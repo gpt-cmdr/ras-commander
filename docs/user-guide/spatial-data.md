@@ -862,8 +862,8 @@ Set `include_wse=True` in `BenefitAreaConfig` (or pass `wse=True` to
 `store_maps()`) to retain pre/post WSE maps. Set `minimum_region_pixels=None` to
 skip the four-connected component filter. `polygon_output=True` creates exact
 raster-edge polygons; an explicit `.gpkg`, `.shp`, `.geojson`, `.parquet`, or
-`.geoparquet` path is also accepted. Install
-`ras-commander[geoparquet]` before requesting either GeoParquet suffix.
+`.geoparquet` path is also accepted. The required core `pyarrow` dependency
+supports both GeoParquet suffixes.
 
 This raster workflow is distinct from `HdfBenefitAreas`, which reads maximum
 WSE at 2D mesh cells and returns benefit/rise GeoDataFrames rather than a

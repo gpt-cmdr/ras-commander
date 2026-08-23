@@ -96,6 +96,9 @@ HDFs.
 - `inspect_result(hdf_path)` - Read an existing result HDF without mutation and
   fail closed on incomplete or conflicting completion evidence, inconsistent
   time axes, missing CRS or units, and mesh/result/topology misalignment
+- `export(hdf_path, output_directory, *, resolution=None,
+  max_dimension=2048, nodata=-9999.0, include_preview=True)` - Generate a
+  checksum-pinned hydraulic product package without modifying the producer HDF
 
 Current HEC-RAS results can establish completion with
 `Event Conditions/Completed Successfully=True`. Older producer HDFs that do
@@ -112,11 +115,46 @@ mechanical completion and product readiness are not engineering acceptance.
 from ras_commander import HdfResultsProducts
 
 inspection = HdfResultsProducts.inspect_result("project.p02.hdf")
+manifest = HdfResultsProducts.export(
+    "project.p02.hdf",
+    "project-p02-hydraulic-products",
+)
 ```
+
+`export()` supports completed unsteady HDFs with 2D flow areas. It writes a
+common-grid trio of Cloud Optimized GeoTIFFs for maximum WSE, maximum depth, and
+maximum adjacent-face velocity; a fixed-schema Arrow/Parquet boundary
+hydrograph table; result metadata; numerical evidence; a WGS84 GeoJSON
+footprint; and, by default, a depth preview. `pyarrow>=14.0` is a required core
+dependency because Arrow and Parquet are part of the modern geospatial product
+contract, not an optional fallback.
+
+Raster dimensions are bounded twice: neither width nor height may exceed
+`max_dimension`, and the total raster contains at most 16,777,216 cells. The
+`nodata` argument is normalized to float32 before collision checks so a nearby
+double-precision value cannot silently become equal to valid stored data.
+Pixels are square at the exact selected resolution; when a footprint span is
+not evenly divisible, raster bounds expand by less than one pixel on the right
+or bottom rather than silently changing the requested cell size.
+
+The source HDF is opened read-only and protected by point-in-time digest checks.
+The files in the output directory are newly generated ras-commander derivative
+artifacts; they are not newly generated HEC-RAS model output. The output
+directory must not already exist. Assets are published without overwriting and
+`hydraulic-products.json` is linked last, so consumers must use that manifest as
+the package-complete marker. A package that lacks the manifest is incomplete.
+Publication requires same-filesystem hard-link support and fails closed when
+the destination filesystem cannot provide it.
+
+The exporter preserves valid negative-datum WSE and uses 2D flow-area
+footprints as raster support. It does not infer hydraulic acceptability:
+`numerical-qaqc.json` preserves evidence while the manifest remains
+`hydraulic_qaqc: not_evaluated`. A result with no boundary-condition series gets
+a valid, empty Parquet table with the same schema rather than losing the asset.
 
 Synthetic HDFs created by focused tests are labeled test artifacts. Real-file
 integration uses pre-existing producer HDFs read-only and does not run HEC-RAS
-or generate model output.
+or generate model output; it generates only temporary derivative packages.
 
 ## Plan Results
 

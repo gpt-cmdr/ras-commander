@@ -244,6 +244,19 @@ def test_inspect_result_rejects_missing_topology(tmp_path):
         HdfResultsProducts.inspect_result(hdf_path)
 
 
+def test_inspect_result_rejects_face_ids_outside_velocity_array(tmp_path):
+    hdf_path = tmp_path / "invalid-face-id.p01.hdf"
+    _write_inspection_hdf(hdf_path)
+    with h5py.File(hdf_path, "r+") as hdf_file:
+        values = hdf_file[
+            "Geometry/2D Flow Areas/Mesh/Cells Face and Orientation Values"
+        ]
+        values[0, 0] = 3
+
+    with pytest.raises(ValueError, match="topology IDs are invalid"):
+        HdfResultsProducts.inspect_result(hdf_path)
+
+
 def test_inspect_result_rejects_contradictory_units(tmp_path):
     hdf_path = tmp_path / "unit-conflict.p01.hdf"
     _write_inspection_hdf(hdf_path, contradictory_units=True)

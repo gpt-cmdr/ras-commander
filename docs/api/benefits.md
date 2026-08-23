@@ -63,9 +63,9 @@ config = BenefitAreaConfig(
 
 Polygon creation is optional. `polygon_output=True` writes a GeoPackage beside
 the BenefitArea raster. An explicit path may use `.gpkg`, `.shp`, `.geojson`,
-`.parquet`, or `.geoparquet`. GeoParquet output requires the optional dependency
-installed with `pip install "ras-commander[geoparquet]"`. Polygon boundaries
-follow the final raster cell edges using four-cell connectivity; they are not
+`.parquet`, or `.geoparquet`. GeoParquet output uses the core `pyarrow`
+dependency. Polygon boundaries follow the final raster cell edges using
+four-cell connectivity; they are not
 smoothed or simplified by default.
 
 Set `polygon_simplify_tolerance` to simplify polygon edges after

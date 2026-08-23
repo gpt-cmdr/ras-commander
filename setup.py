@@ -79,6 +79,7 @@ setup(
         'matplotlib',
         'shapely>=2.0',
         'rasterio',
+        'pyarrow>=14.0',
         'pyproj',
         'rasterstats',
         'rtree',
@@ -110,8 +111,8 @@ setup(
         # Precipitation enhancements
         'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
-        # Optional GeoParquet polygon output for raster benefits analysis
-        'geoparquet': ['pyarrow>=14.0'],
+        # Compatibility alias: pyarrow is required by the core package.
+        'geoparquet': [],
         # Notebook dependencies (raster visualization, coordinate systems, precipitation examples)
         'notebooks': [
             'rasterio',
@@ -149,7 +150,6 @@ setup(
             'aiohttp',
             'pythonnet>=3.0.5',
             'pyjnius',
-            'pyarrow>=14.0',
         ],
     })
 
