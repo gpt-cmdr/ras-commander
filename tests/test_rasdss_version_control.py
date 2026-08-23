@@ -198,6 +198,14 @@ def _skip_if_bridge_unavailable(completed: subprocess.CompletedProcess[str]) -> 
         pytest.skip(completed.stdout.strip())
 
 
+def _assert_clean_native_output(
+    completed: subprocess.CompletedProcess[str],
+) -> None:
+    diagnostic = (completed.stdout + completed.stderr).casefold()
+    assert "access violation" not in diagnostic
+    assert "fatal exception" not in diagnostic
+
+
 @pytest.mark.parametrize(
     ("requested", "expected_version"),
     [("default", 7), ("6", 6), ("7", 7)],
@@ -250,6 +258,7 @@ def test_separate_process_creates_requested_dss_version_and_round_trips(
         expected_version,
     )
     _skip_if_bridge_unavailable(completed)
+    _assert_clean_native_output(completed)
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
@@ -289,6 +298,7 @@ def test_separate_process_matching_update_then_mismatch_is_fail_closed(
 
     prepared = _run_bridge_script(prepare_script, output)
     _skip_if_bridge_unavailable(prepared)
+    _assert_clean_native_output(prepared)
     assert prepared.returncode == 0, prepared.stdout + prepared.stderr
     before = hashlib.sha256(output.read_bytes()).hexdigest()
 
@@ -326,5 +336,6 @@ def test_separate_process_matching_update_then_mismatch_is_fail_closed(
 
     mismatched = _run_bridge_script(mismatch_script, output)
     _skip_if_bridge_unavailable(mismatched)
+    _assert_clean_native_output(mismatched)
     assert mismatched.returncode == 0, mismatched.stdout + mismatched.stderr
     assert hashlib.sha256(output.read_bytes()).hexdigest() == before

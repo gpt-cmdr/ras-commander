@@ -995,7 +995,13 @@ def test_mapped_drive_form_reaches_all_stages_and_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = Path(__file__).absolute().parents[1]
-    if os.name != "nt" or not str(repo_root.resolve()).startswith("\\\\"):
+    repo_root_text = str(repo_root)
+    if (
+        os.name != "nt"
+        or repo_root_text.startswith("\\\\")
+        or not repo_root.drive
+        or not str(repo_root.resolve()).startswith("\\\\")
+    ):
         pytest.skip("test requires a mapped Windows repository drive")
     test_dir = repo_root / f".c04-mapped-{uuid4().hex}"
     test_dir.mkdir()
@@ -1065,6 +1071,62 @@ def _assert_clean_native_output(completed: subprocess.CompletedProcess[str]) -> 
     diagnostic = (completed.stdout + completed.stderr).casefold()
     assert "access violation" not in diagnostic
     assert "fatal exception" not in diagnostic
+
+
+@pytest.mark.integration
+def test_configured_real_grid_family_extends_read_only_source(
+    tmp_path: Path,
+) -> None:
+    """Exercise an existing project-library grid without generating its source."""
+    configured_source = os.environ.get("RAS_COMMANDER_REAL_GRID_DSS")
+    configured_family = os.environ.get("RAS_COMMANDER_REAL_GRID_FAMILY")
+    if not configured_source or not configured_family:
+        pytest.skip(
+            "Set RAS_COMMANDER_REAL_GRID_DSS and RAS_COMMANDER_REAL_GRID_FAMILY "
+            "to an existing reviewed grid family"
+        )
+
+    source = Path(configured_source)
+    if not source.is_file():
+        pytest.skip(f"Configured real grid DSS does not exist: {source}")
+    output = tmp_path / "real-grid-extended.dss"
+    result_json = tmp_path / "real-grid-result.json"
+    source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
+
+    script = """
+        import json
+        import sys
+        from pathlib import Path
+
+        from ras_commander import RasDss
+
+        result = RasDss.copy_grid_with_zero_tail(
+            Path(sys.argv[1]),
+            Path(sys.argv[2]),
+            sys.argv[3],
+            1,
+        )
+        Path(sys.argv[4]).write_text(json.dumps(result), encoding="utf-8")
+    """
+    completed = _run_bridge_script(
+        script,
+        source,
+        output,
+        configured_family,
+        result_json,
+    )
+    _assert_clean_native_output(completed)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+    result = json.loads(result_json.read_text(encoding="utf-8"))
+    assert result["source_sha256"] == source_sha
+    assert result["dss_version"] in {6, 7}
+    assert result["source_record_count"] > 0
+    assert result["appended_record_count"] == 1
+    assert len(result["written_source_pathnames"]) == result["source_record_count"]
+    assert len(result["appended_pathnames"]) == 1
+    assert output.is_file()
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == source_sha
 
 
 @pytest.mark.integration

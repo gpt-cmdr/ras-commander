@@ -14,6 +14,14 @@ import pytest
 from ras_commander import RasDss
 
 
+def _assert_clean_native_output(
+    completed: subprocess.CompletedProcess[str],
+) -> None:
+    diagnostic = (completed.stdout + completed.stderr).casefold()
+    assert "access violation" not in diagnostic
+    assert "fatal exception" not in diagnostic
+
+
 def test_datetimes_to_hec_times_returns_int32_minutes() -> None:
     times = pd.DatetimeIndex(
         ["1899-12-31 00:00", "1900-01-01 00:00", "2019-09-18 13:00"]
@@ -148,4 +156,5 @@ def test_write_timeseries_round_trips_through_real_java_bridge(tmp_path) -> None
     if completed.returncode == 77 and "C03_BRIDGE_UNAVAILABLE:" in completed.stdout:
         pytest.skip(completed.stdout.strip())
 
+    _assert_clean_native_output(completed)
     assert completed.returncode == 0, completed.stdout + completed.stderr
