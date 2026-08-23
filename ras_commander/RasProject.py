@@ -107,7 +107,7 @@ class _InventoryHashCache:
 
     @staticmethod
     def _identity(path: Path) -> tuple[int, int, int, int]:
-        info = path.stat()
+        info = _io_path(path).stat()
         return info.st_size, info.st_mtime_ns, info.st_dev, info.st_ino
 
     def digest(self, path: Path) -> str:
@@ -164,19 +164,62 @@ class _FileSnapshot:
     sha256: str
 
 
+def _io_path(path: Union[str, Path]) -> Path:
+    """Return a Windows extended-length path for private filesystem I/O."""
+    candidate = Path(path)
+    if os.name != "nt":
+        return candidate
+
+    raw = os.path.abspath(os.fspath(candidate))
+    if raw.startswith("\\\\?\\"):
+        return Path(raw)
+    if raw.startswith("\\\\"):
+        return Path(f"\\\\?\\UNC\\{raw[2:]}")
+    return Path(f"\\\\?\\{raw}")
+
+
+def _public_path(path: Union[str, Path]) -> Path:
+    """Strip a Windows extended-length prefix from a path returned by an API."""
+    candidate = Path(path)
+    if os.name != "nt":
+        return candidate
+
+    raw = os.fspath(candidate)
+    if raw.startswith("\\\\?\\UNC\\"):
+        return Path(f"\\\\{raw[8:]}")
+    if raw.startswith("\\\\?\\"):
+        return Path(raw[4:])
+    return candidate
+
+
+def _path_exists(path: Union[str, Path]) -> bool:
+    return os.path.exists(_io_path(path))
+
+
+def _path_lexists(path: Union[str, Path]) -> bool:
+    return os.path.lexists(_io_path(path))
+
+
+def _path_is_file(path: Union[str, Path]) -> bool:
+    try:
+        return stat.S_ISREG(os.stat(_io_path(path)).st_mode)
+    except OSError:
+        return False
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
+    with _io_path(path).open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
 
 
 def _is_reparse_point(path: Path) -> bool:
-    info = path.lstat()
+    info = _io_path(path).lstat()
     attributes = getattr(info, "st_file_attributes", 0)
     marker = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-    return path.is_symlink() or bool(attributes & marker)
+    return stat.S_ISLNK(info.st_mode) or bool(attributes & marker)
 
 
 def _assert_regular_path(path: Path, *, expected_directory: bool = False) -> os.stat_result:
@@ -185,7 +228,7 @@ def _assert_regular_path(path: Path, *, expected_directory: bool = False) -> os.
             "reparse_point",
             f"Reparse points and symbolic links are not supported: {path}",
         )
-    info = path.stat()
+    info = _io_path(path).stat()
     if expected_directory and not stat.S_ISDIR(info.st_mode):
         raise ProjectPathAmbiguityError(
             "unexpected_path_type",
@@ -203,7 +246,7 @@ def _assert_no_reparse_ancestry(path: Path) -> None:
     """Reject any existing reparse point from ``path`` through its ancestry."""
     for candidate in (path, *path.parents):
         try:
-            if candidate.exists() and _is_reparse_point(candidate):
+            if _path_lexists(candidate) and _is_reparse_point(candidate):
                 raise ProjectPathAmbiguityError(
                     "reparse_point",
                     f"Reparse points and symbolic links are not supported: {candidate}",
@@ -219,11 +262,20 @@ def _assert_no_reparse_ancestry(path: Path) -> None:
 
 def _valid_project_files(folder: Path) -> list[Path]:
     projects: list[Path] = []
-    for candidate in sorted(folder.glob("*.prj"), key=lambda item: item.name.casefold()):
-        if _is_reparse_point(candidate) or not candidate.is_file():
+    candidates = [
+        folder / entry.name
+        for entry in os.scandir(_io_path(folder))
+        if Path(entry.name).suffix.lower() == ".prj"
+    ]
+    for candidate in sorted(candidates, key=lambda item: item.name.casefold()):
+        if _is_reparse_point(candidate) or not _path_is_file(candidate):
             continue
         try:
-            with candidate.open("r", encoding="utf-8", errors="replace") as stream:
+            with _io_path(candidate).open(
+                "r",
+                encoding="utf-8",
+                errors="replace",
+            ) as stream:
                 if any(line.startswith("Proj Title=") for line in stream):
                     projects.append(candidate)
         except OSError:
@@ -233,7 +285,7 @@ def _valid_project_files(folder: Path) -> list[Path]:
 
 def _resolve_project_file(project: Union[str, Path]) -> Path:
     path = RasUtils.safe_resolve(Path(project))
-    if path.is_file():
+    if _path_is_file(path):
         if path.suffix.lower() != ".prj":
             raise ValueError(f"Expected a HEC-RAS .prj file: {path}")
         _assert_regular_path(path)
@@ -241,7 +293,7 @@ def _resolve_project_file(project: Union[str, Path]) -> Path:
         if path not in projects:
             raise ValueError(f"File is not a HEC-RAS project (missing Proj Title=): {path}")
         return path
-    if not path.exists():
+    if not _path_exists(path):
         raise FileNotFoundError(f"Project path does not exist: {path}")
     _assert_regular_path(path, expected_directory=True)
     projects = _valid_project_files(path)
@@ -254,7 +306,7 @@ def _resolve_project_file(project: Union[str, Path]) -> Path:
 
 
 def _same_file(left: Path, right: Path) -> bool:
-    return os.path.samefile(left, right)
+    return os.path.samefile(_io_path(left), _io_path(right))
 
 
 def _source_contains_destination(source_root: Path, destination_parent: Path) -> bool:
@@ -301,15 +353,26 @@ def _explicit_ras(
     return ras_object
 
 
-def _read_key(path: Path, key: str) -> Optional[str]:
-    if not path.is_file():
-        return None
-    with path.open("r", encoding="utf-8", errors="replace", newline="") as stream:
+def _read_keys(path: Path, key: str) -> list[str]:
+    if not _path_is_file(path):
+        return []
+    values: list[str] = []
+    with _io_path(path).open(
+        "r",
+        encoding="utf-8",
+        errors="replace",
+        newline="",
+    ) as stream:
         prefix = f"{key}="
         for line in stream:
             if line.startswith(prefix):
-                return line[len(prefix):].strip()
-    return None
+                values.append(line[len(prefix):].strip())
+    return values
+
+
+def _read_key(path: Path, key: str) -> Optional[str]:
+    values = _read_keys(path, key)
+    return values[0] if values else None
 
 
 def _declared_current_plan_version(project_file: Path) -> Optional[str]:
@@ -339,7 +402,7 @@ def _validate_current_plan(project_file: Path, ras_object: RasPrj) -> str:
             f"Current Plan {current.lower()} does not resolve to one declared plan",
         )
     expected_path = project_file.parent / f"{project_file.stem}.p{number}"
-    if not expected_path.is_file():
+    if not _path_is_file(expected_path):
         raise ProjectPopulationError(
             "current_plan_missing",
             f"Current Plan file is unavailable: {expected_path.name}",
@@ -399,8 +462,8 @@ def _resolve_reference(owner: Path, raw: str) -> Path:
 
 def _path_scope(project_root: Path, path: Path) -> tuple[str, Optional[bool]]:
     try:
-        root_real = os.path.normcase(os.path.realpath(project_root))
-        path_real = os.path.normcase(os.path.realpath(path))
+        root_real = os.path.normcase(os.path.realpath(_io_path(project_root)))
+        path_real = os.path.normcase(os.path.realpath(_io_path(path)))
         if os.path.commonpath([root_real, path_real]) == root_real:
             return "internal", True
         return "external", False
@@ -428,7 +491,7 @@ def _path_facts(path: Optional[Path], *, hash_file: bool) -> dict[str, Any]:
     if path is None:
         return facts
     try:
-        info = path.stat()
+        info = _io_path(path).stat()
         is_file = stat.S_ISREG(info.st_mode)
         is_dir = stat.S_ISDIR(info.st_mode)
         facts.update(
@@ -502,7 +565,7 @@ def _add_asset(
     if reason_code is None and state == "missing":
         reason_code = "path_missing"
     owner_hash = None
-    if hash_files and owner is not None and owner.is_file():
+    if hash_files and owner is not None and _path_is_file(owner):
         cache = _ACTIVE_INVENTORY_HASH_CACHE.get()
         owner_hash = cache.digest(owner) if cache is not None else _sha256_file(owner)
     owner_identity: Any = owner
@@ -654,20 +717,26 @@ def _to_arrow_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
 def _rebase_value(value: Any, old_root: Path, new_root: Path) -> Any:
     """Replace one staged-root prefix without touching unrelated values."""
     if isinstance(value, Path):
+        public_value = _public_path(value)
         try:
-            return new_root / value.relative_to(old_root)
+            return new_root / public_value.relative_to(old_root)
         except ValueError:
             return value
     if isinstance(value, str):
         old_text = str(old_root)
-        normalized_value = os.path.normcase(value)
+        public_value = (
+            str(_public_path(value))
+            if os.name == "nt" and value.startswith("\\\\?\\")
+            else value
+        )
+        normalized_value = os.path.normcase(public_value)
         normalized_old = os.path.normcase(old_text)
         if normalized_value == normalized_old:
             return str(new_root)
         for separator in ("\\", "/"):
             prefix = normalized_old.rstrip("\\/") + separator
             if normalized_value.startswith(prefix):
-                return str(new_root) + value[len(old_text):]
+                return str(new_root) + public_value[len(old_text):]
         return value
     if isinstance(value, list):
         return [_rebase_value(item, old_root, new_root) for item in value]
@@ -677,7 +746,11 @@ def _rebase_value(value: Any, old_root: Path, new_root: Path) -> Any:
         return {_rebase_value(item, old_root, new_root) for item in value}
     if isinstance(value, dict):
         return {
-            key: _rebase_value(item, old_root, new_root)
+            _rebase_value(key, old_root, new_root): _rebase_value(
+                item,
+                old_root,
+                new_root,
+            )
             for key, item in value.items()
         }
     return value
@@ -778,6 +851,10 @@ def _inspect_project_assets_impl(
 
     referenced_geometries: set[str] = set()
     referenced_flows: set[tuple[str, str]] = set()
+    project_scoped_components: dict[
+        tuple[str, str],
+        tuple[str, Optional[Path], str],
+    ] = {}
     plan_asset_ids: dict[str, str] = {}
     filter_components = depth != "project"
     for occurrence, (_, plan) in enumerate(component_plans.iterrows()):
@@ -806,8 +883,89 @@ def _inspect_project_assets_impl(
             referenced_geometries.add(str(geometry_number))
         flow_number = plan.get("Flow File")
         if pd.notna(flow_number):
-            flow_kind = "unsteady_flow" if pd.notna(plan.get("unsteady_number")) else "steady_flow"
-            referenced_flows.add((flow_kind, str(flow_number)))
+            flow_type = _optional_text(plan.get("flow_type")).casefold()
+            if pd.notna(plan.get("unsteady_number")):
+                flow_kind = "unsteady_flow"
+            elif flow_type == "quasi-unsteady":
+                flow_kind = "quasi_unsteady_flow"
+            else:
+                flow_kind = "steady_flow"
+            if flow_kind == "quasi_unsteady_flow":
+                quasi_reference = f"q{flow_number}"
+                flow_path_raw = _optional_text(plan.get("Flow Path"))
+                flow_path = Path(flow_path_raw) if flow_path_raw else None
+                if depth == "project":
+                    project_scoped_components.setdefault(
+                        (flow_kind, quasi_reference.casefold()),
+                        (quasi_reference, flow_path, "RasPrj.plan_df"),
+                    )
+                else:
+                    _add_asset(
+                        rows,
+                        inventory_id=inventory_id,
+                        depth=depth,
+                        project_root=project_root,
+                        kind=flow_kind,
+                        role="declared_input",
+                        owner=plan_path,
+                        raw=quasi_reference,
+                        path=flow_path,
+                        required=True,
+                        source_api="RasPrj.plan_df",
+                        hash_files=hash_files,
+                        plan_number=plan_number,
+                        parent_asset_id=plan_id,
+                        occurrence=occurrence,
+                        state="ambiguous" if flow_path is None else None,
+                        readiness="not_ready" if flow_path is None else None,
+                        reason_code="missing_flow_path" if flow_path is None else None,
+                    )
+            else:
+                referenced_flows.add((flow_kind, str(flow_number)))
+
+        sediment_reference = _read_key(plan_path, "Sediment File")
+        if sediment_reference:
+            normalized_sediment = sediment_reference.strip()
+            sediment_match = re.fullmatch(r"[sS](\d{2,3})", normalized_sediment)
+            sediment_path = (
+                project_root / f"{project_file.stem}.s{sediment_match.group(1)}"
+                if sediment_match
+                else None
+            )
+            if depth == "project":
+                project_scoped_components.setdefault(
+                    ("sediment", normalized_sediment.casefold()),
+                    (
+                        normalized_sediment,
+                        sediment_path,
+                        "RasPlan.Sediment File",
+                    ),
+                )
+            else:
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="sediment",
+                    role="declared_input",
+                    owner=plan_path,
+                    raw=normalized_sediment,
+                    path=sediment_path,
+                    required=True,
+                    source_api="RasPlan.Sediment File",
+                    hash_files=hash_files,
+                    plan_number=plan_number,
+                    parent_asset_id=plan_id,
+                    occurrence=occurrence,
+                    state="ambiguous" if sediment_path is None else None,
+                    readiness="not_ready" if sediment_path is None else None,
+                    reason_code=(
+                        "invalid_component_reference"
+                        if sediment_path is None
+                        else None
+                    ),
+                )
 
         if depth != "project":
             expected_start, expected_end = _plan_window(plan_path)
@@ -841,9 +999,17 @@ def _inspect_project_assets_impl(
                 flow_type = str(plan.get("flow_type") or "").casefold()
                 required_hdf = not (
                     (major_version is not None and major_version < 5)
-                    or flow_type == "steady"
+                    or flow_type in {"steady", "quasi-unsteady"}
                 )
                 hdf_state = None if required_hdf else "not_applicable"
+                if major_version is not None and major_version < 5:
+                    hdf_reason = "not_used_before_hec_ras_5"
+                elif flow_type == "steady":
+                    hdf_reason = "not_required_for_steady_plan"
+                elif flow_type == "quasi-unsteady":
+                    hdf_reason = "not_required_for_quasi_unsteady_plan"
+                else:
+                    hdf_reason = None
                 _add_asset(
                     rows,
                     inventory_id=inventory_id,
@@ -861,7 +1027,7 @@ def _inspect_project_assets_impl(
                     parent_asset_id=plan_id,
                     state=hdf_state,
                     readiness="not_required" if hdf_state else None,
-                    reason_code="not_used_before_hec_ras_5" if hdf_state else None,
+                    reason_code=hdf_reason,
                 )
             unsteady_number = plan.get("unsteady_number")
             if pd.notna(unsteady_number):
@@ -882,6 +1048,51 @@ def _inspect_project_assets_impl(
                     plan_number=plan_number,
                     unsteady_number=str(unsteady_number),
                     parent_asset_id=plan_id,
+                )
+
+    if depth == "project":
+        declared_components = (
+            ("QuasiSteady File", "quasi_unsteady_flow", "q"),
+            ("Sediment File", "sediment", "s"),
+        )
+        for key, kind, prefix in declared_components:
+            for raw in _read_keys(project_file, key):
+                normalized = raw.strip()
+                match = re.fullmatch(rf"[{prefix}{prefix.upper()}](\d{{2,3}})", normalized)
+                canonical = f"{prefix}{match.group(1)}" if match else normalized
+                path = (
+                    project_root / f"{project_file.stem}.{canonical}"
+                    if match
+                    else None
+                )
+                project_scoped_components.setdefault(
+                    (kind, canonical.casefold()),
+                    (canonical, path, f"RasPrj.project_file.{key}"),
+                )
+        for occurrence, ((kind, _), component) in enumerate(
+            sorted(project_scoped_components.items())
+        ):
+            raw, path, source_api = component
+            _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind=kind,
+                    role="declared_input",
+                    owner=project_file,
+                    raw=raw,
+                    path=path,
+                    required=True,
+                    source_api=source_api,
+                    hash_files=hash_files,
+                    parent_asset_id=project_id,
+                    occurrence=occurrence,
+                    state="ambiguous" if path is None else None,
+                    readiness="not_ready" if path is None else None,
+                    reason_code=(
+                        "invalid_component_reference" if path is None else None
+                    ),
                 )
 
     for occurrence, (_, geometry) in enumerate(ras_obj.geom_df.iterrows()):
@@ -966,7 +1177,11 @@ def _inspect_project_assets_impl(
 
     rasmap_path = project_root / f"{project_file.stem}.rasmap"
     rasmap_id: Optional[str] = None
-    if rasmap_path.exists() or getattr(ras_obj, "rasmap_df", pd.DataFrame()).shape[0]:
+    if _path_exists(rasmap_path) or getattr(
+        ras_obj,
+        "rasmap_df",
+        pd.DataFrame(),
+    ).shape[0]:
         rasmap_id = _add_asset(
             rows,
             inventory_id=inventory_id,
@@ -985,7 +1200,7 @@ def _inspect_project_assets_impl(
 
     rasmap_df = getattr(ras_obj, "rasmap_df", pd.DataFrame())
     seen_map_paths: set[str] = set()
-    if rasmap_path.is_file() and rasmap_df.empty:
+    if _path_is_file(rasmap_path) and rasmap_df.empty:
         _add_asset(
             rows,
             inventory_id=inventory_id,
@@ -1053,9 +1268,9 @@ def _inspect_project_assets_impl(
                 ):
                     seen_map_paths.add(os.path.normcase(str(sidecar)))
 
-    if rasmap_path.is_file():
+    if _path_is_file(rasmap_path):
         try:
-            root = ET.parse(rasmap_path).getroot()
+            root = ET.parse(_io_path(rasmap_path)).getroot()
             occurrence = 0
             for element in root.iter():
                 for attribute, raw in element.attrib.items():
@@ -1152,7 +1367,7 @@ def _inspect_project_assets_impl(
                     == unsteady_number
                 ]
             try:
-                with unsteady_path.open(
+                with _io_path(unsteady_path).open(
                     "r",
                     encoding="utf-8",
                     errors="replace",
@@ -1796,19 +2011,22 @@ def _tree_snapshot(root: Path) -> tuple[dict[str, _FileSnapshot], str, int]:
     snapshots: dict[str, _FileSnapshot] = {}
     directories: set[str] = set()
     total_bytes = 0
+
     def raise_traversal_error(exc: OSError) -> NoReturn:
         raise ProjectPathAmbiguityError(
             "tree_traversal_failed",
             f"Could not traverse project tree: {root}",
         ) from exc
 
+    io_root = _io_path(root)
     for directory, directory_names, file_names in os.walk(
-        root,
+        io_root,
         topdown=True,
         onerror=raise_traversal_error,
         followlinks=False,
     ):
-        current = Path(directory)
+        relative_directory = Path(directory).relative_to(io_root)
+        current = root / relative_directory
         _assert_regular_path(current, expected_directory=True)
         directory_names.sort(key=str.casefold)
         file_names.sort(key=str.casefold)
@@ -1856,19 +2074,22 @@ def _tree_snapshot(root: Path) -> tuple[dict[str, _FileSnapshot], str, int]:
 
 def _directory_population(root: Path) -> set[str]:
     directories: set[str] = set()
+
     def raise_traversal_error(exc: OSError) -> NoReturn:
         raise ProjectPathAmbiguityError(
             "tree_traversal_failed",
             f"Could not traverse project directories: {root}",
         ) from exc
 
+    io_root = _io_path(root)
     for directory, directory_names, _ in os.walk(
-        root,
+        io_root,
         topdown=True,
         onerror=raise_traversal_error,
         followlinks=False,
     ):
-        current = Path(directory)
+        relative_directory = Path(directory).relative_to(io_root)
+        current = root / relative_directory
         _assert_regular_path(current, expected_directory=True)
         directory_names.sort(key=str.casefold)
         for name in directory_names:
@@ -1916,12 +2137,19 @@ def _copy_snapshot(
         directories,
         key=lambda item: (len(Path(item).parts), item.casefold()),
     ):
-        (destination_root / Path(relative)).mkdir(parents=True, exist_ok=False)
+        _io_path(destination_root / Path(relative)).mkdir(
+            parents=True,
+            exist_ok=False,
+        )
     for relative in sorted(files, key=str.casefold):
         source = source_root / Path(relative)
         target = destination_root / Path(relative)
         _assert_regular_path(source)
-        shutil.copy2(source, target, follow_symlinks=False)
+        shutil.copy2(
+            _io_path(source),
+            _io_path(target),
+            follow_symlinks=False,
+        )
 
 
 def _stage_readiness(assets: pd.DataFrame) -> Literal["ready", "not_ready", "unknown"]:
@@ -1963,7 +2191,7 @@ def _safe_remove_owned_temp(
     destination_parent: Path,
     operation_id: str,
 ) -> bool:
-    if temp_root is None or not temp_root.exists():
+    if temp_root is None or not _path_lexists(temp_root):
         return True
     try:
         parent_matches = _same_file(temp_root.parent, destination_parent)
@@ -1974,21 +2202,21 @@ def _safe_remove_owned_temp(
     sentinel_matches = False
     manifest_matches = False
     try:
-        sentinel_matches = sentinel.is_file() and sentinel.read_text(
+        sentinel_matches = _path_is_file(sentinel) and _io_path(sentinel).read_text(
             encoding="ascii"
         ) == operation_id
     except OSError:
         pass
     try:
-        manifest_matches = manifest.is_file() and json.loads(
-            manifest.read_text(encoding="utf-8")
+        manifest_matches = _path_is_file(manifest) and json.loads(
+            _io_path(manifest).read_text(encoding="utf-8")
         ).get("operation_id") == operation_id
     except (OSError, ValueError, TypeError):
         pass
     if not parent_matches or not (sentinel_matches or manifest_matches):
         logger.error("Refusing cleanup of unverified staging directory: %s", temp_root)
         return False
-    shutil.rmtree(temp_root)
+    shutil.rmtree(_io_path(temp_root))
     return True
 
 
@@ -2003,12 +2231,12 @@ def _safe_remove_owned_lock(
     try:
         if _is_reparse_point(lock_path):
             raise RuntimeError("lock path became a reparse point")
-        info = lock_path.stat()
+        info = _io_path(lock_path).stat()
         if (info.st_dev, info.st_ino) != lock_identity:
             raise RuntimeError("lock file identity changed")
-        if lock_path.read_bytes() != lock_token:
+        if _io_path(lock_path).read_bytes() != lock_token:
             raise RuntimeError("lock file token changed")
-        lock_path.unlink()
+        _io_path(lock_path).unlink()
     except FileNotFoundError:
         return
     except (OSError, RuntimeError) as exc:
@@ -2027,7 +2255,7 @@ def _fsync_path(
         flags |= os.O_DIRECTORY
     descriptor: Optional[int] = None
     try:
-        descriptor = os.open(path, flags)
+        descriptor = os.open(_io_path(path), flags)
         os.fsync(descriptor)
     except OSError as exc:
         unsupported = exc.errno in {
@@ -2055,13 +2283,15 @@ def _fsync_tree(root: Path) -> None:
             f"Could not traverse the prepared staging tree: {root}",
         ) from exc
 
+    io_root = _io_path(root)
     for directory, directory_names, file_names in os.walk(
-        root,
+        io_root,
         topdown=False,
         onerror=raise_traversal_error,
         followlinks=False,
     ):
-        current = Path(directory)
+        relative_directory = Path(directory).relative_to(io_root)
+        current = root / relative_directory
         for name in sorted(file_names, key=str.casefold):
             path = current / name
             _assert_regular_path(path)
@@ -2082,7 +2312,7 @@ def _path_has_directory_identity(path: Path, identity: tuple[int, int]) -> bool:
     try:
         if _is_reparse_point(path):
             return False
-        info = path.stat()
+        info = _io_path(path).stat()
     except OSError:
         return False
     return stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) == identity
@@ -2092,7 +2322,7 @@ def _native_rename_noreplace(source: Path, destination: Path) -> None:
     """Atomically rename one directory without replacing a destination."""
     if os.name == "nt":
         # Windows directory rename already fails when the destination exists.
-        os.rename(source, destination)
+        os.rename(_io_path(source), _io_path(destination))
         return
 
     import ctypes
@@ -2152,11 +2382,11 @@ def _publish_directory_noreplace(source: Path, destination: Path) -> None:
     except OSError as exc:
         source_same = _path_has_directory_identity(source, source_identity)
         destination_same = _path_has_directory_identity(destination, source_identity)
-        if destination_same and not os.path.lexists(source):
+        if destination_same and not _path_lexists(source):
             # Some remote filesystems can report an error after committing rename.
             return
         if source_same and not destination_same:
-            if os.path.lexists(destination):
+            if _path_lexists(destination):
                 raise ProjectPublicationError(
                     "destination_race",
                     f"Destination appeared during staging: {destination}",
@@ -2183,7 +2413,7 @@ def _publish_directory_noreplace(source: Path, destination: Path) -> None:
         ) from exc
     if (
         _path_has_directory_identity(destination, source_identity)
-        and not os.path.lexists(source)
+        and not _path_lexists(source)
     ):
         return
     raise ProjectPublicationError(
@@ -2224,10 +2454,10 @@ def stage_project(
             raise ProjectPopulationError("ras_object_mismatch", str(exc)) from exc
 
     destination_root = Path(destination).absolute()
-    if os.path.lexists(destination_root):
+    if _path_lexists(destination_root):
         raise FileExistsError(f"Destination already exists: {destination_root}")
     destination_parent = destination_root.parent
-    if not destination_parent.exists():
+    if not _path_exists(destination_parent):
         raise ProjectPathAmbiguityError(
             "destination_parent_missing",
             f"Destination parent must already exist: {destination_parent}",
@@ -2241,8 +2471,8 @@ def stage_project(
             f"Destination parent is not an ordinary directory: {destination_parent}",
         ) from exc
 
-    source_real = os.path.normcase(os.path.realpath(source_root))
-    destination_real = os.path.normcase(os.path.realpath(destination_root))
+    source_real = os.path.normcase(os.path.realpath(_io_path(source_root)))
+    destination_real = os.path.normcase(os.path.realpath(_io_path(destination_root)))
     try:
         overlap = os.path.commonpath([source_real, destination_real]) in {
             source_real,
@@ -2265,7 +2495,7 @@ def stage_project(
             "path_overlap",
             "Source and destination project trees must not overlap",
         )
-    if (source_root / _STAGE_METADATA_DIR).exists():
+    if _path_lexists(source_root / _STAGE_METADATA_DIR):
         raise ProjectPopulationError(
             "reserved_metadata_present",
             f"Source contains reserved staging metadata directory: {_STAGE_METADATA_DIR}",
@@ -2279,7 +2509,10 @@ def stage_project(
     published = False
     try:
         try:
-            lock_handle = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            lock_handle = os.open(
+                _io_path(lock_path),
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            )
         except FileExistsError as exc:
             raise ProjectLockedError(
                 "staging_lock_exists",
@@ -2295,14 +2528,18 @@ def stage_project(
 
         source_files_before, source_before, copied_bytes = _tree_snapshot(source_root)
         source_directories_before = _directory_population(source_root)
-        temp_root = Path(
-            tempfile.mkdtemp(
-                prefix=f".{destination_root.name}.ras-stage-",
-                dir=destination_parent,
+        temp_root = _public_path(
+            os.path.realpath(
+                _io_path(
+                    tempfile.mkdtemp(
+                        prefix=f".{destination_root.name}.ras-stage-",
+                        dir=_io_path(destination_parent),
+                    )
+                )
             )
         )
         sentinel = temp_root / _TEMP_SENTINEL
-        sentinel.write_text(operation_id, encoding="ascii")
+        _io_path(sentinel).write_text(operation_id, encoding="ascii")
         _copy_snapshot(
             source_root,
             temp_root,
@@ -2310,13 +2547,13 @@ def stage_project(
             source_directories_before,
         )
 
-        sentinel.unlink()
+        _io_path(sentinel).unlink()
         try:
             copied_files, copied_fingerprint, copied_total = _tree_snapshot(temp_root)
             copied_directories = _directory_population(temp_root)
         finally:
-            if temp_root.exists() and not sentinel.exists():
-                sentinel.write_text(operation_id, encoding="ascii")
+            if _path_exists(temp_root) and not _path_lexists(sentinel):
+                _io_path(sentinel).write_text(operation_id, encoding="ascii")
         _assert_copy_equal(source_files_before, copied_files)
         if copied_directories != source_directories_before:
             raise ProjectCopyVerificationError(
@@ -2331,7 +2568,7 @@ def stage_project(
         temp_project = temp_root / source_project.relative_to(source_root)
         try:
             staged_ras = init_ras_project(
-                temp_project,
+                _io_path(temp_project),
                 ras_version=_declared_current_plan_version(temp_project),
                 ras_object=RasPrj(),
                 load_results_summary=False,
@@ -2355,15 +2592,15 @@ def stage_project(
         _validate_project_population(assets)
         readiness = _stage_readiness(assets)
 
-        sentinel.unlink()
+        _io_path(sentinel).unlink()
         try:
             verified_files, verified_fingerprint, verified_total = _tree_snapshot(
                 temp_root
             )
             verified_directories = _directory_population(temp_root)
         finally:
-            if temp_root.exists() and not sentinel.exists():
-                sentinel.write_text(operation_id, encoding="ascii")
+            if _path_exists(temp_root) and not _path_lexists(sentinel):
+                _io_path(sentinel).write_text(operation_id, encoding="ascii")
         _assert_copy_equal(source_files_before, verified_files)
         if verified_fingerprint != copied_fingerprint:
             raise ProjectCopyVerificationError(
@@ -2399,7 +2636,7 @@ def stage_project(
         state_counts = final_assets["inspection_state"].value_counts().to_dict()
 
         metadata_dir = temp_root / _STAGE_METADATA_DIR
-        metadata_dir.mkdir(exist_ok=False)
+        _io_path(metadata_dir).mkdir(exist_ok=False)
         manifest_path = metadata_dir / _STAGE_MANIFEST
         manifest = {
             "schema_version": 1,
@@ -2432,11 +2669,15 @@ def stage_project(
                 }
             ],
         }
-        with manifest_path.open("x", encoding="utf-8", newline="\n") as stream:
+        with _io_path(manifest_path).open(
+            "x",
+            encoding="utf-8",
+            newline="\n",
+        ) as stream:
             json.dump(manifest, stream, indent=2, sort_keys=True)
             stream.write("\n")
 
-        sentinel.unlink()
+        _io_path(sentinel).unlink()
         _fsync_tree(temp_root)
         _fsync_path(destination_parent, directory=True)
 
@@ -2497,7 +2738,7 @@ def stage_project(
                 "Copied directory population changed before publication",
             )
 
-        if os.path.lexists(destination_root):
+        if _path_lexists(destination_root):
             raise ProjectPublicationError(
                 "destination_race",
                 f"Destination appeared during staging: {destination_root}",

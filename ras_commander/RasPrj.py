@@ -128,6 +128,7 @@ class RasPrj:
         self.suppress_logging = False  # Add suppress_logging as instance variable
         self.project_crs = None
         self.project_crs_source = None
+        self._plan_flow_prefixes = {}
 
     @log_call
     def initialize(
@@ -279,10 +280,11 @@ class RasPrj:
             # Make sure all plan paths are properly set
             self._set_plan_paths()
 
-            # Add flow_type column for deterministic steady/unsteady identification
-            if not self.plan_df.empty and 'unsteady_number' in self.plan_df.columns:
-                self.plan_df['flow_type'] = self.plan_df['unsteady_number'].apply(
-                    lambda x: 'Unsteady' if pd.notna(x) else 'Steady'
+            # Add flow_type column without treating quasi-unsteady q## plans as steady.
+            if not self.plan_df.empty:
+                self.plan_df['flow_type'] = self.plan_df.apply(
+                    self._flow_type_for_plan,
+                    axis=1,
                 )
             else:
                 if not self.plan_df.empty:
@@ -329,9 +331,38 @@ class RasPrj:
     def _set_flow_path(self, idx: int, row: pd.Series):
         """Set flow path for a plan entry."""
         if pd.notna(row['Flow File']):
-            prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+            prefix = self._flow_prefix_for_plan(row)
             flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
             self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _flow_prefix_for_plan(self, row: pd.Series) -> str:
+        """Return the f/u/q prefix declared by a plan without exposing new columns."""
+        full_path = row.get('full_path')
+        if pd.notna(full_path):
+            plan_path = Path(str(full_path))
+            cached = self._plan_flow_prefixes.get(plan_path)
+            if cached is not None:
+                return cached
+            content, _ = read_file_with_fallback_encoding(plan_path)
+            if content is not None:
+                match = re.search(
+                    r'^Flow File=([fFuUqQ])[^\r\n]*\r?$',
+                    content,
+                    re.MULTILINE,
+                )
+                if match:
+                    prefix = match.group(1).lower()
+                    self._plan_flow_prefixes[plan_path] = prefix
+                    return prefix
+        return 'u' if pd.notna(row.get('unsteady_number')) else 'f'
+
+    def _flow_type_for_plan(self, row: pd.Series) -> str:
+        """Return the mechanical plan flow type from its declared file prefix."""
+        return {
+            'f': 'Steady',
+            'u': 'Unsteady',
+            'q': 'Quasi-Unsteady',
+        }.get(self._flow_prefix_for_plan(row), 'Unknown')
 
     def _set_plan_paths(self):
         """Set full path information for plan files and their associated geometry and flow files."""
@@ -361,8 +392,7 @@ class RasPrj:
                 
                 # Set flow path if Flow File exists and Flow Path is missing or invalid
                 if pd.notna(row['Flow File']):
-                    # Determine the prefix (u for unsteady, f for steady flow)
-                    prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+                    prefix = self._flow_prefix_for_plan(row)
                     flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                     self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
                 
@@ -667,6 +697,9 @@ class RasPrj:
         """Process plan entry data."""
         entry = {}
         plan_info = self._parse_plan_file(Path(full_path))
+        flow_file = plan_info.get('Flow File')
+        if flow_file and len(flow_file) > 1 and flow_file[0].lower() in {'f', 'u', 'q'}:
+            self._plan_flow_prefixes[Path(full_path)] = flow_file[0].lower()
 
         # Log warning if parsing returned empty dict (file encoding issues, locks, etc.)
         if not plan_info:
@@ -696,14 +729,15 @@ class RasPrj:
     def _process_flow_file(self, plan_info: dict) -> dict:
         """Process flow file information from plan info."""
         flow_file = plan_info.get('Flow File')
-        if flow_file and flow_file.startswith('u'):
+        if flow_file and len(flow_file) > 1 and flow_file[0].lower() in {'f', 'u', 'q'}:
+            prefix = flow_file[0].lower()
             return {
-                'unsteady_number': flow_file[1:],
+                'unsteady_number': flow_file[1:] if prefix == 'u' else None,
                 'Flow File': flow_file[1:]
             }
         return {
             'unsteady_number': None,
-            'Flow File': flow_file[1:] if flow_file and flow_file.startswith('f') else None
+            'Flow File': None
         }
 
     def _process_geom_file(self, plan_info: dict) -> dict:
@@ -1225,7 +1259,7 @@ class RasPrj:
                 geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
                 plan_df.at[idx, 'Geom Path'] = str(geom_path)
             if pd.notna(row.get('Flow File')):
-                prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
+                prefix = self._flow_prefix_for_plan(row)
                 flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                 plan_df.at[idx, 'Flow Path'] = str(flow_path)
 
@@ -1296,7 +1330,8 @@ class RasPrj:
                 - geom_title (str): Geometry title from 'Geom Title=' line
                 - description (str): Description from BEGIN/END DESCRIPTION block
                 - has_1d_xs (bool): True if geometry has 1D cross sections
-                - has_2d_mesh (bool): True if geometry has 2D mesh areas
+                - has_2d_mesh (bool): True if geometry text declares a 2D flow
+                  area or HDF metadata identifies a mesh area
                 - num_cross_sections (int): Count of 1D cross sections
                 - num_inline_structures (int): Total count of bridges + culverts + weirs
                 - num_bridges (int): Count of bridge structures

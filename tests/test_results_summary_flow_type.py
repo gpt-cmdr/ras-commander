@@ -111,6 +111,26 @@ def test_summarize_plans_infers_steady_from_raw_flow_path(
     assert captured[0]["plan_meta"]["flow_type"] == "Steady"
 
 
+def test_summarize_plans_infers_quasi_unsteady_from_raw_flow_path(
+    monkeypatch,
+    tmp_path,
+):
+    df, captured = _capture_flow_types(
+        monkeypatch,
+        [
+            {
+                "plan_number": "06",
+                "plan_title": "Quasi Flow Path",
+                "Flow Path": tmp_path / "TestProject.q06",
+            }
+        ],
+        tmp_path,
+    )
+
+    assert df["flow_type"].tolist() == ["Quasi-Unsteady"]
+    assert captured[0]["plan_meta"]["flow_type"] == "Quasi-Unsteady"
+
+
 def test_summarize_plans_leaves_bare_numeric_flow_file_unknown(
     monkeypatch,
     tmp_path,

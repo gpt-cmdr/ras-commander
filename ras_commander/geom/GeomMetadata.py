@@ -35,7 +35,7 @@ Performance Notes:
 """
 
 from pathlib import Path
-from typing import Union, Optional, Dict, Any, List
+from typing import Union, Optional, Dict, Any
 import h5py
 
 from ..LoggingConfig import get_logger
@@ -86,7 +86,8 @@ class GeomMetadata:
         Returns:
             dict with keys:
                 - has_1d_xs (bool): True if num_cross_sections > 0
-                - has_2d_mesh (bool): True if mesh_area_names is not empty
+                - has_2d_mesh (bool): True when text declares a 2D flow area
+                  or HDF metadata identifies a mesh area
                 - num_cross_sections (int): Count of 1D cross sections
                 - num_inline_structures (int): Total bridges + culverts + weirs
                 - num_bridges (int): Bridge count
@@ -120,8 +121,10 @@ class GeomMetadata:
                 logger.debug(f"Using HDF extraction for {hdf_path.name}")
                 result = GeomMetadata._get_counts_from_hdf(hdf_path, result)
 
-                # For lateral structures and SA/2D connections, need plain text
-                # (these are NOT stored in HDF geometry file)
+                # Supplement HDF metadata with plain-text-only counts and any
+                # canonical Storage Area Is2D=-1 evidence. Older/incomplete
+                # geometry HDF files may omit a 2D area that is still declared
+                # unambiguously in the geometry text.
                 if geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
 
@@ -303,9 +306,12 @@ class GeomMetadata:
         counts: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Add counts that are only available from plain text (not in HDF).
+        Supplement HDF-derived counts with plain-text geometry evidence.
 
-        Specifically: lateral structures and SA/2D connections.
+        Adds lateral structures and SA/2D connections, and merges 2D flow-area
+        names declared by canonical ``Storage Area Is2D=-1`` records. The text
+        evidence is additive so existing HDF-derived names and cell counts are
+        preserved.
 
         Parameters:
             geom_path: Path to plain text geometry file
@@ -332,6 +338,16 @@ class GeomMetadata:
 
         except Exception as e:
             logger.debug(f"Text-only counts error: {e}")
+
+        try:
+            text_mesh_info = GeomMetadata._get_2d_info_from_text(geom_path)
+            existing_names = counts.get('mesh_area_names', [])
+            text_names = text_mesh_info['mesh_area_names']
+            counts['mesh_area_names'] = list(
+                dict.fromkeys([*existing_names, *text_names])
+            )
+        except Exception as e:
+            logger.debug(f"2D mesh text supplement error: {e}")
 
         return counts
 
@@ -435,23 +451,41 @@ class GeomMetadata:
         }
 
         try:
-            with open(geom_path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
+            # Reuse the geometry parser that understands the canonical HEC-RAS
+            # representation: a Storage Area= block containing an exact integer
+            # Storage Area Is2D=-1 record. Malformed and non-(-1) values remain
+            # ordinary storage areas and therefore cannot create false positives.
+            from .GeomStorage import GeomStorage
 
-            # Find 2D Flow Area names
-            # Format in geometry file: "2D Flow Area="
+            storage_areas = GeomStorage.get_storage_areas(
+                geom_path,
+                exclude_2d=False,
+            )
+            required_columns = {'Name', 'Is2D'}
+            if (
+                not storage_areas.empty
+                and required_columns <= set(storage_areas.columns)
+            ):
+                names = storage_areas.loc[storage_areas['Is2D'], 'Name']
+                result['mesh_area_names'] = list(dict.fromkeys(names.tolist()))
+
+            # Preserve the legacy plain-text record recognized by earlier
+            # releases. It is additive to canonical storage-area evidence.
+            with open(geom_path, 'r', encoding='utf-8', errors='replace') as file:
+                content = file.read()
+
             import re
+
             pattern = r'2D Flow Area=\s*(.+?)(?:\s*,|$)'
-            matches = re.findall(pattern, content, re.MULTILINE)
-
-            # Clean up names
-            area_names = []
-            for match in matches:
-                name = match.strip().rstrip(',')
-                if name and name not in area_names:
-                    area_names.append(name)
-
-            result['mesh_area_names'] = area_names
+            legacy_names = re.findall(pattern, content, re.MULTILINE)
+            result['mesh_area_names'] = list(
+                dict.fromkeys(
+                    [
+                        *result['mesh_area_names'],
+                        *(name.strip().rstrip(',') for name in legacy_names if name.strip()),
+                    ]
+                )
+            )
 
         except Exception as e:
             logger.debug(f"2D info text extraction error: {e}")

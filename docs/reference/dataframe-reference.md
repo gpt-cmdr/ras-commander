@@ -146,7 +146,7 @@ parsed from the plan text are strings unless noted:
 | `description` | str / None | plan `BEGIN DESCRIPTION` block when present |
 | `HDF_Results_Path` | str / None | resolved `.p##.hdf` path; `None` when results do not exist yet |
 | `full_path` | str | resolved absolute `.p##` path |
-| `flow_type` | str | `"Unsteady"`, `"Steady"`, or `"Unknown"` (derived from `unsteady_number`) |
+| `flow_type` | str | Flow computation mode: `"Unsteady"`, `"Steady"`, `"Quasi-Unsteady"`, or `"Unknown"` (derived from the plan's `.u##`, `.f##`, or `.q##` reference). Sediment, dam breach, and topology are separate features. |
 
 !!! note
     Columns derive directly from `_parse_plan_file()` in `ras_commander/RasPrj.py`,
@@ -183,7 +183,7 @@ HDF-based extraction when `.g##.hdf` exists and falls back to plain-text parsing
 | `geom_title` | str / None | parsed `Geom Title=` value when present |
 | `description` | str / None | geometry `BEGIN DESCRIPTION` block when present |
 | `has_1d_xs` | bool | `True` if the geometry has 1D cross sections |
-| `has_2d_mesh` | bool | `True` if the geometry has 2D mesh / flow areas |
+| `has_2d_mesh` | bool | `True` if plain geometry text declares a 2D flow area or geometry HDF metadata identifies a mesh area |
 | `num_cross_sections` | int | count of 1D cross sections |
 | `num_inline_structures` | int | total inline structures (bridges + culverts + weirs) |
 | `num_bridges` | int | count of bridge structures |
@@ -352,7 +352,7 @@ health, and runtime columns are always present, `None`/`0` when unavailable):
 |--------|-------|---------|
 | `plan_number` | str | copied plan id |
 | `plan_title` | str / None | copied plan title |
-| `flow_type` | str / None | `Steady` / `Unsteady` classification |
+| `flow_type` | str / None | `Steady`, `Unsteady`, `Quasi-Unsteady`, or `Unknown` flow computation mode |
 | `hdf_path` | str | path to the `.p##.hdf` result file |
 | `hdf_exists` | bool | whether the HDF result file exists |
 | `hdf_file_modified` | datetime / None | HDF modification timestamp |

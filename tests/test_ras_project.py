@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import h5py
@@ -244,6 +247,7 @@ def test_steady_1d_geometry_hdf_is_not_required(tmp_path: Path) -> None:
     assert geometry_hdf["inspection_state"] == "not_applicable"
     assert geometry_hdf["readiness"] == "not_required"
     assert geometry_hdf["required"] is False
+    assert geometry_hdf["reason_code"] == "not_required_for_steady_plan"
 
 
 def test_directory_input_fails_closed_when_multiple_projects_exist(tmp_path: Path) -> None:
@@ -987,6 +991,59 @@ def test_tree_snapshot_fails_closed_on_traversal_error(
 
     with pytest.raises(ProjectPathAmbiguityError, match="tree_traversal_failed"):
         project_module._tree_snapshot(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length path behavior")
+def test_stage_project_supports_extended_length_tree_io(tmp_path: Path) -> None:
+    source_project = _write_project(tmp_path / "source")
+    relative = (
+        Path("a" * 80)
+        / ("b" * 80)
+        / ("c" * 80)
+        / "long-linked-raster.tif"
+    )
+    source_file = source_project.parent / relative
+    assert len(str(source_file)) > 260
+    project_module._io_path(source_file.parent).mkdir(parents=True)
+    project_module._io_path(source_file).write_bytes(b"long-path-payload")
+
+    assert str(project_module._io_path(Path(r"\\server\share\folder"))) == (
+        r"\\?\UNC\server\share\folder"
+    )
+
+    destination = tmp_path / f"published-{'d' * 150}"
+    assert len(str(destination / project_module._TEMP_SENTINEL)) > 260
+    result = stage_project(source_project, destination)
+    published_file = destination / relative
+
+    assert result.source_fingerprint_before == result.source_fingerprint_after
+    assert project_module._path_is_file(published_file)
+    assert project_module._io_path(published_file).read_bytes() == b"long-path-payload"
+    assert project_module._tree_snapshot(destination)[1] == result.published_fingerprint
+    assert not str(result.destination_root).startswith("\\\\?\\")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows short-name alias behavior")
+def test_stage_project_rebases_all_paths_across_short_name_temp_alias() -> None:
+    root = Path(tempfile.mkdtemp(prefix="rascommander-rebase-alias-"))
+    try:
+        if root == root.resolve():
+            pytest.skip("Temporary directory does not expose a distinct short-name alias")
+        source_project = _write_project(root / "source")
+        result = stage_project(source_project, root / "published")
+
+        stale_attributes = {
+            name: value
+            for name, value in vars(result.ras_object).items()
+            if ".ras-stage-" in str(value)
+        }
+        assert stale_attributes == {}
+        assert all(
+            str(path).startswith(str(result.destination_root))
+            for path in result.ras_object._plan_flow_prefixes
+        )
+    finally:
+        shutil.rmtree(project_module._io_path(root))
 
 
 def test_stage_project_rejects_a_source_reparse_ancestor(tmp_path: Path) -> None:
