@@ -88,6 +88,36 @@ read only. The fallback is computed only in memory and does not create or write
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
 
+### HdfResultsProducts
+
+Inspection and deterministic product contracts for completed unsteady result
+HDFs.
+
+- `inspect_result(hdf_path)` - Read an existing result HDF without mutation and
+  fail closed on incomplete or conflicting completion evidence, inconsistent
+  time axes, missing CRS or units, and mesh/result/topology misalignment
+
+Current HEC-RAS results can establish completion with
+`Event Conditions/Completed Successfully=True`. Older producer HDFs that do
+not contain that attribute can establish completion with their embedded
+`Complete Process` compute-message marker. An explicit false or malformed
+attribute is never overridden by messages.
+
+The returned inspection identifies whether maximum depth will be read from the
+stored HEC-RAS `Depth` time series or derived in memory from `Water Surface -
+Cells Minimum Elevation`. It also records `hydraulic_qaqc: not_evaluated`:
+mechanical completion and product readiness are not engineering acceptance.
+
+```python
+from ras_commander import HdfResultsProducts
+
+inspection = HdfResultsProducts.inspect_result("project.p02.hdf")
+```
+
+Synthetic HDFs created by focused tests are labeled test artifacts. Real-file
+integration uses pre-existing producer HDFs read-only and does not run HEC-RAS
+or generate model output.
+
 ## Plan Results
 
 ### HdfResultsPlan
