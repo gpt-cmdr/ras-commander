@@ -2,6 +2,22 @@
 
 ## Version History
 
+### Unreleased
+
+**C01-C06 Reliability Hardening**
+
+- Preserve the existing precipitation-file line endings and surrounding bytes
+  during targeted key replacement, and fail closed on malformed or ambiguous
+  records instead of rewriting them speculatively.
+- Fail closed when DSS boundary selection or timestamp representation is
+  ambiguous rather than silently selecting a pathname or truncating time.
+- Treat native HDF result datasets as read-only inputs when deriving missing
+  depth products, and fail closed when required mesh topology or result
+  alignment cannot be established.
+- Require exact legacy completion evidence before exporting result products,
+  exclude nonfinite result samples from raster interpolation, and omit
+  unavailable hydrograph variables from exported Parquet metadata.
+
 ### v0.99.1 (Current published release — July 2026)
 
 **Qualified Raster Processing on Linux/Wine**

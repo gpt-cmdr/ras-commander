@@ -166,7 +166,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 22
-  executed_cells: 19
+  executed_cells: 18
 - id: 110_single_plan_execution
   filename: 110_single_plan_execution.ipynb
   title: Single Plan Execution
@@ -1714,7 +1714,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 14
+  executed_cells: 13
 - id: 311_2d_floodway_encroachment
   filename: 311_2d_floodway_encroachment.ipynb
   title: 2D Floodway Encroachment
@@ -1756,7 +1756,9 @@ notebooks:
   functions_used:
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
+  - RasDss.get_file_version
   - RasDss.read_timeseries
+  - RasDss.write_timeseries
   - RasExamples.extract_project
   - RasUnsteady.CLASTIC_METHODS
   - RasUnsteady.HIGH_C_TRANSPORT_METHODS
@@ -1816,7 +1818,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 56
-  executed_cells: 54
+  executed_cells: 47
 - id: 313_hms_to_ras_boundary_matching
   filename: 313_hms_to_ras_boundary_matching.ipynb
   title: HMS-to-RAS Boundary Condition Matching
@@ -2180,6 +2182,7 @@ notebooks:
   - HdfPlan.get_plan_met_precip
   - HdfPlan.get_plan_parameters
   - HdfPlan.get_plan_start_time
+  - HdfResultsMesh.get_boundary_conditions_timeseries
   - HdfResultsMesh.get_mesh_cells_timeseries
   - HdfResultsMesh.get_mesh_faces_timeseries
   - HdfResultsMesh.get_mesh_max_face_v
@@ -2206,7 +2209,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 119
+  code_cells: 120
   executed_cells: 111
 - id: 411_2d_hdf_pipes_and_pumps
   filename: 411_2d_hdf_pipes_and_pumps.ipynb
@@ -2410,6 +2413,31 @@ notebooks:
   excluded: false
   code_cells: 4
   executed_cells: 3
+- id: 417_inspect_results_and_generate_hydraulic_products
+  filename: 417_inspect_results_and_generate_hydraulic_products.ipynb
+  title: Inspecting Results and Generating Hydraulic Product Packages
+  series: 400
+  series_name: HDF Results
+  summary: Read and mechanically inspect an existing completed HEC-RAS result HDF, then generate
+    and independently verify a checksum-pinned COG, Arrow/Parquet, GeoJSON, JSON, and PNG derivative
+    package without modifying the producer HDF or generating model output.
+  tags:
+  - hdf
+  - results
+  - parquet
+  - cloud-native
+  difficulty: intermediate
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - HdfResultsProducts.MANIFEST_FILENAME
+  - HdfResultsProducts.export
+  - HdfResultsProducts.inspect_result
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 6
+  executed_cells: 0
 - id: 420_breach_results_extraction
   filename: 420_breach_results_extraction.ipynb
   title: Dam Breach Results
@@ -2810,7 +2838,6 @@ notebooks:
   - GeomMesh.set_geometry_association
   - HdfLandCover.get_preprocessed_mannings_n
   - HdfMesh.get_mesh_cell_points
-  - HdfMesh.get_mesh_sloped_topology
   - HdfResultsMesh.get_mesh_cells_timeseries
   - HdfResultsMesh.get_mesh_max_depth
   - HdfResultsMesh.get_mesh_max_face_v
@@ -2828,7 +2855,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 14
+  executed_cells: 13
 - id: 711_mannings_sensitivity_multi_interval
   filename: 711_mannings_sensitivity_multi_interval.ipynb
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
@@ -3055,14 +3082,14 @@ notebooks:
   excluded: false
   code_cells: 20
   executed_cells: 20
-- id: 728_prepare_gridded_dss_for_rain_on_grid
-  filename: 728_prepare_gridded_dss_for_rain_on_grid.ipynb
-  title: Preparing Gridded DSS Forcing for HEC-RAS Rain-on-Grid
+- id: 728_extend_gridded_dss_forcing_window
+  filename: 728_extend_gridded_dss_forcing_window.ipynb
+  title: Extending Gridded DSS Forcing Through the Simulation Window
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: Create a run-local gridded precipitation or rainfall-excess DSS derivative, append an explicit
-    zero tail, verify source immutability and grid metadata, and record the reviewed handoff to HEC-RAS
-    rain-on-grid scenario preparation without executing HEC-RAS.
+  summary: Extend a reviewed gridded precipitation or rainfall-excess DSS family with explicit zero
+    forcing through a longer simulation window, verify source immutability and derivative metadata,
+    and show the real ras-commander project handoff without modifying or executing HEC-RAS.
   tags:
   - dss
   - precipitation
@@ -3076,6 +3103,7 @@ notebooks:
   - RasDss.read_grid
   - RasDss.write_grid_timeseries
   - RasDss.write_timeseries
+  - RasUnsteady.configure_gridded_dss_precipitation
   hec_refs: []
   learning_paths: []
   excluded: false
