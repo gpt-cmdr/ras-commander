@@ -2418,9 +2418,9 @@ notebooks:
   title: Inspecting Results and Generating Hydraulic Product Packages
   series: 400
   series_name: HDF Results
-  summary: Read and mechanically inspect an existing completed HEC-RAS result HDF, then generate
-    and independently verify a checksum-pinned COG, Arrow/Parquet, GeoJSON, JSON, and PNG derivative
-    package without modifying the producer HDF or generating model output.
+  summary: Read and mechanically inspect an existing completed HEC-RAS result HDF, then generate and independently
+    verify a checksum-pinned COG, Arrow/Parquet, GeoJSON, JSON, and PNG derivative package without modifying
+    the producer HDF or generating model output.
   tags:
   - hdf
   - results
@@ -3087,9 +3087,9 @@ notebooks:
   title: Extending Gridded DSS Forcing Through the Simulation Window
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: Extend a reviewed gridded precipitation or rainfall-excess DSS family with explicit zero
-    forcing through a longer simulation window, verify source immutability and derivative metadata,
-    and show the real ras-commander project handoff without modifying or executing HEC-RAS.
+  summary: Extend a reviewed gridded precipitation or rainfall-excess DSS family with explicit zero forcing
+    through a longer simulation window, verify source immutability and derivative metadata, and show the
+    real ras-commander project handoff without modifying or executing HEC-RAS.
   tags:
   - dss
   - precipitation
