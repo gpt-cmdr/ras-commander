@@ -41,6 +41,59 @@ Related live notebooks:
 - [212_landcover_mannings_n_write.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/212_landcover_mannings_n_write.ipynb)
 - [611_validating_map_layers.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/611_validating_map_layers.ipynb)
 
+## Project asset inventory
+
+`inspect_project_assets()` returns one row per file reference or referenced
+dataset. File and dataset state are separate: an available DSS container, for
+example, does not prove that a pathname exists or covers a plan window.
+
+The ordered schema is:
+
+| Column group | Meaning |
+|--------------|---------|
+| `inventory_schema_version`, `inventory_id`, `inspection_depth` | Snapshot identity and requested scope |
+| `asset_id`, `parent_asset_id`, `asset_kind`, `asset_role` | Stable row identity, containment, and mechanical role |
+| `plan_number`, `unsteady_number`, `required` | Plan/flow scope and whether the dependency is mechanically enabled |
+| `owner_file`, `owner_sha256`, `reference_raw`, `resolved_path` | Exact reference provenance and resolved path |
+| `path_scope`, `portable` | Internal/external/ambiguous path classification |
+| `exists`, `is_file`, `is_dir`, `volume_id`, `file_id`, `size_bytes`, `mtime_ns`, `sha256` | Filesystem and optional streamed-hash evidence |
+| `dataset_name`, `expected_start`, `expected_end`, `available_start`, `available_end` | HDF/DSS/GDAL dataset and coverage evidence |
+| `inspection_state`, `readiness`, `reason_code`, `detail`, `source_api` | Explicit observation state and parser provenance |
+
+`inspection_state` is one of `available`, `missing`, `ambiguous`,
+`not_inspected`, `failed`, or `not_applicable`. `readiness` is independently
+`ready`, `not_ready`, `unknown`, or `not_required`. In particular,
+`not_inspected` is never silently promoted to ready.
+
+Controlled DSS 6/7 tests found existing-file reads byte-stable, but the normal
+Java handle remained write-capable and several read APIs created a new DSS file
+when the target was missing. Direct source pathname and coverage requests
+therefore remain `not_inspected` with reason `reader_not_source_immutable`; the
+container path is still inventoried normally. A future deeper reader will use a
+verified disposable copy, OS-denied writes, must-exist open, and a short-lived
+worker before returning snapshot-derived coverage.
+
+## Exact boundary-block inventory
+
+`RasUnsteady.inspect_boundary_blocks(staged, unsteady_number="01")` returns one
+row per exact `Boundary Location=` block in an owned `StageProjectResult`. This
+is a mutation-evidence table, not a replacement for the broader
+`ras.boundaries_df` summary. Its key groups are:
+
+| Column group | Meaning |
+|--------------|---------|
+| `inventory_schema_version`, `inventory_id`, `stage_operation_id` | Snapshot and owning stage identity |
+| `owner_relative_path`, `owner_sha256`, `owner_size_bytes`, `owner_mtime_ns`, `volume_id`, `file_id` | Exact staged unsteady-file evidence |
+| `boundary_index`, `occurrence_ordinal`, `boundary_count` | Raw order and duplicate disambiguation |
+| `boundary_location_raw`, `location_kind`, `river`, `reach`, `river_station`, `area_2d`, `bc_line` | Exact and parsed location evidence |
+| `bc_type`, `start_byte`, `end_byte_exclusive`, `block_length_bytes`, `block_sha256` | Detected type and byte-splice evidence |
+| `encoding`, `has_bom`, `newline`, `boundary_id` | File format and exact selector identity |
+| `inspection_state`, `reason_code`, `detail` | Explicit success/failure evidence |
+
+Every column has an exact Arrow dtype in `DATAFRAME_SCHEMAS`. A successful
+mutation invalidates this snapshot; inspect a newly staged copy before a
+subsequent edit.
+
 ## Plan-Number Normalization
 
 ras-commander normalizes RAS file numbers to a two-digit form before path
@@ -80,6 +133,10 @@ parsed from the plan text are strings unless noted:
 | `Geom Path` | str | resolved absolute `.g##` path |
 | `Flow File` | str | steady/unsteady flow reference number (`Flow File=`) |
 | `Flow Path` | str | resolved absolute `.f##` / `.u##` path |
+| `Sediment File` | str / None | normalized sediment-file number such as `01`; `None` when no recognized `s##` reference is present |
+| `Sediment Path` | str / None | expected absolute `.s##` path for the selected sediment file; file existence/readiness is reported separately by the asset inventory |
+| `breach_definition_count` | nullable Int64 | number of successfully parsed stored `Breach Loc` definitions; zero means none and null means inspection failed |
+| `breach_active_count` | nullable Int64 | number of stored definitions whose local `RasBreach` `is_active` flag is true; not evidence that a breach initiated during computation |
 | `Computation Interval` | str | computation time step (`Computation Interval=`) |
 | `Mapping Interval` | str | RAS Mapper output interval (`Mapping Interval=`) |
 | `Simulation Date` | str | simulation date/time window (`Simulation Date=`) |
@@ -93,12 +150,14 @@ parsed from the plan text are strings unless noted:
 | `description` | str / None | plan `BEGIN DESCRIPTION` block when present |
 | `HDF_Results_Path` | str / None | resolved `.p##.hdf` path; `None` when results do not exist yet |
 | `full_path` | str | resolved absolute `.p##` path |
-| `flow_type` | str | `"Unsteady"`, `"Steady"`, or `"Unknown"` (derived from `unsteady_number`) |
+| `flow_type` | str | Flow computation mode: `"Unsteady"`, `"Steady"`, `"Quasi-Unsteady"`, or `"Unknown"` (derived from the plan's `.u##`, `.f##`, or `.q##` reference). Sediment, dam breach, and topology are separate features. |
 
 !!! note
-    Columns derive directly from `_parse_plan_file()` in `ras_commander/RasPrj.py`,
-    so any plan key present in the file appears as a same-named column. Not every plan
-    contains every key; missing keys are simply absent or `None`.
+    Most source columns derive directly from `_parse_plan_file()` in
+    `ras_commander/RasPrj.py`, so a plan key appears under its source name.
+    `Sediment File` is normalized for consistency with `Geom File` and `Flow
+    File`; the two breach counts are derived through the existing `RasBreach`
+    reader. Not every plan contains every source key.
 
 Common patterns:
 
@@ -108,6 +167,12 @@ plans_with_results = ras.plan_df[ras.plan_df["HDF_Results_Path"].notna()]
 
 # Plans using a specific geometry
 g04_plans = ras.plan_df[ras.plan_df["geometry_number"] == "04"]
+
+# Plans with successfully parsed active stored breach definitions
+active_breach_plans = ras.plan_df[ras.plan_df["breach_active_count"].fillna(0) > 0]
+
+# Plans linked to a sediment file (independent of the Run Sediment flag)
+sediment_plans = ras.plan_df[ras.plan_df["Sediment File"].notna()]
 
 # Quick lookup through RasPrj helpers
 info = ras.get_plan_info("01")
@@ -130,7 +195,7 @@ HDF-based extraction when `.g##.hdf` exists and falls back to plain-text parsing
 | `geom_title` | str / None | parsed `Geom Title=` value when present |
 | `description` | str / None | geometry `BEGIN DESCRIPTION` block when present |
 | `has_1d_xs` | bool | `True` if the geometry has 1D cross sections |
-| `has_2d_mesh` | bool | `True` if the geometry has 2D mesh / flow areas |
+| `has_2d_mesh` | bool | `True` if plain geometry text declares a 2D flow area or geometry HDF metadata identifies a mesh area |
 | `num_cross_sections` | int | count of 1D cross sections |
 | `num_inline_structures` | int | total inline structures (bridges + culverts + weirs) |
 | `num_bridges` | int | count of bridge structures |
@@ -299,7 +364,7 @@ health, and runtime columns are always present, `None`/`0` when unavailable):
 |--------|-------|---------|
 | `plan_number` | str | copied plan id |
 | `plan_title` | str / None | copied plan title |
-| `flow_type` | str / None | `Steady` / `Unsteady` classification |
+| `flow_type` | str / None | `Steady`, `Unsteady`, `Quasi-Unsteady`, or `Unknown` flow computation mode |
 | `hdf_path` | str | path to the `.p##.hdf` result file |
 | `hdf_exists` | bool | whether the HDF result file exists |
 | `hdf_file_modified` | datetime / None | HDF modification timestamp |

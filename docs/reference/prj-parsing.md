@@ -166,7 +166,7 @@ After parsing, entries are available as DataFrames:
 - `full_path` - Full path to plan file
 - `geom_number` - Associated geometry number
 - `unsteady_number` - Associated unsteady file (if applicable)
-- `flow_type` - "Steady" or "Unsteady"
+- `flow_type` - flow computation mode: "Steady", "Unsteady", "Quasi-Unsteady", or "Unknown"; sediment, dam breach, and 1D/2D topology are independent features
 
 **geom_df columns:**
 - `geom_number` - Geometry identifier

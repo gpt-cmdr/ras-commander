@@ -207,27 +207,28 @@ utilities.
 - `set_refinement_region_spacing(geom_number, spacing_dx, ...)` - Update spacing for one or more existing refinement regions.
 - `set_refinement_region_name(geom_number, new_name, ...)` - Rename an existing refinement region.
 
-## RasStruct
+## Structure APIs
 
-Inline structure parsing.
+Inline structures are exposed through the public `GeomInlineWeir`,
+`GeomBridge`, and `GeomCulvert` classes. There is no public `RasStruct` class.
 
 ### Inline Weir Methods
 
-- `get_inline_weirs(geom)` - List inline weirs
-- `get_inline_weir_profile(geom, river, reach, station)` - Get weir profile
-- `get_inline_weir_gates(geom, river, reach, station)` - Get gate data
+- `GeomInlineWeir.get_weirs(geom, river=None, reach=None)` - List inline weirs
+- `GeomInlineWeir.get_profile(geom, river, reach, station)` - Get weir profile
+- `GeomInlineWeir.get_gates(geom, river, reach, station)` - Get gate data
 
 ### Bridge Methods
 
-- `get_bridges(geom)` - List bridges
-- `get_bridge_deck(geom, river, reach, station)` - Get deck profile
-- `get_bridge_piers(geom, river, reach, station)` - Get pier data
-- `get_bridge_abutment(geom, river, reach, station)` - Get abutment data
-- `get_bridge_approach_sections(geom, river, reach, station)` - Get approach sections
-- `get_bridge_coefficients(geom, river, reach, station)` - Get coefficients
-- `get_hydraulic_methods(geom, river, reach, station)` - Get bridge low-flow/high-flow method selections from `Bridge Culvert-`, `Deck Dist Width WeirC`, `BR Coef=`, and `WSPro=` records
-- `set_hydraulic_methods(geom, river, reach, station, low_flow_method=..., high_flow_method=..., weir_coefficient=...)` - Set bridge modeling approach method selections and related coefficients
-- `get_bridge_htab(geom, river, reach, station)` - Get HTAB settings
+- `GeomBridge.get_bridges(geom)` - List bridges
+- `GeomBridge.get_deck(geom, river, reach, station)` - Get deck profile
+- `GeomBridge.get_piers(geom, river, reach, station)` - Get pier data
+- `GeomBridge.get_abutment(geom, river, reach, station)` - Get abutment data
+- `GeomBridge.get_approach_sections(geom, river, reach, station)` - Get approach sections
+- `GeomBridge.get_coefficients(geom, river, reach, station)` - Get coefficients
+- `GeomBridge.get_hydraulic_methods(geom, river, reach, station)` - Get bridge low-flow/high-flow method selections from `Bridge Culvert-`, `Deck Dist Width WeirC`, `BR Coef=`, and `WSPro=` records
+- `GeomBridge.set_hydraulic_methods(geom, river, reach, station, low_flow_method=..., high_flow_method=..., weir_coefficient=...)` - Set bridge modeling approach method selections and related coefficients
+- `GeomBridge.get_htab(geom, river, reach, station)` - Get HTAB settings
 
 Accepted `low_flow_method` values are `energy`, `momentum`, `yarnell`, and `wspro`.
 Accepted `high_flow_method` values are `energy` and `pressure_weir`.
@@ -324,9 +325,9 @@ Bridge geometry authoring (deck profiles, piers, abutments, approach sections).
 
 ### Methods
 
-- `build_bridge(geom_file, river, reach, rs, **bridge_params)` - Author complete bridge geometry
-- `get_bridge_deck(geom_file, river, reach, rs)` - Read bridge deck profile
-- `set_bridge_deck(geom_file, river, reach, rs, deck_data)` - Write bridge deck profile
+- `get_bridges(geom_file, river=None, reach=None)` - List bridges
+- `get_deck(geom_file, river, reach, rs)` - Read bridge deck profile
+- `set_deck(geom_file, river, reach, rs, deck_data, ...)` - Write bridge deck profile
 
 ## GeomBcLines
 
@@ -370,13 +371,20 @@ Levee station-elevation parsing and modification.
 
 ## RasBreach
 
-Breach parameter modification in plan files.
+Breach discovery and parameter modification in plan files. Detailed computed
+results are read separately through `HdfResultsBreach`.
 
 ### Methods
 
-- `list_breach_structures_plan(plan)` - List structures with breach data
-- `read_breach_block(plan, structure)` - Read breach parameters
-- `update_breach_block(plan, structure, **params)` - Modify breach parameters
+- `list_breach_structures_plan(plan_input, *, ras_object=None)` - Return one dictionary per stored definition with `structure`, `river`, `reach`, `station`, and local stored `is_active`
+- `read_breach_block(plan_input, structure_name, *, ras_object=None)` - Return the named definition's location, raw `values`, and parsed `table_rows`
+- `update_breach_block(plan_input, structure_name, *, is_active=None, method=None, geom_values=None, start_values=None, progression_mode=None, progression_pairs=None, downcutting_pairs=None, widening_pairs=None, calculator_data=None, dlb_methods=None, dlb_soil_type=None, dlb_soil_properties=None, dlb_core_soil_type=None, dlb_cover_option=None, dlb_cover_soil_properties=None, dlb_breach_direction=None, user_growth_flag=None, user_growth_ratio=None, mass_wasting_option=None, create_backup=True, ras_object=None)` - Update complete stored fields and tables
+- `set_breach_geom(plan_input, structure_name, *, centerline=None, initial_width=None, final_bottom_elev=None, left_slope=None, right_slope=None, active=None, weir_coef=None, top_elev=None, formation_method=None, formation_time=None, ras_object=None)` - Update selected fields in the ten-value `Breach Geom` record
+- `create_breach_block(plan_input, structure_name, *, river="", reach="", station="", is_active=True, create_backup=True, ras_object=None)` - Create a new minimal stored breach block
+
+The list output is the structure-level discovery API. Project-level
+`plan_df` contains only `breach_definition_count` and
+`breach_active_count`; it does not duplicate the full definition records.
 
 ## Usage Examples
 
@@ -400,10 +408,11 @@ RasGeometry.set_station_elevation("01", "River", "Reach", "1000", sta_elev)
 ```python
 from ras_commander import RasBreach
 
-# Update breach parameters
-RasBreach.update_breach_block(
-    "01", "Dam1",
+# Update named fields in Breach Geom
+RasBreach.set_breach_geom(
+    "01",
+    "Dam1",
     formation_time=2.0,
-    bottom_width=100.0
+    initial_width=100.0,
 )
 ```

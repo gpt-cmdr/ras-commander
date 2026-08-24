@@ -61,6 +61,123 @@ Core classes for HEC-RAS project management and execution.
         - get_hdf_entries
         - get_boundary_conditions
 
+### Project asset inspection
+
+`inspect_project_assets()` builds a read-only, PyArrow-backed inventory of a
+project's declared components, plan dependency closure, HDF sidecars,
+RASMapper references, DSS links, restart/prior-water-surface inputs, and
+gridded precipitation inputs. Use an explicit inspection depth rather than
+assuming every file beside a project is required by the current plan.
+The shallow `project` depth initializes project tables without opening HDF or
+raster datasets for geometry metadata or CRS discovery.
+
+```python
+from ras_commander import inspect_project_assets
+
+assets = inspect_project_assets(
+    r"C:\Models\Source\Model.prj",
+    depth="current_plan",
+    hash_files=True,
+    dss_inspection="none",
+)
+
+not_ready = assets.loc[
+    (assets["required"] == True) & (assets["readiness"] == "not_ready")
+]
+```
+
+::: ras_commander.inspect_project_assets
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+### Atomic project staging
+
+`stage_project()` copies a complete project tree into a unique temporary
+sibling, verifies every source and copied file with streaming SHA-256, creates
+an explicit `RasPrj`, inventories the staged dependencies, writes a stage
+manifest, and publishes with one final directory rename. It never runs or
+preprocesses HEC-RAS.
+
+The destination's parent must already exist and the destination itself must
+not exist. The operation fails closed on overlap, reparse/symlink ambiguity,
+lock artifacts, source or copy drift, an invalid project population, and
+destination races. Failures use typed `ProjectStageError` subclasses with a
+machine-readable `reason_code`; an initially existing destination retains the
+standard `FileExistsError`. Existing `RasCmdr` copy behavior is unchanged.
+
+```python
+from ras_commander import stage_project
+
+staged = stage_project(
+    r"C:\Models\Source\Model.prj",
+    r"D:\Runs\model-2026-08-23",
+)
+
+print(staged.destination_project_file)
+print(staged.execution_readiness)
+```
+
+::: ras_commander.stage_project
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+::: ras_commander.StageProjectResult
+    options:
+      show_root_heading: true
+      heading_level: 3
+
+### Exact boundary-block deletion
+
+`RasUnsteady.delete_boundary()` intentionally requires an atomically staged
+project. First inspect the staged unsteady file, select one unique row, and
+pass back all of its exact evidence. Preview is the default and does not write.
+
+```python
+from ras_commander import RasUnsteady, stage_project
+
+staged = stage_project(
+    r"C:\Models\Source\Model.prj",
+    r"D:\Runs\model-boundary-edit",
+)
+blocks = RasUnsteady.inspect_boundary_blocks(staged, unsteady_number="01")
+
+candidate = blocks.loc[
+    (blocks["bc_type"] == "Lateral Inflow Hydrograph")
+    & (blocks["river"] == "River A")
+    & (blocks["reach"] == "Reach 1")
+    & (blocks["river_station"] == "1200")
+]
+if len(candidate) != 1:
+    raise RuntimeError(f"Expected one exact boundary, found {len(candidate)}")
+row = candidate.iloc[0]
+
+evidence = {
+    "unsteady_number": str(row["unsteady_number"]),
+    "boundary_id": str(row["boundary_id"]),
+    "expected_source_sha256": str(row["owner_sha256"]),
+    "expected_block_sha256": str(row["block_sha256"]),
+    "expected_bc_type": str(row["bc_type"]),
+    "expected_location_raw": str(row["boundary_location_raw"]),
+}
+preview = RasUnsteady.delete_boundary(staged, **evidence)
+assert preview.state == "previewed"
+
+applied = RasUnsteady.delete_boundary(staged, **evidence, dry_run=False)
+assert applied.state == "applied"
+```
+
+The operation is generic across recognized 1D and 2D boundary types; it does
+not encode a protected-type policy. It rejects direct paths, partial or
+index-only selectors, ambiguous encodings/types, reparse points, stale file or
+block evidence, and non-local apply targets. Apply performs one verified byte
+splice and atomic replacement without creating a `.bak` file. Any mutation
+invalidates the stage snapshot, so another edit requires a fresh stage and
+inventory. If an exception exposes `mutation_applied=True`, the replacement
+committed before a later verification/refresh failure and the stage must be
+treated as requiring manual review.
+
 ## Plan Execution
 
 ### RasCmdr
@@ -339,6 +456,8 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
       members:
         - clone_unsteady
         - get_unsteady_path
+        - inspect_boundary_blocks
+        - delete_boundary
         - get_restart_settings
         - set_flow_title
         - set_restart_settings

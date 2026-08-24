@@ -1,234 +1,233 @@
 # Dam Breach Analysis
 
-RAS Commander provides tools for both modifying dam breach parameters and extracting breach results.
+RAS Commander separates stored breach configuration from computed breach
+results:
 
-## Architecture
+| Class | Source | Purpose |
+|---|---|---|
+| `RasBreach` | Plan text (`.p##`) | Discover, read, create, and update stored breach definitions |
+| `HdfStruc` | Plan HDF (`.p##.hdf`) | Discover SA/2D connections and available breach-result datasets |
+| `HdfResultsBreach` | Plan HDF (`.p##.hdf`) | Extract structure and breach result time series and summaries |
 
-The library separates breach operations into two classes:
+Stored definitions, stored activation, and computed results are different
+states. A retained definition may be inactive, and the presence of a breach
+result dataset does not by itself prove that a breach initiated during a run.
 
-| Class | File Type | Purpose |
-|-------|-----------|---------|
-| `RasBreach` | Plan files (.p##) | Modify breach **parameters** |
-| `HdfResultsBreach` | HDF files (.p##.hdf) | Extract breach **results** |
+## Inspect Stored Breach Definitions
 
-!!! note "Naming Differences"
-    Structure names may differ between plan files and HDF results. Always verify names in both sources.
-
-## Modifying Breach Parameters
-
-### List Breach Structures
+`list_breach_structures_plan()` returns one dictionary per `Breach Loc`
+definition, not a list of structure-name strings:
 
 ```python
 from ras_commander import RasBreach, init_ras_project
 
 init_ras_project("/path/to/project", "6.5")
 
-# List structures with breach data in plan file
-structures = RasBreach.list_breach_structures_plan("01")
-print(structures)
-# Example: ['Dam1', 'Dam2', 'Levee North']
-```
-
-### Read Breach Block
-
-```python
-# Get breach parameters for a structure
-params = RasBreach.read_breach_block("01", "Dam1")
-print(params)
-
-# Returns dictionary with:
-# - breach_mode: Overtopping, Piping, etc.
-# - start_time: Breach initiation time
-# - formation_time: Time to full breach
-# - bottom_elevation: Final breach bottom
-# - bottom_width: Final breach width
-# - left_slope, right_slope: Side slopes
-# - weir_coefficient: Breach weir coefficient
-# - piping_coefficient: (if piping mode)
-# - trigger_elevation: (if overtopping)
-```
-
-### Update Breach Parameters
-
-```python
-# Modify breach parameters
-RasBreach.update_breach_block(
-    plan_number="01",
-    structure_name="Dam1",
-    start_time=10.0,           # Hours from simulation start
-    formation_time=2.0,        # Hours for breach to fully form
-    bottom_elevation=850.0,    # Final breach bottom (ft)
-    bottom_width=100.0,        # Final breach width (ft)
-    left_slope=1.0,            # H:V ratio
-    right_slope=1.0
-)
-```
-
-### Batch Parameter Updates
-
-```python
-# Define sensitivity scenarios
-scenarios = [
-    {"formation_time": 1.0, "name": "Fast"},
-    {"formation_time": 2.0, "name": "Medium"},
-    {"formation_time": 4.0, "name": "Slow"},
-]
-
-for scenario in scenarios:
-    # Clone plan
-    new_plan = RasPlan.clone_plan("01", new_plan_shortid=scenario["name"])
-
-    # Update breach
-    RasBreach.update_breach_block(
-        new_plan,
-        "Dam1",
-        formation_time=scenario["formation_time"]
+definitions = RasBreach.list_breach_structures_plan("01")
+for definition in definitions:
+    print(
+        definition["structure"],
+        definition["river"],
+        definition["reach"],
+        definition["station"],
+        definition["is_active"],
     )
-
-    # Execute
-    RasCmdr.compute_plan(new_plan, dest_folder=f"./breach_{scenario['name']}")
 ```
 
-## Extracting Breach Results
+Each dictionary has `structure`, `river`, `reach`, `station`, and
+`is_active`. The `is_active` value is the local stored `Breach Loc` flag; it is
+not evidence that the breach initiated during a computation.
 
-### Breach Time Series
+Named definitions can be read through `read_breach_block()`:
 
 ```python
-from ras_commander import HdfResultsBreach, RasPlan
+named = [item for item in definitions if item["structure"]]
+if named:
+    structure_name = named[0]["structure"]
+    block = RasBreach.read_breach_block("01", structure_name)
 
-hdf_path = RasPlan.get_results_path("01")
-
-# Get complete breach time series
-ts = HdfResultsBreach.get_breach_timeseries(hdf_path, "Dam1")
-print(ts.columns)
-# Includes: time, breach_flow, breach_stage, breach_width, breach_depth, etc.
-
-# Plot breach flow
-import matplotlib.pyplot as plt
-ts.plot(x='time', y='breach_flow')
-plt.title("Dam Breach Hydrograph")
-plt.xlabel("Time (hours)")
-plt.ylabel("Flow (cfs)")
-plt.show()
+    print(block["structure_name"])
+    print(block["is_active"])
+    print(block["river"], block["reach"], block["station"])
+    print(block["values"])      # raw named values, including Breach Geom
+    print(block["table_rows"])  # parsed progression/downcutting tables
 ```
 
-### Breach Summary Statistics
+Some older 1D plans contain unnamed river/reach/station definitions. They are
+included in the list output. Passing `structure_name=""` to the existing read
+or mutation methods selects the first unnamed definition. That selector is
+ambiguous when a plan contains multiple unnamed definitions, just as duplicate
+named definitions currently resolve to the first match.
+
+## Update Stored Parameters
+
+For individual fields in the ten-value `Breach Geom` record, use
+`set_breach_geom()`:
 
 ```python
-# Get summary statistics
-summary = HdfResultsBreach.get_breach_summary(hdf_path, "Dam1")
-print(summary)
-
-# Returns:
-# - peak_flow: Maximum breach discharge
-# - peak_flow_time: Time of peak
-# - peak_stage: Maximum stage at breach
-# - total_volume: Total volume through breach
-# - max_width: Maximum breach width
-# - final_bottom: Final breach bottom elevation
-```
-
-### Breach Geometry Evolution
-
-```python
-# Get breach geometry over time
-geometry = HdfResultsBreach.get_breaching_variables(hdf_path, "Dam1")
-print(geometry.columns)
-# Includes: time, bottom_elevation, top_width, side_slopes
-
-# Plot breach evolution
-fig, axes = plt.subplots(2, 1, figsize=(10, 8))
-
-geometry.plot(x='time', y='bottom_elevation', ax=axes[0])
-axes[0].set_ylabel("Bottom Elevation (ft)")
-axes[0].set_title("Breach Evolution")
-
-geometry.plot(x='time', y='top_width', ax=axes[1])
-axes[1].set_ylabel("Top Width (ft)")
-axes[1].set_xlabel("Time (hours)")
-
-plt.tight_layout()
-plt.show()
-```
-
-### Structure Flow Variables
-
-```python
-# Get structure flow variables
-flow_vars = HdfResultsBreach.get_structure_variables(hdf_path, "Dam1")
-print(flow_vars.columns)
-# Includes: time, headwater, tailwater, flow, velocity
-```
-
-## Complete Workflow
-
-```python
-from ras_commander import (
-    init_ras_project, RasExamples, RasCmdr, RasPlan,
-    RasBreach, HdfResultsBreach
+RasBreach.set_breach_geom(
+    "01",
+    "Dam1",
+    initial_width=100.0,
+    final_bottom_elev=850.0,
+    left_slope=1.0,
+    right_slope=1.0,
+    formation_method=1,
+    formation_time=2.0,
 )
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# Setup with dam breach example
-path = RasExamples.extract_project("Dam Breaching")
-init_ras_project(path, "6.5")
-
-# Find plan with breach
-plan = "01"  # Adjust based on project
-
-# Check current breach parameters
-structures = RasBreach.list_breach_structures_plan(plan)
-print(f"Structures with breach: {structures}")
-
-if structures:
-    dam = structures[0]
-    params = RasBreach.read_breach_block(plan, dam)
-    print(f"\nCurrent parameters for {dam}:")
-    for k, v in params.items():
-        print(f"  {k}: {v}")
-
-    # Run the plan
-    success = RasCmdr.compute_plan(plan, dest_folder="./breach_run")
-
-    if success:
-        # Extract results
-        hdf_path = RasPlan.get_results_path(plan)
-
-        # Summary
-        summary = HdfResultsBreach.get_breach_summary(hdf_path, dam)
-        print(f"\nBreach Summary:")
-        print(f"  Peak Flow: {summary['peak_flow']:,.0f} cfs")
-        print(f"  Peak Time: {summary['peak_flow_time']:.1f} hours")
-
-        # Time series
-        ts = HdfResultsBreach.get_breach_timeseries(hdf_path, dam)
-
-        # Plot
-        fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-
-        ts.plot(x='time', y='breach_flow', ax=axes[0], legend=False)
-        axes[0].set_ylabel("Breach Flow (cfs)")
-        axes[0].set_title(f"Dam Breach Results - {dam}")
-
-        ts.plot(x='time', y='breach_stage', ax=axes[1], legend=False)
-        axes[1].set_ylabel("Stage (ft)")
-        axes[1].set_xlabel("Time (hours)")
-
-        plt.tight_layout()
-        plt.savefig("breach_results.png", dpi=150)
-        plt.show()
 ```
 
-## Important Notes
+The geometry fields, in order, are `centerline`, `initial_width`,
+`final_bottom_elev`, `left_slope`, `right_slope`, `active`, `weir_coef`,
+`top_elev`, `formation_method`, and `formation_time`. In the raw CSV,
+formation time is field index 9. Prefer the named setter instead of editing
+that position directly.
 
-1. **Structure naming**: Plan file names may differ from HDF result names
-2. **Breach modes**: Overtopping, Piping, and user-defined triggers are supported
-3. **Units**: All parameters use project units (typically ft, cfs)
-4. **Version**: Dam breach operations added in v0.81.0+
+`active=` in `set_breach_geom()` updates the activation-like field stored in
+`Breach Geom`. To update the local `Breach Loc` flag returned as `is_active`,
+use `update_breach_block(is_active=...)`:
+
+```python
+RasBreach.update_breach_block("01", "Dam1", is_active=False)
+```
+
+Use `update_breach_block()` for complete CSV records, tables, and advanced
+parameters:
+
+```python
+RasBreach.update_breach_block(
+    "01",
+    "Dam1",
+    method=9,
+    dlb_methods=[9, 0, 0, 0, 0, 0, 0],
+    dlb_soil_type=2,
+    dlb_soil_properties=[1.5, 0.001, 35.0, 0.35, 18000, 5000, 30.0],
+    dlb_core_soil_type=3,
+    dlb_cover_option=1,
+    dlb_cover_soil_properties=[1.0, 0.001, 30.0, 0.35, 18000, 4000, 28.0],
+    dlb_breach_direction=0,
+    user_growth_flag=1,
+    user_growth_ratio=1.5,
+    mass_wasting_option=1,
+)
+```
+
+Other supported keyword groups are `geom_values`, `start_values`,
+`progression_mode`, `progression_pairs`, `downcutting_pairs`,
+`widening_pairs`, and `calculator_data`. These methods modify the plan file;
+work on an owned project copy and keep the default backup behavior.
+
+Create a new stored block with an explicit target, then configure it through
+the same setters:
+
+```python
+RasBreach.create_breach_block(
+    "01",
+    "Dam1",
+    river="Big River",
+    reach="Upper",
+    station="5000",
+    is_active=True,
+)
+RasBreach.set_breach_geom(
+    "01",
+    "Dam1",
+    initial_width=25.0,
+    final_bottom_elev=850.0,
+    formation_method=1,
+    formation_time=2.0,
+)
+```
+
+## Extract Computed HDF Results
+
+The result readers accept either a plan number or a plan-HDF path. First use
+`HdfStruc` to inspect the names stored in the HDF; those names can differ from
+the plan-text names:
+
+```python
+from ras_commander import HdfResultsBreach, HdfStruc
+
+connections = HdfStruc.list_sa2d_connections("01")
+breach_info = HdfStruc.get_sa2d_breach_info("01")
+print(connections)
+print(breach_info)
+```
+
+### Combined Time Series
+
+```python
+ts = HdfResultsBreach.get_breach_timeseries("01", "Dam1")
+print(ts.columns)
+
+ts.plot(x="datetime", y="breach_flow")
+```
+
+For one requested structure, the combined DataFrame columns are:
+
+```text
+datetime, total_flow, weir_flow, breach_flow, hw, tw, bottom_width,
+bottom_elevation, left_slope, right_slope, breach_velocity, breach_flow_area
+```
+
+When multiple structures are returned, a `structure` column is also present.
+
+### Individual Result Families
+
+`get_structure_variables()` returns:
+
+```text
+datetime, [structure], total_flow, weir_flow, hw, tw
+```
+
+`get_breaching_variables()` returns:
+
+```text
+datetime, [structure], hw, tw, bottom_width, bottom_elevation, left_slope,
+right_slope, breach_flow, breach_velocity, breach_flow_area
+```
+
+Here `[structure]` means the column is included when multiple structures are
+returned.
+
+### Summary
+
+```python
+summary = HdfResultsBreach.get_breach_summary("01", "Dam1")
+if not summary.empty:
+    row = summary.iloc[0]
+    print(row["max_total_flow"])
+    print(row["max_breach_flow"])
+    print(row["final_breach_width"])
+```
+
+The summary DataFrame can contain `structure`, `breach_initiated`,
+`breach_at_time`, `breach_at_date`, `max_total_flow`,
+`max_total_flow_time`, `max_breach_flow`, `max_breach_flow_time`,
+`final_breach_width`, `final_breach_depth`, `max_hw`, and `max_tw`.
+The current `breach_initiated` field mirrors the HDF breach-dataset indicator;
+do not treat it as independent proof of the physical initiation event.
+
+## Project-Level Discovery
+
+After project initialization, `plan_df` provides two lightweight counts:
+
+```python
+ras.plan_df[[
+    "plan_number",
+    "breach_definition_count",
+    "breach_active_count",
+]]
+```
+
+`breach_definition_count` counts parsed stored definitions.
+`breach_active_count` counts definitions whose local stored `is_active` flag
+is true. Zero means the plan was successfully inspected and no matching rows
+were found; a null count means inspection failed. Use `RasBreach` for the
+structure-level details.
 
 ## See Also
 
-- `examples/18_breach_results_extraction.ipynb` - Complete workflow examples
+- [420_breach_results_extraction.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) - Breach parameter and HDF-result examples
 - [HDF Data Extraction](hdf-data-extraction.md) - General HDF access
-- [Plan Execution](plan-execution.md) - Running breach scenarios
+- [Plan Execution](plan-execution.md) - Running plans on isolated project copies

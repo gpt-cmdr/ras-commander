@@ -88,8 +88,8 @@ flowchart TB
 | `RasPlan` | Plan file operations (cloning, parameters, descriptions) |
 | `RasGeo` | Geometry file operations (2D Manning's n land cover) |
 | `RasGeometry` | 1D geometry parsing (cross sections, storage, connections) |
-| `RasStruct` | Inline structure parsing (bridges, culverts, weirs) |
-| `RasBreach` | Breach parameter modification in plan files |
+| `GeomBridge`, `GeomInlineWeir`, `GeomLateral`, `GeomCulvert` | Structure parsing and modification |
+| `RasBreach` | Stored breach discovery and parameter modification in plan files |
 | `RasUnsteady` | Unsteady flow file management |
 | `RasUtils` | General utility functions |
 | `RasMap` | RASMapper configuration parsing |
@@ -150,6 +150,13 @@ init_ras_project("/path/to/project", "6.5")
 print(ras.plan_df)  # Global object populated
 ```
 
+`plan_df` keeps plan-level feature summaries at the plan row grain. In
+addition to the flow and geometry links, it exposes `Sediment File` (the
+normalized sediment-file number), `Sediment Path` (the expected absolute
+`.s##` path), `breach_definition_count`, and `breach_active_count`. The breach
+counts describe stored plan definitions and their local `is_active` flags;
+use `RasBreach.list_breach_structures_plan()` for structure-level detail.
+
 For multiple projects, create named instances:
 
 ```python
@@ -191,8 +198,8 @@ Example with dam breach:
 ```python
 from ras_commander import RasBreach, HdfResultsBreach
 
-# Plain text: modify breach parameters in plan file
-RasBreach.update_breach_block("01", "Dam1", start_time=10.0)
+# Plain text: update named fields in the stored Breach Geom record
+RasBreach.set_breach_geom("01", "Dam1", formation_time=2.0)
 
 # HDF: extract breach results after computation
 summary = HdfResultsBreach.get_breach_summary("01")
@@ -244,7 +251,9 @@ ras_commander/
 │
 ├── geom/                 # Geometry parsing submodule
 │   ├── RasGeometry.py
-│   ├── RasStruct.py
+│   ├── GeomBridge.py
+│   ├── GeomInlineWeir.py
+│   ├── GeomLateral.py
 │   └── ...
 │
 ├── dss/                  # DSS file operations

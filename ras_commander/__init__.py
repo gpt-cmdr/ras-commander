@@ -82,6 +82,28 @@ from .RasGeometryUtils import RasGeometryUtils  # DEPRECATED - use geom subpacka
 from .RasUnsteady import RasUnsteady
 from .RasSteady import RasSteady
 from .RasUtils import RasUtils
+from .RasProject import (
+    ProjectCopyVerificationError,
+    ProjectDriftError,
+    ProjectLockedError,
+    ProjectPathAmbiguityError,
+    ProjectPopulationError,
+    ProjectPublicationError,
+    ProjectStageError,
+    StageProjectResult,
+    inspect_project_assets,
+    stage_project,
+)
+from .RasBoundary import (
+    BoundaryFormatError,
+    BoundaryMutationError,
+    BoundaryMutationResult,
+    BoundaryPostPublicationError,
+    BoundaryPublicationError,
+    BoundarySelectorError,
+    BoundaryStageOwnershipError,
+    BoundaryStaleEvidenceError,
+)
 from .RasExamples import RasExamples
 from .sources.federal import RasEbfeModels
 from .sources.county import M3Model
@@ -251,6 +273,14 @@ __all__ = [
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
+    'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
+    'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
+    'ProjectPublicationError',
+    'StageProjectResult', 'inspect_project_assets', 'stage_project',
+    'BoundaryMutationResult', 'BoundaryMutationError',
+    'BoundaryStageOwnershipError', 'BoundarySelectorError',
+    'BoundaryStaleEvidenceError', 'BoundaryFormatError',
+    'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
     'GeometryLayerResult', 'GeometryCompleteResult',
