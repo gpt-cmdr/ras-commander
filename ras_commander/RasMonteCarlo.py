@@ -39,6 +39,7 @@ Scope and limitations
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -114,15 +115,36 @@ _FLOW_MULTIPLIER_COLUMNS = (
 
 _BREACH_GEOM_INDEX = {
     "centerline": 0,
-    "initial_width": 1,
+    "final_bottom_width": 1,
     "final_bottom_elev": 2,
     "left_slope": 3,
     "right_slope": 4,
-    "active": 5,
-    "weir_coef": 6,
-    "top_elev": 7,
-    "formation_method": 8,
-    "formation_time": 9,
+    "failure_mode": 5,
+    "piping_coefficient": 6,
+    "initial_piping_elevation": 7,
+    "formation_time": 8,
+    "weir_coefficient": 9,
+}
+
+_BREACH_GEOM_SAFE_ALIASES = {
+    "initial_width": "final_bottom_width",
+    "weir_coef": "weir_coefficient",
+}
+
+_BREACH_GEOM_UNSAFE_LEGACY_TARGETS = {
+    "active": (
+        "'active' was incorrectly mapped to the Breach Geom failure-mode flag. "
+        "Use 'failure_mode' for piping/overtopping, or 'is_active' for the "
+        "stored Breach Loc activation flag."
+    ),
+    "top_elev": (
+        "'top_elev' was incorrectly mapped to initial piping elevation. "
+        "Use 'initial_piping_elevation'."
+    ),
+    "formation_method": (
+        "'formation_method' was incorrectly mapped to breach formation time. "
+        "Use 'formation_time'; breach method/trigger settings are separate fields."
+    ),
 }
 
 _BREACH_SCALAR_FIELDS = {
@@ -145,7 +167,6 @@ _SUPPORTED_BREACH_TARGETS = (
 _BREACH_INT_FIELDS = {
     "method",
     "progression_mode",
-    "formation_method",
     "user_growth_flag",
     "mass_wasting_option",
     "dlb_soil_type",
@@ -154,10 +175,10 @@ _BREACH_INT_FIELDS = {
     "dlb_breach_direction",
 }
 
-_BREACH_BOOL_FIELDS = {"active", "is_active"}
+_BREACH_BOOL_FIELDS = {"is_active"}
 
 _DEFAULT_BREACH_COLUMN_MAP = {
-    "initial_width": "breach_width",
+    "final_bottom_width": "breach_width",
     "final_bottom_elev": "breach_bottom_elev",
     "left_slope": "breach_left_slope",
     "right_slope": "breach_right_slope",
@@ -1759,23 +1780,75 @@ class RasMonteCarlo:
         if not param_column_map:
             return normalized
 
+        explicit_targets = set()
         for left, right in param_column_map.items():
             left_str = str(left).strip()
             right_str = str(right).strip()
 
-            if left_str in _SUPPORTED_BREACH_TARGETS:
-                normalized[left_str] = right_str
-                continue
-
-            if right_str in _SUPPORTED_BREACH_TARGETS:
-                normalized[right_str] = left_str
-                continue
-
-            raise ValueError(
-                "Breach mappings must use supported targets such as "
-                "'initial_width', 'final_bottom_elev', 'method', "
-                "'formation_time', etc."
+            recognized_targets = (
+                _SUPPORTED_BREACH_TARGETS
+                | set(_BREACH_GEOM_SAFE_ALIASES)
+                | set(_BREACH_GEOM_UNSAFE_LEGACY_TARGETS)
             )
+            if (
+                left_str in recognized_targets
+                and right_str in recognized_targets
+            ):
+                raise ValueError(
+                    "Breach mapping is ambiguous because both sides are "
+                    f"recognized targets: '{left_str}' and '{right_str}'. "
+                    "Use a sample-column name that is not also a breach target."
+                )
+
+            if left_str in _SUPPORTED_BREACH_TARGETS:
+                target, column_name = left_str, right_str
+            elif right_str in _SUPPORTED_BREACH_TARGETS:
+                target, column_name = right_str, left_str
+            else:
+                alias_target = None
+                alias_column = None
+                legacy_target = None
+
+                if left_str in _BREACH_GEOM_SAFE_ALIASES:
+                    alias_target = left_str
+                    alias_column = right_str
+                elif right_str in _BREACH_GEOM_SAFE_ALIASES:
+                    alias_target = right_str
+                    alias_column = left_str
+                elif left_str in _BREACH_GEOM_UNSAFE_LEGACY_TARGETS:
+                    legacy_target = left_str
+                elif right_str in _BREACH_GEOM_UNSAFE_LEGACY_TARGETS:
+                    legacy_target = right_str
+
+                if legacy_target is not None:
+                    raise ValueError(
+                        _BREACH_GEOM_UNSAFE_LEGACY_TARGETS[legacy_target]
+                    )
+
+                if alias_target is None:
+                    raise ValueError(
+                        "Breach mappings must use supported targets such as "
+                        "'final_bottom_width', 'final_bottom_elev', 'method', "
+                        "'formation_time', etc."
+                    )
+
+                target = _BREACH_GEOM_SAFE_ALIASES[alias_target]
+                column_name = alias_column
+                warnings.warn(
+                    f"Breach target '{alias_target}' is deprecated; use "
+                    f"'{target}'.",
+                    FutureWarning,
+                    stacklevel=3,
+                )
+
+            if target in explicit_targets:
+                raise ValueError(
+                    f"Breach target '{target}' is mapped more than once; use "
+                    "only its canonical name."
+                )
+
+            explicit_targets.add(target)
+            normalized[target] = column_name
 
         return normalized
 
@@ -1796,6 +1869,29 @@ class RasMonteCarlo:
     @staticmethod
     def _coerce_breach_value(target: str, value: Any) -> Any:
         """Coerce param_row values onto expected breach scalar types."""
+        if target == "failure_mode":
+            if isinstance(value, (bool, np.bool_)):
+                return bool(value)
+
+            if isinstance(value, (int, float, np.number)):
+                if float(value) == 1.0:
+                    return True
+                if float(value) == 0.0:
+                    return False
+                raise ValueError(
+                    "failure_mode numeric values must be exactly 1 or 0"
+                )
+
+            text = str(value).strip().lower()
+            if text in {"piping", "true", "1"}:
+                return True
+            if text in {"overtopping", "false", "0"}:
+                return False
+            raise ValueError(
+                "failure_mode must be 'piping'/'overtopping' or a 1/0 "
+                "boolean equivalent"
+            )
+
         if target in _BREACH_BOOL_FIELDS:
             return RasMonteCarlo._coerce_boolean_like(value)
 
@@ -2206,7 +2302,15 @@ class RasMonteCarlo:
         structure_name: str,
         param_column_map: Optional[Dict[str, str]] = None,
     ) -> Callable[[Path, pd.Series, Any], None]:
-        """Factory: return an apply_fn that modifies breach parameters."""
+        """Return an apply function for canonical breach parameters.
+
+        ``param_column_map`` may use target-to-column or column-to-target
+        orientation only when exactly one side is a recognized target. The
+        deprecated ``initial_width`` and ``weir_coef`` aliases warn and map to
+        their corrected canonical targets; unsafe legacy targets fail closed.
+        Valid nine-field records retain their arity unless a weir coefficient
+        is requested, which appends the optional tenth field.
+        """
         if not isinstance(structure_name, str) or not structure_name.strip():
             raise ValueError("structure_name must be a non-empty string")
 
@@ -2248,13 +2352,16 @@ class RasMonteCarlo:
                             value.strip()
                             for value in str(raw_geom).split(",")
                         ]
-                        if len(geom_values) < 10:
+                        if len(geom_values) not in {9, 10}:
                             raise ValueError(
                                 f"Breach Geom for '{structure_name}' has "
-                                f"{len(geom_values)} fields; expected 10"
+                                f"{len(geom_values)} fields; expected 9 or 10"
                             )
 
-                    geom_values[_BREACH_GEOM_INDEX[target]] = coerced_value
+                    geom_index = _BREACH_GEOM_INDEX[target]
+                    if geom_index == 9 and len(geom_values) == 9:
+                        geom_values.append("")
+                    geom_values[geom_index] = coerced_value
                 else:
                     update_kwargs[target] = coerced_value
 

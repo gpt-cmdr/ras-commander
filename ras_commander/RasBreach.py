@@ -53,11 +53,9 @@ Author: ras-commander development team
 Date: 2025
 """
 
-from typing import Dict, List, Union, Optional, Tuple
+from typing import Dict, List, Union, Optional, Tuple, Literal
 from pathlib import Path
-import pandas as pd
-from datetime import datetime
-import re
+import warnings
 from dataclasses import dataclass
 
 from .Decorators import log_call
@@ -591,8 +589,11 @@ class RasBreach:
         method : int, optional
             Breach calculation method (0-9, where 9 is DLBreach)
         geom_values : List, optional
-            Breach geometry values: [center_station, final_width, final_elev,
-            left_slope, right_slope, weir_coef, formation_time]
+            Raw Breach Geom values in HEC-RAS field order: center station,
+            final bottom width, final bottom elevation, left slope, right slope,
+            failure mode (False=overtopping, True=piping), piping coefficient,
+            initial piping elevation, formation time, and optional breach weir
+            coefficient. Legacy records may contain only the first nine fields.
         start_values : List, optional
             Breach starting conditions
         progression_mode : int, optional
@@ -641,7 +642,7 @@ class RasBreach:
         >>> RasBreach.update_breach_block("02", "Laxton_Dam", is_active=True)
 
         >>> # Set breach geometry
-        >>> geom = [150, 100, 1400, 1, 1, 2.6, 0.5]  # center, width, elev, slopes, coef, time
+        >>> geom = [150, 100, 1400, 1, 1, False, "", "", 0.5, 2.6]
         >>> RasBreach.update_breach_block("02", "Laxton_Dam", geom_values=geom)
 
         >>> # Set non-linear progression
@@ -819,15 +820,20 @@ class RasBreach:
         structure_name: str,
         *,
         centerline: Optional[float] = None,
-        initial_width: Optional[float] = None,
+        final_bottom_width: Optional[float] = None,
         final_bottom_elev: Optional[float] = None,
         left_slope: Optional[float] = None,
         right_slope: Optional[float] = None,
+        failure_mode: Optional[Literal["overtopping", "piping"]] = None,
+        piping_coefficient: Optional[float] = None,
+        initial_piping_elevation: Optional[float] = None,
+        formation_time: Optional[float] = None,
+        weir_coefficient: Optional[float] = None,
+        initial_width: Optional[float] = None,
         active: Optional[bool] = None,
         weir_coef: Optional[float] = None,
         top_elev: Optional[float] = None,
         formation_method: Optional[int] = None,
-        formation_time: Optional[float] = None,
         ras_object=None
     ) -> Dict:
         """
@@ -845,24 +851,38 @@ class RasBreach:
             Name of breach structure to update
         centerline : float, optional
             Centerline/station location (ft or m)
-        initial_width : float, optional
-            Initial breach bottom width (ft or m)
+        final_bottom_width : float, optional
+            Final breach bottom width (ft or m)
         final_bottom_elev : float, optional
             Final breach bottom elevation (ft or m) - **Common modification**
         left_slope : float, optional
             Left side slope (H:V ratio, e.g., 0.5 = 0.5H:1V)
         right_slope : float, optional
             Right side slope (H:V ratio)
-        active : bool, optional
-            Breach activation flag (True/False)
-        weir_coef : float, optional
-            Weir discharge coefficient (dimensionless)
-        top_elev : float, optional
-            Top elevation (ft or m)
-        formation_method : int, optional
-            Formation method (1=Time-based, 2=Trigger-based)
+        failure_mode : {"overtopping", "piping"}, optional
+            Failure mode stored in Breach Geom field 5
+        piping_coefficient : float, optional
+            Piping/orifice coefficient stored in field 6
+        initial_piping_elevation : float, optional
+            Initial piping elevation stored in field 7 (ft or m)
         formation_time : float, optional
-            Formation time (hrs) or trigger threshold (ft)
+            Breach/full formation time in hours
+        weir_coefficient : float, optional
+            Breach weir coefficient. Adds the optional tenth field to a
+            nine-field legacy record when supplied.
+        initial_width : float, optional
+            Deprecated alias for ``final_bottom_width``
+        active : bool, optional
+            Unsupported legacy argument. Use
+            ``update_breach_block(..., is_active=...)`` instead.
+        weir_coef : float, optional
+            Deprecated alias for ``weir_coefficient``
+        top_elev : float, optional
+            Unsupported legacy argument; no Breach Geom field stores a top
+            elevation.
+        formation_method : int, optional
+            Unsupported legacy argument; the breach method and starting
+            condition are stored outside Breach Geom.
         ras_object : RasPrj, optional
             RAS object for multi-project workflows
 
@@ -878,13 +898,14 @@ class RasBreach:
         >>>
         >>> # Update multiple parameters
         >>> RasBreach.set_breach_geom("19", "Dam",
-        ...                           initial_width=250,
+        ...                           final_bottom_width=250,
         ...                           final_bottom_elev=600,
         ...                           formation_time=3.0)
         >>>
-        >>> # Change breach to time-based formation
+        >>> # Configure a piping failure
         >>> RasBreach.set_breach_geom("template_plan", "Dam",
-        ...                           formation_method=1,
+        ...                           failure_mode="piping",
+        ...                           piping_coefficient=0.5,
         ...                           formation_time=2.5)
 
         Notes
@@ -893,19 +914,86 @@ class RasBreach:
         - Automatically reads current Breach Geom and updates selectively
         - Creates backup before modification
         - Validates CRLF line endings
+        - Fields 1 and 2 are interpreted as final bottom width/elevation for
+          user-entered breaches, but as maximum possible bottom width and
+          minimum possible bottom elevation for applicable physical methods.
+          This setter updates the same stored slots without asserting that all
+          methods use those values identically.
 
         Breach Geom Field Reference:
             [0] centerline - Breach centerline/station location
-            [1] initial_width - Starting breach width
+            [1] final_bottom_width - Final breach bottom width
             [2] final_bottom_elev - Final breach bottom elevation
             [3] left_slope - Left side slope (H:V)
             [4] right_slope - Right side slope (H:V)
-            [5] active - Activation flag
-            [6] weir_coef - Weir discharge coefficient
-            [7] top_elev - Top elevation
-            [8] formation_method - 1=Time, 2=Trigger
-            [9] formation_time - Time (hrs) or threshold (ft)
+            [5] failure_mode - False=Overtopping, True=Piping
+            [6] piping_coefficient - Piping/orifice coefficient
+            [7] initial_piping_elevation - Initial piping elevation
+            [8] formation_time - Breach/full formation time (hours)
+            [9] weir_coefficient - Breach weir coefficient (optional in
+                legacy nine-field records)
         """
+        unsupported_legacy = {
+            "active": (
+                active,
+                "Breach activation is stored in Breach Loc; use "
+                "update_breach_block(..., is_active=...).",
+            ),
+            "top_elev": (
+                top_elev,
+                "Breach Geom has no top-elevation field.",
+            ),
+            "formation_method": (
+                formation_method,
+                "Breach Geom has no formation-method field; use method and "
+                "start_values in update_breach_block() for the applicable "
+                "plan settings.",
+            ),
+        }
+        for argument, (value, guidance) in unsupported_legacy.items():
+            if value is not None:
+                raise ValueError(
+                    f"'{argument}' cannot be safely mapped by set_breach_geom(). "
+                    f"{guidance}"
+                )
+
+        if final_bottom_width is not None and initial_width is not None:
+            raise ValueError(
+                "Specify only one of 'final_bottom_width' and its deprecated "
+                "alias 'initial_width'."
+            )
+        if weir_coefficient is not None and weir_coef is not None:
+            raise ValueError(
+                "Specify only one of 'weir_coefficient' and its deprecated "
+                "alias 'weir_coef'."
+            )
+
+        if initial_width is not None:
+            warnings.warn(
+                "'initial_width' is deprecated because Breach Geom field 1 is "
+                "the final bottom width; use 'final_bottom_width'.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            final_bottom_width = initial_width
+        if weir_coef is not None:
+            warnings.warn(
+                "'weir_coef' is deprecated; use 'weir_coefficient'. The value "
+                "is now written to the correct Breach Geom field 9.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            weir_coefficient = weir_coef
+
+        failure_mode_value = None
+        if failure_mode is not None:
+            if not isinstance(failure_mode, str):
+                raise ValueError("failure_mode must be 'overtopping' or 'piping'")
+            normalized_failure_mode = failure_mode.strip().lower()
+            if normalized_failure_mode not in {"overtopping", "piping"}:
+                raise ValueError("failure_mode must be 'overtopping' or 'piping'")
+            failure_mode_value = normalized_failure_mode == "piping"
+
         try:
             # Read current breach block
             current_block = RasBreach.read_breach_block(plan_input, structure_name, ras_object=ras_object)
@@ -917,38 +1005,57 @@ class RasBreach:
 
             current_geom = [x.strip() for x in geom_str.split(',')]
 
-            if len(current_geom) < 10:
-                raise ValueError(f"Breach Geom has {len(current_geom)} fields, expected 10")
+            if len(current_geom) not in {9, 10}:
+                raise ValueError(
+                    f"Breach Geom has {len(current_geom)} fields, expected 9 or 10"
+                )
 
             # Update specified parameters (preserve current values for None parameters)
             new_geom = current_geom.copy()
 
+            # The breach weir coefficient is an optional tenth field in legacy
+            # records. Preserve nine-field arity unless the caller sets it.
+            if weir_coefficient is not None and len(new_geom) == 9:
+                new_geom.append("")
+
             if centerline is not None:
                 new_geom[0] = centerline
-            if initial_width is not None:
-                new_geom[1] = initial_width
+            if final_bottom_width is not None:
+                new_geom[1] = final_bottom_width
             if final_bottom_elev is not None:
                 new_geom[2] = final_bottom_elev
             if left_slope is not None:
                 new_geom[3] = left_slope
             if right_slope is not None:
                 new_geom[4] = right_slope
-            if active is not None:
-                new_geom[5] = active
-            if weir_coef is not None:
-                new_geom[6] = weir_coef
-            if top_elev is not None:
-                new_geom[7] = top_elev
-            if formation_method is not None:
-                new_geom[8] = formation_method
+            if failure_mode_value is not None:
+                new_geom[5] = failure_mode_value
+            if piping_coefficient is not None:
+                new_geom[6] = piping_coefficient
+            if initial_piping_elevation is not None:
+                new_geom[7] = initial_piping_elevation
             if formation_time is not None:
-                new_geom[9] = formation_time
+                new_geom[8] = formation_time
+            if weir_coefficient is not None:
+                new_geom[9] = weir_coefficient
 
             # Log what changed
             changes = []
-            field_names = ['centerline', 'initial_width', 'final_bottom_elev', 'left_slope', 'right_slope',
-                          'active', 'weir_coef', 'top_elev', 'formation_method', 'formation_time']
-            for idx, (old, new, name) in enumerate(zip(current_geom, new_geom, field_names)):
+            field_names = [
+                "centerline",
+                "final_bottom_width",
+                "final_bottom_elev",
+                "left_slope",
+                "right_slope",
+                "failure_mode",
+                "piping_coefficient",
+                "initial_piping_elevation",
+                "formation_time",
+                "weir_coefficient",
+            ]
+            for idx, name in enumerate(field_names):
+                old = current_geom[idx] if idx < len(current_geom) else "<missing>"
+                new = new_geom[idx] if idx < len(new_geom) else "<missing>"
                 if str(old) != str(new):
                     changes.append(f"{name}: {old} -> {new}")
 
@@ -1059,7 +1166,8 @@ class RasBreach:
         -----
         Creates a minimal breach block with:
         - Method 0 (user-specified breach geometry)
-        - Empty geometry values (must be set via update_breach_block or set_breach_geom)
+        - Overtopping failure mode with a one-hour formation time and 2.6 breach
+          weir coefficient; geometry dimensions remain zero until configured
         - Empty start conditions
         - Empty breach progression
 
@@ -1119,7 +1227,7 @@ class RasBreach:
             new_block_lines = [
                 f"Breach Loc={breach_loc}",
                 "Breach Method= 0",
-                "Breach Geom= 0, 0, 0, 0, 0, True, 2.6, 0, 1, 0",
+                "Breach Geom=0,0,0,0,0,False,0.5,,1,2.6",
                 "Breach Start= 0,",
                 "Breach Progression= 0",
                 "Breach Calculator Data= 0, 0, 0, 0, 0, 0, 0",

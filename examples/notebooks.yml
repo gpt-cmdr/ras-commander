@@ -390,7 +390,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 14
+  executed_cells: 0
 - id: 120_automating_ras_with_win32com
   filename: 120_automating_ras_with_win32com.ipynb
   title: Win32COM Automation
@@ -2468,12 +2468,13 @@ notebooks:
   - RasPlan.clone_plan
   - ras.plan_df
   - ras.project_name
+  - ras.ras_version
   - ras.results_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 39
-  executed_cells: 34
+  code_cells: 29
+  executed_cells: 0
 - id: 430_1d_channel_capacity_analysis
   filename: 430_1d_channel_capacity_analysis.ipynb
   title: 1D Channel Capacity Analysis

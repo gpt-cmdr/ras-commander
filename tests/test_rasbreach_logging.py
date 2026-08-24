@@ -19,7 +19,7 @@ def _write_plan_with_breach(tmp_path: Path) -> Path:
         "Plan Title=Breach Logging Test",
         "Breach Loc=           River,           Reach,  1000.0,True,Dam             ",
         "Breach Method= 0",
-        "Breach Geom= 5700,200,595,0.5,0.5,True,2.6,630,1,2.6",
+        "Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1,2.6",
         "Breach Start= 0,",
         "Breach Progression= 0",
         "Breach Calculator Data= 0,0,0,0,0,0,0",
@@ -146,11 +146,11 @@ def test_set_breach_geom_logs_concise_info_and_debug_details(tmp_path, caplog):
     updated = RasBreach.set_breach_geom(
         plan_path,
         "Dam",
-        initial_width=300,
+        final_bottom_width=300,
         formation_time=1.5,
     )
 
-    assert updated["values"]["Breach Geom"] == "5700,300,595,0.5,0.5,True,2.6,630,1,1.5"
+    assert updated["values"]["Breach Geom"] == "5700,300,595,0.5,0.5,True,0.5,630,1.5,2.6"
     records = _breach_records(caplog)
     info_messages = [
         record.getMessage()
@@ -164,10 +164,173 @@ def test_set_breach_geom_logs_concise_info_and_debug_details(tmp_path, caplog):
     ]
 
     assert info_messages == ["Updating breach geometry for 'Dam' (2 field changes)"]
-    assert any("initial_width: 200 -> 300" in message for message in debug_messages)
-    assert any("formation_time: 2.6 -> 1.5" in message for message in debug_messages)
+    assert any("final_bottom_width: 200 -> 300" in message for message in debug_messages)
+    assert any("formation_time: 1 -> 1.5" in message for message in debug_messages)
     assert any("Created backup: BreachProject_backup_" in message for message in debug_messages)
     assert all("Created backup" not in message for message in info_messages)
+
+
+def test_set_breach_geom_maps_canonical_parameters_to_exact_fields(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+
+    updated = RasBreach.set_breach_geom(
+        plan_path,
+        "Dam",
+        centerline=5800,
+        final_bottom_width=300,
+        final_bottom_elev=590,
+        left_slope=1,
+        right_slope=1.5,
+        failure_mode="overtopping",
+        piping_coefficient=0.8,
+        initial_piping_elevation=625,
+        formation_time=1.5,
+        weir_coefficient=3,
+    )
+
+    assert updated["values"]["Breach Geom"].split(",") == [
+        "5800",
+        "300",
+        "590",
+        "1",
+        "1.5",
+        "False",
+        "0.8",
+        "625",
+        "1.5",
+        "3",
+    ]
+
+
+def test_set_breach_geom_accepts_deprecated_intent_preserving_aliases(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+
+    with pytest.warns(FutureWarning) as caught:
+        updated = RasBreach.set_breach_geom(
+            plan_path,
+            "Dam",
+            initial_width=300,
+            weir_coef=3,
+        )
+
+    assert len(caught) == 2
+    assert updated["values"]["Breach Geom"].split(",") == [
+        "5700",
+        "300",
+        "595",
+        "0.5",
+        "0.5",
+        "True",
+        "0.5",
+        "630",
+        "1",
+        "3",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("keyword", "value", "message"),
+    [
+        ("active", True, "activation is stored in Breach Loc"),
+        ("top_elev", 630, "no top-elevation field"),
+        ("formation_method", 1, "no formation-method field"),
+    ],
+)
+def test_set_breach_geom_rejects_unsafe_legacy_arguments_without_writing(
+    tmp_path,
+    keyword,
+    value,
+    message,
+):
+    plan_path = _write_plan_with_breach(tmp_path)
+    source_bytes = plan_path.read_bytes()
+
+    with pytest.raises(ValueError, match=message):
+        RasBreach.set_breach_geom(plan_path, "Dam", **{keyword: value})
+
+    assert plan_path.read_bytes() == source_bytes
+    assert list(tmp_path.glob("BreachProject_backup_*")) == []
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"final_bottom_width": 300, "initial_width": 250},
+        {"weir_coefficient": 3, "weir_coef": 2.6},
+    ],
+)
+def test_set_breach_geom_rejects_canonical_alias_conflicts_without_writing(
+    tmp_path,
+    kwargs,
+):
+    plan_path = _write_plan_with_breach(tmp_path)
+    source_bytes = plan_path.read_bytes()
+
+    with pytest.raises(ValueError, match="Specify only one"):
+        RasBreach.set_breach_geom(plan_path, "Dam", **kwargs)
+
+    assert plan_path.read_bytes() == source_bytes
+    assert list(tmp_path.glob("BreachProject_backup_*")) == []
+
+
+def test_set_breach_geom_rejects_unknown_failure_mode_without_writing(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+    source_bytes = plan_path.read_bytes()
+
+    with pytest.raises(ValueError, match="failure_mode must be"):
+        RasBreach.set_breach_geom(plan_path, "Dam", failure_mode="instantaneous")
+
+    assert plan_path.read_bytes() == source_bytes
+    assert list(tmp_path.glob("BreachProject_backup_*")) == []
+
+
+def test_set_breach_geom_preserves_legacy_nine_field_arity(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+    plan_path.write_bytes(
+        plan_path.read_bytes().replace(
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1,2.6",
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1",
+        )
+    )
+
+    updated = RasBreach.set_breach_geom(plan_path, "Dam", formation_time=1.5)
+
+    fields = updated["values"]["Breach Geom"].split(",")
+    assert len(fields) == 9
+    assert fields[8] == "1.5"
+
+
+def test_set_breach_geom_adds_weir_field_to_legacy_nine_field_record(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+    plan_path.write_bytes(
+        plan_path.read_bytes().replace(
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1,2.6",
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1",
+        )
+    )
+
+    updated = RasBreach.set_breach_geom(plan_path, "Dam", weir_coefficient=3)
+
+    fields = updated["values"]["Breach Geom"].split(",")
+    assert len(fields) == 10
+    assert fields[8:] == ["1", "3"]
+
+
+def test_set_breach_geom_rejects_unknown_arity_without_writing(tmp_path):
+    plan_path = _write_plan_with_breach(tmp_path)
+    plan_path.write_bytes(
+        plan_path.read_bytes().replace(
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1,2.6",
+            b"Breach Geom=5700,200,595,0.5,0.5,True,0.5,630,1,2.6,extra",
+        )
+    )
+    source_bytes = plan_path.read_bytes()
+
+    with pytest.raises(ValueError, match="expected 9 or 10"):
+        RasBreach.set_breach_geom(plan_path, "Dam", formation_time=1.5)
+
+    assert plan_path.read_bytes() == source_bytes
+    assert list(tmp_path.glob("BreachProject_backup_*")) == []
 
 
 def test_update_breach_block_backup_is_debug_only(tmp_path, caplog):
@@ -253,6 +416,7 @@ def test_create_breach_block_backup_is_debug_only(tmp_path, caplog):
     )
 
     assert created["structure_name"] == "NewDam"
+    assert created["values"]["Breach Geom"] == "0,0,0,0,0,False,0.5,,1,2.6"
     records = _breach_records(caplog)
     info_messages = [
         record.getMessage()
