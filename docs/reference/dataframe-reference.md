@@ -127,13 +127,16 @@ parsed from the plan text are strings unless noted:
 | `plan_number` | str | normalized two-digit plan id such as `01` |
 | `geometry_number` | str | normalized geometry id used by the plan |
 | `unsteady_number` | str / None | normalized unsteady-flow id when the plan is unsteady; `None` for steady plans |
+| `quasi_unsteady_number` | str / None | normalized quasi-unsteady id when the plan references `.q##` |
+| `flow_file_prefix` | str / None | exact normalized plan reference prefix: `f`, `u`, or `q` |
 | `Plan Title` | str | HEC-RAS plan title (`Plan Title=`) |
 | `Short Identifier` | str | HEC-RAS short id used by stored-map/result folders |
 | `Geom File` | str | geometry reference number from the plan (`Geom File=`) |
 | `Geom Path` | str | resolved absolute `.g##` path |
-| `Flow File` | str | steady/unsteady flow reference number (`Flow File=`) |
-| `Flow Path` | str | resolved absolute `.f##` / `.u##` path |
+| `Flow File` | str | normalized steady, unsteady, or quasi-unsteady reference number (`Flow File=`) |
+| `Flow Path` | str | resolved absolute `.f##`, `.u##`, or `.q##` path |
 | `Sediment File` | str / None | normalized sediment-file number such as `01`; `None` when no recognized `s##` reference is present |
+| `sediment_number` | str / None | normalized `.s##` identifier; sediment is independent of flow regime |
 | `Sediment Path` | str / None | expected absolute `.s##` path for the selected sediment file; file existence/readiness is reported separately by the asset inventory |
 | `breach_definition_count` | nullable Int64 | number of successfully parsed stored `Breach Loc` definitions; zero means none and null means inspection failed |
 | `breach_active_count` | nullable Int64 | number of stored definitions whose local `RasBreach` `is_active` flag is true; not evidence that a breach initiated during computation |
@@ -151,6 +154,13 @@ parsed from the plan text are strings unless noted:
 | `HDF_Results_Path` | str / None | resolved `.p##.hdf` path; `None` when results do not exist yet |
 | `full_path` | str | resolved absolute `.p##` path |
 | `flow_type` | str | Flow computation mode: `"Unsteady"`, `"Steady"`, `"Quasi-Unsteady"`, or `"Unknown"` (derived from the plan's `.u##`, `.f##`, or `.q##` reference). Sediment, dam breach, and topology are separate features. |
+| `geometry_type` | str | hydraulic inventory: `1D`, `2D`, `1D/2D`, or `Unknown` |
+| `plan_type` | str | finite execution class: `steady_1d`, `unsteady_1d`, `unsteady_2d`, `unsteady_1d_2d`, `quasi_unsteady_1d`, or `unknown` |
+| `plan_classification_valid` | nullable bool | whether the plan maps to a supported execution class |
+| `plan_classification_reason` | str / None | why classification failed closed |
+| `geometry_metadata_source` | str | `hdf`, `text`, or `unavailable` provenance inherited from `geom_df` |
+| `geometry_metadata_valid` | nullable bool | whether geometry metadata was successfully inspected |
+| `geometry_metadata_error` | str / None | failed-source details, including HDF-to-text fallback |
 
 !!! note
     Most source columns derive directly from `_parse_plan_file()` in
@@ -158,6 +168,18 @@ parsed from the plan text are strings unless noted:
     `Sediment File` is normalized for consistency with `Geom File` and `Flow
     File`; the two breach counts are derived through the existing `RasBreach`
     reader. Not every plan contains every source key.
+
+The execution taxonomy is deliberately finite. HEC-RAS has no steady 2D
+solver, so a steady plan that references `2D` or `1D/2D` geometry is
+`plan_type="unknown"` with `plan_classification_valid=False`; no
+`steady_2d` or `steady_1d_2d` value is emitted. Quasi-unsteady is anticipated
+as `quasi_unsteady_1d`; quasi plans with a mesh also fail closed.
+
+Sediment is orthogonal to flow classification. Both `.u##` and `.q##` plans
+can reference `.s##`. Storage-area-only geometries with no cross sections or
+2D areas currently classify as `unknown`. Pipe-network presence is also
+orthogonal: an unsteady pipe-plus-mesh plan remains `unsteady_2d` based on its
+hydraulic geometry inventory.
 
 Common patterns:
 
@@ -195,7 +217,11 @@ HDF-based extraction when `.g##.hdf` exists and falls back to plain-text parsing
 | `geom_title` | str / None | parsed `Geom Title=` value when present |
 | `description` | str / None | geometry `BEGIN DESCRIPTION` block when present |
 | `has_1d_xs` | bool | `True` if the geometry has 1D cross sections |
-| `has_2d_mesh` | bool | `True` if plain geometry text declares a 2D flow area or geometry HDF metadata identifies a mesh area |
+| `has_2d_mesh` | nullable bool | `True` if HDF metadata identifies a mesh or text pairs `Storage Area=<name>` with `Storage Area Is2D=-1`; null when no source can be inspected |
+| `geometry_type` | str | `1D`, `2D`, `1D/2D`, or `Unknown` |
+| `geometry_metadata_source` | str | successful source: `hdf`, `text`, or `unavailable` |
+| `geometry_metadata_valid` | nullable bool | whether a geometry source was successfully inspected |
+| `geometry_metadata_error` | str / None | failed source reads encountered before success, or terminal failure |
 | `num_cross_sections` | int | count of 1D cross sections |
 | `num_inline_structures` | int | total inline structures (bridges + culverts + weirs) |
 | `num_bridges` | int | count of bridge structures |
@@ -204,12 +230,27 @@ HDF-based extraction when `.g##.hdf` exists and falls back to plain-text parsing
 | `num_gates` | int | count of gate structures |
 | `num_lateral_structures` | int | count of lateral structures |
 | `num_sa_2d_connections` | int | count of SA/2D connections |
-| `mesh_cell_count` | int | total 2D mesh cells across all areas |
+| `mesh_cell_count` | nullable Int64 | total HDF mesh cells; null for text-only geometry |
 | `mesh_area_names` | list[str] | names of 2D flow areas |
 
-When metadata extraction fails for a geometry, counts default to `0`, booleans to
-`False`, and `mesh_area_names` to an empty list. Use this table for geometry
-discovery first, then move to `RasGeometry`, `Geom*`, or HDF readers for detail.
+When HDF inspection fails, `GeomMetadata` retries the plain geometry and keeps
+the HDF error in `geometry_metadata_error`. When neither source is readable,
+the classification booleans remain null and the geometry fails closed as
+`Unknown`; an unreadable geometry never masquerades as a valid empty 1D model.
+Text geometry can prove that a 2D area exists, but it cannot provide a mesh-cell
+count until preprocessing materializes the HDF.
+
+`RasPlan.set_geom()`, `set_steady()`, and `set_unsteady()` rewrite exactly one
+top-level plan reference, preserve description text and newline style, verify
+the write, and then refresh geometry, flow, and plan classification dataframes
+in dependency order.
+
+Classification tests pin the public RAS example archive by release, byte size,
+and SHA-256. Derived copies remove or corrupt HDFs without changing the
+immutable source. The private CLB qualification tier additionally covers real
+6.31 text-only 2D, 6.70 pipe-plus-2D, and 7.00 1D HDF schemas. These gates
+qualify metadata classification only; they do not claim solver execution or
+numerical-result parity.
 
 ## `flow_df` and `unsteady_df`
 

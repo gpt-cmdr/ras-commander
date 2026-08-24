@@ -115,12 +115,27 @@ class ResultsSummary:
 
         Preferred inputs:
         1. Explicit ``flow_type``
-        2. ``unsteady_number`` from ``plan_df``
-        3. Raw ``Flow Path`` or ``Flow File`` values with ``u##``/``f##``/``q##``
+        2. Normalized ``flow_file_prefix``
+        3. Quasi/unsteady number columns from ``plan_df``
+        4. Raw ``Flow Path`` or ``Flow File`` values with ``f##``/``u##``/``q##``
         """
         flow_type = entry.get('flow_type')
         if ResultsSummary._has_value(flow_type):
             return str(flow_type).strip()
+
+        prefix = entry.get('flow_file_prefix')
+        if ResultsSummary._has_value(prefix):
+            normalized = str(prefix).strip().lower()
+            inferred = {
+                'f': 'Steady',
+                'u': 'Unsteady',
+                'q': 'Quasi-Unsteady',
+            }.get(normalized)
+            if inferred:
+                return inferred
+
+        if ResultsSummary._has_value(entry.get('quasi_unsteady_number')):
+            return 'Quasi-Unsteady'
 
         if ResultsSummary._has_value(entry.get('unsteady_number')):
             return 'Unsteady'

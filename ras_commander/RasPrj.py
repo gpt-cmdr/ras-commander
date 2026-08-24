@@ -247,7 +247,13 @@ class RasPrj:
                 f"Project CRS: {self.project_crs} "
                 f"(source={self.project_crs_source})"
             )
-            logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
+            geometry_hdf_count = sum(
+                Path(path).is_file()
+                for path in self.geom_df.get(
+                    'hdf_path', pd.Series(dtype='object')
+                ).dropna()
+            )
+            logger.info(f"Geometry HDF files found: {geometry_hdf_count}")
             logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
             logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
 
@@ -271,6 +277,7 @@ class RasPrj:
             self.flow_df = self._get_prj_entries('Flow')
             self.geom_df = self.get_geom_entries()
             self.plan_df = self._enrich_plan_dataframe(self.plan_df)
+            self.plan_df = self._enrich_plan_classification(self.plan_df)
 
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
@@ -283,7 +290,8 @@ class RasPrj:
     def _enrich_plan_dataframe(self, plan_df: pd.DataFrame) -> pd.DataFrame:
         """Apply the canonical plan columns, paths, dtypes, and flow type."""
         required_columns = [
-            'plan_number', 'unsteady_number', 'geometry_number',
+            'plan_number', 'unsteady_number', 'quasi_unsteady_number',
+            'geometry_number', 'sediment_number', 'flow_file_prefix',
             'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
             'Sediment File', 'Sediment Path',
             'breach_definition_count', 'breach_active_count', 'full_path'
@@ -323,6 +331,238 @@ class RasPrj:
 
         return plan_df
 
+    @staticmethod
+    def _classify_plan_flow(row: pd.Series) -> str:
+        """Classify the flow regime from normalized plan-file references."""
+        prefix = row.get('flow_file_prefix')
+        if pd.notna(prefix):
+            flow_type = {
+                'f': 'Steady',
+                'u': 'Unsteady',
+                'q': 'Quasi-Unsteady',
+            }.get(str(prefix).strip().lower())
+            if flow_type:
+                return flow_type
+
+        flow_reference = row.get('Flow File')
+        if pd.notna(flow_reference):
+            reference = str(flow_reference).strip().lower()
+            if reference[:1] in {'f', 'u', 'q'}:
+                return {
+                    'f': 'Steady',
+                    'u': 'Unsteady',
+                    'q': 'Quasi-Unsteady',
+                }[reference[0]]
+
+        quasi_number = row.get('quasi_unsteady_number')
+        if pd.notna(quasi_number) and str(quasi_number).strip():
+            return 'Quasi-Unsteady'
+
+        unsteady_number = row.get('unsteady_number')
+        if pd.notna(unsteady_number) and str(unsteady_number).strip():
+            return 'Unsteady'
+
+        # Backward compatibility for DataFrames created before the normalized
+        # prefix column existed.
+        if pd.notna(flow_reference) and str(flow_reference).strip():
+            return 'Steady'
+
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_geometry(row: pd.Series) -> str:
+        """Return the hydraulic inventory class for a geometry row."""
+        metadata_valid = row.get('geometry_metadata_valid')
+        if pd.isna(metadata_valid) or not bool(metadata_valid):
+            return 'Unknown'
+
+        has_1d = row.get('has_1d_xs')
+        has_2d = row.get('has_2d_mesh')
+        has_1d = False if pd.isna(has_1d) else bool(has_1d)
+        has_2d = False if pd.isna(has_2d) else bool(has_2d)
+
+        if has_1d and has_2d:
+            return '1D/2D'
+        if has_2d:
+            return '2D'
+        if has_1d:
+            return '1D'
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_plan_type(row: pd.Series) -> tuple[str, bool, Optional[str]]:
+        """Map flow and geometry classes into the supported compute taxonomy."""
+        flow_type = row.get('flow_type')
+        geometry_type = row.get('geometry_type')
+
+        if flow_type == 'Unknown':
+            return 'unknown', False, 'Plan flow reference is missing or unsupported'
+
+        if geometry_type == 'Unknown':
+            metadata_error = row.get('geometry_metadata_error')
+            if pd.notna(metadata_error) and str(metadata_error).strip():
+                reason = str(metadata_error)
+            else:
+                reason = (
+                    'Geometry contains no supported 1D cross sections or '
+                    '2D flow areas'
+                )
+            return 'unknown', False, reason
+
+        if flow_type == 'Steady':
+            if geometry_type == '1D':
+                return 'steady_1d', True, None
+            return (
+                'unknown',
+                False,
+                'The HEC-RAS steady solver does not support 2D flow areas',
+            )
+
+        if flow_type == 'Quasi-Unsteady':
+            if geometry_type == '1D':
+                return 'quasi_unsteady_1d', True, None
+            return (
+                'unknown',
+                False,
+                'Quasi-unsteady plans with 2D flow areas are unsupported',
+            )
+
+        if flow_type == 'Unsteady':
+            plan_type = {
+                '1D': 'unsteady_1d',
+                '2D': 'unsteady_2d',
+                '1D/2D': 'unsteady_1d_2d',
+            }.get(geometry_type)
+            if plan_type:
+                return plan_type, True, None
+
+        return 'unknown', False, 'Unsupported flow and geometry combination'
+
+    def _enrich_plan_classification(self, plan_df: pd.DataFrame) -> pd.DataFrame:
+        """Join geometry provenance to plans and derive finite execution classes.
+
+        Stable ``plan_type`` values are ``steady_1d``, ``unsteady_1d``,
+        ``unsteady_2d``, ``unsteady_1d_2d``, ``quasi_unsteady_1d``, and
+        ``unknown``. HEC-RAS has no steady 2D solver, so those combinations
+        fail closed with an explanatory reason.
+        """
+        result = plan_df.copy()
+        geometry_columns = [
+            'has_1d_xs',
+            'has_2d_mesh',
+            'num_cross_sections',
+            'mesh_cell_count',
+            'mesh_area_names',
+            'geometry_metadata_source',
+            'geometry_metadata_valid',
+            'geometry_metadata_error',
+        ]
+        derived_columns = [
+            'geometry_type',
+            'plan_type',
+            'plan_classification_valid',
+            'plan_classification_reason',
+        ]
+
+        if result.empty:
+            for column in ['flow_type', *geometry_columns, *derived_columns]:
+                if column not in result.columns:
+                    result[column] = pd.Series(dtype='object')
+            return result
+
+        result['flow_type'] = result.apply(self._classify_plan_flow, axis=1)
+        result = result.drop(
+            columns=[
+                column for column in [*geometry_columns, *derived_columns]
+                if column in result.columns
+            ],
+            errors='ignore',
+        )
+
+        geom_df = getattr(self, 'geom_df', None)
+        if geom_df is not None and not geom_df.empty and 'geom_number' in geom_df.columns:
+            available_columns = [
+                column for column in geometry_columns if column in geom_df.columns
+            ]
+            geometry_lookup = geom_df[['geom_number', *available_columns]].copy()
+            geometry_lookup = geometry_lookup.rename(
+                columns={'geom_number': 'geometry_number'}
+            )
+            geometry_lookup['geometry_number'] = (
+                geometry_lookup['geometry_number'].astype(str).str.zfill(2)
+            )
+            geometry_lookup['_geometry_metadata_joined'] = True
+            geometry_lookup = geometry_lookup.drop_duplicates(
+                subset=['geometry_number'], keep='first'
+            )
+
+            result['geometry_number'] = result['geometry_number'].apply(
+                lambda value: str(value).zfill(2) if pd.notna(value) else value
+            )
+            result['_plan_row_order'] = range(len(result))
+            result = result.merge(
+                geometry_lookup,
+                how='left',
+                on='geometry_number',
+                validate='many_to_one',
+            )
+            result = result.sort_values('_plan_row_order').drop(
+                columns=['_plan_row_order']
+            )
+            geometry_joined = result.pop('_geometry_metadata_joined').eq(True)
+        else:
+            geometry_joined = pd.Series(False, index=result.index)
+
+        defaults = {
+            'has_1d_xs': pd.NA,
+            'has_2d_mesh': pd.NA,
+            'num_cross_sections': pd.NA,
+            'mesh_cell_count': pd.NA,
+            'mesh_area_names': None,
+            'geometry_metadata_source': 'unavailable',
+            'geometry_metadata_valid': False,
+            'geometry_metadata_error': None,
+        }
+        for column, default in defaults.items():
+            if column not in result.columns:
+                result[column] = default
+
+        missing_geometry = ~geometry_joined.astype(bool)
+        result.loc[missing_geometry, 'geometry_metadata_source'] = 'unavailable'
+        result.loc[missing_geometry, 'geometry_metadata_valid'] = False
+        result.loc[missing_geometry, ['has_1d_xs', 'has_2d_mesh']] = pd.NA
+
+        missing_reference = missing_geometry & result['geometry_number'].isna()
+        missing_lookup = missing_geometry & ~result['geometry_number'].isna()
+        result.loc[missing_reference, 'geometry_metadata_error'] = (
+            'Plan geometry reference is missing'
+        )
+        result.loc[missing_lookup, 'geometry_metadata_error'] = (
+            'Referenced geometry was not found in geom_df'
+        )
+
+        for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+            result[column] = result[column].astype('boolean')
+        for column in ['num_cross_sections', 'mesh_cell_count']:
+            result[column] = pd.to_numeric(result[column], errors='coerce').astype('Int64')
+
+        result['geometry_type'] = result.apply(self._classify_geometry, axis=1)
+        plan_classes = result.apply(
+            self._classify_plan_type,
+            axis=1,
+            result_type='expand',
+        )
+        plan_classes.columns = [
+            'plan_type',
+            'plan_classification_valid',
+            'plan_classification_reason',
+        ]
+        result[plan_classes.columns] = plan_classes
+        result['plan_classification_valid'] = (
+            result['plan_classification_valid'].astype('boolean')
+        )
+        return result
+
     def _set_file_paths(self):
         """Set geometry and flow paths in plan_df."""
         for idx, row in self.plan_df.iterrows():
@@ -356,7 +596,11 @@ class RasPrj:
             self.plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
 
     def _flow_prefix_for_plan(self, row: pd.Series) -> str:
-        """Return the f/u/q prefix declared by a plan without exposing new columns."""
+        """Return the normalized f/u/q prefix declared by a plan."""
+        prefix = row.get('flow_file_prefix')
+        if pd.notna(prefix) and str(prefix).strip().lower() in {'f', 'u', 'q'}:
+            return str(prefix).strip().lower()
+
         full_path = row.get('full_path')
         if pd.notna(full_path):
             plan_path = Path(str(full_path))
@@ -378,11 +622,7 @@ class RasPrj:
 
     def _flow_type_for_plan(self, row: pd.Series) -> str:
         """Return the mechanical plan flow type from its declared file prefix."""
-        return {
-            'f': 'Steady',
-            'u': 'Unsteady',
-            'q': 'Quasi-Unsteady',
-        }.get(self._flow_prefix_for_plan(row), 'Unknown')
+        return self._classify_plan_flow(row)
 
     def _set_plan_paths(self):
         """Set full path information for plan files and their associated geometry and flow files."""
@@ -583,6 +823,15 @@ class RasPrj:
             description_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
             if description_match:
                 plan_info['description'] = description_match.group(1).strip()
+
+            # Description text can contain strings that look like plan keys.
+            # Remove it before reading top-level control records.
+            parse_content = re.sub(
+                r'BEGIN DESCRIPTION:?\s*\n.*?\nEND DESCRIPTION',
+                '',
+                content,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
             
             # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
             
@@ -626,7 +875,7 @@ class RasPrj:
                 plan_info[key] = None
             
             for key, pattern in supported_plan_keys.items():
-                match = re.search(pattern, content)
+                match = re.search(rf'^{pattern}\r?$', parse_content, re.MULTILINE)
                 if match:
                     value = match.group(1).strip()
                     # Convert core values to integers if they exist
@@ -765,10 +1014,14 @@ class RasPrj:
             prefix = flow_file[0].lower()
             return {
                 'unsteady_number': flow_file[1:] if prefix == 'u' else None,
+                'quasi_unsteady_number': flow_file[1:] if prefix == 'q' else None,
+                'flow_file_prefix': prefix,
                 'Flow File': flow_file[1:]
             }
         return {
             'unsteady_number': None,
+            'quasi_unsteady_number': None,
+            'flow_file_prefix': None,
             'Flow File': None
         }
 
@@ -791,8 +1044,15 @@ class RasPrj:
         if sediment_file:
             match = re.fullmatch(r'[sS](\d{2,3})', sediment_file.strip())
             if match:
-                return {'Sediment File': match.group(1)}
-        return {'Sediment File': None}
+                number = match.group(1)
+                return {
+                    'sediment_number': number,
+                    'Sediment File': number,
+                }
+        return {
+            'sediment_number': None,
+            'Sediment File': None,
+        }
 
     def _process_breach_summary(self, plan_path: Path) -> dict:
         """Derive nullable plan-level counts from the public breach reader."""
@@ -1309,7 +1569,8 @@ class RasPrj:
             ...     print(plan_entries.iloc[0])
         """
         self.check_initialized()
-        return self._enrich_plan_dataframe(self._get_prj_entries('Plan'))
+        entries = self._enrich_plan_dataframe(self._get_prj_entries('Plan'))
+        return self._enrich_plan_classification(entries)
 
     @log_call
     def get_flow_entries(self):
@@ -1446,7 +1707,9 @@ class RasPrj:
                     'has_1d_xs', 'has_2d_mesh', 'num_cross_sections',
                     'num_inline_structures', 'num_bridges', 'num_culverts',
                     'num_weirs', 'num_gates', 'num_lateral_structures',
-                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names'
+                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names',
+                    'geometry_metadata_source', 'geometry_metadata_valid',
+                    'geometry_metadata_error',
                 ]
                 for col in metadata_columns:
                     default = GeomMetadata.DEFAULT_COUNTS.get(col)
@@ -1466,7 +1729,8 @@ class RasPrj:
                             geom_path=geom_path,
                             hdf_path=(
                                 hdf_path
-                                if self.load_hdf_metadata and hdf_path.exists()
+                                if getattr(self, 'load_hdf_metadata', True)
+                                and hdf_path.exists()
                                 else None
                             ),
                         )
@@ -1506,6 +1770,25 @@ class RasPrj:
                                 geom_df.at[idx, 'description'] = desc_match.group(1).strip()
                 except Exception as e:
                     logger.debug(f"Failed to extract title/description for {row['geom_file']}: {e}")
+
+            for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+                if column in geom_df.columns:
+                    geom_df[column] = geom_df[column].astype('boolean')
+            for column in [
+                'num_cross_sections', 'num_inline_structures', 'num_bridges',
+                'num_culverts', 'num_weirs', 'num_gates',
+                'num_lateral_structures', 'num_sa_2d_connections',
+                'mesh_cell_count',
+            ]:
+                if column in geom_df.columns:
+                    geom_df[column] = pd.to_numeric(
+                        geom_df[column], errors='coerce'
+                    ).astype('Int64')
+
+            geom_df['geometry_type'] = geom_df.apply(
+                self._classify_geometry,
+                axis=1,
+            )
 
             if not self.suppress_logging:  # Only log if suppress_logging is False
                 logger.debug(f"Found {len(geom_df)} geometry entries")
@@ -2036,7 +2319,12 @@ class RasPrj:
             entry = {
                 'plan_number': row['plan_number'],
                 'plan_title': row.get('Plan Title', row.get('plan_title', '')),
-                'flow_type': row.get('flow_type', 'Unsteady'),
+                'flow_type': row.get('flow_type', 'Unknown'),
+                'flow_file_prefix': row.get('flow_file_prefix'),
+                'unsteady_number': row.get('unsteady_number'),
+                'quasi_unsteady_number': row.get('quasi_unsteady_number'),
+                'Flow File': row.get('Flow File'),
+                'Flow Path': row.get('Flow Path'),
                 'HDF_Results_Path': row.get('HDF_Results_Path'),
                 'Program Version': row.get('Program Version'),
             }

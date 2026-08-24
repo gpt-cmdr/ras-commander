@@ -455,23 +455,13 @@ class GeomPreprocessor:
 
     @staticmethod
     def _resolve_flow_type(plan_num: str, ras_obj) -> str:
-        """Return the flow type recorded in plan_df when available."""
+        """Return the canonical steady, unsteady, or quasi-unsteady type."""
         try:
-            if getattr(ras_obj, "plan_df", None) is None or ras_obj.plan_df.empty:
-                return "Unknown"
-            matching = ras_obj.plan_df[
-                ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                == plan_num
-            ]
-            if matching.empty:
-                return "Unknown"
-            if "flow_type" in matching.columns:
-                return str(matching.iloc[0].get("flow_type") or "Unknown")
-            if "unsteady_number" in matching.columns:
-                return "Unsteady" if matching.iloc[0].get("unsteady_number") else "Steady"
+            from ..RasPlan import RasPlan
+
+            return RasPlan.get_plan_flow_type(plan_num, ras_obj)
         except Exception:
             return "Unknown"
-        return "Unknown"
 
     @staticmethod
     def _compute_message_paths(
