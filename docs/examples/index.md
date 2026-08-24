@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*132 notebooks indexed - 121 with runtime data, 11 without.*
+*134 notebooks indexed - 121 with runtime data, 13 without.*
 
 ## 100s - Initialization & Execution
 
@@ -81,7 +81,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [301 - Flow Hydrograph Optimization](../notebooks/301_flow_hydrograph_optimization.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/301_flow_hydrograph_optimization.ipynb) | 1.0 min |
 | [310 - DSS Boundary Extraction](../notebooks/310_dss_boundary_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/310_dss_boundary_extraction.ipynb) | 5 s |
 | [311 - 2D Floodway Encroachment](../notebooks/311_2d_floodway_encroachment.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/311_2d_floodway_encroachment.ipynb) | 1.2 min |
-| [312 - Boundary DataFrame Enhancement: QMult, QMin, and DSS Path Parsing](../notebooks/312_boundary_df_qmult_dss_paths.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/312_boundary_df_qmult_dss_paths.ipynb) | 1.2 min |
+| [312 - Boundary DataFrame Enhancement: QMult, QMin, and DSS Path Parsing](../notebooks/312_boundary_df_qmult_dss_paths.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/312_boundary_df_qmult_dss_paths.ipynb) | 49 s |
 | [313 - HMS-to-RAS Boundary Condition Matching](../notebooks/313_hms_to_ras_boundary_matching.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/313_hms_to_ras_boundary_matching.ipynb) | 5 s |
 | [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
 | [315 - 2D Computation Options](../notebooks/315_2d_computation_options.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/315_2d_computation_options.ipynb) | 2.4 min |
@@ -104,6 +104,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [414 - Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves](../notebooks/414_depth_varying_mannings_n.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/414_depth_varying_mannings_n.ipynb) | 5.4 min |
 | [415 - 2D Spatial Result Queries with HdfResultsQuery](../notebooks/415_2d_spatial_result_queries.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/415_2d_spatial_result_queries.ipynb) | 5.5 min |
 | [416 - 2D Velocity Profile Line Extraction](../notebooks/416_2d_velocity_profile_line.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/416_2d_velocity_profile_line.ipynb) | 5 s |
+| [417 - Inspecting Results and Generating Hydraulic Product Packages](../notebooks/417_inspect_results_and_generate_hydraulic_products.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/417_inspect_results_and_generate_hydraulic_products.ipynb) | N/A |
 | [420 - Dam Breach Results](../notebooks/420_breach_results_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) | 2.9 min |
 | [430 - 1D Channel Capacity Analysis](../notebooks/430_1d_channel_capacity_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/430_1d_channel_capacity_analysis.ipynb) | 1.3 min |
 
@@ -141,6 +142,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
 | [727 - Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS](../notebooks/727_atlas14_gridded_rain_on_grid_hecras.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/727_atlas14_gridded_rain_on_grid_hecras.ipynb) | 16.5 min |
+| [728 - Extending Gridded DSS Forcing Through the Simulation Window](../notebooks/728_extend_gridded_dss_forcing_window.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/728_extend_gridded_dss_forcing_window.ipynb) | N/A |
 | [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance

@@ -515,7 +515,7 @@ def test_same_stem_raster_and_shapefile_can_be_replaced_transactionally(tmp_path
 
 
 @pytest.mark.parametrize("suffix", [".parquet", ".geoparquet"])
-def test_geoparquet_fails_early_with_actionable_extra_when_pyarrow_missing(
+def test_geoparquet_fails_early_when_required_pyarrow_is_missing(
     monkeypatch,
     tmp_path,
     suffix,
@@ -536,7 +536,7 @@ def test_geoparquet_fails_early_with_actionable_extra_when_pyarrow_missing(
 
     monkeypatch.setattr(builtins, "__import__", import_without_pyarrow)
 
-    with pytest.raises(ImportError, match=r"ras-commander\[geoparquet\]"):
+    with pytest.raises(ImportError, match=r"core 'pyarrow' dependency"):
         RasBenefits.create_benefit_area(
             pre,
             post,

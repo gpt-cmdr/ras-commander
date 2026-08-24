@@ -72,13 +72,89 @@ removed before v1.2.0:
 
 - `get_mesh_max_ws(hdf_path)` - Maximum water surface elevation
 - `get_mesh_max_ws_time(hdf_path)` - Time of maximum WSE
-- `get_mesh_max_depth(hdf_path)` - Maximum depth
+- `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
+  when present, otherwise derived in memory from `Water Surface - Cells Minimum
+  Elevation`
 - `get_mesh_max_face_v(hdf_path)` - Maximum face velocity
 - `get_mesh_timeseries(hdf_path, mesh, var)` - Time series for mesh
 - `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
 - `get_mesh_faces_timeseries(hdf_path, mesh, face_ids, var)` - Face time series
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
+
+`get_mesh_max_depth()` logs one INFO source message per mesh. Stored `Depth` is
+read only. The fallback is computed only in memory and does not create or write
+`Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
+not producer output and are labeled separately from pre-existing HEC-RAS result
+fixtures.
+
+### HdfResultsProducts
+
+Inspection and deterministic product contracts for completed unsteady result
+HDFs.
+
+- `inspect_result(hdf_path)` - Read an existing result HDF without mutation and
+  fail closed on incomplete or conflicting completion evidence, inconsistent
+  time axes, missing CRS or units, and mesh/result/topology misalignment
+- `export(hdf_path, output_directory, *, resolution=None,
+  max_dimension=2048, nodata=-9999.0, include_preview=True)` - Generate a
+  checksum-pinned hydraulic product package without modifying the producer HDF
+
+Current HEC-RAS results can establish completion with
+`Event Conditions/Completed Successfully=True`. Older producer HDFs that do
+not contain that attribute can establish completion with their embedded
+`Complete Process` compute-message marker. An explicit false or malformed
+attribute is never overridden by messages.
+
+The returned inspection identifies whether maximum depth will be read from the
+stored HEC-RAS `Depth` time series or derived in memory from `Water Surface -
+Cells Minimum Elevation`. It also records `hydraulic_qaqc: not_evaluated`:
+mechanical completion and product readiness are not engineering acceptance.
+
+```python
+from ras_commander import HdfResultsProducts
+
+inspection = HdfResultsProducts.inspect_result("project.p02.hdf")
+manifest = HdfResultsProducts.export(
+    "project.p02.hdf",
+    "project-p02-hydraulic-products",
+)
+```
+
+`export()` supports completed unsteady HDFs with 2D flow areas. It writes a
+common-grid trio of Cloud Optimized GeoTIFFs for maximum WSE, maximum depth, and
+maximum adjacent-face velocity; a fixed-schema Arrow/Parquet boundary
+hydrograph table; result metadata; numerical evidence; a WGS84 GeoJSON
+footprint; and, by default, a depth preview. `pyarrow>=14.0` is a required core
+dependency because Arrow and Parquet are part of the modern geospatial product
+contract, not an optional fallback.
+
+Raster dimensions are bounded twice: neither width nor height may exceed
+`max_dimension`, and the total raster contains at most 16,777,216 cells. The
+`nodata` argument is normalized to float32 before collision checks so a nearby
+double-precision value cannot silently become equal to valid stored data.
+Pixels are square at the exact selected resolution; when a footprint span is
+not evenly divisible, raster bounds expand by less than one pixel on the right
+or bottom rather than silently changing the requested cell size.
+
+The source HDF is opened read-only and protected by point-in-time digest checks.
+The files in the output directory are newly generated ras-commander derivative
+artifacts; they are not newly generated HEC-RAS model output. The output
+directory must not already exist. Assets are published without overwriting and
+`hydraulic-products.json` is linked last, so consumers must use that manifest as
+the package-complete marker. A package that lacks the manifest is incomplete.
+Publication requires same-filesystem hard-link support and fails closed when
+the destination filesystem cannot provide it.
+
+The exporter preserves valid negative-datum WSE and uses 2D flow-area
+footprints as raster support. It does not infer hydraulic acceptability:
+`numerical-qaqc.json` preserves evidence while the manifest remains
+`hydraulic_qaqc: not_evaluated`. A result with no boundary-condition series gets
+a valid, empty Parquet table with the same schema rather than losing the asset.
+
+Synthetic HDFs created by focused tests are labeled test artifacts. Real-file
+integration uses pre-existing producer HDFs read-only and does not run HEC-RAS
+or generate model output; it generates only temporary derivative packages.
 
 ## Plan Results
 

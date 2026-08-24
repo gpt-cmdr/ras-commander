@@ -77,6 +77,7 @@ from .HdfResultsQuery import HdfResultsQuery
 from .HdfResultsXsec import HdfResultsXsec
 from .HdfResultsBreach import HdfResultsBreach
 from .HdfResultsSediment import HdfResultsSediment
+from .HdfResultsProducts import HdfResultsProducts
 
 # Infrastructure classes
 from .HdfPipe import HdfPipe
@@ -104,7 +105,7 @@ __all__ = [
     'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
     'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsBreach',
-    'HdfResultsSediment',
+    'HdfResultsSediment', 'HdfResultsProducts',
     # Infrastructure
     'HdfPipe', 'HdfPump', 'HdfInfiltration', 'HdfLandCover',
     # Visualization

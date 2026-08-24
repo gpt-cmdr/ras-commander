@@ -1220,15 +1220,15 @@ class RasBenefits:
 
     @staticmethod
     def _require_geoparquet_support() -> None:
-        """Fail early with the installation command required for GeoParquet."""
+        """Fail early when the required core GeoParquet dependency is absent."""
 
         try:
             import pyarrow  # noqa: F401
         except ImportError as exc:
             raise ImportError(
-                "GeoParquet polygon output requires the optional 'pyarrow' "
-                "dependency. Install it with "
-                "`pip install 'ras-commander[geoparquet]'`."
+                "GeoParquet polygon output requires ras-commander's core "
+                "'pyarrow' dependency, but it is unavailable. Reinstall or "
+                "repair the ras-commander environment."
             ) from exc
 
     @staticmethod

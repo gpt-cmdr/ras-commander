@@ -281,6 +281,36 @@ CLB673_FIXTURE_NAMES = [
 ]
 
 
+MANAGED_PRECIPITATION_PREFIXES = tuple(
+    prefix.encode("ascii")
+    for prefix in (
+        "Precipitation Mode=",
+        "Met BC=Precipitation|Mode=",
+        "Met BC=Precipitation|Constant Value=",
+        "Met BC=Precipitation|Constant Units=",
+        "Met BC=Precipitation|Point Interpolation=",
+        "Met BC=Precipitation|Gridded Source=",
+        "Met BC=Precipitation|Gridded Interpolation=",
+        "Met BC=Precipitation|Gridded DSS Filename=",
+        "Met BC=Precipitation|Gridded DSS Pathname=",
+        "Met BC=Precipitation|Gridded GDAL Filename=",
+        "Met BC=Precipitation|Gridded GDAL Group=",
+        "Met BC=Precipitation|Gridded GDAL Datasetname=",
+        "Met BC=Precipitation|Gridded GDAL Folder=",
+        "Met BC=Precipitation|Gridded GDAL Filter=",
+    )
+)
+
+
+def _unmanaged_precipitation_records(raw: bytes) -> list[bytes]:
+    """Return every raw record outside the precipitation editor's key set."""
+    return [
+        record
+        for record in raw.splitlines(keepends=True)
+        if not record.startswith(MANAGED_PRECIPITATION_PREFIXES)
+    ]
+
+
 MET_PRECIP_MODE_CASES = [
     pytest.param(
         {
@@ -508,6 +538,34 @@ def test_set_met_precipitation_mode_round_trips_each_mode_from_clb673_fixtures(
         assert config[key] == expected_value
 
 
+def test_set_met_precipitation_mode_changes_only_managed_raw_records(
+    tmp_path,
+):
+    assert MANAGED_PRECIPITATION_PREFIXES == tuple(
+        prefix.encode("ascii")
+        for prefix in RasUnsteady._MET_PRECIP_MANAGED_PREFIXES
+    )
+    source = FIXTURE_DIR / "precip_06_gridded_dss_official_baldeagle.u03"
+    unsteady_file = tmp_path / source.name
+    original = source.read_bytes()
+    unsteady_file.write_bytes(original)
+
+    RasUnsteady.set_met_precipitation_mode(
+        unsteady_file,
+        "Constant",
+        constant_value=2.5,
+        constant_units="mm/hr",
+    )
+
+    updated = unsteady_file.read_bytes()
+    assert updated != original
+    assert _unmanaged_precipitation_records(updated) == (
+        _unmanaged_precipitation_records(original)
+    )
+    assert b"Met BC=Precipitation|Mode=Constant" in updated
+    assert b"Met BC=Precipitation|Constant Value=2.5" in updated
+
+
 def test_set_met_precipitation_mode_creates_precipitation_block_from_scratch(tmp_path):
     unsteady_file = tmp_path / "minimal.u01"
     unsteady_file.write_text(
@@ -544,6 +602,84 @@ def test_set_met_precipitation_mode_creates_precipitation_block_from_scratch(tmp
     assert config["mode"] == "Gridded"
     assert config["source"] == "GDAL Raster File(s)"
     assert config["gdal_group"] == "APCP_surface"
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"])
+@pytest.mark.parametrize("terminal_newline", [False, True])
+def test_set_met_precipitation_mode_preserves_newline_convention_and_terminal_state(
+    tmp_path,
+    newline,
+    terminal_newline,
+):
+    unsteady_file = tmp_path / "minimal.u01"
+    sentinel = b"Met BC=Precipitation|Expanded View=-1"
+    records = [
+        b"Flow Title=Minimal",
+        b"Program Version=6.60",
+        sentinel,
+        b"Boundary Location=River,Reach,1000",
+    ]
+    original = newline.join(records)
+    if terminal_newline:
+        original += newline
+    unsteady_file.write_bytes(original)
+
+    RasUnsteady.set_met_precipitation_mode(
+        unsteady_file,
+        "Constant",
+        constant_value=2.5,
+    )
+
+    updated = unsteady_file.read_bytes()
+    assert updated.endswith(newline) is terminal_newline
+    content_without_separators = updated.replace(newline, b"")
+    assert b"\r" not in content_without_separators
+    assert b"\n" not in content_without_separators
+
+    updated_records = updated.split(newline)
+    if terminal_newline:
+        assert updated_records.pop() == b""
+    assert sentinel in updated_records
+    assert b"Flow Title=Minimal" in updated_records
+    assert b"Boundary Location=River,Reach,1000" in updated_records
+    assert b"Precipitation Mode=Enable" in updated_records
+    assert b"Met BC=Precipitation|Mode=Constant" in updated_records
+    assert b"Met BC=Precipitation|Constant Value=2.5" in updated_records
+
+
+@pytest.mark.parametrize("original", [b"", b"Flow Title=Minimal"])
+def test_set_met_precipitation_mode_uses_lf_for_input_without_a_newline(
+    tmp_path,
+    original,
+):
+    unsteady_file = tmp_path / "minimal.u01"
+    unsteady_file.write_bytes(original)
+
+    RasUnsteady.set_met_precipitation_mode(unsteady_file, "None")
+
+    updated = unsteady_file.read_bytes()
+    assert b"\r" not in updated
+    assert not updated.endswith(b"\n")
+    records = updated.split(b"\n")
+    if original:
+        assert original in records
+    assert b"Precipitation Mode=Enable" in records
+    assert b"Met BC=Precipitation|Mode=None" in records
+
+
+def test_set_met_precipitation_mode_rejects_mixed_newlines_without_writing(tmp_path):
+    unsteady_file = tmp_path / "minimal.u01"
+    original = (
+        b"Flow Title=Minimal\r\n"
+        b"Program Version=6.60\n"
+        b"Sentinel=unchanged\r"
+    )
+    unsteady_file.write_bytes(original)
+
+    with pytest.raises(ValueError, match="Mixed newline"):
+        RasUnsteady.set_met_precipitation_mode(unsteady_file, "None")
+
+    assert unsteady_file.read_bytes() == original
 
 
 def test_set_met_precipitation_mode_validates_mode_specific_inputs(tmp_path):

@@ -1889,19 +1889,61 @@ class RasPlan:
             if plan_file_path is None or not Path(plan_file_path).exists():
                 raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
-        # Format the dates
-        formatted_date = f"{start_date.strftime('%d%b%Y').upper()},{start_date.strftime('%H%M')},{end_date.strftime('%d%b%Y').upper()},{end_date.strftime('%H%M')}"
-
         try:
-            # Read the file
-            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                lines = file.readlines()
+            # Plan files are line-oriented text, but a targeted update must not
+            # normalize newline bytes or re-encode unrelated content.
+            original = Path(plan_file_path).read_bytes()
+            lines = original.splitlines(keepends=True)
 
             # Update the Simulation Date line
             updated = False
             for i, line in enumerate(lines):
-                if line.startswith("Simulation Date="):
-                    lines[i] = f"Simulation Date={formatted_date}\n"
+                if line.startswith(b"Simulation Date="):
+                    if line.endswith(b"\r\n"):
+                        line_ending = b"\r\n"
+                    elif line.endswith(b"\n"):
+                        line_ending = b"\n"
+                    elif line.endswith(b"\r"):
+                        line_ending = b"\r"
+                    else:
+                        line_ending = b""
+                    body = line[: len(line) - len(line_ending)] if line_ending else line
+                    fields = body.removeprefix(b"Simulation Date=").split(b",")
+                    if len(fields) != 4:
+                        raise ValueError(
+                            "Malformed 'Simulation Date=' line in plan file: "
+                            f"{plan_file_path}. "
+                            "Expected four comma-separated fields."
+                        )
+
+                    start_time_token = fields[1]
+                    end_time_token = fields[3]
+                    time_formats = []
+                    for label, token in (
+                        ("start", start_time_token),
+                        ("end", end_time_token),
+                    ):
+                        if re.fullmatch(br"[0-9]{4}", token):
+                            time_formats.append("%H%M")
+                        elif re.fullmatch(br"[0-9]{2}:[0-9]{2}", token):
+                            time_formats.append("%H:%M")
+                        else:
+                            raise ValueError(
+                                f"Malformed {label} time {token.decode('ascii', errors='replace')!r} in "
+                                "'Simulation Date=' line in plan file: "
+                                f"{plan_file_path}. Expected HHMM or HH:MM."
+                            )
+
+                    formatted_date = (
+                        f"{start_date.strftime('%d%b%Y').upper()},"
+                        f"{start_date.strftime(time_formats[0])},"
+                        f"{end_date.strftime('%d%b%Y').upper()},"
+                        f"{end_date.strftime(time_formats[1])}"
+                    )
+                    lines[i] = (
+                        f"Simulation Date={formatted_date}".encode("ascii")
+                        + line_ending
+                    )
                     updated = True
                     break
 
@@ -1912,9 +1954,8 @@ class RasPlan:
                     "Cannot update simulation date."
                 )
 
-            # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            # Write only after the complete target record has been validated.
+            Path(plan_file_path).write_bytes(b"".join(lines))
 
             logger.info("Updated simulation date in plan file: %s", plan_file_path.name)
             logger.debug("Updated simulation date in plan file path: %s", plan_file_path)

@@ -163,7 +163,7 @@ See the [HDF Writing Guide](hdf-writing-guide.md) for detailed instructions on s
 |------|-------|-------------|
 | `Water Surface` | (n_times, n_cells) | WSE time series |
 | `Face Velocity` | (n_times, n_faces) | Face velocity time series |
-| `Depth` | (n_times, n_cells) | Depth time series |
+| `Depth` | (n_times, n_cells) | Optional stored depth time series; not present in every HEC-RAS result |
 | `Maximum Water Surface` | (n_cells,) | Max WSE |
 | `Maximum Water Surface Time` | (n_cells,) | Time of max WSE |
 | `Maximum Face Velocity` | (n_faces,) | Max face velocity |
@@ -308,7 +308,7 @@ with h5py.File("project.p01.hdf", "r") as hdf:
 | **Volume Accounting** | `/Results/Summary/Volume Accounting/` | `HdfResultsPlan.get_volume_accounting()` |
 | **Runtime Data** | `/Results/Summary/Run Time Window/` | `HdfResultsPlan.get_runtime_data()` |
 | **2D Max WSE** | `/Results/Unsteady/.../Summary Output/2D Flow Areas/{name}/Maximum Water Surface` | `HdfResultsMesh.get_mesh_max_ws()` |
-| **2D Max Depth** | `/Results/Unsteady/.../Summary Output/2D Flow Areas/{name}/Maximum Depth` | `HdfResultsMesh.get_mesh_max_depth()` |
+| **2D Max Depth** | Preferred: `/Results/Unsteady/.../Unsteady Time Series/2D Flow Areas/{name}/Depth`; fallback: `Water Surface` at that location minus `/Geometry/2D Flow Areas/{name}/Cells Minimum Elevation` | `HdfResultsMesh.get_mesh_max_depth()` |
 | **2D Max Velocity** | `/Results/Unsteady/.../Summary Output/2D Flow Areas/{name}/Maximum Face Velocity` | `HdfResultsMesh.get_mesh_max_face_velocity()` |
 | **2D WSE Timeseries** | `/Results/Unsteady/.../Unsteady Time Series/2D Flow Areas/{name}/Water Surface` | `HdfResultsMesh.get_mesh_timeseries()` |
 | **1D WSE Timeseries** | `/Results/Unsteady/.../Cross Sections/{river}_{reach}/Water Surface` | `HdfResultsXsec.get_xsec_timeseries()` |
@@ -317,6 +317,11 @@ with h5py.File("project.p01.hdf", "r") as hdf:
 | **Steady Profiles** | `/Results/Steady/Output/Geometry/Cross Sections/{river}_{reach}/Water Surface` | `HdfResultsPlan.get_steady_wse()` |
 | **Steady Profile Names** | `/Results/Steady/Output/Geometry/Cross Sections/Output Profiles/` | `HdfResultsPlan.get_steady_profile_names()` |
 | **Breach Data** | `/Results/Unsteady/.../Breach/` | `HdfResultsBreach.get_breach_timeseries()` |
+
+`get_mesh_max_depth()` reads the optional HEC-RAS `Depth` time series when it
+exists. Otherwise it derives depth in memory from `Water Surface` and `Cells
+Minimum Elevation`; it does not add a dataset to the plan HDF. An INFO message
+identifies the selected source for each mesh.
 
 ### Common Query Examples
 

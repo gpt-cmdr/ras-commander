@@ -208,6 +208,7 @@ written = RasDss.write_grid_timeseries(
         "units": "mm",
         "data_type": "PER-CUM",
     },
+    dss_version=6,
 )
 ```
 
@@ -215,6 +216,12 @@ The pathname is a template. Parts A/B/C/F are preserved, while Parts D/E are
 rebuilt for each timestep using the start/end window. For period data such as
 precipitation, pass either `n_times + 1` boundary times or `n_times` interval
 end times.
+
+`dss_version` is keyword-only. Pass `6` or `7` when creating a new database,
+or omit it to retain the HEC bridge default. An explicit version must match an
+existing file. All writer timestamps must be timezone-naive: convert aware
+data to the intended HEC-RAS model clock and remove timezone metadata before
+calling the API.
 
 ### Grid Java API Mapping
 
