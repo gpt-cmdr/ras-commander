@@ -111,6 +111,29 @@ def test_summarize_plans_infers_steady_from_raw_flow_path(
     assert captured[0]["plan_meta"]["flow_type"] == "Steady"
 
 
+def test_summarize_plans_infers_quasi_from_normalized_prefix(
+    monkeypatch,
+    tmp_path,
+):
+    df, captured = _capture_flow_types(
+        monkeypatch,
+        [
+            {
+                "plan_number": "05",
+                "plan_title": "Quasi Plan DF Row",
+                "flow_type": pd.NA,
+                "flow_file_prefix": "q",
+                "quasi_unsteady_number": "02",
+                "Flow File": "02",
+            }
+        ],
+        tmp_path,
+    )
+
+    assert df["flow_type"].tolist() == ["Quasi-Unsteady"]
+    assert captured[0]["plan_meta"]["flow_type"] == "Quasi-Unsteady"
+
+
 def test_summarize_plans_infers_quasi_unsteady_from_raw_flow_path(
     monkeypatch,
     tmp_path,

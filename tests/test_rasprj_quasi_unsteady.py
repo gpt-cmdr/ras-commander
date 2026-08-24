@@ -41,7 +41,7 @@ def _write_quasi_unsteady_project(root: Path) -> Path:
     return project
 
 
-def test_plan_df_resolves_quasi_unsteady_flow_without_new_contract_columns(
+def test_plan_df_resolves_quasi_unsteady_flow_with_normalized_contract_columns(
     tmp_path: Path,
 ) -> None:
     project = _write_quasi_unsteady_project(tmp_path / "quasi")
@@ -66,8 +66,9 @@ def test_plan_df_resolves_quasi_unsteady_flow_without_new_contract_columns(
     assert plan["breach_active_count"] == 0
     assert str(ras_project.plan_df["breach_definition_count"].dtype) == "Int64"
     assert str(ras_project.plan_df["breach_active_count"].dtype) == "Int64"
-    assert "quasi_unsteady_number" not in ras_project.plan_df.columns
-    assert "flow_file_prefix" not in ras_project.plan_df.columns
+    assert plan["quasi_unsteady_number"] == "01"
+    assert plan["flow_file_prefix"] == "q"
+    assert plan["sediment_number"] == "01"
 
     ras_project._plan_flow_prefixes.clear()
     assert ras_project._flow_prefix_for_plan(plan) == "q"
@@ -302,14 +303,20 @@ def test_existing_steady_and_unsteady_prefixes_remain_compatible(tmp_path: Path)
 
     assert ras_project._process_flow_file({"Flow File": "f02"}) == {
         "unsteady_number": None,
+        "quasi_unsteady_number": None,
+        "flow_file_prefix": "f",
         "Flow File": "02",
     }
     assert ras_project._process_flow_file({"Flow File": "u03"}) == {
         "unsteady_number": "03",
+        "quasi_unsteady_number": None,
+        "flow_file_prefix": "u",
         "Flow File": "03",
     }
     assert ras_project._process_flow_file({"Flow File": "Q04"}) == {
         "unsteady_number": None,
+        "quasi_unsteady_number": "04",
+        "flow_file_prefix": "q",
         "Flow File": "04",
     }
 

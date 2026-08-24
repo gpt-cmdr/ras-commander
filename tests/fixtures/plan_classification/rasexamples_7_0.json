@@ -1,0 +1,57 @@
+{
+  "archive": {
+    "filename": "Example_Projects_7_0.zip",
+    "release_tag": "1.0.45",
+    "url": "https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.45/Example_Projects_7_0.zip",
+    "sha256": "fac04f071e624c841b20e943e3b68f351b4531f565a0c24ab7d885cf9e38d523",
+    "size_bytes": 427304097
+  },
+  "projects": {
+    "Balde Eagle Creek": {
+      "01": "unsteady_1d",
+      "02": "steady_1d"
+    },
+    "Muncie": {
+      "01": "unsteady_1d",
+      "03": "unsteady_1d_2d"
+    },
+    "Chippewa_2D": {
+      "02": "unsteady_2d"
+    },
+    "BSTEM - Simple Example": {
+      "02": "quasi_unsteady_1d"
+    },
+    "Wailupe GeoRAS": {
+      "01": "steady_1d",
+      "02": "steady_1d"
+    }
+  },
+  "derived_cases": [
+    "Muncie p03 with g02.hdf removed",
+    "Chippewa_2D p02 with g01.hdf removed",
+    "Muncie p03 with g02 and g02.hdf removed",
+    "Muncie p03 with a corrupt g02.hdf",
+    "Muncie p03 changed to steady f01 against mixed geometry"
+  ],
+  "clb_qualification": {
+    "fixture_database_project_ids": [21, 757, 1106, 1514, 1532],
+    "text_only_2d_regression": {
+      "project_id": 1106,
+      "plan_number": "01",
+      "program_version": "6.31",
+      "expected_plan_type": "unsteady_2d"
+    },
+    "version_schema_regressions": {
+      "6.70": {
+        "project_id": 21,
+        "plan_numbers": ["01", "03"],
+        "expected_plan_type": "unsteady_2d"
+      },
+      "7.00": {
+        "project_id": 1514,
+        "plan_numbers": ["03", "17"],
+        "expected_plan_type": "unsteady_1d"
+      }
+    }
+  }
+}
