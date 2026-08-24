@@ -120,6 +120,16 @@ from .ComputeResults import (
     GeometryLayerResult,
     GeometryCompleteResult,
 )
+from .ExecutionEvidence import (
+    EVIDENCE_CHANNELS,
+    EVIDENCE_STATES,
+    EXECUTION_OBSERVATION_NAMES,
+    EvidenceChannel,
+    EvidenceObservation,
+    EvidenceState,
+    ExecutionEvidence,
+    ObservationName,
+)
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
 from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
@@ -282,6 +292,9 @@ __all__ = [
     'BoundaryStaleEvidenceError', 'BoundaryFormatError',
     'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
+    'EvidenceState', 'EvidenceChannel', 'ObservationName',
+    'EVIDENCE_STATES', 'EVIDENCE_CHANNELS', 'EXECUTION_OBSERVATION_NAMES',
+    'EvidenceObservation', 'ExecutionEvidence',
     'PreprocessResult', 'GeometryPreprocessResult',
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',

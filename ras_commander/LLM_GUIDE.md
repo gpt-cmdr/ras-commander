@@ -54,9 +54,18 @@ ras = init_ras_project(project, "6.6")
 print(ras.plan_df[["plan_number", "Plan Title"]])     # inspect plans
 RasCmdr.compute_plan("01", ras_object=ras)            # run a plan
 
+# Read existing completion evidence without running HEC-RAS or COM.
+evidence = RasCmdr.inspect_execution_evidence("01", ras_object=ras)
+print(evidence.mechanical_completion.state)
+print(evidence.observations["message_error_count"].value)
+
 hdf = ras.plan_df.loc[ras.plan_df["plan_number"] == "01", "HDF_Results_Path"].iloc[0]
 wse = HdfResultsPlan.get_wse(hdf, time_index=-1)       # extract results
 ```
+
+`mechanical_completion=True` means an accepted completion source was observed;
+it does not mean the messages are error-free or that the hydraulics are
+acceptable. Check the independent evidence observations.
 
 ## In-package helpers
 

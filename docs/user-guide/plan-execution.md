@@ -199,6 +199,52 @@ Use `RasFlowOptimization.get_settings()` to audit an existing plan and `RasFlowO
 
 After execution, verify results were generated and the run completed without errors. This is critical for determining if the simulation succeeded.
 
+### Structured Mechanical Evidence
+
+Use `inspect_execution_evidence()` when automation must distinguish an
+inspected false value from an unavailable, uninspected, or unreadable channel.
+The method is read-only: it does not run HEC-RAS, preprocess the plan, or open
+the legacy COM controller.
+
+```python
+from ras_commander import RasCmdr
+
+evidence = RasCmdr.inspect_execution_evidence(
+    "01",
+    ras_object=ras,
+    hash_files=True,
+)
+
+completion = evidence.mechanical_completion
+print(completion.state, completion.value, completion.reason_code)
+
+errors = evidence.observations["message_error_count"]
+print(errors.state, errors.value, errors.source_locator)
+```
+
+The four observation states have distinct meanings:
+
+- `available` means inspection produced a value, including `False` or zero.
+- `not_available_in_version` is used only for a positively established
+  producer-version limitation.
+- `not_inspected` means no trustworthy observation was possible or requested.
+- `failed` means inspection was attempted but the source was unreadable,
+  malformed, unstable, or contradictory.
+
+If `result_modified_after` is supplied, pass a timezone-aware `datetime` so
+the freshness comparison is reproducible across machines. Message-health
+counts prefer embedded HDF messages and fall back to stored messages; the two
+completion-message observations remain separate.
+
+HEC-RAS 3.x and 4.x plans use legacy `.O##` and stored-message evidence when
+available. HEC-RAS 5.x and newer plans use HDF evidence while preserving stored
+messages as a separate channel. Unknown minor-version shapes remain explicit
+`not_inspected` observations rather than being guessed.
+
+Mechanical completion is deliberately independent from message errors,
+warnings, result freshness, volume accounting, convergence quality, and
+hydraulic acceptance. Review those observations separately.
+
 ### Quick Verification
 
 ```python

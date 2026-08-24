@@ -4,6 +4,19 @@
 
 ### Unreleased
 
+**Structured Execution Evidence**
+
+- Add read-only `RasCmdr.inspect_execution_evidence()` with immutable,
+  source-aware observations across HDF, stored-message, legacy-output,
+  process, and COM channels.
+- Preserve available-false, version-unavailable, uninspected, and failed
+  states instead of collapsing them into one completion boolean.
+- Keep mechanical completion independent from parsed errors, warnings,
+  freshness thresholds, and hydraulic acceptance, and fail closed when
+  authoritative completion sources disagree.
+- Use exact `Complete Process` records rather than accepting misleading text
+  substrings.
+
 **C01-C06 Reliability Hardening**
 
 - Preserve the existing precipitation-file line endings and surrounding bytes

@@ -187,10 +187,35 @@ treated as requiring manual review.
       show_root_heading: true
       heading_level: 3
       members:
+        - inspect_execution_evidence
         - compute_plan
         - cancel_plan
         - compute_parallel
         - compute_test_mode
+
+### Structured execution evidence
+
+`RasCmdr.inspect_execution_evidence()` reads existing plan-result artifacts
+without executing HEC-RAS or opening COM. It keeps HDF attributes, embedded
+messages, stored message sidecars, legacy output files, process outcome, and
+COM outcome as separate observations. Mechanical completion does not imply
+hydraulic acceptance or an error-free computation.
+
+`result_modified_after`, when provided, must be a timezone-aware `datetime`.
+`result_artifact_structural_state` narrowly reports whether the plan-
+information group is present; it does not claim that a readable HDF is a
+complete result. Embedded HDF messages take precedence for health parsing,
+with stored messages used as a fallback.
+
+::: ras_commander.ExecutionEvidence
+    options:
+      show_root_heading: true
+      heading_level: 4
+
+::: ras_commander.EvidenceObservation
+    options:
+      show_root_heading: true
+      heading_level: 4
 
 #### Real-Time Execution Monitoring (v0.88.0+)
 

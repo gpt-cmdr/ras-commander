@@ -44,6 +44,7 @@ import subprocess
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from itertools import cycle
 from numbers import Number
 from pathlib import Path
@@ -54,6 +55,10 @@ import pandas as pd
 
 from .ComputeResults import ComputeParallelResult, ComputeResult
 from .Decorators import log_call
+from .ExecutionEvidence import (
+    ExecutionEvidence,
+    inspect_execution_evidence as _inspect_execution_evidence,
+)
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasGeo import RasGeo
@@ -94,6 +99,46 @@ class RasCmdr:
         plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+
+    @staticmethod
+    @log_call
+    def inspect_execution_evidence(
+        plan_number: Union[str, Number, Path],
+        *,
+        ras_object=None,
+        result_modified_after: Optional[datetime] = None,
+        hash_files: bool = False,
+    ) -> ExecutionEvidence:
+        """Inspect existing execution evidence without running HEC-RAS or COM.
+
+        The returned record keeps filesystem, HDF, stored-message, process,
+        and COM observations distinct.  It derives mechanical completion only;
+        parsed errors and warnings remain independent health observations and
+        hydraulic acceptance is deliberately outside this contract.
+
+        Args:
+            plan_number: Plan number or an existing ``.p##`` plan path.
+            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+                global project only when omitted.
+            result_modified_after: Optional timezone-aware filesystem
+                timestamp threshold. This is not a full RAS input-currency
+                check.
+            hash_files: Stream-hash inspected source artifacts for provenance.
+
+        Returns:
+            Immutable :class:`ExecutionEvidence` with a fixed observation
+            registry and JSON-serializable ``to_dict()`` representation.
+
+        Notes:
+            This method is read-only. It does not execute or preprocess a plan,
+            launch a COM controller, or evaluate hydraulic acceptability.
+        """
+        return _inspect_execution_evidence(
+            plan_number,
+            ras_object=ras_object,
+            result_modified_after=result_modified_after,
+            hash_files=hash_files,
+        )
 
     @staticmethod
     def _plan_entries_with_expected_hdf_paths(

@@ -103,10 +103,6 @@ class HdfResultsProducts:
         "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output"
     )
     _COMPUTE_MESSAGES_PATH = "Results/Summary/Compute Messages (text)"
-    _COMPLETE_PROCESS_LINE = re.compile(
-        r"^Complete Process(?:\s+(?:(?:\d+\s*:\s*)+\d+|\d+(?:\.\d+)?[xX]?))?\s*$"
-    )
-
     @staticmethod
     @log_call
     @standardize_input(file_type="plan_hdf")
@@ -1046,10 +1042,10 @@ class HdfResultsProducts:
         message_text = HdfResultsProducts._dataset_text(
             hdf_file.get(HdfResultsProducts._COMPUTE_MESSAGES_PATH)
         )
-        message_complete = any(
-            HdfResultsProducts._COMPLETE_PROCESS_LINE.fullmatch(line)
-            is not None
-            for line in message_text.splitlines()
+        from ..results.ResultsParser import ResultsParser
+
+        message_complete = ResultsParser._has_complete_process_record(
+            message_text
         )
 
         if attribute is False:

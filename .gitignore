@@ -77,6 +77,8 @@ research/**/__pycache__/
 !/feature_dev_notes/README.md
 !/feature_dev_notes/multicore_raster_processing/
 !/feature_dev_notes/multicore_raster_processing/*.md
+!/feature_dev_notes/structured_execution_evidence/
+!/feature_dev_notes/structured_execution_evidence/*.md
 /research
 !/research/
 !/research/fixtures/

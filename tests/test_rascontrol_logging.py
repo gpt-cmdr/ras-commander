@@ -114,6 +114,71 @@ def test_get_comp_msgs_logs_text_source_at_debug(
     assert str(comp_msgs_file) in debug_text
 
 
+def test_get_comp_msgs_empty_bco_falls_back_to_hdf(monkeypatch, tmp_path):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    (tmp_path / "Demo.bco01").write_bytes(b"")
+    (tmp_path / "Demo.p01.hdf").write_bytes(b"hdf placeholder")
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(
+            lambda plan, ras_object=None: ProjectInfo(
+                project_path=project_path,
+                version="6.6",
+                plan_number="01",
+                plan_name="Plan 01",
+            )
+        ),
+    )
+    from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+
+    monkeypatch.setattr(
+        HdfResultsPlan,
+        "get_compute_messages",
+        staticmethod(lambda hdf_file: "messages from hdf"),
+    )
+
+    assert RasControl.get_comp_msgs("01") == "messages from hdf"
+
+
+def test_get_comp_msgs_empty_text_sidecar_preserves_empty_result(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    (tmp_path / "Demo.p01.comp_msgs.txt").write_bytes(b"")
+    (tmp_path / "Demo.p01.hdf").write_bytes(b"hdf placeholder")
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(
+            lambda plan, ras_object=None: ProjectInfo(
+                project_path=project_path,
+                version="6.6",
+                plan_number="01",
+                plan_name="Plan 01",
+            )
+        ),
+    )
+    from ras_commander.hdf.HdfResultsPlan import HdfResultsPlan
+
+    monkeypatch.setattr(
+        HdfResultsPlan,
+        "get_compute_messages",
+        staticmethod(
+            lambda hdf_file: (_ for _ in ()).throw(
+                AssertionError("empty text sidecar must not fall back")
+            )
+        ),
+    )
+
+    assert RasControl.get_comp_msgs("01") == ""
+
+
 def test_failed_extraction_comp_msgs_full_text_is_debug(tmp_path, caplog):
     comp_msgs_file = tmp_path / "Demo.p01.comp_msgs.txt"
     comp_msgs = "line 1\nline 2\nline 3\n"

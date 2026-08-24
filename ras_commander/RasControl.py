@@ -37,6 +37,7 @@ Session tracking infrastructure:
 
 """
 
+import hashlib
 import psutil
 import pandas as pd
 from pathlib import Path
@@ -1653,6 +1654,64 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _set_plan)
 
     @staticmethod
+    def _read_stored_comp_msgs(
+        plan: Union[str, Path],
+        ras_object=None,
+        *,
+        strict: bool = True,
+        hash_file: bool = False,
+    ) -> Optional[Tuple[str, Path, Optional[str]]]:
+        """Read the first stored compute-message sidecar with its source path.
+
+        This helper never opens COM and never falls back to HDF.  Keeping the
+        source path and optional digest alongside the text lets
+        execution-evidence callers retain the exact bytes and channel that
+        supplied an observation.
+        """
+        info = RasControl._get_project_info(plan, ras_object)
+        project_base = info.project_path.stem
+        plan_file = info.project_path.parent / (
+            f"{project_base}.p{info.plan_number}"
+        )
+        candidates = (
+            Path(f"{plan_file}.comp_msgs.txt"),
+            Path(f"{plan_file}.computeMsgs.txt"),
+            info.project_path.parent
+            / f"{project_base}.bco{info.plan_number}",
+        )
+
+        for candidate in candidates:
+            if not candidate.is_file():
+                continue
+            before = candidate.stat()
+            raw = candidate.read_bytes()
+            after = candidate.stat()
+            if (before.st_size, before.st_mtime_ns) != (
+                after.st_size,
+                after.st_mtime_ns,
+            ):
+                raise RuntimeError(
+                    f"Stored computation messages changed while reading: {candidate}"
+                )
+            if raw.startswith(b"\xef\xbb\xbf"):
+                contents = raw.decode(
+                    "utf-8-sig",
+                    errors="strict" if strict else "ignore",
+                )
+            elif not strict:
+                contents = raw.decode("utf-8", errors="ignore")
+            else:
+                try:
+                    contents = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    contents = raw.decode("cp1252")
+            source_sha256 = (
+                hashlib.sha256(raw).hexdigest() if hash_file else None
+            )
+            return contents, candidate, source_sha256
+        return None
+
+    @staticmethod
     @log_call
     def get_comp_msgs(plan: Union[str, Path], ras_object=None) -> str:
         """
@@ -1690,51 +1749,58 @@ class RasControl:
             Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
         info = RasControl._get_project_info(plan, ras_object)
-
-        # Construct plan file path
-        # e.g., "A100_00_00.prj" -> "A100_00_00"
         project_base = info.project_path.stem
-        plan_file = info.project_path.parent / f"{project_base}.p{info.plan_number}"
+        plan_file = (
+            info.project_path.parent
+            / f"{project_base}.p{info.plan_number}"
+        )
 
-        # Try both .txt file naming patterns (version-dependent)
-        comp_msgs_file_old = Path(str(plan_file) + ".comp_msgs.txt")
-        comp_msgs_file_new = Path(str(plan_file) + ".computeMsgs.txt")
-
-        comp_msgs_file = None
-        if comp_msgs_file_old.exists():
-            comp_msgs_file = comp_msgs_file_old
-        elif comp_msgs_file_new.exists():
-            comp_msgs_file = comp_msgs_file_new
-
-        # If .txt file found, read and return
-        if comp_msgs_file is not None:
-            logger.debug(f"Reading computation messages for plan {info.plan_number} from comp_msgs file")
-            logger.debug(f"Computation messages file path: {comp_msgs_file}")
-
-            try:
-                with open(comp_msgs_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    contents = f.read()
-
-                logger.debug(f"Read {len(contents)} characters from comp_msgs file")
-                return contents
-            except Exception as e:
-                logger.warning("Could not read text computation messages; attempting HDF fallback")
-                logger.debug("Text computation message read failed: %s", e)
-
-        # Try .bco## file (HEC-RAS 5.x detailed compute output)
-        bco_file = info.project_path.parent / f"{project_base}.bco{info.plan_number}"
-        if bco_file.exists():
-            logger.debug(f"Reading computation messages for plan {info.plan_number} from .bco file")
-            logger.debug(f"BCO computation messages file path: {bco_file}")
-            try:
-                with open(bco_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    contents = f.read()
-                if contents.strip():
-                    logger.debug(f"Read {len(contents)} characters from .bco file")
-                    return contents
-            except Exception as e:
-                logger.warning("Could not read .bco computation messages; attempting HDF fallback")
-                logger.debug(".bco computation message read failed: %s", e)
+        try:
+            stored = RasControl._read_stored_comp_msgs(
+                plan,
+                ras_object,
+                strict=False,
+            )
+            if stored is not None:
+                contents, source_path, _ = stored
+                normalized_contents = contents.replace(
+                    "\r\n", "\n"
+                ).replace("\r", "\n")
+                is_bco = source_path.name.casefold().endswith(
+                    f".bco{info.plan_number}".casefold()
+                )
+                has_usable_contents = (
+                    bool(normalized_contents.strip()) if is_bco else True
+                )
+                if has_usable_contents:
+                    logger.debug(
+                        "Reading computation messages for plan %s from comp_msgs file",
+                        info.plan_number,
+                    )
+                    logger.debug(
+                        "Computation messages file path: %s",
+                        source_path,
+                    )
+                    logger.debug(
+                        "Read %s characters from comp_msgs file",
+                        len(normalized_contents),
+                    )
+                    # Preserve the historical text-mode API contract.  The
+                    # provenance helper retains decoded source newlines,
+                    # while get_comp_msgs() continues to apply universal-
+                    # newline normalization as Python's former text-mode
+                    # read did.
+                    return normalized_contents
+                logger.debug(
+                    "Stored BCO computation message file is empty: %s; "
+                    "attempting HDF fallback",
+                    source_path,
+                )
+        except Exception as e:
+            logger.warning(
+                "Could not read stored computation messages; attempting HDF fallback"
+            )
+            logger.debug("Stored computation message read failed: %s", e)
 
         # If no .txt or .bco file found, try HDF fallback
         logger.debug(
@@ -1744,7 +1810,7 @@ class RasControl:
 
         try:
             # Late import to avoid circular dependency
-            from .HdfResultsPlan import HdfResultsPlan
+            from .hdf.HdfResultsPlan import HdfResultsPlan
 
             # Construct HDF path
             hdf_file = Path(str(plan_file) + ".hdf")
