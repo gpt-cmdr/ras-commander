@@ -34,7 +34,7 @@ def test_force_geompre_bypasses_skip_and_preserves_source(monkeypatch, tmp_path)
         worker_folder=r"C:\\RasRemote",
         credentials={},
         psexec_path="PsExec.exe",
-        ras_exe_path=r"C:\\HEC-RAS\\Ras.exe",
+        ras_exe_path=r"C:\\HEC-RAS\\6.6\\Ras.exe",
         system_account=False,
         session_id=2,
         process_priority="normal",

@@ -64,6 +64,13 @@ except ImportError:
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .ExecutionArtifacts import (
+    finalize_plan_execution_artifacts,
+    get_plan_result_artifact_paths,
+    normalize_program_version,
+    prepare_plan_execution_artifacts,
+    program_version_major,
+)
 
 logger = get_logger(__name__)
 
@@ -599,6 +606,10 @@ class RasControl:
         """
         version_str = str(version).strip()
 
+        artifact_normalized = normalize_program_version(version_str)
+        if artifact_normalized in RasControl.VERSION_MAP:
+            version_str = artifact_normalized
+
         # Direct match
         if version_str in RasControl.VERSION_MAP:
             return version_str
@@ -655,11 +666,39 @@ class RasControl:
                     "When using direct .prj paths, project must be initialized with version.\n"
                     "Use: init_ras_project(path, '4.1') or similar"
                 )
+            current_plan_number = None
+            current_plan_name = None
+            try:
+                for line in plan_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                ).splitlines():
+                    key, separator, value = line.partition("=")
+                    if separator and key.strip() == "Current Plan":
+                        token = value.strip().lstrip("pP")
+                        if token.isdigit():
+                            current_plan_number = token.zfill(2)
+                        break
+                if (
+                    current_plan_number is not None
+                    and hasattr(ras_object, "plan_df")
+                ):
+                    rows = ras_object.plan_df[
+                        ras_object.plan_df["plan_number"].astype(str).str.zfill(2)
+                        == current_plan_number
+                    ]
+                    if not rows.empty:
+                        current_plan_name = rows.iloc[0].get("Plan Title")
+            except (OSError, KeyError, TypeError):
+                logger.debug(
+                    "Could not resolve Current Plan from direct project path: %s",
+                    plan_path,
+                )
             return ProjectInfo(
                 project_path=plan_path,
                 version=ras_object.ras_version,
-                plan_number=None,
-                plan_name=None
+                plan_number=current_plan_number,
+                plan_name=current_plan_name,
             )
 
         # Otherwise treat as plan number
@@ -857,8 +896,20 @@ class RasControl:
             - Survives kernel restarts and crashes
             - Automatically terminates orphaned ras.exe processes
             - Enforces max_runtime timeout
+
+            When computation occurs, the selected controller version governs
+            permanent, plan-scoped result cleanup. HEC-RAS 5+ preserves HDF;
+            HEC-RAS 3-4 preserves legacy .O##. Skipped runs do not mutate
+            execution artifacts.
         """
         info = RasControl._get_project_info(plan, ras_object)
+        _ras_obj = ras_object if ras_object is not None else ras
+        if info.plan_number is None:
+            raise ValueError(
+                "Could not resolve the current plan number from the project. "
+                "Pass an explicit plan number so result cleanup remains "
+                "exactly plan-scoped."
+            )
 
         # Enable Write Detailed= 1 to ensure .comp_msgs.txt is written
         # This is critical for results_df fallback on all HEC-RAS versions
@@ -867,25 +918,80 @@ class RasControl:
         BcoMonitor.enable_detailed_logging(plan_file)
         logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
 
-        def _run_operation(com_rc):
-            watchdog_pid = 0
-
-            # Set current plan if we have plan_name (using plan number)
+        def _set_current_plan(com_rc) -> None:
             if info.plan_name:
                 logger.debug(f"Setting current plan to: {info.plan_name}")
                 com_rc.Plan_SetCurrent(info.plan_name)
 
-            # Check if results are current (unless force_recompute=True)
-            if not force_recompute:
-                try:
-                    is_current = com_rc.PlanOutput_IsCurrent()
-                    if is_current:
-                        logger.info(f"Plan {info.plan_number} results are current. Skipping computation.")
-                        logger.info("Use force_recompute=True to recompute anyway.")
-                        return True, ["Results are current - computation skipped"]
-                except Exception as e:
-                    logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
-                    logger.warning("Proceeding with computation...")
+        version_major = program_version_major(info.version)
+        if version_major is None:
+            raise ValueError(
+                f"Could not determine result format for HEC-RAS {info.version!r}"
+            )
+        execution_result_format = "legacy" if version_major < 5 else "hdf"
+        artifact_paths = get_plan_result_artifact_paths(
+            info.plan_number,
+            ras_object=_ras_obj,
+        )
+        selected_result = (
+            artifact_paths.legacy_output
+            if execution_result_format == "legacy"
+            else artifact_paths.hdf
+        )
+        opposing_result = (
+            artifact_paths.hdf
+            if execution_result_format == "legacy"
+            else artifact_paths.legacy_output
+        )
+
+        if not force_recompute:
+            def _check_current(com_rc):
+                _set_current_plan(com_rc)
+                return bool(com_rc.PlanOutput_IsCurrent())
+
+            try:
+                is_current = RasControl._com_open_close(
+                    info.project_path,
+                    info.version,
+                    _check_current,
+                )
+                if is_current and selected_result.is_file() and not opposing_result.is_file():
+                    logger.info(
+                        f"Plan {info.plan_number} results are current. "
+                        "Skipping computation."
+                    )
+                    logger.info("Use force_recompute=True to recompute anyway.")
+                    from .ComputeResults import RasControlResult
+                    return RasControlResult(
+                        success=True,
+                        messages=["Results are current - computation skipped"],
+                        results_df_row=None,
+                    )
+                if is_current:
+                    logger.warning(
+                        "HEC-RAS reports plan %s current, but its %s result "
+                        "family is missing or an opposing result is also "
+                        "present. Recomputing with HEC-RAS %s to normalize "
+                        "the artifacts.",
+                        info.plan_number,
+                        execution_result_format,
+                        info.version,
+                    )
+            except Exception as e:
+                logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
+                logger.warning("Proceeding with computation...")
+
+        prepare_plan_execution_artifacts(
+            info.plan_number,
+            output_format=execution_result_format,
+            ras_object=_ras_obj,
+        )
+
+        def _run_operation(com_rc):
+            watchdog_pid = 0
+
+            # Set current plan if we have plan_name (using plan number)
+            _set_current_plan(com_rc)
 
             # Version-specific behavior (normalize for checking)
             norm_version = RasControl._normalize_version(info.version)
@@ -955,17 +1061,34 @@ class RasControl:
                 if watchdog_pid:
                     _terminate_watchdog(watchdog_pid)
 
-        raw_result = RasControl._com_open_close(info.project_path, info.version, _run_operation)
+        try:
+            raw_result = RasControl._com_open_close(
+                info.project_path,
+                info.version,
+                _run_operation,
+            )
+        finally:
+            # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
+            # the selected engine's output family after the controller closes.
+            finalize_plan_execution_artifacts(
+                info.plan_number,
+                output_format=execution_result_format,
+                ras_object=_ras_obj,
+            )
 
         # Wrap tuple result into RasControlResult with results_df_row
         from .ComputeResults import RasControlResult
-        _ras_obj = ras_object if ras_object is not None else ras
         _success = raw_result[0] if raw_result else False
         _messages = list(raw_result[1]) if raw_result and len(raw_result) > 1 else []
         _results_df_row = None
 
         # Refresh DataFrames and capture results_df row (even on failure for diagnostics)
-        if refresh_results and info.plan_number and hasattr(_ras_obj, 'update_results_df'):
+        if (
+            refresh_results
+            and execution_result_format == "hdf"
+            and info.plan_number
+            and hasattr(_ras_obj, 'update_results_df')
+        ):
             try:
                 _ras_obj.plan_df = _ras_obj.get_plan_entries()
                 _ras_obj.update_results_df(plan_numbers=[info.plan_number])

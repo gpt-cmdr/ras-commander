@@ -16,6 +16,15 @@
   authoritative completion sources disagree.
 - Use exact `Complete Process` records rather than accepting misleading text
   substrings.
+- Resolve coexisting HDF and `.O##` results from the current plan-file program
+  version, fail on unsafe ambiguity, and keep all completion/runtime channels
+  tied to the selected result family.
+- Add exact, permanent `RasCmdr.remove_plan_execution_artifacts()` remediation
+  and normalize opposing result formats before and after local, COM, parallel,
+  test-mode, Linux/WSL, Docker, PsExec, and remote-promotion execution paths.
+- Fail closed before cleanup when the selected execution-engine version cannot
+  be resolved, and publish only exact, verified final worker results rather
+  than copied timestamps or Linux preprocessing `.tmp.hdf` files.
 
 **C01-C06 Reliability Hardening**
 

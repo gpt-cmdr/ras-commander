@@ -21,6 +21,8 @@ from ras_commander import (
     ExecutionEvidence,
     RasCmdr,
     RasControl,
+    RasCurrency,
+    ResultArtifactAmbiguityError,
 )
 
 
@@ -109,9 +111,28 @@ def _write_hdf(
     return path
 
 
+def test_hdf_verifiers_reject_misleading_completion_substring(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(tmp_path / "misleading-hdf", version="6.60")
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Did not Complete Process\n",
+        completion_attribute=None,
+    )
+
+    assert RasCmdr._verify_completion(hdf_path, check_errors=False) is False
+    assert RasCurrency.check_plan_hdf_complete(hdf_path) is False
+
+
 def test_public_contract_exports_fixed_registry() -> None:
     assert hasattr(RasCmdr, "inspect_execution_evidence")
+    assert hasattr(RasCmdr, "remove_plan_execution_artifacts")
     assert ras_commander.ExecutionEvidence is ExecutionEvidence
+    assert ras_commander.ResultArtifactAmbiguityError is (
+        ResultArtifactAmbiguityError
+    )
     assert ras_commander.EvidenceObservation is EvidenceObservation
     assert len(EXECUTION_OBSERVATION_NAMES) == len(
         set(EXECUTION_OBSERVATION_NAMES)
@@ -424,15 +445,45 @@ def test_declared_and_observed_version_transition_is_retained(
     assert evidence.conflicts == ()
 
 
-def test_existing_hdf_overrides_legacy_declared_result_family(
+def test_newer_hdf_with_legacy_declaration_raises_ambiguity(
     tmp_path: Path,
 ) -> None:
     _, ras_object = _write_project(
         tmp_path / "legacy-plan-modern-result",
         version="4.00",
     )
-    (ras_object.project_folder / "Model.O01").write_bytes(
-        b"older legacy output"
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"older legacy output")
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="Complete Process\n",
+        completion_attribute=True,
+    )
+    hdf_stat = hdf_path.stat()
+    os.utime(
+        hdf_path,
+        ns=(
+            hdf_stat.st_atime_ns,
+            legacy_path.stat().st_mtime_ns + 1_000_000_000,
+        ),
+    )
+
+    with pytest.raises(ResultArtifactAmbiguityError) as caught:
+        RasCmdr.inspect_execution_evidence(
+            "01",
+            ras_object=ras_object,
+        )
+
+    assert caught.value.reason_code == "hdf_timestamp_after_legacy_output"
+
+
+def test_legacy_plan_selects_legacy_when_hdf_is_not_newer(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "legacy-plan-both-results",
+        version="4.00",
     )
     hdf_path = _write_hdf(
         ras_object.project_folder,
@@ -440,27 +491,52 @@ def test_existing_hdf_overrides_legacy_declared_result_family(
         messages="Complete Process\n",
         completion_attribute=True,
     )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"newer legacy output")
+    sidecar = ras_object.project_folder / "Model.p01.comp_msgs.txt"
+    sidecar.write_text(
+        "Steady Flow Simulation Version 4.0\nComplete Process\t1.0 sec\n",
+        encoding="ascii",
+    )
+    hdf_stat = hdf_path.stat()
+    legacy_stat = legacy_path.stat()
+    os.utime(
+        hdf_path,
+        ns=(hdf_stat.st_atime_ns, legacy_stat.st_mtime_ns),
+    )
 
     evidence = RasCmdr.inspect_execution_evidence(
         "01",
         ras_object=ras_object,
-        result_modified_after=datetime(2020, 1, 1, tzinfo=timezone.utc),
     )
 
     artifact = evidence.observations["result_artifact_exists"]
-    assert artifact.value is True
-    assert artifact.source_locator == str(hdf_path)
-    assert "legacy output artifact also exists" in (artifact.detail or "")
-    assert evidence.observations[
-        "result_artifact_modified_after_threshold"
-    ].value is True
-    assert evidence.observations["completion_attribute"].value is True
-    assert evidence.observations["completion_message_hdf"].value is True
-    assert evidence.observations["producer_program_version"].value == (
-        "HEC-RAS 7.0"
+    assert artifact.source_locator == str(legacy_path)
+    assert "multiple_result_formats_present" in evidence.conflicts
+    assert evidence.observations["completion_attribute"].state == "not_inspected"
+    assert evidence.observations["completion_attribute"].reason_code == (
+        "nonselected_result_format_not_inspected"
     )
+    assert evidence.observations["completion_message_hdf"].state == "not_inspected"
     assert evidence.mechanical_completion.value is True
-    assert evidence.conflicts == ()
+
+
+def test_modern_plan_with_both_formats_always_raises_ambiguity(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(tmp_path / "modern-both", version="6.60")
+    _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"modern companion output")
+
+    with pytest.raises(ResultArtifactAmbiguityError) as caught:
+        RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
+
+    assert caught.value.reason_code == "multiple_result_formats_modern_plan"
 
 
 def test_existing_legacy_output_is_selected_when_hdf_is_absent(
@@ -483,7 +559,160 @@ def test_existing_legacy_output_is_selected_when_hdf_is_absent(
     assert artifact.source_locator == str(legacy_path)
     assert evidence.observations[
         "result_artifact_structural_state"
-    ].reason_code == "result_hdf_missing"
+    ].reason_code == "legacy_output_has_no_plan_hdf_structure"
+    assert "unexpected_result_format" in evidence.conflicts
+
+
+def test_sole_hdf_is_selected_for_legacy_declared_plan(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "legacy-declaration-hdf-only",
+        version="4.00",
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="Complete Process\n",
+        completion_attribute=True,
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    assert evidence.observations["result_artifact_exists"].source_locator == (
+        str(hdf_path)
+    )
+    assert evidence.mechanical_completion.value is True
+    assert "unexpected_result_format" in evidence.conflicts
+
+
+def test_unresolved_program_version_accepts_sole_result_with_conflict(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "unknown-version-one-result",
+        version="",
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    assert evidence.declared_program_version is None
+    assert evidence.observations["result_artifact_exists"].source_locator == (
+        str(hdf_path)
+    )
+    assert "program_version_unresolved" in evidence.conflicts
+
+
+def test_unresolved_program_version_without_results_selects_no_family(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "unknown-version-no-result",
+        version="",
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
+
+    artifact = evidence.observations["result_artifact_exists"]
+    assert artifact.value is False
+    assert artifact.source_locator is None
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert "program_version_unresolved" in evidence.conflicts
+
+
+def test_unresolved_program_version_with_both_formats_raises(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "unknown-version-both-results",
+        version="",
+    )
+    _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+    )
+    (ras_object.project_folder / "Model.O01").write_bytes(b"legacy")
+
+    with pytest.raises(ResultArtifactAmbiguityError) as caught:
+        RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
+
+    assert caught.value.reason_code == (
+        "program_version_unresolved_multiple_formats"
+    )
+
+
+def test_current_plan_file_version_overrides_stale_plan_dataframe(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "fresh-plan-bytes",
+        version="4.00",
+    )
+    plan_path = ras_object.project_folder / "Model.p01"
+    plan_path.write_text(
+        plan_path.read_text(encoding="ascii").replace(
+            "Program Version=4.00",
+            "Program Version=6.60",
+        ),
+        encoding="ascii",
+    )
+    _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+    )
+    (ras_object.project_folder / "Model.O01").write_bytes(b"legacy")
+
+    with pytest.raises(ResultArtifactAmbiguityError) as caught:
+        RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
+
+    assert caught.value.declared_program_version == "6.60"
+    assert caught.value.reason_code == "multiple_result_formats_modern_plan"
+
+
+def test_public_cleanup_removes_only_requested_plan_artifacts(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(tmp_path / "cleanup", version="6.60")
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"legacy")
+    sidecar = ras_object.project_folder / "Model.p01.computeMsgs.txt"
+    sidecar.write_text("Complete Process\n", encoding="ascii")
+    geometry_hdf = ras_object.project_folder / "Model.g01.hdf"
+    geometry_hdf.write_bytes(b"geometry")
+    tmp_hdf = ras_object.project_folder / "Model.p01.tmp.hdf"
+    tmp_hdf.write_bytes(b"preprocess")
+
+    cleanup = RasCmdr.remove_plan_execution_artifacts(
+        "01",
+        result_format="legacy",
+        include_message_sidecars=True,
+        ras_object=ras_object,
+    )
+
+    assert cleanup.removed_paths == (legacy_path, sidecar)
+    assert hdf_path.is_file()
+    assert geometry_hdf.is_file()
+    assert tmp_hdf.is_file()
+    assert not legacy_path.exists()
+    assert not sidecar.exists()
 
 
 def test_hdf_and_stored_producer_version_disagreement_is_retained(

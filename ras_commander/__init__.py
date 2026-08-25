@@ -130,6 +130,11 @@ from .ExecutionEvidence import (
     ExecutionEvidence,
     ObservationName,
 )
+from .ExecutionArtifacts import (
+    PlanExecutionCleanup,
+    PlanExecutionCleanupError,
+    ResultArtifactAmbiguityError,
+)
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
 from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
@@ -295,6 +300,8 @@ __all__ = [
     'EvidenceState', 'EvidenceChannel', 'ObservationName',
     'EVIDENCE_STATES', 'EVIDENCE_CHANNELS', 'EXECUTION_OBSERVATION_NAMES',
     'EvidenceObservation', 'ExecutionEvidence',
+    'PlanExecutionCleanup', 'PlanExecutionCleanupError',
+    'ResultArtifactAmbiguityError',
     'PreprocessResult', 'GeometryPreprocessResult',
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',

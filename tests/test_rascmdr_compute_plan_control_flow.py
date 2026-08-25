@@ -27,6 +27,7 @@ class _DummyRas:
         self.project_folder = r"C:\fake_project"
         self.prj_file = r"C:\fake_project\test.prj"
         self.ras_exe_path = r"C:\Program Files\HEC-RAS\Ras.exe"
+        self.ras_version = "6.6"
         self.init_exception = init_exception
         self.refresh_calls = []
         self.plan_df = None
@@ -197,6 +198,7 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
             self.project_name = "TestProject"
             self.prj_file = tmp_path / "TestProject.prj"
             self.ras_exe_path = "Ras.exe"
+            self.ras_version = "6.6"
             self.plan_df = pd.DataFrame(
                 {
                     "plan_number": ["01"],
@@ -281,8 +283,10 @@ def test_compute_plan_same_dest_folder_does_not_remove_active_project(
     )
     monkeypatch.setattr(
         RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (True, "already current")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (True, "already current")
+        ),
     )
 
     result = RasCmdr.compute_plan(
@@ -345,8 +349,10 @@ def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
     # Results are current: without an override, compute_plan must skip.
     monkeypatch.setattr(
         RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (True, "already current")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (True, "already current")
+        ),
     )
     monkeypatch.setattr(
         RasCurrency,
@@ -557,8 +563,10 @@ def test_compute_plan_success_logging_is_concise(monkeypatch, tmp_path, caplog):
     )
     monkeypatch.setattr(
         rascurrency_module.RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (False, "stale results")
+        ),
     )
     monkeypatch.setattr(
         rascmdr_module.BcoMonitor,
@@ -635,8 +643,10 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
     )
     monkeypatch.setattr(
         rascurrency_module.RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (False, "stale results")
+        ),
     )
     monkeypatch.setattr(
         rascmdr_module.BcoMonitor,
@@ -716,8 +726,10 @@ def test_compute_plan_treats_verified_hdf_after_normal_return_as_success(
     )
     monkeypatch.setattr(
         rascurrency_module.RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (False, "stale results")
+        ),
     )
     monkeypatch.setattr(
         rascmdr_module.BcoMonitor,
@@ -844,8 +856,10 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
     )
     monkeypatch.setattr(
         rascurrency_module.RasCurrency,
-        "are_plan_results_current",
-        staticmethod(lambda plan_number, ras_object: (False, "stale results")),
+        "_are_plan_results_current_for_execution",
+        staticmethod(
+            lambda plan_number, ras_object, **kwargs: (False, "stale results")
+        ),
     )
     monkeypatch.setattr(
         rascmdr_module.BcoMonitor,

@@ -67,13 +67,22 @@ wse = HdfResultsPlan.get_wse(hdf, time_index=-1)       # extract results
 it does not mean the messages are error-free or that the hydraulics are
 acceptable. Check the independent evidence observations.
 
-Result-artifact selection is artifact-first. An existing plan HDF takes
-precedence over an existing legacy `.O##` file; the plan's declared
-`Program Version` chooses the expected result family only when neither artifact
-exists. The declaration describes input provenance and may legitimately differ
-from the producer version stored in a newer result. Use
-`result_modified_after=` when execution-time freshness must be checked; that
-observation is independent from mechanical completion.
+Result-artifact selection reads `Program Version=` from the current plan-file
+bytes. A sole HDF or `.O##` is readable even when the declaration differs, with
+`unexpected_result_format` recorded. If both exist, a HEC-RAS 5+ declaration
+raises `ResultArtifactAmbiguityError`; a legacy declaration selects `.O##` only
+when the HDF filesystem timestamp is not later, otherwise it also raises. This
+timestamp is a conservative ambiguity trigger, not proof of chronology.
+
+Rerunning through ras-commander normalizes outputs according to the actual
+selected engine. Modern runs preserve HDF and remove `.O##`; legacy runs do the
+reverse. Cleanup occurs before and after actual execution because modern 1D
+engines recreate `.O##`. Skipped runs do not delete result artifacts. Existing ambiguity
+can also be resolved explicitly with
+`RasCmdr.remove_plan_execution_artifacts(..., result_format="legacy")` (or
+`"hdf"`); removal is permanent and exactly plan-scoped.
+Automatic cleanup requires an explicitly resolvable engine version and fails
+without deleting either family when given only an unversioned `Ras.exe` path.
 
 ## In-package helpers
 

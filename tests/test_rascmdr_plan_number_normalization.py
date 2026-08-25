@@ -143,6 +143,11 @@ def test_compute_parallel_normalizes_list_plan_numbers_before_filtering(
 
     def fake_compute_plan(plan_number, **kwargs):
         executed_plans.append(plan_number)
+        compute_ras = kwargs["ras_object"]
+        (
+            Path(compute_ras.project_folder)
+            / f"{compute_ras.project_name}.p{plan_number}.hdf"
+        ).write_text("computed\n", encoding="utf-8")
         return ComputeResult(success=True)
 
     monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
@@ -175,6 +180,11 @@ def test_compute_test_mode_normalizes_list_plan_numbers_before_filtering(
 
     def fake_compute_plan(plan_number, **kwargs):
         executed_plans.append(plan_number)
+        compute_ras = kwargs["ras_object"]
+        (
+            Path(compute_ras.project_folder)
+            / f"{compute_ras.project_name}.p{plan_number}.hdf"
+        ).write_text("computed\n", encoding="utf-8")
         return ComputeResult(success=True)
 
     monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
@@ -189,6 +199,68 @@ def test_compute_test_mode_normalizes_list_plan_numbers_before_filtering(
     assert executed_plans == ["01", "02"]
     assert result.execution_results == {"01": True, "02": True}
     assert result.results_df["plan_number"].tolist() == ["01", "02"]
+
+
+def test_compute_parallel_does_not_promote_copied_selected_result(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    project_folder = tmp_path / "parallel-stale-result"
+    project_folder.mkdir()
+    _seed_parallel_project(project_folder)
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+    original_hdf = project_folder / "TestProject.p01.hdf"
+
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
+    monkeypatch.setattr(rascmdr_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        RasCmdr,
+        "compute_plan",
+        staticmethod(lambda *_args, **_kwargs: ComputeResult(success=True)),
+    )
+
+    result = RasCmdr.compute_parallel(
+        plan_number="01",
+        max_workers=1,
+        ras_object=ras_object,
+    )
+
+    assert result.execution_results == {"01": False}
+    assert original_hdf.read_text(encoding="utf-8") == "stale hdf 01\n"
+
+
+def test_compute_test_mode_does_not_promote_copied_selected_result(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    project_folder = tmp_path / "test-mode-stale-result"
+    project_folder.mkdir()
+    _seed_parallel_project(project_folder)
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+    original_hdf = project_folder / "TestProject.p01.hdf"
+
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(
+        RasCmdr,
+        "compute_plan",
+        staticmethod(lambda *_args, **_kwargs: ComputeResult(success=True)),
+    )
+
+    result = RasCmdr.compute_test_mode(
+        plan_number="01",
+        dest_folder_suffix="[Stale Result]",
+        ras_object=ras_object,
+    )
+
+    assert result.execution_results == {"01": False}
+    assert original_hdf.read_text(encoding="utf-8") == "stale hdf 01\n"
 
 
 def test_compute_parallel_does_not_let_later_worker_overwrite_fresh_outputs(
@@ -238,8 +310,9 @@ def test_compute_parallel_does_not_let_later_worker_overwrite_fresh_outputs(
     assert (project_folder / "TestProject.p01.hdf").read_text(encoding="utf-8") == (
         "fresh hdf 01\n"
     )
+    # Worker-local plan edits are not result evidence and are not promoted.
     assert (project_folder / "TestProject.p01").read_text(encoding="utf-8") == (
-        "fresh plan 01\n"
+        "stale plan 01\n"
     )
     assert (project_folder / "TestProject.g01.hdf").read_text(encoding="utf-8") == (
         "fresh geometry\n"
@@ -295,7 +368,7 @@ def test_compute_parallel_dest_folder_keeps_fresh_outputs_when_workers_share_sta
         "fresh hdf 01\n"
     )
     assert (dest_folder / "TestProject.p01").read_text(encoding="utf-8") == (
-        "fresh plan 01\n"
+        "stale plan 01\n"
     )
     assert (dest_folder / "TestProject.g01.hdf").read_text(encoding="utf-8") == (
         "fresh geometry\n"

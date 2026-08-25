@@ -7,9 +7,9 @@ smart execution skip - avoiding unnecessary re-runs when results already
 exist and input files haven't changed.
 
 Currency Logic:
-- Results are CURRENT if plan HDF exists AND is newer than all input files
+- The actual configured execution engine selects HDF or legacy .O results
+- Coexisting result families are never considered current; rerunning normalizes them
 - Input files checked: plan file (.p##), geometry file (.g##), flow file (.u##/.f##)
-- For older HEC-RAS versions (no HDF): uses .O output file instead
 
 All methods are static and designed to be used without instantiation.
 """
@@ -22,6 +22,11 @@ from numbers import Number
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .ExecutionArtifacts import (
+    ResultFormat,
+    get_plan_result_artifact_paths,
+    resolve_plan_result_artifact,
+)
 
 logger = get_logger(__name__)
 
@@ -233,13 +238,14 @@ class RasCurrency:
         try:
             import h5py
             from .hdf.HdfResultsPlan import HdfResultsPlan
+            from .results.ResultsParser import ResultsParser
 
             compute_msgs = HdfResultsPlan.get_compute_messages(hdf_path)
             if not compute_msgs:
                 logger.debug(f"Plan HDF has no available compute messages: {hdf_path}")
                 return "compute messages unavailable"
 
-            if 'Complete Process' not in compute_msgs:
+            if not ResultsParser._has_complete_process_record(compute_msgs):
                 logger.debug(
                     f"Plan HDF missing 'Complete Process' in compute messages: {hdf_path}"
                 )
@@ -285,11 +291,11 @@ class RasCurrency:
         Check if plan results are current (no re-run needed).
 
         Results are CURRENT if ALL conditions are met:
-        1. Plan HDF exists (or .O file for older versions)
-        2. HDF contains 'Complete Process' (if check_complete=True)
-        3. HDF mtime > Plan file (.p##) mtime
-        4. HDF mtime > Geometry file (.g##) mtime
-        5. HDF mtime > Flow file (.u##/.f##) mtime
+        1. The version-aware evidence resolver selects an existing result
+        2. A selected HDF contains 'Complete Process' (if check_complete=True)
+        3. Result mtime > Plan file (.p##) mtime
+        4. Result mtime > Geometry file (.g##) mtime
+        5. Result mtime > Flow file (.u##/.f##) mtime
 
         Args:
             plan_number: Plan number (e.g., "01", 1)
@@ -303,30 +309,85 @@ class RasCurrency:
         """
         plan_num = RasCurrency._normalize_plan_number(plan_number)
 
-        # Check for HDF file first
-        hdf_path = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
-        output_path = None
-        result_mtime = None
+        resolution = resolve_plan_result_artifact(
+            plan_number,
+            ras_object=ras_object,
+        )
+        if not resolution.selected_exists:
+            return (
+                False,
+                f"Plan {plan_num} has no {resolution.selected_format} results "
+                "selected by its Program Version declaration",
+            )
 
-        if hdf_path.exists():
-            result_mtime = RasCurrency.get_file_mtime(hdf_path)
-            result_file = hdf_path
+        return RasCurrency._evaluate_result_currency(
+            plan_number,
+            ras_object,
+            result_file=resolution.selected_path,
+            result_format=resolution.selected_format,
+            check_complete=check_complete,
+        )
 
-            if check_complete:
-                incomplete_reason = RasCurrency._get_plan_hdf_incomplete_reason(hdf_path)
-                if incomplete_reason:
-                    return (
-                        False,
-                        f"Plan {plan_num} HDF exists but incomplete ({incomplete_reason})"
-                    )
-        else:
-            # Try .O file for older versions
-            output_path = RasCurrency.get_output_file_path(plan_number, ras_object)
-            if output_path and output_path.exists():
-                result_mtime = RasCurrency.get_file_mtime(output_path)
-                result_file = output_path
-            else:
-                return (False, f"Plan {plan_num} has no results (HDF or .O file not found)")
+    @staticmethod
+    def _are_plan_results_current_for_execution(
+        plan_number: Union[str, Number, Path],
+        ras_object,
+        *,
+        output_format: ResultFormat,
+        check_complete: bool = True,
+    ) -> Tuple[bool, str]:
+        """Check currency against the explicitly selected execution engine.
+
+        Unlike public evidence inspection, an execution skip must never retain
+        two result families. Mixed artifacts therefore force a rerun so the
+        compute path can normalize the project.
+        """
+        plan_num = RasCurrency._normalize_plan_number(plan_number)
+        paths = get_plan_result_artifact_paths(plan_number, ras_object=ras_object)
+        if paths.hdf.is_file() and paths.legacy_output.is_file():
+            return (
+                False,
+                f"Plan {plan_num} has multiple result formats; rerun with the "
+                "selected HEC-RAS version to normalize artifacts",
+            )
+        result_file = paths.hdf if output_format == "hdf" else paths.legacy_output
+        if not result_file.is_file():
+            return (
+                False,
+                f"Plan {plan_num} has no {output_format} results for the "
+                "selected HEC-RAS execution version",
+            )
+        return RasCurrency._evaluate_result_currency(
+            plan_number,
+            ras_object,
+            result_file=result_file,
+            result_format=output_format,
+            check_complete=check_complete,
+        )
+
+    @staticmethod
+    def _evaluate_result_currency(
+        plan_number: Union[str, Number, Path],
+        ras_object,
+        *,
+        result_file: Path,
+        result_format: ResultFormat,
+        check_complete: bool,
+    ) -> Tuple[bool, str]:
+        """Compare one already-selected result artifact with plan inputs."""
+        plan_num = RasCurrency._normalize_plan_number(plan_number)
+
+        result_mtime = RasCurrency.get_file_mtime(result_file)
+        if check_complete and result_format == "hdf":
+            incomplete_reason = RasCurrency._get_plan_hdf_incomplete_reason(
+                result_file
+            )
+            if incomplete_reason:
+                return (
+                    False,
+                    f"Plan {plan_num} HDF exists but incomplete "
+                    f"({incomplete_reason})",
+                )
 
         if result_mtime is None:
             return (False, f"Plan {plan_num} cannot determine results file modification time")
@@ -370,7 +431,11 @@ class RasCurrency:
         if stale_files:
             return (False, f"Plan {plan_num} stale: {', '.join(stale_files)} modified after results")
 
-        return (True, f"Plan {plan_num} results are current (newer than all inputs)")
+        return (
+            True,
+            f"Plan {plan_num} {result_format} results are current "
+            "(newer than all inputs)",
+        )
 
     @staticmethod
     @log_call

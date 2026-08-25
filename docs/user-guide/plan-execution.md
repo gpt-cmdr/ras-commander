@@ -236,10 +236,62 @@ the freshness comparison is reproducible across machines. Message-health
 counts prefer embedded HDF messages and fall back to stored messages; the two
 completion-message observations remain separate.
 
-HEC-RAS 3.x and 4.x plans use legacy `.O##` and stored-message evidence when
-available. HEC-RAS 5.x and newer plans use HDF evidence while preserving stored
-messages as a separate channel. Unknown minor-version shapes remain explicit
-`not_inspected` observations rather than being guessed.
+Result-family selection reads `Program Version=` from the current `.p##` bytes,
+not from cached `plan_df` metadata. When only one result family exists, that
+artifact is selected even if its family differs from the declaration; the
+evidence records `unexpected_result_format`. This supports a copied legacy plan
+that was cleanly rerun by a newer engine without rewriting its declaration.
+
+When both `.p##.hdf` and `.O##` exist, the inspector applies stricter rules:
+
+| Plan declaration | Selection |
+|---|---|
+| HEC-RAS 5 or newer | Raise `ResultArtifactAmbiguityError`. |
+| HEC-RAS 4 or older, HDF timestamp after `.O##` | Raise `ResultArtifactAmbiguityError`. The timestamp is only a conservative ambiguity trigger, not proof of run chronology. |
+| HEC-RAS 4 or older, HDF timestamp equal to or before `.O##` | Select `.O##`, warn, and record `multiple_result_formats_present`. HDF completion and runtime do not contribute to the selected evidence. |
+| Missing or unreadable declaration | Raise `ResultArtifactAmbiguityError`. |
+
+Copied-folder timestamps can be misleading. The error therefore asks the user
+to resolve the formats rather than claiming which computation is newest.
+
+An actual ras-commander computation normalizes artifacts using the selected
+HEC-RAS engine, not the plan declaration. HEC-RAS 5+ runs preserve HDF and
+remove `.O##`; legacy runs preserve `.O##` and remove the plan HDF. Cleanup is
+performed immediately before a real run and again afterward because modern
+HEC-RAS 1D engines recreate `.O##` during computation. Skipped runs do not
+delete result artifacts.
+
+Automatic cleanup fails closed unless ras-commander can resolve the actual
+configured engine version from `ras_version` or a versioned `ras_exe_path`.
+An unversioned `Ras.exe` path is not assumed to be modern, because that guess
+could permanently remove a valid legacy result. Supply an explicit version and
+retry.
+
+To resolve an existing project manually, explicitly select the family to
+remove:
+
+```python
+from ras_commander import RasCmdr
+
+# Permanent, exact plan-scoped removal. Geometry HDF, DSS, terrain, and
+# .p##.tmp.hdf preprocessing files are never included.
+cleanup = RasCmdr.remove_plan_execution_artifacts(
+    "01",
+    result_format="legacy",  # or "hdf" / "both"
+    include_message_sidecars=False,
+    ras_object=ras,
+)
+print(cleanup.removed_paths)
+```
+
+The helper validates its complete, project-contained target list before the
+first deletion. If an operating-system error occurs during deletion,
+`PlanExecutionCleanupError.cleanup` records any paths already removed and
+`failed_path` identifies the file that could not be removed.
+
+Alternatively, rerun with the intended HEC-RAS version through
+`RasCmdr.compute_plan()` or `RasControl.run_plan()`; the execution path removes
+the opposing result family and stale compute-message sidecars.
 
 Mechanical completion is deliberately independent from message errors,
 warnings, result freshness, volume accounting, convergence quality, and

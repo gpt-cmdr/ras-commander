@@ -49,6 +49,7 @@ Technical Details:
     - Two-step workflow required because Linux HEC-RAS has preprocessing limitations
 """
 
+import os
 import shutil
 import uuid
 import time
@@ -60,7 +61,11 @@ from typing import Dict, Optional, Any
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..ExecutionArtifacts import (
+    finalize_plan_execution_artifacts,
+)
 from ..RasUtils import RasUtils
+from .Utils import clear_staged_plan_execution_artifacts
 
 logger = get_logger(__name__)
 
@@ -558,6 +563,12 @@ def execute_docker_plan(
             elif item.is_dir():
                 shutil.copytree(item, local_input_staging / item.name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
+        clear_staged_plan_execution_artifacts(
+            local_input_staging,
+            plan_number,
+            ras_obj,
+        )
+
         # Step 1: Preprocess on Windows LOCALLY (if enabled)
         if worker.preprocess_on_host:
             logger.info(f"Running preprocessing locally (not on network share)...")
@@ -574,6 +585,14 @@ def execute_docker_plan(
             if not preprocess_result:
                 logger.error(f"Windows preprocessing failed: {preprocess_result.error}")
                 return False
+
+        # Preprocessing may touch plan-scoped files. Reassert that no copied or
+        # preprocessing-created final result can satisfy the container run.
+        clear_staged_plan_execution_artifacts(
+            local_input_staging,
+            plan_number,
+            ras_obj,
+        )
 
         # Step 1.5: For remote Docker, copy preprocessed files to remote share
         if worker._is_remote:
@@ -713,33 +732,54 @@ def execute_docker_plan(
             logger.debug(f"Simulation failed with exit code {exit_code}")
             return False
 
-        # Copy results back
-        # Look for HDF results in both output and input staging
-        result_patterns = [
-            f"{project_name}.p{plan_number}*.hdf",
-            f"{project_name}.p{plan_number}.tmp.hdf",
-        ]
-
-        result_files = []
-        for pattern in result_patterns:
-            result_files.extend(output_staging.glob(pattern))
-            result_files.extend(input_staging.glob(pattern))
-
-        # Remove duplicates
-        result_files = list(set(result_files))
-
-        if not result_files:
+        # Publish only the exact final plan HDF. The staging copy of that file
+        # was removed before launch, and .tmp.hdf is preprocessing input rather
+        # than a successful result.
+        expected_name = f"{project_name}.p{plan_number}.hdf"
+        result_file = next(
+            (
+                candidate
+                for candidate in (
+                    output_staging / expected_name,
+                    input_staging / expected_name,
+                )
+                if candidate.is_file()
+            ),
+            None,
+        )
+        if result_file is None:
             logger.error(
-                f"No HDF results found for plan {plan_number}; "
-                f"searched patterns {result_patterns} in output_staging={output_staging} "
-                f"and input_staging={input_staging}"
+                f"No fresh final HDF result found for plan {plan_number}; "
+                f"expected {expected_name} in output_staging={output_staging} "
+                f"or input_staging={input_staging}"
             )
             return False
+        if result_file.stat().st_mtime < start_time - 2.0:
+            logger.error("Container result is stale: %s", result_file)
+            return False
+        from ..RasCurrency import RasCurrency
 
-        for result_file in result_files:
-            dest_file = project_folder / result_file.name
-            logger.info(f"Copying result: {result_file.name}")
-            shutil.copy2(result_file, dest_file)
+        if not RasCurrency.check_plan_hdf_complete(result_file):
+            logger.error("Container result HDF is incomplete: %s", result_file)
+            return False
+
+        dest_file = project_folder / result_file.name
+        temp_dest = dest_file.with_name(
+            f".{dest_file.name}.{uuid.uuid4().hex}.ras-commander.tmp"
+        )
+        logger.info(f"Copying result: {result_file.name}")
+        try:
+            shutil.copy2(result_file, temp_dest)
+            os.replace(temp_dest, dest_file)
+        finally:
+            if temp_dest.exists():
+                temp_dest.unlink()
+
+        finalize_plan_execution_artifacts(
+            plan_number,
+            output_format="hdf",
+            ras_object=ras_obj,
+        )
 
         # Copy log files
         for log_pattern in ["*.log", "*.computeMsgs.txt", "ras_execution.log"]:
@@ -880,6 +920,12 @@ def execute_docker_plan_linux(
                     ignore=RasUtils.ignore_windows_reserved,
                 )
 
+        clear_staged_plan_execution_artifacts(
+            local_input_staging,
+            plan_number,
+            ras_obj,
+        )
+
         # Optionally clear stale geometry preprocessor (.c) files before a
         # Windows preprocessing pass regenerates them. Note: the .x## execution
         # file is REQUIRED by the Linux RasUnsteady binary, so it is only cleared
@@ -917,6 +963,14 @@ def execute_docker_plan_linux(
                     f"{getattr(preprocess_result, 'error', preprocess_result)}"
                 )
                 return False
+
+        # Preserve the Linux input .tmp.hdf while ensuring the upload contains
+        # no final result that could be mistaken for container output.
+        clear_staged_plan_execution_artifacts(
+            local_input_staging,
+            plan_number,
+            ras_obj,
+        )
 
         # Extract geometry number from the local plan file.
         plan_files = list(local_input_staging.glob(f"*.p{plan_number}"))
@@ -1001,14 +1055,12 @@ def execute_docker_plan_linux(
             logger.error(f"Simulation failed with exit code {exit_code}")
             return False
 
-        # 4. Download HDF results (and logs) back from the Linux host.
-        result_patterns = [
-            f"{project_name}.p{plan_number}*.hdf",
-            f"{project_name}.p{plan_number}.tmp.hdf",
-        ]
+        # 4. Download only the exact final plan HDF. The copied final HDF was
+        # removed before upload; .tmp.hdf remains preprocessing input only.
+        expected_name = f"{project_name}.p{plan_number}.hdf"
         remote_results = []
         for rdir in (remote_output, remote_input):
-            remote_results.extend(stager.list_matching(rdir, result_patterns))
+            remote_results.extend(stager.list_matching(rdir, [expected_name]))
         # Deduplicate by basename, preferring output dir entries (listed first).
         seen = set()
         ordered = []
@@ -1023,12 +1075,38 @@ def execute_docker_plan_linux(
             logger.error("No HDF results found on Linux host")
             return False
 
-        downloaded = stager.download_files(ordered, project_folder)
+        download_staging = local_staging_folder / "download"
+        download_staging.mkdir(parents=True, exist_ok=True)
+        downloaded = stager.download_files(ordered[:1], download_staging)
         if not downloaded:
             logger.error("Failed to download HDF results from Linux host")
             return False
-        for path in downloaded:
-            logger.info(f"Retrieved result: {path.name}")
+        downloaded_hdf = Path(downloaded[0])
+        from ..RasCurrency import RasCurrency
+
+        if downloaded_hdf.name != expected_name:
+            logger.error("Unexpected Docker result selected: %s", downloaded_hdf)
+            return False
+        if not RasCurrency.check_plan_hdf_complete(downloaded_hdf):
+            logger.error("Container result HDF is incomplete: %s", downloaded_hdf)
+            return False
+        dest_file = project_folder / expected_name
+        temp_dest = dest_file.with_name(
+            f".{dest_file.name}.{uuid.uuid4().hex}.ras-commander.tmp"
+        )
+        try:
+            shutil.copy2(downloaded_hdf, temp_dest)
+            os.replace(temp_dest, dest_file)
+        finally:
+            if temp_dest.exists():
+                temp_dest.unlink()
+        logger.info(f"Retrieved result: {dest_file.name}")
+
+        finalize_plan_execution_artifacts(
+            plan_number,
+            output_format="hdf",
+            ras_object=ras_obj,
+        )
 
         # Logs (best effort).
         log_patterns = ["*.log", "*.computeMsgs.txt"]

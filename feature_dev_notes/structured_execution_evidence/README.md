@@ -326,29 +326,70 @@ The version boundary observed on this host is:
 - RAS 6.1 and newer execute successfully through `RasCmdr.compute_plan()`.
   All 30 modern lanes produced fresh plan HDFs with verified completion.
 
-All 34 completed lanes have `process_success=True`, mechanically verified
-completion, a fresh hashed result artifact, unchanged plan classification, and
-no evidence conflicts. Thirty-two completed lanes have zero parsed errors and
-warnings. The steady and unsteady 1D RAS 6.1 lanes each retain one message:
+All 34 completed lanes originally recorded `process_success=True`, mechanically
+verified completion, a fresh hashed result artifact, unchanged plan
+classification, and no evidence conflicts under the then-current HDF-first
+selection rule. That conflict conclusion is superseded by the ambiguity policy
+below; the archived engine outcomes remain valid, but the mixed-format lanes
+must be rerun through the cleanup-enabled compute path before they become clean
+execution-evidence fixtures. Thirty-two completed lanes had zero parsed errors
+and warnings. The steady and unsteady 1D RAS 6.1 lanes each retain one message:
 `WRITE ATTR ERROR: ERROR: Geometry/River Edge Lines not found in
 WriteAttributePreCheck`. Both computations still carry positive completion
 evidence. This is why message health remains separate from mechanical
 completion.
 
-The real transition runs also established an artifact-selection rule. When a
-plan HDF exists, it is the current result artifact even if the plan still
-declares an older `Program Version` and a legacy `.O##` file is present. The
-inspector therefore uses this deterministic order:
+The real transition runs also exposed why HDF-first selection is unsafe. Every
+successful modern steady-1D and unsteady-1D lane contains both a plan HDF and a
+plan `.O##`. The `.O##` modification time is generally a few seconds after the
+HDF, demonstrating that HEC-RAS 6.1-7.0 actively recreates this companion output
+during computation rather than merely leaving the copied legacy file in place.
+Pre-run cleanup alone therefore cannot maintain a single-format invariant.
 
-1. existing plan HDF;
-2. otherwise, existing legacy `.O##` output; and
-3. only when neither exists, the plan declaration selects the expected path.
+The approved replacement rule reads `Program Version=` directly from the
+current `.p##` bytes. A sole HDF or sole `.O##` remains readable even when its
+family differs from the declaration, with `unexpected_result_format` recorded;
+this preserves clean old-plan/new-engine transitions because HEC-RAS does not
+reliably rewrite the plan declaration. When both formats exist:
 
-The result's producer version remains separate from the plan's declared input
-version. A normal old-plan/new-producer transition is not an evidence conflict;
-disagreement between two observed producer channels still is. Artifact
-freshness remains an independent caller-supplied threshold and does not alter
-mechanical-completion evidence.
+1. a HEC-RAS 5+ declaration raises `ResultArtifactAmbiguityError`;
+2. a HEC-RAS 4-or-earlier declaration selects `.O##` and warns only when the
+   HDF modification time is equal to or before the `.O##` time;
+3. a legacy declaration with a later HDF timestamp raises the same error; and
+4. an unresolved declaration with both formats raises the same error.
+
+Filesystem timestamps are a conservative ambiguity trigger, not proof of
+which computation is newer; copied folders can preserve or rewrite them. When
+legacy output is selected, HDF completion, runtime, producer, and message
+evidence cannot validate the legacy result.
+
+Compute cleanup follows the actual selected executable/controller, not the
+plan declaration. Modern runs remove `.O##` and stale message sidecars before
+launch and remove a recreated `.O##` after execution. Legacy runs remove the
+plan HDF and stale messages before launch and enforce the same result family
+afterward. Skipped computations do not delete result artifacts. Parallel, test-mode,
+local, PsExec, Docker, Linux/WSL, and remote-promotion paths apply the same
+plan-scoped rule. The public
+`RasCmdr.remove_plan_execution_artifacts()` helper permanently removes an
+explicitly selected family from an exact allowlist and never includes geometry
+HDF, DSS, terrain, or `.p##.tmp.hdf` files.
+
+Cleanup is fail-closed: the selected executable/controller version must resolve
+before either result family is deleted. An unversioned `Ras.exe` path is not
+silently treated as modern. The public cleanup helper validates all exact
+targets and their project containment before the first unlink; if the operating
+system fails during deletion, `PlanExecutionCleanupError` reports both the
+failed path and any partial removal. Public currency inspection uses the same
+plan-declaration resolver as execution evidence. Compute-oriented currency is a
+separate internal policy tied to the selected engine and treats any dual-format
+project as needing a normalizing rerun.
+
+Worker promotion is limited to successful plans, replaces destination results
+atomically without treating copied mtimes as authority, and copies only the
+selected primary result, exact message sidecars, and one deterministic geometry
+HDF per shared geometry. Docker staging removes copied final HDF/legacy results
+while preserving the required `.tmp.hdf` preprocessing input; only the exact,
+structurally complete final `.p##.hdf` can be published.
 
 One RAS 4.1 first-launch attempt encountered the optional example-project
 installation prompt. The watchdog now explicitly chooses `No`/`Cancel`/`Close`
@@ -362,17 +403,21 @@ deep DSS coverage inspection. It therefore establishes execution and evidence
 behavior, not complete linked-asset or simulation-window coverage. That gap
 remains assigned to the separate linked-asset research effort.
 
-After the artifact-selection correction, all successful outputs were inspected
-again offline without invoking HEC-RAS or COM. The refreshed records include
-the inspector source hash, result hashes, and worktree provenance. A final
-`RasControl.list_processes(show_all=True)` check found no remaining RAS
-processes.
+The archived successful outputs were inspected offline without invoking
+HEC-RAS or COM under the earlier rule. They now serve as regression inputs for
+mixed-format detection. A future, separately approved rerun through the
+cleanup-enabled APIs is required to regenerate the canonical clean fixtures.
+A final `RasControl.list_processes(show_all=True)` check found no remaining RAS
+processes after the original matrix execution.
 
 ## Validation status and baseline test debt
 
-The focused evidence, results-parser, controller, watchdog, and compute-control
-suite passes: **80 passed**. The complete non-integration suite is not green at
-the branch base: **2,272 passed, 40 skipped, 30 deselected, and 43 failed**.
+The focused evidence, artifact-cleanup, currency, controller, command-line,
+parallel/test-mode, local/PsExec/Docker, and remote-promotion suite passes:
+**188 passed**. The complete non-integration suite is not green: the final
+rerun produced **2,299 passed, 40 skipped, 30 deselected, and 43 failed**. It
+reproduced the same 43 unrelated failure clusters recorded at the branch base;
+the increased pass count comes from the added regression coverage.
 A fresh-process rerun of only the failing files produced 36 deterministic
 failures and 226 passes; seven failures were suite-order dependent.
 

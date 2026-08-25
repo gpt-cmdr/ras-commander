@@ -25,8 +25,14 @@ from .Utils import (
     convert_unc_to_local_path,
     copy_geometry_outputs_back,
     copy_plan_hdf_back,
+    copy_plan_result_back,
 )
 from ..LoggingConfig import get_logger
+from ..ExecutionArtifacts import (
+    finalize_plan_execution_artifacts,
+    get_plan_result_artifact_paths,
+    infer_execution_result_format,
+)
 from ..RasCurrency import RasCurrency
 from ..RasPlan import RasPlan
 from ..RasUtils import RasUtils
@@ -420,11 +426,21 @@ def execute_psexec_plan(
 
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
+    execution_engine = type(
+        "PsexecExecutionEngine",
+        (),
+        {"ras_version": None, "ras_exe_path": worker.ras_exe_path},
+    )()
+    output_format = infer_execution_result_format(execution_engine)
 
     # Step 0a: force_geompre implies execution because the currency check cannot
     # see changes to cached geometry-HDF tables or their land-cover sidecars.
     if not force_rerun and not force_geompre:
-        is_current, reason = RasCurrency.are_plan_results_current(plan_number, ras_obj)
+        is_current, reason = RasCurrency._are_plan_results_current_for_execution(
+            plan_number,
+            ras_obj,
+            output_format=output_format,
+        )
         if is_current:
             logger.debug(
                 "Skipping remote execution of plan %s: %s",
@@ -464,8 +480,18 @@ def execute_psexec_plan(
         shutil.copytree(project_folder, worker_temp_folder / project_name, dirs_exist_ok=True, ignore=RasUtils.ignore_windows_reserved)
 
         worker_project_path = worker_temp_folder / project_name
-        hdf_file = worker_project_path / RasCurrency.get_plan_hdf_path(plan_number, ras_obj).name
         clear_worker_plan_hdf_artifacts(worker_project_path, plan_number, ras_obj)
+        worker_artifacts = get_plan_result_artifact_paths(
+            plan_number,
+            ras_object=ras_obj,
+            project_folder=worker_project_path,
+            project_name=project_name,
+        )
+        result_file = (
+            worker_artifacts.hdf
+            if output_format == "hdf"
+            else worker_artifacts.legacy_output
+        )
 
         prj_file = list(worker_project_path.glob("*.prj"))[0]
         plan_file = worker_project_path / f"{project_name}.p{plan_number}"
@@ -583,18 +609,20 @@ def execute_psexec_plan(
             logger.error(f"PsExec stderr: {result.stderr}")
             return False
 
-        # Step 6: Check for HDF file
+        # Step 6: Check for the result family owned by the selected engine.
         max_wait = 60
         wait_interval = 5
         elapsed = 0
 
-        while not hdf_file.exists() and elapsed < max_wait:
+        while not result_file.exists() and elapsed < max_wait:
             time.sleep(wait_interval)
             elapsed += wait_interval
-            logger.debug(f"Waiting for HDF file... ({elapsed}s)")
+            logger.debug(
+                "Waiting for %s result... (%ss)", output_format, elapsed
+            )
 
-        if not hdf_file.exists():
-            logger.error(f"HDF file not created: {hdf_file}")
+        if not result_file.exists():
+            logger.error("%s result not created: %s", output_format, result_file)
             logger.error(f"PsExec stdout: {result.stdout}")
             logger.error(f"PsExec stderr: {result.stderr}")
             logger.error(
@@ -603,18 +631,54 @@ def execute_psexec_plan(
             )
             return False
 
-        if not RasCurrency.check_plan_hdf_complete(hdf_file):
-            logger.error(f"HDF file is incomplete: {hdf_file}")
+        if output_format == "hdf" and not RasCurrency.check_plan_hdf_complete(
+            result_file
+        ):
+            logger.error(f"HDF file is incomplete: {result_file}")
             return False
+        if output_format == "legacy":
+            from ..RasCmdr import RasCmdr
+
+            if not RasCmdr._verify_legacy_result(
+                plan_number,
+                ras_obj,
+                check_errors=True,
+                project_folder=worker_project_path,
+                project_name=project_name,
+            ):
+                logger.error(
+                    "Legacy output lacks exact completion evidence: %s",
+                    result_file,
+                )
+                return False
+
+        finalize_plan_execution_artifacts(
+            plan_number,
+            output_format=output_format,
+            ras_object=ras_obj,
+            project_folder=worker_project_path,
+            project_name=project_name,
+        )
 
         logger.debug(
-            "HDF file created successfully for plan %s: %s",
+            "%s result created successfully for plan %s: %s",
+            output_format,
             plan_number,
-            hdf_file,
+            result_file,
         )
 
         # Step 7: Copy results back
-        if copy_plan_hdf_back(worker_project_path, plan_number, ras_obj) is None:
+        copied_result = (
+            copy_plan_hdf_back(worker_project_path, plan_number, ras_obj)
+            if output_format == "hdf"
+            else copy_plan_result_back(
+                worker_project_path,
+                plan_number,
+                ras_obj,
+                output_format=output_format,
+            )
+        )
+        if copied_result is None:
             return False
 
         if copy_geometry_outputs:

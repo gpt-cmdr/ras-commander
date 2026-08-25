@@ -188,6 +188,7 @@ treated as requiring manual review.
       heading_level: 3
       members:
         - inspect_execution_evidence
+        - remove_plan_execution_artifacts
         - compute_plan
         - cancel_plan
         - compute_parallel
@@ -207,12 +208,39 @@ information group is present; it does not claim that a readable HDF is a
 complete result. Embedded HDF messages take precedence for health parsing,
 with stored messages used as a fallback.
 
+When HDF and `.O##` results coexist, selection follows the current plan-file
+`Program Version=` declaration. Unsafe combinations raise
+`ResultArtifactAmbiguityError`; the inspector never combines completion or
+runtime evidence from two result families. Use
+`RasCmdr.remove_plan_execution_artifacts()` for explicit, permanent,
+plan-scoped remediation, or rerun through ras-commander so the selected engine
+normalizes the artifacts. Actual runs clean before and after execution;
+skipped runs do not delete result artifacts. Cleanup requires a resolvable selected engine
+version and fails before mutation when that version is unknown. Worker and
+Docker promotion accepts only a successful plan's exact final result family;
+Linux preprocessing `.tmp.hdf` files are never published as results.
+
 ::: ras_commander.ExecutionEvidence
     options:
       show_root_heading: true
       heading_level: 4
 
 ::: ras_commander.EvidenceObservation
+    options:
+      show_root_heading: true
+      heading_level: 4
+
+::: ras_commander.PlanExecutionCleanup
+    options:
+      show_root_heading: true
+      heading_level: 4
+
+::: ras_commander.PlanExecutionCleanupError
+    options:
+      show_root_heading: true
+      heading_level: 4
+
+::: ras_commander.ResultArtifactAmbiguityError
     options:
       show_root_heading: true
       heading_level: 4

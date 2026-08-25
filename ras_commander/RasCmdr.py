@@ -42,6 +42,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -58,6 +59,16 @@ from .Decorators import log_call
 from .ExecutionEvidence import (
     ExecutionEvidence,
     inspect_execution_evidence as _inspect_execution_evidence,
+)
+from .ExecutionArtifacts import (
+    PlanExecutionCleanup,
+    RemovalFormat,
+    ResultFormat,
+    finalize_plan_execution_artifacts,
+    get_plan_result_artifact_paths,
+    infer_execution_result_format,
+    prepare_plan_execution_artifacts,
+    remove_plan_execution_artifacts as _remove_plan_execution_artifacts,
 )
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
@@ -138,6 +149,41 @@ class RasCmdr:
             ras_object=ras_object,
             result_modified_after=result_modified_after,
             hash_files=hash_files,
+        )
+
+    @staticmethod
+    @log_call
+    def remove_plan_execution_artifacts(
+        plan_number: Union[str, Number, Path],
+        *,
+        result_format: RemovalFormat,
+        include_message_sidecars: bool = False,
+        ras_object=None,
+    ) -> PlanExecutionCleanup:
+        """Permanently remove exact result artifacts owned by one plan.
+
+        Args:
+            plan_number: Plan number or existing ``.p##`` plan path.
+            result_format: Required selection: ``"hdf"``, ``"legacy"``, or
+                ``"both"``. This names the result family to remove.
+            include_message_sidecars: Also remove the plan's exact
+                ``.comp_msgs.txt``, ``.computeMsgs.txt``, and ``.bco##`` files.
+            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+                global project only when omitted.
+
+        Returns:
+            Immutable :class:`PlanExecutionCleanup` listing removed and
+            already-missing paths.
+
+        Warning:
+            Removal is permanent. Geometry HDF, DSS, terrain, and Linux
+            ``.tmp.hdf`` preprocessing files are never included.
+        """
+        return _remove_plan_execution_artifacts(
+            plan_number,
+            result_format=result_format,
+            include_message_sidecars=include_message_sidecars,
+            ras_object=ras_object,
         )
 
     @staticmethod
@@ -392,38 +438,129 @@ class RasCmdr:
     @staticmethod
     def _copy_worker_artifact(source_path: Path, dest_path: Path) -> bool:
         """
-        Copy a worker artifact unless the destination is already newer.
+        Atomically replace a destination with a validated worker artifact.
+
+        Copied-folder timestamps are not execution provenance. Once the caller
+        has established that a worker plan succeeded, its artifact must win
+        regardless of the destination mtime.
         """
         if not source_path.exists() or not source_path.is_file():
             return False
-
-        if dest_path.exists():
-            source_stat = source_path.stat()
-            dest_stat = dest_path.stat()
-
-            if dest_stat.st_mtime > source_stat.st_mtime:
-                logger.debug(
-                    "Skipping older worker artifact %s because destination %s is newer",
-                    source_path,
-                    dest_path,
-                )
-                return False
-
-            if (
-                dest_stat.st_mtime == source_stat.st_mtime
-                and dest_stat.st_size == source_stat.st_size
-            ):
-                logger.debug(
-                    "Skipping unchanged worker artifact %s",
-                    source_path,
-                )
-                return False
-
-            dest_path.unlink()
-
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, dest_path)
+        temp_path = dest_path.with_name(
+            f".{dest_path.name}.{uuid.uuid4().hex}.ras-commander.tmp"
+        )
+        try:
+            shutil.copy2(source_path, temp_path)
+            os.replace(temp_path, dest_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
         return True
+
+    @staticmethod
+    def _verify_legacy_result(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+        *,
+        check_errors: bool = True,
+        modified_after: Optional[float] = None,
+        project_folder: Optional[Union[str, Path]] = None,
+        project_name: Optional[str] = None,
+    ) -> bool:
+        """Verify a legacy run from a fresh ``.O##`` and exact completion record."""
+        paths = get_plan_result_artifact_paths(
+            plan_number,
+            ras_object=ras_object,
+            project_folder=project_folder,
+            project_name=project_name,
+        )
+        output_path = paths.legacy_output
+        if not output_path.is_file():
+            logger.debug("Legacy result file does not exist: %s", output_path)
+            return False
+        if (
+            modified_after is not None
+            and output_path.stat().st_mtime < float(modified_after) - 2.0
+        ):
+            logger.debug(
+                "Verification rejected stale legacy result %s",
+                output_path.name,
+            )
+            return False
+        from .results.ResultsParser import ResultsParser
+
+        selected_message: Optional[str] = None
+        selected_path: Optional[Path] = None
+        for message_path in paths.message_sidecars:
+            if not message_path.is_file():
+                continue
+            try:
+                before = message_path.stat()
+                raw = message_path.read_bytes()
+                after = message_path.stat()
+                if (before.st_size, before.st_mtime_ns) != (
+                    after.st_size,
+                    after.st_mtime_ns,
+                ):
+                    logger.warning(
+                        "Legacy messages changed while reading: %s",
+                        message_path,
+                    )
+                    return False
+                if raw.startswith(b"\xef\xbb\xbf"):
+                    selected_message = raw.decode("utf-8-sig", errors="replace")
+                else:
+                    try:
+                        selected_message = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        selected_message = raw.decode("cp1252")
+                selected_path = message_path
+                break
+            except OSError as exc:
+                logger.warning(
+                    "Could not inspect legacy messages %s: %s",
+                    message_path,
+                    exc,
+                )
+                return False
+        if selected_message is None or not ResultsParser._has_complete_process_record(
+            selected_message
+        ):
+            logger.warning(
+                "Legacy verification requires an exact Complete Process "
+                "record in a stored message sidecar for plan %s",
+                paths.plan_number,
+            )
+            return False
+        parsed = ResultsParser.parse_compute_messages(selected_message)
+        if check_errors and parsed["has_errors"]:
+            logger.warning("Verification found errors in %s", selected_path.name)
+            return False
+        return True
+
+    @staticmethod
+    def _verify_result(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+        *,
+        output_format: ResultFormat,
+        check_errors: bool = True,
+        modified_after: Optional[float] = None,
+    ) -> bool:
+        """Verify the result family produced by the selected execution engine."""
+        if output_format == "legacy":
+            return RasCmdr._verify_legacy_result(
+                plan_number,
+                ras_object,
+                check_errors=check_errors,
+                modified_after=modified_after,
+            )
+        return RasCmdr._verify_completion(
+            RasCmdr._get_hdf_path(plan_number, ras_object),
+            check_errors=check_errors,
+            modified_after=modified_after,
+        )
 
     @staticmethod
     def _verify_completion(
@@ -471,7 +608,11 @@ class RasCmdr:
 
             compute_msgs = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
 
-            if not compute_msgs or 'Complete Process' not in compute_msgs:
+            from .results.ResultsParser import ResultsParser
+
+            if not compute_msgs or not ResultsParser._has_complete_process_record(
+                compute_msgs
+            ):
                 logger.debug(f"Verification failed: 'Complete Process' not found in {hdf_path.name}")
                 return False
 
@@ -482,7 +623,6 @@ class RasCmdr:
                     return False
 
             if check_errors:
-                from .results.ResultsParser import ResultsParser
                 parsed = ResultsParser.parse_compute_messages(compute_msgs)
                 if parsed['has_errors']:
                     logger.warning(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
@@ -783,11 +923,14 @@ class RasCmdr:
                 Generally, 2-4 cores provides good performance for most models.
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
                 Set to True to replace an existing destination folder with the same name.
-            skip_existing (bool, optional): If True, skip computation if HDF results file already exists
-                and contains 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool, optional): If True, skip computation when the
+                selected engine's sole result family already verifies. Modern
+                HDF uses ``Complete Process``; legacy execution requires its
+                ``.O##`` output and checks available messages for errors.
+                Defaults to False.
                 Useful for resuming interrupted batch runs or incremental workflows.
-            verify (bool, optional): If True, verify computation completed successfully by checking
-                for 'Complete Process' in compute messages after execution. Defaults to False.
+            verify (bool, optional): If True, verify the selected result family
+                after execution. Defaults to False.
                 Returns False if verification fails even if subprocess returned success.
             stream_callback (Callable, optional): Callback object for real-time execution progress monitoring.
                 Must implement ExecutionCallback protocol methods (all methods optional):
@@ -872,12 +1015,19 @@ class RasCmdr:
               * >8 cores: May have diminishing returns due to overhead
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
             - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
-            - The verify parameter checks for 'Complete Process' in HDF compute messages.
+            - Verification is version-aware: modern plans inspect HDF completion;
+              legacy plans require a fresh ``.O##`` and inspect available stored
+              messages for errors.
+            - Actual runs permanently remove the opposing result family and
+              stale compute-message sidecars before launch, then remove any
+              opposing result recreated by HEC-RAS after completion. Skipped
+              runs do not mutate execution artifacts.
         """
         _success = False
         _results_df_row = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
+        _execution_result_format = None
         _watchdog = None
         try:
             ras_obj = ras_object if ras_object is not None else ras
@@ -925,6 +1075,11 @@ class RasCmdr:
                 _success = False
                 return ComputeResult(success=False, results_df_row=None)
 
+            # Resolve the actual selected engine before making any skip or
+            # cleanup decision. An unresolved version fails closed and leaves
+            # both result families untouched.
+            _execution_result_format = infer_execution_result_format(compute_ras)
+
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
                 variables_to_apply = hdf_additional_variables or hdf_output_variables
@@ -964,9 +1119,31 @@ class RasCmdr:
 
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:
-                hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                if RasCmdr._verify_completion(hdf_path, check_errors=False):
-                    logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
+                artifact_paths = get_plan_result_artifact_paths(
+                    plan_number, ras_object=compute_ras
+                )
+                mixed_results = (
+                    artifact_paths.hdf.is_file()
+                    and artifact_paths.legacy_output.is_file()
+                )
+                if mixed_results:
+                    logger.warning(
+                        "Plan %s has both HDF and legacy results; "
+                        "skip_existing will rerun it with the selected HEC-RAS "
+                        "version and normalize its result artifacts.",
+                        plan_number,
+                    )
+                elif RasCmdr._verify_result(
+                    plan_number,
+                    compute_ras,
+                    output_format=_execution_result_format,
+                    check_errors=False,
+                ):
+                    logger.info(
+                        "Skipping plan %s: verified %s results already exist",
+                        plan_number,
+                        _execution_result_format,
+                    )
                     _success = True
                     return ComputeResult(
                         success=True,
@@ -976,13 +1153,19 @@ class RasCmdr:
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
             # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
-            # force_geompre also bypasses the skip: are_plan_results_current() only
+            # force_geompre also bypasses the skip: currency only
             # compares .p##/.g##/.u## mtimes against the results HDF, so it cannot
             # see sidecar-only changes. Skipping would silently drop the native
             # reprocessing request and return success.
             if not force_rerun and not skip_existing and not force_geompre:
                 from .RasCurrency import RasCurrency
-                is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
+                is_current, reason = (
+                    RasCurrency._are_plan_results_current_for_execution(
+                        plan_number,
+                        compute_ras,
+                        output_format=_execution_result_format,
+                    )
+                )
                 if is_current:
                     logger.info(f"Skipping plan {plan_number}: {reason}")
                     _success = True
@@ -993,6 +1176,16 @@ class RasCmdr:
                     )
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
+
+            # The actual selected executable/controller, not the plan-file
+            # declaration, determines which result family this run will own.
+            # Remove the opposing family and stale messages only after all
+            # skip checks have decided that execution will occur.
+            prepare_plan_execution_artifacts(
+                plan_number,
+                output_format=_execution_result_format,
+                ras_object=compute_ras,
+            )
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
             # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
@@ -1152,11 +1345,15 @@ class RasCmdr:
                     f"in {run_time:.2f} seconds"
                 )
 
-                async_verified = RasCmdr._wait_for_async_plan_completion(
-                    plan_number,
-                    compute_ras,
-                    check_errors=verify,
-                    modified_after=start_time,
+                async_verified = (
+                    RasCmdr._wait_for_async_plan_completion(
+                        plan_number,
+                        compute_ras,
+                        check_errors=verify,
+                        modified_after=start_time,
+                    )
+                    if _execution_result_format == "hdf"
+                    else None
                 )
                 if async_verified is True:
                     logger.debug(
@@ -1184,11 +1381,12 @@ class RasCmdr:
 
                     # Verify completion if requested
                     if verify:
-                        hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
                         verified = (
                             async_verified is True
-                            or RasCmdr._verify_completion(
-                                hdf_path,
+                            or RasCmdr._verify_result(
+                                plan_number,
+                                compute_ras,
+                                output_format=_execution_result_format,
                                 modified_after=start_time,
                             )
                         )
@@ -1202,7 +1400,7 @@ class RasCmdr:
                             _success = True
                         else:
                             logger.error(
-                                f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
+                                f"Verification failed for plan {plan_number}: no complete, current {_execution_result_format} result was found. "
                                 f"See: https://rascommander.info/ras/user-guide/plan-execution/"
                             )
                             _success = False
@@ -1212,11 +1410,15 @@ class RasCmdr:
             except subprocess.CalledProcessError as e:
                 end_time = time.time()
                 run_time = end_time - start_time
-                async_verified = RasCmdr._wait_for_async_plan_completion(
-                    plan_number,
-                    compute_ras,
-                    check_errors=True,
-                    modified_after=start_time,
+                async_verified = (
+                    RasCmdr._wait_for_async_plan_completion(
+                        plan_number,
+                        compute_ras,
+                        check_errors=True,
+                        modified_after=start_time,
+                    )
+                    if _execution_result_format == "hdf"
+                    else None
                 )
                 if async_verified is True:
                     logger.info(
@@ -1277,6 +1479,28 @@ class RasCmdr:
         finally:
             if _watchdog:
                 _watchdog.stop()
+
+            if (
+                _did_execute
+                and _execution_result_format is not None
+                and 'compute_ras' in locals()
+            ):
+                try:
+                    # Modern HEC-RAS 1D engines recreate .O## after writing the
+                    # HDF. Final cleanup is therefore required in addition to
+                    # the pre-run stale-artifact cleanup.
+                    finalize_plan_execution_artifacts(
+                        plan_number,
+                        output_format=_execution_result_format,
+                        ras_object=compute_ras,
+                    )
+                except Exception as cleanup_error:
+                    logger.error(
+                        "Could not normalize result artifacts after plan %s: %s",
+                        plan_number,
+                        cleanup_error,
+                    )
+                    _success = False
 
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
@@ -1390,11 +1614,11 @@ class RasCmdr:
                 If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
-            skip_existing (bool): If True, skip computation for plans that already have HDF results
-                with 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool): If True, skip computation for plans whose
+                selected engine result family already verifies. Defaults to False.
                 Skipped plans are marked as successful (True) in results. Checked on source folder.
-            verify (bool): If True, verify each plan completed successfully by checking
-                for 'Complete Process' in compute messages. Defaults to False.
+            verify (bool): If True, verify each selected result family after
+                execution. Defaults to False.
                 Plans that fail verification are marked False in results.
 
         Returns:
@@ -1466,6 +1690,7 @@ class RasCmdr:
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
+            execution_result_format = infer_execution_result_format(ras_obj)
 
             project_folder = Path(ras_obj.project_folder)
 
@@ -1499,11 +1724,30 @@ class RasCmdr:
                 plans_to_skip = []
                 plans_to_compute = []
                 for plan_num in filtered_plan_numbers:
-                    hdf_path = RasCmdr._get_hdf_path(plan_num, ras_obj)
-                    if RasCmdr._verify_completion(hdf_path, check_errors=False):
+                    artifact_paths = get_plan_result_artifact_paths(
+                        plan_num,
+                        ras_object=ras_obj,
+                    )
+                    mixed_results = (
+                        artifact_paths.hdf.is_file()
+                        and artifact_paths.legacy_output.is_file()
+                    )
+                    if not mixed_results and RasCmdr._verify_result(
+                        plan_num,
+                        ras_obj,
+                        output_format=execution_result_format,
+                        check_errors=False,
+                    ):
                         plans_to_skip.append(plan_num)
                         execution_results[plan_num] = True  # Mark as successful (results exist)
                     else:
+                        if mixed_results:
+                            logger.warning(
+                                "Plan %s has both HDF and legacy results; "
+                                "parallel skip_existing will rerun it to "
+                                "normalize artifacts.",
+                                plan_num,
+                            )
                         plans_to_compute.append(plan_num)
                 if plans_to_skip:
                     logger.info(f"Skipping {len(plans_to_skip)} plans with existing results: {plans_to_skip}")
@@ -1562,6 +1806,21 @@ class RasCmdr:
             for worker_id, plan_num in plan_assignments:
                 worker_plan_numbers[worker_id].append(plan_num)
 
+            # These plans are now known to execute. Remove both copied final
+            # result families and stale messages inside the disposable worker
+            # folders so a zero-exit/no-output run cannot promote source data
+            # as a fresh worker result. Preserve .tmp.hdf preprocessing input.
+            for worker_id, plan_num in plan_assignments:
+                worker_ras = worker_ras_objects[worker_id]
+                if worker_ras is None:
+                    continue
+                _remove_plan_execution_artifacts(
+                    plan_num,
+                    result_format="both",
+                    include_message_sidecars=True,
+                    ras_object=worker_ras,
+                )
+
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit futures and track which plan each future represents
                 future_to_plan = {}
@@ -1612,6 +1871,8 @@ class RasCmdr:
                 logger.debug(f"Consolidating worker artifacts back to original project path: {final_dest_folder}")
 
             consolidated_artifact_count = 0
+            promoted_geometry_numbers: set[str] = set()
+            promoted_plan_numbers: set[str] = set()
             for worker_id, worker_ras in worker_ras_objects.items():
                 if worker_ras is None:
                     continue
@@ -1629,16 +1890,50 @@ class RasCmdr:
                     for retry in range(max_retries):
                         try:
                             for plan_num in assigned_plan_numbers:
+                                if not execution_results.get(plan_num, False):
+                                    continue
+                                artifact_paths = get_plan_result_artifact_paths(
+                                    plan_num,
+                                    ras_object=worker_ras,
+                                )
+                                primary_result = (
+                                    artifact_paths.hdf
+                                    if execution_result_format == "hdf"
+                                    else artifact_paths.legacy_output
+                                )
+                                if not primary_result.is_file():
+                                    execution_results[plan_num] = False
+                                    logger.error(
+                                        "Successful worker plan %s has no %s "
+                                        "result to promote: %s",
+                                        plan_num,
+                                        execution_result_format,
+                                        primary_result,
+                                    )
+                                    continue
+                                plan_artifacts = [primary_result]
+                                plan_artifacts.extend(
+                                    path
+                                    for path in artifact_paths.message_sidecars
+                                    if path.is_file()
+                                )
                                 geometry_number = RasCmdr._get_plan_geometry_number(
                                     filtered_plan_entries,
                                     plan_num
                                 )
-                                plan_artifacts = RasCmdr._get_worker_plan_artifacts(
-                                    worker_folder=worker_folder,
-                                    project_name=worker_ras.project_name,
-                                    plan_number=plan_num,
-                                    geometry_number=geometry_number
+                                promote_geometry = bool(
+                                    geometry_number
+                                    and geometry_number
+                                    not in promoted_geometry_numbers
                                 )
+                                if promote_geometry:
+                                    geometry_hdf = (
+                                        worker_folder
+                                        / f"{worker_ras.project_name}.g"
+                                        f"{geometry_number}.hdf"
+                                    )
+                                    if geometry_hdf.is_file():
+                                        plan_artifacts.append(geometry_hdf)
                                 for artifact_path in plan_artifacts:
                                     dest_path = final_dest_folder / artifact_path.name
                                     if RasCmdr._copy_worker_artifact(
@@ -1646,6 +1941,16 @@ class RasCmdr:
                                         dest_path
                                     ):
                                         consolidated_artifact_count += 1
+                                if promote_geometry and geometry_hdf.is_file():
+                                    promoted_geometry_numbers.add(geometry_number)
+                                finalize_plan_execution_artifacts(
+                                    plan_num,
+                                    output_format=execution_result_format,
+                                    ras_object=ras_obj,
+                                    project_folder=final_dest_folder,
+                                    project_name=worker_ras.project_name,
+                                )
+                                promoted_plan_numbers.add(plan_num)
                              
                             # Add another small delay before removal
                             time.sleep(1)
@@ -1664,6 +1969,12 @@ class RasCmdr:
                             continue
                             
                 except Exception as e:
+                    for plan_num in assigned_plan_numbers:
+                        if (
+                            execution_results.get(plan_num, False)
+                            and plan_num not in promoted_plan_numbers
+                        ):
+                            execution_results[plan_num] = False
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
 
             logger.info(
@@ -1780,11 +2091,11 @@ class RasCmdr:
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists.
                 Defaults to False.
                 Set to True to replace an existing test folder with the same name.
-            skip_existing (bool, optional): If True, skip computation for plans that already have HDF results
-                with 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool, optional): If True, skip plans whose selected
+                engine result family already verifies. Defaults to False.
                 Skipped plans are marked as successful (True) in results. Check happens in test folder.
-            verify (bool, optional): If True, verify each plan completed successfully by checking
-                for 'Complete Process' in compute messages. Defaults to False.
+            verify (bool, optional): If True, verify each selected result family
+                after execution. Defaults to False.
                 Plans that fail verification are marked False in results.
 
         Returns:
@@ -1899,6 +2210,9 @@ class RasCmdr:
                 compute_ras = RasPrj()
                 compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
                 compute_prj_path = compute_ras.prj_file
+                execution_result_format = infer_execution_result_format(
+                    compute_ras
+                )
                 logger.info("Initialized RAS project in compute folder: %s", compute_folder.name)
                 logger.debug(f"Initialized RAS project file in compute folder: {compute_prj_path}")
             except Exception as e:
@@ -1926,6 +2240,31 @@ class RasCmdr:
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
                 current_plan_number = plan["plan_number"]
+                artifact_paths = get_plan_result_artifact_paths(
+                    current_plan_number,
+                    ras_object=compute_ras,
+                )
+                mixed_results = (
+                    artifact_paths.hdf.is_file()
+                    and artifact_paths.legacy_output.is_file()
+                )
+                verified_skip = (
+                    skip_existing
+                    and not mixed_results
+                    and RasCmdr._verify_result(
+                        current_plan_number,
+                        compute_ras,
+                        output_format=execution_result_format,
+                        check_errors=False,
+                    )
+                )
+                if not verified_skip:
+                    _remove_plan_execution_artifacts(
+                        current_plan_number,
+                        result_format="both",
+                        include_message_sidecars=True,
+                        ras_object=compute_ras,
+                    )
                 start_time = time.time()
                 try:
                     compute_result = RasCmdr.compute_plan(
@@ -1954,23 +2293,84 @@ class RasCmdr:
 
             logger.info("All selected plans have been executed.")
 
-            # Consolidate HDF results back to original project folder
-            # This eliminates the [Test] folder anti-pattern - results go to original project
-            logger.info("Consolidating HDF results from test folder back to original project folder")
-            logger.debug(f"Consolidating HDF results from {compute_folder} back to {project_folder}")
-            hdf_files_copied = 0
-            for hdf_file in compute_folder.glob("*.hdf"):
-                dest_path = project_folder / hdf_file.name
-                try:
-                    if dest_path.exists():
-                        dest_path.unlink()
-                    shutil.copy2(hdf_file, dest_path)
-                    hdf_files_copied += 1
-                    logger.debug(f"Copied {hdf_file.name} to original project folder")
-                except Exception as e:
-                    logger.error(f"Failed to copy {hdf_file.name}: {str(e)}")
+            # Promote only artifacts owned by plans that actually succeeded.
+            # The previous broad *.hdf copy could publish unrelated or stale
+            # results from the copied test project.
+            logger.info(
+                "Consolidating successful plan artifacts from test folder "
+                "back to original project folder"
+            )
+            logger.debug(
+                "Consolidating plan artifacts from %s back to %s",
+                compute_folder,
+                project_folder,
+            )
+            artifact_files_copied = 0
+            for current_plan_number, succeeded in execution_results.items():
+                if not succeeded:
+                    continue
+                artifact_paths = get_plan_result_artifact_paths(
+                    current_plan_number,
+                    ras_object=compute_ras,
+                )
+                primary_result = (
+                    artifact_paths.hdf
+                    if execution_result_format == "hdf"
+                    else artifact_paths.legacy_output
+                )
+                candidates = [primary_result]
+                candidates.extend(
+                    path
+                    for path in artifact_paths.message_sidecars
+                    if path.is_file()
+                )
+                geometry_number = RasCmdr._get_plan_geometry_number(
+                    ras_compute_plan_entries,
+                    current_plan_number,
+                )
+                if geometry_number:
+                    geometry_hdf = (
+                        compute_folder
+                        / f"{compute_ras.project_name}.g{geometry_number}.hdf"
+                    )
+                    if geometry_hdf.is_file():
+                        candidates.append(geometry_hdf)
 
-            logger.info(f"Consolidated {hdf_files_copied} HDF file(s) to original project folder")
+                if not primary_result.is_file():
+                    logger.error(
+                        "Successful plan %s has no expected %s result to "
+                        "promote: %s",
+                        current_plan_number,
+                        execution_result_format,
+                        primary_result,
+                    )
+                    execution_results[current_plan_number] = False
+                    continue
+
+                try:
+                    for artifact in candidates:
+                        if RasCmdr._copy_worker_artifact(
+                            artifact,
+                            project_folder / artifact.name,
+                        ):
+                            artifact_files_copied += 1
+                    finalize_plan_execution_artifacts(
+                        current_plan_number,
+                        output_format=execution_result_format,
+                        ras_object=ras_obj,
+                    )
+                except Exception as e:
+                    execution_results[current_plan_number] = False
+                    logger.error(
+                        "Failed to promote plan %s artifacts: %s",
+                        current_plan_number,
+                        e,
+                    )
+
+            logger.info(
+                "Consolidated %s plan artifact file(s) to the original project",
+                artifact_files_copied,
+            )
 
             # Clean up test folder
             try:
@@ -1989,7 +2389,10 @@ class RasCmdr:
             ras_obj.geom_df = ras_obj.get_geom_entries()
             ras_obj.flow_df = ras_obj.get_flow_entries()
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-            ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
+            if execution_result_format == "hdf":
+                ras_obj.update_results_df(
+                    plan_numbers=list(execution_results.keys())
+                )
 
             # Extract results_df rows for executed plans
             _results_df = pd.DataFrame()
@@ -2190,6 +2593,12 @@ class RasCmdr:
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
 
+        prepare_plan_execution_artifacts(
+            plan_num_str,
+            output_format="hdf",
+            ras_object=ras_obj,
+        )
+
         # Set num_cores if specified
         if num_cores is not None:
             try:
@@ -2199,7 +2608,7 @@ class RasCmdr:
                 logger.error(f"Error setting number of cores: {e}")
 
         if run_via_wsl:
-            return RasCmdr._compute_plan_linux_via_wsl(
+            linux_result = RasCmdr._compute_plan_linux_via_wsl(
                 ras_exe=str(ras_exe),
                 ras_exe_dir=ras_exe_dir_posix,
                 plan_number=plan_num_str,
@@ -2213,6 +2622,12 @@ class RasCmdr:
                 retry_delay_sec=retry_delay_sec,
                 ras_obj=ras_obj,
             )
+            finalize_plan_execution_artifacts(
+                plan_num_str,
+                output_format="hdf",
+                ras_object=ras_obj,
+            )
+            return linux_result
 
         # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
         #   5.0.7:     libs live alongside the binary in bin_ras/
@@ -2339,6 +2754,12 @@ class RasCmdr:
                     plan_hdf = RasCmdr._get_hdf_path(plan_num_str, ras_obj)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
                     logger.debug(f"Renamed {tmp_hdf.name} → {plan_hdf.name}")
+
+                finalize_plan_execution_artifacts(
+                    plan_num_str,
+                    output_format="hdf",
+                    ras_object=ras_obj,
+                )
 
                 # Clean up io.* symlinks
                 for link in io_links:

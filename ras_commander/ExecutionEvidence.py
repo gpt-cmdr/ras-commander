@@ -17,8 +17,11 @@ import numpy as np
 import pandas as pd
 
 from .LoggingConfig import get_logger
+from .ExecutionArtifacts import (
+    normalize_program_version,
+    resolve_plan_result_artifact,
+)
 from .RasControl import RasControl
-from .RasPlan import RasPlan
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 from .hdf.HdfUtils import HdfUtils
@@ -391,26 +394,7 @@ def _optional_bool(value: Any, *, label: str) -> Optional[bool]:
 
 
 def _normalize_version(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return None
-    match = re.search(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?", str(value))
-    if match is None:
-        return None
-    major = int(match.group(1))
-    minor_text = match.group(2)
-    patch_text = match.group(3)
-    if patch_text is not None:
-        patch = int(patch_text)
-        if patch == 0:
-            return f"{major}.{int(minor_text)}"
-        return f"{major}.{int(minor_text)}.{patch}"
-    if len(minor_text) == 2:
-        if major == 5 and minor_text.startswith("0"):
-            return f"5.0.{int(minor_text[1])}"
-        if minor_text.endswith("0"):
-            return f"{major}.{int(minor_text[0])}"
-        return f"{major}.{int(minor_text[0])}.{int(minor_text[1])}"
-    return f"{major}.{int(minor_text)}"
+    return normalize_program_version(value)
 
 
 def _major_version(value: Optional[str]) -> Optional[int]:
@@ -557,12 +541,19 @@ def _default_observations(
 def _derive_mechanical_completion(
     inspected_at: datetime,
     observations: Mapping[str, EvidenceObservation[Any]],
+    *,
+    selected_format: Optional[Literal["hdf", "legacy"]],
 ) -> tuple[EvidenceObservation[bool], tuple[str, ...]]:
-    sources = (
-        observations["completion_attribute"],
-        observations["completion_message_hdf"],
-        observations["completion_message_stored"],
-    )
+    if selected_format == "hdf":
+        sources = (
+            observations["completion_attribute"],
+            observations["completion_message_hdf"],
+            observations["completion_message_stored"],
+        )
+    elif selected_format == "legacy":
+        sources = (observations["completion_message_stored"],)
+    else:
+        sources = ()
     failed = [source for source in sources if source.state == "failed"]
     values = [
         bool(source.value)
@@ -663,54 +654,26 @@ def inspect_execution_evidence(
     if rows.empty:
         raise ValueError(f"Plan {normalized_plan!r} is not present in plan_df")
     plan_row = rows.iloc[0]
-    raw_declared = plan_row.get("Program Version")
-    declared_version = (
-        None
-        if raw_declared is None or pd.isna(raw_declared)
-        else str(raw_declared).strip() or None
-    )
-    if declared_version is None:
-        value = RasPlan.get_plan_value(
-            plan_path,
-            "Program Version",
-            ras_object=ras_obj,
-        )
-        declared_version = None if value is None else str(value).strip() or None
 
     inspected_at = datetime.now(timezone.utc)
     observations = _default_observations(inspected_at)
     conflicts: list[str] = []
 
-    declared_for_family = declared_version or getattr(
-        ras_obj, "ras_version", None
+    resolution = resolve_plan_result_artifact(
+        normalized_plan,
+        ras_object=ras_obj,
     )
-    declared_major = _major_version(declared_for_family)
-    hdf_path = Path(f"{plan_path}.hdf")
-    legacy_path = (
-        Path(ras_obj.project_folder)
-        / f"{ras_obj.project_name}.O{normalized_plan}"
-    )
-    # The plan's declared version describes its input-file provenance, not
-    # necessarily the program that produced the current result.  A legacy
-    # plan opened and computed by RAS 5+ can retain its old Program Version
-    # while gaining a plan HDF.  Prefer observed artifacts before using the
-    # declaration to choose the expected result family.
-    if hdf_path.is_file():
-        result_path = hdf_path
-    elif legacy_path.is_file():
-        result_path = legacy_path
-    elif declared_major is not None and declared_major < 5:
-        result_path = legacy_path
-    else:
-        result_path = hdf_path
-    result_exists = result_path.is_file()
+    declared_version = resolution.declared_program_version
+    declared_major = _major_version(declared_version)
+    hdf_path = resolution.paths.hdf
+    legacy_path = resolution.paths.legacy_output
+    result_path = resolution.selected_path
+    result_exists = resolution.selected_exists
+    conflicts.extend(resolution.conflicts)
     result_hash: Optional[str] = None
-    hash_detail: Optional[str] = (
-        "Plan HDF selected while a legacy output artifact also exists"
-        if result_path == hdf_path and legacy_path.is_file()
-        else None
-    )
+    hash_detail: Optional[str] = resolution.detail
     if result_exists and hash_files and result_path != hdf_path:
+        assert result_path is not None
         try:
             result_hash = _stable_sha256(result_path)
         except Exception as exc:
@@ -721,12 +684,13 @@ def inspect_execution_evidence(
         state="available",
         channel="filesystem",
         value=result_exists,
-        source_locator=str(result_path),
+        source_locator=(str(result_path) if result_path else None),
         source_sha256=result_hash,
         reason_code="filesystem_path_inspected",
         detail=hash_detail,
     )
     if result_exists:
+        assert result_path is not None
         result_mtime = datetime.fromtimestamp(
             result_path.stat().st_mtime, timezone.utc
         )
@@ -735,7 +699,7 @@ def inspect_execution_evidence(
             state="available",
             channel="filesystem",
             value=result_mtime,
-            source_locator=str(result_path),
+            source_locator=(str(result_path) if result_path else None),
             source_sha256=result_hash,
             reason_code="filesystem_metadata_inspected",
         )
@@ -746,7 +710,7 @@ def inspect_execution_evidence(
                 inspected_at,
                 state="not_inspected",
                 channel="filesystem",
-                source_locator=str(result_path),
+                source_locator=(str(result_path) if result_path else None),
                 source_sha256=result_hash,
                 reason_code="threshold_not_requested",
             )
@@ -768,7 +732,7 @@ def inspect_execution_evidence(
             inspected_at,
             state="not_inspected",
             channel="filesystem",
-            source_locator=str(result_path),
+            source_locator=(str(result_path) if result_path else None),
             reason_code="result_artifact_missing",
         )
         observations[
@@ -777,7 +741,7 @@ def inspect_execution_evidence(
             inspected_at,
             state="not_inspected",
             channel="filesystem",
-            source_locator=str(result_path),
+            source_locator=(str(result_path) if result_path else None),
             reason_code="result_artifact_missing",
         )
 
@@ -791,11 +755,7 @@ def inspect_execution_evidence(
     hdf_window_error: Optional[str] = None
     hdf_stable = False
 
-    if (
-        not hdf_path.is_file()
-        and declared_major is not None
-        and declared_major < 5
-    ):
+    if resolution.selected_format == "legacy":
         observations["result_artifact_structural_state"] = _observation(
             inspected_at,
             state="not_available_in_version",
@@ -805,20 +765,31 @@ def inspect_execution_evidence(
             observed_program_version=declared_version,
             reason_code="legacy_output_has_no_plan_hdf_structure",
         )
-        observations["completion_attribute"] = _observation(
-            inspected_at,
-            state="not_available_in_version",
-            channel="hdf",
-            observed_program_version=declared_version,
-            reason_code="plan_hdf_not_available_before_ras_5",
+        # A physically present, nonselected HDF was deliberately not opened;
+        # describing it as unavailable would erase that distinction.
+        hdf_state: EvidenceState = (
+            "not_inspected"
+            if hdf_path.is_file()
+            else (
+                "not_available_in_version"
+                if declared_major is not None and declared_major < 5
+                else "not_inspected"
+            )
         )
-        observations["completion_message_hdf"] = _observation(
-            inspected_at,
-            state="not_available_in_version",
-            channel="hdf",
-            observed_program_version=declared_version,
-            reason_code="plan_hdf_not_available_before_ras_5",
+        hdf_reason = (
+            "plan_hdf_not_available_before_ras_5"
+            if hdf_state == "not_available_in_version"
+            else "nonselected_result_format_not_inspected"
         )
+        for name in ("completion_attribute", "completion_message_hdf"):
+            observations[name] = _observation(
+                inspected_at,
+                state=hdf_state,
+                channel="hdf",
+                source_locator=str(hdf_path),
+                observed_program_version=declared_version,
+                reason_code=hdf_reason,
+            )
     elif not hdf_path.is_file():
         for name in (
             "result_artifact_structural_state",
@@ -1173,7 +1144,11 @@ def inspect_execution_evidence(
                 reason_code="compute_messages_unavailable",
             )
 
-    if structured_runtime is not None and hdf_stable:
+    if (
+        resolution.selected_format == "hdf"
+        and structured_runtime is not None
+        and hdf_stable
+    ):
         observations["runtime_seconds"] = _observation(
             inspected_at,
             state="available",
@@ -1224,7 +1199,12 @@ def inspect_execution_evidence(
         )
 
     plan_start, plan_end = _plan_window(plan_row.get("Simulation Date"))
-    if hdf_start is not None and hdf_end is not None and hdf_stable:
+    if (
+        resolution.selected_format == "hdf"
+        and hdf_start is not None
+        and hdf_end is not None
+        and hdf_stable
+    ):
         window_channel: EvidenceChannel = "hdf"
         window_locator = f"{hdf_path}::{_PLAN_INFORMATION_PATH}"
         window_hash = result_hash
@@ -1301,6 +1281,7 @@ def inspect_execution_evidence(
     mechanical, derived_conflicts = _derive_mechanical_completion(
         inspected_at,
         observations,
+        selected_format=resolution.selected_format,
     )
     conflicts.extend(derived_conflicts)
     unique_conflicts = tuple(dict.fromkeys(conflicts))
