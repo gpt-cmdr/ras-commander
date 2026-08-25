@@ -19,7 +19,9 @@ For older HEC-RAS versions that don't support command-line execution or HDF outp
 | 4.1 | Full |
 | 5.0.x (501-507) | Full |
 | 6.0 | Full |
-| 6.3 | Full |
+| 6.3 family alias | Full; retains the historical 6.3.1 Controller fallback |
+| 6.3.0.2 exact | Full; selects `RAS630.HECRASController` |
+| 6.3.1 exact | Full; selects `RAS631.HECRASController` |
 | 6.6 | Full |
 | 7.0 | Full |
 
@@ -53,6 +55,51 @@ The COM interface:
 3. Sets the current plan
 4. Executes the plan
 5. Closes HEC-RAS
+
+### Exact HEC-RAS 6.3.0.2 batch execution
+
+HEC-RAS 6.3.0.2 and 6.3.1 register different Controller ProgIDs. Select the
+exact 6.3.0.2 identity explicitly when a reproducible batch must not fall
+forward to 6.3.1:
+
+```python
+from ras_commander import RasControl, RasPrj, init_ras_project
+
+project = RasPrj()
+init_ras_project("/path/to/project", "6.3", ras_object=project)
+
+result = RasControl.run_plan(
+    "01",
+    ras_object=project,
+    force_recompute=True,
+    blocking=True,
+    controller_version="6.3.0.2",
+    use_watchdog=False,
+    strict_close=True,
+    refresh_results=False,
+)
+
+assert result.execution_details["controller_progid"] == (
+    "RAS630.HECRASController"
+)
+assert result.execution_details["watchdog_started"] is False
+```
+
+`blocking=True` uses `Compute_CurrentPlan(None, None, True)` and does not poll
+`Compute_Complete()`. `use_watchdog=False` is intended only when an outer batch
+supervisor already owns the process tree and hard timeout. `strict_close=True`
+makes a `QuitRas()` failure or a verified surviving owned `ras.exe` process
+fail the operation instead of logging only a warning. If the internal watchdog
+is requested but PID detection fails, `watchdog_started` is `False` and
+`max_runtime` is not enforced; batch callers must inspect that field or provide
+an outer supervisor. The default values preserve existing interactive behavior.
+
+`execution_details` contains JSON-safe provenance. Its stable common keys are
+`requested_controller_version`, `resolved_controller_version`,
+`controller_progid`, `compute_mode`, `message_count`,
+`controller_message_count`, `watchdog_requested`, `watchdog_started`, and
+`duration_seconds`. Blocking results also include `blocking_result`; polled
+results include `poll_count`.
 
 ## Steady State Results
 
