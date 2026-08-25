@@ -252,6 +252,20 @@ When both `.p##.hdf` and `.O##` exist, the inspector applies stricter rules:
 | HEC-RAS 4 or older, HDF timestamp equal to or before `.O##` | Select `.O##`, warn, and record `multiple_result_formats_present`. HDF completion and runtime do not contribute to the selected evidence. |
 | Missing or unreadable declaration | Raise `ResultArtifactAmbiguityError`. |
 
+```mermaid
+flowchart TD
+    A["Inspect existing project"] --> B{"Both HDF and .O##?"}
+    B -- "No" --> C["Read sole existing format<br/>record a conflict if unexpected"]
+    B -- "Yes" --> D{"Declared plan family"}
+    D -- "HEC-RAS 5+" --> E{"HDF mtime >= .O## mtime?"}
+    E -- "Yes" --> F["Select HDF<br/>warn about ignored .O##"]
+    E -- "No" --> G["Raise ResultArtifactAmbiguityError"]
+    D -- "HEC-RAS 4 or older" --> H{".O## mtime >= HDF mtime?"}
+    H -- "Yes" --> I["Select .O##<br/>warn about ignored HDF"]
+    H -- "No" --> G
+    D -- "Unresolved" --> G
+```
+
 Copied-folder timestamps can be misleading. The error therefore asks the user
 to resolve the formats rather than claiming which computation is newest.
 
@@ -267,6 +281,25 @@ quiescence cannot be confirmed, the run fails and leaves the opposing artifact
 visible rather than racing an active writer. Remote PsExec staging is also
 retained when completion is unconfirmed. Skipped runs do not change plan bytes
 or delete result artifacts.
+
+```mermaid
+flowchart TD
+    A["Resolve selected executable or controller"] --> B{"Engine family reliable?"}
+    B -- "No or conflicting" --> C["Fail without deleting results"]
+    B -- "Yes" --> D{"Skip calculation?"}
+    D -- "Yes" --> E["Return without changing<br/>plan bytes or results"]
+    D -- "No" --> F["Finish plan preparation,<br/>callbacks, watchdog, and log setup"]
+    F --> G{"Selected engine family"}
+    G -- "HEC-RAS 5+" --> H["Remove exact .O##<br/>and stale messages"]
+    G -- "HEC-RAS 3-4" --> I["Remove exact plan HDF<br/>and stale messages"]
+    H --> J["Launch calculation"]
+    I --> J
+    J --> K["Wait for launcher, solver children,<br/>and temporary HDF state"]
+    K --> L{"Solver quiescence confirmed?"}
+    L -- "No" --> M["Fail and preserve visible conflict<br/>and remote staging"]
+    L -- "Yes" --> N["Remove any opposing result<br/>recreated during execution"]
+    N --> O["Return normalized result set"]
+```
 
 For command-line execution, a versioned `ras_exe_path` is authoritative and
 `ras_version` is the fallback for an unversioned executable name. If both are
