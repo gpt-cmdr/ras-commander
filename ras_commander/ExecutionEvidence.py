@@ -690,13 +690,26 @@ def inspect_execution_evidence(
         Path(ras_obj.project_folder)
         / f"{ras_obj.project_name}.O{normalized_plan}"
     )
-    if declared_major is not None and declared_major < 5:
+    # The plan's declared version describes its input-file provenance, not
+    # necessarily the program that produced the current result.  A legacy
+    # plan opened and computed by RAS 5+ can retain its old Program Version
+    # while gaining a plan HDF.  Prefer observed artifacts before using the
+    # declaration to choose the expected result family.
+    if hdf_path.is_file():
+        result_path = hdf_path
+    elif legacy_path.is_file():
+        result_path = legacy_path
+    elif declared_major is not None and declared_major < 5:
         result_path = legacy_path
     else:
         result_path = hdf_path
     result_exists = result_path.is_file()
     result_hash: Optional[str] = None
-    hash_detail: Optional[str] = None
+    hash_detail: Optional[str] = (
+        "Plan HDF selected while a legacy output artifact also exists"
+        if result_path == hdf_path and legacy_path.is_file()
+        else None
+    )
     if result_exists and hash_files and result_path != hdf_path:
         try:
             result_hash = _stable_sha256(result_path)
@@ -778,7 +791,11 @@ def inspect_execution_evidence(
     hdf_window_error: Optional[str] = None
     hdf_stable = False
 
-    if declared_major is not None and declared_major < 5:
+    if (
+        not hdf_path.is_file()
+        and declared_major is not None
+        and declared_major < 5
+    ):
         observations["result_artifact_structural_state"] = _observation(
             inspected_at,
             state="not_available_in_version",
@@ -1092,19 +1109,6 @@ def inspect_execution_evidence(
             and hdf_normalized != stored_normalized
         ):
             conflicts.append("producer_version_sources_disagree")
-
-    producer_observation = observations["producer_program_version"]
-    if declared_version and producer_observation.state == "available":
-        declared_normalized = _normalize_version(declared_version)
-        producer_normalized = _normalize_version(
-            str(producer_observation.value)
-        )
-        if (
-            declared_normalized is not None
-            and producer_normalized is not None
-            and declared_normalized != producer_normalized
-        ):
-            conflicts.append("declared_producer_versions_disagree")
 
     selected_message: Optional[str] = None
     selected_channel: EvidenceChannel = "stored_message"

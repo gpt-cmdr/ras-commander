@@ -1,8 +1,8 @@
 # Structured execution evidence
 
-Status: **E01a public API approved and implemented; installed-engine gates remain closed**
+Status: **E01a implemented; installed-engine qualification completed where the host automation path is usable**
 
-Date: 2026-08-24
+Date: 2026-08-25
 
 ## Purpose
 
@@ -274,3 +274,96 @@ now covered by regression tests:
   false assertion.
 
 No HEC-RAS executable, preprocessor, or COM controller was invoked.
+
+## Installed-engine qualification checkpoint
+
+A later human-in-the-loop approval authorized execution against staged copies
+of three real projects. This does not change the earlier E01a checkpoint: that
+checkpoint remains the record of the read-only work completed before execution
+was authorized.
+
+| Plan family | Real plan | Versions staged |
+|---|---|---|
+| steady 1D | Chapter 4 EX1, plan 01, `Existing Conditions Run` | 4.0 through 7.0 |
+| unsteady 1D | Hager lateral-weir example, plan 06, `Unsteady Broad Crest S=10ft/mi` | 4.0 through 7.0 |
+| unsteady 2D | Bald Eagle dam-break example, plan 18, `2D to 2D Run` | 5.0 through 7.0 |
+
+The exact installed set was 4.0, 4.1.0, 5.0, 5.0.1, 5.0.3, 5.0.4,
+5.0.5, 5.0.6, 5.0.7, 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.4.1, 6.5, 6.6,
+6.7 Beta 4, 6.7 Beta 5, and 7.0. The 2D fixture starts at 5.0 because only
+RAS 5 and newer support that plan family.
+
+The matrix contains 58 canonical lanes. Attempts retained in separate
+`__attempt_*` archive folders are excluded from these counts.
+
+| Version family | Lanes | Completed | Attempted and failed | Blocked before plan execution |
+|---|---:|---:|---:|---:|
+| 4.0-4.1 | 4 | 4 | 0 | 0 |
+| 5.0-5.0.7 | 21 | 0 | 8 | 13 |
+| 6.0 | 3 | 0 | 1 | 2 |
+| 6.1-7.0 | 30 | 30 | 0 | 0 |
+| **Total** | **58** | **34** | **9** | **15** |
+
+`Failed` means an execution API or controller was actually attempted and did
+not produce a successful process result. `Blocked` means the real project copy
+was staged and its PR #314 plan classification was validated, but plan
+execution was deliberately not attempted after the same engine-level gate had
+already been reproduced. A temporary harness bug initially labeled a 5.0.6
+`success=False` result as completed; the record and harness were corrected
+before deriving these totals.
+
+The version boundary observed on this host is:
+
+- RAS 4.0 and 4.1 execute through their exact COM controllers. Both steady and
+  unsteady outputs were read back through `RasControl`; the probes returned 30
+  and 21 result rows respectively for each version.
+- RAS 5.x command-line computation is not usable, while the registered 5.x
+  controllers fail or block during `Project_Open`, before plan dispatch. The
+  installed `RAS506` registration also resolves to the 5.0.5 executable, so it
+  cannot establish exact 5.0.6 controller attribution on this host.
+- RAS 6.0 has the same pre-dispatch automation boundary: command-line
+  computation stalls and `RAS60.Project_Open` blocks.
+- RAS 6.1 and newer execute successfully through `RasCmdr.compute_plan()`.
+  All 30 modern lanes produced fresh plan HDFs with verified completion.
+
+All 34 completed lanes have `process_success=True`, mechanically verified
+completion, a fresh hashed result artifact, unchanged plan classification, and
+no evidence conflicts. Thirty-two completed lanes have zero parsed errors and
+warnings. The steady and unsteady 1D RAS 6.1 lanes each retain one message:
+`WRITE ATTR ERROR: ERROR: Geometry/River Edge Lines not found in
+WriteAttributePreCheck`. Both computations still carry positive completion
+evidence. This is why message health remains separate from mechanical
+completion.
+
+The real transition runs also established an artifact-selection rule. When a
+plan HDF exists, it is the current result artifact even if the plan still
+declares an older `Program Version` and a legacy `.O##` file is present. The
+inspector therefore uses this deterministic order:
+
+1. existing plan HDF;
+2. otherwise, existing legacy `.O##` output; and
+3. only when neither exists, the plan declaration selects the expected path.
+
+The result's producer version remains separate from the plan's declared input
+version. A normal old-plan/new-producer transition is not an evidence conflict;
+disagreement between two observed producer channels still is. Artifact
+freshness remains an independent caller-supplied threshold and does not alter
+mechanical-completion evidence.
+
+One RAS 4.1 first-launch attempt encountered the optional example-project
+installation prompt. The watchdog now explicitly chooses `No`/`Cancel`/`Close`
+for that prompt and never installs examples as a side effect. The first attempt
+is archived; the repeat lane completed successfully.
+
+The 2D project copies contain 98 files totaling 354,028,433 bytes and executed
+successfully in every 6.1-7.0 lane. Their linked DSS assets existed, but were
+accepted with `execution_readiness=unknown` because this packet did not perform
+deep DSS coverage inspection. It therefore establishes execution and evidence
+behavior, not complete linked-asset or simulation-window coverage. That gap
+remains assigned to the separate linked-asset research effort.
+
+After the artifact-selection correction, all successful outputs were inspected
+again offline without invoking HEC-RAS or COM. The refreshed records include
+the inspector source hash, result hashes, and worktree provenance. A final
+`RasControl.list_processes(show_all=True)` check found no remaining RAS
+processes.

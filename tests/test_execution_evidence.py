@@ -406,7 +406,7 @@ def test_bco_without_marker_does_not_contradict_hdf_completion(
     assert evidence.conflicts == ()
 
 
-def test_declared_and_observed_version_disagreement_is_retained(
+def test_declared_and_observed_version_transition_is_retained(
     tmp_path: Path,
 ) -> None:
     _, ras_object = _write_project(tmp_path / "versions", version="5.05")
@@ -421,7 +421,69 @@ def test_declared_and_observed_version_disagreement_is_retained(
     assert evidence.observations["producer_program_version"].value == (
         "HEC-RAS 5.0.6"
     )
-    assert "declared_producer_versions_disagree" in evidence.conflicts
+    assert evidence.conflicts == ()
+
+
+def test_existing_hdf_overrides_legacy_declared_result_family(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "legacy-plan-modern-result",
+        version="4.00",
+    )
+    (ras_object.project_folder / "Model.O01").write_bytes(
+        b"older legacy output"
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="Complete Process\n",
+        completion_attribute=True,
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+        result_modified_after=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+
+    artifact = evidence.observations["result_artifact_exists"]
+    assert artifact.value is True
+    assert artifact.source_locator == str(hdf_path)
+    assert "legacy output artifact also exists" in (artifact.detail or "")
+    assert evidence.observations[
+        "result_artifact_modified_after_threshold"
+    ].value is True
+    assert evidence.observations["completion_attribute"].value is True
+    assert evidence.observations["completion_message_hdf"].value is True
+    assert evidence.observations["producer_program_version"].value == (
+        "HEC-RAS 7.0"
+    )
+    assert evidence.mechanical_completion.value is True
+    assert evidence.conflicts == ()
+
+
+def test_existing_legacy_output_is_selected_when_hdf_is_absent(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "modern-plan-legacy-result",
+        version="6.60",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"legacy output retained after conversion")
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    artifact = evidence.observations["result_artifact_exists"]
+    assert artifact.value is True
+    assert artifact.source_locator == str(legacy_path)
+    assert evidence.observations[
+        "result_artifact_structural_state"
+    ].reason_code == "result_hdf_missing"
 
 
 def test_hdf_and_stored_producer_version_disagreement_is_retained(

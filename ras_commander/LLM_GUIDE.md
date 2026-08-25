@@ -67,6 +67,14 @@ wse = HdfResultsPlan.get_wse(hdf, time_index=-1)       # extract results
 it does not mean the messages are error-free or that the hydraulics are
 acceptable. Check the independent evidence observations.
 
+Result-artifact selection is artifact-first. An existing plan HDF takes
+precedence over an existing legacy `.O##` file; the plan's declared
+`Program Version` chooses the expected result family only when neither artifact
+exists. The declaration describes input provenance and may legitimately differ
+from the producer version stored in a newer result. Use
+`result_modified_after=` when execution-time freshness must be checked; that
+observation is independent from mechanical completion.
+
 ## In-package helpers
 
 ```python
