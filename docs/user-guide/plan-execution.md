@@ -246,7 +246,8 @@ When both `.p##.hdf` and `.O##` exist, the inspector applies stricter rules:
 
 | Plan declaration | Selection |
 |---|---|
-| HEC-RAS 5 or newer | Raise `ResultArtifactAmbiguityError`. |
+| HEC-RAS 5 or newer, `.O##` timestamp after HDF | Raise `ResultArtifactAmbiguityError`. |
+| HEC-RAS 5 or newer, `.O##` timestamp equal to or before HDF | Select HDF, warn, and record `multiple_result_formats_present`. Legacy output does not contribute to the selected evidence. |
 | HEC-RAS 4 or older, HDF timestamp after `.O##` | Raise `ResultArtifactAmbiguityError`. The timestamp is only a conservative ambiguity trigger, not proof of run chronology. |
 | HEC-RAS 4 or older, HDF timestamp equal to or before `.O##` | Select `.O##`, warn, and record `multiple_result_formats_present`. HDF completion and runtime do not contribute to the selected evidence. |
 | Missing or unreadable declaration | Raise `ResultArtifactAmbiguityError`. |
@@ -254,18 +255,33 @@ When both `.p##.hdf` and `.O##` exist, the inspector applies stricter rules:
 Copied-folder timestamps can be misleading. The error therefore asks the user
 to resolve the formats rather than claiming which computation is newest.
 
-An actual ras-commander computation normalizes artifacts using the selected
-HEC-RAS engine, not the plan declaration. HEC-RAS 5+ runs preserve HDF and
+An actual ras-commander computation does not use those timestamps to decide
+what to remove. It normalizes artifacts using the selected HEC-RAS executable
+or controller, not the plan declaration: HEC-RAS 5+ runs preserve HDF and
 remove `.O##`; legacy runs preserve `.O##` and remove the plan HDF. Cleanup is
-performed immediately before a real run and again afterward because modern
-HEC-RAS 1D engines recreate `.O##` during computation. Skipped runs do not
-delete result artifacts.
+coupled to the real launch after skip decisions, plan preparation, callbacks,
+watchdog startup, and log creation have succeeded. It runs again after every
+launched attempt once solver completion or termination is confirmed, because
+modern HEC-RAS 1D engines recreate `.O##` during computation. If solver
+quiescence cannot be confirmed, the run fails and leaves the opposing artifact
+visible rather than racing an active writer. Remote PsExec staging is also
+retained when completion is unconfirmed. Skipped runs do not change plan bytes
+or delete result artifacts.
 
-Automatic cleanup fails closed unless ras-commander can resolve the actual
-configured engine version from `ras_version` or a versioned `ras_exe_path`.
-An unversioned `Ras.exe` path is not assumed to be modern, because that guess
-could permanently remove a valid legacy result. Supply an explicit version and
-retry.
+For command-line execution, a versioned `ras_exe_path` is authoritative and
+`ras_version` is the fallback for an unversioned executable name. If both are
+resolvable but imply different result families, automatic cleanup fails closed
+without deleting either family. `RasControl.run_plan()` instead follows the
+version of the selected COM controller. An unversioned `Ras.exe` path with no
+resolvable version is not assumed to be modern, because that guess could
+permanently remove a valid legacy result.
+
+This automatic normalization belongs to full plan-calculation APIs.
+`RasPreprocess.preprocess_plan()` and
+`GeomPreprocessor.run_geometry_preprocessor()` are preflight/preprocessing
+operations that attempt to stop before hydraulic computation; they do not
+delete either family of final results and must not be used to normalize an
+ambiguous project.
 
 To resolve an existing project manually, explicitly select the family to
 remove:

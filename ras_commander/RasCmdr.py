@@ -635,8 +635,10 @@ class RasCmdr:
             return False
 
     @staticmethod
-    def _rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path: Path) -> bool:
-        """Return True when a Windows RasUnsteady process still owns this plan tmp HDF."""
+    def _rasunsteady_process_running_for_tmp_hdf(
+        tmp_hdf_path: Path,
+    ) -> Optional[bool]:
+        """Return solver state: running, stopped, or unknown on query failure."""
         if os.name != "nt":
             return False
 
@@ -656,14 +658,66 @@ class RasCmdr:
                 text=True,
                 timeout=5,
             )
-            return result.returncode == 0 and bool(result.stdout.strip())
+            if result.returncode != 0:
+                logger.warning(
+                    "Could not establish RasUnsteady process state for %s: "
+                    "PowerShell query exited with code %s",
+                    tmp_hdf_path.name,
+                    result.returncode,
+                )
+                return None
+            return bool(result.stdout.strip())
         except Exception as exc:
             logger.debug(
                 "Could not query RasUnsteady process state for %s: %s",
                 tmp_hdf_path.name,
                 exc,
             )
-            return False
+            return None
+
+    @staticmethod
+    def _terminate_launched_process_tree(process: subprocess.Popen) -> None:
+        """Stop a launched command and its descendants before final cleanup."""
+        try:
+            import psutil
+
+            parent = psutil.Process(process.pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            _gone, alive = psutil.wait_procs(children, timeout=10)
+            if alive:
+                raise RuntimeError(
+                    "HEC-RAS child processes did not terminate: "
+                    f"{[child.pid for child in alive]}"
+                )
+            try:
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass
+            process.wait(timeout=10)
+            if process.poll() is None:
+                raise RuntimeError("HEC-RAS launcher did not terminate")
+        except Exception as exc:
+            logger.warning(
+                "Could not terminate the complete HEC-RAS process tree (%s); "
+                "falling back to the launcher process",
+                exc,
+            )
+            try:
+                process.kill()
+                process.wait(timeout=10)
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    "Could not confirm HEC-RAS process termination"
+                ) from fallback_exc
+            raise RuntimeError(
+                "HEC-RAS launcher stopped, but descendant termination could "
+                "not be confirmed"
+            ) from exc
 
     @staticmethod
     def _wait_for_async_plan_completion(
@@ -700,17 +754,19 @@ class RasCmdr:
             / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
         )
 
-        if RasCmdr._verify_completion(
+        verified = RasCmdr._verify_completion(
             hdf_path,
             check_errors=check_errors,
             modified_after=modified_after,
-        ):
-            return True
-
+        )
         active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
         partial_exists = tmp_hdf_path.exists()
-        if not active and not partial_exists:
+        if verified and active is False and not partial_exists:
+            return True
+        if active is False and not partial_exists:
             return None
+        if active is None and not partial_exists:
+            return False
 
         logger.debug(
             "Waiting for RasUnsteady to finish plan %s after Ras.exe returned",
@@ -720,29 +776,36 @@ class RasCmdr:
         observed_async = True
 
         while time.time() < deadline:
-            if RasCmdr._verify_completion(
+            verified = RasCmdr._verify_completion(
                 hdf_path,
                 check_errors=check_errors,
                 modified_after=modified_after,
-            ):
-                return True
-
+            )
             active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
             partial_exists = tmp_hdf_path.exists()
-            if not active and not partial_exists:
+            if verified and active is False and not partial_exists:
+                return True
+            if active is False and not partial_exists:
+                return False
+            if active is None and not partial_exists:
                 return False
 
-            if not active and partial_exists:
+            if active is False and partial_exists:
                 # Give HEC-RAS a short grace window to rename/close files after
                 # the solver process exits, then verify one final time.
                 time.sleep(min(poll_interval, 2.0))
-                if RasCmdr._verify_completion(
+                verified = RasCmdr._verify_completion(
                     hdf_path,
                     check_errors=check_errors,
                     modified_after=modified_after,
-                ):
+                )
+                active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+                    tmp_hdf_path
+                )
+                partial_exists = tmp_hdf_path.exists()
+                if verified and active is False and not partial_exists:
                     return True
-                if not RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path):
+                if active is False:
                     return False
 
             time.sleep(poll_interval)
@@ -1027,6 +1090,7 @@ class RasCmdr:
         _results_df_row = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
+        _execution_quiesced = False
         _execution_result_format = None
         _watchdog = None
         try:
@@ -1079,43 +1143,6 @@ class RasCmdr:
             # cleanup decision. An unresolved version fails closed and leaves
             # both result families untouched.
             _execution_result_format = infer_execution_result_format(compute_ras)
-
-            if use_optimal_hdf_settings or hdf_output_profile:
-                profile_to_apply = hdf_output_profile or hdf_settings_profile
-                variables_to_apply = hdf_additional_variables or hdf_output_variables
-                hdf_settings_success = RasPlan.use_optimal_hdf_settings(
-                    compute_plan_path,
-                    profile=profile_to_apply,
-                    additional_variables=variables_to_apply,
-                    ras_object=compute_ras
-                )
-                if hdf_settings_success:
-                    logger.info(
-                        f"Applied '{profile_to_apply}' HDF settings profile "
-                        f"to plan: {compute_plan_path.name}"
-                    )
-                else:
-                    logger.warning(
-                        f"Could not apply '{profile_to_apply}' HDF settings profile "
-                        f"to plan: {compute_plan_path.name}"
-                    )
-
-            if hdf_output_options:
-                hdf_options_success = RasPlan.set_hdf_output_options(
-                    compute_plan_path,
-                    ras_object=compute_ras,
-                    **hdf_output_options
-                )
-                if not hdf_options_success:
-                    logger.warning(f"Could not apply explicit HDF output options to {compute_plan_path.name}")
-
-            if hdf_output_variables and not (use_optimal_hdf_settings or hdf_output_profile):
-                RasPlan.set_hdf_output_variables(
-                    compute_plan_path,
-                    hdf_output_variables,
-                    enabled=True,
-                    ras_object=compute_ras
-                )
 
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:
@@ -1177,15 +1204,44 @@ class RasCmdr:
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
-            # The actual selected executable/controller, not the plan-file
-            # declaration, determines which result family this run will own.
-            # Remove the opposing family and stale messages only after all
-            # skip checks have decided that execution will occur.
-            prepare_plan_execution_artifacts(
-                plan_number,
-                output_format=_execution_result_format,
-                ras_object=compute_ras,
-            )
+            # Plan-file execution settings are mutations. Apply them only
+            # after every skip path has committed to an actual run.
+            if use_optimal_hdf_settings or hdf_output_profile:
+                profile_to_apply = hdf_output_profile or hdf_settings_profile
+                variables_to_apply = hdf_additional_variables or hdf_output_variables
+                hdf_settings_success = RasPlan.use_optimal_hdf_settings(
+                    compute_plan_path,
+                    profile=profile_to_apply,
+                    additional_variables=variables_to_apply,
+                    ras_object=compute_ras
+                )
+                if hdf_settings_success:
+                    logger.info(
+                        f"Applied '{profile_to_apply}' HDF settings profile "
+                        f"to plan: {compute_plan_path.name}"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not apply '{profile_to_apply}' HDF settings profile "
+                        f"to plan: {compute_plan_path.name}"
+                    )
+
+            if hdf_output_options:
+                hdf_options_success = RasPlan.set_hdf_output_options(
+                    compute_plan_path,
+                    ras_object=compute_ras,
+                    **hdf_output_options
+                )
+                if not hdf_options_success:
+                    logger.warning(f"Could not apply explicit HDF output options to {compute_plan_path.name}")
+
+            if hdf_output_variables and not (use_optimal_hdf_settings or hdf_output_profile):
+                RasPlan.set_hdf_output_variables(
+                    compute_plan_path,
+                    hdf_output_variables,
+                    enabled=True,
+                    ras_object=compute_ras
+                )
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
             # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
@@ -1284,7 +1340,6 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
-            _did_execute = True
             start_time = time.time()
             try:
                 if dialog_watchdog:
@@ -1300,6 +1355,14 @@ class RasCmdr:
                     # file and process.poll(); it never reads process.stdout, so
                     # nothing here depends on a pipe.
                     with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
+                        # Couple cleanup to the launch attempt: callbacks,
+                        # watchdog startup, and log creation have all succeeded.
+                        prepare_plan_execution_artifacts(
+                            plan_number,
+                            output_format=_execution_result_format,
+                            ras_object=compute_ras,
+                        )
+                        _did_execute = True
                         process = subprocess.Popen(
                             cmd,
                             stdout=_run_log_fh,
@@ -1307,15 +1370,54 @@ class RasCmdr:
                             cwd=str(compute_ras.project_folder),
                             shell=True
                         )
-                        if _watchdog:
-                            _watchdog.add_pid(process.pid)
+                        try:
+                            if _watchdog:
+                                _watchdog.add_pid(process.pid)
 
-                        # Monitor .bco file until process completes
-                        # (BcoMonitor will call on_exec_message callback as messages appear)
-                        bco_monitor.monitor_until_signal(process)
+                            # Monitor .bco file until process completes
+                            # (BcoMonitor will call on_exec_message callback as messages appear)
+                            bco_monitor.monitor_until_signal(process)
 
-                        # Wait for process to complete
-                        return_code = process.wait()
+                            # Wait for process to complete
+                            return_code = process.wait()
+                        except BaseException:
+                            if process.poll() is None:
+                                try:
+                                    RasCmdr._terminate_launched_process_tree(process)
+                                except Exception as termination_error:
+                                    logger.critical(
+                                        "Could not confirm termination of plan %s "
+                                        "after callback failure: %s",
+                                        plan_number,
+                                        termination_error,
+                                    )
+                                else:
+                                    _execution_quiesced = True
+                            elif _execution_result_format == "hdf":
+                                # The Ras.exe launcher may have exited while a
+                                # RasUnsteady child still owns the tmp HDF.
+                                _async_wait_result = RasCmdr._wait_for_async_plan_completion(
+                                    plan_number,
+                                    compute_ras,
+                                    check_errors=False,
+                                    modified_after=start_time,
+                                )
+                                _tmp_hdf_path = (
+                                    Path(compute_ras.project_folder)
+                                    / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
+                                )
+                                _execution_quiesced = (
+                                    _async_wait_result is not False
+                                    or (
+                                        RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+                                            _tmp_hdf_path
+                                        ) is False
+                                        and not _tmp_hdf_path.exists()
+                                    )
+                                )
+                            else:
+                                _execution_quiesced = True
+                            raise
 
                     # Check if subprocess succeeded
                     if return_code != 0:
@@ -1330,6 +1432,12 @@ class RasCmdr:
                     # exits -- the intermittent CLB-880 hang. A file handle has no
                     # EOF wait, so run() returns as soon as the process exits.
                     with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
+                        prepare_plan_execution_artifacts(
+                            plan_number,
+                            output_format=_execution_result_format,
+                            ras_object=compute_ras,
+                        )
+                        _did_execute = True
                         subprocess.run(
                             cmd,
                             check=True,
@@ -1355,6 +1463,22 @@ class RasCmdr:
                     if _execution_result_format == "hdf"
                     else None
                 )
+                if _execution_result_format == "hdf":
+                    _tmp_hdf_path = (
+                        Path(compute_ras.project_folder)
+                        / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
+                    )
+                    _execution_quiesced = (
+                        async_verified is not False
+                        or (
+                            RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+                                _tmp_hdf_path
+                            ) is False
+                            and not _tmp_hdf_path.exists()
+                        )
+                    )
+                else:
+                    _execution_quiesced = True
                 if async_verified is True:
                     logger.debug(
                         "Verified final HDF for plan %s after Ras.exe returned",
@@ -1420,6 +1544,22 @@ class RasCmdr:
                     if _execution_result_format == "hdf"
                     else None
                 )
+                if _execution_result_format == "hdf":
+                    _tmp_hdf_path = (
+                        Path(compute_ras.project_folder)
+                        / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
+                    )
+                    _execution_quiesced = (
+                        async_verified is not False
+                        or (
+                            RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+                                _tmp_hdf_path
+                            ) is False
+                            and not _tmp_hdf_path.exists()
+                        )
+                    )
+                else:
+                    _execution_quiesced = True
                 if async_verified is True:
                     logger.info(
                         "Ras.exe returned exit code %s for plan %s, but the final HDF verified after solver completion",
@@ -1482,6 +1622,7 @@ class RasCmdr:
 
             if (
                 _did_execute
+                and _execution_quiesced
                 and _execution_result_format is not None
                 and 'compute_ras' in locals()
             ):
@@ -1501,6 +1642,14 @@ class RasCmdr:
                         cleanup_error,
                     )
                     _success = False
+            elif _did_execute and not _execution_quiesced:
+                logger.critical(
+                    "Skipped final result normalization for plan %s because "
+                    "solver termination could not be confirmed; opposing "
+                    "artifacts were left visible rather than racing an active run.",
+                    plan_number,
+                )
+                _success = False
 
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
@@ -2593,12 +2742,6 @@ class RasCmdr:
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
 
-        prepare_plan_execution_artifacts(
-            plan_num_str,
-            output_format="hdf",
-            ras_object=ras_obj,
-        )
-
         # Set num_cores if specified
         if num_cores is not None:
             try:
@@ -2608,7 +2751,7 @@ class RasCmdr:
                 logger.error(f"Error setting number of cores: {e}")
 
         if run_via_wsl:
-            linux_result = RasCmdr._compute_plan_linux_via_wsl(
+            return RasCmdr._compute_plan_linux_via_wsl(
                 ras_exe=str(ras_exe),
                 ras_exe_dir=ras_exe_dir_posix,
                 plan_number=plan_num_str,
@@ -2622,12 +2765,6 @@ class RasCmdr:
                 retry_delay_sec=retry_delay_sec,
                 ras_obj=ras_obj,
             )
-            finalize_plan_execution_artifacts(
-                plan_num_str,
-                output_format="hdf",
-                ras_object=ras_obj,
-            )
-            return linux_result
 
         # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
         #   5.0.7:     libs live alongside the binary in bin_ras/
@@ -2688,6 +2825,8 @@ class RasCmdr:
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"
             success = False
             err_msg = ""
+            attempt_launched = False
+            proc = None
 
             try:
                 start_time = time.time()
@@ -2699,6 +2838,13 @@ class RasCmdr:
                 else:
                     ras_args = [str(tmp_hdf), f"x{geom_num}"]
                 with open(log_path, "w") as log_fh:
+                    # Reassert modern result ownership immediately before
+                    # every solver attempt, after log creation succeeds.
+                    prepare_plan_execution_artifacts(
+                        plan_num_str,
+                        output_format="hdf",
+                        ras_object=ras_obj,
+                    )
                     proc = subprocess.Popen(
                         [str(ras_exe), *ras_args],
                         stdout=log_fh,
@@ -2706,6 +2852,7 @@ class RasCmdr:
                         env=env,
                         cwd=str(project_dir),
                     )
+                    attempt_launched = True
                 try:
                     rc = proc.wait(timeout=timeout_sec)
                     end_time = time.time()
@@ -2747,6 +2894,16 @@ class RasCmdr:
                 raise RuntimeError(
                     f"RasUnsteady binary not found at {ras_exe}."
                 )
+            finally:
+                if attempt_launched:
+                    if proc is not None and proc.poll() is None:
+                        proc.kill()
+                        proc.wait()
+                    finalize_plan_execution_artifacts(
+                        plan_num_str,
+                        output_format="hdf",
+                        ras_object=ras_obj,
+                    )
 
             if success:
                 # Move results from .tmp.hdf → .hdf
@@ -2754,12 +2911,6 @@ class RasCmdr:
                     plan_hdf = RasCmdr._get_hdf_path(plan_num_str, ras_obj)
                     shutil.move(str(tmp_hdf), str(plan_hdf))
                     logger.debug(f"Renamed {tmp_hdf.name} → {plan_hdf.name}")
-
-                finalize_plan_execution_artifacts(
-                    plan_num_str,
-                    output_format="hdf",
-                    ras_object=ras_obj,
-                )
 
                 # Clean up io.* symlinks
                 for link in io_links:
@@ -3225,6 +3376,14 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             if io_tmp_hdf.exists():
                 io_tmp_hdf.unlink()
 
+            # A failed prior attempt may have recreated an opposing result.
+            # Normalize again immediately before each WSL solver launch.
+            prepare_plan_execution_artifacts(
+                plan_number,
+                output_format="hdf",
+                ras_object=ras_obj,
+            )
+
             proc = subprocess.Popen(
                 ["wsl", "bash", "-lc", script],
                 stdout=subprocess.PIPE,
@@ -3240,8 +3399,20 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                 logger.error(f"Plan {plan_number}: WSL RasUnsteady timeout after {timeout_sec}s")
                 stdout, stderr = "", f"Timeout after {timeout_sec}s"
                 rc = -1
+            except BaseException:
+                proc.kill()
+                proc.communicate()
+                raise
             else:
                 rc = proc.returncode
+            finally:
+                # Normalize immediately after every launched solver attempt,
+                # before validation, promotion, retry delay, or return.
+                finalize_plan_execution_artifacts(
+                    plan_number,
+                    output_format="hdf",
+                    ras_object=ras_obj,
+                )
 
             if rc == 0:
                 ok, reason = RasCmdr._validate_linux_solve(

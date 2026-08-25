@@ -69,20 +69,27 @@ acceptable. Check the independent evidence observations.
 
 Result-artifact selection reads `Program Version=` from the current plan-file
 bytes. A sole HDF or `.O##` is readable even when the declaration differs, with
-`unexpected_result_format` recorded. If both exist, a HEC-RAS 5+ declaration
-raises `ResultArtifactAmbiguityError`; a legacy declaration selects `.O##` only
-when the HDF filesystem timestamp is not later, otherwise it also raises. This
+`unexpected_result_format` recorded. If both exist, the declared family is
+selected only when its filesystem timestamp is equal to or later than the
+opposing family; otherwise `ResultArtifactAmbiguityError` is raised. This
 timestamp is a conservative ambiguity trigger, not proof of chronology.
 
-Rerunning through ras-commander normalizes outputs according to the actual
-selected engine. Modern runs preserve HDF and remove `.O##`; legacy runs do the
-reverse. Cleanup occurs before and after actual execution because modern 1D
-engines recreate `.O##`. Skipped runs do not delete result artifacts. Existing ambiguity
-can also be resolved explicitly with
+Rerunning through ras-commander ignores artifact timestamps for cleanup and
+normalizes outputs according to the actual selected engine. Modern runs
+preserve HDF and remove `.O##`; legacy runs do the reverse. Cleanup occurs
+at the launch boundary and after every launched attempt whose solver completion
+or termination is confirmed, because modern 1D engines recreate `.O##`. An
+unconfirmed active solver fails without final normalization. Skipped runs do
+not change plan bytes or delete result artifacts. A versioned command-line
+executable is authoritative; a
+metadata/executable result-family mismatch fails closed. Existing ambiguity can
+also be resolved explicitly with
 `RasCmdr.remove_plan_execution_artifacts(..., result_format="legacy")` (or
 `"hdf"`); removal is permanent and exactly plan-scoped.
 Automatic cleanup requires an explicitly resolvable engine version and fails
 without deleting either family when given only an unversioned `Ras.exe` path.
+Preprocessing-only APIs do not delete final result families and are not an
+ambiguity-normalization workflow.
 
 ## In-package helpers
 

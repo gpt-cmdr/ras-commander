@@ -469,6 +469,8 @@ def execute_psexec_plan(
     worker_temp_folder = Path(worker.share_path) / f"{project_name}_{plan_number}_SW{sub_worker_id}_{uuid.uuid4().hex[:8]}"
     worker_temp_folder.mkdir(parents=True, exist_ok=True)
     logger.debug(f"Created worker folder: {worker_temp_folder}")
+    psexec_launch_attempted = False
+    solver_completion_confirmed = False
 
     try:
         # Step 2: Copy project to worker folder
@@ -491,6 +493,9 @@ def execute_psexec_plan(
             worker_artifacts.hdf
             if output_format == "hdf"
             else worker_artifacts.legacy_output
+        )
+        tmp_result_file = (
+            worker_project_path / f"{project_name}.p{plan_number}.tmp.hdf"
         )
 
         prj_file = list(worker_project_path.glob("*.prj"))[0]
@@ -595,70 +600,101 @@ def execute_psexec_plan(
             cmd_display,
         )
 
-        # Step 5: Execute PsExec command
-        result = subprocess.run(
-            psexec_cmd,
-            capture_output=True,
-            text=True,
-            timeout=worker.max_runtime_minutes * 60
+        # Step 5: Execute PsExec command. Ras.exe can return before its solver
+        # child has finished, so normalization belongs after the result wait
+        # and verification phase, not merely after the PsExec parent returns.
+        result_complete = False
+        execution_deadline = (
+            time.monotonic() + worker.max_runtime_minutes * 60
         )
-
-        if result.returncode != 0:
-            logger.error(f"PsExec failed with return code {result.returncode}")
-            logger.error(f"PsExec stdout: {result.stdout}")
-            logger.error(f"PsExec stderr: {result.stderr}")
-            return False
-
-        # Step 6: Check for the result family owned by the selected engine.
-        max_wait = 60
-        wait_interval = 5
-        elapsed = 0
-
-        while not result_file.exists() and elapsed < max_wait:
-            time.sleep(wait_interval)
-            elapsed += wait_interval
-            logger.debug(
-                "Waiting for %s result... (%ss)", output_format, elapsed
+        try:
+            psexec_launch_attempted = True
+            result = subprocess.run(
+                psexec_cmd,
+                capture_output=True,
+                text=True,
+                timeout=worker.max_runtime_minutes * 60
             )
-
-        if not result_file.exists():
-            logger.error("%s result not created: %s", output_format, result_file)
-            logger.error(f"PsExec stdout: {result.stdout}")
-            logger.error(f"PsExec stderr: {result.stderr}")
-            logger.error(
-                "Ensure session_id is set correctly (typically 2) and remote machine is configured. "
-                "See: https://rascommander.info/ras/user-guide/remote-execution/"
-            )
-            return False
-
-        if output_format == "hdf" and not RasCurrency.check_plan_hdf_complete(
-            result_file
-        ):
-            logger.error(f"HDF file is incomplete: {result_file}")
-            return False
-        if output_format == "legacy":
-            from ..RasCmdr import RasCmdr
-
-            if not RasCmdr._verify_legacy_result(
-                plan_number,
-                ras_obj,
-                check_errors=True,
-                project_folder=worker_project_path,
-                project_name=project_name,
-            ):
-                logger.error(
-                    "Legacy output lacks exact completion evidence: %s",
-                    result_file,
-                )
+            if result.returncode != 0:
+                logger.error(f"PsExec failed with return code {result.returncode}")
+                logger.error(f"PsExec stdout: {result.stdout}")
+                logger.error(f"PsExec stderr: {result.stderr}")
                 return False
 
-        finalize_plan_execution_artifacts(
-            plan_number,
-            output_format=output_format,
-            ras_object=ras_obj,
-            project_folder=worker_project_path,
-            project_name=project_name,
-        )
+            # Step 6: Wait for a complete result, not only the first appearance
+            # of its pathname. This covers a solver child that outlives Ras.exe.
+            def _result_is_complete() -> bool:
+                if not result_file.is_file():
+                    return False
+                if output_format == "hdf":
+                    return (
+                        RasCurrency.check_plan_hdf_complete(result_file)
+                        and not tmp_result_file.exists()
+                    )
+
+                from ..RasCmdr import RasCmdr
+
+                return RasCmdr._verify_legacy_result(
+                    plan_number,
+                    ras_obj,
+                    check_errors=True,
+                    project_folder=worker_project_path,
+                    project_name=project_name,
+                )
+
+            wait_interval = 5
+            wait_started = time.monotonic()
+            result_complete = _result_is_complete()
+            while not result_complete and time.monotonic() < execution_deadline:
+                remaining = execution_deadline - time.monotonic()
+                time.sleep(min(wait_interval, max(0.0, remaining)))
+                elapsed = time.monotonic() - wait_started
+                logger.debug(
+                    "Waiting for complete %s result... (%.0fs)",
+                    output_format,
+                    elapsed,
+                )
+                result_complete = _result_is_complete()
+
+            if not result_complete:
+                if result_file.is_file():
+                    logger.error(
+                        "%s result did not become complete: %s",
+                        output_format,
+                        result_file,
+                    )
+                else:
+                    logger.error(
+                        "%s result not created: %s",
+                        output_format,
+                        result_file,
+                    )
+                logger.error(f"PsExec stdout: {result.stdout}")
+                logger.error(f"PsExec stderr: {result.stderr}")
+                logger.error(
+                    "Ensure session_id is set correctly (typically 2) and remote machine is configured. "
+                    "See: https://rascommander.info/ras/user-guide/remote-execution/"
+                )
+                return False
+            solver_completion_confirmed = True
+        finally:
+            if result_complete:
+                # Run only after result waiting/verification confirms the
+                # asynchronous solver reached a completed output state.
+                finalize_plan_execution_artifacts(
+                    plan_number,
+                    output_format=output_format,
+                    ras_object=ras_obj,
+                    project_folder=worker_project_path,
+                    project_name=project_name,
+                )
+            else:
+                logger.error(
+                    "PsExec solver completion was not confirmed for plan %s; "
+                    "leaving the staged project and opposing artifacts intact "
+                    "to avoid racing an active remote calculation.",
+                    plan_number,
+                )
 
         logger.debug(
             "%s result created successfully for plan %s: %s",
@@ -710,7 +746,9 @@ def execute_psexec_plan(
 
     except Exception as e:
         logger.error(f"Error in PsExec execution: {e}")
-        if autoclean:
+        if autoclean and (
+            not psexec_launch_attempted or solver_completion_confirmed
+        ):
             try:
                 if worker_temp_folder.exists():
                     shutil.rmtree(worker_temp_folder, ignore_errors=True)
@@ -718,7 +756,8 @@ def execute_psexec_plan(
                 pass
         else:
             logger.info(
-                "Preserving PsExec worker folder for plan %s for debugging; "
+                "Preserving PsExec worker folder for plan %s because solver "
+                "completion was not confirmed or debugging was requested; "
                 "enable DEBUG logging for the path",
                 plan_number,
             )

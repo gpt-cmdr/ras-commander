@@ -149,6 +149,11 @@ class RasPreprocess:
         plan_file = project_folder / f"{project_name}.p{plan_num}"
         prj_file = project_folder / f"{project_name}.prj"
 
+        hdf_state_before = None
+        if hdf_file.is_file():
+            hdf_stat = hdf_file.stat()
+            hdf_state_before = (hdf_stat.st_size, hdf_stat.st_mtime_ns)
+
         # Validate plan file exists
         if not plan_file.exists():
             return PreprocessResult(
@@ -220,8 +225,18 @@ class RasPreprocess:
         else:
             logger.warning(f"Process exited with code {process.returncode} before signal detected")
 
-        # If process completed fully and .hdf exists but no .tmp.hdf, copy it
-        if not tmp_hdf.exists() and hdf_file.exists() and hdf_file.stat().st_size > 0:
+        # If the process completed fully and wrote a new/changed final HDF but
+        # no .tmp.hdf, use that fresh file as the Linux preprocessing input.
+        # Never mistake an unchanged pre-existing final result for new output.
+        hdf_state_after = None
+        if hdf_file.is_file():
+            hdf_stat = hdf_file.stat()
+            hdf_state_after = (hdf_stat.st_size, hdf_stat.st_mtime_ns)
+        if (
+            not tmp_hdf.exists()
+            and hdf_state_after is not None
+            and hdf_state_after != hdf_state_before
+        ):
             logger.warning(
                 "Full simulation completed before early termination; copying %s to %s",
                 hdf_file.name,
@@ -417,7 +432,8 @@ class RasPreprocess:
         """
         Delete stale preprocessing files to force regeneration.
 
-        Removes .tmp.hdf, .hdf, .b##, .x##, and .bco## files.
+        Removes .tmp.hdf, .b##, .x##, and .bco## files. Final plan HDF and
+        legacy .O## results are deliberately preserved.
 
         Args:
             project_folder: Path to the project folder.
@@ -426,7 +442,6 @@ class RasPreprocess:
             geom_num: Geometry number (e.g., "04").
         """
         patterns = [
-            f"{project_name}.p{plan_num}.hdf",
             f"{project_name}.p{plan_num}.tmp.hdf",
             f"{project_name}.b{plan_num}",
             f"{project_name}.x{geom_num}",

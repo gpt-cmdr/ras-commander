@@ -212,17 +212,19 @@ def execute_local_plan(
             logger.error(f"No .prj file found in {worker_project_path}")
             return False
 
-        # Get version from original ras object
-        ras_version = getattr(ras_obj, "ras_version", None) or getattr(
+        # The worker-selected executable is authoritative for the staged run.
+        # Fall back to source-project configuration only when no worker path
+        # was supplied.
+        execution_engine = getattr(worker, "ras_exe_path", None) or getattr(
             ras_obj, "ras_exe_path", None
-        )
-        if not ras_version:
+        ) or getattr(ras_obj, "ras_version", None)
+        if not execution_engine:
             raise ValueError(
                 "Local worker requires an explicit HEC-RAS version or executable"
             )
         init_ras_project(
             str(worker_project_path),
-            ras_version,
+            execution_engine,
             ras_object=temp_ras,
             hide_intro=True,
         )

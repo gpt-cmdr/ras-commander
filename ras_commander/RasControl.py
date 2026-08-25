@@ -911,13 +911,6 @@ class RasControl:
                 "exactly plan-scoped."
             )
 
-        # Enable Write Detailed= 1 to ensure .comp_msgs.txt is written
-        # This is critical for results_df fallback on all HEC-RAS versions
-        from .RasBco import BcoMonitor
-        plan_file = info.project_path.parent / f"{info.project_path.stem}.p{info.plan_number}"
-        BcoMonitor.enable_detailed_logging(plan_file)
-        logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
-
         def _set_current_plan(com_rc) -> None:
             if info.plan_name:
                 logger.debug(f"Setting current plan to: {info.plan_name}")
@@ -981,13 +974,17 @@ class RasControl:
                 logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
                 logger.warning("Proceeding with computation...")
 
-        prepare_plan_execution_artifacts(
-            info.plan_number,
-            output_format=execution_result_format,
-            ras_object=_ras_obj,
-        )
+        # This plan-file mutation belongs to execution, not inspection. Keep
+        # the skip path byte-for-byte read-only.
+        from .RasBco import BcoMonitor
+        plan_file = info.project_path.parent / f"{info.project_path.stem}.p{info.plan_number}"
+        BcoMonitor.enable_detailed_logging(plan_file)
+        logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
+
+        calculation_attempted = False
 
         def _run_operation(com_rc):
+            nonlocal calculation_attempted
             watchdog_pid = 0
 
             # Set current plan if we have plan_name (using plan number)
@@ -998,6 +995,15 @@ class RasControl:
 
             # Start computation (returns immediately - ASYNCHRONOUS!)
             logger.info("Starting computation...")
+            # The selected controller version owns the output family. Couple
+            # cleanup to Compute_CurrentPlan so COM activation/setup failures
+            # leave existing final results untouched.
+            prepare_plan_execution_artifacts(
+                info.plan_number,
+                output_format=execution_result_format,
+                ras_object=_ras_obj,
+            )
+            calculation_attempted = True
             if norm_version.startswith('4') or norm_version.startswith('3'):
                 status, _, messages = com_rc.Compute_CurrentPlan(None, None)
             else:
@@ -1070,11 +1076,12 @@ class RasControl:
         finally:
             # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
             # the selected engine's output family after the controller closes.
-            finalize_plan_execution_artifacts(
-                info.plan_number,
-                output_format=execution_result_format,
-                ras_object=_ras_obj,
-            )
+            if calculation_attempted:
+                finalize_plan_execution_artifacts(
+                    info.plan_number,
+                    output_format=execution_result_format,
+                    ras_object=_ras_obj,
+                )
 
         # Wrap tuple result into RasControlResult with results_df_row
         from .ComputeResults import RasControlResult

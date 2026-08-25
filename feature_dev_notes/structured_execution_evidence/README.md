@@ -352,31 +352,41 @@ family differs from the declaration, with `unexpected_result_format` recorded;
 this preserves clean old-plan/new-engine transitions because HEC-RAS does not
 reliably rewrite the plan declaration. When both formats exist:
 
-1. a HEC-RAS 5+ declaration raises `ResultArtifactAmbiguityError`;
-2. a HEC-RAS 4-or-earlier declaration selects `.O##` and warns only when the
+1. a HEC-RAS 5+ declaration selects HDF and warns only when its modification
+   time is equal to or after the `.O##` time;
+2. a modern declaration with a later `.O##` timestamp raises
+   `ResultArtifactAmbiguityError`;
+3. a HEC-RAS 4-or-earlier declaration selects `.O##` and warns only when the
    HDF modification time is equal to or before the `.O##` time;
-3. a legacy declaration with a later HDF timestamp raises the same error; and
-4. an unresolved declaration with both formats raises the same error.
+4. a legacy declaration with a later HDF timestamp raises the same error; and
+5. an unresolved declaration with both formats raises the same error.
 
 Filesystem timestamps are a conservative ambiguity trigger, not proof of
 which computation is newer; copied folders can preserve or rewrite them. When
 legacy output is selected, HDF completion, runtime, producer, and message
 evidence cannot validate the legacy result.
 
-Compute cleanup follows the actual selected executable/controller, not the
-plan declaration. Modern runs remove `.O##` and stale message sidecars before
-launch and remove a recreated `.O##` after execution. Legacy runs remove the
-plan HDF and stale messages before launch and enforce the same result family
-afterward. Skipped computations do not delete result artifacts. Parallel, test-mode,
-local, PsExec, Docker, Linux/WSL, and remote-promotion paths apply the same
-plan-scoped rule. The public
+Compute cleanup does not use artifact timestamps. It follows the actual
+selected executable/controller, not the plan declaration. Modern runs remove
+`.O##` and stale message sidecars at the launch boundary and remove a recreated
+`.O##` after every launched attempt whose solver completion or termination is
+confirmed. Legacy runs remove the plan HDF and stale messages at the same
+boundary and enforce the same result family afterward. An unconfirmed active
+solver fails without final normalization, leaving possible conflicts visible.
+Skipped computations preserve both result artifacts and plan-file bytes.
+Parallel, test-mode, local, PsExec, Docker, Linux/WSL, and remote-promotion
+paths apply the same plan-scoped rule. The public
 `RasCmdr.remove_plan_execution_artifacts()` helper permanently removes an
 explicitly selected family from an exact allowlist and never includes geometry
 HDF, DSS, terrain, or `.p##.tmp.hdf` files.
 
-Cleanup is fail-closed: the selected executable/controller version must resolve
-before either result family is deleted. An unversioned `Ras.exe` path is not
-silently treated as modern. The public cleanup helper validates all exact
+Cleanup is fail-closed: a versioned command-line executable is authoritative,
+and a `ras_version`/executable mismatch across result families stops before
+either family is deleted. `RasControl` follows the selected controller version.
+An unversioned `Ras.exe` path is not silently treated as modern. Preprocessing-
+only APIs are deliberately excluded because they must not delete prior final
+results and are not an ambiguity-normalization workflow. The public cleanup
+helper validates all exact
 targets and their project containment before the first unlink; if the operating
 system fails during deletion, `PlanExecutionCleanupError` reports both the
 failed path and any partial removal. Public currency inspection uses the same
@@ -413,8 +423,8 @@ processes after the original matrix execution.
 ## Validation status and baseline test debt
 
 The focused evidence, artifact-cleanup, currency, controller, command-line,
-parallel/test-mode, local/PsExec/Docker, and remote-promotion suite passes:
-**188 passed**. The complete non-integration suite is not green: the final
+preprocessing, parallel/test-mode, local/PsExec/Docker, and remote-promotion suite passes:
+**198 passed, 2 skipped**. The complete non-integration suite is not green: the final
 rerun produced **2,299 passed, 40 skipped, 30 deselected, and 43 failed**. It
 reproduced the same 43 unrelated failure clusters recorded at the branch base;
 the increased pass count comes from the added regression coverage.

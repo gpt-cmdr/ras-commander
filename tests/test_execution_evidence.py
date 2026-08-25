@@ -521,22 +521,68 @@ def test_legacy_plan_selects_legacy_when_hdf_is_not_newer(
     assert evidence.mechanical_completion.value is True
 
 
-def test_modern_plan_with_both_formats_always_raises_ambiguity(
+def test_modern_plan_with_newer_legacy_output_raises_ambiguity(
     tmp_path: Path,
 ) -> None:
     _, ras_object = _write_project(tmp_path / "modern-both", version="6.60")
-    _write_hdf(
+    hdf_path = _write_hdf(
         ras_object.project_folder,
         file_version="HEC-RAS 6.6",
         messages="Complete Process\n",
     )
     legacy_path = ras_object.project_folder / "Model.O01"
     legacy_path.write_bytes(b"modern companion output")
+    legacy_stat = legacy_path.stat()
+    os.utime(
+        legacy_path,
+        ns=(legacy_stat.st_atime_ns, hdf_path.stat().st_mtime_ns + 1_000_000_000),
+    )
 
     with pytest.raises(ResultArtifactAmbiguityError) as caught:
         RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
 
-    assert caught.value.reason_code == "multiple_result_formats_modern_plan"
+    assert caught.value.reason_code == "legacy_output_timestamp_after_hdf"
+
+
+@pytest.mark.parametrize("hdf_offset_ns", [0, 1_000_000_000])
+def test_modern_plan_selects_hdf_when_legacy_output_is_not_newer(
+    tmp_path: Path,
+    hdf_offset_ns: int,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "modern-both-hdf-newer",
+        version="6.60",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"stale legacy output")
+    sidecar = ras_object.project_folder / "Model.p01.comp_msgs.txt"
+    sidecar.write_text(
+        "Complete Process\t1.0 sec\n",
+        encoding="ascii",
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 6.6",
+        messages="Complete Process\n",
+        completion_attribute=True,
+    )
+    legacy_stat = legacy_path.stat()
+    hdf_stat = hdf_path.stat()
+    os.utime(
+        hdf_path,
+        ns=(hdf_stat.st_atime_ns, legacy_stat.st_mtime_ns + hdf_offset_ns),
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    artifact = evidence.observations["result_artifact_exists"]
+    assert artifact.source_locator == str(hdf_path)
+    assert "multiple_result_formats_present" in evidence.conflicts
+    assert evidence.observations["completion_message_hdf"].value is True
+    assert evidence.mechanical_completion.value is True
 
 
 def test_existing_legacy_output_is_selected_when_hdf_is_absent(
@@ -668,18 +714,24 @@ def test_current_plan_file_version_overrides_stale_plan_dataframe(
         ),
         encoding="ascii",
     )
-    _write_hdf(
+    hdf_path = _write_hdf(
         ras_object.project_folder,
         file_version="HEC-RAS 6.6",
         messages="Complete Process\n",
     )
-    (ras_object.project_folder / "Model.O01").write_bytes(b"legacy")
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"legacy")
+    legacy_stat = legacy_path.stat()
+    os.utime(
+        legacy_path,
+        ns=(legacy_stat.st_atime_ns, hdf_path.stat().st_mtime_ns + 1_000_000_000),
+    )
 
     with pytest.raises(ResultArtifactAmbiguityError) as caught:
         RasCmdr.inspect_execution_evidence("01", ras_object=ras_object)
 
     assert caught.value.declared_program_version == "6.60"
-    assert caught.value.reason_code == "multiple_result_formats_modern_plan"
+    assert caught.value.reason_code == "legacy_output_timestamp_after_hdf"
 
 
 def test_public_cleanup_removes_only_requested_plan_artifacts(

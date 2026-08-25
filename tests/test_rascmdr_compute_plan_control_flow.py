@@ -770,6 +770,64 @@ def test_verify_completion_rejects_hdf_older_than_execution(tmp_path):
     ) is False
 
 
+def test_async_wait_does_not_finalize_while_completed_hdf_has_active_solver(
+    monkeypatch,
+    tmp_path,
+):
+    tmp_hdf = tmp_path / "TestProject.p01.tmp.hdf"
+    tmp_hdf.write_bytes(b"active partial")
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name="TestProject",
+    )
+    active_checks = []
+
+    def solver_active(_path):
+        active_checks.append(True)
+        if len(active_checks) == 1:
+            return True
+        tmp_hdf.unlink()
+        return False
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(lambda *_args, **_kwargs: tmp_path / "TestProject.p01.hdf"),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_completion",
+        staticmethod(lambda *_args, **_kwargs: True),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(solver_active),
+    )
+    monkeypatch.setattr(rascmdr_module.time, "sleep", lambda *_args: None)
+
+    assert RasCmdr._wait_for_async_plan_completion(
+        "01",
+        ras_obj,
+        poll_interval=0,
+        timeout_seconds=1,
+    ) is True
+    assert len(active_checks) == 2
+
+
+def test_process_query_failure_returns_unknown(monkeypatch, tmp_path):
+    monkeypatch.setattr(rascmdr_module, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout=""),
+    )
+
+    assert RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+        tmp_path / "TestProject.p01.tmp.hdf"
+    ) is None
+
+
 def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
     monkeypatch,
     tmp_path,
@@ -938,7 +996,10 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
         dos2unix=False,
         retry=False,
         retry_delay_sec=0,
-        ras_obj=SimpleNamespace(),
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
     )
 
     assert result.success is False
@@ -955,6 +1016,66 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
     )
     assert run_calls[0][0] == ["wsl", "bash", "-lc", expected_cleanup]
     assert run_calls[0][1]["encoding"] == "utf-8"
+
+
+def test_wsl_linux_retry_normalizes_opposing_result_after_each_attempt(
+    monkeypatch,
+    tmp_path,
+):
+    legacy = tmp_path / "Demo.O01"
+    launches = []
+
+    class FakePopen:
+        returncode = 1
+
+        def __init__(self, _args, **_kwargs):
+            assert not legacy.exists()
+            launches.append(len(launches) + 1)
+
+        def communicate(self, timeout=None):
+            legacy.write_bytes(b"recreated by failed modern attempt")
+            return "", "ras failed"
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+        timeout_sec=30,
+        dos2unix=False,
+        retry=True,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    assert result.success is False
+    assert launches == [1, 2]
+    assert not legacy.exists()
 
 
 def test_compute_plan_linux_wsl_uses_canonical_layout_without_c_file(
@@ -1012,6 +1133,60 @@ def test_compute_plan_linux_wsl_uses_canonical_layout_without_c_file(
     assert captured["geom_num"] == "01"
     assert captured["tmp_hdf"] == tmp_path / f"{project_name}.p01.tmp.hdf"
     assert not (tmp_path / f"{project_name}.c01").exists()
+
+
+def test_compute_plan_linux_wsl_preflight_failure_preserves_legacy_result(
+    monkeypatch,
+    tmp_path,
+):
+    project_name = "Demo"
+    plan_path = tmp_path / f"{project_name}.p01"
+    plan_path.write_text("Geom File=g01\n", encoding="utf-8")
+    (tmp_path / f"{project_name}.p01.tmp.hdf").write_bytes(b"tmp")
+    (tmp_path / f"{project_name}.b01").write_bytes(b"boundary")
+    (tmp_path / f"{project_name}.x01").write_bytes(b"geometry")
+    legacy = tmp_path / f"{project_name}.O01"
+    legacy.write_bytes(b"existing legacy result")
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name=project_name,
+        check_initialized=lambda: None,
+    )
+
+    monkeypatch.setattr(rascmdr_module, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_compute_plan_linux_via_wsl",
+        staticmethod(
+            lambda **_kwargs: (_ for _ in ()).throw(
+                RuntimeError("WSL path conversion failed")
+            )
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="WSL path conversion failed"):
+        RasCmdr.compute_plan_linux(
+            "01",
+            ras_exe_dir="/mnt/c/HEC-RAS/7.0.1/Linux/Linux",
+            ras_object=ras_obj,
+            retry=False,
+        )
+
+    assert legacy.read_bytes() == b"existing legacy result"
 
 
 def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
@@ -1078,7 +1253,10 @@ def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
         dos2unix=False,
         retry=False,
         retry_delay_sec=0,
-        ras_obj=SimpleNamespace(),
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
     )
 
     assert result.success is False

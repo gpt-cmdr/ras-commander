@@ -235,9 +235,9 @@ def resolve_plan_result_artifact(
 ) -> ResultArtifactResolution:
     """Select a result artifact using the current plan-file declaration.
 
-    File timestamps are consulted only for the narrowly defined legacy-plan
-    ambiguity rule.  They are a conservative error trigger, not proof of run
-    chronology.
+    File timestamps are consulted only when both result families exist. They
+    are a conservative error trigger, not proof of run chronology. Actual
+    execution cleanup is governed separately by the selected engine version.
     """
     paths = get_plan_result_artifact_paths(plan_number, ras_object=ras_object)
     if not paths.plan_file.is_file():
@@ -269,13 +269,38 @@ def resolve_plan_result_artifact(
             ) from exc
 
         if expected == "hdf":
-            raise ResultArtifactAmbiguityError(
+            if legacy_mtime_ns > hdf_mtime_ns:
+                raise ResultArtifactAmbiguityError(
+                    paths=paths,
+                    declared_program_version=declared,
+                    expected_format=expected,
+                    reason_code="legacy_output_timestamp_after_hdf",
+                    hdf_mtime_ns=hdf_mtime_ns,
+                    legacy_mtime_ns=legacy_mtime_ns,
+                    detail=(
+                        "The timestamp comparison is conservative because "
+                        "copied folders can preserve or rewrite filesystem "
+                        "times. Re-run with the selected HEC-RAS version or "
+                        "remove one result family explicitly."
+                    ),
+                )
+            conflicts.append("multiple_result_formats_present")
+            detail = (
+                f"Selected {paths.hdf.name} because the plan declares "
+                f"HEC-RAS {declared} and its filesystem modification time "
+                f"is equal to or later than {paths.legacy_output.name}; "
+                "ignored the coexisting legacy result."
+            )
+            logger.warning("%s", detail)
+            return ResultArtifactResolution(
                 paths=paths,
                 declared_program_version=declared,
                 expected_format=expected,
-                reason_code="multiple_result_formats_modern_plan",
-                hdf_mtime_ns=hdf_mtime_ns,
-                legacy_mtime_ns=legacy_mtime_ns,
+                selected_format="hdf",
+                selected_path=paths.hdf,
+                selected_exists=True,
+                conflicts=tuple(conflicts),
+                detail=detail,
             )
         if expected is None:
             raise ResultArtifactAmbiguityError(
@@ -302,7 +327,9 @@ def resolve_plan_result_artifact(
         conflicts.append("multiple_result_formats_present")
         detail = (
             f"Selected {paths.legacy_output.name} because the plan declares "
-            f"HEC-RAS {declared}; ignored coexisting {paths.hdf.name}."
+            f"HEC-RAS {declared} and its filesystem modification time is "
+            f"equal to or later than {paths.hdf.name}; ignored the "
+            "coexisting HDF result."
         )
         logger.warning("%s", detail)
         return ResultArtifactResolution(
@@ -448,17 +475,47 @@ def infer_execution_result_format(ras_object: RasPrj) -> ResultFormat:
     permanent deletion of the opposing result family before computation.
     """
     configured_version = getattr(ras_object, "ras_version", None)
-    major = program_version_major(configured_version)
-    if major is not None:
-        return "legacy" if major < 5 else "hdf"
-
+    configured_major = program_version_major(configured_version)
     executable = getattr(ras_object, "ras_exe_path", None)
+    executable_major = None
     if executable:
         path = Path(str(executable))
         for part in reversed(path.parts[:-1]):
-            major = program_version_major(part)
-            if major is not None:
-                return "legacy" if major < 5 else "hdf"
+            executable_major = program_version_major(part)
+            if executable_major is not None:
+                break
+
+    configured_format = (
+        None
+        if configured_major is None
+        else ("legacy" if configured_major < 5 else "hdf")
+    )
+    executable_format = (
+        None
+        if executable_major is None
+        else ("legacy" if executable_major < 5 else "hdf")
+    )
+
+    if (
+        configured_format is not None
+        and executable_format is not None
+        and configured_format != executable_format
+    ):
+        raise ValueError(
+            "Configured HEC-RAS metadata disagrees with the selected "
+            f"executable: ras_version={configured_version!r} implies "
+            f"{configured_format} results, while ras_exe_path={str(executable)!r} "
+            f"implies {executable_format} results. Cleanup was not attempted; "
+            "reinitialize the project with the executable that will actually run."
+        )
+
+    # A versioned executable is the closest available description of the
+    # process that will actually be launched. Metadata is only a fallback for
+    # unversioned executable names such as ``Ras.exe``.
+    if executable_format is not None:
+        return executable_format
+    if configured_format is not None:
+        return configured_format
     raise ValueError(
         "Could not determine the HEC-RAS output format from ras_version or "
         "a versioned ras_exe_path. Cleanup was not attempted; initialize the "

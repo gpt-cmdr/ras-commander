@@ -63,7 +63,7 @@ def _patch_local_execution(monkeypatch):
         ras_object.project_folder = Path(project_path)
         ras_object.project_name = "TestProject"
         ras_object.ras_version = ras_version
-        ras_object.ras_exe_path = r"C:\HEC-RAS\6.6\Ras.exe"
+        ras_object.ras_exe_path = ras_version
         return ras_object
 
     def fake_compute_plan(plan_number, ras_object, **kwargs):
@@ -206,6 +206,36 @@ def test_execute_local_plan_geometry_copyback_can_be_disabled(monkeypatch, tmp_p
     )
 
     assert geometry_copy_calls == []
+
+
+def test_execute_local_plan_uses_worker_selected_executable(monkeypatch, tmp_path):
+    ras_obj = _seed_project(tmp_path / "project")
+    worker = _local_worker(tmp_path / "workers")
+    worker.ras_exe_path = r"C:\HEC-RAS\7.0\Ras.exe"
+    _patch_local_execution(monkeypatch)
+    rasprj_module = importlib.import_module("ras_commander.RasPrj")
+    selected_engines = []
+
+    def capture_init(project_path, execution_engine, ras_object=None, **kwargs):
+        selected_engines.append(execution_engine)
+        ras_object.project_folder = Path(project_path)
+        ras_object.project_name = "TestProject"
+        ras_object.ras_version = "7.0"
+        ras_object.ras_exe_path = execution_engine
+        return ras_object
+
+    monkeypatch.setattr(rasprj_module, "init_ras_project", capture_init)
+
+    assert local_worker_module.execute_local_plan(
+        worker=worker,
+        plan_number="07",
+        ras_obj=ras_obj,
+        num_cores=2,
+        clear_geompre=False,
+        force_rerun=True,
+    )
+
+    assert selected_engines == [worker.ras_exe_path]
 
 
 def test_execute_local_plan_does_not_publish_copied_stale_result(
