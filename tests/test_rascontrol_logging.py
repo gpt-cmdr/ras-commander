@@ -8,6 +8,20 @@ RasControl = rascontrol_module.RasControl
 ProjectInfo = rascontrol_module.ProjectInfo
 
 
+def test_registered_versions_use_their_exact_controllers():
+    assert RasControl.VERSION_MAP["4.0"] == "RAS400.HECRASController"
+    assert RasControl.VERSION_MAP["40"] == "RAS400.HECRASController"
+    assert RasControl.VERSION_MAP["4.1.0"] == "RAS41.HECRASController"
+    assert RasControl.VERSION_MAP["5.0"] == "RAS500.HECRASController"
+    assert RasControl.VERSION_MAP["50"] == "RAS500.HECRASController"
+    assert RasControl.VERSION_MAP["6.1"] == "RAS610.HECRASController"
+    assert RasControl.VERSION_MAP["61"] == "RAS610.HECRASController"
+    assert RasControl.VERSION_MAP["6.2"] == "RAS620.HECRASController"
+    assert RasControl.VERSION_MAP["62"] == "RAS620.HECRASController"
+    assert RasControl.VERSION_MAP["6.3"] == "RAS630.HECRASController"
+    assert RasControl.VERSION_MAP["63"] == "RAS630.HECRASController"
+
+
 def _messages(caplog, level):
     return [
         record.getMessage()

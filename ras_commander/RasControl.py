@@ -492,10 +492,10 @@ class RasControl:
         Accepts formats: "4.1", "41", "5.0.6", "506", "7.0", "66", etc.
     """
 
-    # Version mapping based on ACTUAL COM interfaces registered on system
-    # Only these COM interfaces exist: RAS41, RAS503, RAS505, RAS506, RAS507,
-    # RAS60, RAS631, RAS641, RAS65, RAS66, RAS67
-    # Other versions use nearest available fallback
+    # Version mapping based on HEC-RAS COM ProgIDs. Some releases do not
+    # register a distinct controller and therefore retain a documented nearest
+    # compatible fallback. HEC-RAS 4.0 does register RAS400 and must not be
+    # silently executed by the 4.1 controller.
     VERSION_MAP = {
         # HEC-RAS 3.x → Use 4.1 (3.x COM not registered)
         '3.0': 'RAS41.HECRASController',
@@ -510,16 +510,16 @@ class RasControl:
         '313': 'RAS41.HECRASController',
 
         # HEC-RAS 4.x
-        '4.0': 'RAS41.HECRASController',    # Use 4.1 (4.0 COM not registered)
-        '40': 'RAS41.HECRASController',
+        '4.0': 'RAS400.HECRASController',   # ✓ EXISTS
+        '40': 'RAS400.HECRASController',
         '4.1': 'RAS41.HECRASController',    # ✓ EXISTS
         '41': 'RAS41.HECRASController',
         '4.1.0': 'RAS41.HECRASController',
         '410': 'RAS41.HECRASController',
 
         # HEC-RAS 5.0.x
-        '5.0': 'RAS503.HECRASController',   # Use 5.0.3 (RAS50 COM not registered)
-        '50': 'RAS503.HECRASController',
+        '5.0': 'RAS500.HECRASController',   # ✓ EXISTS
+        '50': 'RAS500.HECRASController',
         '5.0.1': 'RAS501.HECRASController', # ✓ EXISTS
         '501': 'RAS501.HECRASController',
         '5.0.3': 'RAS503.HECRASController', # ✓ EXISTS
@@ -536,12 +536,12 @@ class RasControl:
         # HEC-RAS 6.x
         '6.0': 'RAS60.HECRASController',    # ✓ EXISTS
         '60': 'RAS60.HECRASController',
-        '6.1': 'RAS60.HECRASController',    # Use 6.0 (6.1 COM not registered)
-        '61': 'RAS60.HECRASController',
-        '6.2': 'RAS60.HECRASController',    # Use 6.0 (6.2 COM not registered)
-        '62': 'RAS60.HECRASController',
-        '6.3': 'RAS631.HECRASController',   # Use 6.3.1 (6.3 COM not registered)
-        '63': 'RAS631.HECRASController',
+        '6.1': 'RAS610.HECRASController',   # ✓ EXISTS
+        '61': 'RAS610.HECRASController',
+        '6.2': 'RAS620.HECRASController',   # ✓ EXISTS
+        '62': 'RAS620.HECRASController',
+        '6.3': 'RAS630.HECRASController',   # ✓ EXISTS
+        '63': 'RAS630.HECRASController',
         '6.3.1': 'RAS631.HECRASController', # ✓ EXISTS
         '631': 'RAS631.HECRASController',
         '6.4': 'RAS641.HECRASController',   # Use 6.4.1 (6.4 COM not registered)
