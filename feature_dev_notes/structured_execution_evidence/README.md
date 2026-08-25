@@ -367,3 +367,22 @@ again offline without invoking HEC-RAS or COM. The refreshed records include
 the inspector source hash, result hashes, and worktree provenance. A final
 `RasControl.list_processes(show_all=True)` check found no remaining RAS
 processes.
+
+## Validation status and baseline test debt
+
+The focused evidence, results-parser, controller, watchdog, and compute-control
+suite passes: **80 passed**. The complete non-integration suite is not green at
+the branch base: **2,272 passed, 40 skipped, 30 deselected, and 43 failed**.
+A fresh-process rerun of only the failing files produced 36 deterministic
+failures and 226 passes; seven failures were suite-order dependent.
+
+Nine representative failures spanning every major failure cluster were then
+run from a temporary detached worktree at the pre-change commit `c9311e3`.
+All nine failed there with the same symptoms, including citation/package
+version drift, stale logging expectations, an executed tutorial notebook,
+HRRR timing-fixture assumptions, Windows relative-path resolution, and the
+missing `RasUnsteady._clean_boundary_selector` helper referenced by the merged
+DSS-link selector tests. This establishes that those sampled failures predate
+the controller, watchdog, and artifact-selection commits. It does not make the
+branch globally green or waive the need to reconcile the broader baseline
+failures before merge.
