@@ -14,6 +14,7 @@ List of Functions:
 - identify_section() - Find section boundaries by keyword marker
 - extract_keyword_value() - Extract value following keyword
 - extract_comma_list() - Extract comma-separated list
+- extract_river_reach() - Parse modern and legacy 1D reach headers
 - create_backup() - Create .bak backup before modification
 - validate_river_reach_rs() - Validate river/reach/RS exists
 - get_geom_title() - Read the Geom Title from a geometry file
@@ -383,6 +384,32 @@ class GeomParser:
         values = [v.strip().strip('"\'') for v in value_str.split(',')]
 
         return values
+
+    @staticmethod
+    def extract_river_reach(line: str) -> Optional[Tuple[str, str]]:
+        """Parse modern and legacy 1D reach headers.
+
+        HEC-RAS 5+ writes ``River Reach=<river>,<reach>``. Older projects can
+        instead contain the single-name ``Reach=<name>`` form; when HEC-RAS
+        upgrades those projects it materializes that name as both River and
+        Reach. Mirror that vendor conversion so legacy projects classify as
+        1D before they are opened or mutated by HEC-RAS.
+
+        Returns:
+            ``(river, reach)`` for a recognized non-empty header, otherwise
+            ``None``.
+        """
+        stripped = line.strip()
+        if stripped.startswith("River Reach="):
+            values = GeomParser.extract_comma_list(stripped, "River Reach")
+            if len(values) >= 2 and values[0] and values[1]:
+                return values[0], values[1]
+            return None
+        if stripped.startswith("Reach="):
+            name = GeomParser.extract_keyword_value(stripped, "Reach").strip()
+            if name:
+                return name, name
+        return None
 
     @staticmethod
     @log_call

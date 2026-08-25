@@ -2120,13 +2120,11 @@ class GeomCrossSection:
             while i < len(lines):
                 line = lines[i].strip()
 
-                # Track current river/reach
-                if line.startswith("River Reach="):
-                    values = GeomParser.extract_comma_list(lines[i], "River Reach")
-                    if len(values) >= 2:
-                        current_river = values[0]
-                        current_reach = values[1]
-                        logger.debug(f"Parsing {current_river} / {current_reach}")
+                # Track current river/reach, including legacy ``Reach=`` files.
+                river_reach = GeomParser.extract_river_reach(lines[i])
+                if river_reach is not None:
+                    current_river, current_reach = river_reach
+                    logger.debug(f"Parsing {current_river} / {current_reach}")
 
                 # Parse cross section metadata
                 elif line.startswith("Type RM Length L Ch R ="):
@@ -2152,7 +2150,9 @@ class GeomCrossSection:
                                 next_line = lines[j].strip()
                                 if next_line.startswith("Node Name="):
                                     node_name = GeomParser.extract_keyword_value(lines[j], "Node Name")
-                                if next_line.startswith("Type RM Length") or next_line.startswith("River Reach="):
+                                if next_line.startswith(
+                                    "Type RM Length"
+                                ) or GeomParser.extract_river_reach(next_line) is not None:
                                     break
                                 j += 1
 
