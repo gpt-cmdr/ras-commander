@@ -28,7 +28,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.4"
+SCHEMA_VERSION = "1.5"
 
 DATAFRAME_SCHEMAS = {
     "project_asset_inventory": {
@@ -138,6 +138,18 @@ DATAFRAME_SCHEMAS = {
             {"name": "unsteady_number", "dtype": "str | None", "description": "Linked unsteady-flow number, if the plan is unsteady."},
             {"name": "flow_type", "dtype": "str", "description": "Flow computation mode: 'Steady', 'Unsteady', 'Quasi-Unsteady', or 'Unknown'; orthogonal features such as sediment or dam breach are not flow types."},
             {"name": "geometry_number", "dtype": "str | None", "description": "Linked geometry number."},
+            {"name": "geometry_type", "dtype": "str", "description": "Derived geometry class: '1D', '2D', '1D/2D', or 'Unknown'."},
+            {"name": "has_1d_xs", "dtype": "boolean", "description": "Nullable flag indicating whether the linked geometry contains 1D cross sections."},
+            {"name": "has_2d_mesh", "dtype": "boolean", "description": "Nullable flag indicating whether the linked geometry contains a 2D mesh."},
+            {"name": "num_cross_sections", "dtype": "Int64", "description": "Nullable count of 1D cross sections in the linked geometry."},
+            {"name": "mesh_cell_count", "dtype": "Int64", "description": "Nullable total 2D mesh cell count in the linked geometry."},
+            {"name": "mesh_area_names", "dtype": "list[str] | None", "description": "Names of 2D flow areas in the linked geometry, when metadata is available."},
+            {"name": "geometry_metadata_source", "dtype": "str", "description": "Metadata source used for classification: 'hdf', 'text', or 'unavailable'."},
+            {"name": "geometry_metadata_valid", "dtype": "boolean", "description": "Whether linked-geometry metadata was successfully classified."},
+            {"name": "geometry_metadata_error", "dtype": "str | None", "description": "Diagnostic retained when geometry metadata inspection failed or fell back."},
+            {"name": "plan_type", "dtype": "str", "description": "Finite compute class: 'steady_1d', 'unsteady_1d', 'unsteady_2d', 'unsteady_1d_2d', 'quasi_unsteady_1d', or 'unknown'."},
+            {"name": "plan_classification_valid", "dtype": "boolean", "description": "Whether flow and geometry metadata produce a supported, unambiguous compute class."},
+            {"name": "plan_classification_reason", "dtype": "str | None", "description": "Reason an unsupported or ambiguous plan classified as 'unknown'."},
             {"name": "Geom File", "dtype": "str", "description": "Geometry file name (e.g. 'project.g01')."},
             {"name": "Geom Path", "dtype": "str", "description": "Absolute path to the geometry file."},
             {"name": "Flow File", "dtype": "str", "description": "Normalized flow-file number for steady .f##, unsteady .u##, or quasi-unsteady .q## input."},
@@ -162,18 +174,22 @@ DATAFRAME_SCHEMAS = {
             {"name": "hdf_path", "dtype": "str | None", "description": "Absolute path to the geometry HDF (.g##.hdf), if present."},
             {"name": "geom_title", "dtype": "str", "description": "Title from the 'Geom Title=' line."},
             {"name": "description", "dtype": "str", "description": "Text from the BEGIN/END DESCRIPTION block."},
-            {"name": "has_1d_xs", "dtype": "bool", "description": "Whether the geometry contains 1D cross sections."},
-            {"name": "has_2d_mesh", "dtype": "bool", "description": "Whether geometry text declares a 2D flow area or HDF metadata identifies a mesh area."},
-            {"name": "num_cross_sections", "dtype": "int", "description": "Count of 1D cross sections."},
-            {"name": "num_inline_structures", "dtype": "int", "description": "Count of inline structures."},
-            {"name": "num_bridges", "dtype": "int", "description": "Count of bridges."},
-            {"name": "num_culverts", "dtype": "int", "description": "Count of culverts."},
-            {"name": "num_weirs", "dtype": "int", "description": "Count of weirs."},
-            {"name": "num_gates", "dtype": "int", "description": "Count of gates."},
-            {"name": "num_lateral_structures", "dtype": "int", "description": "Count of lateral structures."},
-            {"name": "num_sa_2d_connections", "dtype": "int", "description": "Count of storage-area / 2D connections."},
-            {"name": "mesh_cell_count", "dtype": "int", "description": "Total 2D mesh cell count across areas."},
+            {"name": "geometry_type", "dtype": "str", "description": "Derived geometry class: '1D', '2D', '1D/2D', or 'Unknown'."},
+            {"name": "has_1d_xs", "dtype": "boolean", "description": "Nullable flag indicating whether the geometry contains 1D cross sections."},
+            {"name": "has_2d_mesh", "dtype": "boolean", "description": "Nullable flag indicating whether geometry text declares a 2D flow area or HDF metadata identifies a mesh area."},
+            {"name": "num_cross_sections", "dtype": "Int64", "description": "Nullable count of 1D cross sections."},
+            {"name": "num_inline_structures", "dtype": "Int64", "description": "Nullable count of inline structures."},
+            {"name": "num_bridges", "dtype": "Int64", "description": "Nullable count of bridges."},
+            {"name": "num_culverts", "dtype": "Int64", "description": "Nullable count of culverts."},
+            {"name": "num_weirs", "dtype": "Int64", "description": "Nullable count of weirs."},
+            {"name": "num_gates", "dtype": "Int64", "description": "Nullable count of gates."},
+            {"name": "num_lateral_structures", "dtype": "Int64", "description": "Nullable count of lateral structures."},
+            {"name": "num_sa_2d_connections", "dtype": "Int64", "description": "Nullable count of storage-area / 2D connections."},
+            {"name": "mesh_cell_count", "dtype": "Int64", "description": "Nullable total 2D mesh cell count across areas."},
             {"name": "mesh_area_names", "dtype": "list[str]", "description": "Names of the 2D flow areas."},
+            {"name": "geometry_metadata_source", "dtype": "str", "description": "Metadata source used for classification: 'hdf', 'text', or 'unavailable'."},
+            {"name": "geometry_metadata_valid", "dtype": "boolean", "description": "Whether geometry metadata was successfully classified."},
+            {"name": "geometry_metadata_error", "dtype": "str | None", "description": "Diagnostic retained when HDF or text metadata inspection failed or fell back."},
         ],
     },
     "boundaries_df": {

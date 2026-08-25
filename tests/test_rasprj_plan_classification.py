@@ -9,6 +9,7 @@ import pytest
 from ras_commander.RasPlan import RasPlan
 from ras_commander.RasPrj import RasPrj
 from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
+from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
 
 
 def _geometry_rows() -> pd.DataFrame:
@@ -82,6 +83,45 @@ def test_plan_df_uses_only_supported_compute_taxonomy():
     assert "no supported" in classified.loc[9, "plan_classification_reason"]
     assert str(classified["has_1d_xs"].dtype) == "boolean"
     assert str(classified["mesh_cell_count"].dtype) == "Int64"
+
+
+def test_classification_and_provenance_columns_are_canonical_schema() -> None:
+    expected_plan_columns = {
+        "geometry_type": "str",
+        "has_1d_xs": "boolean",
+        "has_2d_mesh": "boolean",
+        "num_cross_sections": "Int64",
+        "mesh_cell_count": "Int64",
+        "mesh_area_names": "list[str] | None",
+        "geometry_metadata_source": "str",
+        "geometry_metadata_valid": "boolean",
+        "geometry_metadata_error": "str | None",
+        "plan_type": "str",
+        "plan_classification_valid": "boolean",
+        "plan_classification_reason": "str | None",
+    }
+    expected_geom_columns = {
+        "geometry_type": "str",
+        "has_1d_xs": "boolean",
+        "has_2d_mesh": "boolean",
+        "num_cross_sections": "Int64",
+        "mesh_cell_count": "Int64",
+        "geometry_metadata_source": "str",
+        "geometry_metadata_valid": "boolean",
+        "geometry_metadata_error": "str | None",
+    }
+
+    assert SCHEMA_VERSION == "1.5"
+    for dataframe, expected in (
+        ("plan_df", expected_plan_columns),
+        ("geom_df", expected_geom_columns),
+    ):
+        schema_columns = DATAFRAME_SCHEMAS[dataframe]["columns"]
+        names = [column["name"] for column in schema_columns]
+        dtypes = {column["name"]: column["dtype"] for column in schema_columns}
+        for name, dtype in expected.items():
+            assert names.count(name) == 1
+            assert dtypes[name] == dtype
 
 
 def test_plan_parser_ignores_reference_like_text_in_description(tmp_path):
