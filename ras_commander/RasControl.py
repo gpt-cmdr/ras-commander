@@ -8,7 +8,8 @@ Includes robust process management with session tracking, orphan detection,
 and optional watchdog protection for Jupyter kernel restarts.
 
 Public functions (HEC-RAS Operations):
-- RasControl.run_plan(plan, ras_object=None, force_recompute=False, use_watchdog=True, max_runtime=3600) -> Tuple[bool, List[str]]
+- RasControl.run_plan(..., blocking=False, controller_version=None, strict_close=False) -> RasControlResult
+- RasControl.get_controller_progid(version) -> str
 - RasControl.get_steady_results(plan, ras_object=None) -> pandas.DataFrame
 - RasControl.get_unsteady_results(plan, max_times=None, ras_object=None) -> pandas.DataFrame
 - RasControl.get_output_times(plan, ras_object=None) -> List[str]
@@ -27,7 +28,7 @@ Private functions:
 - _is_ras_running() -> bool
 - RasControl._normalize_version(version: str) -> str
 - RasControl._get_project_info(plan, ras_object=None) -> Tuple[Path, str, Optional[str], Optional[str]]
-- RasControl._com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any
+- RasControl._com_open_close(..., strict_close=False) -> Any
 
 Session tracking infrastructure:
 - SessionLock dataclass - Tracks active COM sessions with lock files
@@ -40,7 +41,7 @@ Session tracking infrastructure:
 import psutil
 import pandas as pd
 from pathlib import Path
-from typing import Optional, List, Tuple, Callable, Any, Union, Dict
+from typing import Optional, List, Tuple, Callable, Any, Union, Dict, TYPE_CHECKING
 import logging
 import time
 import json
@@ -63,11 +64,12 @@ except ImportError:
 
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from .RasPrj import ras
+
+if TYPE_CHECKING:
+    from .ComputeResults import RasControlResult
 
 logger = get_logger(__name__)
-
-# Import ras-commander components
-from .RasPrj import ras
 
 
 def _log_failed_extraction_comp_msgs(comp_msgs_file: Path, comp_msgs: str) -> None:
@@ -116,6 +118,25 @@ class SessionLock:
     def from_file(cls, path: Path) -> 'SessionLock':
         """Load from lock file."""
         return cls.from_json(path.read_text(encoding='utf-8'))
+
+
+@dataclass(frozen=True)
+class _SessionCleanupResult:
+    """Outcome of cleaning one Controller-owned process and session lock."""
+
+    session_id: str
+    ras_pid: Optional[int]
+    process_detected: bool = False
+    terminated: bool = False
+    killed: bool = False
+    process_survived: bool = False
+    lock_retained: bool = False
+    error: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        """Return True when no identified Controller-owned process survived."""
+        return not self.process_survived
 
 
 @dataclass
@@ -297,27 +318,65 @@ def _remove_session_lock(session_id: str) -> None:
         logger.warning(f"Failed to remove session lock file: {e}")
 
 
-def _cleanup_session(session_id: str) -> None:
-    """Clean up a specific session."""
-    if session_id in _active_sessions:
-        lock = _active_sessions[session_id]
+def _cleanup_session(session_id: str) -> _SessionCleanupResult:
+    """Clean one session and retain its lock if an owned process survives."""
+    lock = _active_sessions.get(session_id)
+    if lock is None:
+        return _SessionCleanupResult(session_id=session_id, ras_pid=None)
 
-        # Try to terminate the ras.exe process gracefully
-        if lock.ras_pid:
-            try:
-                proc = psutil.Process(lock.ras_pid)
-                if proc.is_running() and proc.name().lower() == 'ras.exe':
-                    logger.debug(f"Terminating tracked ras.exe PID {lock.ras_pid}")
-                    proc.terminate()
+    detected = False
+    terminated = False
+    killed = False
+    survived = False
+    error = None
+
+    if lock.ras_pid:
+        try:
+            proc = psutil.Process(lock.ras_pid)
+            if proc.is_running() and proc.name().lower() == 'ras.exe':
+                detected = True
+                logger.debug(f"Terminating tracked ras.exe PID {lock.ras_pid}")
+                proc.terminate()
+                try:
                     proc.wait(timeout=5)
-            except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied) as e:
-                logger.debug(f"Could not terminate PID {lock.ras_pid}: {e}")
+                    terminated = True
+                except psutil.TimeoutExpired:
+                    logger.warning(
+                        f"Tracked ras.exe PID {lock.ras_pid} did not exit gracefully; forcing kill"
+                    )
+                    proc.kill()
+                    killed = True
+                    proc.wait(timeout=5)
+                survived = proc.is_running()
+        except psutil.NoSuchProcess:
+            terminated = detected
+        except (psutil.TimeoutExpired, psutil.AccessDenied) as exc:
+            survived = True
+            error = f"{type(exc).__name__}: {exc}"
+            logger.warning(f"Could not verify termination of PID {lock.ras_pid}: {exc}")
 
-        # Remove from tracking
-        del _active_sessions[session_id]
+    if survived:
+        lock_retained = _get_lock_file_path(session_id).exists()
+        return _SessionCleanupResult(
+            session_id=session_id,
+            ras_pid=lock.ras_pid,
+            process_detected=detected,
+            terminated=terminated,
+            killed=killed,
+            process_survived=True,
+            lock_retained=lock_retained,
+            error=error,
+        )
 
-        # Remove lock file
-        _remove_session_lock(session_id)
+    _active_sessions.pop(session_id, None)
+    _remove_session_lock(session_id)
+    return _SessionCleanupResult(
+        session_id=session_id,
+        ras_pid=lock.ras_pid,
+        process_detected=detected,
+        terminated=terminated,
+        killed=killed,
+    )
 
 
 def _emergency_cleanup_all() -> None:
@@ -493,7 +552,7 @@ class RasControl:
 
     # Version mapping based on ACTUAL COM interfaces registered on system
     # Only these COM interfaces exist: RAS41, RAS503, RAS505, RAS506, RAS507,
-    # RAS60, RAS631, RAS641, RAS65, RAS66, RAS67
+    # RAS60, RAS630, RAS631, RAS641, RAS65, RAS66, RAS67
     # Other versions use nearest available fallback
     VERSION_MAP = {
         # HEC-RAS 3.x → Use 4.1 (3.x COM not registered)
@@ -539,8 +598,13 @@ class RasControl:
         '61': 'RAS60.HECRASController',
         '6.2': 'RAS60.HECRASController',    # Use 6.0 (6.2 COM not registered)
         '62': 'RAS60.HECRASController',
-        '6.3': 'RAS631.HECRASController',   # Use 6.3.1 (6.3 COM not registered)
+        # Keep the family label on the historical 6.3.1 fallback. Exact 6.3.0
+        # product identities select the distinct RAS630 controller below.
+        '6.3': 'RAS631.HECRASController',
         '63': 'RAS631.HECRASController',
+        '6.3.0': 'RAS630.HECRASController',
+        '6.3.0.2': 'RAS630.HECRASController',
+        '630': 'RAS630.HECRASController',
         '6.3.1': 'RAS631.HECRASController', # ✓ EXISTS
         '631': 'RAS631.HECRASController',
         '6.4': 'RAS641.HECRASController',   # Use 6.4.1 (6.4 COM not registered)
@@ -557,6 +621,24 @@ class RasControl:
         '6.7 Beta 5': 'RAS67.HECRASController',
         '7.0': 'RAS70.HECRASController',    # ✓ EXISTS
         '70': 'RAS70.HECRASController',
+    }
+
+    _CONTROLLER_CANONICAL_VERSIONS = {
+        'RAS41.HECRASController': '4.1',
+        'RAS501.HECRASController': '5.0.1',
+        'RAS503.HECRASController': '5.0.3',
+        'RAS504.HECRASController': '5.0.4',
+        'RAS505.HECRASController': '5.0.5',
+        'RAS506.HECRASController': '5.0.6',
+        'RAS507.HECRASController': '5.0.7',
+        'RAS60.HECRASController': '6.0',
+        'RAS630.HECRASController': '6.3.0.2',
+        'RAS631.HECRASController': '6.3.1',
+        'RAS641.HECRASController': '6.4.1',
+        'RAS65.HECRASController': '6.5',
+        'RAS66.HECRASController': '6.6',
+        'RAS67.HECRASController': '6.7',
+        'RAS70.HECRASController': '7.0',
     }
 
     # Legacy reference (kept for backwards compatibility)
@@ -628,10 +710,24 @@ class RasControl:
             f"  3.x: 3.0, 3.1 (3.1.1, 3.1.2, 3.1.3)\n"
             f"  4.x: 4.0, 4.1\n"
             f"  5.0.x: 5.0, 5.0.1, 5.0.3, 5.0.4, 5.0.5, 5.0.6, 5.0.7\n"
-            f"  6.x: 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.4, 6.4.1, 6.5, 6.6, 6.7\n"
+            f"  6.x: 6.0, 6.1, 6.2, 6.3, 6.3.0.2, 6.3.1, 6.4, 6.4.1, 6.5, 6.6, 6.7\n"
             f"  7.x: 7.0\n"
             f"  Formats: Can use '6.6' or '66', '5.0.6' or '506', etc."
         )
+
+    @staticmethod
+    @log_call
+    def get_controller_progid(version: str) -> str:
+        """Return ras-commander's configured Controller ProgID for a version.
+
+        This performs a static mapping; COM registration is checked only when
+        the Controller is dispatched. Exact product identities remain distinct
+        from family aliases: ``6.3.0.2`` resolves to
+        ``RAS630.HECRASController`` while the historical ``6.3`` alias remains
+        on the 6.3.1 Controller for backward compatibility.
+        """
+        normalized = RasControl._normalize_version(version)
+        return RasControl.VERSION_MAP[normalized]
 
     @staticmethod
     def _get_project_info(plan: Union[str, Path], ras_object=None) -> ProjectInfo:
@@ -697,12 +793,20 @@ class RasControl:
         )
 
     @staticmethod
-    def _com_open_close(project_path: Path, version: str, operation_func: Callable[[Any], Any]) -> Any:
+    def _com_open_close(
+        project_path: Path,
+        version: str,
+        operation_func: Callable[[Any], Any],
+        *,
+        strict_close: bool = False,
+    ) -> Any:
         """
         PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
 
         This is the core COM interface handler. All public methods use this.
         Includes session tracking for robust cleanup on crashes/kernel restarts.
+        When ``strict_close`` is True, a failed ``QuitRas()`` or a verified
+        surviving owned process fails an otherwise successful operation.
         """
         # Normalize version (handles "7.0" → "7.0", "66" → "7.0", etc.)
         normalized_version = RasControl._normalize_version(version)
@@ -713,7 +817,7 @@ class RasControl:
         com_rc = None
         result = None
         session_id = str(uuid.uuid4())
-        lock_path = None
+        operation_error = None
 
         # Take snapshot of ras.exe processes before COM launch
         before_snapshot = {}
@@ -728,7 +832,7 @@ class RasControl:
 
         try:
             # Open HEC-RAS COM interface
-            com_string = RasControl.VERSION_MAP[normalized_version]
+            com_string = RasControl.get_controller_progid(normalized_version)
             logger.debug(f"Opening HEC-RAS: {com_string} (version: {version})")
             com_rc = win32com.client.Dispatch(com_string)
 
@@ -757,7 +861,7 @@ class RasControl:
             _active_sessions[session_id] = lock_data
 
             # Create lock file
-            lock_path = _create_session_lock(session_id, lock_data)
+            _create_session_lock(session_id, lock_data)
 
             # Perform operation
             logger.debug("Executing operation...")
@@ -767,6 +871,7 @@ class RasControl:
             return result
 
         except Exception as e:
+            operation_error = e
             logger.error(f"Operation failed: {e}")
             raise
 
@@ -774,21 +879,44 @@ class RasControl:
             # ALWAYS close
             logger.debug("Closing HEC-RAS...")
 
+            close_error = None
             if com_rc is not None:
                 try:
                     com_rc.QuitRas()
                     logger.debug("HEC-RAS closed via QuitRas()")
                 except Exception as e:
+                    close_error = e
                     logger.warning(f"QuitRas() failed: {e}")
+                finally:
+                    # Release the pywin32 proxy deterministically. Otherwise
+                    # its finalizer can contact an already-closed COM server
+                    # during a later, unrelated garbage-collection cycle.
+                    com_rc = None
 
             # Clean up session tracking (terminates only our tracked PID)
-            _cleanup_session(session_id)
+            cleanup_result = _cleanup_session(session_id)
 
             # Check if our specific process is still running
-            if session_id in _active_sessions:
-                logger.warning("Session cleanup may have failed - session still tracked")
+            if cleanup_result.process_survived:
+                logger.warning(
+                    "Session cleanup failed for tracked ras.exe PID %s; "
+                    "session evidence retained=%s",
+                    cleanup_result.ras_pid,
+                    cleanup_result.lock_retained,
+                )
             else:
                 logger.debug("Session cleanup completed successfully")
+
+            if strict_close and operation_error is None:
+                strict_errors = []
+                if close_error is not None:
+                    strict_errors.append(f"QuitRas() failed: {close_error}")
+                if cleanup_result.process_survived:
+                    strict_errors.append(
+                        f"owned ras.exe PID {cleanup_result.ras_pid} survived cleanup"
+                    )
+                if strict_errors:
+                    raise RuntimeError("; ".join(strict_errors)) from close_error
 
     # ========== PUBLIC API (ras-commander style) ==========
 
@@ -796,14 +924,17 @@ class RasControl:
     @log_call
     def run_plan(plan: Union[str, Path], ras_object=None, force_recompute: bool = False,
                  use_watchdog: bool = True, max_runtime: int = 86400,
-                 refresh_results: bool = True) -> 'RasControlResult':
+                 refresh_results: bool = True, *, blocking: bool = False,
+                 controller_version: Optional[str] = None,
+                 strict_close: bool = False) -> 'RasControlResult':
         """
         Run a plan (steady or unsteady) and wait for completion.
 
         This method checks if results are current before running. If results
         are up-to-date, it skips computation (unless force_recompute=True).
-        When computation is needed, it starts the computation and polls
-        Compute_Complete() until the run finishes. It will block until completion.
+        When computation is needed, the default path starts it asynchronously
+        and polls ``Compute_Complete()``. The opt-in blocking path delegates the
+        wait to the Controller.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
@@ -821,12 +952,25 @@ class RasControl:
             refresh_results: Refresh ``plan_df`` and ``results_df`` after the
                 controller returns. Disable for compute-only validation when
                 detailed legacy result extraction is unnecessary. Defaults to True.
+            blocking: Pass the Controller's blocking flag to
+                ``Compute_CurrentPlan`` instead of polling ``Compute_Complete``.
+                This is required by exact HEC-RAS 6.3.0.2 batch execution.
+                Defaults to False for backward compatibility.
+            controller_version: Optional exact Controller product identity.
+                Use ``"6.3.0.2"`` to select
+                ``RAS630.HECRASController`` while leaving the project's
+                executable family label unchanged.
+            strict_close: Raise if ``QuitRas()`` fails or an identified owned
+                ``ras.exe`` process survives cleanup after an otherwise
+                successful operation. Defaults to False for compatibility.
 
         Returns:
             RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
                 ``success``: Whether execution succeeded.
                 ``messages``: List of computation messages.
                 ``results_df_row``: Single row from results_df (pd.Series or None).
+                ``execution_details``: JSON-safe Controller identity, mode,
+                watchdog, message-count, and timing provenance.
                 Existing code ``success, msgs = RasControl.run_plan("01")`` still works via __iter__.
 
         Example:
@@ -844,6 +988,12 @@ class RasControl:
             >>> success, msgs = RasControl.run_plan("01", use_watchdog=False)
             >>> # Long-running with extended timeout
             >>> success, msgs = RasControl.run_plan("01", max_runtime=7200)
+            >>> # Exact HEC-RAS 6.3.0.2 under an outer batch supervisor
+            >>> result = RasControl.run_plan(
+            ...     "01", blocking=True, controller_version="6.3.0.2",
+            ...     use_watchdog=False, strict_close=True,
+            ...     refresh_results=False,
+            ... )
 
         Note:
             Can take several minutes for large models or unsteady runs.
@@ -855,9 +1005,20 @@ class RasControl:
             - Spawns independent Python process monitoring parent death
             - Survives kernel restarts and crashes
             - Automatically terminates orphaned ras.exe processes
-            - Enforces max_runtime timeout
+            - Enforces max_runtime only when PID detection succeeds and the
+              execution details report ``watchdog_started=True``
         """
         info = RasControl._get_project_info(plan, ras_object)
+        requested_controller_version = str(controller_version or info.version)
+        normalized_version = RasControl._normalize_version(requested_controller_version)
+        controller_progid = RasControl.get_controller_progid(normalized_version)
+        resolved_controller_version = RasControl._CONTROLLER_CANONICAL_VERSIONS[
+            controller_progid
+        ]
+        if blocking and normalized_version.startswith(('3', '4')):
+            raise ValueError(
+                "blocking=True is supported only by HEC-RAS 5.x and newer Controllers"
+            )
 
         # Enable Write Detailed= 1 to ensure .comp_msgs.txt is written
         # This is critical for results_df fallback on all HEC-RAS versions
@@ -865,6 +1026,45 @@ class RasControl:
         plan_file = info.project_path.parent / f"{info.project_path.stem}.p{info.plan_number}"
         BcoMonitor.enable_detailed_logging(plan_file)
         logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
+
+        def _normalize_messages(raw_messages) -> List[str]:
+            if isinstance(raw_messages, str):
+                return [raw_messages]
+            return [
+                item.decode('utf-8', errors='replace')
+                if isinstance(item, bytes) else str(item)
+                for item in (raw_messages or [])
+            ]
+
+        def _json_scalar(value):
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+            if isinstance(value, bytes):
+                return value.decode('utf-8', errors='replace')
+            return str(value)
+
+        def _execution_details(mode: str, messages: List[str], *,
+                               controller_message_count=None,
+                               watchdog_pid: int = 0,
+                               duration_seconds: float = 0.0,
+                               **extra) -> Dict[str, Any]:
+            try:
+                returned_count = int(controller_message_count)
+            except (TypeError, ValueError):
+                returned_count = None
+            details = {
+                'requested_controller_version': requested_controller_version,
+                'resolved_controller_version': resolved_controller_version,
+                'controller_progid': controller_progid,
+                'compute_mode': mode,
+                'message_count': len(messages),
+                'controller_message_count': returned_count,
+                'watchdog_requested': use_watchdog,
+                'watchdog_started': watchdog_pid != 0,
+                'duration_seconds': float(duration_seconds),
+            }
+            details.update({key: _json_scalar(value) for key, value in extra.items()})
+            return details
 
         def _run_operation(com_rc):
             watchdog_pid = 0
@@ -881,20 +1081,13 @@ class RasControl:
                     if is_current:
                         logger.info(f"Plan {info.plan_number} results are current. Skipping computation.")
                         logger.info("Use force_recompute=True to recompute anyway.")
-                        return True, ["Results are current - computation skipped"]
+                        messages = ["Results are current - computation skipped"]
+                        return True, messages, _execution_details(
+                            'skipped_current', messages
+                        )
                 except Exception as e:
                     logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
                     logger.warning("Proceeding with computation...")
-
-            # Version-specific behavior (normalize for checking)
-            norm_version = RasControl._normalize_version(info.version)
-
-            # Start computation (returns immediately - ASYNCHRONOUS!)
-            logger.info("Starting computation...")
-            if norm_version.startswith('4') or norm_version.startswith('3'):
-                status, _, messages = com_rc.Compute_CurrentPlan(None, None)
-            else:
-                status, _, messages, _ = com_rc.Compute_CurrentPlan(None, None)
 
             # Spawn watchdog if requested
             if use_watchdog:
@@ -917,6 +1110,41 @@ class RasControl:
                     logger.warning("Could not spawn watchdog - ras.exe PID not detected")
 
             try:
+                compute_started = time.monotonic()
+                logger.info(
+                    "Starting %s Controller computation...",
+                    "blocking" if blocking else "asynchronous",
+                )
+
+                if blocking:
+                    raw_compute = com_rc.Compute_CurrentPlan(None, None, True)
+                    if not isinstance(raw_compute, (tuple, list)) or len(raw_compute) < 3:
+                        raise RuntimeError(
+                            "Blocking Compute_CurrentPlan returned an unsupported result"
+                        )
+                    status = raw_compute[0]
+                    controller_message_count = raw_compute[1]
+                    messages = _normalize_messages(raw_compute[2])
+                    blocking_result = raw_compute[3] if len(raw_compute) > 3 else None
+                    return status, messages, _execution_details(
+                        'blocking',
+                        messages,
+                        controller_message_count=controller_message_count,
+                        watchdog_pid=watchdog_pid,
+                        duration_seconds=time.monotonic() - compute_started,
+                        blocking_result=blocking_result,
+                    )
+
+                if normalized_version.startswith(('3', '4')):
+                    status, controller_message_count, raw_messages = (
+                        com_rc.Compute_CurrentPlan(None, None)
+                    )
+                else:
+                    status, controller_message_count, raw_messages, _ = (
+                        com_rc.Compute_CurrentPlan(None, None)
+                    )
+                messages = _normalize_messages(raw_messages)
+
                 # CRITICAL: Wait for computation to complete
                 # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
                 logger.info("Waiting for computation to complete...")
@@ -947,20 +1175,33 @@ class RasControl:
                         # If we can't check status, break and hope for the best
                         break
 
-                return status, list(messages) if messages else []
+                return status, messages, _execution_details(
+                    'poll',
+                    messages,
+                    controller_message_count=controller_message_count,
+                    watchdog_pid=watchdog_pid,
+                    duration_seconds=time.monotonic() - compute_started,
+                    poll_count=poll_count,
+                )
 
             finally:
                 # Always terminate watchdog on completion (even if error)
                 if watchdog_pid:
                     _terminate_watchdog(watchdog_pid)
 
-        raw_result = RasControl._com_open_close(info.project_path, info.version, _run_operation)
+        raw_result = RasControl._com_open_close(
+            info.project_path,
+            requested_controller_version,
+            _run_operation,
+            strict_close=strict_close,
+        )
 
         # Wrap tuple result into RasControlResult with results_df_row
         from .ComputeResults import RasControlResult
         _ras_obj = ras_object if ras_object is not None else ras
-        _success = raw_result[0] if raw_result else False
+        _success = bool(raw_result[0]) if raw_result else False
         _messages = list(raw_result[1]) if raw_result and len(raw_result) > 1 else []
+        _details = raw_result[2] if raw_result and len(raw_result) > 2 else {}
         _results_df_row = None
 
         # Refresh DataFrames and capture results_df row (even on failure for diagnostics)
@@ -974,7 +1215,12 @@ class RasControl:
             except Exception as e:
                 logger.debug(f"Could not extract results_df_row: {e}")
 
-        return RasControlResult(success=_success, messages=_messages, results_df_row=_results_df_row)
+        return RasControlResult(
+            success=_success,
+            messages=_messages,
+            results_df_row=_results_df_row,
+            execution_details=_details,
+        )
 
     @staticmethod
     def _parse_ras_datetime(time_string: str) -> pd.Timestamp:
