@@ -238,6 +238,7 @@ nav:
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
+    - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
     - Release Notes: development/release-notes.md
   - About:
     - Cite and Support RAS Commander: cite.md

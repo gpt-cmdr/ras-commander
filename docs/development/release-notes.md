@@ -28,6 +28,12 @@
   not align. Immutable HEC-RAS 6.0.0, 6.3.1, 6.4.1, 6.6, and 7.0 fixtures
   cover the available 6.x-to-7.0 steady-result schemas and sentinel
   normalization behavior.
+- Qualify the narrow `RasCmdr.compute_plan()` path against exact HEC-RAS
+  6.3.0.2 under Wine without RasControl/COM. The real 38-row ras2fim result CSV
+  is byte-identical to the immutable Windows Controller baseline; the
+  [qualification report](hec-ras-6302-wine-compute-plan-qualification.md)
+  records identities, TCU handling, failed experiments, parity, and remaining
+  downstream gates.
 
 **C01-C06 Reliability Hardening**
 
