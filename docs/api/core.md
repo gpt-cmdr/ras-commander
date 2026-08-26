@@ -280,6 +280,28 @@ RasCmdr.compute_plan("01", stream_callback=CustomCallback())
                 self.results[plan_number] = (success, duration)
     ```
 
+##### Linux-Hosted Unsteady Preparation
+
+::: ras_commander.RasPreprocess
+    options:
+      show_root_heading: true
+      heading_level: 6
+      members:
+        - preprocess_plan
+        - run_ras_geom_preprocess
+        - verify_preprocessing
+
+`preprocess_plan()` runs Windows HEC-RAS through native Windows Python or
+Windows Python hosted by Wine. It stops at either the detailed `.bco` signal or
+an owned `RasUnsteady.exe` descendant after `.tmp.hdf`, `.b##`, and `.x##` are
+all non-empty. The returned `PreprocessResult.signal_source` records which path
+was used. First-run legal-assent dialogs are reported as blockers and are never
+accepted automatically.
+
+`run_ras_geom_preprocess()` performs the matching vendor geometry-preprocessor
+step with a bounded timeout, executable hash, before/after HDF hashes,
+compute-message parsing, and HDF readability/`Geometry`-group validation.
+
 ##### BcoMonitor Utility
 
 ::: ras_commander.BcoMonitor

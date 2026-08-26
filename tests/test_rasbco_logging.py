@@ -125,3 +125,30 @@ def test_callback_error_warns_once_then_debugs_repeats(tmp_path, caplog):
     ]
     assert "Repeated callback error while monitoring" in debug_text
     assert str(bco_file) in debug_text
+
+
+def test_monitor_accepts_job_scoped_alternate_signal(tmp_path):
+    monitor = BcoMonitor(
+        project_path=tmp_path,
+        plan_number="07",
+        project_name="TestProject",
+        alternate_signal_condition=lambda: True,
+        alternate_signal_description="owned RasUnsteady.exe startup",
+    )
+
+    assert monitor.monitor_until_signal(_FakeProcess(returncode=None))
+    assert monitor.signal_source == "alternate"
+    assert monitor.blocked_reason is None
+
+
+def test_monitor_stops_on_blocking_condition(tmp_path):
+    monitor = BcoMonitor(
+        project_path=tmp_path,
+        plan_number="07",
+        project_name="TestProject",
+        blocking_condition=lambda: "legal dialog requires review",
+    )
+
+    assert not monitor.monitor_until_signal(_FakeProcess(returncode=None))
+    assert monitor.blocked_reason == "legal dialog requires review"
+    assert monitor.signal_source is None

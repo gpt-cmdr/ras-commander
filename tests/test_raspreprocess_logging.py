@@ -189,6 +189,8 @@ def test_full_simulation_fallback_warning_is_concise(
     )
 
     assert result.success is True
+    assert result.signal_source == "full_result_copy"
+    assert result.full_result_copied is True
     warning_messages = [
         record.getMessage()
         for record in _preprocess_records(caplog)
