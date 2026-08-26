@@ -92,15 +92,13 @@ from typing import (
 from .RasPrj import ras
 from .RasPlan import RasPlan
 from .RasUtils import RasUtils
-from .RasGuiAutomation import RasGuiAutomation
-from .RasBenefits import BenefitAreaConfig
-from .RasterPerformance import StoreMapPerformanceOptions
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 from ._native_helper import (
     normalize_store_map_render_mode,
     run_store_all_maps_helper,
 )
+from ._execution_types import BenefitAreaConfig, StoreMapPerformanceOptions
 
 if TYPE_CHECKING:
     from geopandas import GeoDataFrame
@@ -3270,6 +3268,8 @@ class RasMap:
                 # Note: For multiple plans, we run the first plan's automation
                 # The user can manually run additional plans if needed
                 first_plan = plan_number_list[0]
+
+                from .RasGuiAutomation import RasGuiAutomation
 
                 success = RasGuiAutomation.open_and_compute(
                     plan_number=first_plan,

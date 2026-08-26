@@ -23,6 +23,7 @@ Available Functions:
         - get_steady_profile_names: Extract steady state profile names
         - get_steady_wse: Extract WSE data for steady state profiles
         - get_steady_info: Extract steady flow attributes and metadata
+        - get_steady_results: Extract profile/XS hydraulics and channel length
 
     Computation Messages:
         - get_compute_messages: Extract computation messages from HDF (with .txt fallback)
@@ -35,10 +36,8 @@ from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import h5py
 import pandas as pd
-import xarray as xr
 from ..Decorators import standardize_input, log_call
 from .HdfUtils import HdfUtils
-from .HdfResultsXsec import HdfResultsXsec
 from ..LoggingConfig import get_logger
 import numpy as np
 from datetime import datetime
@@ -546,6 +545,83 @@ class HdfResultsPlan:
         raise KeyError(f"Cross section attributes not found at: {paths}")
 
     @staticmethod
+    def _get_steady_channel_lengths(
+        hdf_file: h5py.File,
+        result_attributes: np.ndarray,
+        result_fields: Dict[str, str],
+    ) -> np.ndarray:
+        """Join geometry channel reach lengths to ordered result cross sections.
+
+        HEC-RAS stores the downstream channel reach length on geometry cross
+        sections, not in the steady output block. Result rows use ``Station``
+        while geometry rows use ``RS`` in the supported 6.x layouts, so the
+        join is performed on the complete river/reach/station identity.
+
+        Non-finite and HEC-RAS sentinel lengths are normalized to zero, matching
+        the value returned by established Controller-based ras2fim workflows.
+        """
+        geometry_path = "Geometry/Cross Sections/Attributes"
+        if geometry_path not in hdf_file:
+            return np.full(len(result_attributes), np.nan, dtype=float)
+
+        geometry_attributes = hdf_file[geometry_path][()]
+        field_names = geometry_attributes.dtype.names or ()
+        field_lookup = {name.strip().lower(): name for name in field_names}
+        geometry_fields = {
+            "river": field_lookup.get("river"),
+            "reach": field_lookup.get("reach"),
+            "station": field_lookup.get("rs") or field_lookup.get("station"),
+            "length": (
+                field_lookup.get("len channel")
+                or field_lookup.get("length channel")
+                or field_lookup.get("channel length")
+            ),
+        }
+        missing = [name for name, field in geometry_fields.items() if field is None]
+        if missing:
+            logger.debug(
+                "Geometry cross-section attributes do not expose channel lengths; "
+                "missing fields: %s",
+                ", ".join(missing),
+            )
+            return np.full(len(result_attributes), np.nan, dtype=float)
+
+        def decode(value) -> str:
+            if isinstance(value, (bytes, np.bytes_)):
+                return value.decode("utf-8", errors="replace").rstrip("\x00").strip()
+            return str(value).rstrip("\x00").strip()
+
+        lengths_by_identity = {}
+        for item in geometry_attributes:
+            identity = tuple(
+                decode(item[geometry_fields[name]])
+                for name in ("river", "reach", "station")
+            )
+            if identity in lengths_by_identity:
+                raise ValueError(
+                    "Duplicate geometry cross-section identity while joining "
+                    f"channel lengths: {identity}"
+                )
+            value = float(item[geometry_fields["length"]])
+            if not np.isfinite(value) or abs(value) > 1e20:
+                value = 0.0
+            lengths_by_identity[identity] = value
+
+        ordered_lengths = []
+        for item in result_attributes:
+            identity = tuple(
+                decode(item[result_fields[name]])
+                for name in ("river", "reach", "station")
+            )
+            if identity not in lengths_by_identity:
+                raise ValueError(
+                    "Steady result cross section is absent from geometry "
+                    f"attributes: {identity}"
+                )
+            ordered_lengths.append(lengths_by_identity[identity])
+        return np.asarray(ordered_lengths, dtype=float)
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_steady_wse(
@@ -1049,7 +1125,11 @@ class HdfResultsPlan:
             +----------------+----------+---------------------------------------+
             | energy         | float    | Energy grade elevation (ft or m)      |
             +----------------+----------+---------------------------------------+
-            | max_depth      | float    | Maximum channel depth (ft or m)       |
+            | max_depth      | float    | Maximum total depth (ft or m)         |
+            +----------------+----------+---------------------------------------+
+            | hydraulic_depth| float    | Channel hydraulic depth (ft or m)     |
+            +----------------+----------+---------------------------------------+
+            | channel_length | float    | Downstream channel reach length       |
             +----------------+----------+---------------------------------------+
             | min_ch_el      | float    | Minimum channel elevation (ft or m)   |
             +----------------+----------+---------------------------------------+
@@ -1072,9 +1152,13 @@ class HdfResultsPlan:
         **Comparison with RasControl.get_steady_results():**
 
         This HDF-based method provides the same schema as the COM-based
-        RasControl.get_steady_results(), plus additional hydraulic variables
-        (top_width, area, eg_slope, friction_slope) that are readily
-        available in the HDF file.
+        RasControl.get_steady_results(), plus channel reach length and
+        additional hydraulic variables (hydraulic_depth, top_width, area,
+        eg_slope, friction_slope) that are readily available in the HDF file.
+
+        ``max_depth`` is read from HEC-RAS ``Maximum Depth Total``. Older HDFs
+        without that dataset fall back to ``Hydraulic Depth Channel`` and
+        record the selected dataset in ``df.attrs['max_depth_source']``.
 
         **Performance:**
 
@@ -1132,12 +1216,34 @@ class HdfResultsPlan:
                     raise ValueError("Profile names not found in HDF file")
 
                 # Get main variables (WSE, Flow)
-                wse_data = hdf_file[f"{xs_path}/Water Surface"][()]
-                flow_data = hdf_file[f"{xs_path}/Flow"][()]
+                wse_data = np.asarray(
+                    hdf_file[f"{xs_path}/Water Surface"][()]
+                )
+                flow_data = np.asarray(hdf_file[f"{xs_path}/Flow"][()])
+                if wse_data.ndim != 2:
+                    raise ValueError(
+                        "Steady Water Surface dataset must be a 2D "
+                        "profile-by-cross-section array"
+                    )
+                if flow_data.shape != wse_data.shape:
+                    raise ValueError(
+                        "Steady Flow dataset shape does not match Water Surface: "
+                        f"{flow_data.shape} != {wse_data.shape}"
+                    )
                 num_profiles, num_xs = wse_data.shape
+                if len(profile_names) != num_profiles:
+                    raise ValueError(
+                        "Steady profile-name count does not match result rows: "
+                        f"{len(profile_names)} != {num_profiles}"
+                    )
                 xs_attrs, xs_fields = HdfResultsPlan._get_steady_cross_section_attributes(
                     hdf_file,
                     expected_count=num_xs,
+                )
+                channel_length_data = HdfResultsPlan._get_steady_channel_lengths(
+                    hdf_file,
+                    xs_attrs,
+                    xs_fields,
                 )
 
                 # Missing optional variables are returned as null values. Do
@@ -1146,13 +1252,27 @@ class HdfResultsPlan:
                 def get_additional_var(var_name, default=np.nan):
                     path = f"{add_vars_path}/{var_name}"
                     if path in hdf_file:
-                        return hdf_file[path][()]
+                        values = np.asarray(hdf_file[path][()])
+                        expected_shape = (num_profiles, num_xs)
+                        if values.shape != expected_shape:
+                            raise ValueError(
+                                f"Steady variable {var_name!r} has shape "
+                                f"{values.shape}; expected {expected_shape}"
+                            )
+                        return values
                     return np.full((num_profiles, num_xs), default)
 
                 velocity_data = get_additional_var('Velocity Channel')
                 energy_data = get_additional_var('Energy Grade')
                 froude_data = get_additional_var('Froude # Channel')
-                max_depth_data = get_additional_var('Hydraulic Depth Channel')
+                hydraulic_depth_data = get_additional_var('Hydraulic Depth Channel')
+                maximum_depth_path = f"{add_vars_path}/Maximum Depth Total"
+                if maximum_depth_path in hdf_file:
+                    max_depth_data = get_additional_var('Maximum Depth Total')
+                    max_depth_source = 'Maximum Depth Total'
+                else:
+                    max_depth_data = hydraulic_depth_data
+                    max_depth_source = 'Hydraulic Depth Channel (legacy fallback)'
                 min_ch_el_data = get_additional_var('Min Ch El')
                 top_width_data = get_additional_var('Top Width Total')
                 area_data = get_additional_var('Area Flow Total')
@@ -1183,6 +1303,8 @@ class HdfResultsPlan:
                             'froude': float(froude_data[prof_idx, xs_idx]),
                             'energy': float(energy_data[prof_idx, xs_idx]),
                             'max_depth': float(max_depth_data[prof_idx, xs_idx]),
+                            'hydraulic_depth': float(hydraulic_depth_data[prof_idx, xs_idx]),
+                            'channel_length': float(channel_length_data[xs_idx]),
                             'min_ch_el': float(min_ch_el_data[prof_idx, xs_idx]),
                             'top_width': float(top_width_data[prof_idx, xs_idx]),
                             'area': float(area_data[prof_idx, xs_idx]),
@@ -1191,6 +1313,12 @@ class HdfResultsPlan:
                         })
 
                 df = pd.DataFrame(rows)
+                df.attrs['max_depth_source'] = max_depth_source
+                df.attrs['channel_length_source'] = (
+                    'unavailable'
+                    if np.isnan(channel_length_data).all()
+                    else 'Geometry/Cross Sections/Attributes/Len Channel'
+                )
                 logger.debug(f"Extracted steady results: {len(df)} rows "
                             f"({num_profiles} profiles x {num_xs} cross sections)")
                 return df

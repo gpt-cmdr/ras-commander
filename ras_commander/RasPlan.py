@@ -387,6 +387,12 @@ class RasPlan:
                 f"Plan reference verification failed for {plan_file_path}: "
                 f"expected {key}={value}, found {actual}"
             )
+        logger.debug(
+            "Updated %s in plan file %s to %s",
+            key,
+            plan_file_path.name,
+            value,
+        )
 
     @staticmethod
     def _refresh_classification(ras_obj, *, refresh_flows: bool = False) -> None:
@@ -449,7 +455,7 @@ class RasPlan:
             logger.error(f"Error updating plan file: {e}")
             raise
 
-        logger.debug("Set geometry for plan p%s to g%s", plan_number, new_geom)
+        logger.info("Set geometry for plan p%s to g%s", plan_number, new_geom)
         logger.debug("Updated plan DataFrame:")
         logger.debug(ras_obj.plan_df)
 
@@ -3997,6 +4003,11 @@ class RasPlan:
                     logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
                     return flow_type
 
+            if 'unsteady_number' not in plan_row.columns:
+                logger.debug(
+                    "plan_df missing unsteady_number column for plan %s",
+                    plan_num,
+                )
             flow_type = RasPrj._classify_plan_flow(plan_row.iloc[0])
             logger.debug(f"Plan {plan_num}: {flow_type} (from flow references)")
             return flow_type

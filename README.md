@@ -165,6 +165,18 @@ pip install ras-commander[all]
 pip install --upgrade ras-commander
 ```
 
+The standard install provides project inventory and direct HDF access. For a
+lean batch runner that also executes plans through `RasCmdr.compute_plan()`, use:
+
+```bash
+pip install --upgrade "ras-commander[compute]"
+```
+
+The `compute` surface excludes RasControl/COM and the geospatial and plotting
+stacks. It does not bypass ras-commander: `RasCmdr` still constructs and owns
+the HEC-RAS command-line execution, message handling, verification options, and
+normal post-compute DataFrame refreshes.
+
 If you have dependency issues with pip (especially if you have errors with numpy), try clearing your local pip packages `C:\Users\your_username\AppData\Roaming\Python\` and then creating a new virtual environment.
 
 ### Extras
@@ -173,7 +185,10 @@ Install only what you need using pip extras:
 
 | Extra | What it adds | Install command |
 |-------|-------------|-----------------|
-| `all` | Everything below | `pip install ras-commander[all]` |
+| `compute` | Lean command-line plan execution and process supervision (no RasControl/COM) | `pip install ras-commander[compute]` |
+| `execution` | Alias for `compute` | `pip install ras-commander[execution]` |
+| `full` | Historical ras-commander feature dependency set | `pip install ras-commander[full]` |
+| `all` | Full feature set plus every optional integration below | `pip install ras-commander[all]` |
 | `remote-all` | All remote backends (SSH, WinRM, Docker, AWS, Azure) | `pip install ras-commander[remote-all]` |
 | `gui` | GUI automation & screenshots (Pillow) | `pip install ras-commander[gui]` |
 | `usgs` | USGS gauge data (dataretrieval) | `pip install ras-commander[usgs]` |
@@ -185,7 +200,9 @@ Combine extras as needed: `pip install ras-commander[notebooks,usgs,dss]`
 
 ### Core Dependencies (installed automatically)
 
-h5py, numpy, pandas, requests, tqdm, scipy, xarray, geopandas, matplotlib, shapely, rasterstats, rtree, fsspec, hms-commander, psutil, and pywin32 (Windows only).
+h5py, numpy, and pandas. The `compute` extra adds psutil and pywin32 on
+Windows for process and dialog supervision. Install `full` or `all` for the
+geospatial, plotting, scientific, precipitation, and remote-data feature stack.
 
 Note: `pathlib` is built into Python 3.4+ and does not need to be installed separately.
 

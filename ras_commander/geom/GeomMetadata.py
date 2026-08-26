@@ -146,6 +146,9 @@ class GeomMetadata:
                 logger.debug(f"Using HDF extraction for {hdf_path.name}")
                 candidate = GeomMetadata._new_counts()
                 result = GeomMetadata._get_counts_from_hdf(hdf_path, candidate)
+                hdf_error = result.pop('_hdf_extraction_error', None)
+                if hdf_error:
+                    raise ValueError(hdf_error)
                 result['geometry_metadata_source'] = 'hdf'
                 result['geometry_metadata_valid'] = True
 
@@ -201,10 +204,22 @@ class GeomMetadata:
         Returns:
             Updated counts dict
         """
-        with h5py.File(hdf_path, 'r') as hdf:
-            counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
-            counts.update(GeomMetadata._get_structure_counts_hdf(hdf))
-            counts.update(GeomMetadata._get_2d_info_hdf(hdf))
+        try:
+            with h5py.File(hdf_path, 'r') as hdf:
+                counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
+                counts.update(GeomMetadata._get_structure_counts_hdf(hdf))
+                counts.update(GeomMetadata._get_2d_info_hdf(hdf))
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            counts['_hdf_extraction_error'] = str(exc)
+            logger.warning(
+                "HDF geometry metadata extraction failed for %s",
+                Path(hdf_path).name,
+            )
+            logger.debug(
+                "HDF geometry metadata extraction failed for %s: %s",
+                hdf_path,
+                exc,
+            )
 
         return counts
 

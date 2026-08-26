@@ -74,13 +74,40 @@ python -m ipykernel install --user --name RasCommander --display-name "Python (R
     pip install --upgrade ras-commander
     ```
 
-## Core Dependencies
+## Installation Profiles
 
 These are installed automatically with `pip install ras-commander`:
 
 ```bash
-h5py numpy pandas requests tqdm scipy xarray geopandas matplotlib shapely rasterstats rtree pywin32 psutil
+h5py numpy pandas
 ```
+
+For command-line HEC-RAS execution, compute-message parsing, and direct HDF
+result extraction without RasControl/COM or the full geospatial stack:
+
+```bash
+pip install "ras-commander[compute]"
+```
+
+The `execution` extra is an alias for `compute`. Both add psutil and, on
+Windows, pywin32 for the normal process and dialog supervision used by
+`RasCmdr.compute_plan()`.
+
+For the historical complete feature dependency set, including geospatial,
+plotting, scientific, precipitation, and remote-data dependencies:
+
+```bash
+pip install "ras-commander[full]"
+```
+
+Use `ras-commander[all]` when you also want every optional backend and
+integration. Extras are additive and can be combined.
+
+!!! note "Compute extra scope"
+    The extra controls Python dependencies only; it does not install HEC-RAS or
+    Wine. It preserves the normal `RasCmdr.compute_plan()` behavior, including
+    project/result DataFrame refresh after execution. It does not expose a
+    reduced-refresh execution mode and does not route computation through COM.
 
 ## Optional Dependencies
 

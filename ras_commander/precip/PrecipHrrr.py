@@ -715,7 +715,13 @@ class PrecipHrrr:
             expected_valid_times = pd.DatetimeIndex(
                 [forecast_reference_time] * record_count
             ) + step_deltas
-            if not valid_times.equals(expected_valid_times):
+            # Pandas 3 preserves source datetime resolutions.  Equivalent
+            # coordinates can therefore be represented as datetime64[s] and
+            # datetime64[ns], for which DatetimeIndex.equals() returns False.
+            # Compare the timestamp values rather than their storage units.
+            if not np.array_equal(
+                valid_times.to_numpy(), expected_valid_times.to_numpy()
+            ):
                 raise ValueError(
                     "HRRR valid_time must equal the forecast cycle time plus step"
                 )

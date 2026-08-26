@@ -71,7 +71,6 @@ import pandas as pd
 import numpy as np
 import shutil
 import re
-from scipy.spatial import KDTree
 import datetime
 import time
 import h5py
@@ -169,7 +168,11 @@ class RasUtils:
                 f"Mapped drive detected: {original_str} would resolve to UNC {resolved}. "
                 f"Using absolute() to preserve drive letter."
             )
-            return path.absolute()
+            # ``Path.absolute()`` intentionally avoids resolving the mapped
+            # drive, but on Windows it can retain ``.`` and ``..`` segments.
+            # Normalize those segments lexically without another filesystem
+            # lookup that could convert the drive back to UNC.
+            return Path(os.path.normpath(str(path.absolute())))
 
         return resolved
 
@@ -1157,6 +1160,8 @@ class RasUtils:
             >>> print(result)
             array([ 0, -1])
         """
+        from scipy.spatial import KDTree
+
         dist, snap = KDTree(reference_points).query(query_points, distance_upper_bound=max_distance)
         snap[dist > max_distance] = -1
         return snap
@@ -1183,6 +1188,8 @@ class RasUtils:
             >>> print(result)
             array([1, 0, 1, -1])
         """
+        from scipy.spatial import KDTree
+
         dist, snap = KDTree(points).query(points, k=2, distance_upper_bound=max_distance)
         snap[dist > max_distance] = -1
         

@@ -20,11 +20,13 @@ def _stub_initialization(monkeypatch):
         ras_exe_path,
         prj_file=None,
         load_results_summary=True,
+        load_hdf_metadata=True,
     ):
         self.project_folder = Path(project_folder)
         self.project_name = "Citation Test Project"
         self.prj_file = prj_file
         self.ras_exe_path = ras_exe_path
+        self.load_hdf_metadata = load_hdf_metadata
 
     monkeypatch.setattr(RasPrj, "initialize", fake_initialize)
     monkeypatch.setattr(
