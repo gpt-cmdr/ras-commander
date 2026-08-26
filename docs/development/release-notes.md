@@ -4,6 +4,31 @@
 
 ### Unreleased
 
+**Lean Command-Line Compute Integration**
+
+- Add `ras-commander[compute]` (and the `execution` alias) for command-line
+  `RasCmdr.compute_plan()` workers without RasControl/COM or the geospatial and
+  plotting dependency stack.
+- Add `ras_commander.compute` as a narrow integration facade for project
+  inventory, plan execution, compute-message parsing, and direct steady-result
+  HDF extraction.
+- Preserve normal compute semantics, including ras-commander-owned command
+  construction and post-compute DataFrame refreshes; no reduced-refresh flags
+  were added.
+- Lazy-load optional top-level and HDF exports so the lean install remains
+  import-safe, while retaining the historical public import names. The `full`
+  extra restores the previous broad dependency surface.
+- Keep lightweight map option types available from their historical modules,
+  including their documented and pickle-visible module identities, without
+  importing the optional geospatial stack into a compute-only worker.
+- Correct HDF steady `max_depth` extraction to use `Maximum Depth Total`
+  instead of `Hydraulic Depth Channel`, expose hydraulic depth separately, and
+  join downstream channel reach length by full river/reach/station identity.
+  Result arrays now fail closed when profile or cross-section dimensions do
+  not align. Immutable HEC-RAS 6.0.0, 6.3.1, 6.4.1, 6.6, and 7.0 fixtures
+  cover the available 6.x-to-7.0 steady-result schemas and sentinel
+  normalization behavior.
+
 **C01-C06 Reliability Hardening**
 
 - Preserve the existing precipitation-file line endings and surrounding bytes
@@ -21,6 +46,16 @@
 - Require exact legacy completion evidence before exporting result products,
   exclude nonfinite result samples from raster interpolation, and omit
   unavailable hydrograph variables from exported Parquet metadata.
+- Treat equivalent HRRR timestamps as equal across differing NumPy datetime
+  storage resolutions, avoiding false cycle-plus-step validation failures.
+- Allow initial-condition method mutation against an explicit unsteady-flow
+  path without requiring unrelated global project initialization.
+- Match 1D and 2D unsteady boundary blocks with exact semantic selectors and
+  fail closed on ambiguous or index-mismatched DSS-link mutations.
+- Restore the concise plan-geometry mutation summary at INFO while retaining
+  file paths and refreshed DataFrames at DEBUG.
+- Normalize relative components in mapped-drive fallbacks without converting
+  HEC-RAS-compatible drive-letter paths to UNC paths.
 
 ### v0.99.1 (Current published release — July 2026)
 

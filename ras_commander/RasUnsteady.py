@@ -2752,10 +2752,9 @@ class RasUnsteady:
             Dict[str, Optional[Any]]: Parsed usage settings and raw values.
         """
         ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.is_file():
+            ras_obj.check_initialized()
             from .RasPlan import RasPlan
             resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
             if resolved_path:
@@ -2831,11 +2830,10 @@ class RasUnsteady:
               ``Initial RRR Elev`` lines present
             - ``raw_use_restart`` (str or None): Raw value from file
         """
-        ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.is_file():
+            ras_obj = ras_object or ras
+            ras_obj.check_initialized()
             from .RasPlan import RasPlan
             resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
             if resolved_path:
@@ -2951,10 +2949,9 @@ class RasUnsteady:
             raise ValueError("prior_ws_filename is required when method is 'prior_ws'")
 
         ras_obj = ras_object or ras
-        ras_obj.check_initialized()
-
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.is_file():
+            ras_obj.check_initialized()
             from .RasPlan import RasPlan
             resolved_path = RasPlan.get_unsteady_path(unsteady_file, ras_obj)
             if resolved_path:
@@ -3010,7 +3007,10 @@ class RasUnsteady:
 
         logger.info(f"Set IC method to '{method}' in {unsteady_path.name}")
 
-        if hasattr(ras_obj, "get_unsteady_entries"):
+        if (
+            getattr(ras_obj, "initialized", False)
+            and hasattr(ras_obj, "get_unsteady_entries")
+        ):
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
@@ -4083,6 +4083,55 @@ class RasUnsteady:
             })
 
         return blocks
+
+    @staticmethod
+    def _clean_boundary_selector(value: Optional[Any]) -> Optional[str]:
+        """Normalize an optional exact boundary selector."""
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @staticmethod
+    def _boundary_block_matches(
+        block: Dict[str, Any],
+        river: Optional[str],
+        reach: Optional[str],
+        station: Optional[str],
+        area_2d: Optional[str],
+        bc_line_name: Optional[str],
+    ) -> bool:
+        """Return whether one parsed block exactly matches supplied fields."""
+        parts = list(block.get("parts", ()))
+        if len(parts) < 8:
+            parts.extend([""] * (8 - len(parts)))
+
+        selectors = (
+            (river, parts[0]),
+            (reach, parts[1]),
+            (station, parts[2]),
+            (area_2d, parts[5]),
+            (bc_line_name, parts[7]),
+        )
+        return all(
+            selector is None or candidate == selector
+            for selector, candidate in selectors
+        )
+
+    @staticmethod
+    def _boundary_block_name(block: Dict[str, Any]) -> str:
+        """Return a concise semantic identity for logs and errors."""
+        parts = list(block.get("parts", ()))
+        if len(parts) < 8:
+            parts.extend([""] * (8 - len(parts)))
+
+        if parts[5] or parts[7]:
+            identity = f"2D {parts[5]!r}/{parts[7]!r}"
+        elif any(parts[:3]):
+            identity = f"1D {parts[0]!r}/{parts[1]!r}/{parts[2]!r}"
+        else:
+            identity = repr(block.get("location", ""))
+        return f"index {block.get('boundary_index', '?')} ({identity})"
 
     @staticmethod
     @log_call

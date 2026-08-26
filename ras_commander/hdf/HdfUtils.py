@@ -49,9 +49,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Union, Optional, Dict, List, Tuple, Any
-from scipy.spatial import KDTree
 import re
-from shapely.geometry import LineString  # Import LineString to avoid NameError
 
 from ..Decorators import standardize_input, log_call 
 from ..LoggingConfig import setup_logging, get_logger
@@ -210,6 +208,8 @@ class HdfUtils:
             >>> print(result)
             array([ 0, -1])
         """
+        from scipy.spatial import KDTree
+
         dist, snap = KDTree(reference_points).query(query_points, distance_upper_bound=max_distance)
         snap[dist > max_distance] = -1
         return snap
@@ -235,6 +235,8 @@ class HdfUtils:
             >>> print(result)
             array([1, 0, 1, -1])
         """
+        from scipy.spatial import KDTree
+
         dist, snap = KDTree(points).query(points, k=2, distance_upper_bound=max_distance)
         snap[dist > max_distance] = -1
         

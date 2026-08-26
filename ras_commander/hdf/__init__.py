@@ -56,47 +56,63 @@ Usage:
     cells = HdfMesh.get_mesh_cell_polygons("plan.hdf")
 """
 
-# Core classes
-from .HdfBase import HdfBase
-from .HdfUtils import HdfUtils
-from .HdfPlan import HdfPlan
+from importlib import import_module
+import sys
+from types import ModuleType
 
-# Geometry classes
-from .HdfMesh import HdfMesh
-from .HdfXsec import HdfXsec
-from .HdfBndry import HdfBndry
-from .HdfStruc import HdfStruc
-from .HdfStorageArea import HdfStorageArea
-from .HdfStruc1D import HdfStruc1D
-from .HdfHydraulicTables import HdfHydraulicTables
 
-# Results classes
-from .HdfResultsPlan import HdfResultsPlan
-from .HdfResultsMesh import HdfResultsMesh
-from .HdfResultsQuery import HdfResultsQuery
-from .HdfResultsXsec import HdfResultsXsec
-from .HdfResultsBreach import HdfResultsBreach
-from .HdfResultsSediment import HdfResultsSediment
-from .HdfResultsProducts import HdfResultsProducts
+_LAZY_EXPORTS = {
+    name: (f".{name}", name)
+    for name in (
+        'HdfBase', 'HdfUtils', 'HdfPlan',
+        'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea',
+        'HdfStruc1D', 'HdfHydraulicTables',
+        'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsQuery',
+        'HdfResultsXsec', 'HdfResultsBreach', 'HdfResultsSediment',
+        'HdfResultsProducts',
+        'HdfPipe', 'HdfPump', 'HdfInfiltration', 'HdfLandCover',
+        'HdfPlot', 'HdfResultsPlot',
+        'HdfFluvialPluvial', 'HdfBenefitAreas', 'HdfChannelCapacity',
+        'HdfResultsAnalysis', 'HdfProject',
+    )
+}
 
-# Infrastructure classes
-from .HdfPipe import HdfPipe
-from .HdfPump import HdfPump
-from .HdfInfiltration import HdfInfiltration
-from .HdfLandCover import HdfLandCover
 
-# Visualization classes
-from .HdfPlot import HdfPlot
-from .HdfResultsPlot import HdfResultsPlot
+def _load_export(name):
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module 'ras_commander.hdf' has no attribute '{name}'")
+    module_name, attribute_name = target
+    value = getattr(import_module(module_name, __name__), attribute_name)
+    globals()[name] = value
+    return value
 
-# Analysis classes
-from .HdfFluvialPluvial import HdfFluvialPluvial
-from .HdfBenefitAreas import HdfBenefitAreas
-from .HdfChannelCapacity import HdfChannelCapacity
-from .HdfResultsAnalysis import HdfResultsAnalysis
 
-# Project-level classes
-from .HdfProject import HdfProject
+def __getattr__(name):
+    """Import an HDF feature only when its public class is requested."""
+    return _load_export(name)
+
+
+class _LazyHdfModule(ModuleType):
+    """Keep class exports stable when Python also imports same-named modules.
+
+    Import machinery assigns ``package.HdfMesh`` to the submodule object when
+    code imports ``ras_commander.hdf.HdfMesh`` directly. Historically the HDF
+    package overwrote that name with the class during eager initialization.
+    This accessor preserves that public behavior without eagerly loading the
+    entire optional HDF stack.
+    """
+
+    def __getattribute__(self, name):
+        namespace = ModuleType.__getattribute__(self, "__dict__")
+        exports = namespace.get("_LAZY_EXPORTS", {})
+        current = namespace.get(name)
+        if name in exports and (current is None or isinstance(current, ModuleType)):
+            return namespace["_load_export"](name)
+        return ModuleType.__getattribute__(self, name)
+
+
+sys.modules[__name__].__class__ = _LazyHdfModule
 
 __all__ = [
     # Core
