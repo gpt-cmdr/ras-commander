@@ -37,3 +37,13 @@ def test_parse_compute_messages_ignores_new_orleans_error_columns():
     assert parsed["has_errors"] is False
     assert parsed["error_count"] == 0
     assert parsed["first_error_line"] is None
+
+
+def test_parse_compute_messages_ignores_explicit_zero_error_summaries():
+    parsed = ResultsParser.parse_compute_messages(
+        "Errors: 0\n0 Errors\nFinished Processing Geometry"
+    )
+
+    assert parsed["has_errors"] is False
+    assert parsed["error_count"] == 0
+    assert parsed["first_error_line"] is None

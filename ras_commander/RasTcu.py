@@ -58,6 +58,14 @@ _VB_ROOT = r"Software\VB and VBA Program Settings"
 _PERSONAL_SECTIONS = ("Projects", "Form Position")
 _PERSONAL_SECTION_NAMES = {section.casefold() for section in _PERSONAL_SECTIONS}
 
+# HEC-RAS 6.x records the user-approved TCU state inside the otherwise-personal
+# ``Projects`` section.  ``System Statistic`` is not an MRU entry: a value such
+# as ``660`` is the release-family sentinel written after the user accepts the
+# 6.6 terms.  It must be detected and preserved while the other Projects values
+# remain excluded from acceptance inference and donor copying.
+_TCU_SENTINEL_SECTION = "Projects"
+_TCU_SENTINEL_VALUE = "System Statistic"
+
 HEC_TERMS_URL = "https://www.hec.usace.army.mil/software/hec-ras/"
 
 
@@ -139,13 +147,15 @@ class RasTcu:
 
     @staticmethod
     def _node_has_acceptance_state(hive, subkey: str) -> bool:
-        """Return True only for a VB6 settings node that is not merely personal MRU state.
+        """Return True only for a VB6 settings node with acceptance-bearing state.
 
         HEC-RAS stores recent projects and window layout under child sections such as
         ``Projects`` and ``Form Position``. Those sections can exist without the TCU
-        having been accepted for the target version, and copying only those sections
-        can produce a false positive. Treat a node as acceptance-bearing only when it
-        has root values or at least one non-personal child section.
+        having been accepted for the target version. HEC-RAS 6.x also stores its
+        ``System Statistic`` acceptance sentinel inside ``Projects``. Treat that exact,
+        non-empty value as acceptance-bearing; continue to ignore ordinary MRU values.
+        Root values and non-personal child sections remain acceptance-bearing for older
+        and future layouts.
         """
         import winreg
 
@@ -154,6 +164,8 @@ class RasTcu:
                 n_sub, n_val, _ = winreg.QueryInfoKey(key)
                 if n_val > 0:
                     return True
+                if RasTcu._has_tcu_sentinel(hive, subkey):
+                    return True
                 for idx in range(n_sub):
                     child = winreg.EnumKey(key, idx)
                     if child.casefold() not in _PERSONAL_SECTION_NAMES:
@@ -161,6 +173,28 @@ class RasTcu:
                 return False
         except OSError:
             return False
+
+    @staticmethod
+    def _has_tcu_sentinel(hive, subkey: str) -> bool:
+        """Return whether ``Projects`` contains the exact non-empty TCU sentinel."""
+        import winreg
+
+        projects_key = f"{subkey}\\{_TCU_SENTINEL_SECTION}"
+        try:
+            with winreg.OpenKey(hive, projects_key) as key:
+                _, n_val, _ = winreg.QueryInfoKey(key)
+                for idx in range(n_val):
+                    name, value, _ = winreg.EnumValue(key, idx)
+                    if name.casefold() != _TCU_SENTINEL_VALUE.casefold():
+                        continue
+                    if isinstance(value, str):
+                        return bool(value.strip())
+                    if isinstance(value, int) and not isinstance(value, bool):
+                        return value > 0
+                    return False
+        except OSError:
+            pass
+        return False
 
     # ------------------------------------------------------------------ #
     # Public: detection (read-only)
@@ -370,7 +404,16 @@ class RasTcu:
             RasTcu._copy_key(donor_hive, donor_key, winreg.HKEY_CURRENT_USER, target_key, writes, dry_run)
             if not keep_personal and not dry_run:
                 for section in _PERSONAL_SECTIONS:
-                    RasTcu._clear_values(winreg.HKEY_CURRENT_USER, f"{target_key}\\{section}")
+                    preserve_names = (
+                        (_TCU_SENTINEL_VALUE,)
+                        if section.casefold() == _TCU_SENTINEL_SECTION.casefold()
+                        else ()
+                    )
+                    RasTcu._clear_values(
+                        winreg.HKEY_CURRENT_USER,
+                        f"{target_key}\\{section}",
+                        preserve_names=preserve_names,
+                    )
         except OSError as exc:
             logger.error("Failed to seed HEC-RAS %s TCU acceptance: %s", pre.version, exc)
             return TcuStatus(False, pre.version, install_dir, target_key, "no-vb6-subtree")
@@ -402,9 +445,10 @@ class RasTcu:
         return TcuStatus(True, pre.version, install_dir, target_key, "accepted")
 
     @staticmethod
-    def _clear_values(hive, subkey: str) -> None:
+    def _clear_values(hive, subkey: str, *, preserve_names=()) -> None:
         import winreg
 
+        preserved = {name.casefold() for name in preserve_names}
         try:
             with winreg.OpenKey(hive, subkey, 0, winreg.KEY_ALL_ACCESS) as key:
                 names = []
@@ -416,6 +460,8 @@ class RasTcu:
                     except OSError:
                         break
                 for name in names:
+                    if name.casefold() in preserved:
+                        continue
                     try:
                         winreg.DeleteValue(key, name)
                     except OSError:
