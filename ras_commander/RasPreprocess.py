@@ -74,6 +74,25 @@ class RasPreprocess:
     )
 
     @staticmethod
+    def _ras_compute_command_line(
+        ras_exe: Union[str, Path],
+        project_file: Union[str, Path],
+        plan_file: Union[str, Path],
+    ) -> str:
+        """Build the fully quoted command line required by ``Ras.exe -c``.
+
+        HEC-RAS parses the optional plan path from the raw Windows command
+        line and requires it to be quoted even when the path has no spaces.
+        Passing an argument vector through ``subprocess`` is therefore not
+        equivalent to the documented command-line contract.
+        """
+        values = tuple(str(value) for value in (ras_exe, project_file, plan_file))
+        if any('"' in value for value in values):
+            raise ValueError("HEC-RAS command paths cannot contain a double quote")
+        executable, project, plan = values
+        return f'"{executable}" -c "{project}" "{plan}"'
+
+    @staticmethod
     @log_call
     def preprocess_plan(
         plan_number: Union[str, Number],
@@ -224,16 +243,30 @@ class RasPreprocess:
         # Windows Python hosted by Wine.
         launcher = (
             "import subprocess,sys; "
-            "raise SystemExit(subprocess.call(sys.argv[1:], shell=False))"
+            "ras_exe,command_line=sys.argv[1:3]; "
+            "raise SystemExit(subprocess.call(command_line, "
+            "executable=ras_exe, shell=False))"
         )
+        try:
+            compute_command_line = RasPreprocess._ras_compute_command_line(
+                ras_exe,
+                prj_file,
+                plan_file,
+            )
+        except ValueError as e:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                error=f"Could not launch HEC-RAS preprocessing: {e}",
+                elapsed_seconds=time.time() - start_time,
+            )
         cmd = [
             sys.executable,
             "-c",
             launcher,
             str(ras_exe),
-            "-c",
-            str(prj_file),
-            str(plan_file),
+            compute_command_line,
         ]
         logger.info("Starting HEC-RAS preprocessing for plan %s", plan_num)
         logger.debug(f"Command: {cmd}")
