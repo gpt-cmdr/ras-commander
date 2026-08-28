@@ -3694,12 +3694,12 @@ class GeomMesh:
                     mesh_index=mesh_index,
                 )
                 if cell_size is not None:
-                    logger.info(
+                    logger.debug(
                         f"Auto-detected cell size {cell_size} from geometry text"
                     )
                 else:
                     cell_size = _read_cell_size_from_hdf(hdf_path, mesh_name)
-                    logger.info(
+                    logger.debug(
                         f"Auto-detected cell size {cell_size} from HDF Spacing dx"
                     )
 

@@ -140,6 +140,9 @@ class RasControlResult:
         messages: List of computation messages from HEC-RAS COM interface.
         results_df_row: Single row from results_df for the executed plan,
             or None if unavailable.
+        execution_details: JSON-safe Controller identity, compute mode,
+            watchdog status, message counts, and timing provenance reported by
+            ``RasControl.run_plan()``. Mode-specific keys are additive.
 
     Examples:
         # Old usage (still works):
@@ -158,6 +161,7 @@ class RasControlResult:
     success: bool
     messages: List[str] = field(default_factory=list)
     results_df_row: Optional[pd.Series] = None
+    execution_details: Dict[str, Any] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return self.success

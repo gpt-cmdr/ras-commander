@@ -2,6 +2,33 @@
 
 RAS Commander provides three modes for executing HEC-RAS plans, each optimized for different workflows.
 
+## Lean Batch Installation
+
+Batch workers that only need project inventory, plan computation, computation
+messages, and HDF result extraction can install the compute dependency profile:
+
+```bash
+pip install "ras-commander[compute]"
+```
+
+Use the intentionally narrow facade in integration code:
+
+```python
+from ras_commander.compute import (
+    HdfResultsPlan,
+    RasCmdr,
+    ResultsParser,
+    init_ras_project,
+)
+```
+
+This facade does not export `RasControl` or `RasControlResult`. Call
+`RasCmdr.compute_plan()` rather than constructing a `Ras.exe -c` command in the
+integrating application. The method retains normal ras-commander behavior:
+command construction, process and dialog supervision, compute-message handling,
+caller-controlled semantic verification, and post-compute project/result
+DataFrame refresh.
+
 ## Single Plan Execution
 
 Execute one plan with full parameter control using `RasCmdr.compute_plan()`.

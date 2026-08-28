@@ -61,35 +61,52 @@ named definitions currently resolve to the first match.
 
 ## Update Stored Parameters
 
-For individual fields in the ten-value `Breach Geom` record, use
+For individual fields in the nine- or ten-value `Breach Geom` record, use
 `set_breach_geom()`:
 
 ```python
 RasBreach.set_breach_geom(
     "01",
     "Dam1",
-    initial_width=100.0,
+    final_bottom_width=100.0,
     final_bottom_elev=850.0,
     left_slope=1.0,
     right_slope=1.0,
-    formation_method=1,
+    failure_mode="overtopping",
     formation_time=2.0,
+    weir_coefficient=2.6,
 )
 ```
 
-The geometry fields, in order, are `centerline`, `initial_width`,
-`final_bottom_elev`, `left_slope`, `right_slope`, `active`, `weir_coef`,
-`top_elev`, `formation_method`, and `formation_time`. In the raw CSV,
-formation time is field index 9. Prefer the named setter instead of editing
-that position directly.
+The geometry fields, in order, are `centerline`, `final_bottom_width`,
+`final_bottom_elev`, `left_slope`, `right_slope`, `failure_mode`,
+`piping_coefficient`, `initial_piping_elevation`, `formation_time`, and
+`weir_coefficient`. In the raw CSV, formation time is field index 8 and the
+weir coefficient is field index 9. The failure mode is stored as `False` for
+overtopping or `True` for piping; it is not an activation flag. Prefer the
+named setter instead of editing raw positions directly.
 
-`active=` in `set_breach_geom()` updates the activation-like field stored in
-`Breach Geom`. To update the local `Breach Loc` flag returned as `is_active`,
-use `update_breach_block(is_active=...)`:
+The bottom-width and bottom-elevation slots are method-dependent: method 0
+interprets them as final dimensions, while other breach methods may interpret
+the same raw slots as limiting dimensions. Confirm the applicable HEC-RAS
+method definition before changing them.
+
+To update the local `Breach Loc` flag returned as `is_active`, use
+`update_breach_block(is_active=...)`:
 
 ```python
 RasBreach.update_breach_block("01", "Dam1", is_active=False)
 ```
+
+The deprecated `initial_width` alias still targets final bottom width, and
+`weir_coef` still expresses weir-coefficient intent while writing the corrected
+field. The former `active`, `top_elev`, and `formation_method` geometry keywords
+fail closed because their documented meanings did not correspond to the fields
+they changed. For activation intent, use
+`update_breach_block(is_active=...)`. `top_elev` has no direct equivalent;
+use `initial_piping_elevation` only when that is the intended physical input.
+For breach method or start-condition intent, use the corresponding `method` or
+`start_values` fields in `update_breach_block()`.
 
 Use `update_breach_block()` for complete CSV records, tables, and advanced
 parameters:
@@ -132,10 +149,10 @@ RasBreach.create_breach_block(
 RasBreach.set_breach_geom(
     "01",
     "Dam1",
-    initial_width=25.0,
+    final_bottom_width=25.0,
     final_bottom_elev=850.0,
-    formation_method=1,
     formation_time=2.0,
+    weir_coefficient=2.6,
 )
 ```
 

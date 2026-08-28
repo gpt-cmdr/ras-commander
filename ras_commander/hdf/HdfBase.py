@@ -44,15 +44,16 @@ from datetime import datetime, timedelta
 import h5py
 import numpy as np
 import pandas as pd
-import xarray as xr
-from typing import List, Tuple, Union, Optional, Dict, Any
+from typing import TYPE_CHECKING, List, Tuple, Union, Optional, Dict, Any
 from pathlib import Path
 import logging
-from shapely.geometry import LineString, MultiLineString
 
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import setup_logging, get_logger
+
+if TYPE_CHECKING:
+    from shapely.geometry import LineString
 
 logger = get_logger(__name__)
 _missing_projection_warning_paths: set[str] = set()
@@ -481,7 +482,7 @@ class HdfBase:
     @standardize_input(file_type='plan_hdf')
     def get_polylines_from_parts(hdf_path: Path, path: str, info_name: str = "Polyline Info", 
                               parts_name: str = "Polyline Parts", 
-                              points_name: str = "Polyline Points") -> List[LineString]:
+                              points_name: str = "Polyline Points") -> List["LineString"]:
         """
         Extract polylines from HDF file parts data.
 
@@ -501,6 +502,8 @@ class HdfBase:
             - Parts information for multi-part lines
             - Point coordinates
         """
+        from shapely.geometry import LineString, MultiLineString
+
         polyline_info_path = f"{path}/{info_name}"
         polyline_parts_path = f"{path}/{parts_name}"
         polyline_points_path = f"{path}/{points_name}"

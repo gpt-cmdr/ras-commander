@@ -198,16 +198,13 @@ class _SliceOnlyDataset:
         return self._values[key]
 
 
-def test_pyarrow_is_a_required_core_dependency():
+def test_pyarrow_is_available_through_feature_extras():
     setup_path = Path(__file__).absolute().parents[1] / "setup.py"
     setup_text = setup_path.read_text(encoding="utf-8")
 
-    install_requires = setup_text.split("install_requires=[", 1)[1].split(
-        "],",
-        1,
-    )[0]
-    assert "'pyarrow>=14.0'" in install_requires
-    assert "'geoparquet': []" in setup_text
+    assert "'pyarrow>=14.0'" in setup_text
+    assert "'geoparquet': ['pyarrow>=14.0']" in setup_text
+    assert "'full': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES" in setup_text
 
 
 def test_velocity_reduction_is_bounded_slice_only():

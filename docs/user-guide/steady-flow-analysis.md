@@ -74,6 +74,37 @@ print(info)
 # - reach_names: List of reach names
 ```
 
+## Complete Cross-Section Results Without COM
+
+`get_steady_results()` reads the modern plan HDF directly and returns one row
+per profile and cross section:
+
+```python
+results = HdfResultsPlan.get_steady_results(hdf_path)
+results = results[
+    [
+        "river", "reach", "node_id", "profile", "wsel", "flow",
+        "max_depth", "channel_length",
+    ]
+]
+```
+
+`max_depth` is the HEC-RAS `Maximum Depth Total` result. This is distinct from
+`hydraulic_depth`, which is also returned from `Hydraulic Depth Channel`.
+`channel_length` is joined from geometry cross-section attributes using the
+full `(river, reach, station)` identity; HEC-RAS non-finite terminal reach-length
+sentinels are normalized to zero.
+
+The selected sources are recorded on the returned DataFrame:
+
+```python
+print(results.attrs["max_depth_source"])
+print(results.attrs["channel_length_source"])
+```
+
+HEC-RAS layouts without `Maximum Depth Total` use `Hydraulic Depth Channel` as
+an explicit legacy fallback and record that fallback in `max_depth_source`.
+
 ## Complete Workflow
 
 ```python
@@ -160,5 +191,9 @@ See [Legacy COM Interface](legacy-com-interface.md) for complete RasControl docu
 
 - Steady flow support was added in v0.80.3+
 - Works with HEC-RAS 6.x+ HDF files
+- `Maximum Depth Total` and geometry `Len Channel` semantics are regression
+  tested against immutable HEC-RAS 6.0.0, 6.3.1, 6.4.1, 6.6, and 7.0 fixtures.
+  The current CLB catalog contains no computed steady-result HDF from 6.1,
+  6.2, or 6.5, so those exact releases remain explicit fixture gaps.
 - For legacy versions (3.x-5.x), use `RasControl.get_steady_results()`
 - See `examples/19_steady_flow_analysis.ipynb` for complete examples

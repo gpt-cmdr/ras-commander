@@ -239,6 +239,35 @@ def test_clb_1106_text_only_631_2d_regression():
 
 
 @pytest.mark.qualification_critical
+def test_clb_68_legacy_reach_text_fallback_is_steady_1d_and_immutable(tmp_path):
+    database_path = _fixture_database_path()
+    if not database_path.is_file():
+        pytest.skip("CLB fixture database is not available")
+
+    project_path = _project_path_from_database(database_path, 68)
+    if not project_path.is_file():
+        pytest.skip("CLB fixture 68 is not mounted")
+
+    working_copy = tmp_path / "clb_68_legacy_reach"
+    shutil.copytree(project_path.parent, working_copy)
+    geometry_path = working_copy / "MIXED.g01"
+    geometry_hdf = working_copy / "MIXED.g01.hdf"
+    geometry_hdf.unlink()
+    before = _sha256(geometry_path)
+
+    project = _load_project(working_copy)
+    plan = project.plan_df.set_index("plan_number").loc["01"]
+
+    assert _sha256(geometry_path) == before
+    assert plan["flow_type"] == "Steady"
+    assert plan["geometry_type"] == "1D"
+    assert plan["plan_type"] == "steady_1d"
+    assert bool(plan["plan_classification_valid"])
+    assert plan["geometry_metadata_source"] == "text"
+    assert plan["num_cross_sections"] == 19
+
+
+@pytest.mark.qualification_critical
 def test_clb_670_and_700_geometry_hdf_schema_regressions():
     database_path = _fixture_database_path()
     if not database_path.is_file():

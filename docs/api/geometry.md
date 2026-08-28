@@ -379,7 +379,7 @@ results are read separately through `HdfResultsBreach`.
 - `list_breach_structures_plan(plan_input, *, ras_object=None)` - Return one dictionary per stored definition with `structure`, `river`, `reach`, `station`, and local stored `is_active`
 - `read_breach_block(plan_input, structure_name, *, ras_object=None)` - Return the named definition's location, raw `values`, and parsed `table_rows`
 - `update_breach_block(plan_input, structure_name, *, is_active=None, method=None, geom_values=None, start_values=None, progression_mode=None, progression_pairs=None, downcutting_pairs=None, widening_pairs=None, calculator_data=None, dlb_methods=None, dlb_soil_type=None, dlb_soil_properties=None, dlb_core_soil_type=None, dlb_cover_option=None, dlb_cover_soil_properties=None, dlb_breach_direction=None, user_growth_flag=None, user_growth_ratio=None, mass_wasting_option=None, create_backup=True, ras_object=None)` - Update complete stored fields and tables
-- `set_breach_geom(plan_input, structure_name, *, centerline=None, initial_width=None, final_bottom_elev=None, left_slope=None, right_slope=None, active=None, weir_coef=None, top_elev=None, formation_method=None, formation_time=None, ras_object=None)` - Update selected fields in the ten-value `Breach Geom` record
+- `set_breach_geom(plan_input, structure_name, *, centerline=None, final_bottom_width=None, final_bottom_elev=None, left_slope=None, right_slope=None, failure_mode=None, piping_coefficient=None, initial_piping_elevation=None, formation_time=None, weir_coefficient=None, initial_width=None, weir_coef=None, active=None, top_elev=None, formation_method=None, ras_object=None)` - Update selected fields in the `Breach Geom` record; `initial_width`/`weir_coef` are deprecated safe aliases, while the three other legacy keywords fail closed with migration guidance
 - `create_breach_block(plan_input, structure_name, *, river="", reach="", station="", is_active=True, create_backup=True, ras_object=None)` - Create a new minimal stored breach block
 
 The list output is the structure-level discovery API. Project-level
@@ -413,6 +413,7 @@ RasBreach.set_breach_geom(
     "01",
     "Dam1",
     formation_time=2.0,
-    initial_width=100.0,
+    final_bottom_width=100.0,
+    weir_coefficient=2.6,
 )
 ```

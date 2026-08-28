@@ -4,6 +4,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pytest
 
 from ras_commander.hdf import HdfResultsPlan
 
@@ -18,6 +19,7 @@ def _write_legacy_steady_plan_hdf(path: Path) -> None:
             ("River", "S32"),
             ("Reach", "S32"),
             ("RS", "S32"),
+            ("Len Channel", "f4"),
         ]
     )
     with h5py.File(path, "w") as hdf:
@@ -25,8 +27,8 @@ def _write_legacy_steady_plan_hdf(path: Path) -> None:
             "Geometry/Cross Sections/Attributes",
             data=np.array(
                 [
-                    (b"River A", b"Reach A", b"1000"),
-                    (b"River A", b"Reach A", b"900"),
+                    (b"River A", b"Reach A", b"1000", 125.0),
+                    (b"River A", b"Reach A", b"900", 1.0e30),
                 ],
                 dtype=attributes_dtype,
             ),
@@ -42,6 +44,14 @@ def _write_legacy_steady_plan_hdf(path: Path) -> None:
         hdf.create_dataset(
             f"{STEADY_BASE_PATH}/Cross Sections/Flow",
             data=np.array([[1000.0, 1000.0], [1500.0, 1500.0]]),
+        )
+        hdf.create_dataset(
+            f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables/Maximum Depth Total",
+            data=np.array([[5.0, 4.0], [6.0, 5.0]]),
+        )
+        hdf.create_dataset(
+            f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables/Hydraulic Depth Channel",
+            data=np.array([[2.0, 1.0], [3.0, 2.0]]),
         )
 
 
@@ -116,3 +126,44 @@ def test_steady_results_uses_geometry_cross_section_attributes_when_needed(tmp_p
             "flow": 1500.0,
         },
     ]
+    assert results[["max_depth", "hydraulic_depth", "channel_length"]].to_dict("records") == [
+        {"max_depth": 5.0, "hydraulic_depth": 2.0, "channel_length": 125.0},
+        {"max_depth": 4.0, "hydraulic_depth": 1.0, "channel_length": 0.0},
+        {"max_depth": 6.0, "hydraulic_depth": 3.0, "channel_length": 125.0},
+        {"max_depth": 5.0, "hydraulic_depth": 2.0, "channel_length": 0.0},
+    ]
+    assert results.attrs["max_depth_source"] == "Maximum Depth Total"
+    assert results.attrs["channel_length_source"].endswith("Len Channel")
+
+
+def test_steady_results_records_legacy_hydraulic_depth_fallback(tmp_path):
+    hdf_path = tmp_path / "legacy_depth_fallback.p01.hdf"
+    _write_legacy_steady_plan_hdf(hdf_path)
+    maximum_depth_path = (
+        f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables/"
+        "Maximum Depth Total"
+    )
+    with h5py.File(hdf_path, "a") as hdf:
+        del hdf[maximum_depth_path]
+
+    results = HdfResultsPlan.get_steady_results(hdf_path)
+
+    assert results["max_depth"].tolist() == results["hydraulic_depth"].tolist()
+    assert results.attrs["max_depth_source"] == (
+        "Hydraulic Depth Channel (legacy fallback)"
+    )
+
+
+def test_steady_results_rejects_misaligned_variable_shape(tmp_path):
+    hdf_path = tmp_path / "misaligned_steady.p01.hdf"
+    _write_legacy_steady_plan_hdf(hdf_path)
+    maximum_depth_path = (
+        f"{STEADY_BASE_PATH}/Cross Sections/Additional Variables/"
+        "Maximum Depth Total"
+    )
+    with h5py.File(hdf_path, "a") as hdf:
+        del hdf[maximum_depth_path]
+        hdf.create_dataset(maximum_depth_path, data=np.array([[5.0, 4.0]]))
+
+    with pytest.raises(ValueError, match="Maximum Depth Total.*shape"):
+        HdfResultsPlan.get_steady_results(hdf_path)

@@ -3,6 +3,38 @@ from setuptools.command.build_py import build_py
 import subprocess
 from pathlib import Path
 
+
+# Keep the default installation import-safe and suitable for inventory/HDF work.
+# Feature groups are additive so batch runners can install only what they use.
+CORE_DEPENDENCIES = [
+    'h5py',
+    'numpy',
+    'pandas',
+]
+
+COMPUTE_DEPENDENCIES = [
+    'psutil>=5.6.6',  # Process supervision and the default dialog watchdog
+    'pywin32>=227; sys_platform == "win32"',  # Windows dialog watchdog primitives
+]
+
+FULL_FEATURE_DEPENDENCIES = [
+    'requests',
+    'tqdm',
+    'scipy',
+    'xarray',
+    'geopandas',
+    'matplotlib',
+    'shapely>=2.0',
+    'rasterio',
+    'pyarrow>=14.0',
+    'pyproj',
+    'rasterstats',
+    'rtree',
+    'fsspec>=2023.0.0',
+    'hms-commander>=0.3.1',
+]
+
+
 class CustomBuildPy(build_py):
     def run(self):
         # Clean up __pycache__ folders
@@ -67,28 +99,16 @@ setup(
     cmdclass={
         'build_py': CustomBuildPy,
     },
-    install_requires=[
-        'h5py',
-        'numpy',
-        'pandas',
-        'requests',
-        'tqdm',
-        'scipy',
-        'xarray',
-        'geopandas',
-        'matplotlib',
-        'shapely>=2.0',
-        'rasterio',
-        'pyarrow>=14.0',
-        'pyproj',
-        'rasterstats',
-        'rtree',
-        'fsspec>=2023.0.0',  # Required for Atlas14Grid remote HTTP access
-        'pywin32>=227; sys_platform == "win32"',    # Required for RasControl COM interface (Windows only)
-        'psutil>=5.6.6',   # Required for RasControl process management
-        'hms-commander>=0.3.1',  # Storm generator updates and Atlas 14 DataFrame API
-    ],
+    install_requires=CORE_DEPENDENCIES,
     extras_require={
+        # Lean Windows/Wine batch execution through RasCmdr.compute_plan().
+        # This intentionally excludes the RasControl COM interface and the
+        # geospatial/plotting stack. "execution" is a descriptive alias.
+        'compute': COMPUTE_DEPENDENCIES,
+        'execution': COMPUTE_DEPENDENCIES,
+        # Preserve the historical default feature dependency surface for
+        # users who need every ras-commander module.
+        'full': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES,
         # Remote execution backends (PsExec worker has no extra deps)
         'remote': [],  # Base remote - PsExec only, no additional deps
         'remote-ssh': ['paramiko>=3.0'],
@@ -111,8 +131,8 @@ setup(
         # Precipitation enhancements
         'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
-        # Compatibility alias: pyarrow is required by the core package.
-        'geoparquet': [],
+        # GeoParquet support without the rest of the full feature stack.
+        'geoparquet': ['pyarrow>=14.0'],
         # Notebook dependencies (raster visualization, coordinate systems, precipitation examples)
         'notebooks': [
             'rasterio',
@@ -131,7 +151,7 @@ setup(
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],
         # Everything (all optional dependencies)
-        'all': [
+        'all': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES + [
             'paramiko>=3.0',
             'pywinrm>=0.4.3',
             'docker>=6.0',

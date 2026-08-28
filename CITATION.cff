@@ -13,7 +13,7 @@ authors:
 abstract: >-
   RAS Commander is an open-source Python library for reproducible HEC-RAS
   automation, project inspection, execution, and results analysis.
-version: 0.99.0
+version: 0.99.1
 license: MIT
 repository-code: https://github.com/gpt-cmdr/ras-commander
 url: https://rascommander.info/ras/

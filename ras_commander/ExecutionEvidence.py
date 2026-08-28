@@ -21,7 +21,6 @@ from .ExecutionArtifacts import (
     normalize_program_version,
     resolve_plan_result_artifact,
 )
-from .RasControl import RasControl
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
 from .hdf.HdfUtils import HdfUtils
@@ -1013,6 +1012,11 @@ def inspect_execution_evidence(
     stored_hash: Optional[str] = None
     stored_version: Optional[str] = None
     try:
+        # Keep the command-line compute surface import-safe without loading the
+        # optional COM implementation. Offline inspection imports RasControl
+        # only when stored Controller messages are actually inspected.
+        from .RasControl import RasControl
+
         stored = RasControl._read_stored_comp_msgs(
             normalized_plan,
             ras_object=ras_obj,

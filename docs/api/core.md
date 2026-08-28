@@ -86,7 +86,7 @@ not_ready = assets.loc[
 ]
 ```
 
-::: ras_commander.inspect_project_assets
+::: ras_commander.RasProject.inspect_project_assets
     options:
       show_root_heading: true
       heading_level: 3
@@ -118,12 +118,12 @@ print(staged.destination_project_file)
 print(staged.execution_readiness)
 ```
 
-::: ras_commander.stage_project
+::: ras_commander.RasProject.stage_project
     options:
       show_root_heading: true
       heading_level: 3
 
-::: ras_commander.StageProjectResult
+::: ras_commander.RasProject.StageProjectResult
     options:
       show_root_heading: true
       heading_level: 3
@@ -220,27 +220,27 @@ version and fails before mutation when that version is unknown. Worker and
 Docker promotion accepts only a successful plan's exact final result family;
 Linux preprocessing `.tmp.hdf` files are never published as results.
 
-::: ras_commander.ExecutionEvidence
+::: ras_commander.ExecutionEvidence.ExecutionEvidence
     options:
       show_root_heading: true
       heading_level: 4
 
-::: ras_commander.EvidenceObservation
+::: ras_commander.ExecutionEvidence.EvidenceObservation
     options:
       show_root_heading: true
       heading_level: 4
 
-::: ras_commander.PlanExecutionCleanup
+::: ras_commander.ExecutionArtifacts.PlanExecutionCleanup
     options:
       show_root_heading: true
       heading_level: 4
 
-::: ras_commander.PlanExecutionCleanupError
+::: ras_commander.ExecutionArtifacts.PlanExecutionCleanupError
     options:
       show_root_heading: true
       heading_level: 4
 
-::: ras_commander.ResultArtifactAmbiguityError
+::: ras_commander.ExecutionArtifacts.ResultArtifactAmbiguityError
     options:
       show_root_heading: true
       heading_level: 4

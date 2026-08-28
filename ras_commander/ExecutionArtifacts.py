@@ -188,17 +188,33 @@ def get_plan_result_artifact_paths(
     project_folder: Optional[Union[str, Path]] = None,
     project_name: Optional[str] = None,
 ) -> PlanResultArtifactPaths:
-    """Resolve the exact artifact allowlist for one plan."""
-    ras_obj = ras_object if ras_object is not None else ras
-    if hasattr(ras_obj, "check_initialized"):
-        ras_obj.check_initialized()
-    elif not hasattr(ras_obj, "project_folder") or not hasattr(
-        ras_obj, "project_name"
-    ):
-        raise ValueError("ras_object must identify an initialized project")
+    """Resolve the exact artifact allowlist for one plan.
+
+    Explicit ``project_folder`` and ``project_name`` identify the project
+    without requiring the process-global project object to be initialized.
+    Both values are required together so cleanup cannot combine metadata from
+    different project contexts.
+    """
+    explicit_project = project_folder is not None or project_name is not None
+    if explicit_project:
+        if project_folder is None or project_name is None:
+            raise ValueError(
+                "project_folder and project_name must be provided together"
+            )
+        ras_obj = None
+    else:
+        ras_obj = ras_object if ras_object is not None else ras
+        if hasattr(ras_obj, "check_initialized"):
+            ras_obj.check_initialized()
+        elif not hasattr(ras_obj, "project_folder") or not hasattr(
+            ras_obj, "project_name"
+        ):
+            raise ValueError("ras_object must identify an initialized project")
     normalized = RasUtils.normalize_ras_number(plan_number)
-    folder = Path(project_folder or ras_obj.project_folder).resolve()
-    name = str(project_name or ras_obj.project_name)
+    folder = Path(
+        project_folder if explicit_project else ras_obj.project_folder
+    ).resolve()
+    name = str(project_name if explicit_project else ras_obj.project_name)
     if not name or Path(name).name != name or name in {".", ".."}:
         raise ValueError(
             "project_name must be a plain filename stem without path separators"
