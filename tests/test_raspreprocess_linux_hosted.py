@@ -55,6 +55,30 @@ def _write_preprocess_outputs(folder: Path):
     (folder / "fixture.x03").write_bytes(b"ready")
 
 
+def test_compute_command_line_quotes_every_hec_ras_path():
+    assert RasPreprocess._ras_compute_command_line(
+        r"C:\HEC-RAS\6.6\Ras.exe",
+        r"Q:\fixture\model.prj",
+        r"Q:\fixture\model.p01",
+    ) == (
+        r'"C:\HEC-RAS\6.6\Ras.exe" -c '
+        r'"Q:\fixture\model.prj" "Q:\fixture\model.p01"'
+    )
+
+
+def test_compute_command_line_rejects_quote_in_path():
+    try:
+        RasPreprocess._ras_compute_command_line(
+            r"C:\HEC-RAS\6.6\Ras.exe",
+            'Q:\\bad"folder\\model.prj',
+            r"Q:\fixture\model.p01",
+        )
+    except ValueError as error:
+        assert "cannot contain a double quote" in str(error)
+    else:
+        raise AssertionError("a quoted path must be rejected")
+
+
 def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
     tmp_path,
     monkeypatch,
@@ -112,11 +136,15 @@ def test_preprocess_uses_owned_launcher_and_records_alternate_signal(
         sys.executable,
         "-c",
         "import subprocess,sys; "
-        "raise SystemExit(subprocess.call(sys.argv[1:], shell=False))",
+        "ras_exe,command_line=sys.argv[1:3]; "
+        "raise SystemExit(subprocess.call(command_line, "
+        "executable=ras_exe, shell=False))",
         str(ras_obj.ras_exe_path),
-        "-c",
-        str(tmp_path / "fixture.prj"),
-        str(tmp_path / "fixture.p01"),
+        (
+            f'"{ras_obj.ras_exe_path}" -c '
+            f'"{tmp_path / "fixture.prj"}" '
+            f'"{tmp_path / "fixture.p01"}"'
+        ),
     ]
     assert launched["kwargs"]["shell"] is False
     assert callable(launched["monitor"]["alternate_signal_condition"])
