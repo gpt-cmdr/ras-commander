@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pyarrow.parquet as pq
 import pytest
@@ -62,6 +62,60 @@ def test_available_observation_requires_exactly_one_typed_value() -> None:
     row["value_string"] = "also populated"
     with pytest.raises(SchemaValidationError, match="exactly one value"):
         table_from_rows("observations", [row])
+
+
+def test_modeled_local_datetime_round_trips_without_invented_timezone() -> None:
+    row = dict(valid_table_rows()["observations"][0])
+    row.update(
+        observation_name="simulation_start",
+        channel="filesystem",
+        value_type="local_datetime",
+        value_bool=None,
+        value_string="1999-01-01T12:00:00.123456",
+    )
+
+    restored = table_from_rows("observations", [row]).to_pylist()[0]
+
+    assert restored["value_type"] == "local_datetime"
+    assert restored["value_string"] == "1999-01-01T12:00:00.123456"
+    assert restored["value_timestamp"] is None
+
+
+def test_local_datetime_rejects_an_attached_timezone() -> None:
+    row = dict(valid_table_rows()["observations"][0])
+    row.update(
+        observation_name="simulation_start",
+        channel="filesystem",
+        value_type="local_datetime",
+        value_bool=None,
+        value_string="1999-01-01T12:00:00+00:00",
+    )
+    with pytest.raises(SchemaValidationError, match="timezone-naive"):
+        table_from_rows("observations", [row])
+
+
+def test_aware_evidence_datetime_remains_a_deterministic_utc_timestamp() -> None:
+    row = dict(valid_table_rows()["observations"][0])
+    row.update(
+        observation_name="result_artifact_modified_at",
+        channel="filesystem",
+        value_type="timestamp",
+        value_bool=None,
+        value_timestamp=datetime(
+            2026,
+            8,
+            28,
+            12,
+            0,
+            tzinfo=timezone(timedelta(hours=-5)),
+        ),
+    )
+
+    restored = table_from_rows("observations", [row]).to_pylist()[0]
+
+    assert restored["value_timestamp"] == datetime(
+        2026, 8, 28, 17, 0, tzinfo=timezone.utc
+    )
 
 
 def test_unavailable_observation_cannot_retain_a_value() -> None:

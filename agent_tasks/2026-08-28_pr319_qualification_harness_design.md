@@ -550,8 +550,8 @@ remaining rows use the exact `EXECUTION_OBSERVATION_NAMES` registry.
 | `run_id`, `lane_id`, `attempt_id`, `evidence_id`, `observation_name` | `string not null` |
 | `evidence_inspected_at`, `observation_inspected_at` | `timestamp[ns, UTC] not null` |
 | `declared_program_version`, `state`, `channel` | `string nullable`, `string not null`, `string not null` |
-| `value_type` | `string not null` (`null`, `bool`, `int64`, `float64`, `string`, `timestamp`) |
-| `value_bool`, `value_int64`, `value_float64`, `value_string`, `value_timestamp` | corresponding nullable scalar; exactly one populated for available evidence |
+| `value_type` | `string not null` (`null`, `bool`, `int64`, `float64`, `string`, `local_datetime`, `timestamp`) |
+| `value_bool`, `value_int64`, `value_float64`, `value_string`, `value_timestamp` | corresponding nullable scalar; exactly one populated for available evidence. `local_datetime` uses `value_string` with timezone-naive ISO-8601 text because HEC-RAS modeled windows do not declare a timezone; `timestamp` remains an aware UTC Arrow timestamp. |
 | `source_locator`, `source_sha256`, `observed_program_version`, `reason_code`, `detail` | `string nullable` |
 | `conflicts` | `list<string> not null` |
 

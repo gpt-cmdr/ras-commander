@@ -61,6 +61,7 @@ def make_captured_legacy_project(root: Path) -> Path:
         "Plan Title=Base\n"
         "Program Version=4.10\n"
         "Short Identifier=Base\n"
+        "Simulation Date=01JAN2020,0000,02JAN2020,2400\n"
         "Geom File=g01\n"
         "Flow File=f01\n",
         encoding="ascii",

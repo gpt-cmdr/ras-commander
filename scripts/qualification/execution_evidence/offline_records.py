@@ -82,8 +82,12 @@ def _typed_value(value: Any) -> tuple[str, dict[str, Any]]:
         columns["value_float64"] = value
         return "float64", columns
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            raise ValueError("evidence datetime values must be timezone-aware")
+        if value.utcoffset() is None:
+            # HEC-RAS simulation windows are modeled wall-clock values.  RAS
+            # does not attach a timezone, so preserve the exact ISO local
+            # datetime rather than inventing UTC chronology.
+            columns["value_string"] = value.isoformat()
+            return "local_datetime", columns
         columns["value_timestamp"] = value
         return "timestamp", columns
     if isinstance(value, str):

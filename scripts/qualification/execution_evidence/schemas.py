@@ -438,10 +438,27 @@ def _validate_rows(table_name: str, rows: list[dict[str, Any]]) -> None:
                     "int64": "value_int64",
                     "float64": "value_float64",
                     "string": "value_string",
+                    "local_datetime": "value_string",
                     "timestamp": "value_timestamp",
                 }.get(value_type)
                 if expected_column != populated[0]:
                     raise SchemaValidationError(f"{prefix} value_type does not match populated value column")
+                if value_type == "local_datetime":
+                    raw_local = row.get("value_string")
+                    try:
+                        parsed_local = datetime.fromisoformat(raw_local)
+                    except (TypeError, ValueError) as exc:
+                        raise SchemaValidationError(
+                            f"{prefix}.value_string is not an ISO local datetime"
+                        ) from exc
+                    if parsed_local.isoformat() != raw_local:
+                        raise SchemaValidationError(
+                            f"{prefix}.value_string must use canonical ISO local datetime text"
+                        )
+                    if parsed_local.utcoffset() is not None:
+                        raise SchemaValidationError(
+                            f"{prefix}.value_string local datetime must be timezone-naive"
+                        )
             elif populated or value_type != "null":
                 raise SchemaValidationError(f"{prefix} unavailable observation must use value_type='null'")
             _validate_hash(row.get("source_sha256"), f"{prefix}.source_sha256")

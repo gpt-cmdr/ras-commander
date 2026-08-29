@@ -214,11 +214,38 @@ def test_offline_inspect_uses_public_evidence_api_and_is_read_only(
     assert attempt.request["required_invariants"] == ["R01", "R03", "R11"]
     assert receipt["evidence"]["mechanical_completion"]["value"] is True
     assert receipt["evidence"]["observations"]["completion_message_stored"]["value"] is True
+    assert receipt["evidence"]["observations"]["simulation_start"]["value"] == (
+        "2020-01-01T00:00:00"
+    )
+    assert receipt["evidence"]["observations"]["simulation_end"]["value"] == (
+        "2020-01-03T00:00:00"
+    )
     assert len(receipt["tables"]["observations"]) == 17
     invariant_status = {
         row["invariant_id"]: row["status"] for row in receipt["tables"]["invariants"]
     }
     assert invariant_status == {"R01": "pass", "R03": "pass", "R11": "pass"}
+    observation_rows = {
+        row["observation_name"]: row
+        for row in receipt["tables"]["observations"]
+    }
+    assert observation_rows["simulation_start"]["value_type"] == (
+        "local_datetime"
+    )
+    assert observation_rows["simulation_start"]["value_string"] == (
+        "2020-01-01T00:00:00"
+    )
+    assert observation_rows["simulation_start"]["value_timestamp"] is None
+    assert observation_rows["simulation_end"]["value_type"] == (
+        "local_datetime"
+    )
+    assert observation_rows["simulation_end"]["value_string"] == (
+        "2020-01-03T00:00:00"
+    )
+    modified_at = observation_rows["result_artifact_modified_at"]
+    assert modified_at["value_type"] == "timestamp"
+    assert modified_at["value_string"] is None
+    assert modified_at["value_timestamp"].endswith("+00:00")
     lane_row = receipt["tables"]["lanes"][0]
     assert lane_row["compute_mode"] == "offline_inspect"
     event_apis = {row["api"] for row in receipt["tables"]["events"]}
@@ -271,6 +298,18 @@ def test_action_scoped_receipts_rebuild_and_verify_aggregates(
     verified_counts = last_json_line(verified.stdout)
     assert verified_counts["lanes"] == counts["lanes"]
     assert verified_counts["invariants"] == counts["invariants"]
+    reported = run_offline_cli(
+        runtime_repo,
+        "report",
+        "--run-root",
+        str(run_root),
+    )
+    assert reported.returncode == 0, reported.stderr
+    summary_path = Path(reported.stdout.strip())
+    assert summary_path.is_file()
+    assert "Execution-evidence qualification summary" in summary_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_exact_public_ambiguity_is_a_verified_expected_failure(
