@@ -154,20 +154,31 @@ class FakePsutil:
 
 
 class FakeRas:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, plan_number: str = "01"):
         self.project_folder = root
         self.project_name = "Fox"
         self.prj_file = root / "Fox.prj"
-        self.plan_path = root / "Fox.p01"
+        self.plan_number = plan_number
+        self.plan_path = root / f"Fox.p{plan_number}"
         self.prj_file.write_text("Proj Title=Fox\n", encoding="ascii")
-        self.plan_path.write_text("Plan Title=Plan 01\n", encoding="ascii")
+        self.plan_path.write_text(
+            f"Plan Title=Plan {plan_number}\n",
+            encoding="ascii",
+        )
 
     @staticmethod
     def check_initialized():
         return None
 
     def get_plan_entries(self):
-        return pd.DataFrame([{"plan_number": "01", "full_path": str(self.plan_path)}])
+        return pd.DataFrame(
+            [
+                {
+                    "plan_number": self.plan_number,
+                    "full_path": str(self.plan_path),
+                }
+            ]
+        )
 
 
 def _record(pid, name, command, *, cwd=r"C:\Models", created=1.0):
@@ -492,6 +503,215 @@ def test_exact_match_rejects_prefix_and_basename_collisions():
     assert result.complete is True
 
 
+def test_destination_promotion_gate_matches_exact_destination_plan(
+    monkeypatch,
+    tmp_path,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p01"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Plan Title=Plan 01\n", encoding="ascii")
+    destination_launcher = _record(
+        10,
+        "Ras.exe",
+        ["Ras.exe", str(project), str(plan)],
+        cwd=str(tmp_path),
+    )
+    inventory = RasProcessInventory(
+        observed_at=1.0,
+        complete=True,
+        processes=(destination_launcher,),
+    )
+    inspection_module = importlib.import_module(
+        "ras_commander._process_inspection"
+    )
+    monkeypatch.setattr(
+        inspection_module,
+        "scan_ras_processes",
+        lambda **_kwargs: inventory,
+    )
+
+    allowed, evidence = RasCmdr._destination_promotion_process_gate(
+        ["01"],
+        project_folder=tmp_path,
+        project_name="Fox",
+    )
+
+    assert allowed is False
+    assert evidence["complete"] is True
+    assert evidence["quiescence_confirmed"] is False
+    assert evidence["blocked_plan_numbers"] == ["01"]
+    assert evidence["plan_inventories"]["01"]["matched"][0]["pid"] == 10
+
+
+def test_destination_promotion_gate_blocks_match_level_uncertainty(
+    monkeypatch,
+    tmp_path,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p01"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Plan Title=Plan 01\n", encoding="ascii")
+    inventory = RasProcessInventory(
+        observed_at=1.0,
+        complete=True,
+    )
+    match_error = RasProcessQueryError(
+        pid=10,
+        operation="match_plan_process_identity",
+        reason_code="ambiguous_process_identity",
+        exception_type="AmbiguousProcessIdentity",
+        detail="Exact-plan identity could not be decided",
+    )
+    inspection_module = importlib.import_module(
+        "ras_commander._process_inspection"
+    )
+    monkeypatch.setattr(
+        inspection_module,
+        "scan_ras_processes",
+        lambda **_kwargs: inventory,
+    )
+
+    def incomplete_match(
+        _inventory,
+        *,
+        plan_number,
+        project_path,
+        plan_path,
+        tmp_hdf_path,
+    ):
+        return PlanProcessInventory(
+            observed_at=1.0,
+            plan_number=plan_number,
+            project_path=str(project_path),
+            plan_path=str(plan_path),
+            tmp_hdf_path=str(tmp_hdf_path),
+            complete=False,
+            query_errors=(match_error,),
+        )
+
+    monkeypatch.setattr(
+        inspection_module,
+        "match_plan_processes",
+        incomplete_match,
+    )
+
+    allowed, evidence = RasCmdr._destination_promotion_process_gate(
+        ["01"],
+        project_folder=tmp_path,
+        project_name="Fox",
+    )
+
+    assert allowed is False
+    assert evidence["complete"] is False
+    assert evidence["quiescence_confirmed"] is None
+    assert evidence["blocked_plan_numbers"] == []
+    assert evidence["query_errors"] == [match_error.to_dict()]
+    assert evidence["plan_inventories"]["01"]["complete"] is False
+
+
+@pytest.mark.parametrize(
+    "global_process",
+    [
+        _record(
+            20,
+            "Ras.exe",
+            ["Ras.exe", r"C:\Models\Fox.prj", r"C:\Models\Fox.p02"],
+            cwd=r"C:\Models",
+        ),
+        _record(
+            21,
+            "RasGeomPreprocess.exe",
+            ["RasGeomPreprocess.exe", r"C:\Models\Fox.g01.hdf"],
+            cwd=r"C:\Models",
+        ),
+    ],
+    ids=["other_plan_same_project", "shared_geometry_preprocessor"],
+)
+def test_destination_promotion_gate_requires_globally_empty_ras_inventory(
+    monkeypatch,
+    tmp_path,
+    global_process,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p01"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Plan Title=Plan 01\nGeom File=g01\n", encoding="ascii")
+    inventory = RasProcessInventory(
+        observed_at=1.0,
+        complete=True,
+        processes=(global_process,),
+    )
+    inspection_module = importlib.import_module(
+        "ras_commander._process_inspection"
+    )
+    monkeypatch.setattr(
+        inspection_module,
+        "scan_ras_processes",
+        lambda **_kwargs: inventory,
+    )
+
+    allowed, evidence = RasCmdr._destination_promotion_process_gate(
+        ["01"],
+        project_folder=tmp_path,
+        project_name="Fox",
+    )
+
+    assert allowed is False
+    assert evidence["complete"] is True
+    assert evidence["quiescence_confirmed"] is False
+    assert evidence["blocked_plan_numbers"] == []
+    assert evidence["plan_inventories"]["01"]["matched"] == []
+    assert evidence["global_processes"] == [global_process.to_dict()]
+
+
+def test_destination_promotion_lock_refuses_other_owner_and_releases_own(
+    tmp_path,
+):
+    first_lease, first_evidence = (
+        RasCmdr._acquire_destination_promotion_lock(
+            project_folder=tmp_path,
+            project_name="Fox",
+        )
+    )
+    second_lease, second_evidence = (
+        RasCmdr._acquire_destination_promotion_lock(
+            project_folder=tmp_path,
+            project_name="Fox",
+        )
+    )
+
+    assert first_lease is not None
+    assert first_evidence["acquired"] is True
+    assert second_lease is None
+    assert second_evidence["acquired"] is False
+    assert second_evidence["existing_owner"].startswith(
+        "ras_commander_destination_promotion_lock_v1\n"
+    )
+    assert RasCmdr._release_destination_promotion_lock(first_lease) is True
+    assert not Path(first_evidence["lock_path"]).exists()
+
+
+def test_destination_promotion_lock_never_removes_changed_owner(tmp_path):
+    lease, evidence = RasCmdr._acquire_destination_promotion_lock(
+        project_folder=tmp_path,
+        project_name="Fox",
+    )
+    assert lease is not None
+    lock_path = Path(evidence["lock_path"])
+
+    # Simulate losing our open ownership handle before another cooperative
+    # owner publishes a different token. Release must fail closed and preserve
+    # the current lock instead of deleting by path alone.
+    os.close(lease["descriptor"])
+    lease["descriptor"] = -1
+    other_payload = b"ras_commander_destination_promotion_lock_v1\ntoken=other\n"
+    lock_path.write_bytes(other_payload)
+
+    assert RasCmdr._release_destination_promotion_lock(lease) is False
+    assert lock_path.read_bytes() == other_payload
+
+
 def test_exact_match_normalizes_solver_relative_unc_and_extended_paths():
     relative_solver = _record(
         10,
@@ -525,18 +745,24 @@ def test_exact_match_normalizes_solver_relative_unc_and_extended_paths():
     ) == normalize_windows_path_token(r"c:/models/FOX.p01", None)
 
 
-def test_exact_match_supports_observed_solver_cwd_and_plan_marker_signature():
+def test_exact_match_supports_observed_solver_cwd_and_plan_marker_signature(
+    tmp_path,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p08"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Plan Title=Eight\nGeom File=g01\n", encoding="ascii")
     exact = _record(
         10,
         "RasUnsteady.exe",
-        ["RasUnsteady.exe", r"C:\Models\Fox.c01", "b08"],
-        cwd=r"C:\Models",
+        ["RasUnsteady.exe", str(tmp_path / "Fox.c01"), "b08"],
+        cwd=str(tmp_path),
     )
     wrong_plan = _record(
         11,
         "RasUnsteady.exe",
-        ["RasUnsteady.exe", r"C:\Models\Fox.c01", "b09"],
-        cwd=r"C:\Models",
+        ["RasUnsteady.exe", str(tmp_path / "Fox.c01"), "b09"],
+        cwd=str(tmp_path),
     )
     wrong_project = _record(
         12,
@@ -553,12 +779,49 @@ def test_exact_match_supports_observed_solver_cwd_and_plan_marker_signature():
     result = match_plan_processes(
         inventory,
         plan_number="08",
-        project_path=Path(r"C:\Models\Fox.prj"),
-        plan_path=Path(r"C:\Models\Fox.p08"),
-        tmp_hdf_path=Path(r"C:\Models\Fox.p08.tmp.hdf"),
+        project_path=project,
+        plan_path=plan,
+        tmp_hdf_path=tmp_path / "Fox.p08.tmp.hdf",
     )
 
     assert result.matched == (exact,)
+
+
+def test_cwd_marker_match_is_indeterminate_without_computation_identity(
+    tmp_path,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p08"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Plan Title=Eight\n", encoding="ascii")
+    other_project = _record(
+        10,
+        "RasUnsteady.exe",
+        ["RasUnsteady.exe", str(tmp_path / "Other.c03"), "b08"],
+        cwd=str(tmp_path),
+    )
+    inventory = RasProcessInventory(
+        observed_at=1.0,
+        complete=True,
+        processes=(other_project,),
+    )
+
+    result = match_plan_processes(
+        inventory,
+        plan_number="08",
+        project_path=project,
+        plan_path=plan,
+        tmp_hdf_path=tmp_path / "Fox.p08.tmp.hdf",
+    )
+
+    assert result.matched == ()
+    assert result.complete is False
+    assert len(result.query_errors) == 1
+    error = result.query_errors[0]
+    assert error.pid == other_project.pid
+    assert error.operation == "resolve_plan_computation_file"
+    assert error.reason_code == "plan_computation_identity_unavailable"
+    assert "cwd plus bNN" in error.detail
 
 
 def test_cwd_marker_match_requires_resolved_project_computation_file(tmp_path):
@@ -866,8 +1129,16 @@ def test_plan_cancellation_rejects_coercion_and_contradictory_safety_claims():
                 "cancellation_attempted": True,
             }
         )
-    with pytest.raises(ValueError, match="confirmed quiescence"):
+    with pytest.raises(ValueError, match="incomplete cancellation scans"):
         PlanCancellationResult(**{**base, "post_scan_complete": False})
+    with pytest.raises(ValueError, match="confirmed quiescence"):
+        PlanCancellationResult(
+            **{
+                **base,
+                "post_scan_complete": False,
+                "query_errors": (error,),
+            }
+        )
     with pytest.raises(ValueError, match="incomplete cancellation scans"):
         PlanCancellationResult(
             **{
@@ -884,6 +1155,19 @@ def test_plan_cancellation_rejects_coercion_and_contradictory_safety_claims():
         PlanCancellationResult(
             **{**base, "stopped": (), "quiescence_confirmed": False}
         )
+    for incomplete_field in ("pre_scan_complete", "post_scan_complete"):
+        with pytest.raises(
+            ValueError,
+            match="incomplete cancellation scans require query_errors",
+        ):
+            PlanCancellationResult(
+                **{
+                    **base,
+                    incomplete_field: False,
+                    "survivors": (survivor,),
+                    "quiescence_confirmed": False,
+                }
+            )
     with pytest.raises(ValueError, match="stopped and survivors"):
         PlanCancellationResult(
             **{
@@ -1000,6 +1284,28 @@ def test_cancel_exact_terminates_tree_and_leaves_unrelated_process(
     assert unrelated.terminated is False
     assert unrelated.killed is False
     assert RasCmdr.cancel_plan("01", ras_object=ras_obj) is False
+
+
+def test_cancel_exact_never_signals_shared_cwd_marker_without_project_identity(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj = FakeRas(tmp_path, plan_number="08")
+    other_project = FakeProcess(
+        20,
+        "RasUnsteady.exe",
+        ["RasUnsteady.exe", str(tmp_path / "Other.c03"), "b08"],
+        cwd=str(tmp_path),
+    )
+    fake = FakePsutil([other_project])
+    _patch_psutil(monkeypatch, fake)
+
+    result = RasCmdr.cancel_plan_exact("08", ras_object=ras_obj)
+
+    assert result.matched == ()
+    assert result.cancellation_attempted is False
+    assert other_project.terminated is False
+    assert other_project.killed is False
 
 
 def test_cancel_exact_escalates_to_kill_and_reports_survivor(monkeypatch, tmp_path):
@@ -1154,7 +1460,10 @@ def test_cancel_exact_initial_scan_uncertainty_prevents_quiescence_claim(
     result = RasCmdr.cancel_plan_exact("01", ras_object=ras_obj)
 
     assert result.pre_scan_complete is False
-    assert result.post_scan_complete is True
+    assert result.post_scan_complete is False
+    assert result.cancellation_attempted is False
+    assert launcher.terminated is False
+    assert launcher.killed is False
     assert result.survivors == ()
     assert result.quiescence_confirmed is None
 

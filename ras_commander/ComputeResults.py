@@ -476,8 +476,7 @@ class PlanCancellationResult:
         ):
             raise ValueError("quiescence_confirmed must be a boolean or null")
         if (
-            self.quiescence_confirmed is None
-            and (not self.pre_scan_complete or not self.post_scan_complete)
+            not self.pre_scan_complete or not self.post_scan_complete
         ) and not self.query_errors:
             raise ValueError(
                 "incomplete cancellation scans require query_errors"

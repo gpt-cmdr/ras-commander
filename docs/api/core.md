@@ -231,6 +231,76 @@ version and fails before mutation when that version is unknown. Worker and
 Docker promotion accepts only a successful plan's exact final result family;
 Linux preprocessing `.tmp.hdf` files are never published as results.
 
+#### Batch promotion safety
+
+`compute_parallel()` and `compute_test_mode()` treat destination promotion as
+one batch safety decision. Immediately before copying any plan result, message
+sidecar, or shared geometry HDF, ras-commander acquires an exact-create,
+tokenized destination lock and requires a complete, globally empty strict
+HEC-RAS process inventory. This intentionally blocks promotion when *any*
+recognized HEC-RAS launcher, solver, or preprocessor is active, even when it
+belongs to another plan: shared geometry makes plan-only occupancy checks
+insufficient.
+
+If the lock is already held, process inspection is incomplete, or the strict
+inventory is nonempty, no candidate in the batch is promoted or finalized.
+Every otherwise successful candidate is returned as unsuccessful with the
+lock and process-gate evidence in `execution_details_by_plan`. Fresh outputs
+remain available for explicit review or recovery at the exact
+`retained_worker_folder` or `retained_test_folder` path recorded there.
+
+The same recoverability rule applies after the gate succeeds. A missing
+primary result, any artifact copy that raises or returns `False`, or a
+finalization error marks the affected plan unsuccessful and retains its worker
+or test folder. Each candidate plan uses a destination-local publication
+transaction. Ras-commander first copies and hash-verifies the primary result,
+same-run message sidecars, and any selected shared geometry HDF under a unique
+hidden stage, without changing any recognized destination artifact. It then
+quarantines both result families, every known plan-message sidecar, and the
+shared geometry artifact being replaced. Only after that quarantine succeeds
+does it commit the fresh same-run set and run finalization.
+
+If staging, commit, verification, or finalization fails, ras-commander first
+removes every fresh artifact from recognized names. It restores the complete
+prior primary-family set as one safety group, then restores supporting
+artifacts. If either group cannot be completed, every artifact restored so far
+is re-quarantined; this avoids exposing one primary family with an ambiguous
+or partial sidecar set. Hash verification must prove the exact prior
+destination state before the transaction is discarded. When that proof
+succeeds, `rollback_confirmed` is true and no partial publication remains.
+When it cannot be proved, later publication in that batch is refused,
+`partial_promotion_possible` is true, and the hidden transaction, backup
+paths, and fresh worker or test folder remain available for explicit recovery.
+This ordering prevents an old result primary from being paired with a message
+sidecar from the failed new run.
+
+The lock prevents two cooperative ras-commander promotion batches from racing.
+It cannot prevent a person or unrelated program from launching HEC-RAS after
+the process snapshot, so do not open or compute the destination project in the
+GUI during promotion.
+
+#### WSL solver supervision
+
+On Windows, `compute_plan_linux()` uses a fail-closed WSL adapter. Before any
+solver launch it atomically acquires a per-plan lease and verifies that Bash,
+`setsid --wait`, `/proc` identity, durable sync, and process-group signalling
+are available. The solver runs as a session/process-group leader and publishes
+the lease token, its Linux PID, `/proc` start-time tick, and process-group ID
+before `exec`. Recovery rejects state that is not bound to the held lease.
+
+On timeout or Python interruption, ras-commander kills only its Windows WSL
+launcher and invokes a separate WSL recovery command. Recovery sends TERM and,
+if needed, KILL only after the current `/proc` identity exactly matches the
+published PID, start time, and process group; it then waits for positive group
+absence. Identity mismatch, unavailable identity, or incomplete recovery is
+recorded as indeterminate and never authorizes a signal.
+
+The WSL path deliberately does not remove an opposing result family before
+launch. It finalizes result artifacts only after exact solver quiescence is
+proved. If that proof or owned-state cleanup is uncertain, both visible result
+families and the per-plan lease are preserved, result validation/promotion and
+retry are refused, and a subsequent duplicate execution fails closed.
+
 ### Structured process safety
 
 `RasControl.inspect_processes()` returns a strict host-wide inventory of
@@ -243,10 +313,11 @@ decisions must fail closed when inspection is incomplete.
 `RasCmdr.cancel_plan_exact()` revalidates process identity as `(pid,
 create_time)` before signalling and returns matched, stopped, survivor, query-
 error, timing, and tri-state quiescence evidence. Use this structured method
-for supervision and recovery. The older Boolean `cancel_plan()` remains a
-compatibility wrapper: it returns `True` only when it found an exact match and
-quiescence was positively proved. Process creation, observation, and
-cancellation start/finish times are Unix epoch seconds.
+for supervision and recovery. An incomplete exact-plan inventory is returned
+as indeterminate without sending any signal. The older Boolean
+`cancel_plan()` remains a compatibility wrapper: it returns `True` only when
+it found an exact match and quiescence was positively proved. Process creation,
+observation, and cancellation start/finish times are Unix epoch seconds.
 
 ::: ras_commander.ExecutionEvidence.ExecutionEvidence
     options:

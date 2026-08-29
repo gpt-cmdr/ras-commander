@@ -417,6 +417,32 @@ def _message_program_version(messages: str) -> Optional[str]:
     return None
 
 
+def _stored_message_binding(
+    *,
+    mixed_result_families: bool,
+    stored_paths: tuple[Path, ...],
+) -> tuple[bool, Optional[str], Optional[str]]:
+    """Decide whether filesystem sidecars can prove exact-run identity.
+
+    A sole result artifact provides an unambiguous family association and
+    retains the historical sidecar behavior.  When both result families are
+    present, neither a matching family nor a matching producer-version string
+    proves which run wrote a plan-scoped sidecar.  Mixed-family sidecars are
+    therefore diagnostic provenance only, never authoritative result evidence.
+    """
+    if not mixed_result_families:
+        return True, None, None
+    names = ", ".join(path.name for path in stored_paths)
+    return (
+        False,
+        "stored_message_mixed_result_families_ambiguous",
+        "Both HDF and legacy results exist. Plan-scoped filesystem sidecars "
+        "cannot prove which exact run produced the selected result, even when "
+        "their family and producer version appear compatible. Inspected in "
+        f"fixed precedence: {names}.",
+    )
+
+
 def _parse_plan_datetime(date_text: str, time_text: str) -> Optional[datetime]:
     try:
         parsed = datetime.strptime(date_text.strip().title(), "%d%b%Y")
@@ -1011,18 +1037,22 @@ def inspect_execution_evidence(
     stored_path: Optional[Path] = None
     stored_hash: Optional[str] = None
     stored_version: Optional[str] = None
+    stored_message_bound = False
+    stored_binding_reason: Optional[str] = None
+    stored_binding_detail: Optional[str] = None
+    stored_multiplicity_detail: Optional[str] = None
     try:
         # Keep the command-line compute surface import-safe without loading the
         # optional COM implementation. Offline inspection imports RasControl
         # only when stored Controller messages are actually inspected.
         from .RasControl import RasControl
 
-        stored = RasControl._read_stored_comp_msgs(
+        stored_candidates = RasControl._read_stored_comp_msgs(
             normalized_plan,
             ras_object=ras_obj,
             hash_file=hash_files,
         )
-        if stored is None:
+        if not stored_candidates:
             observations["completion_message_stored"] = _observation(
                 inspected_at,
                 state="not_inspected",
@@ -1030,9 +1060,76 @@ def inspect_execution_evidence(
                 reason_code="stored_message_missing",
             )
         else:
-            stored_message, stored_path, stored_hash = stored
+            stored_paths = tuple(
+                candidate.path for candidate in stored_candidates
+            )
+            if len(stored_candidates) > 1:
+                conflicts.append("multiple_stored_message_sidecars_present")
+                stored_multiplicity_detail = (
+                    "Multiple stored computation-message sidecars were "
+                    "inspected in fixed historical precedence; selected "
+                    f"{stored_paths[0].name} before "
+                    f"{', '.join(path.name for path in stored_paths[1:])}."
+                )
+            failed_candidates = tuple(
+                candidate
+                for candidate in stored_candidates
+                if candidate.error is not None
+            )
+            if failed_candidates:
+                conflicts.append(
+                    "stored_message_sidecar_candidate_inspection_failed"
+                )
+                failure_detail = "; ".join(
+                    f"{candidate.path.name}: {candidate.error}"
+                    for candidate in failed_candidates
+                )
+                stored_multiplicity_detail = (
+                    f"{stored_multiplicity_detail or ''} Sidecar inspection "
+                    f"failures: {failure_detail}"
+                ).strip()[:1000]
+
+            selected_stored = stored_candidates[0]
+            stored_path = selected_stored.path
+            stored_hash = selected_stored.source_sha256
+            if (
+                selected_stored.error is not None
+                or selected_stored.contents is None
+            ):
+                raise RuntimeError(
+                    selected_stored.error
+                    or f"Stored computation messages unreadable: {stored_path}"
+                )
+            stored_message = selected_stored.contents
             stored_version = _message_program_version(stored_message)
-            if ResultsParser._has_complete_process_record(stored_message):
+            (
+                stored_message_bound,
+                stored_binding_reason,
+                stored_binding_detail,
+            ) = _stored_message_binding(
+                mixed_result_families=(
+                    hdf_path.is_file() and legacy_path.is_file()
+                ),
+                stored_paths=stored_paths,
+            )
+            if stored_binding_detail and stored_multiplicity_detail:
+                stored_binding_detail = (
+                    f"{stored_binding_detail} {stored_multiplicity_detail}"
+                )[:1000]
+            if not stored_message_bound:
+                assert stored_binding_reason is not None
+                conflicts.append(stored_binding_reason)
+                observations["completion_message_stored"] = _observation(
+                    inspected_at,
+                    state="not_inspected",
+                    channel="stored_message",
+                    source_locator=str(stored_path),
+                    source_sha256=stored_hash,
+                    observed_program_version=stored_version,
+                    reason_code=stored_binding_reason,
+                    detail=stored_binding_detail,
+                )
+            elif ResultsParser._has_complete_process_record(stored_message):
                 observations["completion_message_stored"] = _observation(
                     inspected_at,
                     state="available",
@@ -1042,6 +1139,7 @@ def inspect_execution_evidence(
                     source_sha256=stored_hash,
                     observed_program_version=stored_version,
                     reason_code="completion_marker_observed",
+                    detail=stored_multiplicity_detail,
                 )
             else:
                 observations["completion_message_stored"] = _observation(
@@ -1052,6 +1150,7 @@ def inspect_execution_evidence(
                     source_sha256=stored_hash,
                     observed_program_version=stored_version,
                     reason_code="completion_marker_absent",
+                    detail=stored_multiplicity_detail,
                 )
     except Exception as exc:
         observations["completion_message_stored"] = _observation(
@@ -1064,7 +1163,11 @@ def inspect_execution_evidence(
         )
 
     producer_observation = observations["producer_program_version"]
-    if producer_observation.state != "available" and stored_version:
+    if (
+        producer_observation.state != "available"
+        and stored_version
+        and stored_message_bound
+    ):
         observations["producer_program_version"] = _observation(
             inspected_at,
             state="available",
@@ -1075,7 +1178,11 @@ def inspect_execution_evidence(
             observed_program_version=stored_version,
             reason_code="stored_message_version_observed",
         )
-    elif producer_observation.state == "available" and stored_version:
+    elif (
+        producer_observation.state == "available"
+        and stored_version
+        and stored_message_bound
+    ):
         hdf_normalized = _normalize_version(str(producer_observation.value))
         stored_normalized = _normalize_version(stored_version)
         if (
@@ -1084,6 +1191,22 @@ def inspect_execution_evidence(
             and hdf_normalized != stored_normalized
         ):
             conflicts.append("producer_version_sources_disagree")
+    elif (
+        producer_observation.state == "not_inspected"
+        and stored_message is not None
+        and not stored_message_bound
+    ):
+        assert stored_binding_reason is not None
+        observations["producer_program_version"] = _observation(
+            inspected_at,
+            state="not_inspected",
+            channel="stored_message",
+            source_locator=None if stored_path is None else str(stored_path),
+            source_sha256=stored_hash,
+            observed_program_version=stored_version,
+            reason_code=stored_binding_reason,
+            detail=stored_binding_detail,
+        )
 
     selected_message: Optional[str] = None
     selected_channel: EvidenceChannel = "stored_message"
@@ -1096,7 +1219,11 @@ def inspect_execution_evidence(
         selected_locator = hdf_message_locator
         selected_hash = result_hash
         selected_version = observed_hdf_version
-    elif stored_message is not None and stored_message.strip():
+    elif (
+        stored_message is not None
+        and stored_message.strip()
+        and stored_message_bound
+    ):
         selected_message = stored_message
         selected_channel = "stored_message"
         selected_locator = None if stored_path is None else str(stored_path)

@@ -367,6 +367,16 @@ class _WatchdogCleanupResult:
         }
 
 
+@dataclass(frozen=True)
+class _StoredCompMessageCandidate:
+    """One inspected compute-message sidecar in deterministic precedence."""
+
+    path: Path
+    contents: Optional[str]
+    source_sha256: Optional[str]
+    error: Optional[str] = None
+
+
 @dataclass
 class ProjectInfo:
     """
@@ -3050,13 +3060,15 @@ class RasControl:
         *,
         strict: bool = True,
         hash_file: bool = False,
-    ) -> Optional[Tuple[str, Path, Optional[str]]]:
-        """Read the first stored compute-message sidecar with its source path.
+    ) -> Tuple[_StoredCompMessageCandidate, ...]:
+        """Inspect every stored compute-message sidecar in fixed precedence.
 
         This helper never opens COM and never falls back to HDF.  Keeping the
-        source path and optional digest alongside the text lets
-        execution-evidence callers retain the exact bytes and channel that
-        supplied an observation.
+        source path, optional digest, and per-candidate error lets evidence
+        callers surface multiplicity without silently treating the first file
+        as the only sidecar.  The returned order preserves the historical
+        selection precedence: ``.comp_msgs.txt``, ``.computeMsgs.txt``, then
+        ``.bco##``.
         """
         info = RasControl._get_project_info(plan, ras_object)
         project_base = info.project_path.stem
@@ -3070,36 +3082,54 @@ class RasControl:
             / f"{project_base}.bco{info.plan_number}",
         )
 
+        inspected = []
         for candidate in candidates:
             if not candidate.is_file():
                 continue
-            before = candidate.stat()
-            raw = candidate.read_bytes()
-            after = candidate.stat()
-            if (before.st_size, before.st_mtime_ns) != (
-                after.st_size,
-                after.st_mtime_ns,
-            ):
-                raise RuntimeError(
-                    f"Stored computation messages changed while reading: {candidate}"
+            try:
+                before = candidate.stat()
+                raw = candidate.read_bytes()
+                after = candidate.stat()
+                if (before.st_size, before.st_mtime_ns) != (
+                    after.st_size,
+                    after.st_mtime_ns,
+                ):
+                    raise RuntimeError(
+                        "Stored computation messages changed while reading: "
+                        f"{candidate}"
+                    )
+                if raw.startswith(b"\xef\xbb\xbf"):
+                    contents = raw.decode(
+                        "utf-8-sig",
+                        errors="strict" if strict else "ignore",
+                    )
+                elif not strict:
+                    contents = raw.decode("utf-8", errors="ignore")
+                else:
+                    try:
+                        contents = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        contents = raw.decode("cp1252")
+                source_sha256 = (
+                    hashlib.sha256(raw).hexdigest() if hash_file else None
                 )
-            if raw.startswith(b"\xef\xbb\xbf"):
-                contents = raw.decode(
-                    "utf-8-sig",
-                    errors="strict" if strict else "ignore",
+                inspected.append(
+                    _StoredCompMessageCandidate(
+                        path=candidate,
+                        contents=contents,
+                        source_sha256=source_sha256,
+                    )
                 )
-            elif not strict:
-                contents = raw.decode("utf-8", errors="ignore")
-            else:
-                try:
-                    contents = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    contents = raw.decode("cp1252")
-            source_sha256 = (
-                hashlib.sha256(raw).hexdigest() if hash_file else None
-            )
-            return contents, candidate, source_sha256
-        return None
+            except Exception as exc:
+                inspected.append(
+                    _StoredCompMessageCandidate(
+                        path=candidate,
+                        contents=None,
+                        source_sha256=None,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
+        return tuple(inspected)
 
     @staticmethod
     @log_call
@@ -3136,6 +3166,9 @@ class RasControl:
             - COM interface: {plan_file}.comp_msgs.txt
             - HEC-RAS 6.x+: {plan_file}.computeMsgs.txt
             - HEC-RAS 5.x: {project_name}.bco{plan_number}
+            If several filesystem sidecars exist, all are inspected and the
+            first is returned in the fixed order listed above. A warning
+            identifies the additional candidates.
             Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
         info = RasControl._get_project_info(plan, ras_object)
@@ -3146,13 +3179,31 @@ class RasControl:
         )
 
         try:
-            stored = RasControl._read_stored_comp_msgs(
+            stored_candidates = RasControl._read_stored_comp_msgs(
                 plan,
                 ras_object,
                 strict=False,
             )
-            if stored is not None:
-                contents, source_path, _ = stored
+            if stored_candidates:
+                selected = stored_candidates[0]
+                if selected.error is not None or selected.contents is None:
+                    raise RuntimeError(
+                        selected.error
+                        or f"Stored computation messages unreadable: {selected.path}"
+                    )
+                contents = selected.contents
+                source_path = selected.path
+                if len(stored_candidates) > 1:
+                    logger.warning(
+                        "Multiple stored computation-message sidecars exist for "
+                        "plan %s; using %s by fixed precedence and ignoring: %s",
+                        info.plan_number,
+                        source_path.name,
+                        ", ".join(
+                            candidate.path.name
+                            for candidate in stored_candidates[1:]
+                        ),
+                    )
                 normalized_contents = contents.replace(
                     "\r\n", "\n"
                 ).replace("\r", "\n")

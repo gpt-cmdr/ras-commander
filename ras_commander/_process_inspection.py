@@ -343,6 +343,25 @@ def _resolve_plan_computation_file(
     return project_path.parent / f"{project_path.stem}.c{geometry_number}"
 
 
+def _unresolved_computation_identity_error(
+    process: RasProcessRecord,
+    *,
+    plan_path: Path,
+) -> RasProcessQueryError:
+    """Describe an unsteady signature that cannot be tied to one project."""
+    return RasProcessQueryError(
+        pid=process.pid,
+        operation="resolve_plan_computation_file",
+        reason_code="plan_computation_identity_unavailable",
+        exception_type="PlanComputationIdentityUnavailable",
+        detail=(
+            "Could not derive the project-specific .cNN computation file "
+            f"from plan {plan_path}; cwd plus bNN is not an exact project "
+            "identity"
+        ),
+    )
+
+
 def match_plan_processes(
     inventory: RasProcessInventory,
     *,
@@ -360,6 +379,7 @@ def match_plan_processes(
         plan_path=plan_path,
     )
     matches = []
+    identity_errors = []
     for process in inventory.processes:
         name = process.name.casefold()
         if name not in _PLAN_MATCHABLE_PROCESS_NAMES:
@@ -392,9 +412,10 @@ def match_plan_processes(
             # Some modern versions pass the tmp HDF directly; others pass a
             # project-specific computation file plus the exact plan marker
             # ``bNN`` while using the project directory as cwd. The latter was
-            # confirmed on HEC-RAS 6.3.1. Requiring both exact cwd identity and
-            # the complete marker avoids basename/substring selection.
-            marker_match = (
+            # confirmed on HEC-RAS 6.3.1. That shorter form is safe only when
+            # the plan also resolves the exact project .cNN token; cwd plus
+            # bNN is shared by different projects in the same directory.
+            cwd_marker_match = (
                 process.working_directory is not None
                 and _same_windows_path(
                     process.working_directory,
@@ -404,15 +425,32 @@ def match_plan_processes(
                     process.command_line,
                     f"b{plan_number}",
                 )
-                and (
-                    computation_file_path is None
-                    or _command_has_exact_path(
-                        process.command_line,
-                        computation_file_path,
-                        process.working_directory,
-                    )
+            )
+            marker_match = (
+                cwd_marker_match
+                and computation_file_path is not None
+                and _command_has_exact_path(
+                    process.command_line,
+                    computation_file_path,
+                    process.working_directory,
                 )
             )
+            if (
+                cwd_marker_match
+                and not tmp_hdf_match
+                and computation_file_path is None
+            ):
+                # ``bNN`` is only plan-specific within a project. Multiple
+                # projects can share one working directory and the same plan
+                # number, so selecting this process would risk terminating a
+                # different project. Preserve the process as unmatched and
+                # make the narrowed inventory explicitly indeterminate.
+                identity_errors.append(
+                    _unresolved_computation_identity_error(
+                        process,
+                        plan_path=plan_path,
+                    )
+                )
             matched = tmp_hdf_match or marker_match
         else:
             matched = False
@@ -420,13 +458,14 @@ def match_plan_processes(
             matches.append(process)
 
     matching_processes = tuple(sorted(matches, key=lambda item: item.identity))
+    query_errors = (*inventory.query_errors, *identity_errors)
     return PlanProcessInventory(
         observed_at=inventory.observed_at,
         plan_number=plan_number,
         project_path=str(project_path),
         plan_path=str(plan_path),
         tmp_hdf_path=str(tmp_hdf_path),
-        complete=inventory.complete,
+        complete=inventory.complete and not identity_errors,
         matched=matching_processes,
-        query_errors=inventory.query_errors,
+        query_errors=query_errors,
     )

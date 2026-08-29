@@ -518,7 +518,263 @@ def test_legacy_plan_selects_legacy_when_hdf_is_not_newer(
         "nonselected_result_format_not_inspected"
     )
     assert evidence.observations["completion_message_hdf"].state == "not_inspected"
+    assert evidence.observations["completion_message_stored"].state == (
+        "not_inspected"
+    )
+    assert evidence.observations["completion_message_stored"].reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert (
+        "stored_message_mixed_result_families_ambiguous"
+        in evidence.conflicts
+    )
+
+
+def test_legacy_selected_result_quarantines_stale_modern_sidecar(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "legacy-selected-modern-sidecar",
+        version="4.00",
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="Complete Process\n",
+        completion_attribute=True,
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"selected legacy output")
+    (ras_object.project_folder / "Model.p01.comp_msgs.txt").write_text(
+        "Unsteady Flow Simulation Version 7.0\n"
+        "Computation Task\tTime(hh:mm:ss)\n"
+        "Complete Process\t2.0 sec\n",
+        encoding="ascii",
+    )
+    hdf_stat = hdf_path.stat()
+    os.utime(
+        hdf_path,
+        ns=(hdf_stat.st_atime_ns, legacy_path.stat().st_mtime_ns),
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    stored = evidence.observations["completion_message_stored"]
+    assert stored.state == "not_inspected"
+    assert stored.reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    assert stored.observed_program_version == "7.0"
+    assert evidence.observations["producer_program_version"].state == (
+        "not_inspected"
+    )
+    assert evidence.observations["producer_program_version"].reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    assert evidence.observations["message_error_count"].state == "not_inspected"
+    assert evidence.observations["runtime_seconds"].state == "not_inspected"
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert (
+        "stored_message_mixed_result_families_ambiguous"
+        in evidence.conflicts
+    )
+
+
+def test_mixed_results_quarantine_sidecar_without_producer_version(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "mixed-unversioned-sidecar",
+        version="4.00",
+    )
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="Complete Process\n",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"selected legacy output")
+    (ras_object.project_folder / "Model.p01.comp_msgs.txt").write_text(
+        "Computation Task\tTime(hh:mm:ss)\n"
+        "Complete Process\t1.0 sec\n",
+        encoding="ascii",
+    )
+    hdf_stat = hdf_path.stat()
+    os.utime(
+        hdf_path,
+        ns=(hdf_stat.st_atime_ns, legacy_path.stat().st_mtime_ns),
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    stored = evidence.observations["completion_message_stored"]
+    assert stored.state == "not_inspected"
+    assert stored.reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert (
+        "stored_message_mixed_result_families_ambiguous"
+        in evidence.conflicts
+    )
+
+
+def test_mixed_modern_result_quarantines_same_version_multiple_sidecars(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "modern-selected-modern-sidecar",
+        version="7.00",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"stale legacy output")
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="",
+    )
+    first_sidecar = ras_object.project_folder / "Model.p01.comp_msgs.txt"
+    first_sidecar.write_text(
+        "Unsteady Flow Simulation Version 7.0\n"
+        "Computation Task\tTime(hh:mm:ss)\n"
+        "Complete Process\t2.0 sec\n",
+        encoding="ascii",
+    )
+    later_sidecar = ras_object.project_folder / "Model.p01.computeMsgs.txt"
+    later_sidecar.write_text(
+        "Unsteady Flow Simulation Version 7.0\n"
+        "Error: later sidecar belongs to an unbound run\n",
+        encoding="ascii",
+    )
+    legacy_stat = legacy_path.stat()
+    os.utime(
+        legacy_path,
+        ns=(legacy_stat.st_atime_ns, hdf_path.stat().st_mtime_ns),
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    stored = evidence.observations["completion_message_stored"]
+    assert stored.state == "not_inspected"
+    assert stored.reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    assert stored.source_locator == str(first_sidecar)
+    assert first_sidecar.name in (stored.detail or "")
+    assert later_sidecar.name in (stored.detail or "")
+    assert evidence.observations["message_error_count"].state == "not_inspected"
+    assert evidence.observations["runtime_seconds"].state == "not_inspected"
+    assert evidence.observations["producer_program_version"].channel == "hdf"
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert "multiple_stored_message_sidecars_present" in evidence.conflicts
+    assert (
+        "stored_message_mixed_result_families_ambiguous"
+        in evidence.conflicts
+    )
+
+
+def test_mixed_hdf_result_quarantines_different_modern_producer_sidecar(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "modern-selected-stale-modern-sidecar",
+        version="7.00",
+    )
+    legacy_path = ras_object.project_folder / "Model.O01"
+    legacy_path.write_bytes(b"stale legacy output")
+    hdf_path = _write_hdf(
+        ras_object.project_folder,
+        file_version="HEC-RAS 7.0",
+        messages="",
+    )
+    (ras_object.project_folder / "Model.p01.computeMsgs.txt").write_text(
+        "Unsteady Flow Simulation Version 6.6\n"
+        "Computation Task\tTime(hh:mm:ss)\n"
+        "Complete Process\t2.0 sec\n",
+        encoding="ascii",
+    )
+    legacy_stat = legacy_path.stat()
+    os.utime(
+        legacy_path,
+        ns=(legacy_stat.st_atime_ns, hdf_path.stat().st_mtime_ns),
+    )
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    stored = evidence.observations["completion_message_stored"]
+    assert stored.state == "not_inspected"
+    assert stored.reason_code == (
+        "stored_message_mixed_result_families_ambiguous"
+    )
+    producer = evidence.observations["producer_program_version"]
+    assert producer.state == "available"
+    assert producer.channel == "hdf"
+    assert producer.value == "HEC-RAS 7.0"
+    assert evidence.mechanical_completion.state == "not_inspected"
+    assert (
+        "stored_message_mixed_result_families_ambiguous"
+        in evidence.conflicts
+    )
+
+
+def test_single_family_preserves_first_sidecar_selection_and_surfaces_others(
+    tmp_path: Path,
+) -> None:
+    _, ras_object = _write_project(
+        tmp_path / "single-family-multiple-sidecars",
+        version="4.10",
+    )
+    (ras_object.project_folder / "Model.O01").write_bytes(b"legacy output")
+    first_sidecar = ras_object.project_folder / "Model.p01.comp_msgs.txt"
+    first_sidecar.write_text(
+        "Steady Flow Simulation Version 4.1.0\n"
+        "Computation Task\tTime(hh:mm:ss)\n"
+        "Complete Process\t1.0 sec\n",
+        encoding="ascii",
+    )
+    later_sidecar = ras_object.project_folder / "Model.p01.computeMsgs.txt"
+    later_sidecar.write_text(
+        "Unsteady Flow Simulation Version 7.0\n"
+        "Error: later sidecar must not replace the historical winner\n",
+        encoding="ascii",
+    )
+
+    candidates = RasControl._read_stored_comp_msgs(
+        "01",
+        ras_object=ras_object,
+    )
+    assert tuple(candidate.path for candidate in candidates) == (
+        first_sidecar,
+        later_sidecar,
+    )
+    assert all(candidate.contents is not None for candidate in candidates)
+
+    evidence = RasCmdr.inspect_execution_evidence(
+        "01",
+        ras_object=ras_object,
+    )
+
+    stored = evidence.observations["completion_message_stored"]
+    assert stored.state == "available"
+    assert stored.value is True
+    assert stored.source_locator == str(first_sidecar)
+    assert later_sidecar.name in (stored.detail or "")
+    assert evidence.observations["runtime_seconds"].value == 1.0
     assert evidence.mechanical_completion.value is True
+    assert "multiple_stored_message_sidecars_present" in evidence.conflicts
 
 
 def test_modern_plan_with_newer_legacy_output_raises_ambiguity(

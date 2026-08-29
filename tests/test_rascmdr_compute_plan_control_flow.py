@@ -20,6 +20,30 @@ from ras_commander.RasCmdr import RasCmdr
 rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
 
 
+def _write_wsl_identity(
+    project_dir: Path,
+    *,
+    pid: int = 101,
+    start: int = 12345,
+    pgid: int = 101,
+) -> Path:
+    state_path = (
+        project_dir / ".Demo.p01.ras-commander-wsl.identity"
+    )
+    lease_path = Path(f"{state_path}.lease")
+    owner_token = next(
+        line.removeprefix("token=")
+        for line in lease_path.read_text(encoding="ascii").splitlines()
+        if line.startswith("token=")
+    )
+    state_path.write_text(
+        "ras_commander_wsl_identity_v2 "
+        f"token={owner_token} pid={pid} start={start} pgid={pgid}\n",
+        encoding="ascii",
+    )
+    return state_path
+
+
 class _DummyRas:
     """Minimal ras-like object for compute_plan control-flow tests."""
 
@@ -1540,7 +1564,10 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
     assert "Error running plan: 01 (exit code 1)" in error_text
 
 
-def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_path):
+def test_wsl_linux_missing_exit_proof_preserves_artifacts_and_io_links(
+    monkeypatch,
+    tmp_path,
+):
     popen_calls = []
     run_calls = []
 
@@ -1570,6 +1597,8 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
 
     io_tmp_hdf = tmp_path / "io.tmp.hdf"
     io_tmp_hdf.write_bytes(b"stale")
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preserve on uncertain WSL exit")
 
     result = RasCmdr._compute_plan_linux_via_wsl(
         ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
@@ -1591,37 +1620,49 @@ def test_wsl_linux_retry_script_uses_utf8_and_cleans_io_tmp(monkeypatch, tmp_pat
 
     assert result.success is False
     assert not io_tmp_hdf.exists()
+    assert legacy.read_bytes() == b"preserve on uncertain WSL exit"
 
     script = popen_calls[0][0][3]
     assert '[ -d "\\$d" ] && ld_path=' not in script
-    assert 'if [ -d "\\$d" ]; then' in script
+    assert 'if [ -d "$d" ]; then' in script
     assert popen_calls[0][1]["text"] is True
     assert popen_calls[0][1]["encoding"] == "utf-8"
-    expected_cleanup = (
-        f"cd /mnt/test/{tmp_path.name} && "
-        "find . -maxdepth 1 -type l -name 'io.*' -delete"
-    )
-    assert run_calls[0][0] == ["wsl", "bash", "-lc", expected_cleanup]
-    assert run_calls[0][1]["encoding"] == "utf-8"
+    assert "setsid --wait bash -c" in script
+    assert 'exec env "${command_args[@]}"' in script
+    assert "kill -0 -- \"-$solver_pgid\"" in script
+    assert "__RAS_COMMANDER_WSL_EXIT_PROOF__" in script
+    assert len(run_calls) == 1
+    assert "setsid --help" in run_calls[0][0][3]
+    assert result.execution_details["solver_quiescence_confirmed"] is None
+    assert result.execution_details["result_artifacts_finalized"] is False
+    assert result.execution_details["failure_stage"] == "solver_quiescence"
+    assert Path(
+        result.execution_details["wsl_supervision_lease"]["lease_path"]
+    ).is_file()
 
 
-def test_wsl_linux_retry_normalizes_opposing_result_after_each_attempt(
+def test_wsl_linux_retry_finalizes_only_after_positive_exit_proof(
     monkeypatch,
     tmp_path,
 ):
     legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preexisting legacy result")
     launches = []
 
     class FakePopen:
         returncode = 1
 
         def __init__(self, _args, **_kwargs):
-            assert not legacy.exists()
-            launches.append(len(launches) + 1)
+            launches.append(legacy.exists())
 
         def communicate(self, timeout=None):
             legacy.write_bytes(b"recreated by failed modern attempt")
-            return "", "ras failed"
+            _write_wsl_identity(tmp_path)
+            return (
+                "__RAS_COMMANDER_WSL_EXIT_PROOF__ "
+                "pid=101 start=12345 pgid=101 rc=1 quiescent=1\n",
+                "ras failed",
+            )
 
         def kill(self):
             pass
@@ -1661,8 +1702,10 @@ def test_wsl_linux_retry_normalizes_opposing_result_after_each_attempt(
     )
 
     assert result.success is False
-    assert launches == [1, 2]
+    assert launches == [True, False]
     assert not legacy.exists()
+    assert result.execution_details["solver_quiescence_confirmed"] is True
+    assert result.execution_details["result_artifacts_finalized"] is True
 
 
 def test_compute_plan_linux_wsl_uses_canonical_layout_without_c_file(
@@ -1789,7 +1832,12 @@ def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
             pass
 
         def communicate(self, timeout=None):
-            return "", ""
+            _write_wsl_identity(tmp_path)
+            return (
+                "__RAS_COMMANDER_WSL_EXIT_PROOF__ "
+                "pid=101 start=12345 pgid=101 rc=0 quiescent=1\n",
+                "",
+            )
 
         def kill(self):
             pass
@@ -1849,3 +1897,484 @@ def test_wsl_linux_exit_zero_does_not_promote_incomplete_hdf(
     assert result.success is False
     assert tmp_hdf.exists()
     assert not plan_hdf.exists()
+    assert result.execution_details["solver_quiescence_confirmed"] is True
+    # Positive process-group quiescence authorizes opposing-artifact
+    # finalization even though the newly produced HDF then fails validation.
+    assert result.execution_details["result_artifacts_finalized"] is True
+
+
+def test_wsl_linux_positive_process_group_proof_allows_finalize_and_promotion(
+    monkeypatch,
+    tmp_path,
+):
+    class FakePopen:
+        returncode = 0
+        pid = 500
+
+        def __init__(self, args, **kwargs):
+            del args, kwargs
+
+        def communicate(self, timeout=None):
+            del timeout
+            _write_wsl_identity(tmp_path)
+            return (
+                "__RAS_COMMANDER_WSL_EXIT_PROOF__ "
+                "pid=101 start=12345 pgid=101 rc=0 quiescent=1\n",
+                "",
+            )
+
+        def kill(self):
+            pytest.fail("A proved, completed WSL launcher must not be killed")
+
+    tmp_hdf = tmp_path / "Demo.p01.tmp.hdf"
+    with h5py.File(tmp_hdf, "w") as hdf_file:
+        hdf_file.create_group("Results/Unsteady")
+    (tmp_path / "compute_linux_01.log").write_text(
+        "Finished Unsteady Flow Simulation\n",
+        encoding="utf-8",
+    )
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"stale legacy result")
+    plan_hdf = tmp_path / "Demo.p01.hdf"
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(lambda *_args, **_kwargs: plan_hdf),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_hdf,
+        timeout_sec=30,
+        dos2unix=False,
+        retry=False,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    assert result.success is True
+    assert not legacy.exists()
+    assert not tmp_hdf.exists()
+    assert plan_hdf.is_file()
+    assert result.execution_details["calculation_attempted"] is True
+    assert result.execution_details["solver_quiescence_confirmed"] is True
+    assert result.execution_details["result_artifacts_finalized"] is True
+    assert result.execution_details["selected_executable_path"] == (
+        "/mnt/c/HEC-RAS/RasUnsteady"
+    )
+    assert result.execution_details["wsl_launcher_pid"] == 500
+    assert result.execution_details["linux_solver_pid"] == 101
+    assert result.execution_details[
+        "linux_solver_start_time_ticks"
+    ] == 12345
+    assert result.execution_details["linux_process_group_id"] == 101
+    assert result.execution_details["linux_reported_returncode"] == 0
+    assert result.execution_details[
+        "wsl_supervision_lease_released"
+    ] is True
+
+
+def test_wsl_supervision_preflight_failure_does_not_launch_solver(
+    monkeypatch,
+    tmp_path,
+):
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preserved")
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(
+            lambda _path: pytest.fail(
+                "Path translation must follow supervision preflight"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Solver launcher must not run without supervision capabilities"
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="setsid --wait unavailable",
+        ),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+        timeout_sec=30,
+        dos2unix=False,
+        retry=False,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    assert result.success is False
+    assert result.execution_details["calculation_attempted"] is False
+    assert result.execution_details["failure_stage"] == (
+        "wsl_supervision_preflight"
+    )
+    assert legacy.read_bytes() == b"preserved"
+    assert not Path(
+        result.execution_details["wsl_supervision_lease"]["lease_path"]
+    ).exists()
+
+
+def test_wsl_plan_lease_atomically_blocks_duplicate_launch(
+    monkeypatch,
+    tmp_path,
+):
+    state_path = tmp_path / ".Demo.p01.ras-commander-wsl.identity"
+    existing_lease, _ = RasCmdr._acquire_wsl_plan_lease(state_path)
+    assert existing_lease is not None
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Duplicate refusal must precede WSL preflight"
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Duplicate refusal must precede solver launch"
+        ),
+    )
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+        timeout_sec=30,
+        dos2unix=False,
+        retry=False,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    assert result.success is False
+    assert result.execution_details["calculation_attempted"] is False
+    assert result.execution_details["failure_stage"] == (
+        "wsl_supervision_lease"
+    )
+    assert result.execution_details["duplicate_execution_blocked"] is True
+    assert RasCmdr._release_destination_promotion_lock(existing_lease) is True
+
+
+@pytest.mark.parametrize(
+    ("recovery_stdout", "expected_status", "expected_quiescence", "retained"),
+    [
+        (
+            "__RAS_COMMANDER_WSL_RECOVERY__ status=quiescent term=1 "
+            "kill=0 pid=101 start=12345 pgid=101\n",
+            "quiescent",
+            True,
+            False,
+        ),
+        (
+            "__RAS_COMMANDER_WSL_RECOVERY__ status=identity_mismatch "
+            "term=0 kill=0 pid=101 start=12345 pgid=101\n",
+            "identity_mismatch",
+            None,
+            True,
+        ),
+        (
+            "malformed recovery output\n",
+            "uncertain",
+            None,
+            True,
+        ),
+    ],
+    ids=["exact_recovery", "identity_mismatch_no_signal", "uncertain"],
+)
+def test_wsl_timeout_recovery_is_exact_and_fail_closed(
+    monkeypatch,
+    tmp_path,
+    recovery_stdout,
+    expected_status,
+    expected_quiescence,
+    retained,
+):
+    run_calls = []
+
+    class FakePopen:
+        returncode = None
+        pid = 500
+
+        def __init__(self, _args, **_kwargs):
+            self.killed = False
+
+        def communicate(self, timeout=None):
+            _write_wsl_identity(tmp_path)
+            raise rascmdr_module.subprocess.TimeoutExpired(
+                cmd="wsl",
+                timeout=timeout,
+            )
+
+        def kill(self):
+            self.killed = True
+
+    def fake_run(args, **kwargs):
+        run_calls.append((args, kwargs))
+        if len(run_calls) == 1:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=recovery_stdout,
+            stderr="",
+        )
+
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preserved during timeout recovery")
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+        timeout_sec=1,
+        dos2unix=False,
+        retry=True,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    recovery = result.execution_details["wsl_supervision_recovery"]
+    state_path = Path(result.execution_details["wsl_supervision_state_path"])
+    lease_path = Path(
+        result.execution_details["wsl_supervision_lease"]["lease_path"]
+    )
+    assert result.success is False
+    assert result.execution_details["failure_stage"] == "solver_timeout"
+    assert result.execution_details[
+        "solver_quiescence_confirmed"
+    ] is expected_quiescence
+    assert recovery["status"] == expected_status
+    assert recovery["term_sent"] is (expected_status == "quiescent")
+    assert recovery["kill_sent"] is False
+    assert len(run_calls) == 2
+    assert "expected_pid=101" in run_calls[1][0][3]
+    assert "expected_start=12345" in run_calls[1][0][3]
+    assert "expected_pgid=101" in run_calls[1][0][3]
+    assert state_path.exists() is retained
+    assert lease_path.exists() is retained
+    assert legacy.read_bytes() == b"preserved during timeout recovery"
+
+
+def test_wsl_timeout_owner_token_mismatch_never_invokes_signal_recovery(
+    monkeypatch,
+    tmp_path,
+):
+    run_calls = []
+
+    class FakePopen:
+        returncode = None
+        pid = 500
+
+        def __init__(self, _args, **_kwargs):
+            return None
+
+        def communicate(self, timeout=None):
+            state_path = (
+                tmp_path / ".Demo.p01.ras-commander-wsl.identity"
+            )
+            state_path.write_text(
+                "ras_commander_wsl_identity_v2 "
+                f"token={'f' * 32} pid=101 start=12345 pgid=101\n",
+                encoding="ascii",
+            )
+            raise rascmdr_module.subprocess.TimeoutExpired(
+                cmd="wsl",
+                timeout=timeout,
+            )
+
+        def kill(self):
+            return None
+
+    def fake_run(args, **kwargs):
+        run_calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preserved for mismatched state owner")
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    result = RasCmdr._compute_plan_linux_via_wsl(
+        ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+        ras_exe_dir="/mnt/c/HEC-RAS",
+        plan_number="01",
+        geom_num="01",
+        project_dir=tmp_path,
+        project_name="Demo",
+        tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+        timeout_sec=1,
+        dos2unix=False,
+        retry=True,
+        retry_delay_sec=0,
+        ras_obj=SimpleNamespace(
+            project_folder=tmp_path,
+            project_name="Demo",
+        ),
+    )
+
+    details = result.execution_details
+    recovery = details["wsl_supervision_recovery"]
+    assert result.success is False
+    assert details["solver_quiescence_confirmed"] is None
+    assert recovery["status"] == "identity_unavailable"
+    assert "owner token mismatch" in recovery["detail"]
+    assert len(run_calls) == 1
+    assert Path(details["wsl_supervision_state_path"]).exists()
+    assert Path(details["wsl_supervision_lease"]["lease_path"]).exists()
+    assert legacy.read_bytes() == b"preserved for mismatched state owner"
+
+
+def test_wsl_python_interruption_recovers_exact_identity_before_reraise(
+    monkeypatch,
+    tmp_path,
+):
+    run_calls = []
+
+    class FakePopen:
+        returncode = None
+        pid = 500
+
+        def __init__(self, _args, **_kwargs):
+            self.communicate_count = 0
+
+        def communicate(self, timeout=None):
+            del timeout
+            self.communicate_count += 1
+            if self.communicate_count == 1:
+                _write_wsl_identity(tmp_path)
+                raise KeyboardInterrupt("injected interruption")
+            return "", ""
+
+        def kill(self):
+            return None
+
+    def fake_run(args, **kwargs):
+        run_calls.append((args, kwargs))
+        if len(run_calls) == 1:
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "__RAS_COMMANDER_WSL_RECOVERY__ status=quiescent term=1 "
+                "kill=0 pid=101 start=12345 pgid=101\n"
+            ),
+            stderr="",
+        )
+
+    legacy = tmp_path / "Demo.O01"
+    legacy.write_bytes(b"preserved during Python interruption")
+    monkeypatch.setattr(
+        RasCmdr,
+        "_windows_path_to_wsl",
+        staticmethod(lambda path: f"/mnt/test/{Path(path).name}"),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+
+    with pytest.raises(KeyboardInterrupt) as raised:
+        RasCmdr._compute_plan_linux_via_wsl(
+            ras_exe="/mnt/c/HEC-RAS/RasUnsteady",
+            ras_exe_dir="/mnt/c/HEC-RAS",
+            plan_number="01",
+            geom_num="01",
+            project_dir=tmp_path,
+            project_name="Demo",
+            tmp_hdf=tmp_path / "Demo.p01.tmp.hdf",
+            timeout_sec=30,
+            dos2unix=False,
+            retry=True,
+            retry_delay_sec=0,
+            ras_obj=SimpleNamespace(
+                project_folder=tmp_path,
+                project_name="Demo",
+            ),
+        )
+
+    details = raised.value.execution_details
+    recovery = details["wsl_supervision_recovery"]
+    assert details["failure_stage"] == "solver_interrupted"
+    assert details["solver_quiescence_confirmed"] is True
+    assert details["wsl_supervision_state_cleared"] is True
+    assert details["wsl_supervision_lease_released"] is True
+    assert recovery["status"] == "quiescent"
+    assert recovery["term_sent"] is True
+    assert len(run_calls) == 2
+    assert "expected_pid=101" in run_calls[1][0][3]
+    assert "expected_start=12345" in run_calls[1][0][3]
+    assert "expected_pgid=101" in run_calls[1][0][3]
+    assert not Path(details["wsl_supervision_state_path"]).exists()
+    assert not Path(
+        details["wsl_supervision_lease"]["lease_path"]
+    ).exists()
+    assert legacy.read_bytes() == b"preserved during Python interruption"

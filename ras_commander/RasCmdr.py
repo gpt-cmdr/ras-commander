@@ -497,6 +497,900 @@ class RasCmdr:
         return True
 
     @staticmethod
+    def _artifact_sha256(path: Path) -> str:
+        """Hash one staged/published artifact for transaction verification."""
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _publish_plan_artifacts_transaction(
+        plan_number: str,
+        *,
+        source_primary: Path,
+        source_sidecars: List[Path],
+        geometry_source: Optional[Path],
+        output_format: ResultFormat,
+        ras_object: 'RasPrj',
+        destination_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[bool, Dict[str, Any]]:
+        """Publish one plan's same-run evidence as a recoverable transaction."""
+        destination = Path(destination_folder).resolve(strict=False)
+        normalized_plan = RasUtils.normalize_ras_number(plan_number)
+        # Keep the hidden transaction path short enough for non-long-path
+        # Windows installations. The destination promotion lock serializes
+        # callers, and 64 random bits still make stale-name collision remote.
+        token = uuid.uuid4().hex[:16]
+        transaction_path = destination / (
+            f".rcp-{normalized_plan}-{token}"
+        )
+        stage_folder = transaction_path / "s"
+        backup_folder = transaction_path / "b"
+        failed_new_folder = transaction_path / "f"
+        transaction_created = False
+        failure_stage = "destination_promotion_staging"
+        committed_paths: List[Path] = []
+        mutated_paths: set[Path] = set()
+        rollback_errors: List[Dict[str, Any]] = []
+        current_source_path: Optional[Path] = None
+        current_destination_path: Optional[Path] = None
+
+        destination_paths = get_plan_result_artifact_paths(
+            normalized_plan,
+            project_folder=destination,
+            project_name=project_name,
+        )
+        primary_destination = (
+            destination_paths.hdf
+            if output_format == "hdf"
+            else destination_paths.legacy_output
+        )
+        opposing_destination = (
+            destination_paths.legacy_output
+            if output_format == "hdf"
+            else destination_paths.hdf
+        )
+        known_sidecars = {
+            path.name: path for path in destination_paths.message_sidecars
+        }
+
+        source_primary = Path(source_primary)
+        if not source_primary.is_file():
+            failure_detail = (
+                f"Expected {output_format} primary result is missing: "
+                f"{source_primary}"
+            )
+            return False, {
+                "failure_stage": "destination_promotion_missing_result",
+                "failure_detail": failure_detail,
+                "exception_type": "FileNotFoundError",
+                "source_path": str(source_primary),
+                "destination_path": str(primary_destination),
+                "transaction_path": None,
+                "retained_transaction_path": None,
+                "copied_destination_paths": [],
+                "rollback_attempted": False,
+                "rollback_confirmed": True,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+
+        publication_entries: List[Dict[str, Any]] = []
+        for source in source_sidecars:
+            destination_sidecar = known_sidecars.get(source.name)
+            if destination_sidecar is None:
+                return False, {
+                    "failure_stage": "destination_promotion_selection",
+                    "failure_detail": (
+                        "Worker message sidecar is not in the exact plan "
+                        f"allowlist: {source}"
+                    ),
+                    "exception_type": "ValueError",
+                    "source_path": str(source),
+                    "destination_path": None,
+                    "transaction_path": None,
+                    "retained_transaction_path": None,
+                    "copied_destination_paths": [],
+                    "rollback_attempted": False,
+                    "rollback_confirmed": True,
+                    "rollback_errors": [],
+                    "partial_promotion_possible": False,
+                }
+            publication_entries.append(
+                {
+                    "role": "message_sidecar",
+                    "source": Path(source),
+                    "destination": destination_sidecar,
+                }
+            )
+        if geometry_source is not None:
+            geometry_source = Path(geometry_source)
+            publication_entries.append(
+                {
+                    "role": "geometry",
+                    "source": geometry_source,
+                    "destination": destination / geometry_source.name,
+                }
+            )
+        publication_entries.append(
+            {
+                "role": "primary",
+                "source": source_primary,
+                "destination": primary_destination,
+            }
+        )
+
+        destination_names = [
+            entry["destination"].name for entry in publication_entries
+        ]
+        if len(destination_names) != len(set(destination_names)):
+            return False, {
+                "failure_stage": "destination_promotion_selection",
+                "failure_detail": "Duplicate publication destination selected",
+                "exception_type": "ValueError",
+                "source_path": None,
+                "destination_path": None,
+                "transaction_path": None,
+                "retained_transaction_path": None,
+                "copied_destination_paths": [],
+                "rollback_attempted": False,
+                "rollback_confirmed": True,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+
+        quarantine_targets = [
+            destination_paths.hdf,
+            destination_paths.legacy_output,
+            *destination_paths.message_sidecars,
+        ]
+        if geometry_source is not None:
+            quarantine_targets.append(destination / geometry_source.name)
+        quarantine_targets = list(dict.fromkeys(quarantine_targets))
+        prior_state: Dict[Path, Dict[str, Any]] = {}
+        backup_paths: Dict[Path, Path] = {}
+        staged_paths: Dict[Path, Path] = {}
+
+        def rollback_destination() -> bool:
+            if not mutated_paths:
+                return True
+            try:
+                failed_new_folder.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                rollback_errors.append(
+                    {
+                        "path": str(failed_new_folder),
+                        "exception_type": type(exc).__name__,
+                        "detail": str(exc),
+                    }
+                )
+                return False
+
+            # First remove every newly published artifact from recognized
+            # destination names. Never restore an old primary while any fresh
+            # sidecar might remain visible.
+            for index, target in enumerate(quarantine_targets):
+                if target not in mutated_paths or not target.exists():
+                    continue
+                try:
+                    failed_path = (
+                        failed_new_folder / f"{index:02d}-{target.name}"
+                    )
+                    os.replace(target, failed_path)
+                    if target.exists() or not failed_path.is_file():
+                        raise RuntimeError(
+                            f"Could not quarantine failed publication: {target}"
+                        )
+                except Exception as exc:
+                    rollback_errors.append(
+                        {
+                            "path": str(target),
+                            "exception_type": type(exc).__name__,
+                            "detail": str(exc),
+                        }
+                    )
+            if rollback_errors:
+                return False
+
+            # Restore both primary families first, then supporting evidence.
+            # If either group cannot be restored completely, re-quarantine
+            # everything restored so far. This prevents one primary from
+            # becoming readable with ambiguous or partial sidecars.
+            primary_targets = {
+                destination_paths.hdf,
+                destination_paths.legacy_output,
+            }
+            restoration_groups = (
+                [
+                    target
+                    for target in quarantine_targets
+                    if (
+                        target in mutated_paths
+                        and target in primary_targets
+                    )
+                ],
+                [
+                    target
+                    for target in quarantine_targets
+                    if (
+                        target in mutated_paths
+                        and target not in primary_targets
+                    )
+                ],
+            )
+            restored_targets: List[Path] = []
+
+            def requarantine_restored_targets() -> None:
+                for target in reversed(restored_targets):
+                    backup_path = backup_paths.get(target)
+                    try:
+                        if backup_path is None:
+                            raise FileNotFoundError(
+                                f"Backup path unavailable for {target}"
+                            )
+                        if not target.is_file():
+                            raise FileNotFoundError(
+                                "Restored artifact disappeared before "
+                                f"re-quarantine: {target}"
+                            )
+                        os.replace(target, backup_path)
+                        if target.exists() or not backup_path.is_file():
+                            raise RuntimeError(
+                                "Could not re-quarantine restored artifact: "
+                                f"{target}"
+                            )
+                    except Exception as exc:
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": type(exc).__name__,
+                                "detail": str(exc),
+                            }
+                        )
+
+            for targets in restoration_groups:
+                for target in targets:
+                    original = prior_state[target]
+                    backup_path = backup_paths.get(target)
+                    try:
+                        if original["existed"]:
+                            if (
+                                backup_path is None
+                                or not backup_path.is_file()
+                            ):
+                                raise FileNotFoundError(
+                                    "Original backup unavailable for "
+                                    f"{target}"
+                                )
+                            os.replace(backup_path, target)
+                            restored_targets.append(target)
+                            if (
+                                not target.is_file()
+                                or RasCmdr._artifact_sha256(target)
+                                != original["sha256"]
+                            ):
+                                raise RuntimeError(
+                                    "Restored artifact verification failed: "
+                                    f"{target}"
+                                )
+                        elif target.exists():
+                            raise RuntimeError(
+                                "Originally absent artifact is visible: "
+                                f"{target}"
+                            )
+                    except Exception as exc:
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": type(exc).__name__,
+                                "detail": str(exc),
+                            }
+                        )
+                if rollback_errors:
+                    requarantine_restored_targets()
+                    return False
+
+            for target, original in prior_state.items():
+                if original["existed"]:
+                    if (
+                        not target.is_file()
+                        or RasCmdr._artifact_sha256(target)
+                        != original["sha256"]
+                    ):
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": "RuntimeError",
+                                "detail": (
+                                    "Final restored-state verification failed"
+                                ),
+                            }
+                        )
+                elif target.exists():
+                    rollback_errors.append(
+                        {
+                            "path": str(target),
+                            "exception_type": "RuntimeError",
+                            "detail": (
+                                "Originally absent artifact is visible after "
+                                "rollback"
+                            ),
+                        }
+                    )
+            return not rollback_errors
+
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+            for target in quarantine_targets:
+                if target.parent.resolve(strict=False) != destination:
+                    raise ValueError(
+                        f"Promotion artifact escapes destination: {target}"
+                    )
+                if target.exists() and not target.is_file():
+                    raise IsADirectoryError(
+                        f"Promotion artifact is not a file: {target}"
+                    )
+                prior_state[target] = {
+                    "existed": target.is_file(),
+                    "sha256": (
+                        RasCmdr._artifact_sha256(target)
+                        if target.is_file()
+                        else None
+                    ),
+                }
+
+            transaction_path.mkdir(parents=False, exist_ok=False)
+            transaction_created = True
+            stage_folder.mkdir()
+            backup_folder.mkdir()
+
+            for index, entry in enumerate(publication_entries):
+                source = entry["source"]
+                current_source_path = source
+                current_destination_path = entry["destination"]
+                if not source.is_file():
+                    raise FileNotFoundError(
+                        f"Selected publication source is missing: {source}"
+                    )
+                before = source.stat()
+                before_hash = RasCmdr._artifact_sha256(source)
+                stage_path = stage_folder / f"{index:02d}"
+                copied = RasCmdr._copy_worker_artifact(source, stage_path)
+                if not copied:
+                    raise RuntimeError(
+                        "Artifact staging copy returned False for "
+                        f"{source} -> {stage_path}"
+                    )
+                after = source.stat()
+                after_hash = RasCmdr._artifact_sha256(source)
+                if (
+                    before.st_dev,
+                    before.st_ino,
+                    before.st_size,
+                    before.st_mtime_ns,
+                    before_hash,
+                ) != (
+                    after.st_dev,
+                    after.st_ino,
+                    after.st_size,
+                    after.st_mtime_ns,
+                    after_hash,
+                ):
+                    raise RuntimeError(
+                        f"Publication source changed while staging: {source}"
+                    )
+                if RasCmdr._artifact_sha256(stage_path) != before_hash:
+                    raise RuntimeError(
+                        f"Staged artifact hash mismatch: {source}"
+                    )
+                entry["sha256"] = before_hash
+                entry["stage_path"] = stage_path
+                staged_paths[entry["destination"]] = stage_path
+
+            failure_stage = "destination_promotion_quarantine"
+            current_source_path = None
+            for index, target in enumerate(quarantine_targets):
+                current_destination_path = target
+                if not prior_state[target]["existed"]:
+                    continue
+                backup_path = backup_folder / f"{index:02d}-{target.name}"
+                backup_paths[target] = backup_path
+                os.replace(target, backup_path)
+                mutated_paths.add(target)
+                if target.exists() or not backup_path.is_file():
+                    raise RuntimeError(
+                        f"Could not prove artifact quarantine: {target}"
+                    )
+                if (
+                    RasCmdr._artifact_sha256(backup_path)
+                    != prior_state[target]["sha256"]
+                ):
+                    raise RuntimeError(
+                        f"Quarantined artifact hash mismatch: {target}"
+                    )
+
+            failure_stage = "destination_promotion_commit"
+            for entry in publication_entries:
+                target = entry["destination"]
+                stage_path = entry["stage_path"]
+                current_source_path = entry["source"]
+                current_destination_path = target
+                mutated_paths.add(target)
+                os.replace(stage_path, target)
+                committed_paths.append(target)
+                if not target.is_file():
+                    raise FileNotFoundError(
+                        f"Committed artifact is missing: {target}"
+                    )
+                if RasCmdr._artifact_sha256(target) != entry["sha256"]:
+                    raise RuntimeError(
+                        f"Committed artifact hash mismatch: {target}"
+                    )
+
+            failure_stage = "destination_promotion_finalization"
+            current_source_path = None
+            current_destination_path = opposing_destination
+            mutated_paths.add(opposing_destination)
+            finalize_plan_execution_artifacts(
+                normalized_plan,
+                output_format=output_format,
+                ras_object=ras_object,
+                project_folder=destination,
+                project_name=project_name,
+            )
+
+            failure_stage = "destination_promotion_verification"
+            for entry in publication_entries:
+                target = entry["destination"]
+                if (
+                    not target.is_file()
+                    or RasCmdr._artifact_sha256(target) != entry["sha256"]
+                ):
+                    raise RuntimeError(
+                        f"Published artifact verification failed: {target}"
+                    )
+            source_sidecar_names = {
+                source.name for source in source_sidecars
+            }
+            for sidecar in destination_paths.message_sidecars:
+                if sidecar.name not in source_sidecar_names and sidecar.exists():
+                    raise RuntimeError(
+                        f"Stale message sidecar remains visible: {sidecar}"
+                    )
+            if opposing_destination.exists():
+                raise RuntimeError(
+                    "Opposing result remains visible after finalization: "
+                    f"{opposing_destination}"
+                )
+
+            try:
+                shutil.rmtree(transaction_path)
+            except OSError as exc:
+                logger.warning(
+                    "Plan %s promotion committed, but transaction cleanup "
+                    "failed at %s: %s",
+                    normalized_plan,
+                    transaction_path,
+                    exc,
+                )
+            return True, {
+                "failure_stage": None,
+                "failure_detail": None,
+                "exception_type": None,
+                "source_path": None,
+                "destination_path": None,
+                "transaction_path": str(transaction_path),
+                "retained_transaction_path": (
+                    str(transaction_path)
+                    if transaction_path.exists()
+                    else None
+                ),
+                "copied_destination_paths": [
+                    str(path) for path in committed_paths
+                ],
+                "rollback_attempted": False,
+                "rollback_confirmed": None,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+        except Exception as exc:
+            rollback_attempted = bool(mutated_paths)
+            rollback_confirmed = rollback_destination()
+            if rollback_confirmed and transaction_created:
+                try:
+                    shutil.rmtree(transaction_path)
+                except OSError as cleanup_exc:
+                    rollback_errors.append(
+                        {
+                            "path": str(transaction_path),
+                            "exception_type": type(cleanup_exc).__name__,
+                            "detail": str(cleanup_exc),
+                        }
+                    )
+            retained_transaction_path = (
+                str(transaction_path)
+                if transaction_path.exists()
+                else None
+            )
+            artifact_manifest = [
+                {
+                    "role": entry["role"],
+                    "source_path": str(entry["source"]),
+                    "destination_path": str(entry["destination"]),
+                    "staged_path": (
+                        str(entry["stage_path"])
+                        if "stage_path" in entry
+                        else None
+                    ),
+                }
+                for entry in publication_entries
+            ]
+            quarantine_manifest = [
+                {
+                    "destination_path": str(target),
+                    "prior_existed": prior_state.get(target, {}).get(
+                        "existed"
+                    ),
+                    "prior_sha256": prior_state.get(target, {}).get(
+                        "sha256"
+                    ),
+                    "backup_path": (
+                        str(backup_paths[target])
+                        if target in backup_paths
+                        else None
+                    ),
+                }
+                for target in quarantine_targets
+            ]
+            return False, {
+                "failure_stage": failure_stage,
+                "failure_detail": f"{type(exc).__name__}: {exc}",
+                "exception_type": type(exc).__name__,
+                "source_path": (
+                    str(current_source_path)
+                    if current_source_path is not None
+                    else None
+                ),
+                "destination_path": (
+                    str(current_destination_path)
+                    if current_destination_path is not None
+                    else None
+                ),
+                "transaction_path": (
+                    str(transaction_path) if transaction_created else None
+                ),
+                "retained_transaction_path": retained_transaction_path,
+                "copied_destination_paths": [
+                    str(path) for path in committed_paths
+                ],
+                "staged_paths_remaining": [
+                    str(path)
+                    for path in staged_paths.values()
+                    if path.exists()
+                ],
+                "backup_paths_remaining": [
+                    str(path)
+                    for path in backup_paths.values()
+                    if path.exists()
+                ],
+                "failed_new_paths_remaining": [
+                    str(path)
+                    for path in failed_new_folder.glob("*")
+                    if path.is_file()
+                ] if failed_new_folder.is_dir() else [],
+                "artifact_manifest": artifact_manifest,
+                "quarantine_manifest": quarantine_manifest,
+                "rollback_attempted": rollback_attempted,
+                "rollback_confirmed": rollback_confirmed,
+                "rollback_errors": rollback_errors,
+                "partial_promotion_possible": not rollback_confirmed,
+            }
+
+    @staticmethod
+    def _destination_promotion_process_gate(
+        plan_numbers: List[str],
+        *,
+        project_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[bool, Dict[str, Any]]:
+        """Prove exact-plan destination quiescence before batch promotion.
+
+        A single strict host snapshot is matched against every plan that would
+        be promoted.  Reusing one snapshot makes this a batch gate: no plan is
+        copied when any destination plan is occupied or when process inventory
+        is incomplete.  The returned evidence is detached and JSON-safe so a
+        refused promotion can be retained in ``execution_details_by_plan``.
+        """
+        from ._process_inspection import match_plan_processes, scan_ras_processes
+
+        normalized_plans = sorted(
+            {
+                RasUtils.normalize_ras_number(plan_number)
+                for plan_number in plan_numbers
+            }
+        )
+        destination = Path(project_folder).resolve(strict=False)
+        project_path = (
+            destination / f"{project_name}.prj"
+        ).resolve(strict=False)
+        resolution_errors = []
+        if not project_path.is_file():
+            resolution_errors.append(
+                {
+                    "plan_number": None,
+                    "path": str(project_path),
+                    "reason": "destination project file is missing",
+                }
+            )
+
+        try:
+            import psutil
+
+            inventory = scan_ras_processes(psutil_module=psutil)
+        except Exception as exc:
+            evidence = {
+                "complete": False,
+                "quiescence_confirmed": None,
+                "destination_folder": str(destination),
+                "project_path": str(project_path),
+                "plan_inventories": {},
+                "blocked_plan_numbers": [],
+                "global_processes": [],
+                "query_errors": [
+                    {
+                        "pid": None,
+                        "operation": "scan_destination_processes",
+                        "reason_code": "process_query_failed",
+                        "exception_type": type(exc).__name__,
+                        "detail": str(exc),
+                    }
+                ],
+                "resolution_errors": resolution_errors,
+            }
+            return False, evidence
+
+        plan_inventories = {}
+        blocked_plan_numbers = []
+        plan_inventories_complete = True
+        aggregated_query_errors = [
+            error.to_dict() for error in inventory.query_errors
+        ]
+        for plan_number in normalized_plans:
+            plan_path = (
+                destination / f"{project_name}.p{plan_number}"
+            ).resolve(strict=False)
+            tmp_hdf_path = (
+                destination / f"{project_name}.p{plan_number}.tmp.hdf"
+            ).resolve(strict=False)
+            if not plan_path.is_file():
+                resolution_errors.append(
+                    {
+                        "plan_number": plan_number,
+                        "path": str(plan_path),
+                        "reason": "destination plan file is missing",
+                    }
+                )
+            try:
+                plan_inventory = match_plan_processes(
+                    inventory,
+                    plan_number=plan_number,
+                    project_path=project_path,
+                    plan_path=plan_path,
+                    tmp_hdf_path=tmp_hdf_path,
+                )
+            except Exception as exc:
+                match_error = RasProcessQueryError(
+                    pid=None,
+                    operation="match_destination_plan_processes",
+                    reason_code="process_query_failed",
+                    exception_type=type(exc).__name__,
+                    detail=str(exc),
+                )
+                plan_inventory = PlanProcessInventory(
+                    observed_at=inventory.observed_at,
+                    plan_number=plan_number,
+                    project_path=str(project_path),
+                    plan_path=str(plan_path),
+                    tmp_hdf_path=str(tmp_hdf_path),
+                    complete=False,
+                    query_errors=(match_error,),
+                )
+            plan_inventories[plan_number] = plan_inventory.to_dict()
+            plan_inventories_complete = bool(
+                plan_inventories_complete and plan_inventory.complete
+            )
+            for error in plan_inventory.query_errors:
+                serialized_error = error.to_dict()
+                if serialized_error not in aggregated_query_errors:
+                    aggregated_query_errors.append(serialized_error)
+            if plan_inventory.matched:
+                blocked_plan_numbers.append(plan_number)
+
+        complete = bool(
+            inventory.complete
+            and plan_inventories_complete
+            and not resolution_errors
+        )
+        global_processes = [
+            process.to_dict() for process in inventory.processes
+        ]
+        if global_processes:
+            quiescence_confirmed: Optional[bool] = False
+        elif complete:
+            quiescence_confirmed = True
+        else:
+            quiescence_confirmed = None
+        evidence = {
+            "complete": complete,
+            "quiescence_confirmed": quiescence_confirmed,
+            "destination_folder": str(destination),
+            "project_path": str(project_path),
+            "plan_inventories": plan_inventories,
+            "blocked_plan_numbers": blocked_plan_numbers,
+            "global_processes": global_processes,
+            "query_errors": aggregated_query_errors,
+            "resolution_errors": resolution_errors,
+        }
+        return quiescence_confirmed is True, evidence
+
+    @staticmethod
+    def _acquire_destination_promotion_lock(
+        *,
+        project_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+        """Acquire one cooperative exact-create lock for shared promotion."""
+        destination = Path(project_folder).resolve(strict=False)
+        lock_path = destination / (
+            f".{project_name}.ras-commander-promotion.lock"
+        )
+        token = uuid.uuid4().hex
+        owner_pid = os.getpid()
+        created_at = time.time()
+        payload = (
+            "ras_commander_destination_promotion_lock_v1\n"
+            f"token={token}\n"
+            f"pid={owner_pid}\n"
+            f"created_at={created_at:.9f}\n"
+        ).encode("ascii")
+        flags = (
+            os.O_CREAT
+            | os.O_EXCL
+            | os.O_RDWR
+            | getattr(os, "O_BINARY", 0)
+        )
+        try:
+            descriptor = os.open(lock_path, flags, 0o600)
+        except FileExistsError:
+            try:
+                existing_owner = lock_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )[:4096]
+            except OSError as exc:
+                existing_owner = f"<unreadable: {type(exc).__name__}: {exc}>"
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lock_exists",
+                "reason": "destination promotion lock already exists",
+                "existing_owner": existing_owner,
+            }
+        except OSError as exc:
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lock_creation_failed",
+                "reason": f"lock creation failed: {type(exc).__name__}: {exc}",
+                "existing_owner": None,
+            }
+        try:
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        except Exception as exc:
+            os.close(descriptor)
+            removed = False
+            try:
+                if lock_path.read_bytes() == payload:
+                    lock_path.unlink()
+                    removed = True
+            except OSError:
+                pass
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": token,
+                "owner_pid": owner_pid,
+                "created_at": created_at,
+                "reason_code": "lock_initialization_failed",
+                "reason": (
+                    "lock initialization failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "existing_owner": None,
+                "partial_lock_removed": removed,
+            }
+        lease = {
+            "descriptor": descriptor,
+            "path": lock_path,
+            "token": token,
+            "payload": payload,
+        }
+        return lease, {
+            "acquired": True,
+            "lock_path": str(lock_path),
+            "owner_token": token,
+            "owner_pid": owner_pid,
+            "created_at": created_at,
+            "reason_code": None,
+            "reason": None,
+            "existing_owner": None,
+        }
+
+    @staticmethod
+    def _release_destination_promotion_lock(
+        lease: Dict[str, Any],
+    ) -> bool:
+        """Remove only the still-identical lock owned by ``lease``."""
+        descriptor = lease["descriptor"]
+        lock_path = Path(lease["path"])
+        expected_payload = lease["payload"]
+        owned = False
+        descriptor_identity = None
+        try:
+            descriptor_stat = os.fstat(descriptor)
+            path_stat = lock_path.stat()
+            same_identity = (
+                descriptor_stat.st_dev == path_stat.st_dev
+                and descriptor_stat.st_ino == path_stat.st_ino
+            )
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            observed_payload = os.read(
+                descriptor,
+                len(expected_payload) + 1,
+            )
+            owned = bool(
+                same_identity and observed_payload == expected_payload
+            )
+            descriptor_identity = (
+                descriptor_stat.st_dev,
+                descriptor_stat.st_ino,
+            )
+        except OSError:
+            owned = False
+        finally:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            lease["descriptor"] = -1
+        if not owned or descriptor_identity is None:
+            return False
+        try:
+            current_stat = lock_path.stat()
+            current_identity = (
+                current_stat.st_dev,
+                current_stat.st_ino,
+            )
+            if current_identity != descriptor_identity:
+                return False
+            if lock_path.read_bytes() != expected_payload:
+                return False
+            lock_path.unlink()
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
     def _verify_legacy_result(
         plan_number: Union[str, Number],
         ras_object: 'RasPrj',
@@ -1233,7 +2127,40 @@ class RasCmdr:
             tmp_hdf_path=tmp_hdf_path,
         )
         matched = initial_plan.matched
-        errors = list(initial_scan.inventory.query_errors)
+        errors = list(initial_plan.query_errors)
+        if not initial_plan.complete:
+            if not errors:
+                errors.append(
+                    RasProcessQueryError(
+                        pid=None,
+                        operation="match_initial_plan_processes",
+                        reason_code="incomplete_plan_inventory",
+                        exception_type="IncompletePlanProcessInventory",
+                        detail=(
+                            "The initial exact-plan process inventory was "
+                            "incomplete"
+                        ),
+                    )
+                )
+            logger.warning(
+                "Refusing to signal plan %s because its initial exact-plan "
+                "process inventory is incomplete",
+                plan_num,
+            )
+            return PlanCancellationResult(
+                plan_number=plan_num,
+                project_path=str(project_path),
+                plan_path=str(plan_path),
+                tmp_hdf_path=str(tmp_hdf_path),
+                cancellation_attempted=False,
+                pre_scan_complete=False,
+                post_scan_complete=False,
+                matched=matched,
+                query_errors=tuple(errors),
+                quiescence_confirmed=None,
+                started_at=cancellation_started_at,
+                finished_at=time.time(),
+            )
 
         target_records = {record.identity: record for record in matched}
         target_handles = {
@@ -1431,7 +2358,7 @@ class RasCmdr:
             plan_path=plan_path,
             tmp_hdf_path=tmp_hdf_path,
         )
-        errors.extend(final_scan.inventory.query_errors)
+        errors.extend(final_plan.query_errors)
 
         final_matches = final_plan.matched
         all_survivors = {
@@ -1440,8 +2367,8 @@ class RasCmdr:
         if all_survivors:
             quiescence_confirmed: Optional[bool] = False
         elif (
-            not initial_scan.inventory.complete
-            or not final_scan.inventory.complete
+            not initial_plan.complete
+            or not final_plan.complete
             or child_query_uncertain
             or errors
         ):
@@ -1455,8 +2382,8 @@ class RasCmdr:
             plan_path=str(plan_path),
             tmp_hdf_path=str(tmp_hdf_path),
             cancellation_attempted=cancellation_attempted,
-            pre_scan_complete=initial_scan.inventory.complete,
-            post_scan_complete=final_scan.inventory.complete,
+            pre_scan_complete=initial_plan.complete,
+            post_scan_complete=final_plan.complete,
             matched=matched,
             stopped=tuple(
                 sorted(
@@ -2452,6 +3379,18 @@ class RasCmdr:
         in those folders, and then consolidates results to a final destination folder.
         It's ideal for running independent plans simultaneously to make better use of system resources.
 
+        Destination publication is fail closed. A cooperative destination
+        lock and complete, globally empty HEC-RAS process inventory are
+        required for the whole promotion batch. Each successful plan is then
+        published as a recoverable transaction: every source is first copied
+        and verified under a hidden destination stage, existing recognized
+        result/message/geometry artifacts are quarantined, and the same-run
+        set is committed before finalization. A provable failure restores the
+        exact prior destination state; otherwise the transaction backups and
+        worker folder are retained and later publication is refused. The
+        corresponding paths and failure evidence are available in
+        ``execution_details_by_plan``.
+
         Args:
             plan_number (Union[str, List[str], None]): Plan number(s) to compute.
                 If None, all plans in the project are computed.
@@ -2549,6 +3488,25 @@ class RasCmdr:
             - The function creates worker folders during execution and consolidates results
               to the destination folder upon completion.
 
+            - Promotion is an all-or-none safety gate for the successful
+              candidate plans. Before copying any plan or shared geometry
+              artifact, ras-commander holds a cooperative destination lock and
+              requires a complete, globally empty strict HEC-RAS process
+              inventory. A refusal marks every candidate unsuccessful and
+              retains each computed worker folder; its exact recovery path and
+              gate evidence are recorded in ``execution_details_by_plan``.
+              The lock coordinates ras-commander promotions, but an external
+              GUI or process can still start after the inventory snapshot. Do
+              not run HEC-RAS manually against the destination during
+              promotion.
+
+            - Missing worker results, rejected/failed artifact copies, and
+              finalization errors also retain the affected worker folder and
+              mark unpromoted plans unsuccessful with exact failure evidence.
+              Supporting artifacts are copied before the primary result. If a
+              later step fails, ``promotion_failure`` records whether partial
+              promotion is possible and lists every copied destination path.
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the SOURCE folder before creating workers. Plans with existing
@@ -2559,6 +3517,7 @@ class RasCmdr:
         execution_results: Dict[str, bool] = {}
         execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
         filtered_plan_numbers: List[str] = []
+        promotion_lock_lease: Optional[Dict[str, Any]] = None
 
         try:
             ras_obj = ras_object or ras
@@ -2768,25 +3727,162 @@ class RasCmdr:
             consolidated_artifact_count = 0
             promoted_geometry_numbers: set[str] = set()
             promoted_plan_numbers: set[str] = set()
+            promotion_candidates = sorted(
+                {
+                    plan_num
+                    for _, plan_num in plan_assignments
+                    if execution_results.get(plan_num, False)
+                }
+            )
+            promotion_allowed = True
+            promotion_gate_evidence: Dict[str, Any] = {}
+            promotion_lock_evidence: Dict[str, Any] = {}
+            if promotion_candidates:
+                (
+                    promotion_lock_lease,
+                    promotion_lock_evidence,
+                ) = RasCmdr._acquire_destination_promotion_lock(
+                    project_folder=final_dest_folder,
+                    project_name=ras_obj.project_name,
+                )
+                if promotion_lock_lease is None:
+                    promotion_allowed = False
+                    promotion_gate_evidence = {
+                        "complete": False,
+                        "quiescence_confirmed": None,
+                        "destination_folder": str(final_dest_folder),
+                        "project_path": str(
+                            final_dest_folder / f"{ras_obj.project_name}.prj"
+                        ),
+                        "plan_inventories": {},
+                        "blocked_plan_numbers": [],
+                        "global_processes": [],
+                        "query_errors": [],
+                        "resolution_errors": [],
+                        "promotion_lock": promotion_lock_evidence,
+                    }
+                else:
+                    (
+                        promotion_allowed,
+                        promotion_gate_evidence,
+                    ) = RasCmdr._destination_promotion_process_gate(
+                        promotion_candidates,
+                        project_folder=final_dest_folder,
+                        project_name=ras_obj.project_name,
+                    )
+                    promotion_gate_evidence["promotion_lock"] = (
+                        promotion_lock_evidence
+                    )
+            if not promotion_allowed:
+                retained_worker_folders = {
+                    plan_num: str(
+                        Path(worker_ras_objects[worker_id].project_folder)
+                    )
+                    for worker_id, plan_num in plan_assignments
+                    if worker_ras_objects.get(worker_id) is not None
+                }
+                promotion_candidate_set = set(promotion_candidates)
+                for plan_num, retained_folder in (
+                    retained_worker_folders.items()
+                ):
+                    details = dict(
+                        execution_details_by_plan.get(plan_num, {})
+                    )
+                    details["retained_worker_folder"] = retained_folder
+                    if plan_num in promotion_candidate_set:
+                        execution_results[plan_num] = False
+                        details["failure_stage"] = (
+                            "destination_promotion_process_gate"
+                        )
+                        details["destination_promotion_process_gate"] = (
+                            promotion_gate_evidence
+                        )
+                    execution_details_by_plan[plan_num] = details
+                logger.error(
+                    "Refused the entire worker-result promotion because "
+                    "destination exact-plan quiescence was not proved: %s",
+                    promotion_gate_evidence,
+                )
+            promotion_integrity_lost = False
+            promotion_integrity_failure: Dict[str, Any] = {}
             for worker_id, worker_ras in worker_ras_objects.items():
                 if worker_ras is None:
                     continue
                 worker_folder = Path(worker_ras.project_folder)
                 assigned_plan_numbers = worker_plan_numbers.get(worker_id, [])
+                retained_worker_folder = str(
+                    worker_folder.resolve(strict=False)
+                )
+                worker_must_be_retained = not promotion_allowed
+                current_plan_number: Optional[str] = None
+                current_failure_stage = "destination_promotion_preparation"
+                current_source_path: Optional[Path] = None
+                current_destination_path: Optional[Path] = None
+                copied_destinations_by_plan: Dict[str, List[str]] = {
+                    plan_num: [] for plan_num in assigned_plan_numbers
+                }
                 try:
                     # First, close any open resources in the worker RAS object
                     worker_ras.close() if hasattr(worker_ras, 'close') else None
                     
                     # Add a small delay to ensure file handles are released
                     time.sleep(1)
-                    
+
+                    if not promotion_allowed:
+                        logger.warning(
+                            "Retained computed worker folder after promotion "
+                            "refusal: %s",
+                            worker_folder,
+                        )
+                        continue
+                    if promotion_integrity_lost:
+                        worker_must_be_retained = True
+                        failure_detail = (
+                            "A prior plan promotion could not prove exact "
+                            "destination rollback; refusing later publication"
+                        )
+                        for plan_num in assigned_plan_numbers:
+                            if (
+                                execution_results.get(plan_num, False)
+                                and plan_num not in promoted_plan_numbers
+                            ):
+                                execution_results[plan_num] = False
+                                details = dict(
+                                    execution_details_by_plan.get(
+                                        plan_num,
+                                        {},
+                                    )
+                                )
+                                details.update(
+                                    {
+                                        "failure_stage": (
+                                            "destination_promotion_aborted_unrestored"
+                                        ),
+                                        "failure_detail": failure_detail,
+                                        "promotion_failure": (
+                                            promotion_integrity_failure
+                                        ),
+                                    }
+                                )
+                                execution_details_by_plan[plan_num] = details
+                        continue
+
                     # Move files with retry mechanism
                     max_retries = 3
                     for retry in range(max_retries):
                         try:
                             for plan_num in assigned_plan_numbers:
-                                if not execution_results.get(plan_num, False):
+                                if (
+                                    not execution_results.get(plan_num, False)
+                                    or plan_num in promoted_plan_numbers
+                                ):
                                     continue
+                                current_plan_number = plan_num
+                                current_failure_stage = (
+                                    "destination_promotion_inventory"
+                                )
+                                current_source_path = None
+                                current_destination_path = None
                                 artifact_paths = get_plan_result_artifact_paths(
                                     plan_num,
                                     ras_object=worker_ras,
@@ -2796,22 +3892,11 @@ class RasCmdr:
                                     if execution_result_format == "hdf"
                                     else artifact_paths.legacy_output
                                 )
-                                if not primary_result.is_file():
-                                    execution_results[plan_num] = False
-                                    logger.error(
-                                        "Successful worker plan %s has no %s "
-                                        "result to promote: %s",
-                                        plan_num,
-                                        execution_result_format,
-                                        primary_result,
-                                    )
-                                    continue
-                                plan_artifacts = [primary_result]
-                                plan_artifacts.extend(
+                                source_sidecars = [
                                     path
                                     for path in artifact_paths.message_sidecars
                                     if path.is_file()
-                                )
+                                ]
                                 geometry_number = RasCmdr._get_plan_geometry_number(
                                     filtered_plan_entries,
                                     plan_num
@@ -2821,6 +3906,7 @@ class RasCmdr:
                                     and geometry_number
                                     not in promoted_geometry_numbers
                                 )
+                                geometry_source = None
                                 if promote_geometry:
                                     geometry_hdf = (
                                         worker_folder
@@ -2828,29 +3914,130 @@ class RasCmdr:
                                         f"{geometry_number}.hdf"
                                     )
                                     if geometry_hdf.is_file():
-                                        plan_artifacts.append(geometry_hdf)
-                                for artifact_path in plan_artifacts:
-                                    dest_path = final_dest_folder / artifact_path.name
-                                    if RasCmdr._copy_worker_artifact(
-                                        artifact_path,
-                                        dest_path
-                                    ):
-                                        consolidated_artifact_count += 1
-                                if promote_geometry and geometry_hdf.is_file():
-                                    promoted_geometry_numbers.add(geometry_number)
-                                finalize_plan_execution_artifacts(
+                                        geometry_source = geometry_hdf
+                                (
+                                    promotion_succeeded,
+                                    promotion_evidence,
+                                ) = RasCmdr._publish_plan_artifacts_transaction(
                                     plan_num,
+                                    source_primary=primary_result,
+                                    source_sidecars=source_sidecars,
+                                    geometry_source=geometry_source,
                                     output_format=execution_result_format,
                                     ras_object=ras_obj,
-                                    project_folder=final_dest_folder,
+                                    destination_folder=final_dest_folder,
                                     project_name=worker_ras.project_name,
                                 )
+                                if not promotion_succeeded:
+                                    execution_results[plan_num] = False
+                                    worker_must_be_retained = True
+                                    details = dict(
+                                        execution_details_by_plan.get(
+                                            plan_num,
+                                            {},
+                                        )
+                                    )
+                                    details.update(
+                                        {
+                                            "failure_stage": (
+                                                promotion_evidence[
+                                                    "failure_stage"
+                                                ]
+                                            ),
+                                            "failure_detail": (
+                                                promotion_evidence[
+                                                    "failure_detail"
+                                                ]
+                                            ),
+                                            "retained_worker_folder": (
+                                                retained_worker_folder
+                                            ),
+                                            "promotion_failure": (
+                                                promotion_evidence
+                                            ),
+                                        }
+                                    )
+                                    execution_details_by_plan[plan_num] = (
+                                        details
+                                    )
+                                    if not promotion_evidence.get(
+                                        "rollback_confirmed",
+                                        False,
+                                    ):
+                                        promotion_integrity_lost = True
+                                        promotion_integrity_failure = (
+                                            promotion_evidence
+                                        )
+                                        break
+                                    continue
+                                copied_destinations_by_plan[plan_num] = list(
+                                    promotion_evidence[
+                                        "copied_destination_paths"
+                                    ]
+                                )
+                                consolidated_artifact_count += len(
+                                    copied_destinations_by_plan[plan_num]
+                                )
+                                if geometry_source is not None:
+                                    promoted_geometry_numbers.add(
+                                        geometry_number
+                                    )
                                 promoted_plan_numbers.add(plan_num)
+
+                            if promotion_integrity_lost:
+                                worker_must_be_retained = True
+                                failure_detail = (
+                                    "A plan promotion could not prove exact "
+                                    "destination rollback; refusing later "
+                                    "publication"
+                                )
+                                for plan_num in assigned_plan_numbers:
+                                    if (
+                                        execution_results.get(plan_num, False)
+                                        and plan_num
+                                        not in promoted_plan_numbers
+                                    ):
+                                        execution_results[plan_num] = False
+                                        details = dict(
+                                            execution_details_by_plan.get(
+                                                plan_num,
+                                                {},
+                                            )
+                                        )
+                                        details.update(
+                                            {
+                                                "failure_stage": (
+                                                    "destination_promotion_aborted_unrestored"
+                                                ),
+                                                "failure_detail": (
+                                                    failure_detail
+                                                ),
+                                                "retained_worker_folder": (
+                                                    retained_worker_folder
+                                                ),
+                                                "promotion_failure": (
+                                                    promotion_integrity_failure
+                                                ),
+                                            }
+                                        )
+                                        execution_details_by_plan[
+                                            plan_num
+                                        ] = details
                              
                             # Add another small delay before removal
                             time.sleep(1)
-                            
+
+                            if worker_must_be_retained:
+                                logger.warning(
+                                    "Retained worker folder after a plan "
+                                    "promotion failure: %s",
+                                    worker_folder,
+                                )
+                                break
+
                             # Try to remove the worker folder
+                            current_failure_stage = "worker_folder_cleanup"
+                            current_plan_number = None
                             if worker_folder.exists():
                                 if not RasUtils.remove_with_retry(worker_folder, ras_object=None):
                                     raise PermissionError(f"Unable to remove worker folder: {worker_folder}")
@@ -2864,13 +4051,90 @@ class RasCmdr:
                             continue
                             
                 except Exception as e:
+                    worker_must_be_retained = True
+                    failure_detail = f"{type(e).__name__}: {e}"
                     for plan_num in assigned_plan_numbers:
+                        details = dict(
+                            execution_details_by_plan.get(plan_num, {})
+                        )
+                        details["retained_worker_folder"] = (
+                            retained_worker_folder
+                        )
                         if (
                             execution_results.get(plan_num, False)
                             and plan_num not in promoted_plan_numbers
                         ):
                             execution_results[plan_num] = False
+                            plan_failure_stage = (
+                                current_failure_stage
+                                if plan_num == current_plan_number
+                                else "destination_promotion_aborted"
+                            )
+                            details.update(
+                                {
+                                    "failure_stage": plan_failure_stage,
+                                    "failure_detail": failure_detail,
+                                    "promotion_failure": {
+                                        "exception_type": type(e).__name__,
+                                        "detail": failure_detail,
+                                        "source_path": (
+                                            str(current_source_path)
+                                            if plan_num
+                                            == current_plan_number
+                                            and current_source_path is not None
+                                            else None
+                                        ),
+                                        "destination_path": (
+                                            str(current_destination_path)
+                                            if plan_num
+                                            == current_plan_number
+                                            and current_destination_path
+                                            is not None
+                                            else None
+                                        ),
+                                        "copied_destination_paths": list(
+                                            copied_destinations_by_plan.get(
+                                                plan_num,
+                                                [],
+                                            )
+                                        ),
+                                        "partial_promotion_possible": bool(
+                                            copied_destinations_by_plan.get(
+                                                plan_num,
+                                                [],
+                                            )
+                                        ),
+                                    },
+                                }
+                            )
+                        elif current_failure_stage == "worker_folder_cleanup":
+                            details["worker_cleanup_failure"] = {
+                                "exception_type": type(e).__name__,
+                                "detail": failure_detail,
+                            }
+                        execution_details_by_plan[plan_num] = details
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+                finally:
+                    if worker_must_be_retained:
+                        for plan_num in assigned_plan_numbers:
+                            details = dict(
+                                execution_details_by_plan.get(plan_num, {})
+                            )
+                            details["retained_worker_folder"] = (
+                                retained_worker_folder
+                            )
+                            execution_details_by_plan[plan_num] = details
+
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Did not remove destination promotion lock because "
+                        "ownership could not be reverified: %s",
+                        promotion_lock_evidence.get("lock_path"),
+                    )
+                promotion_lock_lease = None
 
             logger.info(
                 "Consolidated %s worker artifact(s) to %s",
@@ -2947,6 +4211,16 @@ class RasCmdr:
                 execution_results=execution_results,
                 execution_details_by_plan=execution_details_by_plan,
             )
+        finally:
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Preserved destination promotion lock after ownership "
+                        "verification failed: %s",
+                        promotion_lock_lease.get("path"),
+                    )
 
     @staticmethod
     @log_call
@@ -2968,6 +4242,14 @@ class RasCmdr:
         This function creates a separate test folder, copies the project there, and executes
         the specified plans in sequential order. It's useful for batch processing plans that
         need to be run in a specific order or when you want to ensure consistent resource usage.
+
+        Result publication uses the same fail-closed global process gate,
+        cooperative destination lock, and per-plan staged transaction as
+        ``compute_parallel``. On refusal or failure, the fresh test folder is
+        retained and its exact recovery path is recorded in
+        ``execution_details_by_plan``. If exact destination rollback cannot be
+        proved, later plan publication is refused and the hidden transaction
+        backups remain available for recovery.
 
         Args:
             plan_number (Union[str, Number, List[Union[str, Number]], None], optional): Plan number or list of plan numbers to execute (e.g., "01", 1, 1.0, or ["01", 2]).
@@ -3070,12 +4352,29 @@ class RasCmdr:
               * Each plan gets consistent resource usage
               * Execution time scales linearly with the number of plans
 
+            - Promotion is all-or-none for the successful candidate plans.
+              Before copying any plan or shared geometry artifact,
+              ras-commander holds a cooperative destination lock and requires
+              a complete, globally empty strict HEC-RAS process inventory. A
+              refusal marks every candidate unsuccessful and retains the test
+              folder; its exact recovery path and gate evidence are recorded
+              in ``execution_details_by_plan``. The lock coordinates
+              ras-commander promotions, but cannot close the race with a
+              manually launched HEC-RAS GUI/process after the process scan.
+
+            - Missing results, rejected/failed copies, and finalization errors
+              retain the test folder and record its exact path plus structured
+              failure evidence. Supporting artifacts are copied before the
+              primary result; any already copied paths are reported when a
+              later failure makes partial promotion possible.
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the TEST folder after copying. This allows resuming interrupted test runs.
 
             - verify is passed through to compute_plan() for each plan execution.
         """
+        promotion_lock_lease: Optional[Dict[str, Any]] = None
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
@@ -3219,79 +4518,249 @@ class RasCmdr:
                 project_folder,
             )
             artifact_files_copied = 0
+            promotion_candidates = sorted(
+                plan_number
+                for plan_number, succeeded in execution_results.items()
+                if succeeded
+            )
+            promotion_allowed = True
+            promotion_gate_evidence: Dict[str, Any] = {}
+            promotion_lock_evidence: Dict[str, Any] = {}
+            if promotion_candidates:
+                (
+                    promotion_lock_lease,
+                    promotion_lock_evidence,
+                ) = RasCmdr._acquire_destination_promotion_lock(
+                    project_folder=project_folder,
+                    project_name=ras_obj.project_name,
+                )
+                if promotion_lock_lease is None:
+                    promotion_allowed = False
+                    promotion_gate_evidence = {
+                        "complete": False,
+                        "quiescence_confirmed": None,
+                        "destination_folder": str(project_folder),
+                        "project_path": str(
+                            project_folder / f"{ras_obj.project_name}.prj"
+                        ),
+                        "plan_inventories": {},
+                        "blocked_plan_numbers": [],
+                        "global_processes": [],
+                        "query_errors": [],
+                        "resolution_errors": [],
+                        "promotion_lock": promotion_lock_evidence,
+                    }
+                else:
+                    (
+                        promotion_allowed,
+                        promotion_gate_evidence,
+                    ) = RasCmdr._destination_promotion_process_gate(
+                        promotion_candidates,
+                        project_folder=project_folder,
+                        project_name=ras_obj.project_name,
+                    )
+                    promotion_gate_evidence["promotion_lock"] = (
+                        promotion_lock_evidence
+                    )
+            retained_test_folder = str(
+                compute_folder.resolve(strict=False)
+            )
+            retain_test_folder = not promotion_allowed
+            if not promotion_allowed:
+                promotion_candidate_set = set(promotion_candidates)
+                for current_plan_number in execution_results:
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details["retained_test_folder"] = retained_test_folder
+                    if current_plan_number in promotion_candidate_set:
+                        execution_results[current_plan_number] = False
+                        details["failure_stage"] = (
+                            "destination_promotion_process_gate"
+                        )
+                        details["destination_promotion_process_gate"] = (
+                            promotion_gate_evidence
+                        )
+                    execution_details_by_plan[current_plan_number] = details
+                logger.error(
+                    "Refused the entire test-mode result promotion because "
+                    "destination exact-plan quiescence was not proved: %s",
+                    promotion_gate_evidence,
+                )
+            promotion_integrity_lost = False
+            promotion_integrity_failure: Dict[str, Any] = {}
+            promoted_geometry_numbers: set[str] = set()
             for current_plan_number, succeeded in execution_results.items():
                 if not succeeded:
                     continue
-                artifact_paths = get_plan_result_artifact_paths(
-                    current_plan_number,
-                    ras_object=compute_ras,
-                )
-                primary_result = (
-                    artifact_paths.hdf
-                    if execution_result_format == "hdf"
-                    else artifact_paths.legacy_output
-                )
-                candidates = [primary_result]
-                candidates.extend(
-                    path
-                    for path in artifact_paths.message_sidecars
-                    if path.is_file()
-                )
-                geometry_number = RasCmdr._get_plan_geometry_number(
-                    ras_compute_plan_entries,
-                    current_plan_number,
-                )
-                if geometry_number:
-                    geometry_hdf = (
-                        compute_folder
-                        / f"{compute_ras.project_name}.g{geometry_number}.hdf"
-                    )
-                    if geometry_hdf.is_file():
-                        candidates.append(geometry_hdf)
-
-                if not primary_result.is_file():
-                    logger.error(
-                        "Successful plan %s has no expected %s result to "
-                        "promote: %s",
-                        current_plan_number,
-                        execution_result_format,
-                        primary_result,
-                    )
+                if promotion_integrity_lost:
                     execution_results[current_plan_number] = False
+                    retain_test_folder = True
+                    failure_detail = (
+                        "A prior plan promotion could not prove exact "
+                        "destination rollback; refusing later publication"
+                    )
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details.update(
+                        {
+                            "failure_stage": (
+                                "destination_promotion_aborted_unrestored"
+                            ),
+                            "failure_detail": failure_detail,
+                            "retained_test_folder": retained_test_folder,
+                            "promotion_failure": (
+                                promotion_integrity_failure
+                            ),
+                        }
+                    )
+                    execution_details_by_plan[
+                        current_plan_number
+                    ] = details
                     continue
 
                 try:
-                    for artifact in candidates:
-                        if RasCmdr._copy_worker_artifact(
-                            artifact,
-                            project_folder / artifact.name,
-                        ):
-                            artifact_files_copied += 1
-                    finalize_plan_execution_artifacts(
+                    artifact_paths = get_plan_result_artifact_paths(
                         current_plan_number,
+                        ras_object=compute_ras,
+                    )
+                    primary_result = (
+                        artifact_paths.hdf
+                        if execution_result_format == "hdf"
+                        else artifact_paths.legacy_output
+                    )
+                    source_sidecars = [
+                        path
+                        for path in artifact_paths.message_sidecars
+                        if path.is_file()
+                    ]
+                    geometry_number = RasCmdr._get_plan_geometry_number(
+                        ras_compute_plan_entries,
+                        current_plan_number,
+                    )
+                    geometry_source = None
+                    if (
+                        geometry_number
+                        and geometry_number not in promoted_geometry_numbers
+                    ):
+                        geometry_hdf = (
+                            compute_folder
+                            / f"{compute_ras.project_name}.g"
+                            f"{geometry_number}.hdf"
+                        )
+                        if geometry_hdf.is_file():
+                            geometry_source = geometry_hdf
+                    (
+                        promotion_succeeded,
+                        promotion_evidence,
+                    ) = RasCmdr._publish_plan_artifacts_transaction(
+                        current_plan_number,
+                        source_primary=primary_result,
+                        source_sidecars=source_sidecars,
+                        geometry_source=geometry_source,
                         output_format=execution_result_format,
                         ras_object=ras_obj,
+                        destination_folder=project_folder,
+                        project_name=compute_ras.project_name,
                     )
-                except Exception as e:
+                except Exception as exc:
+                    promotion_succeeded = False
+                    promotion_evidence = {
+                        "failure_stage": (
+                            "destination_promotion_inventory"
+                        ),
+                        "failure_detail": f"{type(exc).__name__}: {exc}",
+                        "exception_type": type(exc).__name__,
+                        "source_path": None,
+                        "destination_path": None,
+                        "transaction_path": None,
+                        "retained_transaction_path": None,
+                        "copied_destination_paths": [],
+                        "rollback_attempted": False,
+                        "rollback_confirmed": True,
+                        "rollback_errors": [],
+                        "partial_promotion_possible": False,
+                    }
+                if not promotion_succeeded:
                     execution_results[current_plan_number] = False
+                    retain_test_folder = True
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details.update(
+                        {
+                            "failure_stage": promotion_evidence[
+                                "failure_stage"
+                            ],
+                            "failure_detail": promotion_evidence[
+                                "failure_detail"
+                            ],
+                            "retained_test_folder": retained_test_folder,
+                            "promotion_failure": promotion_evidence,
+                        }
+                    )
+                    execution_details_by_plan[
+                        current_plan_number
+                    ] = details
+                    if not promotion_evidence.get(
+                        "rollback_confirmed",
+                        False,
+                    ):
+                        promotion_integrity_lost = True
+                        promotion_integrity_failure = promotion_evidence
                     logger.error(
                         "Failed to promote plan %s artifacts: %s",
                         current_plan_number,
-                        e,
+                        promotion_evidence["failure_detail"],
                     )
+                    continue
+                artifact_files_copied += len(
+                    promotion_evidence["copied_destination_paths"]
+                )
+                if geometry_source is not None:
+                    promoted_geometry_numbers.add(geometry_number)
+
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Did not remove destination promotion lock because "
+                        "ownership could not be reverified: %s",
+                        promotion_lock_evidence.get("lock_path"),
+                    )
+                promotion_lock_lease = None
 
             logger.info(
                 "Consolidated %s plan artifact file(s) to the original project",
                 artifact_files_copied,
             )
 
-            # Clean up test folder
-            try:
-                shutil.rmtree(compute_folder)
-                logger.info("Removed test folder: %s", compute_folder.name)
-                logger.debug(f"Removed test folder path: {compute_folder}")
-            except Exception as e:
-                logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
+            # A refused promotion retains the only freshly computed copy for
+            # explicit user recovery/review.
+            if not retain_test_folder:
+                try:
+                    shutil.rmtree(compute_folder)
+                    logger.info("Removed test folder: %s", compute_folder.name)
+                    logger.debug(f"Removed test folder path: {compute_folder}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
+            else:
+                logger.warning(
+                    "Retained computed test folder after promotion refusal "
+                    "or failure: %s",
+                    compute_folder,
+                )
 
             logger.info("compute_test_mode completed.")
 
@@ -3329,6 +4798,16 @@ class RasCmdr:
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
             return ComputeParallelResult()
+        finally:
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Preserved destination promotion lock after ownership "
+                        "verification failed: %s",
+                        promotion_lock_lease.get("path"),
+                    )
 
     @staticmethod
     @log_call
@@ -3384,6 +4863,19 @@ class RasCmdr:
         The Linux RasUnsteady binary uses Fortran I/O conventions that require
         files to be accessible with a base name of "io" (e.g., io.b, io.X).
         This method creates temporary symlinks to satisfy this requirement.
+
+        On a Windows host, the WSL adapter fails before solver launch unless
+        Bash, ``setsid --wait``, ``/proc`` identity, durable sync, and process-
+        group signalling are available. It atomically acquires a per-plan
+        lease, launches the solver as a session/process-group leader, and
+        publishes the lease token, its Linux PID, ``/proc`` start time, and
+        process-group ID before ``exec``. Timeout or Python interruption starts
+        a separate WSL recovery command that revalidates that exact identity
+        before TERM/KILL and then proves the group empty. Opposing result
+        families are deliberately not precleaned or finalized until
+        quiescence is positive.
+        Uncertain recovery preserves all outputs and the lease so a duplicate
+        execution fails closed.
 
         Args:
             plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
@@ -4060,6 +5552,487 @@ class RasCmdr:
         return proc.stdout.strip()
 
     @staticmethod
+    def _parse_wsl_solver_exit_proof(stdout: str) -> Dict[str, Any]:
+        """Parse the shell's exact Linux solver process-group exit receipt."""
+        marker = "__RAS_COMMANDER_WSL_EXIT_PROOF__"
+        proof_line = None
+        for line in str(stdout).splitlines():
+            if line.startswith(f"{marker} "):
+                proof_line = line
+        if proof_line is None:
+            return {
+                "quiescence_confirmed": None,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "reported_returncode": None,
+            }
+
+        try:
+            fields = dict(
+                token.split("=", 1)
+                for token in proof_line[len(marker) + 1 :].split()
+            )
+            solver_pid = int(fields["pid"])
+            start_time_ticks = int(fields["start"])
+            process_group_id = int(fields["pgid"])
+            reported_returncode = int(fields["rc"])
+            quiescent_value = fields["quiescent"]
+            if (
+                solver_pid <= 0
+                or start_time_ticks <= 0
+                or process_group_id != solver_pid
+            ):
+                raise ValueError("invalid solver process-group identity")
+            if not 0 <= reported_returncode <= 255:
+                raise ValueError("invalid shell return code")
+            if quiescent_value not in {"0", "1"}:
+                raise ValueError("invalid quiescence value")
+        except (KeyError, TypeError, ValueError):
+            return {
+                "quiescence_confirmed": None,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "reported_returncode": None,
+            }
+        return {
+            "quiescence_confirmed": quiescent_value == "1",
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+            "reported_returncode": reported_returncode,
+        }
+
+    @staticmethod
+    def _read_wsl_supervision_identity(
+        state_path: Union[str, Path],
+        *,
+        expected_owner_token: Optional[str] = None,
+    ) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Read one atomically published Linux ``/proc`` identity receipt."""
+        path = Path(state_path)
+        try:
+            before = path.stat()
+            text = path.read_text(encoding="ascii")
+            after = path.stat()
+        except OSError as exc:
+            return None, f"{type(exc).__name__}: {exc}"
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            return None, "supervision identity changed while reading"
+        try:
+            (
+                schema,
+                token_field,
+                pid_field,
+                start_field,
+                pgid_field,
+            ) = text.strip().split()
+            if schema != "ras_commander_wsl_identity_v2":
+                raise ValueError("unsupported supervision identity schema")
+            if not token_field.startswith("token="):
+                raise ValueError("missing owner token field")
+            owner_token = token_field.removeprefix("token=")
+            if uuid.UUID(owner_token).hex != owner_token:
+                raise ValueError("invalid owner token")
+            if (
+                expected_owner_token is not None
+                and owner_token != expected_owner_token
+            ):
+                raise ValueError("supervision identity owner token mismatch")
+            solver_pid = int(pid_field.removeprefix("pid="))
+            start_time_ticks = int(start_field.removeprefix("start="))
+            process_group_id = int(pgid_field.removeprefix("pgid="))
+            if not pid_field.startswith("pid="):
+                raise ValueError("missing pid field")
+            if not start_field.startswith("start="):
+                raise ValueError("missing start field")
+            if not pgid_field.startswith("pgid="):
+                raise ValueError("missing pgid field")
+            if (
+                solver_pid <= 0
+                or start_time_ticks <= 0
+                or process_group_id != solver_pid
+            ):
+                raise ValueError("invalid exact Linux process identity")
+        except (TypeError, ValueError) as exc:
+            return None, str(exc)
+        return {
+            "owner_token": owner_token,
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+        }, None
+
+    @staticmethod
+    def _wsl_supervision_preflight() -> tuple[bool, Dict[str, Any]]:
+        """Prove WSL exposes every primitive required for exact supervision."""
+        script = (
+            "command -v bash >/dev/null 2>&1 && "
+            "command -v setsid >/dev/null 2>&1 && "
+            "setsid --help 2>&1 | grep -q -- '--wait' && "
+            "command -v cat >/dev/null 2>&1 && "
+            "command -v sync >/dev/null 2>&1 && "
+            "type kill >/dev/null 2>&1 && "
+            "[ -r /proc/self/stat ]"
+        )
+        try:
+            result = subprocess.run(
+                ["wsl", "bash", "-lc", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+        except Exception as exc:
+            return False, {
+                "complete": False,
+                "available": False,
+                "returncode": None,
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        available = result.returncode == 0
+        detail = (result.stderr or result.stdout or "").strip()
+        return available, {
+            "complete": True,
+            "available": available,
+            "returncode": result.returncode,
+            "detail": detail[:1000] or None,
+        }
+
+    @staticmethod
+    def _recover_wsl_solver_identity(
+        identity: Dict[str, int],
+    ) -> Dict[str, Any]:
+        """Revalidate and quiesce only one exact Linux solver process group."""
+        solver_pid = int(identity["solver_pid"])
+        start_time_ticks = int(identity["start_time_ticks"])
+        process_group_id = int(identity["process_group_id"])
+        script = fr"""
+set +e
+expected_pid={solver_pid}
+expected_start={start_time_ticks}
+expected_pgid={process_group_id}
+term_sent=0
+kill_sent=0
+read_exact_identity() {{
+    [ -r "/proc/$expected_pid/stat" ] || return 1
+    stat_text=$(cat "/proc/$expected_pid/stat") || return 2
+    stat_tail="${{stat_text##*) }}"
+    set -- $stat_tail
+    actual_pgid=$3
+    actual_start=${{20}}
+    case "$actual_pgid:$actual_start" in
+        *[!0-9:]*) return 2 ;;
+    esac
+    [ "$actual_pgid" = "$expected_pgid" ] && [ "$actual_start" = "$expected_start" ] || return 3
+    return 0
+}}
+group_exists() {{
+    kill -0 -- "-$expected_pgid" 2>/dev/null
+}}
+read_exact_identity
+identity_rc=$?
+if [ "$identity_rc" -eq 0 ]; then
+    if kill -TERM -- "-$expected_pgid" 2>/dev/null; then
+        term_sent=1
+    elif group_exists; then
+        status=uncertain
+    else
+        status=quiescent
+    fi
+    if [ -z "$status" ]; then
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            group_exists || {{ status=quiescent; break; }}
+            sleep 0.1
+        done
+    fi
+    if [ -z "$status" ]; then
+        if kill -KILL -- "-$expected_pgid" 2>/dev/null; then
+            kill_sent=1
+        elif group_exists; then
+            status=uncertain
+        else
+            status=quiescent
+        fi
+    fi
+    if [ -z "$status" ]; then
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            group_exists || {{ status=quiescent; break; }}
+            sleep 0.1
+        done
+    fi
+    [ -n "$status" ] || status=survivor
+elif [ "$identity_rc" -eq 1 ]; then
+    if group_exists; then
+        status=identity_unavailable
+    else
+        status=quiescent
+    fi
+elif [ "$identity_rc" -eq 3 ]; then
+    status=identity_mismatch
+else
+    status=uncertain
+fi
+printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s pgid=%s\n' "$status" "$term_sent" "$kill_sent" "$expected_pid" "$expected_start" "$expected_pgid"
+"""
+        try:
+            result = subprocess.run(
+                ["wsl", "bash", "-lc", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+        except Exception as exc:
+            return {
+                "attempted": True,
+                "status": "uncertain",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": solver_pid,
+                "start_time_ticks": start_time_ticks,
+                "process_group_id": process_group_id,
+                "returncode": None,
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        marker = "__RAS_COMMANDER_WSL_RECOVERY__"
+        receipt_line = next(
+            (
+                line
+                for line in reversed(result.stdout.splitlines())
+                if line.startswith(f"{marker} ")
+            ),
+            None,
+        )
+        try:
+            if result.returncode != 0 or receipt_line is None:
+                raise ValueError("recovery receipt missing or command failed")
+            fields = dict(
+                token.split("=", 1)
+                for token in receipt_line[len(marker) + 1 :].split()
+            )
+            status = fields["status"]
+            term_sent = fields["term"] == "1"
+            kill_sent = fields["kill"] == "1"
+            if fields["term"] not in {"0", "1"}:
+                raise ValueError("invalid TERM receipt")
+            if fields["kill"] not in {"0", "1"}:
+                raise ValueError("invalid KILL receipt")
+            if int(fields["pid"]) != solver_pid:
+                raise ValueError("recovery pid mismatch")
+            if int(fields["start"]) != start_time_ticks:
+                raise ValueError("recovery start-time mismatch")
+            if int(fields["pgid"]) != process_group_id:
+                raise ValueError("recovery process-group mismatch")
+            if status not in {
+                "quiescent",
+                "survivor",
+                "identity_mismatch",
+                "identity_unavailable",
+                "uncertain",
+            }:
+                raise ValueError("invalid recovery status")
+        except (KeyError, TypeError, ValueError) as exc:
+            return {
+                "attempted": True,
+                "status": "uncertain",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": solver_pid,
+                "start_time_ticks": start_time_ticks,
+                "process_group_id": process_group_id,
+                "returncode": result.returncode,
+                "detail": str(exc),
+            }
+        quiescence_confirmed = (
+            True
+            if status == "quiescent"
+            else False
+            if status == "survivor"
+            else None
+        )
+        return {
+            "attempted": True,
+            "status": status,
+            "quiescence_confirmed": quiescence_confirmed,
+            "term_sent": term_sent,
+            "kill_sent": kill_sent,
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+            "returncode": result.returncode,
+            "detail": None,
+        }
+
+    @staticmethod
+    def _clear_wsl_supervision_state(
+        state_path: Union[str, Path],
+        identity: Dict[str, Any],
+    ) -> bool:
+        """Remove only a supervision record that still names ``identity``."""
+        observed, _ = RasCmdr._read_wsl_supervision_identity(state_path)
+        if observed != identity:
+            return False
+        try:
+            Path(state_path).unlink()
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
+    def _acquire_wsl_plan_lease(
+        state_path: Union[str, Path],
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+        """Atomically reserve one plan's stable WSL supervision identity."""
+        lease_path = Path(f"{state_path}.lease")
+        token = uuid.uuid4().hex
+        owner_pid = os.getpid()
+        created_at = time.time()
+        payload = (
+            "ras_commander_wsl_plan_lease_v1\n"
+            f"token={token}\n"
+            f"pid={owner_pid}\n"
+            f"created_at={created_at:.9f}\n"
+        ).encode("ascii")
+        try:
+            descriptor = os.open(
+                lease_path,
+                os.O_CREAT
+                | os.O_EXCL
+                | os.O_RDWR
+                | getattr(os, "O_BINARY", 0),
+                0o600,
+            )
+        except FileExistsError:
+            try:
+                existing_owner = lease_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )[:4096]
+            except OSError as exc:
+                existing_owner = f"<unreadable: {type(exc).__name__}: {exc}>"
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lease_exists",
+                "reason": "WSL plan supervision lease already exists",
+                "existing_owner": existing_owner,
+            }
+        except OSError as exc:
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lease_creation_failed",
+                "reason": f"lease creation failed: {type(exc).__name__}: {exc}",
+                "existing_owner": None,
+            }
+        try:
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        except Exception as exc:
+            os.close(descriptor)
+            removed = False
+            try:
+                if lease_path.read_bytes() == payload:
+                    lease_path.unlink()
+                    removed = True
+            except OSError:
+                pass
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": token,
+                "owner_pid": owner_pid,
+                "created_at": created_at,
+                "reason_code": "lease_initialization_failed",
+                "reason": (
+                    "lease initialization failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "existing_owner": None,
+                "partial_lease_removed": removed,
+            }
+        lease = {
+            "descriptor": descriptor,
+            "path": lease_path,
+            "token": token,
+            "payload": payload,
+        }
+        return lease, {
+            "acquired": True,
+            "lease_path": str(lease_path),
+            "owner_token": token,
+            "owner_pid": owner_pid,
+            "created_at": created_at,
+            "reason_code": None,
+            "reason": None,
+            "existing_owner": None,
+        }
+
+    @staticmethod
+    def _retain_wsl_plan_lease(lease: Dict[str, Any]) -> None:
+        """Close our handle while deliberately retaining a fail-closed lease."""
+        descriptor = lease.get("descriptor")
+        if isinstance(descriptor, int) and descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        lease["descriptor"] = -1
+
+    @staticmethod
+    def _recover_wsl_from_state(
+        state_path: Union[str, Path],
+        *,
+        expected_owner_token: str,
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any], bool]:
+        """Recover an interrupted WSL run from its durable exact identity."""
+        identity, identity_error = RasCmdr._read_wsl_supervision_identity(
+            state_path,
+            expected_owner_token=expected_owner_token,
+        )
+        if identity is None:
+            return None, {
+                "attempted": False,
+                "status": "identity_unavailable",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "returncode": None,
+                "detail": identity_error,
+            }, False
+        recovery = RasCmdr._recover_wsl_solver_identity(identity)
+        state_cleared = False
+        if recovery["quiescence_confirmed"] is True:
+            state_cleared = RasCmdr._clear_wsl_supervision_state(
+                state_path,
+                identity,
+            )
+        return identity, recovery, state_cleared
+
+    @staticmethod
     def _compute_plan_linux_via_wsl(
         ras_exe: str,
         ras_exe_dir: str,
@@ -4075,10 +6048,108 @@ class RasCmdr:
         ras_obj,
     ) -> 'ComputeResult':
         """Run native Linux RasUnsteady from a Windows Python session via WSL."""
-        project_dir_wsl = RasCmdr._windows_path_to_wsl(project_dir)
-        tmp_hdf_wsl = RasCmdr._windows_path_to_wsl(tmp_hdf)
-        log_path = project_dir / f"compute_linux_{plan_number}.log"
-        log_path_wsl = RasCmdr._windows_path_to_wsl(log_path)
+        state_path = project_dir / (
+            f".{project_name}.p{plan_number}.ras-commander-wsl.identity"
+        )
+        initial_execution_details: Dict[str, Any] = {
+            "execution_api": "ras_cmdr",
+            "engine_kind": "native_linux_wsl",
+            "selected_result_format": "hdf",
+            "calculation_attempted": False,
+            "solver_quiescence_confirmed": None,
+            "result_artifacts_finalized": False,
+            "selected_executable_path": ras_exe,
+            "wsl_launcher_pid": None,
+            "linux_solver_pid": None,
+            "linux_solver_start_time_ticks": None,
+            "linux_process_group_id": None,
+            "linux_reported_returncode": None,
+            "wsl_supervision_state_path": str(state_path),
+            "wsl_supervision_lease": None,
+            "wsl_supervision_lease_released": False,
+            "wsl_supervision_preflight": None,
+            "wsl_supervision_recovery": None,
+        }
+        wsl_plan_lease, lease_evidence = RasCmdr._acquire_wsl_plan_lease(
+            state_path
+        )
+        initial_execution_details["wsl_supervision_lease"] = lease_evidence
+        if wsl_plan_lease is None:
+            initial_execution_details["failure_stage"] = (
+                "wsl_supervision_lease"
+            )
+            initial_execution_details["duplicate_execution_blocked"] = bool(
+                lease_evidence.get("reason_code") == "lease_exists"
+            )
+            if initial_execution_details["duplicate_execution_blocked"]:
+                logger.error(
+                    "Plan %s: refusing duplicate WSL execution because its "
+                    "supervision lease is held: %s",
+                    plan_number,
+                    lease_evidence["lease_path"],
+                )
+            else:
+                logger.error(
+                    "Plan %s: refusing WSL execution because its supervision "
+                    "lease could not be acquired: %s",
+                    plan_number,
+                    lease_evidence.get("reason"),
+                )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+        if state_path.exists():
+            RasCmdr._retain_wsl_plan_lease(wsl_plan_lease)
+            initial_execution_details["failure_stage"] = (
+                "existing_wsl_supervision_state"
+            )
+            initial_execution_details["duplicate_execution_blocked"] = True
+            logger.error(
+                "Plan %s: refusing duplicate WSL execution because durable "
+                "supervision state still exists: %s",
+                plan_number,
+                state_path,
+            )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+
+        preflight_ok, preflight_evidence = (
+            RasCmdr._wsl_supervision_preflight()
+        )
+        initial_execution_details["wsl_supervision_preflight"] = (
+            preflight_evidence
+        )
+        if not preflight_ok:
+            initial_execution_details[
+                "wsl_supervision_lease_released"
+            ] = RasCmdr._release_destination_promotion_lock(wsl_plan_lease)
+            initial_execution_details["failure_stage"] = (
+                "wsl_supervision_preflight"
+            )
+            logger.error(
+                "Plan %s: exact WSL supervision capabilities are unavailable; "
+                "the solver was not launched",
+                plan_number,
+            )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+
+        try:
+            project_dir_wsl = RasCmdr._windows_path_to_wsl(project_dir)
+            tmp_hdf_wsl = RasCmdr._windows_path_to_wsl(tmp_hdf)
+            log_path = project_dir / f"compute_linux_{plan_number}.log"
+            log_path_wsl = RasCmdr._windows_path_to_wsl(log_path)
+        except BaseException:
+            RasCmdr._release_destination_promotion_lock(wsl_plan_lease)
+            raise
 
         if dos2unix:
             try:
@@ -4094,6 +6165,8 @@ class RasCmdr:
         tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
         log_path_q = shlex.quote(log_path_wsl)
         geom_arg_q = shlex.quote(f"x{geom_num}")
+        state_file_q = shlex.quote(state_path.name)
+        lease_token_q = shlex.quote(str(wsl_plan_lease["token"]))
 
         cleanup_script = (
             f"cd {project_q} && "
@@ -4105,37 +6178,77 @@ set -e
 cd {project_q}
 find . -maxdepth 1 -type l -name 'io.*' -delete
 link_or_copy() {{
-    ln -sfn "\$1" "\$2" 2>/dev/null || cp -f "\$1" "\$2"
+    ln -sfn "$1" "$2" 2>/dev/null || cp -f "$1" "$2"
 }}
 prefix={project_name_q}.
 link_or_copy {shlex.quote(f'{project_name}.b{plan_number}')} io.b
 link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.X
 link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.x
 for f in {project_name_q}.*; do
-    [ -e "\$f" ] || continue
-    suffix="\${{f#\$prefix}}"
-    [ -e "io.\$suffix" ] || link_or_copy "\$f" "io.\$suffix"
+    [ -e "$f" ] || continue
+    suffix="${{f#$prefix}}"
+    [ -e "io.$suffix" ] || link_or_copy "$f" "io.$suffix"
 done
 lib_base=""
 if [ -d {ras_exe_dir_q}/libs ]; then
     lib_base={ras_exe_dir_q}/libs
-elif [ -d "\$(dirname {ras_exe_dir_q})/libs" ]; then
-    lib_base="\$(dirname {ras_exe_dir_q})/libs"
+elif [ -d "$(dirname {ras_exe_dir_q})/libs" ]; then
+    lib_base="$(dirname {ras_exe_dir_q})/libs"
 fi
-if [ -n "\$lib_base" ]; then
-    ld_path="\$lib_base"
-    for d in "\$lib_base"/*; do
-        if [ -d "\$d" ]; then
-            ld_path="\$ld_path:\$d"
+if [ -n "$lib_base" ]; then
+    ld_path="$lib_base"
+    for d in "$lib_base"/*; do
+        if [ -d "$d" ]; then
+            ld_path="$ld_path:$d"
         fi
     done
 else
     ld_path={ras_exe_dir_q}
 fi
-LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 2>&1
+set +e
+state_file={state_file_q}
+owner_token={lease_token_q}
+setsid --wait bash -c 'state_file=$1; owner_token=$2; shift 2; command_args=("$@"); stat_text=$(cat /proc/$$/stat) || exit 125; stat_tail="${{stat_text##*) }}"; set -- $stat_tail; solver_pgid=$3; solver_start=${{20}}; [ "$solver_pgid" = "$$" ] || exit 125; set -o noclobber; printf "ras_commander_wsl_identity_v2 token=%s pid=%s start=%s pgid=%s\n" "$owner_token" "$$" "$solver_start" "$solver_pgid" > "$state_file" || exit 125; sync "$state_file" || exit 125; exec env "${{command_args[@]}}"' ras-commander-wsl "$state_file" "$owner_token" "LD_LIBRARY_PATH=$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 2>&1 &
+wrapper_pid=$!
+wait "$wrapper_pid"
+solver_rc=$?
+solver_pid=""
+solver_start=""
+solver_pgid=""
+state_owner_token=""
+if IFS=' ' read -r schema token_field pid_field start_field pgid_field < "$state_file"; then
+    state_owner_token="${{token_field#token=}}"
+    solver_pid="${{pid_field#pid=}}"
+    solver_start="${{start_field#start=}}"
+    solver_pgid="${{pgid_field#pgid=}}"
+fi
+case "$solver_pid:$solver_start:$solver_pgid" in
+    *[!0-9:]*) solver_pid="" ;;
+esac
+if [ "$state_owner_token" = "$owner_token" ] && [ -n "$solver_pid" ] && [ "$solver_pid" = "$solver_pgid" ]; then
+    if kill -0 -- "-$solver_pgid" 2>/dev/null; then
+        group_quiescent=0
+    else
+        group_quiescent=1
+    fi
+    printf '__RAS_COMMANDER_WSL_EXIT_PROOF__ pid=%s start=%s pgid=%s rc=%s quiescent=%s\n' "$solver_pid" "$solver_start" "$solver_pgid" "$solver_rc" "$group_quiescent"
+else
+    printf '__RAS_COMMANDER_WSL_EXIT_PROOF__ invalid_identity=1 rc=%s\n' "$solver_rc"
+fi
+exit "$solver_rc"
 """
 
         max_attempts = 2 if retry else 1
+        last_execution_details: Dict[str, Any] = {}
+
+        def settle_plan_lease(*, release: bool) -> bool:
+            if release:
+                return RasCmdr._release_destination_promotion_lock(
+                    wsl_plan_lease
+                )
+            RasCmdr._retain_wsl_plan_lease(wsl_plan_lease)
+            return False
+
         for attempt in range(1, max_attempts + 1):
             logger.info(
                 f"WSL Linux execution attempt {attempt}/{max_attempts} for plan {plan_number}"
@@ -4146,43 +6259,266 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             if io_tmp_hdf.exists():
                 io_tmp_hdf.unlink()
 
-            # A failed prior attempt may have recreated an opposing result.
-            # Normalize again immediately before each WSL solver launch.
-            prepare_plan_execution_artifacts(
-                plan_number,
-                output_format="hdf",
-                ras_object=ras_obj,
-            )
-
-            proc = subprocess.Popen(
-                ["wsl", "bash", "-lc", script],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-            )
+            proc = None
+            launcher_pid = None
             try:
+                proc = subprocess.Popen(
+                    ["wsl", "bash", "-lc", script],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                )
+                launcher_pid = getattr(proc, "pid", None)
+                if (
+                    isinstance(launcher_pid, bool)
+                    or not isinstance(launcher_pid, int)
+                    or launcher_pid <= 0
+                ):
+                    launcher_pid = None
                 stdout, stderr = proc.communicate(timeout=timeout_sec)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.communicate()
-                logger.error(f"Plan {plan_number}: WSL RasUnsteady timeout after {timeout_sec}s")
-                stdout, stderr = "", f"Timeout after {timeout_sec}s"
-                rc = -1
-            except BaseException:
-                proc.kill()
-                proc.communicate()
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    proc.communicate(timeout=5)
+                except BaseException:
+                    pass
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                last_execution_details = dict(initial_execution_details)
+                last_execution_details.update(
+                    {
+                        "calculation_attempted": proc is not None,
+                        "solver_quiescence_confirmed": recovery[
+                            "quiescence_confirmed"
+                        ],
+                        "wsl_launcher_pid": launcher_pid,
+                        "linux_solver_pid": (
+                            None
+                            if identity is None
+                            else identity["solver_pid"]
+                        ),
+                        "linux_solver_start_time_ticks": (
+                            None
+                            if identity is None
+                            else identity["start_time_ticks"]
+                        ),
+                        "linux_process_group_id": (
+                            None
+                            if identity is None
+                            else identity["process_group_id"]
+                        ),
+                        "wsl_supervision_recovery": recovery,
+                        "wsl_supervision_state_cleared": state_cleared,
+                        "failure_stage": "solver_timeout",
+                    }
+                )
+                last_execution_details["wsl_supervision_lease_released"] = (
+                    settle_plan_lease(
+                        release=bool(
+                            recovery["quiescence_confirmed"] is True
+                            and state_cleared
+                        )
+                    )
+                )
+                logger.error(
+                    "Plan %s: WSL RasUnsteady timed out after %ss; exact "
+                    "recovery status=%s",
+                    plan_number,
+                    timeout_sec,
+                    recovery["status"],
+                )
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+            except BaseException as exc:
+                if proc is not None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    try:
+                        proc.communicate(timeout=5)
+                    except BaseException:
+                        pass
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                interrupted_details = dict(initial_execution_details)
+                interrupted_details.update(
+                    {
+                        "calculation_attempted": proc is not None,
+                        "solver_quiescence_confirmed": recovery[
+                            "quiescence_confirmed"
+                        ],
+                        "wsl_launcher_pid": launcher_pid,
+                        "linux_solver_pid": (
+                            None
+                            if identity is None
+                            else identity["solver_pid"]
+                        ),
+                        "linux_solver_start_time_ticks": (
+                            None
+                            if identity is None
+                            else identity["start_time_ticks"]
+                        ),
+                        "linux_process_group_id": (
+                            None
+                            if identity is None
+                            else identity["process_group_id"]
+                        ),
+                        "wsl_supervision_recovery": recovery,
+                        "wsl_supervision_state_cleared": state_cleared,
+                        "failure_stage": "solver_interrupted",
+                    }
+                )
+                interrupted_details["wsl_supervision_lease_released"] = (
+                    settle_plan_lease(
+                        release=bool(
+                            recovery["quiescence_confirmed"] is True
+                            and state_cleared
+                        )
+                    )
+                )
+                try:
+                    setattr(exc, "execution_details", interrupted_details)
+                except Exception:
+                    pass
                 raise
             else:
                 rc = proc.returncode
-            finally:
-                # Normalize immediately after every launched solver attempt,
-                # before validation, promotion, retry delay, or return.
+            proof = RasCmdr._parse_wsl_solver_exit_proof(stdout)
+            identity, identity_error = (
+                RasCmdr._read_wsl_supervision_identity(
+                    state_path,
+                    expected_owner_token=wsl_plan_lease["token"],
+                )
+            )
+            proof_matches_identity = bool(
+                identity is not None
+                and proof["solver_pid"] == identity["solver_pid"]
+                and proof["start_time_ticks"]
+                == identity["start_time_ticks"]
+                and proof["process_group_id"]
+                == identity["process_group_id"]
+                and proof["reported_returncode"] == rc
+                and proof["quiescence_confirmed"] is True
+            )
+            recovery: Optional[Dict[str, Any]] = None
+            state_cleared = False
+            if proof_matches_identity:
+                state_cleared = RasCmdr._clear_wsl_supervision_state(
+                    state_path,
+                    identity,
+                )
+                quiescence_confirmed: Optional[bool] = True
+            else:
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                quiescence_confirmed = recovery[
+                    "quiescence_confirmed"
+                ]
+            last_execution_details = dict(initial_execution_details)
+            last_execution_details.update(
+                {
+                    "calculation_attempted": True,
+                    "solver_quiescence_confirmed": quiescence_confirmed,
+                    "wsl_launcher_pid": launcher_pid,
+                    "linux_solver_pid": (
+                        proof["solver_pid"]
+                        if identity is None
+                        else identity["solver_pid"]
+                    ),
+                    "linux_solver_start_time_ticks": (
+                        proof["start_time_ticks"]
+                        if identity is None
+                        else identity["start_time_ticks"]
+                    ),
+                    "linux_process_group_id": (
+                        proof["process_group_id"]
+                        if identity is None
+                        else identity["process_group_id"]
+                    ),
+                    "linux_reported_returncode": proof[
+                        "reported_returncode"
+                    ],
+                    "wsl_exit_proof": proof,
+                    "wsl_supervision_identity_error": identity_error,
+                    "wsl_supervision_recovery": recovery,
+                    "wsl_supervision_state_cleared": state_cleared,
+                }
+            )
+            if quiescence_confirmed is not True:
+                last_execution_details["failure_stage"] = (
+                    "solver_quiescence"
+                )
+                logger.error(
+                    "Plan %s: WSL solver process-group exit was not proved; "
+                    "preserving all visible result families and refusing "
+                    "validation, promotion, finalization, and retry",
+                    plan_number,
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=False)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+            if not state_cleared:
+                last_execution_details["failure_stage"] = (
+                    "wsl_supervision_state_release"
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=False)
+                logger.error(
+                    "Plan %s: solver quiescence was proved but its owned "
+                    "supervision state could not be cleared; refusing "
+                    "finalization and retaining the duplicate-run lease",
+                    plan_number,
+                )
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+
+            # The Linux shell waited for the exact solver process and proved
+            # its process group empty. Only this positive receipt authorizes
+            # removal of an opposing result recreated by HEC-RAS.
+            try:
                 finalize_plan_execution_artifacts(
                     plan_number,
                     output_format="hdf",
                     ras_object=ras_obj,
                 )
+            except Exception:
+                last_execution_details["failure_stage"] = (
+                    "result_artifact_finalization"
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=True)
+                raise
+            last_execution_details["result_artifacts_finalized"] = True
 
             if rc == 0:
                 ok, reason = RasCmdr._validate_linux_solve(
@@ -4221,6 +6557,12 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                     return ComputeResult(
                         success=True,
                         results_df_row=results_row,
+                        execution_details={
+                            **last_execution_details,
+                            "wsl_supervision_lease_released": (
+                                settle_plan_lease(release=True)
+                            ),
+                        },
                     )
 
                 logger.error(
@@ -4252,4 +6594,13 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             text=True,
             encoding="utf-8",
         )
-        return ComputeResult(success=False, results_df_row=None)
+        return ComputeResult(
+            success=False,
+            results_df_row=None,
+            execution_details={
+                **last_execution_details,
+                "wsl_supervision_lease_released": settle_plan_lease(
+                    release=True
+                ),
+            },
+        )
