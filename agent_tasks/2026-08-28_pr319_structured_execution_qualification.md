@@ -38,7 +38,8 @@ compatibility posture remain a highlighted merge-review decision.
 
 - Draft PR: <https://github.com/gpt-cmdr/ras-commander/pull/319>
 - Head branch: `codex/structured-execution-evidence-integration`
-- Base branch: `codex/structured-execution-evidence-test-base`
+- Base branch: `codex/structured-execution-evidence-test-base-v2`
+- Latest-main base commit: `d7784fcc7714ca75632eef5338612fece28609aa`
 - Qualification-start head: `8b9eec5d`
 - Qualification report root:
   `H:\CLB-Repos\ras-commander\working\pr319_execution_qualification_2026-08-28`
@@ -579,3 +580,12 @@ complete.
   live supervisor/offline/manifest shards passed 182 tests; Ruff and
   `git diff --check` passed. The live manifest example now uses the exact eight
   invariants supported by live v1.
+- 2026-08-29: the reviewed work was checkpointed in five coherent commits and
+  merged with latest `main` (`d7784fcc`). The sole textual conflict retained
+  main's newer quoted-command, legal-dialog, TCU, and owned-process supervision
+  while preserving existing final HDF/legacy results and accepting a final-HDF
+  preprocessing fallback only when it is nonempty and new or changed. A new
+  negative regression rejects an unchanged pre-existing HDF. The reconciliation
+  shard passed 59 tests, the full affected no-engine gate passed 521 tests in
+  143.78 seconds, and Ruff/compileall/diff checks passed. No HEC-RAS, COM, or
+  process-signalling action occurred.

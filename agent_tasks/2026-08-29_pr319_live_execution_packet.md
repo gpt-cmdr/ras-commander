@@ -2,8 +2,9 @@
 
 Date: 2026-08-29
 
-Status: approved scope, implementation/preflight in progress; live dispatch held
-until internal safety review and clean latest-main gates pass
+Status: approved scope and clean latest-main deterministic gates complete; live
+dispatch held until the exact manifest is pinned and the strict under-lock host
+inventory is complete and empty
 
 Branch: `codex/structured-execution-evidence-integration`
 
