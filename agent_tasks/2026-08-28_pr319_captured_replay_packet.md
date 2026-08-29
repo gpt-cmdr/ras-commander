@@ -227,3 +227,26 @@ that evidence with the expected outcomes in this packet.
 - Read-only acceptance requires identical stage content and metadata
   fingerprints before and after inspection, ten passed lanes, three exact
   expected ambiguity failures, and no HEC-RAS/COM process launch.
+
+## Qualification execution record
+
+Three immutable campaign roots under
+`working/pr319_execution_qualification_2026-08-28/captured_replay/` preserve
+the progression from negative evidence to the accepted replay:
+
+| Run | Pinned commit | Result | Finding |
+|---|---|---|---|
+| `run-001` | `c87b5a60` | 2 passed, 3 expected failures, 8 worker crashes | Temporary replay names crossed the legacy Windows 260-character boundary for longer project/artifact names. |
+| `run-002` | `cc6ef362` | 2 passed, 3 expected failures, 8 worker crashes | Replay publication succeeded; the flattener incorrectly rejected timezone-naive modeled simulation windows. |
+| `run-003` | `9828e8c198f376945ff3940288ce3b9996952c11` | 10 passed, 3 expected failures, 0 crashes | Accepted captured-output replay oracle. |
+
+Run 003 uses normalized manifest SHA-256
+`b0d41a53da2613d144e5d78a095ed208b8c98e60c7d5c0f34d840152abb7c937`.
+Its verified aggregate contains 13 lanes, 36 passing invariant rows, 170
+observations, 2,162 artifact rows, and 78 event rows. All 13 attempt gates pass.
+The 30 overlaid files total 84,925,655 bytes; every receipt proves matching
+source-before, source-after, and destination hashes plus preserved size and
+`mtime_ns`. Sixteen modeled `simulation_start`/`simulation_end` values are
+stored as canonical timezone-naive `local_datetime` text. Every attempt has a
+distinct worker PID, `worker_invocation_index=1`, and
+`hec_ras_invoked=false`.

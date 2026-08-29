@@ -404,3 +404,42 @@ complete.
   RasControl/RasCmdr/evidence tests and 145 qualification-framework tests.
   Qualification-record hard-link publication was also proved on the approved
   H-drive audit root. No HEC-RAS or COM process was launched by these tests.
+- 2026-08-28: captured replay Run 001 (commit `c87b5a60`) preserved a
+  fail-closed Windows path-length finding. The two short steady lanes passed,
+  three steady ambiguity lanes failed exactly as expected, and eight longer
+  Hager/2D lanes produced supervisor-synthesized `worker_crashed` receipts
+  because the harness embedded the final artifact name in a temporary name at
+  the legacy 260-character boundary. Its aggregate remained verifiable.
+- 2026-08-28: commit `cc6ef362` replaced only the disposable replay temporary
+  basename with a short same-directory name. Exact final HEC-RAS names,
+  byte/size/mtime pins, stable hashes, and atomic no-overwrite hard-link
+  publication remain unchanged. The added boundary regression and 146-test
+  qualification suite passed.
+- 2026-08-28: captured replay Run 002 (commit `cc6ef362`) proved replay
+  publication and inspection reached all longer projects, then preserved a
+  second systematic failure: all eight unsteady lanes exposed the harness's
+  incorrect requirement that modeled simulation-window datetimes carry a
+  timezone. The aggregate again verified and the run remains retained as
+  negative evidence.
+- 2026-08-28: commit `a510996e` added the logical `local_datetime` observation
+  type using canonical timezone-naive ISO text for modeled HEC-RAS wall-clock
+  windows. True audit and filesystem instants remain aware Arrow UTC
+  timestamps; no physical Parquet column changed.
+- 2026-08-28: independent report audit found that Run 001's report mixed
+  evaluated invariant-row counts with attempt gates. Commit `9828e8c1` now
+  reports recorded check rows separately and labels zero-row crash gates
+  `not_evaluated`, without inventing failed invariant records or altering
+  aggregate semantics. The combined qualification suite passed 151 tests.
+- 2026-08-28: captured replay Run 003 is pinned to full commit
+  `9828e8c198f376945ff3940288ce3b9996952c11` and normalized manifest SHA-256
+  `b0d41a53da2613d144e5d78a095ed208b8c98e60c7d5c0f34d840152abb7c937`.
+  All 13 fresh workers completed with the exact oracle: ten `passed`, three
+  `expected_failure`, 36/36 invariant evaluations passed, and every attempt's
+  required-invariant gate passed. PyArrow verification rebuilt 13 lane, 36
+  invariant, 170 observation, 2,162 artifact, and 78 event rows. All 30 pinned
+  replay files (84,925,655 bytes) preserved source bytes and mtimes; 16 modeled
+  window observations round-tripped as `local_datetime`; no HEC-RAS/COM was
+  invoked.
+- 2026-08-28: post-replay RasControl process preflight still finds the unrelated
+  untracked HEC-RAS PID 320624 (`UPGU3.prj`). The `dev_human-in-loop` live-engine
+  gate therefore remains closed; no process was adopted, terminated, or used.
