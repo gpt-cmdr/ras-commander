@@ -15,6 +15,7 @@ Main Classes:
         - compute_bank_lines(): Generate bank lines from XS bank stations
         - create_terrain_hdf(): Create terrain HDF from input rasters
         - vrt_to_tiff(): Convert VRT to single TIFF with overviews
+        - export_rasmapper_terrain(): Native registered-terrain GeoTIFF export
 
     Usgs3depAws: USGS 3DEP elevation tile download from AWS S3
         - find_tiles_for_bbox(): Find tiles covering a bounding box
@@ -63,6 +64,7 @@ See Also:
 """
 
 from .RasTerrain import RasTerrain
+from ..ComputeResults import TerrainExportResult
 from .Usgs3depAws import Usgs3depAws
 from .RasTerrainModWriter import RasTerrainModification, RasTerrainModWriter
 
@@ -75,6 +77,7 @@ try:
         'RasTerrainMod',
         'RasTerrainModification',
         'RasTerrainModWriter',
+        'TerrainExportResult',
     ]
 except ImportError:
     __all__ = [
@@ -82,4 +85,5 @@ except ImportError:
         'Usgs3depAws',
         'RasTerrainModification',
         'RasTerrainModWriter',
+        'TerrainExportResult',
     ]

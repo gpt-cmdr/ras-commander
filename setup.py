@@ -80,6 +80,8 @@ setup(
             "InvokeRas5LandCover.ps1",
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
+            "RasMapperTerrainExportHelper.exe",
+            "RasMapperTerrainExportHelper.cs",
         ],
     },
     python_requires='>=3.10',

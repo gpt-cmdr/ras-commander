@@ -62,10 +62,11 @@ import subprocess
 import time
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 # Import decorator from parent package
 from ..Decorators import log_call
+from ..ComputeResults import TerrainExportResult
 from ..LoggingConfig import get_logger
 from ..RasUtils import RasUtils
 from ..RasterPerformance import (
@@ -112,6 +113,73 @@ class RasTerrain:
         Path("C:/Program Files (x86)/HEC/HEC-RAS"),
         Path("C:/Program Files/HEC/HEC-RAS"),
     ]
+
+    @staticmethod
+    @log_call
+    def export_rasmapper_terrain(
+        ras_project_path: Union[str, Path],
+        output_tif: Union[str, Path],
+        terrain_name: Optional[str] = None,
+        extent: Optional[Sequence[float]] = None,
+        downsample_factor: int = 1,
+        rasterize_modifications: bool = True,
+        overwrite: bool = False,
+        timeout_seconds: float = 1800.0,
+        hecras_version: Optional[str] = None,
+        ras_object=None,
+        receipt_path: Optional[Union[str, Path]] = None,
+    ) -> TerrainExportResult:
+        """Export one registered RAS Mapper terrain to a validated GeoTIFF.
+
+        This is a supervised wrapper around HEC-RAS's own terrain
+        consolidation operation. It loads the selected terrain from the
+        project's ``.rasmap`` so registered source order, stitches, masks, and
+        vector modifications remain native RAS Mapper behavior.
+
+        Args:
+            ras_project_path: Project folder, ``.prj``, or ``.rasmap`` path.
+            output_tif: Destination single-band Float32 GeoTIFF.
+            terrain_name: Exact registered terrain name. May be omitted only
+                when the project registers exactly one terrain.
+            extent: Optional ``(xmin, ymin, xmax, ymax)`` export bounds.
+            downsample_factor: Exact source-derived factor: 1, 2, 4, or 8.
+            rasterize_modifications: Apply native RAS Mapper vector terrain
+                modifications through ``resampleVecMods``.
+            overwrite: Replace existing output and receipt when true.
+            timeout_seconds: Total bounded runtime, including validation.
+            hecras_version: HEC-RAS 6.6 or checked 7.0-family runtime. When
+                omitted, use ``ras_object.ras_version``.
+            ras_object: Optional initialized project object for multi-project
+                and runtime-version context.
+            receipt_path: Machine-readable JSON receipt path. Defaults to
+                ``<output_tif>.receipt.json``.
+
+        Returns:
+            TerrainExportResult: Bool-compatible typed result. Operational
+            failures and timeouts return a failed result and failure receipt;
+            invalid inputs raise before native execution.
+
+        Notes:
+            The base export is always nearest-neighbor. The derivative is not
+            registered in or otherwise written back to the source project.
+            ``RasTerrainMod.compute_modified_terrain_raster()`` remains an
+            analytical row sampler and is not used as a production fallback.
+        """
+        from ..native.terrain_export_host import export_rasmapper_terrain
+
+        return export_rasmapper_terrain(
+            ras_project_path=ras_project_path,
+            output_tif=output_tif,
+            terrain_name=terrain_name,
+            extent=extent,
+            downsample_factor=downsample_factor,
+            rasterize_modifications=rasterize_modifications,
+            overwrite=overwrite,
+            timeout_seconds=timeout_seconds,
+            hecras_version=hecras_version,
+            ras_object=ras_object,
+            receipt_path=receipt_path,
+        )
 
     @staticmethod
     def _empty_bank_lines_gdf(crs=None):

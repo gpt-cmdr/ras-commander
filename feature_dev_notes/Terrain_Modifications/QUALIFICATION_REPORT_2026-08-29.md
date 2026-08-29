@@ -1,0 +1,145 @@
+# Native RAS Mapper terrain export qualification report
+
+Date: 2026-08-29
+Branch: `codex/native-rasmapper-terrain-export`
+Base revision: `d7784fcc7714ca75632eef5338612fece28609aa`
+
+## Outcome
+
+The focused native helper and Python supervisor passed unit/regression tests,
+bounded native HEC-RAS 6.6 exports, the checked HEC-RAS 7.0-family API, and a
+Wine export using the HEC-RAS 6.6 mapper runtime. All production-path outputs
+were one single-band Float32 GeoTIFF with CRS and nodata metadata, exact source-
+anchored grid dimensions, at least one valid value, no sidecars, and a JSON
+receipt. No project registration or source project file was changed.
+
+## Automated tests
+
+- `tests/terrain_export_host_test.py`: 26 passed. Coverage includes exact
+  terrain selection, Path/string/Windows/UNC/space-containing and Wine path
+  conversion, factors and cell-size math, negative-coordinate grid snapping,
+  source resolution compatibility, overwrite protection, request/response
+  schemas, GeoTIFF semantic validation, failure partial cleanup, task-local Wine
+  state, packaged resources, and forced-timeout owned-process cleanup.
+- Focused regression set: 72 passed after adding the feature (terrain export,
+  existing native helper packaging, GDAL runtime, terrain logging/creation, and
+  terrain display settings).
+- Opt-in real-runtime suite
+  `tests/qualification/terrain_export_qualification_test.py`: 2 passed and the
+  Wine-only case skipped on Windows. The equivalent production Wine invocation
+  was then run on the controlled Linux worker described below.
+
+The full repository suite completed with `2,393 passed`, `62 skipped`, and
+eight failures in 4 minutes 19 seconds. The failures did not touch feature
+files or feature paths: five were existing in-process CLR order conflicts after
+a 7.0 mapper load attempted 6.6 land-classification calls, one was a PROJ
+database/environment mismatch in a benefit-area concurrency test, one was an
+existing numeric sediment-plan expectation, and one was an already-executed
+tutorial notebook baseline. Collection also printed pre-existing Windows GUI
+extension entry-point faults (`0xc0000139`) and continued. The focused feature
+and adjacent regression sets were rerun independently and remained green.
+
+## Native Windows HEC-RAS 6.6
+
+### UPGU3 modification window
+
+Project: `UPGU3`, registered terrain `Terrain`
+Requested bounds: `(1996495.92929205, 13858745.25719928,
+1996712.46429205, 13859060.217199279)`
+
+| Export | Cell size (ft) | Grid | Time | Semantic result |
+|---|---:|---:|---:|---|
+| 2x, modifications off | 6.561666666666625 | 33 x 48 | 2.7 s | pass |
+| 2x, modifications on | 6.561666666666625 | 33 x 48 | 2.7 s | pass |
+| 4x, modifications on | 13.12333333333325 | 17 x 24 | 2.8 s | pass |
+
+At 2x, all 1,584 cells were valid. Enabling native vector modifications changed
+73 cells across the known channel and left 1,511 control cells unchanged. Every
+changed value was lower: delta range `-27.0625` to `-0.09375` feet, mean
+absolute delta `12.703767` feet. A top-left 8 x 8 unaffected control block was
+pixel-identical. This demonstrates that `resampleVecMods` changes the intended
+feature without introducing broad raster drift.
+
+The exact 33 x 48 result also closes the scratch-probe extra-row issue: the
+production host calculated integer dimensions and used the bounded inward far
+edge solely for the vendor `Ceiling` call, while preserving the requested
+source-grid origin and validated final bounds.
+
+### Muncie stitched terrain
+
+Project: `Muncie`, registered terrain `TerrainWithChannel`
+Requested bounds: `(404147.258781418, 1801881.85296284,
+404307.258781418, 1802111.85296284)`
+
+The HEC-RAS 6.6 production export completed in 1.7 seconds at 10-foot (2x)
+resolution with a 16 x 23 grid. The native XML-loaded inventory contained both
+registered sources; both intersected the output, one source deterministically
+anchored the authoritative grid, and the registered stitch behavior completed
+without requiring aligned source origins.
+
+## HEC-RAS 7.0-family compatibility
+
+The same packaged helper, compiled against the verified 6.6 signature, loaded
+the checked 7.0-family mapper assemblies and exported the bounded Muncie window
+in 1.6 seconds. Its pixels, affine transform, CRS, dimensions, nodata, and GDAL
+band checksum were identical to the 6.6 output. The helper accepts no
+free-form resampling vocabulary: it asserts the exact private method contract
+and hard-codes `near`, so new vendor terms cannot be accepted silently.
+
+## Wine HEC-RAS 6.6
+
+The dedicated CLB07 HEC-RAS 6.6 worker did not accept SSH connections during
+qualification. A controlled alternate Linux worker (CLB09) was therefore used
+with:
+
+- Wine 10.0;
+- Wine Mono 10.0 installed in a prefix owned by this qualification task;
+- the HEC-RAS 6.6 mapper assemblies, 32-bit HDF native libraries, and bundled
+  GDAL runtime staged into that task-local prefix;
+- the production packaged helper and supervisor, with
+  `RAS_COMMANDER_TERRAIN_WINE_PREFIX_IS_TASK_LOCAL=1` declaring the already
+  isolated prefix.
+
+The bounded Muncie 2x production export completed successfully in 17.2 seconds.
+It returned the expected two-source inventory, 16 x 23 grid, Float32/nodata/CRS
+semantics, no sidecars, and GDAL band checksum `4221`. Copying the resulting
+GeoTIFF back to the Windows qualification host confirmed pixel-identical data,
+an identical affine transform, an identical CRS, and identical dimensions to
+the native Windows HEC-RAS 6.6 production result.
+
+Earlier useful failures were retained as findings rather than hidden:
+
+1. The first Wine probe failed because Wine Mono was absent.
+2. The next failed because `hdf5.dll` was not present beside the x86 helper.
+3. Installing Mono into the task prefix and staging the HEC-RAS 6.6 `bin32`
+   HDF libraries resolved those runtime prerequisites.
+
+The production host now stages the required `bin32` libraries beside the helper
+and clones a configured Wine prefix into per-call state by default. It never
+issues a global `wineserver` termination; timeouts target only the owned POSIX
+process group. An already task-owned prefix may be reused only through the
+explicit environment declaration documented in the public API guide.
+
+## Artifact and receipt checks
+
+- Native `resampleTo1RFI=true` produced exactly one TIFF in all bounded runs.
+- Semantic validation checked GTiff driver, exact size, affine transform,
+  source-derived cell, CRS, one Float32 band, finite nodata, valid-value range,
+  file size, and absence of `.aux.xml`, `.ovr`, `.tfw`, and `.prj` sidecars.
+- Requests, helper responses, public results, logs, and receipts contain no
+  model, input, output, installer, dependency, or executable hashes.
+- Success promoted a unique same-directory partial TIFF and prepared receipt.
+  Failure/timeout tests removed owned partials and unique staging directories.
+
+## Qualification gaps and limitations
+
+- CLB07 availability remains an infrastructure gap. The alternate-worker Wine
+  result qualifies the exact HEC-RAS 6.6 mapper runtime under Wine, but does not
+  prove the unavailable CLB07 image configuration.
+- Only installed HEC-RAS 6.6 and the checked 7.0-family API were accepted. Other
+  versions fail closed until separately reflected and qualified.
+- Full-domain UPGU3 export was intentionally not attempted. Bounded windows
+  satisfy feature semantics without multi-gigabyte derivative cost.
+- The output is a derivative GeoTIFF only. Terrain HDF construction,
+  registration, UI actions, hydraulic simulation, and modification-math
+  reimplementation remain out of scope.

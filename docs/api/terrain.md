@@ -3,7 +3,7 @@
 Classes for terrain creation, terrain modification writing, and terrain modification analysis.
 
 !!! note "Platform Requirements"
-    `RasTerrainMod` requires Windows with pythonnet and a HEC-RAS installation (uses RasMapperLib.dll via .NET interop). `RasTerrain` and `RasTerrainModWriter` work on all platforms.
+    `RasTerrainMod` requires Windows with pythonnet and a HEC-RAS installation (uses RasMapperLib.dll via .NET interop). `RasTerrain.export_rasmapper_terrain()` runs natively on Windows and through a configured Wine runtime on Linux. Other `RasTerrain` and `RasTerrainModWriter` methods retain their documented platform requirements.
 
 ## RasTerrain
 
@@ -13,6 +13,56 @@ Terrain HDF creation from rasters using `RasProcess.exe CreateTerrain`.
 
 - `create_terrain_hdf(input_rasters, output_hdf, projection_prj, units="Feet", stitch=True, hecras_version="7.0", timeout_seconds=600)` - Create HEC-RAS terrain HDF from input rasters
 - `create_terrain_from_rasters(input_rasters, output_folder, terrain_name="Terrain", units="Feet", stitch=True, hecras_version="7.0", generate_prj=True)` - Convenience wrapper with automatic PRJ generation
+
+### Native Registered-Terrain Export
+
+- `export_rasmapper_terrain(ras_project_path, output_tif, terrain_name=None, extent=None, downsample_factor=1, rasterize_modifications=True, overwrite=False, timeout_seconds=1800, hecras_version=None, ras_object=None, receipt_path=None)` - Consolidate a registered RAS Mapper terrain to one semantically validated GeoTIFF
+
+The native export loads the exact terrain entry from the project's `.rasmap`.
+Consequently, source priority/order, stitches, masks, and terrain-modification
+surfaces remain HEC-RAS behavior. The base raster always uses nearest-neighbor
+and the output cell size is exactly the finest registered source cell size
+times `1`, `2`, `4`, or `8`. Requested bounds snap outward to the authoritative
+source grid.
+
+The method writes to a unique same-directory partial, validates the GeoTIFF,
+then atomically promotes it. `overwrite=False` is the default. A JSON receipt
+is written beside the TIFF by default, and the returned `TerrainExportResult`
+is bool-compatible. The derivative is not registered back into the project.
+
+```python
+from pathlib import Path
+from ras_commander import RasMap, RasTerrain
+
+project = Path(r"C:\Models\Example\Example.prj")
+print(RasMap.list_terrain_layers(project)[["name", "resolved_path"]])
+
+result = RasTerrain.export_rasmapper_terrain(
+    project,
+    Path(r"C:\Exports\channel_window_2x.tif"),
+    terrain_name="Terrain",
+    extent=(100000.0, 200000.0, 101000.0, 201000.0),
+    downsample_factor=2,
+    rasterize_modifications=True,
+    hecras_version="6.6",
+)
+
+if not result:
+    raise RuntimeError(result.error)
+print(result.output_path)
+print(result.receipt_path)
+print(result.source_inventory)
+```
+
+On Linux, configure `RasProcess.configure_wine()` first. The host clones the
+configured Wine prefix into task-local state by default. An orchestration
+system that already supplies a prefix owned exclusively by the current task
+may set `RAS_COMMANDER_TERRAIN_WINE_PREFIX_IS_TASK_LOCAL=1`; do not set it for
+a shared prefix.
+
+`RasTerrainMod.compute_modified_terrain_raster()` remains available for small,
+row-sampled analytical rasters. It is not a fallback for this native,
+modification-aware consolidation operation.
 
 ### Utility Methods
 

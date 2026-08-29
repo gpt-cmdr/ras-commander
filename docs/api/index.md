@@ -69,7 +69,7 @@ Classes for parsing and authoring geometry files:
 Classes for terrain creation, modification writing, and terrain-modification
 analysis:
 
-- [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation from rasters
+- [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation and native registered-terrain GeoTIFF export
 - [`RasTerrainModWriter`](terrain.md#rasterrainmodwriter) / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
 - [`RasTerrainMod`](terrain.md#rasterrainmod) - Terrain profile and volume comparison with modifications applied
 
