@@ -71,9 +71,12 @@ sys.meta_path.insert(0, Blocker())
 from ras_commander.compute import (
     ComputeParallelResult,
     ComputeResult,
+    GeometryPreprocessResult,
     HdfResultsPlan,
+    PreprocessResult,
     RasCmdr,
     RasPlan,
+    RasPreprocess,
     RasPrj,
     ResultsParser,
     ResultsSummary,
@@ -86,6 +89,8 @@ assert all(name not in globals() for name in ("RasControl", "RasControlResult"))
 print(json.dumps({
     "exports": [
         RasCmdr.__name__, RasPlan.__name__, RasPrj.__name__,
+        RasPreprocess.__name__, PreprocessResult.__name__,
+        GeometryPreprocessResult.__name__,
         ComputeResult.__name__, ComputeParallelResult.__name__,
         HdfResultsPlan.__name__, ResultsParser.__name__, ResultsSummary.__name__,
     ],
@@ -106,6 +111,9 @@ print(json.dumps({
         "RasCmdr",
         "RasPlan",
         "RasPrj",
+        "RasPreprocess",
+        "PreprocessResult",
+        "GeometryPreprocessResult",
         "ComputeResult",
         "ComputeParallelResult",
         "HdfResultsPlan",

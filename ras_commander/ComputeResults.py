@@ -785,6 +785,12 @@ class PreprocessResult:
         b_file_path: Path to the generated .b## file, or None on failure.
         x_file_path: Path to the generated .x## file, or None on failure.
         elapsed_seconds: Wall-clock time for preprocessing.
+        signal_source: ``bco``, ``owned_process_artifacts``,
+            ``natural_completion``, ``full_result_copy``, ``timeout``, or a
+            blocking-condition identifier.
+        full_result_copied: Whether a naturally completed ``p##.hdf`` supplied
+            the temporary HDF fallback.
+        timed_out: Whether preprocessing exceeded its bounded wait.
         error: Error message if preprocessing failed, None on success.
 
     Examples:
@@ -807,6 +813,9 @@ class PreprocessResult:
     b_file_path: Optional[Path] = None
     x_file_path: Optional[Path] = None
     elapsed_seconds: float = 0.0
+    signal_source: Optional[str] = None
+    full_result_copied: bool = False
+    timed_out: bool = False
     error: Optional[str] = None
 
     def __bool__(self) -> bool:
@@ -821,12 +830,12 @@ class PreprocessResult:
 @dataclass
 class GeometryPreprocessResult:
     """
-    Result of GeomPreprocessor.run_geometry_preprocessor().
+    Result of a HEC-RAS geometry-preprocessing operation.
 
-    This result is for delivery/assembly validation: run the HEC-RAS geometry
-    preprocessor, capture detailed compute messages, and report whether blocking
-    errors were found. It is intentionally separate from ``PreprocessResult``,
-    which is tuned for creating Linux unsteady-compute prerequisite files.
+    This result supports both delivery/assembly validation through
+    ``GeomPreprocessor`` and the standalone vendor ``RasGeomPreprocess`` action
+    used after Linux/Wine plan materialization. The optional executable and HDF
+    provenance fields are populated by the standalone action.
     """
     success: bool
     plan_number: str = ""
@@ -835,6 +844,18 @@ class GeometryPreprocessResult:
     elapsed_seconds: float = 0.0
     command: str = ""
     return_code: Optional[int] = None
+    executable_path: Optional[Path] = None
+    executable_sha256: Optional[str] = None
+    input_hdf_path: Optional[Path] = None
+    x_file_path: Optional[Path] = None
+    input_hdf_sha256_before: Optional[str] = None
+    input_hdf_sha256_after: Optional[str] = None
+    output_changed: bool = False
+    hdf_readable: bool = False
+    geometry_group_present: bool = False
+    timed_out: bool = False
+    stdout: str = ""
+    stderr: str = ""
     signal_detected: Optional[str] = None
     compute_message_paths: List[Path] = field(default_factory=list)
     artifact_paths: List[Path] = field(default_factory=list)

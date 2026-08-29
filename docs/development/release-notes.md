@@ -56,6 +56,14 @@
   [qualification report](hec-ras-6302-wine-compute-plan-qualification.md)
   records identities, TCU handling, failed experiments, parity, and remaining
   downstream gates.
+- Extend the lean `ras_commander.compute` facade for Linux-hosted unsteady
+  workflows. `RasPreprocess.preprocess_plan()` now recognizes an owned
+  `RasUnsteady.exe` plus complete `.tmp.hdf`/`.b##`/`.x##` artifacts when a
+  release leaves `.bco` empty, records the exact stop or full-result-copy path,
+  fails closed on timeout and legal-assent dialogs, and supervises only the
+  launched process tree. `run_ras_geom_preprocess()` adds the matching bounded
+  vendor geometry-preprocessor step with hashes, message parsing, and semantic
+  HDF checks.
 
 **C01-C06 Reliability Hardening**
 

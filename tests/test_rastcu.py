@@ -105,6 +105,54 @@ def test_node_has_acceptance_state_ignores_projects_only(monkeypatch):
     assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is False
 
 
+def test_node_has_acceptance_state_accepts_exact_projects_sentinel(monkeypatch):
+    fake = _FakeWinregModule(
+        {
+            (1, "node"): {"values": [], "subkeys": ["Projects"]},
+            (1, r"node\Projects"): {
+                "values": [
+                    ("Most Recent Project", r"C:\models\example.prj", 1),
+                    ("System Statistic", "660", 1),
+                ],
+                "subkeys": [],
+            },
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
+
+
+@pytest.mark.parametrize("sentinel", ["", "   ", 0, False, b"660"])
+def test_node_has_acceptance_state_rejects_empty_or_invalid_sentinel(monkeypatch, sentinel):
+    fake = _FakeWinregModule(
+        {
+            (1, "node"): {"values": [], "subkeys": ["Projects"]},
+            (1, r"node\Projects"): {
+                "values": [("System Statistic", sentinel, 1)],
+                "subkeys": [],
+            },
+        }
+    )
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is False
+
+
+def test_clear_values_preserves_tcu_sentinel(monkeypatch):
+    projects = {
+        "values": [
+            ("Most Recent Project", r"C:\private\model.prj", 1),
+            ("System Statistic", "660", 1),
+        ],
+        "subkeys": [],
+    }
+    fake = _FakeWinregModule({(1, "projects"): projects})
+    monkeypatch.setitem(sys.modules, "winreg", fake)
+
+    RasTcu._clear_values(1, "projects", preserve_names=("System Statistic",))
+
+    assert projects["values"] == [("System Statistic", "660", 1)]
+
+
 def test_node_has_acceptance_state_accepts_root_values(monkeypatch):
     fake = _FakeWinregModule(
         {
@@ -261,3 +309,8 @@ class _FakeWinregModule:
             return key.data.get("values", [])[index]
         except IndexError as exc:
             raise OSError(index) from exc
+
+    def DeleteValue(self, key, name):
+        key.data["values"] = [
+            value for value in key.data.get("values", []) if value[0] != name
+        ]

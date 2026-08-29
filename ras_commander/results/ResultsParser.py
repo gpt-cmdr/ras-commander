@@ -60,6 +60,8 @@ class ResultsParser:
         r'\bcell\s+error\b',               # Iteration/convergence table header
         r'\berror\s+node\s+or\s+conduit\b', # Pipe network iteration table header
         r'iterations',                     # Lines with iteration counts
+        r'\b0\s+errors?\b',               # Explicit zero-error summary
+        r'\berrors?\s*[:=]\s*0\b',       # "Errors: 0" / "Error = 0"
     ]
 
     WARNING_KEYWORDS = [

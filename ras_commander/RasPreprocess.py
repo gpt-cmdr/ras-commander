@@ -18,21 +18,29 @@ Classes:
     RasPreprocess - Static class for Windows preprocessing operations.
 """
 
+import hashlib
+import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from numbers import Number
 
-from .ComputeResults import PreprocessResult
+from .ComputeResults import GeometryPreprocessResult, PreprocessResult
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import ras
+from ._legal_dialogs import (
+    TCU_BLOCKING_ERROR,
+    TCU_DIALOG_TITLE,
+    legal_dialog_blocking_reason,
+)
 
 logger = get_logger(__name__)
 
@@ -43,7 +51,7 @@ class RasPreprocess:
 
     Automates Phase 1 of the two-phase Linux execution workflow:
     1. Launches HEC-RAS on Windows
-    2. Monitors the .bco log for "Starting Unsteady Flow Computations"
+    2. Monitors the .bco log or owned process tree for compute-engine startup
     3. Terminates HEC-RAS at that point (preprocessing complete)
     4. Verifies .tmp.hdf, .b##, .x## files were generated
 
@@ -56,6 +64,33 @@ class RasPreprocess:
         >>> if result:
         ...     print(f"Ready for Linux in {result.elapsed_seconds:.1f}s")
     """
+
+    _TCU_DIALOG_TITLE = TCU_DIALOG_TITLE
+    _TCU_BLOCKING_ERROR = TCU_BLOCKING_ERROR
+    _TCU_SUPERVISION_ERROR = (
+        "HEC-RAS legal-dialog supervision could not establish the launched "
+        "process tree. ras-commander refused to continue without a scoped "
+        "first-run TCU check."
+    )
+
+    @staticmethod
+    def _ras_compute_command_line(
+        ras_exe: Union[str, Path],
+        project_file: Union[str, Path],
+        plan_file: Union[str, Path],
+    ) -> str:
+        """Build the fully quoted command line required by ``Ras.exe -c``.
+
+        HEC-RAS parses the optional plan path from the raw Windows command
+        line and requires it to be quoted even when the path has no spaces.
+        Passing an argument vector through ``subprocess`` is therefore not
+        equivalent to the documented command-line contract.
+        """
+        values = tuple(str(value) for value in (ras_exe, project_file, plan_file))
+        if any('"' in value for value in values):
+            raise ValueError("HEC-RAS command paths cannot contain a double quote")
+        executable, project, plan = values
+        return f'"{executable}" -c "{project}" "{plan}"'
 
     @staticmethod
     @log_call
@@ -72,7 +107,9 @@ class RasPreprocess:
         Runs HEC-RAS with early termination to generate .tmp.hdf, .b##, and .x##
         files required by the Linux RasUnsteady binary. The process is killed when
         the .bco log indicates preprocessing is complete ("Starting Unsteady Flow
-        Computations" signal).
+        Computations" signal), or when an owned ``RasUnsteady.exe`` descendant has
+        started and all three prerequisite files are non-empty. The process-tree
+        fallback supports releases that create an empty ``.bco`` file.
 
         Args:
             plan_number: Plan number to preprocess (e.g., "01", 1).
@@ -182,28 +219,80 @@ class RasPreprocess:
                 elapsed_seconds=time.time() - start_time,
             )
 
+        supervision_error = RasPreprocess._tcu_supervision_availability_error()
+        if supervision_error:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                error=supervision_error,
+                elapsed_seconds=time.time() - start_time,
+            )
+
         # Clear existing preprocessing files
         if clear_existing:
             RasPreprocess._clear_preprocessing_files(
                 project_folder, project_name, plan_num, geometry_number
             )
 
+        artifact_baseline = {
+            path: RasPreprocess._artifact_state(path)
+            for path in (tmp_hdf, b_file, x_file)
+        }
+
         # Enable detailed logging to create .bco file
         BcoMonitor.enable_detailed_logging(plan_file)
 
-        # Build command: RAS.exe -c project.prj plan.p##
-        cmd = f'"{ras_exe}" -c "{prj_file}" "{plan_file}"'
+        # Keep a Python launcher alive while the GUI-subsystem Ras.exe runs.
+        # This provides a stable job-owned ancestry under native Windows and
+        # Windows Python hosted by Wine.
+        launcher = (
+            "import subprocess,sys; "
+            "ras_exe,command_line=sys.argv[1:3]; "
+            "raise SystemExit(subprocess.call(command_line, "
+            "executable=ras_exe, shell=False))"
+        )
+        try:
+            compute_command_line = RasPreprocess._ras_compute_command_line(
+                ras_exe,
+                prj_file,
+                plan_file,
+            )
+        except ValueError as e:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                error=f"Could not launch HEC-RAS preprocessing: {e}",
+                elapsed_seconds=time.time() - start_time,
+            )
+        cmd = [
+            sys.executable,
+            "-c",
+            launcher,
+            str(ras_exe),
+            compute_command_line,
+        ]
         logger.info("Starting HEC-RAS preprocessing for plan %s", plan_num)
         logger.debug(f"Command: {cmd}")
 
         # Launch HEC-RAS
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=str(project_folder),
-            shell=True,
-        )
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(project_folder),
+                shell=False,
+            )
+        except OSError as e:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                error=f"Could not launch HEC-RAS preprocessing: {e}",
+                elapsed_seconds=time.time() - start_time,
+            )
 
         # Monitor .bco file for preprocessing completion signal
         monitor = BcoMonitor(
@@ -212,22 +301,86 @@ class RasPreprocess:
             project_name=project_name,
             signal_string="Starting Unsteady Flow Computations",
             max_wait_seconds=max_wait,
+            blocking_condition=lambda: (
+                RasPreprocess._detect_first_run_tcu_dialog(process.pid)
+            ),
+            alternate_signal_condition=lambda: (
+                RasPreprocess._unsteady_compute_started(
+                    process.pid,
+                    tmp_hdf,
+                    b_file,
+                    x_file,
+                    artifact_baseline=artifact_baseline,
+                )
+            ),
+            alternate_signal_description=(
+                "owned RasUnsteady.exe startup with complete preprocessing artifacts"
+            ),
         )
 
         signal_detected = monitor.monitor_until_signal(process)
+        blocked_reason = getattr(monitor, "blocked_reason", None)
+        monitor_source = getattr(monitor, "signal_source", None)
+        signal_source = (
+            "owned_process_artifacts"
+            if monitor_source == "alternate"
+            else monitor_source
+        )
+        if signal_detected and signal_source is None:
+            signal_source = "bco"
+
+        if blocked_reason:
+            if process.poll() is None:
+                RasPreprocess._terminate_process_tree(process)
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                signal_source="blocked_legal_dialog",
+                error=blocked_reason,
+                elapsed_seconds=time.time() - start_time,
+            )
 
         # Terminate process tree
-        if process.poll() is None:
-            logger.debug("Preprocessing signal detected; terminating HEC-RAS")
+        process_was_running = process.poll() is None
+        if process_was_running:
             RasPreprocess._terminate_process_tree(process)
+            if not signal_detected:
+                return PreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    signal_source="timeout",
+                    timed_out=True,
+                    error=(
+                        "Preprocessing timed out after "
+                        f"{int(max_wait)} seconds before a readiness signal"
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
+            logger.debug("Preprocessing signal detected; terminating HEC-RAS")
         elif signal_detected:
             logger.debug("Preprocessing complete; HEC-RAS process already exited")
         else:
             logger.warning(f"Process exited with code {process.returncode} before signal detected")
+            signal_source = "natural_completion"
+            if process.returncode not in (0, None):
+                return PreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    signal_source=signal_source,
+                    error=(
+                        "HEC-RAS exited with code "
+                        f"{process.returncode} before a readiness signal"
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
 
         # If the process completed fully and wrote a new/changed final HDF but
         # no .tmp.hdf, use that fresh file as the Linux preprocessing input.
         # Never mistake an unchanged pre-existing final result for new output.
+        full_result_copied = False
         hdf_state_after = None
         if hdf_file.is_file():
             hdf_stat = hdf_file.stat()
@@ -235,6 +388,7 @@ class RasPreprocess:
         if (
             not tmp_hdf.exists()
             and hdf_state_after is not None
+            and hdf_state_after[0] > 0
             and hdf_state_after != hdf_state_before
         ):
             logger.warning(
@@ -243,6 +397,8 @@ class RasPreprocess:
                 tmp_hdf.name,
             )
             shutil.copy2(hdf_file, tmp_hdf)
+            full_result_copied = True
+            signal_source = "full_result_copy"
 
         # Verify all three prerequisite files exist and are non-empty
         missing = []
@@ -257,6 +413,8 @@ class RasPreprocess:
             return PreprocessResult(
                 success=False, plan_number=plan_num,
                 geometry_number=geometry_number,
+                signal_source=signal_source,
+                full_result_copied=full_result_copied,
                 error=f"Preprocessing did not generate: {', '.join(missing)}",
                 elapsed_seconds=time.time() - start_time,
             )
@@ -290,6 +448,251 @@ class RasPreprocess:
             b_file_path=b_file,
             x_file_path=x_file,
             elapsed_seconds=elapsed,
+            signal_source=signal_source,
+            full_result_copied=full_result_copied,
+        )
+
+    @staticmethod
+    @log_call
+    def run_ras_geom_preprocess(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        input_hdf_path: Optional[Union[str, Path]] = None,
+        x_file_path: Optional[Union[str, Path]] = None,
+        executable_path: Optional[Union[str, Path]] = None,
+        timeout_sec: int = 300,
+        require_hdf_change: bool = False,
+    ) -> GeometryPreprocessResult:
+        """Run vendor ``RasGeomPreprocess.exe`` for one staged plan.
+
+        :meth:`preprocess_plan` creates the plan ``*.tmp.hdf`` and geometry
+        ``.x##`` inputs. This method executes the matching standalone geometry
+        preprocessor using an argument vector, enforces a bounded timeout, and
+        records executable and before/after HDF fingerprints. It is intended for
+        Windows Python, including Windows Python hosted by Wine.
+
+        Args:
+            plan_number: Plan number (for example ``"06"``).
+            ras_object: Initialized :class:`RasPrj`; defaults to the global project.
+            input_hdf_path: Optional explicit plan ``*.tmp.hdf`` input.
+            x_file_path: Optional explicit project ``.x##`` file.
+            executable_path: Optional explicit ``RasGeomPreprocess.exe`` path.
+                The default is the ``x64`` directory beside ``Ras.exe``.
+            timeout_sec: Maximum execution time in seconds.
+            require_hdf_change: Require the input HDF fingerprint to change.
+                Leave False for idempotent reruns; qualification of a fresh input
+                should set this to True.
+
+        Returns:
+            GeometryPreprocessResult: Bool-compatible execution evidence.
+        """
+        start_time = time.time()
+        ras_obj = ras_object if ras_object is not None else ras
+
+        if isinstance(plan_number, Number):
+            plan_num = f"{int(plan_number):02d}"
+        else:
+            plan_num = str(plan_number).zfill(2)
+
+        try:
+            ras_obj.check_initialized()
+        except Exception as e:
+            return GeometryPreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                error=f"Project not initialized: {e}",
+                elapsed_seconds=time.time() - start_time,
+            )
+
+        project_folder = Path(ras_obj.project_folder)
+        project_name = ras_obj.project_name
+        plan_path = project_folder / f"{project_name}.p{plan_num}"
+        geometry_number = None
+        try:
+            plan_row = ras_obj.plan_df[ras_obj.plan_df["plan_number"] == plan_num]
+            if not plan_row.empty and "Geom File" in plan_row.columns:
+                match = re.search(r"(\d+)", str(plan_row["Geom File"].iloc[0]))
+                if match:
+                    geometry_number = match.group(1)
+        except Exception:
+            pass
+        if geometry_number is None and plan_path.is_file():
+            geometry_number = RasPreprocess._extract_geometry_number(plan_path)
+        if geometry_number is None:
+            return GeometryPreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                error=f"Could not determine geometry number for plan {plan_num}",
+                elapsed_seconds=time.time() - start_time,
+            )
+
+        input_hdf = (
+            Path(input_hdf_path)
+            if input_hdf_path is not None
+            else project_folder / f"{project_name}.p{plan_num}.tmp.hdf"
+        )
+        x_file = (
+            Path(x_file_path)
+            if x_file_path is not None
+            else project_folder / f"{project_name}.x{geometry_number}"
+        )
+        if executable_path is None:
+            ras_exe_path = Path(str(getattr(ras_obj, "ras_exe_path", "")))
+            executable = ras_exe_path.parent / "x64" / "RasGeomPreprocess.exe"
+        else:
+            executable = Path(executable_path)
+
+        missing = [
+            str(path)
+            for path in (executable, input_hdf, x_file)
+            if not path.is_file() or path.stat().st_size == 0
+        ]
+        if missing:
+            return GeometryPreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                executable_path=executable,
+                input_hdf_path=input_hdf,
+                x_file_path=x_file,
+                error=(
+                    "Missing or empty geometry-preprocessor input: "
+                    + ", ".join(missing)
+                ),
+                elapsed_seconds=time.time() - start_time,
+            )
+
+        expected_x_name = f"{project_name}.x{geometry_number}".casefold()
+        try:
+            same_parent = x_file.parent.resolve() == input_hdf.parent.resolve()
+        except OSError:
+            same_parent = x_file.parent.absolute() == input_hdf.parent.absolute()
+        if not same_parent or x_file.name.casefold() != expected_x_name:
+            return GeometryPreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                executable_path=executable,
+                input_hdf_path=input_hdf,
+                x_file_path=x_file,
+                error=(
+                    "RasGeomPreprocess requires the project execution file "
+                    f"{project_name}.x{geometry_number} beside the input HDF"
+                ),
+                elapsed_seconds=time.time() - start_time,
+            )
+
+        executable_sha256 = RasPreprocess._file_sha256(executable)
+        before_sha256 = RasPreprocess._file_sha256(input_hdf)
+        command = [str(executable), str(input_hdf), f"x{geometry_number}"]
+        command_text = subprocess.list2cmdline(command)
+        process = None
+        stdout = ""
+        stderr = ""
+        timed_out = False
+        launch_error = None
+
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=str(input_hdf.parent),
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=int(timeout_sec))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                RasPreprocess._terminate_process_tree(process)
+                try:
+                    stdout, stderr = process.communicate(timeout=2)
+                except Exception:
+                    stdout, stderr = "", ""
+        except OSError as e:
+            launch_error = str(e)
+
+        after_sha256 = (
+            RasPreprocess._file_sha256(input_hdf)
+            if input_hdf.is_file() and input_hdf.stat().st_size > 0
+            else None
+        )
+        output_changed = bool(
+            before_sha256 and after_sha256 and before_sha256 != after_sha256
+        )
+        return_code = process.returncode if process is not None else None
+
+        hdf_readable = False
+        geometry_group_present = False
+        hdf_error = None
+        if after_sha256 is not None:
+            try:
+                import h5py
+
+                with h5py.File(input_hdf, "r") as handle:
+                    hdf_readable = True
+                    geometry_group_present = "Geometry" in handle
+            except Exception as e:
+                hdf_error = str(e)
+
+        errors = []
+        if launch_error:
+            errors.append(f"Could not launch RasGeomPreprocess: {launch_error}")
+        if timed_out:
+            errors.append(
+                f"RasGeomPreprocess timed out after {int(timeout_sec)} seconds"
+            )
+        if return_code is None:
+            errors.append("RasGeomPreprocess did not report a final return code")
+        elif return_code != 0:
+            errors.append(f"RasGeomPreprocess exited with code {return_code}")
+        if after_sha256 is None:
+            errors.append("RasGeomPreprocess did not leave a non-empty input HDF")
+        elif not hdf_readable:
+            errors.append(f"RasGeomPreprocess output HDF is unreadable: {hdf_error}")
+        elif not geometry_group_present:
+            errors.append("RasGeomPreprocess output HDF has no Geometry group")
+        if require_hdf_change and not output_changed:
+            errors.append("RasGeomPreprocess did not change the input HDF fingerprint")
+
+        combined_output = "\n".join(item for item in (stdout, stderr) if item)
+        from .results import ResultsParser
+
+        parsed = ResultsParser.parse_compute_messages(combined_output)
+        operational_error_count = len(errors)
+        if parsed["has_errors"]:
+            errors.append(
+                "RasGeomPreprocess reported an error: "
+                f"{parsed['first_error_line']}"
+            )
+
+        return GeometryPreprocessResult(
+            success=not errors,
+            plan_number=plan_num,
+            geometry_number=geometry_number,
+            elapsed_seconds=time.time() - start_time,
+            command=command_text,
+            return_code=return_code,
+            executable_path=executable,
+            executable_sha256=executable_sha256,
+            input_hdf_path=input_hdf,
+            x_file_path=x_file,
+            input_hdf_sha256_before=before_sha256,
+            input_hdf_sha256_after=after_sha256,
+            output_changed=output_changed,
+            hdf_readable=hdf_readable,
+            geometry_group_present=geometry_group_present,
+            timed_out=timed_out,
+            stdout=stdout or "",
+            stderr=stderr or "",
+            artifact_paths=[input_hdf, x_file],
+            error_count=operational_error_count + parsed["error_count"],
+            warning_count=parsed["warning_count"],
+            first_error_line=parsed["first_error_line"],
+            error="; ".join(errors) if errors else None,
         )
 
     @staticmethod
@@ -389,6 +792,191 @@ class RasPreprocess:
         return None
 
     @staticmethod
+    def _file_sha256(path: Path) -> str:
+        """Return a streaming SHA-256 digest for a preprocessing artifact."""
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _artifact_state(path: Path) -> Optional[Tuple[int, int]]:
+        """Return a size/mtime fingerprint, or None when an artifact is absent."""
+        try:
+            stat = Path(path).stat()
+        except OSError:
+            return None
+        return stat.st_size, stat.st_mtime_ns
+
+    @staticmethod
+    def _detect_first_run_tcu_dialog(
+        root_pid: Optional[int] = None,
+    ) -> Optional[str]:
+        """Return a diagnostic for a TCU modal in one launched process tree."""
+        try:
+            titles = RasPreprocess._get_visible_window_titles(root_pid=root_pid)
+        except Exception as e:
+            return f"{RasPreprocess._TCU_SUPERVISION_ERROR} Detail: {e}"
+        for title in titles:
+            reason = legal_dialog_blocking_reason(title=title)
+            if reason:
+                return reason
+        return None
+
+    @staticmethod
+    def _tcu_supervision_availability_error() -> Optional[str]:
+        """Return a prelaunch diagnostic when scoped TCU detection is unavailable."""
+        if os.name != "nt":
+            return (
+                f"{RasPreprocess._TCU_SUPERVISION_ERROR} "
+                "A Windows-hosted Python process is required for this Ras.exe path."
+            )
+        try:
+            import psutil  # noqa: F401
+        except Exception as e:
+            return (
+                f"{RasPreprocess._TCU_SUPERVISION_ERROR} "
+                f"psutil is unavailable: {e}"
+            )
+        return None
+
+    @staticmethod
+    def _get_visible_window_titles(
+        root_pid: Optional[int] = None,
+    ) -> List[str]:
+        """Enumerate visible titles, optionally scoped to one process tree."""
+        if os.name != "nt":
+            return []
+
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            allowed_pids = None
+            if root_pid is not None:
+                allowed_pids = {int(root_pid)}
+                try:
+                    import psutil
+
+                    root = psutil.Process(int(root_pid))
+                    allowed_pids.update(
+                        child.pid for child in root.children(recursive=True)
+                    )
+                except Exception as e:
+                    raise RuntimeError(
+                        "Could not enumerate descendants for TCU window scope "
+                        f"PID {root_pid}: {e}"
+                    ) from e
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            enum_windows_proc = ctypes.WINFUNCTYPE(
+                wintypes.BOOL,
+                wintypes.HWND,
+                wintypes.LPARAM,
+            )
+            user32.EnumWindows.argtypes = [enum_windows_proc, wintypes.LPARAM]
+            user32.EnumWindows.restype = wintypes.BOOL
+            user32.IsWindowVisible.argtypes = [wintypes.HWND]
+            user32.IsWindowVisible.restype = wintypes.BOOL
+            user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+            user32.GetWindowTextLengthW.restype = ctypes.c_int
+            user32.GetWindowTextW.argtypes = [
+                wintypes.HWND,
+                wintypes.LPWSTR,
+                ctypes.c_int,
+            ]
+            user32.GetWindowTextW.restype = ctypes.c_int
+            user32.GetWindowThreadProcessId.argtypes = [
+                wintypes.HWND,
+                ctypes.POINTER(wintypes.DWORD),
+            ]
+            user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+            titles: List[str] = []
+
+            @enum_windows_proc
+            def collect_title(hwnd, _lparam):
+                if not user32.IsWindowVisible(hwnd):
+                    return True
+                if allowed_pids is not None:
+                    window_pid = wintypes.DWORD()
+                    user32.GetWindowThreadProcessId(
+                        hwnd,
+                        ctypes.byref(window_pid),
+                    )
+                    if int(window_pid.value) not in allowed_pids:
+                        return True
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length <= 0:
+                    return True
+                buffer = ctypes.create_unicode_buffer(length + 1)
+                if user32.GetWindowTextW(hwnd, buffer, length + 1):
+                    title = buffer.value.strip()
+                    if title:
+                        titles.append(title)
+                return True
+
+            user32.EnumWindows(collect_title, 0)
+            return titles
+        except Exception as e:
+            if root_pid is not None:
+                raise RuntimeError(
+                    f"Could not enumerate scoped visible window titles: {e}"
+                ) from e
+            logger.debug(f"Could not enumerate visible window titles: {e}")
+            return []
+
+    @staticmethod
+    def _unsteady_compute_started(
+        root_pid: int,
+        tmp_hdf: Path,
+        b_file: Path,
+        x_file: Path,
+        artifact_baseline: Optional[
+            Dict[Path, Optional[Tuple[int, int]]]
+        ] = None,
+    ) -> bool:
+        """Return True when this launch owns a ready unsteady compute process."""
+        artifacts = (Path(tmp_hdf), Path(b_file), Path(x_file))
+        if any(
+            not path.is_file() or path.stat().st_size == 0
+            for path in artifacts
+        ):
+            return False
+        if artifact_baseline is not None:
+            for path in artifacts:
+                before = artifact_baseline.get(path)
+                if before is not None and RasPreprocess._artifact_state(path) == before:
+                    return False
+
+        try:
+            import psutil
+
+            descendants = psutil.Process(int(root_pid)).children(recursive=True)
+        except Exception:
+            return False
+
+        for child in descendants:
+            candidates = []
+            try:
+                candidates.append(child.name())
+            except Exception:
+                pass
+            try:
+                command = child.cmdline()
+                if command:
+                    candidates.append(Path(command[0]).name)
+            except Exception:
+                pass
+            if any(
+                str(candidate).casefold() in {"rasunsteady", "rasunsteady.exe"}
+                for candidate in candidates
+            ):
+                return True
+        return False
+
+    @staticmethod
     def _terminate_process_tree(process: subprocess.Popen) -> None:
         """
         Kill a process and all its children.
@@ -401,18 +989,42 @@ class RasPreprocess:
         """
         try:
             import psutil
+
             parent = psutil.Process(process.pid)
             children = parent.children(recursive=True)
 
             # Kill children first, then parent
-            for child in children:
+            for child in reversed(children):
                 try:
                     child.kill()
                 except psutil.NoSuchProcess:
                     pass
 
-            parent.kill()
-            process.wait(timeout=10)
+            try:
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass
+
+            _, survivors = psutil.wait_procs(
+                [*children, parent],
+                timeout=10,
+            )
+            for survivor in survivors:
+                try:
+                    survivor.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            if survivors:
+                _, survivors = psutil.wait_procs(survivors, timeout=2)
+            if survivors:
+                logger.warning(
+                    "Owned HEC-RAS processes survived termination: %s",
+                    ", ".join(str(item.pid) for item in survivors),
+                )
+            try:
+                process.wait(timeout=2)
+            except Exception:
+                pass
             logger.debug("HEC-RAS process tree terminated")
         except Exception as e:
             logger.warning(f"psutil termination failed ({e}), falling back to process.kill()")

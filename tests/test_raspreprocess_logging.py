@@ -194,6 +194,8 @@ def test_full_simulation_fallback_warning_is_concise(
     )
 
     assert result.success is True
+    assert result.signal_source == "full_result_copy"
+    assert result.full_result_copied is True
     warning_messages = [
         record.getMessage()
         for record in _preprocess_records(caplog)
@@ -257,3 +259,52 @@ def test_clear_existing_preserves_final_result_families(
     assert result.success is True
     assert hdf.read_bytes() == b"existing hdf bytes"
     assert legacy.read_bytes() == b"existing legacy bytes"
+
+
+def test_full_simulation_fallback_rejects_unchanged_existing_hdf(
+    tmp_path,
+    monkeypatch,
+):
+    ras_obj = _seed_project(tmp_path)
+    hdf = ras_obj.project_folder / "PreprocessProject.p01.hdf"
+    hdf.write_bytes(b"unchanged existing result")
+    (ras_obj.project_folder / "PreprocessProject.b01").write_bytes(b"b")
+    (ras_obj.project_folder / "PreprocessProject.x03").write_bytes(b"x")
+
+    class CompletedProcess:
+        pid = 12345
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+    class FakeBcoMonitor:
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, **_kwargs):
+            return None
+
+        def monitor_until_signal(self, _process):
+            return True
+
+    monkeypatch.setattr(raspreprocess_module, "BcoMonitor", FakeBcoMonitor)
+    monkeypatch.setattr(
+        raspreprocess_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: CompletedProcess(),
+    )
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras_obj,
+        clear_existing=False,
+        fix_line_endings=False,
+    )
+
+    assert result.success is False
+    assert result.full_result_copied is False
+    assert result.signal_source == "bco"
+    assert result.error == "Preprocessing did not generate: .p01.tmp.hdf"
+    assert hdf.read_bytes() == b"unchanged existing result"
