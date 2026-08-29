@@ -183,6 +183,8 @@ run_*.py
 !scripts/benchmarks/run_raster_profile_matrix.py
 test_*.py
 !tests/test_*.py
+!tests/qualification/
+!tests/qualification/test_*.py
 monitor_*.py
 cayce_*.py
 ai_tools/generate_*.py  # Only ignore AI tool generators, not scripts/
