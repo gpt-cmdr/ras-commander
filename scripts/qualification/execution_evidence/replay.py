@@ -74,7 +74,7 @@ def overlay_replay_artifacts(
             source, pin, label=f"replay source {relative.as_posix()}"
         )
         descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{target.name}.", suffix=".replay-tmp", dir=target.parent
+            prefix=".rpl-", suffix=".tmp", dir=target.parent
         )
         os.close(descriptor)
         temporary = Path(temporary_name)

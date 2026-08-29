@@ -90,3 +90,32 @@ def test_replay_publication_never_overwrites_concurrent_winner(
     with pytest.raises(replay.ReplayArtifactError, match="appeared concurrently"):
         replay.overlay_replay_artifacts(stage_root, packet)
     assert target.read_bytes() == b"concurrent winner"
+
+
+def test_short_replay_temporary_avoids_legacy_windows_path_budget(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "replay"
+    source_root.mkdir()
+    relative_path = "HagerLatWeir.p06.comp_msgs.txt"
+    source = source_root / relative_path
+    source.write_bytes(b"captured compute messages")
+    packet = _replay_packet(source_root, relative_path)
+
+    stage_root = tmp_path / "stage"
+    old_candidate_name = f".{relative_path}.12345678.replay-tmp"
+    while len(str(stage_root / old_candidate_name)) < 260:
+        remaining = 260 - len(str(stage_root / old_candidate_name))
+        stage_root /= "d" * min(remaining, 32)
+    final_target = stage_root / relative_path
+    old_candidate = stage_root / old_candidate_name
+    assert len(str(final_target)) < 260
+    stage_root.mkdir(parents=True)
+
+    records = replay.overlay_replay_artifacts(stage_root, packet)
+
+    assert len(str(old_candidate)) >= 260
+    assert len(str(final_target)) < 260
+    assert final_target.read_bytes() == source.read_bytes()
+    assert records[0]["relative_path"] == relative_path
+    assert not list(stage_root.glob(".rpl-*.tmp"))
