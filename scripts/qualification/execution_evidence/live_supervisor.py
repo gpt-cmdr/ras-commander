@@ -352,7 +352,11 @@ def create_live_attempt_request(
         attempt_id=attempt_id,
         source_project=source_project,
     )
-    source_hdf, source_legacy = result_population(source.rows)
+    source_hdf, source_legacy = result_population(
+        source.rows,
+        project_file=source_project,
+        plan_number=fixture["plan_number"],
+    )
     lock_proof = {
         "path": str(real_engine_lock_path.resolve(strict=True)),
         "token": real_engine_lock_payload["token"],
@@ -1612,7 +1616,11 @@ def _synthesize_failure_receipt(
             known_paths=known_paths,
         )
         artifact_rows.extend(stage_after.rows)
-        final_hdf, final_legacy = result_population(stage_after.rows)
+        final_hdf, final_legacy = result_population(
+            stage_after.rows,
+            project_file=request["source_project"],
+            plan_number=request["fixture"]["plan_number"],
+        )
     detail = (
         "Live Python worker did not publish a terminal worker receipt; "
         f"process_hygiene={'confirmed' if hygiene_safe else 'uncertain'}"

@@ -218,6 +218,74 @@ def _request(
     return request, context, lock
 
 
+def _plan_18_snapshot(root: Path, *, selected_result: str | None = None):
+    root.mkdir()
+    project = root / "Model.prj"
+    project.write_text("Proj Title=Plan 18 scope\n", encoding="ascii")
+    (root / "Model.p06.hdf").write_bytes(b"other plan hdf")
+    (root / "Model.IC.O06").write_bytes(b"other plan initial condition")
+    if selected_result is not None:
+        (root / selected_result).write_bytes(b"selected plan result")
+    snapshot = snapshot_tree(
+        root,
+        run_id="run-1",
+        lane_id="plan-18",
+        attempt_id="attempt-1",
+        phase="selected_plan_scope",
+        root_kind="stage",
+        data_origin="captured_real",
+        known_paths=("Model.p18.hdf", "Model.O18"),
+    )
+    return project, snapshot
+
+
+def test_live_initial_state_ignores_other_plan_and_ic_result_artifacts(
+    tmp_path: Path,
+) -> None:
+    project, snapshot = _plan_18_snapshot(tmp_path / "stage")
+    assert live_worker.result_population(snapshot.rows) == (True, True)
+    assert live_worker.result_population(
+        snapshot.rows,
+        project_file=project,
+        plan_number="18",
+    ) == (False, False)
+
+    request = {
+        "source_project": str(project),
+        "fixture": {"plan_number": "18"},
+        "engine": {"expected_result_format": "hdf"},
+        "lane": {"initial_state": "neither"},
+    }
+    live_worker._validate_pre_execution_state(
+        request,
+        stage_published=snapshot,
+        pre_execution=snapshot,
+    )
+
+
+@pytest.mark.parametrize(
+    ("selected_result", "expected_population"),
+    [
+        ("Model.p18.hdf", (True, False)),
+        ("Model.O18", (False, True)),
+    ],
+)
+def test_live_result_population_detects_only_exact_selected_plan_artifacts(
+    tmp_path: Path,
+    selected_result: str,
+    expected_population: tuple[bool, bool],
+) -> None:
+    project, snapshot = _plan_18_snapshot(
+        tmp_path / selected_result.replace(".", "_"),
+        selected_result=selected_result,
+    )
+    assert live_worker.result_population(
+        snapshot.rows,
+        project_file=project,
+        plan_number="18",
+    ) == expected_population
+
+
 def _inventory(*, plan: bool, project: Path | None = None) -> _PublicRecord:
     payload: dict[str, Any] = {
         "observed_at": 1.0,

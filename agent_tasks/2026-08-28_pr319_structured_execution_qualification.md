@@ -571,3 +571,11 @@ complete.
   The final integrated no-engine baseline passed 518 tests in 151.22 seconds;
   its focused process shard passed 83 tests and Ruff passed. No HEC-RAS, COM,
   or process-signalling action occurred.
+- 2026-08-29: live-packet review found that folder-wide result-family detection
+  would treat an unrelated plan or initial-condition artifact such as
+  `Model.IC.O06` as a plan-18 legacy result. Live source, pre-execution, final,
+  timestamp, and failure evidence now count only the selected plan's exact
+  `<stem>.p##.hdf` and `<stem>.O##` paths. Cross-plan regression tests plus the
+  live supervisor/offline/manifest shards passed 182 tests; Ruff and
+  `git diff --check` passed. The live manifest example now uses the exact eight
+  invariants supported by live v1.

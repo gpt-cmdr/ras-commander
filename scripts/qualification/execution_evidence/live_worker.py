@@ -727,12 +727,23 @@ def _prepare_initial_state(
     return records
 
 
-def _result_row(snapshot: Any, family: str) -> Mapping[str, Any] | None:
+def _result_row(
+    snapshot: Any,
+    family: str,
+    *,
+    project_file: str | Path,
+    plan_number: str,
+) -> Mapping[str, Any] | None:
+    known_paths = known_result_paths(project_file, plan_number)
+    selected_path = known_paths[0 if family == "hdf" else 1].casefold()
     return next(
         (
             row
             for row in snapshot.rows
-            if row.get("exists") and row.get("result_family") == family
+            if row.get("exists")
+            and row.get("result_family") == family
+            and isinstance(row.get("relative_path"), str)
+            and row["relative_path"].casefold() == selected_path
         ),
         None,
     )
@@ -747,7 +758,13 @@ def _validate_pre_execution_state(
     expected = request["engine"]["expected_result_format"]
     opposing = "legacy" if expected == "hdf" else "hdf"
     initial_state = request["lane"]["initial_state"]
-    hdf_exists, legacy_exists = result_population(pre_execution.rows)
+    project_file = request["source_project"]
+    plan_number = request["fixture"]["plan_number"]
+    hdf_exists, legacy_exists = result_population(
+        pre_execution.rows,
+        project_file=project_file,
+        plan_number=plan_number,
+    )
     population = {"hdf": hdf_exists, "legacy": legacy_exists}
     expected_population = {
         "neither": {"hdf": False, "legacy": False},
@@ -762,8 +779,18 @@ def _validate_pre_execution_state(
             f"prepared {initial_state} population mismatch: {population}"
         )
     if initial_state.startswith("both_"):
-        expected_row = _result_row(stage_published, expected)
-        opposing_row = _result_row(stage_published, opposing)
+        expected_row = _result_row(
+            stage_published,
+            expected,
+            project_file=project_file,
+            plan_number=plan_number,
+        )
+        opposing_row = _result_row(
+            stage_published,
+            opposing,
+            project_file=project_file,
+            plan_number=plan_number,
+        )
         if expected_row is None or opposing_row is None:
             raise LiveWorkerError(f"{initial_state} requires both result families")
         expected_mtime = expected_row["mtime_ns"]
@@ -1379,7 +1406,11 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         and source_before.metadata_fingerprint == source_final.metadata_fingerprint
     )
     selected_format = selected_result_format(evidence)
-    final_hdf, final_legacy = result_population(post_evidence.rows)
+    final_hdf, final_legacy = result_population(
+        post_evidence.rows,
+        project_file=stage_result.destination_project_file,
+        plan_number=plan_number,
+    )
     final_family_valid = (
         (selected_format == "hdf" and final_hdf and not final_legacy)
         or (selected_format == "legacy" and final_legacy and not final_hdf)

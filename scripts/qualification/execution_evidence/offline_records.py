@@ -34,15 +34,48 @@ def known_result_paths(project_file: str | Path, plan_number: str) -> tuple[str,
     )
 
 
-def result_population(rows: Iterable[Mapping[str, Any]]) -> tuple[bool, bool]:
+def result_population(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    project_file: str | Path | None = None,
+    plan_number: str | None = None,
+) -> tuple[bool, bool]:
+    """Return HDF/legacy presence, optionally scoped to one exact plan.
+
+    A project tree can contain results and initial-condition files for other
+    plans.  When ``project_file`` and ``plan_number`` are supplied, only the
+    selected plan's exact ``<stem>.p##.hdf`` and ``<stem>.O##`` paths count.
+    Both scope arguments must be supplied together.
+    """
+    if (project_file is None) != (plan_number is None):
+        raise ValueError(
+            "project_file and plan_number must be supplied together"
+        )
+    selected_paths: dict[str, str] | None = None
+    if project_file is not None and plan_number is not None:
+        known_paths = known_result_paths(project_file, plan_number)
+        selected_paths = {
+            known_paths[0].casefold(): "hdf",
+            known_paths[1].casefold(): "legacy",
+        }
+
     hdf = False
     legacy = False
     for row in rows:
         if not row.get("exists"):
             continue
-        if row.get("result_family") == "hdf":
+        family = row.get("result_family")
+        if selected_paths is not None:
+            relative_path = row.get("relative_path")
+            if not isinstance(relative_path, str):
+                continue
+            expected_family = selected_paths.get(relative_path.casefold())
+            if expected_family is None or family != expected_family:
+                continue
+            family = expected_family
+        if family == "hdf":
             hdf = True
-        elif row.get("result_family") == "legacy":
+        elif family == "legacy":
             legacy = True
     return hdf, legacy
 
