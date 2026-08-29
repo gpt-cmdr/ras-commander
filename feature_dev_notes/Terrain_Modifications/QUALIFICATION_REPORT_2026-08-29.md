@@ -16,10 +16,12 @@ receipt. No project registration or source project file was changed.
 
 ## Automated tests
 
-- `tests/terrain_export_host_test.py`: 76 passed. Coverage includes exact
+- `tests/terrain_export_host_test.py`: 80 passed after the mixed-resolution
+  correction. Coverage includes exact
   terrain selection, Path/string/Windows/UNC/space-containing and Wine path
   conversion, factors and cell-size math, negative-coordinate grid snapping,
-  source resolution compatibility, overwrite protection, request/response
+  mixed non-integer source-resolution acceptance, unusable-grid rejection,
+  overwrite protection, request/response
   schemas, GeoTIFF semantic validation, failure partial cleanup, task-local Wine
   state, packaged resources, forced-timeout owned-process cleanup, supported
   version normalization, early unsupported-version `RasPrj` rejection,
@@ -29,8 +31,9 @@ receipt. No project registration or source project file was changed.
   logging/creation, and terrain display settings). This includes explicit
   rejection of unqualified or new version terms.
 - Opt-in real-runtime suite
-  `tests/qualification/terrain_export_qualification_test.py`: 8 passed and the
-  Wine-only case skipped on Windows. The eight cases cover modification-aware
+  `tests/qualification/terrain_export_qualification_test.py`: 9 passed and the
+  Wine-only case skipped on Windows after adding the original mixed-resolution
+  Bald Eagle `Terrain50` case. The other eight cases cover modification-aware
   and stitched exports on 6.4.1, 6.5, 6.6, and 7.0.1. The equivalent production Wine
   invocation was run with the 6.6 runtime on the controlled Linux worker
   described below.
@@ -44,6 +47,18 @@ existing numeric sediment-plan expectation, and one was an already-executed
 tutorial notebook baseline. Collection also printed pre-existing Windows GUI
 extension entry-point faults (`0xc0000139`) and continued. The focused feature
 and adjacent regression sets were rerun independently and remained green.
+
+Five notebook revisions cover the public workflow: modification-aware Bald
+Eagle evidence (`316`), benefit-area terrain preparation guidance (`612`), the
+creation-versus-export distinction (`920`), analytical-sampler scope (`930`),
+and a focused bounded stitched-terrain tutorial (`931`). The new native-export
+cells are opt-in. Their review figures are written only to ignored task-local
+folders; no new notebook outputs or generated visual artifacts are committed.
+The final combined terrain-export/public/adjacent and notebook-contract gate
+passed 152 tests in 3.56 seconds. JSON and Python-AST checks passed all five
+notebooks (70 code cells), and the output audit found no stored exceptions. A
+fresh opt-in HEC-RAS 6.6 mixed-resolution `Terrain50` qualification passed in
+2.69 seconds, including 1.77 seconds in the native test call.
 
 ## Native Windows HEC-RAS 6.6
 
@@ -82,6 +97,29 @@ resolution with a 16 x 23 grid. The native XML-loaded inventory contained both
 registered sources; both intersected the output, one source deterministically
 anchored the authoritative grid, and the registered stitch behavior completed
 without requiring aligned source origins.
+
+### Bald Eagle mixed-resolution terrain
+
+Project: `BaldEagleCrkMulti2D`, original registered terrain `Terrain50`
+
+The registered inventory contains a 36.504512049933-foot source followed by a
+20-foot source. Those level-zero resolutions have a non-integer ratio, which
+is valid input to RAS Mapper's **Export to Single Raster** operation. Python
+selects the finer 20-foot source as the authoritative output-grid anchor;
+factor 2 produces an exact 40-foot `resampleCellSize`. The managed receipt
+confirms `resampleTo1RFI=true` and `ResampleMethod="near"`, and both registered
+sources intersect the bounded output.
+
+A clean HEC-RAS 6.6 qualification of the original registration produced one
+61 x 61 TIFF in 2.42 seconds. A separate isolated project copy wrote a
+high-ground modification directly to the original `Terrain50` HDF--no
+replacement terrain was created or registered--then exported the same window
+with modifications off and on. The final reproducibility run completed in
+1.611 and 1.726 seconds. Across 3,721 valid
+cells, 264 cells rose by 0.15625 to 9.625 feet and 1,769 geometric control
+cells remained exactly unchanged (maximum absolute control delta 0.0). The
+off/on checksums were 49168 and 48517. This closes the premature preflight
+rejection that had required source resolutions to be integer multiples.
 
 ## HEC-RAS 7.0-family compatibility evidence
 
@@ -160,6 +198,18 @@ Earlier useful failures were retained as findings rather than hidden:
 2. The next failed because `hdf5.dll` was not present beside the x86 helper.
 3. Installing Mono into the task prefix and staging the HEC-RAS 6.6 `bin32`
    HDF libraries resolved those runtime prerequisites.
+4. The first Bald Eagle evidence harness used an exact decimal assertion for
+   the coarse source's reported cell size and stopped after both native exports
+   had succeeded because the managed inventory reports 36.504512049933 rather
+   than the rounded 36.504512 fixture label. The production test now uses an
+   explicit floating tolerance; the native outputs and receipts were retained
+   and independently validated.
+5. A repeat harness directory whose fully qualified helper response path
+   exceeded the legacy .NET 260-character limit failed cleanly before export.
+   Repeating from the shorter task-local `working/mr50b` path passed. Extreme
+   Windows path length therefore remains a runtime limitation; ordinary
+   `Path`/string, UNC, Wine, and space-containing cases retain their existing
+   coverage.
 
 The production host now stages the required `bin32` libraries beside the helper
 and clones a configured Wine prefix into per-call state by default. It never

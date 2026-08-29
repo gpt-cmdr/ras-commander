@@ -1933,6 +1933,8 @@ notebooks:
   - HdfResultsMesh.get_mesh_max_ws
   - RasCmdr.compute_plan
   - RasExamples.extract_project
+  - RasMap.list_terrain_layers
+  - RasTerrain.export_rasmapper_terrain
   - RasTerrainMod.get_terrain_profile
   - RasTerrainMod.setup_gdal_bridge
   - RasTerrainModWriter.add_high_ground_modification
@@ -1943,7 +1945,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
+  code_cells: 14
   executed_cells: 12
 - id: 317_restart_file_settings
   filename: 317_restart_file_settings.ipynb
@@ -3559,13 +3561,14 @@ notebooks:
   - RasProcess.validate_geometry_association_cli
   - RasTerrain.create_terrain_from_rasters
   - RasTerrain.create_terrain_hdf
+  - RasTerrain.export_rasmapper_terrain
   - RasTerrain.vrt_to_tiff
   - ras.geom_df
   - ras.project_name
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 25
+  code_cells: 26
   executed_cells: 25
 - id: 921_usgs_study_package_from_primitives
   filename: 921_usgs_study_package_from_primitives.ipynb
@@ -3738,6 +3741,31 @@ notebooks:
   excluded: false
   code_cells: 10
   executed_cells: 10
+- id: 931_native_rasmapper_terrain_export
+  filename: 931_native_rasmapper_terrain_export.ipynb
+  title: Native RAS Mapper Terrain Export
+  series: 900
+  series_name: Data Integration
+  summary: export a registered, stitched RAS Mapper terrain to one bounded and semantically validated
+    GeoTIFF, then inspect its typed result, source inventory, receipt, grid alignment, and visual evidence
+  tags:
+  - rasmapper
+  - terrain
+  difficulty: advanced
+  est_runtime: null
+  data_project: Muncie
+  functions_used:
+  - RasExamples.extract_project
+  - RasMap.list_terrain_layers
+  - RasTerrain.export_rasmapper_terrain
+  - ras.project_folder
+  - ras.project_name
+  - ras.ras_version
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 950_ebfe_spring_creek
   filename: 950_ebfe_spring_creek.ipynb
   title: 'Using eBFE Models: Spring Creek 2D Analysis'

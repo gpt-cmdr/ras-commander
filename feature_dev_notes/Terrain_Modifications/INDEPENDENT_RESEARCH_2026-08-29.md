@@ -81,7 +81,13 @@ Small bounded probes produced one TIFF and no persistent overview or sidecar fil
 - Output resolution is source-derived: native level-zero cell size multiplied by the allowed factor `1`, `2`, `4`, or `8`.
 - Requested bounds are snapped outward to the output grid, anchored on an authoritative native-resolution source's MinX and MaxY.
 - The authoritative source is selected among sources at the finest native resolution, using terrain priority and then registered order as deterministic tie-breakers.
-- Other registered sources need valid positive resolution and compatible integer resolution ratios. Their origins need not align: the native terrain layer and its stitch data resolve seams. Rejecting non-aligned origins would incorrectly reject the Muncie stitched fixture.
+- Other registered sources need valid positive resolutions, but their level-zero
+  cell sizes do not need integer ratios and their origins do not need to align.
+  `GenerateNewRasTerrain` receives the explicit source-derived output cell size
+  with `resampleTo1RFI=true`; the XML-loaded native terrain layer reconciles all
+  sources using its priority/order, stitches, masks, and modifications. The
+  original Bald Eagle `Terrain50` fixture proves this with 36.504512-foot and
+  20-foot sources. Python must not reject that valid RAS Mapper input.
 - Nearest-neighbor is required for the base export path. Vendor overview generation may use its own averaging behavior; that does not change the exported base raster.
 
 ## Fixture selection and qualification evidence

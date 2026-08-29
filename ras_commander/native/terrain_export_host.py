@@ -267,7 +267,13 @@ def _source_cell(source: dict[str, Any]) -> float:
 def select_authoritative_source(
     sources: Sequence[dict[str, Any]],
 ) -> tuple[dict[str, Any], float]:
-    """Choose the finest source, then native priority/order, and audit ratios."""
+    """Choose the finest valid source, then native priority and registered order.
+
+    Source rasters in a registered RAS Mapper terrain need not have commensurate
+    level-zero cell sizes.  ``GenerateNewRasTerrain`` receives the explicit
+    output cell size and, with ``resampleTo1RFI=True``, owns reconciliation of
+    every XML-loaded source, stitch, mask, and modification onto that grid.
+    """
     if not sources:
         raise ValueError("The registered terrain contains no raster sources")
 
@@ -284,13 +290,6 @@ def select_authoritative_source(
         return (0 if raw >= 0 else 1, raw if raw >= 0 else 0, int(source["index"]))
 
     authoritative = min(finest, key=priority)
-    for source, cell in source_cells:
-        ratio = cell / native_cell
-        if not math.isclose(ratio, round(ratio), rel_tol=1e-8, abs_tol=1e-8):
-            raise ValueError(
-                "Registered terrain sources have incompatible level-zero cell "
-                f"sizes ({cell!r} is not an integer multiple of {native_cell!r})"
-            )
     return authoritative, native_cell
 
 

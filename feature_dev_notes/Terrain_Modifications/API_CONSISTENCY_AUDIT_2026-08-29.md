@@ -92,7 +92,12 @@ The change is additive. Existing terrain sampling, geometry compute, imports, an
 
 - The helper exposes structured `inspect` and `export` operations with a versioned request/response schema.
 - `inspect` returns the XML-loaded registered terrain extent and ordered raster-file inventory.
-- Python calculates the authoritative source grid, validates multi-source resolution compatibility, snaps bounds, and calculates exact integer dimensions.
+- Python validates that every reported level-zero source grid is usable,
+  selects the finest source (then native priority/order) as the authoritative
+  output-grid anchor, snaps bounds, and calculates exact integer dimensions.
+  It does not require integer resolution ratios: the native single-raster
+  export owns consolidation of mixed-resolution registered sources at the
+  explicit output cell size.
 - `export` reloads the registered XML layer, sets `ResampleMethod="near"`, calls the exact private method, and reports `newRFIs`, progress, messages, metadata, and files observed.
 - The helper writes only to a unique same-directory partial TIFF. Python validates driver, single Float32 band, dimensions, affine transform, CRS presence, nodata, and at least one valid pixel before atomic promotion.
 - The final machine-readable receipt is written as a unique partial and atomically promoted after the TIFF. It records requested settings, registered sources, actual output semantics, timing, and messages, but no hashes.

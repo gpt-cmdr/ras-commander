@@ -34,6 +34,7 @@ def test_terrain_tutorial_notebook_maps_current_api_surface():
         "Usgs3depAws",
         "RasMap.add_terrain_layer",
         "RasMap.list_terrain_layers",
+        "RasTerrain.export_rasmapper_terrain",
         "RasMap.associate_geometry_layers",
     ]:
         assert api_name in source
@@ -50,9 +51,30 @@ def test_terrain_tutorial_notebook_keeps_heavy_cells_opt_in():
     assert "RUN_USGS_DOWNLOAD = False" in source
     assert "RUN_TERRAIN_CREATION = False" in source
     assert "RUN_MULTI_SOURCE_TERRAIN_CREATION = False" in source
+    assert "RUN_REGISTERED_TERRAIN_EXPORT = False" in source
 
-    for cell in notebook["cells"]:
-        if cell.get("cell_type") != "code":
-            continue
-        assert cell.get("execution_count") is None
-        assert cell.get("outputs", []) == []
+    native_export_cells = [
+        cell
+        for cell in notebook["cells"]
+        if cell.get("id") == "registered-terrain-export-example"
+    ]
+    assert len(native_export_cells) == 1
+    assert native_export_cells[0].get("execution_count") is None
+    assert native_export_cells[0].get("outputs", []) == []
+
+
+def test_registered_terrain_export_is_distinct_from_terrain_creation():
+    source = _notebook_source()
+
+    assert "Export an Already Registered Terrain" in source
+    assert "different source resolutions" in source
+    assert "source ordering" in source
+    assert "stitches, masks, and optional vector modifications" in source
+    assert "REGISTERED_TERRAIN_EXPORT_RAS_VERSION = \"6.6\"" in source
+    assert "REGISTERED_TERRAIN_EXPORT_DOWNSAMPLE_FACTOR = 2" in source
+    assert "rasterize_modifications=True" in source
+    assert "overwrite=False" in source
+    assert "931_native_rasmapper_terrain_export.ipynb" in source
+    assert "316_terrain_modifications.ipynb" in source
+    assert "does not replace the loose-raster creation APIs" in source
+    assert "does not create the cross-section channel bathymetry raster" in source

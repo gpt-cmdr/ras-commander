@@ -23,7 +23,11 @@ Consequently, source priority/order, stitches, masks, and terrain-modification
 surfaces remain HEC-RAS behavior. The base raster always uses nearest-neighbor
 and the output cell size is exactly the finest registered source cell size
 times `1`, `2`, `4`, or `8`. Requested bounds snap outward to the authoritative
-source grid.
+source grid. Registered sources may have different, non-integer-related cell
+sizes: the API passes the exact selected output cell size to RAS Mapper with
+**Export to Single Raster** enabled, and RAS Mapper performs the consolidation
+and downsampling using the loaded source order, stitches, and masks. Preflight
+rejects only missing, non-finite, or non-positive level-zero source grids.
 
 The method writes to a unique same-directory partial, validates the GeoTIFF,
 then atomically promotes it. `overwrite=False` is the default. A JSON receipt
@@ -228,3 +232,4 @@ print(comparison[['station', 'existing_elevation', 'proposed_elevation', 'differ
 | `316_terrain_modifications.ipynb` | Terrain modification writer: high ground, channel, polygon |
 | `920_terrain_creation.ipynb` | Terrain HDF creation from rasters |
 | `930_terrain_modification_analysis.ipynb` | Cut/fill analysis with RasTerrainMod |
+| `931_native_rasmapper_terrain_export.ipynb` | Bounded native export, typed result, receipt, and visual grid evidence |

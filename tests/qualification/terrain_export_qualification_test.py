@@ -6,6 +6,7 @@ may be overridden with the environment variables used below.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 from pathlib import Path
@@ -31,6 +32,10 @@ MUNCIE_PROJECT = Path(os.environ.get(
     "RAS_COMMANDER_MUNCIE_PROJECT",
     r"H:\CLB-Repos\ras-commander\example_projects\Muncie\Muncie.prj",
 ))
+BALD_EAGLE_PROJECT = Path(os.environ.get(
+    "RAS_COMMANDER_BALD_EAGLE_PROJECT",
+    r"H:\CLB-Repos\ras-commander\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj",
+))
 UPGU3_WINDOW = (
     1996495.92929205,
     13858745.25719928,
@@ -42,6 +47,12 @@ MUNCIE_WINDOW = (
     1801881.85296284,
     404307.258781418,
     1802111.85296284,
+)
+BALD_EAGLE_WINDOW = (
+    2041660.41918676,
+    347030.9951331958,
+    2044060.41918676,
+    349430.9951331958,
 )
 
 
@@ -138,6 +149,36 @@ def test_supported_versions_multi_source_stitched_export(tmp_path, version):
     assert result.source_inventory["intersects_output"].all()
     assert result.source_inventory["authoritative_grid"].sum() == 1
     assert result.validation["checksum"] == 4221
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
+def test_hecras_66_mixed_noninteger_source_resolutions_export_to_one_tiff(tmp_path):
+    """RAS Mapper owns consolidation at the explicit selected output cell size."""
+    assert BALD_EAGLE_PROJECT.is_file()
+    result = RasTerrain.export_rasmapper_terrain(
+        ras_project_path=BALD_EAGLE_PROJECT,
+        output_tif=tmp_path / "bald-eagle-terrain50-mixed-2x.tif",
+        terrain_name="Terrain50",
+        extent=BALD_EAGLE_WINDOW,
+        downsample_factor=2,
+        rasterize_modifications=False,
+        hecras_version="6.6",
+        timeout_seconds=180,
+    )
+    _assert_result(result, 2)
+    assert (result.validation["columns"], result.validation["rows"]) == (61, 61)
+    assert result.native_cell_size == 20.0
+    assert result.output_cell_size == 40.0
+    assert len(result.source_inventory.index) == 2
+    assert result.source_inventory["intersects_output"].all()
+    assert result.source_inventory["authoritative_grid"].tolist() == [False, True]
+    source_cells = result.source_inventory["cell_sizes"].map(lambda cells: cells[0])
+    assert source_cells.tolist() == pytest.approx([36.504512049933, 20.0])
+
+    receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+    assert receipt["native_helper"]["resample_to_one_rfi"] is True
+    assert receipt["native_helper"]["resample_method"] == "near"
+    assert receipt["result"]["output_cell_size"] == 40.0
 
 
 @pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")

@@ -103,9 +103,20 @@ def test_multi_source_selection_uses_finest_priority_without_origin_rejection():
     assert authoritative["index"] == 2
 
 
-def test_multi_source_nonintegral_resolution_ratio_fails_closed():
-    with pytest.raises(ValueError, match="incompatible"):
-        host.select_authoritative_source([_source(0, 5.0, 0), _source(1, 7.5, 1)])
+def test_multi_source_nonintegral_resolution_ratio_is_native_resample_input():
+    sources = [_source(0, 36.504512, 0), _source(1, 20.0, 1)]
+    authoritative, native = host.select_authoritative_source(sources)
+    assert authoritative["index"] == 1
+    assert native == 20.0
+    assert native * host.validate_downsample_factor(2) == 40.0
+
+
+@pytest.mark.parametrize("cell_sizes", [[], [0.0], [-5.0], [float("nan")]])
+def test_multi_source_still_rejects_unusable_level_zero_grids(cell_sizes):
+    bad_source = _source(1, 20.0, 1)
+    bad_source["cell_sizes"] = cell_sizes
+    with pytest.raises(ValueError, match="level-zero|finite and positive"):
+        host.select_authoritative_source([_source(0, 36.504512, 0), bad_source])
 
 
 @pytest.mark.parametrize(

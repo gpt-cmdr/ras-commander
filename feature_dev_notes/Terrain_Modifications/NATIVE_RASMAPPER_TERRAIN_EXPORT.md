@@ -1,8 +1,8 @@
 # Native RAS Mapper Terrain Export
 
 **Status**: Implemented and qualified on branch
-`codex/native-rasmapper-terrain-export`; ready for upstream review without a
-pull request opened
+`codex/native-rasmapper-terrain-export`; upstream review is open in pull
+request #321
 
 **Started**: 2026-08-29
 
@@ -25,6 +25,23 @@ The completed public API is `RasTerrain.export_rasmapper_terrain(...)`. It
 returns `TerrainExportResult`, writes a machine-readable receipt, validates the
 single GeoTIFF before promotion, and never registers the derivative in the
 source project.
+
+Notebook integration is also complete. Five accepted revisions document the
+feature without committing generated outputs: `316_terrain_modifications`
+contains real HEC-RAS 6.6 mixed-source modification-off/on semantic and visual
+evidence; `612_benefit_area_analysis` points registered terrains to the native
+export while preserving loose-raster creation guidance;
+`920_terrain_creation` distinguishes creation from registered-terrain export;
+`930_terrain_modification_analysis` preserves the analytical sampler's scope;
+and the new `931_native_rasmapper_terrain_export` provides the focused bounded
+selection, result, receipt, grid, source-inventory, and review-figure workflow.
+
+A post-implementation correction removed an invalid Python preflight that
+required every source resolution to be an integer multiple of the finest
+source. RAS Mapper's single-raster operation accepts mixed source resolutions
+and reconciles them at the explicit `resampleCellSize`. HEC-RAS 6.6 now passes
+the original Bald Eagle `Terrain50` fixture with 36.504512049933-foot and
+20-foot sources, including bounded modification-off/on semantic evidence.
 
 The follow-up version audit checked official release notes, reflected every
 locally installed runtime from 6.3 through 7.0.1, and ran bounded exports on
@@ -215,10 +232,14 @@ For example, a source cell size of 3.280833 US survey feet produces:
 | 4 | 13.123332 feet |
 | 8 | 26.246664 feet |
 
-For a multi-source terrain, inventory every participating raster. If the
-source origins and resolutions are not commensurate with the chosen reference
-grid, fail or require an explicit normalization policy. Do not silently call
-an arbitrary output cell size an exact-factor downsample.
+For a multi-source terrain, inventory every participating raster and fail if a
+source lacks a finite, positive level-zero cell size. Source origins and source
+resolutions do not otherwise need to be commensurate. Select the finest source
+(then native priority and registered order) as the authoritative grid, derive
+the exact factor-based output cell size from it, and pass that cell size to
+RAS Mapper with **Export to Single Raster** enabled. RAS Mapper, not Python,
+owns consolidation and downsampling across its XML-loaded priority/order,
+stitches, masks, and modifications.
 
 ## Proposed implementation architecture
 
@@ -312,7 +333,7 @@ control cells remain stable.
 - `str`/`Path`, Windows, Wine, UNC, relative, and space-containing paths;
 - factor and resolution validation;
 - source-grid snapping, including negative coordinates;
-- multi-raster compatibility checks;
+- mixed-resolution multi-raster acceptance and unusable-grid rejection;
 - output overwrite protection;
 - request and receipt schema validation;
 - missing, malformed, stale, and incomplete receipts;

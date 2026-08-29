@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*134 notebooks indexed - 121 with runtime data, 13 without.*
+*135 notebooks indexed - 121 with runtime data, 14 without.*
 
 ## 100s - Initialization & Execution
 
@@ -196,6 +196,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [920 - RAS Terrain Creation](../notebooks/920_terrain_creation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | 2.0 h |
 | [925 - Cross-Section Interpolation Surface](../notebooks/925_xs_interpolation_surface.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/925_xs_interpolation_surface.ipynb) | 6 s |
 | [930 - Terrain Modification Analysis](../notebooks/930_terrain_modification_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/930_terrain_modification_analysis.ipynb) | 15 s |
+| [931 - Native RAS Mapper Terrain Export](../notebooks/931_native_rasmapper_terrain_export.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/931_native_rasmapper_terrain_export.ipynb) | N/A |
 
 ## 950s - eBFE Delivery
 
