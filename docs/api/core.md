@@ -86,7 +86,7 @@ not_ready = assets.loc[
 ]
 ```
 
-::: ras_commander.inspect_project_assets
+::: ras_commander.RasProject.inspect_project_assets
     options:
       show_root_heading: true
       heading_level: 3
@@ -118,12 +118,12 @@ print(staged.destination_project_file)
 print(staged.execution_readiness)
 ```
 
-::: ras_commander.stage_project
+::: ras_commander.RasProject.stage_project
     options:
       show_root_heading: true
       heading_level: 3
 
-::: ras_commander.StageProjectResult
+::: ras_commander.RasProject.StageProjectResult
     options:
       show_root_heading: true
       heading_level: 3

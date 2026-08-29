@@ -8,16 +8,19 @@ Base revision: `d7784fcc7714ca75632eef5338612fece28609aa`
 
 The focused native helper and Python supervisor passed unit/regression tests,
 bounded native HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 exports, audit-only checks of the
-installed 6.7 Beta 4/5 and 7.0.0 runtimes, and a Wine export using the HEC-RAS
-6.6 mapper runtime. All production-path outputs
-were one single-band Float32 GeoTIFF with CRS and nodata metadata, exact source-
-anchored grid dimensions, at least one valid value, no sidecars, and a JSON
-receipt. No project registration or source project file was changed.
+installed 6.7 Beta 4/5 and 7.0.0 runtimes, and HEC-RAS 6.6 Wine exports on both
+the alternate CLB09 worker and the dedicated CLB07 CT212 worker. An exact copy
+of the notebook-316 modified project also produced identical native-Windows
+and CLB07 Wine arrays, validity masks, metadata, source inventory, and receipt
+semantics with a maximum valid-cell difference of 0.0 feet. All production-path
+outputs were one single-band Float32 GeoTIFF with CRS and nodata metadata, exact
+source-anchored grid dimensions, at least one valid value, no sidecars, and a
+JSON receipt. No project registration or source project file was changed.
 
 ## Automated tests
 
-- `tests/terrain_export_host_test.py`: 80 passed after the mixed-resolution
-  correction. Coverage includes exact
+- `tests/terrain_export_host_test.py`: 82 passed after the mixed-resolution and
+  cross-platform runtime-label corrections. Coverage includes exact
   terrain selection, Path/string/Windows/UNC/space-containing and Wine path
   conversion, factors and cell-size math, negative-coordinate grid snapping,
   mixed non-integer source-resolution acceptance, unusable-grid rejection,
@@ -32,11 +35,11 @@ receipt. No project registration or source project file was changed.
   rejection of unqualified or new version terms.
 - Opt-in real-runtime suite
   `tests/qualification/terrain_export_qualification_test.py`: 9 passed and the
-  Wine-only case skipped on Windows after adding the original mixed-resolution
-  Bald Eagle `Terrain50` case. The other eight cases cover modification-aware
-  and stitched exports on 6.4.1, 6.5, 6.6, and 7.0.1. The equivalent production Wine
-  invocation was run with the 6.6 runtime on the controlled Linux worker
-  described below.
+  three Wine-only cases skipped on Windows. The Windows cases cover the original
+  mixed-resolution Bald Eagle `Terrain50` and modification-aware and stitched
+  exports on 6.4.1, 6.5, 6.6, and 7.0.1. The permanent Linux cases cover Muncie,
+  the mixed-resolution terrain, and optional exact Windows-reference off/on
+  parity when all reference paths are configured.
 
 The full repository suite completed with `2,393 passed`, `62 skipped`, and
 eight failures in 4 minutes 19 seconds. The failures did not touch feature
@@ -217,6 +220,50 @@ issues a global `wineserver` termination; timeouts target only the owned POSIX
 process group. An already task-owned prefix may be reused only through the
 explicit environment declaration documented in the public API guide.
 
+### Independent CLB07 CT212 run
+
+The dedicated CLB07 worker was subsequently available for an independent run
+using CT212, Ubuntu 24.04, Wine 11.0, and HEC-RAS 6.6. The strict runtime
+preflight passed before any export. A bounded two-source Muncie 2x export
+produced the expected 16 x 23 grid at 10-foot cells in 58.18 seconds. The
+original mixed-resolution Bald Eagle `Terrain50` consolidated its registered
+36.504512049933-foot and 20-foot sources into one 61 x 61 GeoTIFF at the
+explicit 40-foot cell size in 58.09 seconds.
+
+An isolated CLB07 project copy with a task-written high-ground modification
+also passed modification-disabled and modification-enabled exports in 58.30
+and 58.29 seconds. Of 3,721 valid cells, 311 rose by 0.28125 to 18.15625 feet;
+all 1,769 geometric control cells were unchanged. This first independent run
+used a different crest profile than notebook 316, so its intrinsic semantic
+checks passed but it was not used as a Windows parity gate.
+
+A second CLB07 run then staged the exact existing notebook-316 modified Bald
+Eagle project and HDF used for the fresh native-Windows reference. The Windows
+off/on exports took 1.748 and 1.994 seconds; the Wine pair took 117.483 seconds.
+For both modification conditions, the Float32 arrays and validity masks were
+exactly equal between Windows and Wine, with maximum valid-cell absolute
+difference 0.0 feet. Transform, bounds, CRS, nodata, shape, semantic validation
+fields, source order and inventory after path-prefix normalization, and receipt
+semantics also matched. The affected-cell and unaffected-control masks were
+identical: 264 cells rose by 0.15625 to 9.625 feet while all 1,769 control cells
+remained exactly unchanged. This closes the exact-input Windows/Wine parity gap
+for the qualified HEC-RAS 6.6 bounded mixed-resolution workflow.
+
+Both CLB07 runs supervised only task-owned processes. After validation, no
+owned Wine/helper/`gdalinfo` process, stage directory, or partial output
+remained. CT212 was gracefully stopped, verified stopped, and retained
+`onboot=0`; CT100 and CT213 remained healthy. Task-owned ephemeral runtime
+copies were removed after evidence capture. Logical scratch usage was restored,
+but no manual host-wide trim or discard was run; physical thin-pool reclamation
+is deferred to the scheduled guest trim, and no further infrastructure action
+was taken.
+
+The first CLB07 host-test pass also exposed one diagnostic-only portability
+defect: a Windows-style `ras_exe_path` was rejected correctly on Linux but its
+runtime label was empty. The branch now parses Windows and UNC executable paths
+with Windows path semantics and includes a focused cross-platform regression;
+the rejection message reports the expected runtime release.
+
 ## Artifact and receipt checks
 
 - Native `resampleTo1RFI=true` produced exactly one TIFF in all bounded runs.
@@ -230,9 +277,6 @@ explicit environment declaration documented in the public API guide.
 
 ## Qualification gaps and limitations
 
-- CLB07 availability remains an infrastructure gap. The alternate-worker Wine
-  result qualifies the exact HEC-RAS 6.6 mapper runtime under Wine, but does not
-  prove the unavailable CLB07 image configuration.
 - Exactly HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 are accepted. All four passed the
   native Windows modification-aware and stitched matrix. Wine qualification
   covers 6.6; matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap.

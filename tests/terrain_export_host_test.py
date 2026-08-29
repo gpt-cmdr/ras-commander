@@ -9,7 +9,7 @@ import platform
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pandas as pd
 import pytest
@@ -243,6 +243,26 @@ def test_rasprj_executable_folder_conflict_is_rejected():
     project.initialized = True
     project.ras_version = "6.6"
     project.ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe"
+
+    with pytest.raises(ValueError, match="ras_exe_path runtime '6\\.5'"):
+        host.resolve_supported_hecras_version(None, project)
+
+
+@pytest.mark.parametrize(
+    "ras_exe_path",
+    [
+        r"C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe",
+        r"\\server\HEC RAS Installations\6.5\Ras.exe",
+    ],
+)
+def test_windows_executable_conflict_reports_runtime_on_posix(
+    monkeypatch, ras_exe_path
+):
+    monkeypatch.setattr(host, "Path", PurePosixPath)
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "6.6"
+    project.ras_exe_path = ras_exe_path
 
     with pytest.raises(ValueError, match="ras_exe_path runtime '6\\.5'"):
         host.resolve_supported_hecras_version(None, project)

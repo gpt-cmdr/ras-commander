@@ -1,7 +1,11 @@
 """Opt-in real-runtime qualification for native RAS Mapper terrain export.
 
 Run with ``RAS_COMMANDER_RUN_TERRAIN_EXPORT_QUALIFICATION=1``. Fixture paths
-may be overridden with the environment variables used below.
+may be overridden with the environment variables used below. Exact-input
+Windows/Wine pixel parity is additionally enabled by setting all three of
+``RAS_COMMANDER_TERRAIN_PARITY_PROJECT``,
+``RAS_COMMANDER_TERRAIN_PARITY_WINDOWS_OFF``, and
+``RAS_COMMANDER_TERRAIN_PARITY_WINDOWS_ON``.
 """
 
 from __future__ import annotations
@@ -65,6 +69,46 @@ def _assert_result(result, factor):
     assert result.validation["crs_present"] is True
     assert result.validation["sidecars"] == []
     assert result.receipt_path.is_file()
+
+
+def _optional_exact_parity_paths() -> tuple[Path, Path, Path]:
+    variable_names = (
+        "RAS_COMMANDER_TERRAIN_PARITY_PROJECT",
+        "RAS_COMMANDER_TERRAIN_PARITY_WINDOWS_OFF",
+        "RAS_COMMANDER_TERRAIN_PARITY_WINDOWS_ON",
+    )
+    configured = [os.environ.get(name) for name in variable_names]
+    if not any(configured):
+        pytest.skip("exact Windows-reference terrain parity paths are not configured")
+    missing_variables = [
+        name for name, value in zip(variable_names, configured) if not value
+    ]
+    if missing_variables:
+        pytest.fail(
+            "exact terrain parity requires all reference paths; missing "
+            + ", ".join(missing_variables)
+        )
+    paths = tuple(Path(value) for value in configured)
+    missing_paths = [str(path) for path in paths if not path.is_file()]
+    if missing_paths:
+        pytest.fail(
+            "exact terrain parity paths do not exist: " + ", ".join(missing_paths)
+        )
+    return paths
+
+
+def _read_raster_for_parity(path: Path) -> tuple[np.ma.MaskedArray, dict]:
+    with rasterio.open(path) as dataset:
+        values = dataset.read(1, masked=True)
+        metadata = {
+            "shape": (dataset.height, dataset.width),
+            "transform": dataset.transform,
+            "bounds": dataset.bounds,
+            "crs": dataset.crs,
+            "nodata": dataset.nodata,
+            "dtype": dataset.dtypes,
+        }
+    return values, metadata
 
 
 @pytest.mark.parametrize(
@@ -184,7 +228,8 @@ def test_hecras_66_mixed_noninteger_source_resolutions_export_to_one_tiff(tmp_pa
 @pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")
 def test_hecras_66_wine_matches_native_muncie_semantics(tmp_path):
     """The host must be configured with a task-copyable HEC-RAS 6.6 prefix."""
-    assert MUNCIE_PROJECT.is_file()
+    if not MUNCIE_PROJECT.is_file():
+        pytest.skip("Wine Muncie fixture is not configured")
     result = RasTerrain.export_rasmapper_terrain(
         MUNCIE_PROJECT,
         tmp_path / "muncie-wine-66.tif",
@@ -199,3 +244,91 @@ def test_hecras_66_wine_matches_native_muncie_semantics(tmp_path):
     assert (result.validation["columns"], result.validation["rows"]) == (16, 23)
     assert result.validation["checksum"] == 4221
     assert len(result.source_inventory.index) == 2
+
+
+@pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")
+def test_hecras_66_wine_mixed_noninteger_sources_export_to_one_tiff(tmp_path):
+    """RAS Mapper consolidates mixed source grids under the configured Wine runtime."""
+    if not BALD_EAGLE_PROJECT.is_file():
+        pytest.skip("Wine Bald Eagle fixture is not configured")
+    result = RasTerrain.export_rasmapper_terrain(
+        BALD_EAGLE_PROJECT,
+        tmp_path / "bald-eagle-terrain50-mixed-wine-2x.tif",
+        terrain_name="Terrain50",
+        extent=BALD_EAGLE_WINDOW,
+        downsample_factor=2,
+        rasterize_modifications=False,
+        hecras_version="6.6",
+        timeout_seconds=300,
+    )
+    _assert_result(result, 2)
+    assert (result.validation["columns"], result.validation["rows"]) == (61, 61)
+    assert result.native_cell_size == 20.0
+    assert result.output_cell_size == 40.0
+    assert len(result.source_inventory.index) == 2
+    assert result.source_inventory["intersects_output"].all()
+    assert result.source_inventory["authoritative_grid"].tolist() == [False, True]
+    source_cells = result.source_inventory["cell_sizes"].map(lambda cells: cells[0])
+    assert source_cells.tolist() == pytest.approx([36.504512049933, 20.0])
+
+    receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+    assert receipt["native_helper"]["resample_to_one_rfi"] is True
+    assert receipt["native_helper"]["resample_method"] == "near"
+    assert receipt["native_helper"]["rasterize_modifications"] is False
+    assert len(receipt["native_helper"]["new_rfis"]) == 1
+
+
+@pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")
+def test_hecras_66_wine_exact_windows_reference_off_on_pixel_parity(tmp_path):
+    """Compare Wine output to native Windows for one exact modified project copy."""
+    project, windows_off, windows_on = _optional_exact_parity_paths()
+    results = {}
+    for label, enabled in (("off", False), ("on", True)):
+        result = RasTerrain.export_rasmapper_terrain(
+            project,
+            tmp_path / f"terrain50-exact-{label}-wine-2x.tif",
+            terrain_name="Terrain50",
+            extent=BALD_EAGLE_WINDOW,
+            downsample_factor=2,
+            rasterize_modifications=enabled,
+            hecras_version="6.6",
+            timeout_seconds=300,
+        )
+        _assert_result(result, 2)
+        assert (result.validation["columns"], result.validation["rows"]) == (61, 61)
+        assert result.source_inventory["authoritative_grid"].tolist() == [False, True]
+        receipt = json.loads(result.receipt_path.read_text(encoding="utf-8"))
+        assert receipt["native_helper"]["resample_to_one_rfi"] is True
+        assert receipt["native_helper"]["resample_method"] == "near"
+        assert receipt["native_helper"]["rasterize_modifications"] is enabled
+        assert len(receipt["native_helper"]["new_rfis"]) == 1
+        results[label] = result
+
+    wine_off, wine_off_metadata = _read_raster_for_parity(results["off"].output_path)
+    wine_on, wine_on_metadata = _read_raster_for_parity(results["on"].output_path)
+    reference_off, reference_off_metadata = _read_raster_for_parity(windows_off)
+    reference_on, reference_on_metadata = _read_raster_for_parity(windows_on)
+
+    assert wine_off_metadata == reference_off_metadata
+    assert wine_on_metadata == reference_on_metadata
+    np.testing.assert_array_equal(
+        np.ma.getmaskarray(wine_off), np.ma.getmaskarray(reference_off)
+    )
+    np.testing.assert_array_equal(
+        np.ma.getmaskarray(wine_on), np.ma.getmaskarray(reference_on)
+    )
+    np.testing.assert_array_equal(wine_off.data, reference_off.data)
+    np.testing.assert_array_equal(wine_on.data, reference_on.data)
+
+    wine_valid = ~np.ma.getmaskarray(wine_off) & ~np.ma.getmaskarray(wine_on)
+    reference_valid = ~np.ma.getmaskarray(reference_off) & ~np.ma.getmaskarray(
+        reference_on
+    )
+    wine_delta = np.where(wine_valid, wine_on.data - wine_off.data, 0.0)
+    reference_delta = np.where(
+        reference_valid, reference_on.data - reference_off.data, 0.0
+    )
+    np.testing.assert_array_equal(wine_valid, reference_valid)
+    np.testing.assert_array_equal(wine_delta, reference_delta)
+    np.testing.assert_array_equal(wine_delta > 0.01, reference_delta > 0.01)
+    assert np.any(wine_delta > 0.01)

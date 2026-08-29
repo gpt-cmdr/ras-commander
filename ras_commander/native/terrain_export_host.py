@@ -16,7 +16,7 @@ import time
 import uuid
 from dataclasses import asdict
 from importlib import resources
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Optional, Sequence, Union
 
 import pandas as pd
@@ -38,6 +38,14 @@ SUPPORTED_TERRAIN_EXPORT_VERSIONS = {
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
 _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _executable_runtime_label(executable: Any) -> str:
+    """Return an executable's parent folder using its own path dialect."""
+    text = str(executable).strip()
+    if _WINDOWS_PATH.match(text):
+        return PureWindowsPath(text).parent.name
+    return Path(text).parent.name
 
 
 def _hecras_version_key(
@@ -149,7 +157,7 @@ def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
     if executable_key != project_key:
         raise ValueError(
             f"ras_object.ras_version {project_version!r} conflicts with "
-            f"ras_object.ras_exe_path runtime {Path(str(executable)).parent.name!r}; "
+            f"ras_object.ras_exe_path runtime {_executable_runtime_label(executable)!r}; "
             "native terrain export requires one exact HEC-RAS release"
         )
     return executable_key

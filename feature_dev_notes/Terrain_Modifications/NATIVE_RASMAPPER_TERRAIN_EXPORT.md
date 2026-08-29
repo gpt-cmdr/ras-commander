@@ -43,6 +43,24 @@ and reconciles them at the explicit `resampleCellSize`. HEC-RAS 6.6 now passes
 the original Bald Eagle `Terrain50` fixture with 36.504512049933-foot and
 20-foot sources, including bounded modification-off/on semantic evidence.
 
+Independent Linux qualification is complete on CLB07 CT212 with Ubuntu 24.04,
+Wine 11.0, and HEC-RAS 6.6. The bounded two-source Muncie export and original
+mixed-resolution `Terrain50` export passed, as did native modification-off/on
+semantics. A follow-up run staged the exact notebook-316 modified project and
+HDF used by native Windows. Its Windows and Wine Float32 arrays, validity and
+affected/control masks, transform, bounds, CRS, nodata, dimensions, normalized
+source inventory, validation fields, and receipt semantics matched exactly for
+both modification conditions; maximum valid-cell difference was 0.0 feet.
+Owned-process and partial-output cleanup passed. CT212 was stopped with
+`onboot=0`; logical scratch usage was restored, while physical thin-pool
+reclamation is deferred to scheduled guest trim because no manual host-wide
+trim or discard was run.
+
+The independent run also found a diagnostic-only Linux formatting defect for
+conflicting Windows-style `RasPrj.ras_exe_path` values. Runtime rejection was
+already correct; path-dialect-aware label extraction now reports the expected
+release for Windows-drive and UNC paths on POSIX.
+
 The follow-up version audit checked official release notes, reflected every
 locally installed runtime from 6.3 through 7.0.1, and ran bounded exports on
 6.4.1, 6.5, 6.6, 6.7 Beta 4/5, 7.0.0, and 7.0.1. The public API accepts exactly
