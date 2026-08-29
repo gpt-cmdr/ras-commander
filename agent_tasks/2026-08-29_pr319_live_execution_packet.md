@@ -2,9 +2,10 @@
 
 Date: 2026-08-29
 
-Status: approved scope and clean latest-main deterministic gates complete; live
-dispatch held until the exact manifest is pinned and the strict under-lock host
-inventory is complete and empty
+Status: approved scope and deterministic design gates complete; the unexecuted
+`5feae3d8` preflight manifest is superseded by later safety fixes. Live dispatch
+is held until those fixes are committed, a new exact manifest pins the resulting
+clean commit, and the strict under-lock host inventory is complete and empty.
 
 Branch: `codex/structured-execution-evidence-integration`
 

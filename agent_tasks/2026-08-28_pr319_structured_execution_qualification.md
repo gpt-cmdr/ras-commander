@@ -589,3 +589,28 @@ complete.
   shard passed 59 tests, the full affected no-engine gate passed 521 tests in
   143.78 seconds, and Ruff/compileall/diff checks passed. No HEC-RAS, COM, or
   process-signalling action occurred.
+- 2026-08-29: final adversarial review held live dispatch and found four P1
+  gaps outside the approved direct Windows L0 happy path: an unresolved
+  unsteady computation identity could relax to shared `cwd + bNN`; WSL lacked
+  exact Linux-side timeout quiescence; batch promotion did not prove the
+  destination was globally idle; and mixed-family sidecars could be attributed
+  to the selected result. Follow-up review also exposed promotion recovery
+  paths that could discard worker output or temporarily pair an old primary
+  result with a new sidecar.
+- 2026-08-29: those findings are closed deterministically. Exact cancellation
+  now becomes incomplete and sends no signal without project-specific `.cNN`
+  identity. Mixed-family filesystem sidecars are diagnostic-only and all known
+  candidates are inventoried. WSL requires an atomic token-bound per-plan
+  lease, PID/start-tick/PGID evidence, and exact recovery before finalization.
+  Batch promotion holds a cooperative destination lock, requires a complete
+  empty global RAS inventory, retains failed worker/test stages, and publishes
+  each plan through a hash-verified transaction with grouped-primary rollback.
+  Unproved rollback exposes no recognized result/sidecar set and retains its
+  backups for recovery.
+- 2026-08-29: the settled post-remediation gate passed 626 tests in 148.98
+  seconds; Ruff, compileall, and `git diff --check` passed. Final API review
+  approved the changes with no blocker/high finding. Final adversarial review
+  reported no remaining P0/P1 design finding after 226 focused process,
+  evidence, WSL, and promotion tests plus 121 live harness tests. No HEC-RAS,
+  COM, or process-signalling action occurred. The earlier unexecuted manifest
+  pinned to `5feae3d8` is superseded and must not be dispatched.
