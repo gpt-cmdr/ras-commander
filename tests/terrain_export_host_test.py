@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import platform
@@ -121,20 +122,71 @@ def test_windows_path_str_path_unc_and_spaces_remain_lossless(monkeypatch, value
     assert str(host._normalize_host_path(value)) == str(Path(os.fspath(value)))
 
 
-@pytest.mark.parametrize("version", ["6.6", "6.6.1", "6.60", "66", "7.0", "7.0.1", "70"])
-def test_supported_terrain_export_version_families(version):
-    assert host.resolve_supported_hecras_version(version, None) == version
+@pytest.mark.parametrize(
+    ("version", "canonical"),
+    [
+        ("6.4", "6.4.1"),
+        ("6.4.1", "6.4.1"),
+        ("6.41", "6.4.1"),
+        ("64", "6.4.1"),
+        ("641", "6.4.1"),
+        (r"C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe", "6.4.1"),
+        ("6.5", "6.5"),
+        ("6.5.0", "6.5"),
+        ("6.50", "6.5"),
+        ("65", "6.5"),
+        ("6.6", "6.6"),
+        ("6.6.0", "6.6"),
+        ("6.60", "6.6"),
+        ("66", "6.6"),
+    ],
+)
+def test_exact_qualified_terrain_export_versions(version, canonical):
+    assert host.resolve_supported_hecras_version(version, None) == canonical
 
 
-@pytest.mark.parametrize("version", ["6.7", "7.0 Beta", "7.1"])
+@pytest.mark.parametrize(
+    "version", ["6.4.1.1", "6.6.0.1", "6.6.1", "7.0 Beta", "7.1"]
+)
 def test_unqualified_or_new_version_terms_are_rejected(version):
     with pytest.raises(ValueError):
         host.resolve_supported_hecras_version(version, None)
 
 
+@pytest.mark.parametrize("version", ["6.7", "6.70", "6.7 Beta 4", "6.7 Beta 5"])
+def test_hecras_67_betas_are_checked_but_not_accepted(version):
+    with pytest.raises(ValueError, match="released only as beta builds"):
+        host.resolve_supported_hecras_version(version, None)
+
+
+def test_hecras_640_is_rejected_with_official_elevation_defect_reason():
+    version = r"C:\Program Files (x86)\HEC\HEC-RAS\6.4\Ras.exe"
+    with pytest.raises(ValueError, match=r"could add 1\.0 to elevations"):
+        host.resolve_supported_hecras_version(version, None)
+
+
+def test_hecras_700_is_rejected_with_official_modification_defect_reason():
+    with pytest.raises(ValueError, match="omit the minimum-Y portion"):
+        host.resolve_supported_hecras_version("7.0", None)
+
+
+def test_hecras_701_fix_is_documented_but_not_silently_accepted():
+    with pytest.raises(
+        ValueError, match="not yet been locally reflected and qualified"
+    ):
+        host.resolve_supported_hecras_version("7.0.1", None)
+
+
 @pytest.mark.parametrize(
     "version",
-    ["6.3", "6.3.1", "6.30", "6.31", r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"],
+    [
+        "6.3",
+        "6.3.0.2",
+        "6.3.1",
+        "6.30",
+        "6.31",
+        r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe",
+    ],
 )
 def test_hecras_63_is_rejected_with_native_contract_reason(version):
     with pytest.raises(ValueError, match="6\\.3 lacks the bounded"):
@@ -147,7 +199,7 @@ def test_public_api_rejects_unsupported_rasprj_before_filesystem_work(tmp_path):
     project.ras_version = "6.3"
     output = tmp_path / "must-not-be-created" / "terrain.tif"
 
-    with pytest.raises(ValueError, match="Supported versions are 6\\.6\\.x and 7\\.0\\.x"):
+    with pytest.raises(ValueError, match="exactly 6\\.4\\.1, 6\\.5, and 6\\.6"):
         RasTerrain.export_rasmapper_terrain(
             tmp_path / "missing.prj",
             output,
@@ -157,13 +209,47 @@ def test_public_api_rejects_unsupported_rasprj_before_filesystem_work(tmp_path):
     assert not output.parent.exists()
 
 
-def test_explicit_version_must_match_rasprj_version_family():
+def test_explicit_version_must_match_exact_rasprj_version():
     project = RasPrj()
     project.initialized = True
     project.ras_version = "6.6"
 
     with pytest.raises(ValueError, match="conflicts with ras_object\\.ras_version"):
-        host.resolve_supported_hecras_version("7.0", project)
+        host.resolve_supported_hecras_version("6.5", project)
+
+
+def test_rasprj_executable_folder_conflict_is_rejected():
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "6.6"
+    project.ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\6.5\Ras.exe"
+
+    with pytest.raises(ValueError, match="ras_exe_path runtime '6\\.5'"):
+        host.resolve_supported_hecras_version(None, project)
+
+
+def test_rasprj_64_alias_is_verified_as_641_from_executable_folder():
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "6.4"
+    project.ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\6.4.1\Ras.exe"
+
+    assert host.resolve_supported_hecras_version(None, project) == "6.4.1"
+
+
+def test_rasprj_700_is_rejected_before_filesystem_work(tmp_path):
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "7.0"
+    project.ras_exe_path = r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\Ras.exe"
+    output = tmp_path / "must-not-be-created" / "terrain.tif"
+
+    with pytest.raises(ValueError, match="omit the minimum-Y portion"):
+        RasTerrain.export_rasmapper_terrain(
+            tmp_path / "missing.prj", output, ras_object=project
+        )
+
+    assert not output.parent.exists()
 
 
 def test_uninitialized_rasprj_is_rejected_even_with_explicit_version():
@@ -174,6 +260,23 @@ def test_uninitialized_rasprj_is_rejected_even_with_explicit_version():
 def test_non_rasprj_project_context_is_rejected():
     with pytest.raises(TypeError, match="RasPrj instance"):
         host.resolve_supported_hecras_version("6.6", object())
+
+
+def test_resolved_installation_must_match_qualified_release(monkeypatch, tmp_path):
+    ras_prj_module = importlib.import_module("ras_commander.RasPrj")
+    installation = tmp_path / "7.0"
+    installation.mkdir()
+    (installation / "Ras.exe").touch()
+    (installation / "RasMapperLib.dll").touch()
+    monkeypatch.setattr(host.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        ras_prj_module,
+        "get_ras_exe",
+        lambda _version: str(installation / "Ras.exe"),
+    )
+
+    with pytest.raises(ValueError, match="installation '7\\.0' conflicts"):
+        host._resolve_hecras_source("6.6", None)
 
 
 def test_wine_path_conversion_uses_configured_winepath(monkeypatch):

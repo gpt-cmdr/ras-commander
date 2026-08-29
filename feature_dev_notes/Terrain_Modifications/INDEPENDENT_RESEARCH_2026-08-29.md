@@ -6,7 +6,7 @@ Base revision: `d7784fcc7714ca75632eef5338612fece28609aa`
 
 ## Scope and method
 
-This investigation independently checked the proposed native terrain-export design against the current `ras-commander` API, examples, notebooks, tests, terrain-modification notes, managed/native helpers, installed HEC-RAS assemblies, and the fixture database. HEC-RAS 6.6 and the locally available 7.0-family assemblies were reflected and decompiled. Small bounded probes were then run against registered terrains; no project terrain registrations were changed.
+This investigation independently checked the proposed native terrain-export design against the current `ras-commander` API, examples, notebooks, tests, terrain-modification notes, managed/native helpers, installed HEC-RAS assemblies, and the fixture database. The initial HEC-RAS 6.6 and 7.0.0 inspection was subsequently expanded to 6.3, 6.3.1, 6.4.1, 6.5, 6.7 Beta 4, and 6.7 Beta 5; see `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md` for the controlling support decision. Small bounded probes were run against registered terrains; no project terrain registrations were changed.
 
 ## Existing upstream behavior and prior art
 
@@ -18,7 +18,7 @@ This investigation independently checked the proposed native terrain-export desi
 
 ## Verified HEC-RAS API surface
 
-The proposed operation exists in both the installed HEC-RAS 6.6 and 7.0-family `RasMapperLib` assemblies, but it is **private**, not public:
+The proposed operation exists in the installed HEC-RAS 6.4.1, 6.5, 6.6, 6.7 Beta 4/5, and 7.0.0 `RasMapperLib` assemblies, but it is **private**, not public. It is absent from 6.3 and 6.3.1:
 
 ```csharp
 private void GenerateNewRasTerrain(
@@ -33,7 +33,7 @@ private void GenerateNewRasTerrain(
     ref TiffAssist.TiffMetadata<float> md)
 ```
 
-The signature is identical in the checked 6.6 and 7.0-family assemblies. The implementation therefore must resolve the non-public instance method by exact parameter contract and fail closed if it changes.
+The signature is identical in the checked 6.4.1 through 7.0.0 assemblies. The implementation therefore must resolve the non-public instance method by exact parameter contract and fail closed if it changes.
 
 Other verified details:
 
@@ -47,7 +47,7 @@ Other verified details:
 - `newRFIs` must be a non-null `List<string>`; the method appends the produced TIFF.
 - The by-reference `TiffMetadata<float>` argument may begin as null. With reflection, the updated value is returned in the final element of the invocation argument array.
 - `ExportRasterOptions` is nested under `RasMapperLib.ExportRaster`; it is not needed by this specific private method.
-- HEC-RAS 7.0-family code adds ground-line force-render handling but preserves the checked invocation contract.
+- HEC-RAS 7.0.0 code adds ground-line force-render handling but preserves the checked invocation contract.
 
 ## Loading the registered terrain without losing semantics
 
@@ -97,7 +97,7 @@ Pre-implementation probes established the following evidence:
 - Native HEC-RAS 6.6, bounded UPGU3 2x: 73 of 1,632 valid cells changed across a known channel; all observed changes lowered elevation, with a minimum delta of -27.0625 feet. The remaining 1,559 valid cells were unaffected controls.
 - Native HEC-RAS 6.6, bounded UPGU3 4x: completed successfully. The scratch probe also reproduced the vendor extra-row/column floating-point issue, justifying exact grid validation in the host.
 - Native HEC-RAS 6.6, bounded Muncie 2x: completed with both sources loaded and stitch information preserved.
-- Native HEC-RAS 7.0-family, bounded Muncie 2x: completed and was pixel-identical to the 6.6 result for the checked window.
+- Native HEC-RAS 7.0.0, bounded Muncie 2x: completed and was pixel-identical to the 6.6 result for the checked window. This remains audit-only evidence because HEC documents a separate terrain-modification export defect in 7.0.0.
 - Wine 10.0 with Wine Mono 10.0, using the HEC-RAS 6.6 mapper/native runtime staged into a task-local prefix: bounded Muncie 2x completed in 0.68 seconds, reached approximately 150 MiB maximum resident memory, and was pixel-identical to native Windows 6.6. The dedicated CLB07 worker was unreachable, so this is exact 6.6 runtime parity evidence on a controlled alternate worker, not qualification of that unavailable worker image.
 
 ## Implementation consequences

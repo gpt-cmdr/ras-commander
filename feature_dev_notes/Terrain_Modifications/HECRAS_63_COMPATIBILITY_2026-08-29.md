@@ -5,10 +5,11 @@ Date: 2026-08-29
 ## Decision
 
 `RasTerrain.export_rasmapper_terrain()` does not support HEC-RAS 6.3 or 6.3.1.
-The supported runtime families remain HEC-RAS 6.6.x and checked 7.0.x. The
-public API now checks an explicitly supplied `RasPrj.ras_version` before any
-filesystem or native work and raises `ValueError` for 6.3, for other
-unsupported versions, or for a conflicting explicit runtime family.
+The subsequent full version audit qualifies exactly HEC-RAS 6.4.1, 6.5, and
+6.6. The public API checks an explicitly supplied `RasPrj.ras_version` and its
+identifiable executable release before filesystem or native work, then raises
+`ValueError` for 6.3, every other unsupported version, or a conflicting exact
+runtime. See `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md`.
 
 This is an intentional fail-closed compatibility boundary, not an assumption
 that 6.3 terrain modifications are unusable in every context.
@@ -16,7 +17,7 @@ that 6.3 terrain modifications are unusable in every context.
 ## Independent 6.3 inspection
 
 The installed 6.3 and 6.3.1 `RasMapperLib.dll` assemblies were reflected and
-decompiled independently after the 6.6/7.0 implementation was complete. Both
+decompiled independently after the initial implementation was complete. Both
 identify themselves as `RasMapperLib, Version=2.0.0.0`, and both expose the
 same checked terrain-export surface described below.
 
@@ -32,7 +33,7 @@ The checked 6.3 `TerrainLayer` exposes:
 - `ExportResampleToSingleFile(string, double, TiffMetadata<float>, ProgressReporter)`;
 - XML loading and `RASMapperCom.GetTerrainFromXML`.
 
-It does not expose the nine-parameter private method used by 6.6/7.0:
+It does not expose the nine-parameter private method used by the supported path:
 
 ```text
 GenerateNewRasTerrain(
@@ -63,12 +64,13 @@ requires.
 
 ## Compatibility contract
 
-| HEC-RAS family | API status | Qualification status |
-|----------------|------------|----------------------|
-| 6.6.x | Accepted | Native Windows and Wine qualified |
-| 7.0.x | Accepted | Checked native API and bounded stitched output |
-| 6.3.x | Rejected | Inspected; required bounded export contract absent |
-| all others | Rejected | Not qualified; no private-API guessing |
+| HEC-RAS release | API status | Qualification status |
+|-----------------|------------|----------------------|
+| 6.4.1 | Accepted | Native Windows qualified |
+| 6.5 | Accepted | Native Windows qualified |
+| 6.6 | Accepted | Native Windows and Wine qualified |
+| 6.3 / 6.3.1 | Rejected | Inspected; required bounded export contract absent |
+| all others | Rejected | Unqualified, prerelease, or affected by an official export defect |
 
 Workflows that initialize a project with HEC-RAS 6.3 receive an actionable
 error before export staging begins. They must run this export with a project

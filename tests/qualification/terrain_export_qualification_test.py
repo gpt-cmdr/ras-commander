@@ -56,14 +56,20 @@ def _assert_result(result, factor):
     assert result.receipt_path.is_file()
 
 
+@pytest.mark.parametrize(
+    ("version", "expected_min_delta"),
+    [("6.4.1", -26.90625), ("6.5", -26.90625), ("6.6", -27.0625)],
+)
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
-def test_hecras_66_upgu3_modification_aware_2x_and_4x(tmp_path):
+def test_supported_versions_upgu3_modification_aware_2x_and_4x(
+    tmp_path, version, expected_min_delta
+):
     assert UPGU3_PROJECT.is_file()
     common = dict(
         ras_project_path=UPGU3_PROJECT,
         terrain_name="Terrain",
         extent=UPGU3_WINDOW,
-        hecras_version="6.6",
+        hecras_version=version,
         timeout_seconds=300,
     )
     off = RasTerrain.export_rasmapper_terrain(
@@ -100,12 +106,13 @@ def test_hecras_66_upgu3_modification_aware_2x_and_4x(tmp_path):
     assert changed.sum() == 73
     assert unchanged.sum() == 1511
     assert np.all(deltas < 0)
-    assert deltas.min() == pytest.approx(-27.0625)
+    assert deltas.min() == pytest.approx(expected_min_delta)
     assert np.allclose(on_values[:8, :8], off_values[:8, :8])
 
 
+@pytest.mark.parametrize("version", ["6.4.1", "6.5", "6.6"])
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
-def test_hecras_66_multi_source_stitched_and_70_api_compatibility(tmp_path):
+def test_supported_versions_multi_source_stitched_export(tmp_path, version):
     assert MUNCIE_PROJECT.is_file()
     common = dict(
         ras_project_path=MUNCIE_PROJECT,
@@ -115,23 +122,17 @@ def test_hecras_66_multi_source_stitched_and_70_api_compatibility(tmp_path):
         rasterize_modifications=True,
         timeout_seconds=180,
     )
-    six = RasTerrain.export_rasmapper_terrain(
-        output_tif=tmp_path / "muncie-66.tif", hecras_version="6.6", **common
+    result = RasTerrain.export_rasmapper_terrain(
+        output_tif=tmp_path / f"muncie-{version}.tif",
+        hecras_version=version,
+        **common,
     )
-    seven = RasTerrain.export_rasmapper_terrain(
-        output_tif=tmp_path / "muncie-70.tif", hecras_version="7.0", **common
-    )
-    _assert_result(six, 2)
-    _assert_result(seven, 2)
-    assert (six.validation["columns"], six.validation["rows"]) == (16, 23)
-    assert len(six.source_inventory.index) == 2
-    assert six.source_inventory["intersects_output"].all()
-    assert six.source_inventory["authoritative_grid"].sum() == 1
-    assert six.validation["checksum"] == 4221
-    with rasterio.open(six.output_path) as six_ds, rasterio.open(seven.output_path) as seven_ds:
-        assert six_ds.transform == seven_ds.transform
-        assert six_ds.crs == seven_ds.crs
-        assert np.array_equal(six_ds.read(1), seven_ds.read(1))
+    _assert_result(result, 2)
+    assert (result.validation["columns"], result.validation["rows"]) == (16, 23)
+    assert len(result.source_inventory.index) == 2
+    assert result.source_inventory["intersects_output"].all()
+    assert result.source_inventory["authoritative_grid"].sum() == 1
+    assert result.validation["checksum"] == 4221
 
 
 @pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")

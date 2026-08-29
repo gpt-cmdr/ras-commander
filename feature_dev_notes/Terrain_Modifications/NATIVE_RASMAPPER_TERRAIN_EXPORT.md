@@ -19,17 +19,21 @@ and bounded real-runtime qualification are complete. See:
 - `API_CONSISTENCY_AUDIT_2026-08-29.md`
 - `QUALIFICATION_REPORT_2026-08-29.md`
 - `HECRAS_63_COMPATIBILITY_2026-08-29.md`
+- `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md`
 
 The completed public API is `RasTerrain.export_rasmapper_terrain(...)`. It
 returns `TerrainExportResult`, writes a machine-readable receipt, validates the
 single GeoTIFF before promotion, and never registers the derivative in the
 source project.
 
-The follow-up HEC-RAS 6.3/6.3.1 inspection found that those versions do not
-provide the bounded modification-aware export contract used here. The public
-API therefore accepts only 6.6.x and checked 7.0.x, validates an explicitly
-supplied `RasPrj.ras_version`, and raises before filesystem or native work for
-6.3.x and every other unsupported runtime family.
+The follow-up version audit checked official release notes, reflected every
+locally installed runtime from 6.3 through 7.0.0, and ran bounded exports on
+6.4.1, 6.5, 6.6, 6.7 Beta 4/5, and 7.0.0. The public API accepts exactly
+6.4.1, 6.5, and 6.6. It validates `RasPrj.ras_version` and the identifiable
+release in `ras_exe_path`, then raises before filesystem or native work for all
+other versions. HEC-RAS 7.0.0 is rejected because HEC documents a terrain-
+modification export defect; 7.0.1 is unqualified because its exact binary was
+not locally available.
 
 ## Original implementation gap
 
@@ -71,8 +75,9 @@ TerrainLayer.GenerateNewRasTerrain(
 ```
 
 Independent reflection corrected two assumptions in the original proposal:
-`GenerateNewRasTerrain` is a **private** instance method in both checked 6.6
-and 7.0-family assemblies, and there is no public `RasterFilesInfo` collection.
+`GenerateNewRasTerrain` is a **private** instance method in the checked 6.4.1,
+6.5, 6.6, 6.7 Beta 4/5, and 7.0.0 assemblies, and there is no public
+`RasterFilesInfo` collection on that newer surface.
 The helper resolves the exact non-public nine-parameter contract and uses the
 public `RasterFileCount` plus `RasterFileInfo(int)` inventory.
 
@@ -322,8 +327,8 @@ control cells remain stable.
 - UPGU3 2x and 4x products;
 - native Windows HEC-RAS 6.6;
 - the matching HEC-RAS 6.6 managed helper under Wine;
-- version-surface checks through available 7.0-family fixtures without
-  silently changing accepted vendor terms.
+- audit-only version-surface checks through available 7.0-family fixtures
+  without accepting unverified signatures, semantics, or version terms.
 
 Use the project-fixture database to locate additional candidates. Do not run a
 full-domain hydraulic computation merely to qualify terrain export.

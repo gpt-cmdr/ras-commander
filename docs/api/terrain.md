@@ -34,17 +34,27 @@ Supported HEC-RAS versions are deliberately narrow:
 
 | Runtime | Status | Evidence |
 |---------|--------|----------|
-| 6.6.x | Supported | Qualified on native Windows and under Wine with bounded modification-aware and stitched exports |
-| 7.0.x | Supported | Checked native API contract and bounded stitched export; the 7.0 output matched 6.6 for the qualification window |
-| 6.3 / 6.3.1 | Unsupported | The installed 6.3 API lacks the bounded `GenerateNewRasTerrain(..., resampleVecMods, ...)` contract; its public single-file method always uses the full terrain extent |
-| Other versions | Unsupported | Their private mapper contract has not been qualified |
+| 6.3 / 6.3.1 | Unsupported | The installed API lacks the bounded `GenerateNewRasTerrain(..., resampleVecMods, ...)` contract; its public single-file method always uses the full terrain extent |
+| 6.4.0 | Unsupported | Not locally installed or qualified; HEC's [6.4.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4.1/resolved-issues) report that creating a terrain in 6.4 could add 1.0 to elevations |
+| 6.4.1 | Supported | Exact private contract reflected; bounded 2x/4x modification-aware and two-source stitched exports qualified on native Windows |
+| 6.5 | Supported | Exact private contract reflected; the same native Windows qualification passed, including 73 changed modification cells and 1,511 unaffected controls |
+| 6.6 | Supported | Native Windows and Wine qualified with bounded modification-aware and stitched exports; HEC's [6.6 terrain manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer) explicitly documents the unified export options |
+| 6.7 beta releases | Unsupported prereleases | HEC's [archive](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) lists Beta, Beta 2, Beta 3, Beta 4a, and Beta 5 before 7.0. The locally installed Beta 4-labeled and Beta 5 runtimes passed bounded checks, but the API accepts no beta runtime |
+| 7.0.0 | Unsupported | Although the checked windows completed, HEC documents a [terrain-modification export defect](https://www.hec.usace.army.mil/confluence/rasdocs/raski/7.0) that can omit the minimum-Y portion of a modification |
+| 7.0.1 | Unqualified | HEC reports the 7.0.0 defect fixed in [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues), but the exact 7.0.1 binary was not locally available for reflection and production qualification |
+| Other versions | Unsupported | Their exact mapper contract and semantics have not been qualified |
 
 When `ras_object` is supplied, it must be an initialized `RasPrj`. The API
-checks `ras_object.ras_version` before creating output directories or starting
-native work. It raises `ValueError` for an unsupported version, including 6.3,
-and when an explicit `hecras_version` conflicts with the `RasPrj` version
-family. This prevents a project initialized for 6.3 from accidentally entering
-the 6.6/7.0 native path.
+checks `ras_object.ras_version` and, when identifiable, the release folder in
+`ras_object.ras_exe_path` before creating output directories or starting native
+work. It raises `ValueError` for unsupported versions and for any mismatch
+between the explicit version, project version, and executable release. The
+existing `6.4` convenience term resolves to the qualified 6.4.1 installation;
+an actual executable in a `6.4` folder remains rejected.
+
+All three accepted releases are qualified on native Windows. The task-local
+Wine path is qualified with the exact 6.6 runtime; 6.4.1 and 6.5 have not yet
+received matching Wine-runtime qualification.
 
 ```python
 from pathlib import Path

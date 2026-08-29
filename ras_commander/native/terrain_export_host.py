@@ -28,51 +28,133 @@ logger = get_logger(__name__)
 
 SCHEMA_VERSION = 1
 ALLOWED_DOWNSAMPLE_FACTORS = frozenset({1, 2, 4, 8})
-SUPPORTED_TERRAIN_EXPORT_VERSION_FAMILIES = frozenset({(6, 6), (7, 0)})
+SUPPORTED_TERRAIN_EXPORT_VERSIONS = {
+    (6, 4, 1): "6.4.1",
+    (6, 5, 0): "6.5",
+    (6, 6, 0): "6.6",
+}
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
 _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
 
 
-def _hecras_version_family(value: Any) -> tuple[int, int]:
-    """Parse the HEC-RAS major/minor family used by the mapper contract."""
+def _hecras_version_key(
+    value: Any, *, allow_install_aliases: bool = True
+) -> tuple[int, ...]:
+    """Parse an exact HEC-RAS release key used by the mapper contract."""
     text = str(value).strip()
     if text.lower().endswith(".exe"):
         parts = [part for part in re.split(r"[\\/]", text) if part]
         if len(parts) >= 2:
             text = parts[-2]
-    compact_aliases = {"66": (6, 6), "70": (7, 0)}
+        # Folder names identify installed releases, so do not apply the public
+        # ``6.4`` -> ``6.4.1`` convenience alias to an actual 6.4 folder.
+        allow_install_aliases = False
+
+    compact_aliases = {
+        "63": (6, 3, 0),
+        "631": (6, 3, 1),
+        "64": (6, 4, 1),
+        "641": (6, 4, 1),
+        "65": (6, 5, 0),
+        "66": (6, 6, 0),
+        "67": (6, 7, 0),
+        "70": (7, 0, 0),
+    }
     if text in compact_aliases:
         return compact_aliases[text]
 
     legacy = re.fullmatch(r"(\d)\.(\d{2})", text)
     if legacy:
-        return int(legacy.group(1)), int(legacy.group(2)[0])
+        return (
+            int(legacy.group(1)),
+            int(legacy.group(2)[0]),
+            int(legacy.group(2)[1]),
+        )
 
-    match = re.fullmatch(r"(\d+)\.(\d+)(?:\.\d+)*", text)
-    if match is None:
+    if allow_install_aliases and text == "6.4":
+        # Match get_ras_exe(), where the public 6.4 term resolves to the fixed
+        # 6.4.1 installation because the 6.4 release is not registered.
+        return (6, 4, 1)
+
+    beta = re.fullmatch(r"(\d+)\.(\d+)\s+Beta(?:\s+\w+)?", text, re.IGNORECASE)
+    if beta:
+        return int(beta.group(1)), int(beta.group(2)), 0
+
+    if re.fullmatch(r"\d+(?:\.\d+)+", text) is None:
         raise ValueError(f"Could not determine a HEC-RAS version from {value!r}")
-    return int(match.group(1)), int(match.group(2))
+    parts = tuple(int(part) for part in text.split("."))
+    return parts if len(parts) >= 3 else (*parts, 0)
 
 
-def _require_supported_hecras_family(
-    version: Any, family: tuple[int, int]
-) -> None:
+def _require_supported_hecras_version(
+    version: Any, key: tuple[int, ...]
+) -> str:
     """Raise with actionable, version-specific compatibility guidance."""
-    if family in SUPPORTED_TERRAIN_EXPORT_VERSION_FAMILIES:
-        return
+    if key in SUPPORTED_TERRAIN_EXPORT_VERSIONS:
+        return SUPPORTED_TERRAIN_EXPORT_VERSIONS[key]
+
     reason = ""
-    if family == (6, 3):
+    if key[:2] == (6, 3):
         reason = (
             " HEC-RAS 6.3 lacks the bounded TerrainLayer.GenerateNewRasTerrain"
-            "(..., resampleVecMods, ...) contract required to bake terrain "
+            " (..., resampleVecMods, ...) contract required to bake terrain "
             "modifications into this derivative."
+        )
+    elif key == (6, 4, 0):
+        reason = (
+            " HEC-RAS 6.4 is not qualified, and its official resolved-issues "
+            "record says creating a new RAS Terrain could add 1.0 to elevations; "
+            "use the fixed HEC-RAS 6.4.1 release."
+        )
+    elif key[:2] == (6, 7):
+        reason = (
+            " HEC-RAS 6.7 was released only as beta builds. The locally installed "
+            "Beta 4-labeled and Beta 5 runtimes passed bounded compatibility "
+            "probes, but prerelease builds are not accepted by this production API."
+        )
+    elif key == (7, 0, 0):
+        reason = (
+            " HEC-RAS 7.0.0 has an official known Terrain Modifications - Export "
+            "defect that can omit the minimum-Y portion of a modification."
+        )
+    elif key == (7, 0, 1):
+        reason = (
+            " HEC-RAS 7.0.1 officially fixes the 7.0.0 terrain-modification "
+            "export defect, but its exact managed/native runtime has not yet been "
+            "locally reflected and qualified for this API."
         )
     raise ValueError(
         f"HEC-RAS {version!r} is unsupported by "
-        "RasTerrain.export_rasmapper_terrain(). Supported versions are 6.6.x "
-        f"and 7.0.x.{reason}"
+        "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
+        f"6.4.1, 6.5, and 6.6.{reason}"
     )
+
+
+def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
+    """Resolve a RasPrj's exact runtime, preferring its executable folder."""
+    project_version = getattr(project, "ras_version", None)
+    project_key = _hecras_version_key(project_version)
+    executable = getattr(project, "ras_exe_path", None)
+    if not executable or str(executable).strip().lower() == "ras.exe":
+        return project_key
+
+    try:
+        executable_key = _hecras_version_key(
+            executable, allow_install_aliases=False
+        )
+    except ValueError:
+        # Non-standard installation folders still retain the initialized
+        # RasPrj's explicit version term as the best available identity.
+        return project_key
+
+    if executable_key != project_key:
+        raise ValueError(
+            f"ras_object.ras_version {project_version!r} conflicts with "
+            f"ras_object.ras_exe_path runtime {Path(str(executable)).parent.name!r}; "
+            "native terrain export requires one exact HEC-RAS release"
+        )
+    return executable_key
 
 
 def resolve_supported_hecras_version(
@@ -99,26 +181,28 @@ def resolve_supported_hecras_version(
         )
 
     if ras_object is not None:
-        project_family = _hecras_version_family(project_version)
-        _require_supported_hecras_family(project_version, project_family)
+        project_key = _rasprj_runtime_key(project)
+        canonical_version = _require_supported_hecras_version(
+            project_version, project_key
+        )
         if hecras_version is not None:
-            explicit_family = _hecras_version_family(hecras_version)
-            _require_supported_hecras_family(hecras_version, explicit_family)
-            if explicit_family != project_family:
+            explicit_key = _hecras_version_key(hecras_version)
+            _require_supported_hecras_version(hecras_version, explicit_key)
+            if explicit_key != project_key:
                 raise ValueError(
                     f"hecras_version {hecras_version!r} conflicts with "
                     f"ras_object.ras_version {project_version!r}; native terrain "
-                    "export requires matching HEC-RAS version families"
+                    "export requires one exact HEC-RAS release"
                 )
+        return canonical_version
 
     version = hecras_version or project_version
     if not version:
         raise ValueError(
             "hecras_version is required when no initialized ras_object provides ras_version"
         )
-    family = _hecras_version_family(version)
-    _require_supported_hecras_family(version, family)
-    return str(version)
+    key = _hecras_version_key(version)
+    return _require_supported_hecras_version(version, key)
 
 
 def select_terrain_row(layers: pd.DataFrame, terrain_name: Optional[str]) -> pd.Series:
@@ -378,7 +462,11 @@ def _resolve_hecras_source(
         wine_config = config
     else:
         explicit_exe = getattr(project, "ras_exe_path", None)
-        if hecras_version is None and explicit_exe and Path(str(explicit_exe)).is_file():
+        if (
+            ras_object is not None
+            and explicit_exe
+            and Path(str(explicit_exe)).is_file()
+        ):
             ras_exe = str(explicit_exe)
         else:
             ras_exe = get_ras_exe(version)
@@ -387,9 +475,20 @@ def _resolve_hecras_source(
         directory = Path(ras_exe).parent
         wine_config = None
 
+    expected_key = _hecras_version_key(version_text)
+    try:
+        installed_key = _hecras_version_key(
+            directory / "Ras.exe", allow_install_aliases=False
+        )
+    except ValueError:
+        installed_key = None
+    if installed_key is not None and installed_key != expected_key:
+        raise ValueError(
+            f"Resolved HEC-RAS installation {directory.name!r} conflicts with "
+            f"the qualified runtime {version_text!r}"
+        )
+
     version_label = version_text
-    if Path(version_text).suffix.lower() == ".exe":
-        version_label = directory.name
     if not (directory / "RasMapperLib.dll").is_file():
         raise FileNotFoundError(f"RasMapperLib.dll not found in {directory}")
     return version_label, directory, wine_config
