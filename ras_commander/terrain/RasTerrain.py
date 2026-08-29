@@ -147,10 +147,14 @@ class RasTerrain:
                 modifications through ``resampleVecMods``.
             overwrite: Replace existing output and receipt when true.
             timeout_seconds: Total bounded runtime, including validation.
-            hecras_version: HEC-RAS 6.6 or checked 7.0-family runtime. When
-                omitted, use ``ras_object.ras_version``.
+            hecras_version: HEC-RAS 6.6.x or checked 7.0.x runtime. When
+                omitted, use ``ras_object.ras_version``. HEC-RAS 6.3 is
+                explicitly unsupported because it lacks the bounded native
+                export contract used by this method.
             ras_object: Optional initialized project object for multi-project
-                and runtime-version context.
+                and runtime-version context. Its ``ras_version`` is checked
+                before filesystem or native work; an unsupported version or a
+                conflict with ``hecras_version`` raises ``ValueError``.
             receipt_path: Machine-readable JSON receipt path. Defaults to
                 ``<output_tif>.receipt.json``.
 
@@ -160,6 +164,9 @@ class RasTerrain:
             invalid inputs raise before native execution.
 
         Notes:
+            Supported runtime families are exactly HEC-RAS 6.6.x and 7.0.x.
+            HEC-RAS 6.3's public single-file method exports the full terrain;
+            its clip path does not bake a bounded modification-aware GeoTIFF.
             The base export is always nearest-neighbor. The derivative is not
             registered in or otherwise written back to the source project.
             ``RasTerrainMod.compute_modified_terrain_raster()`` remains an

@@ -15,19 +15,24 @@ receipt. No project registration or source project file was changed.
 
 ## Automated tests
 
-- `tests/terrain_export_host_test.py`: 26 passed. Coverage includes exact
+- `tests/terrain_export_host_test.py`: 45 passed. Coverage includes exact
   terrain selection, Path/string/Windows/UNC/space-containing and Wine path
   conversion, factors and cell-size math, negative-coordinate grid snapping,
   source resolution compatibility, overwrite protection, request/response
   schemas, GeoTIFF semantic validation, failure partial cleanup, task-local Wine
-  state, packaged resources, and forced-timeout owned-process cleanup.
-- Focused regression set: 72 passed after adding the feature (terrain export,
-  existing native helper packaging, GDAL runtime, terrain logging/creation, and
-  terrain display settings).
+  state, packaged resources, forced-timeout owned-process cleanup, supported
+  version families, early 6.3/6.3.1 `RasPrj` rejection, and explicit/project
+  runtime conflict rejection.
+- Focused regression set: 92 passed after the 6.3 compatibility follow-up
+  (terrain export, existing native helper packaging, GDAL runtime, terrain
+  logging/creation, and terrain display settings). This includes explicit
+  rejection of unqualified or new version terms.
 - Opt-in real-runtime suite
   `tests/qualification/terrain_export_qualification_test.py`: 2 passed and the
   Wine-only case skipped on Windows. The equivalent production Wine invocation
-  was then run on the controlled Linux worker described below.
+  was then run on the controlled Linux worker described below. The Windows
+  suite was rerun after adding the 6.3 guard and again passed 2 with the Wine
+  case skipped.
 
 The full repository suite completed with `2,393 passed`, `62 skipped`, and
 eight failures in 4 minutes 19 seconds. The failures did not touch feature
@@ -86,6 +91,27 @@ band checksum were identical to the 6.6 output. The helper accepts no
 free-form resampling vocabulary: it asserts the exact private method contract
 and hard-codes `near`, so new vendor terms cannot be accepted silently.
 
+## HEC-RAS 6.3 and 6.3.1 compatibility decision
+
+Both locally installed 6.3-family mapper assemblies were reflected and
+decompiled. Neither contains the private nine-parameter
+`GenerateNewRasTerrain` method used by the 6.6/7.0 production path, and neither
+contains `ExportRasterOptions`. Their public
+`ExportResampleToSingleFile(string, double, TiffMetadata<float>,
+ProgressReporter)` method uses `TerrainLayer.Extent` directly and cannot accept
+a bounded extent. Their separate clip implementation copies source tile
+subsets and carries modification definitions into a new terrain HDF; it does
+not emit one bounded GeoTIFF with modifications baked into the cells.
+
+Consequently, 6.3 and 6.3.1 are explicitly unsupported. A supplied
+`RasPrj.ras_version` is validated before output directories are created, and
+the public API raises an actionable `ValueError` rather than falling through
+to helper reflection or the analytical row sampler. See
+`HECRAS_63_COMPATIBILITY_2026-08-29.md` for the checked surface and rationale.
+The public guard was also exercised with a real `RasPrj` initialized for the
+Muncie fixture and HEC-RAS 6.3. It raised before creating the deliberately
+absent destination directory.
+
 ## Wine HEC-RAS 6.6
 
 The dedicated CLB07 HEC-RAS 6.6 worker did not accept SSH connections during
@@ -136,10 +162,17 @@ explicit environment declaration documented in the public API guide.
 - CLB07 availability remains an infrastructure gap. The alternate-worker Wine
   result qualifies the exact HEC-RAS 6.6 mapper runtime under Wine, but does not
   prove the unavailable CLB07 image configuration.
-- Only installed HEC-RAS 6.6 and the checked 7.0-family API were accepted. Other
-  versions fail closed until separately reflected and qualified.
+- Only installed HEC-RAS 6.6.x and the checked 7.0.x API are accepted. The
+  installed 6.3 and 6.3.1 APIs were inspected and are explicitly rejected
+  because the required bounded export contract is absent. Every other version
+  also fails closed until separately reflected and qualified.
 - Full-domain UPGU3 export was intentionally not attempted. Bounded windows
   satisfy feature semantics without multi-gigabyte derivative cost.
 - The output is a derivative GeoTIFF only. Terrain HDF construction,
   registration, UI actions, hydraulic simulation, and modification-math
   reimplementation remain out of scope.
+- `mkdocs build --strict` reached the repository's pre-existing
+  `docs/api/core.md` collection failure for
+  `ras_commander.inspect_project_assets`; direct Python imports confirmed that
+  symbol exists. The edited terrain page introduced no reported Markdown or
+  navigation error before that unrelated abort.

@@ -33,8 +33,8 @@ Contract decisions:
 - `downsample_factor` is restricted to the exact source-derived set `{1, 2, 4, 8}`. A free-form target cell size and arbitrary resampling terms are intentionally not public.
 - The base export always uses nearest-neighbor resampling. `rasterize_modifications` maps directly to native `resampleVecMods`.
 - `overwrite` defaults to false. Output and receipt collisions are checked before native work begins.
-- `hecras_version` is explicit or inherited from `ras_object.ras_version`; it is resolved through existing HEC-RAS installation conventions. Unsupported/incompatible assemblies fail closed.
-- `ras_object` provides the same multi-project/version context used elsewhere without making global state authoritative.
+- `hecras_version` is explicit or inherited from `ras_object.ras_version`; it is resolved through existing HEC-RAS installation conventions. The accepted families are exactly 6.6.x and checked 7.0.x. Reflected 6.3/6.3.1 assemblies lack the required bounded export contract and fail closed.
+- `ras_object` must be an initialized `RasPrj` when supplied. Its version is checked before output or native work and must not conflict with an explicit runtime family, preserving multi-project context without making global state authoritative.
 - `receipt_path` defaults to `<output_tif>.receipt.json`. The receipt is always emitted for a promoted success and contains no hashes.
 
 Input/programming errors such as a missing project, ambiguous terrain, invalid extent/factor, or protected output raise the corresponding clear exception. A started native operation returns a failed `TerrainExportResult` for helper/runtime/timeout/validation failure, consistent with compute-result patterns.

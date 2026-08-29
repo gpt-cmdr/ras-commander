@@ -18,11 +18,18 @@ and bounded real-runtime qualification are complete. See:
 - `INDEPENDENT_RESEARCH_2026-08-29.md`
 - `API_CONSISTENCY_AUDIT_2026-08-29.md`
 - `QUALIFICATION_REPORT_2026-08-29.md`
+- `HECRAS_63_COMPATIBILITY_2026-08-29.md`
 
 The completed public API is `RasTerrain.export_rasmapper_terrain(...)`. It
 returns `TerrainExportResult`, writes a machine-readable receipt, validates the
 single GeoTIFF before promotion, and never registers the derivative in the
 source project.
+
+The follow-up HEC-RAS 6.3/6.3.1 inspection found that those versions do not
+provide the bounded modification-aware export contract used here. The public
+API therefore accepts only 6.6.x and checked 7.0.x, validates an explicitly
+supplied `RasPrj.ras_version`, and raises before filesystem or native work for
+6.3.x and every other unsupported runtime family.
 
 ## Original implementation gap
 

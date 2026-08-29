@@ -30,6 +30,22 @@ then atomically promotes it. `overwrite=False` is the default. A JSON receipt
 is written beside the TIFF by default, and the returned `TerrainExportResult`
 is bool-compatible. The derivative is not registered back into the project.
 
+Supported HEC-RAS versions are deliberately narrow:
+
+| Runtime | Status | Evidence |
+|---------|--------|----------|
+| 6.6.x | Supported | Qualified on native Windows and under Wine with bounded modification-aware and stitched exports |
+| 7.0.x | Supported | Checked native API contract and bounded stitched export; the 7.0 output matched 6.6 for the qualification window |
+| 6.3 / 6.3.1 | Unsupported | The installed 6.3 API lacks the bounded `GenerateNewRasTerrain(..., resampleVecMods, ...)` contract; its public single-file method always uses the full terrain extent |
+| Other versions | Unsupported | Their private mapper contract has not been qualified |
+
+When `ras_object` is supplied, it must be an initialized `RasPrj`. The API
+checks `ras_object.ras_version` before creating output directories or starting
+native work. It raises `ValueError` for an unsupported version, including 6.3,
+and when an explicit `hecras_version` conflicts with the `RasPrj` version
+family. This prevents a project initialized for 6.3 from accidentally entering
+the 6.6/7.0 native path.
+
 ```python
 from pathlib import Path
 from ras_commander import RasMap, RasTerrain

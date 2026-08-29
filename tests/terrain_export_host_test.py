@@ -15,6 +15,7 @@ import pytest
 
 from ras_commander import RasMap, RasTerrain, TerrainExportResult
 from ras_commander.native import terrain_export_host as host
+from ras_commander.RasPrj import RasPrj
 
 
 def _source(
@@ -118,6 +119,61 @@ def test_multi_source_nonintegral_resolution_ratio_fails_closed():
 def test_windows_path_str_path_unc_and_spaces_remain_lossless(monkeypatch, value):
     monkeypatch.setattr(host.platform, "system", lambda: "Windows")
     assert str(host._normalize_host_path(value)) == str(Path(os.fspath(value)))
+
+
+@pytest.mark.parametrize("version", ["6.6", "6.6.1", "6.60", "66", "7.0", "7.0.1", "70"])
+def test_supported_terrain_export_version_families(version):
+    assert host.resolve_supported_hecras_version(version, None) == version
+
+
+@pytest.mark.parametrize("version", ["6.7", "7.0 Beta", "7.1"])
+def test_unqualified_or_new_version_terms_are_rejected(version):
+    with pytest.raises(ValueError):
+        host.resolve_supported_hecras_version(version, None)
+
+
+@pytest.mark.parametrize(
+    "version",
+    ["6.3", "6.3.1", "6.30", "6.31", r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"],
+)
+def test_hecras_63_is_rejected_with_native_contract_reason(version):
+    with pytest.raises(ValueError, match="6\\.3 lacks the bounded"):
+        host.resolve_supported_hecras_version(version, None)
+
+
+def test_public_api_rejects_unsupported_rasprj_before_filesystem_work(tmp_path):
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "6.3"
+    output = tmp_path / "must-not-be-created" / "terrain.tif"
+
+    with pytest.raises(ValueError, match="Supported versions are 6\\.6\\.x and 7\\.0\\.x"):
+        RasTerrain.export_rasmapper_terrain(
+            tmp_path / "missing.prj",
+            output,
+            ras_object=project,
+        )
+
+    assert not output.parent.exists()
+
+
+def test_explicit_version_must_match_rasprj_version_family():
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "6.6"
+
+    with pytest.raises(ValueError, match="conflicts with ras_object\\.ras_version"):
+        host.resolve_supported_hecras_version("7.0", project)
+
+
+def test_uninitialized_rasprj_is_rejected_even_with_explicit_version():
+    with pytest.raises(ValueError, match="initialized RasPrj"):
+        host.resolve_supported_hecras_version("6.6", RasPrj())
+
+
+def test_non_rasprj_project_context_is_rejected():
+    with pytest.raises(TypeError, match="RasPrj instance"):
+        host.resolve_supported_hecras_version("6.6", object())
 
 
 def test_wine_path_conversion_uses_configured_winepath(monkeypatch):

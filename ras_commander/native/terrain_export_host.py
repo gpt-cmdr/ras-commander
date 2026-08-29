@@ -28,9 +28,97 @@ logger = get_logger(__name__)
 
 SCHEMA_VERSION = 1
 ALLOWED_DOWNSAMPLE_FACTORS = frozenset({1, 2, 4, 8})
+SUPPORTED_TERRAIN_EXPORT_VERSION_FAMILIES = frozenset({(6, 6), (7, 0)})
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
 _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def _hecras_version_family(value: Any) -> tuple[int, int]:
+    """Parse the HEC-RAS major/minor family used by the mapper contract."""
+    text = str(value).strip()
+    if text.lower().endswith(".exe"):
+        parts = [part for part in re.split(r"[\\/]", text) if part]
+        if len(parts) >= 2:
+            text = parts[-2]
+    compact_aliases = {"66": (6, 6), "70": (7, 0)}
+    if text in compact_aliases:
+        return compact_aliases[text]
+
+    legacy = re.fullmatch(r"(\d)\.(\d{2})", text)
+    if legacy:
+        return int(legacy.group(1)), int(legacy.group(2)[0])
+
+    match = re.fullmatch(r"(\d+)\.(\d+)(?:\.\d+)*", text)
+    if match is None:
+        raise ValueError(f"Could not determine a HEC-RAS version from {value!r}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def _require_supported_hecras_family(
+    version: Any, family: tuple[int, int]
+) -> None:
+    """Raise with actionable, version-specific compatibility guidance."""
+    if family in SUPPORTED_TERRAIN_EXPORT_VERSION_FAMILIES:
+        return
+    reason = ""
+    if family == (6, 3):
+        reason = (
+            " HEC-RAS 6.3 lacks the bounded TerrainLayer.GenerateNewRasTerrain"
+            "(..., resampleVecMods, ...) contract required to bake terrain "
+            "modifications into this derivative."
+        )
+    raise ValueError(
+        f"HEC-RAS {version!r} is unsupported by "
+        "RasTerrain.export_rasmapper_terrain(). Supported versions are 6.6.x "
+        f"and 7.0.x.{reason}"
+    )
+
+
+def resolve_supported_hecras_version(
+    hecras_version: Optional[str], ras_object: Any
+) -> str:
+    """Resolve and fail closed on unsupported or conflicting project runtimes.
+
+    An explicitly supplied ``ras_object`` is authoritative project context. Its
+    ``ras_version`` must therefore be present and supported even when the caller
+    also supplies ``hecras_version``.
+    """
+    from ..RasPrj import RasPrj, ras
+
+    project = ras_object if ras_object is not None else ras
+    project_version = getattr(project, "ras_version", None)
+    if ras_object is not None and not isinstance(ras_object, RasPrj):
+        raise TypeError("ras_object must be an initialized RasPrj instance")
+    if ras_object is not None and (
+        not getattr(ras_object, "initialized", False) or not project_version
+    ):
+        raise ValueError(
+            "ras_object must be an initialized RasPrj with a ras_version for "
+            "native RAS Mapper terrain export"
+        )
+
+    if ras_object is not None:
+        project_family = _hecras_version_family(project_version)
+        _require_supported_hecras_family(project_version, project_family)
+        if hecras_version is not None:
+            explicit_family = _hecras_version_family(hecras_version)
+            _require_supported_hecras_family(hecras_version, explicit_family)
+            if explicit_family != project_family:
+                raise ValueError(
+                    f"hecras_version {hecras_version!r} conflicts with "
+                    f"ras_object.ras_version {project_version!r}; native terrain "
+                    "export requires matching HEC-RAS version families"
+                )
+
+    version = hecras_version or project_version
+    if not version:
+        raise ValueError(
+            "hecras_version is required when no initialized ras_object provides ras_version"
+        )
+    family = _hecras_version_family(version)
+    _require_supported_hecras_family(version, family)
+    return str(version)
 
 
 def select_terrain_row(layers: pd.DataFrame, terrain_name: Optional[str]) -> pd.Series:
@@ -269,12 +357,8 @@ def _resolve_hecras_source(
     from ..RasPrj import get_ras_exe, ras
 
     project = ras_object if ras_object is not None else ras
+    version_text = resolve_supported_hecras_version(hecras_version, ras_object)
     version = hecras_version or getattr(project, "ras_version", None)
-    if not version:
-        raise ValueError(
-            "hecras_version is required when no initialized ras_object provides ras_version"
-        )
-    version_text = str(version)
 
     if platform.system() == "Linux":
         from ..RasProcess import RasProcess
@@ -306,11 +390,6 @@ def _resolve_hecras_source(
     version_label = version_text
     if Path(version_text).suffix.lower() == ".exe":
         version_label = directory.name
-    if not (version_label.startswith("6.6") or version_label.startswith("7.0")):
-        raise ValueError(
-            "Native RAS Mapper terrain export is qualified only for HEC-RAS "
-            "6.6 and checked 7.0-family APIs"
-        )
     if not (directory / "RasMapperLib.dll").is_file():
         raise FileNotFoundError(f"RasMapperLib.dll not found in {directory}")
     return version_label, directory, wine_config
@@ -798,6 +877,10 @@ def export_rasmapper_terrain(
     timeout = float(timeout_seconds)
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout_seconds must be finite and positive")
+
+    # Reject unsupported RasPrj/runtime context before creating output folders,
+    # enumerating terrain data, or starting a native helper.
+    resolve_supported_hecras_version(hecras_version, ras_object)
 
     project_input = _normalize_host_path(ras_project_path)
     output = _normalize_host_path(output_tif).absolute()
