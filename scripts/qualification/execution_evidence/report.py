@@ -40,7 +40,19 @@ def render_summary(run_root: str | Path) -> str:
     )
     invariant_rows = invariants.to_pylist()
     terminal = Counter(row["terminal_category"] for row in lane_rows)
-    invariant_status = Counter(row["status"] for row in invariant_rows)
+    invariant_evaluation_status = Counter(row["status"] for row in invariant_rows)
+    invariant_attempts = {
+        (row["lane_id"], row["attempt_id"]) for row in invariant_rows
+    }
+
+    def required_invariant_gate(row: dict[str, object]) -> str:
+        if row["all_invariants_passed"]:
+            return "pass"
+        if (row["lane_id"], row["attempt_id"]) not in invariant_attempts:
+            return "not_evaluated"
+        return "incomplete_or_failed"
+
+    invariant_gate_status = Counter(required_invariant_gate(row) for row in lane_rows)
     lines = [
         "# Execution-evidence qualification summary",
         "",
@@ -55,27 +67,43 @@ def render_summary(run_root: str | Path) -> str:
     lines.extend(
         [
             "",
-            "## Invariants",
+            "## Recorded invariant evaluations",
             "",
-            "| Status | Count |",
+            f"Invariant check rows: **{len(invariant_rows)}**",
+            "",
+            "| Evaluation status | Count |",
             "|---|---:|",
         ]
     )
     lines.extend(
-        f"| `{name}` | {invariant_status[name]} |" for name in sorted(invariant_status)
+        f"| `{name}` | {invariant_evaluation_status[name]} |"
+        for name in sorted(invariant_evaluation_status)
+    )
+    lines.extend(
+        [
+            "",
+            "## Required-invariant attempt gates",
+            "",
+            "| Gate status | Attempts |",
+            "|---|---:|",
+        ]
+    )
+    lines.extend(
+        f"| `{name}` | {invariant_gate_status[name]} |"
+        for name in sorted(invariant_gate_status)
     )
     lines.extend(
         [
             "",
             "## Attempts",
             "",
-            "| Lane | Attempt | Terminal | Result family | Invariants |",
+            "| Lane | Attempt | Terminal | Result family | Required-invariant gate |",
             "|---|---|---|---|---|",
         ]
     )
     for row in lane_rows:
         family = row["selected_result_format"] or "unresolved"
-        gate = "pass" if row["all_invariants_passed"] else "fail"
+        gate = required_invariant_gate(row)
         lines.append(
             f"| `{row['lane_id']}` | `{row['attempt_id']}` | "
             f"`{row['terminal_category']}` | `{family}` | `{gate}` |"

@@ -160,6 +160,9 @@ def make_attempt(
     lane_id: str = "lane-a",
     attempt_id: str = "attempt-1",
     tables: dict[str, list[dict]] | None = None,
+    terminal_category: str = "passed",
+    worker_exit_code: int = 0,
+    supervisor_synthesized: bool = False,
 ) -> Path:
     attempt = run_root / "attempts" / lane_id / attempt_id
     attempt.mkdir(parents=True)
@@ -181,8 +184,9 @@ def make_attempt(
         **request,
         "request_sha256": request_sha,
         "receipt_committed_at": STAMP,
-        "terminal_category": "passed",
-        "worker_exit_code": 0,
+        "terminal_category": terminal_category,
+        "worker_exit_code": worker_exit_code,
+        "supervisor_synthesized": supervisor_synthesized,
         "referenced_artifacts": [],
         "tables": tables or valid_table_rows(
             run_id=run_id,

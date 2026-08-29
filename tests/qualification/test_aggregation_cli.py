@@ -89,7 +89,85 @@ def test_report_is_deterministic_and_contains_audit_counts(tmp_path: Path) -> No
     assert first == second
     assert "Attempts: **2**" in first
     assert "| `passed` | 2 |" in first
+    assert "## Recorded invariant evaluations" in first
+    assert "Invariant check rows: **2**" in first
     assert "| `pass` | 2 |" in first
+    assert "## Required-invariant attempt gates" in first
+
+
+def test_report_distinguishes_unevaluated_crash_from_invariant_failure(
+    tmp_path: Path,
+) -> None:
+    completed_rows = valid_table_rows(lane_id="lane-completed", attempt_id="attempt-1")
+    make_attempt(
+        tmp_path,
+        lane_id="lane-completed",
+        attempt_id="attempt-1",
+        tables=completed_rows,
+    )
+    crash_rows = valid_table_rows(lane_id="lane-crashed", attempt_id="attempt-2")
+    crash_lane = crash_rows["lanes"][0]
+    crash_lane.update(
+        terminal_category="worker_crashed",
+        worker_exit_code=7,
+        selected_result_format=None,
+        all_invariants_passed=False,
+        failure_reason_code="worker_crashed",
+    )
+    crash_rows["invariants"] = []
+    make_attempt(
+        tmp_path,
+        lane_id="lane-crashed",
+        attempt_id="attempt-2",
+        tables=crash_rows,
+        terminal_category="worker_crashed",
+        worker_exit_code=7,
+        supervisor_synthesized=True,
+    )
+    aggregate_run(tmp_path)
+
+    summary = render_summary(tmp_path)
+
+    assert "Attempts: **2**" in summary
+    assert "Invariant check rows: **1**" in summary
+    assert "| `not_evaluated` | 1 |" in summary
+    assert "| `pass` | 1 |" in summary
+    assert (
+        "| `lane-crashed` | `attempt-2` | `worker_crashed` | `unresolved` | "
+        "`not_evaluated` |"
+    ) in summary
+    assert "| `fail` |" not in summary
+
+
+def test_report_labels_recorded_nonpassing_invariant_gate(tmp_path: Path) -> None:
+    failed_rows = valid_table_rows(lane_id="lane-failed", attempt_id="attempt-1")
+    failed_lane = failed_rows["lanes"][0]
+    failed_lane.update(
+        terminal_category="failed_invariant",
+        worker_exit_code=20,
+        all_invariants_passed=False,
+        failure_reason_code="invariant_failure",
+    )
+    failed_rows["invariants"][0]["status"] = "fail"
+    make_attempt(
+        tmp_path,
+        lane_id="lane-failed",
+        attempt_id="attempt-1",
+        tables=failed_rows,
+        terminal_category="failed_invariant",
+        worker_exit_code=20,
+    )
+    aggregate_run(tmp_path)
+
+    summary = render_summary(tmp_path)
+
+    assert "Invariant check rows: **1**" in summary
+    assert "| `fail` | 1 |" in summary
+    assert "| `incomplete_or_failed` | 1 |" in summary
+    assert (
+        "| `lane-failed` | `attempt-1` | `failed_invariant` | `hdf` | "
+        "`incomplete_or_failed` |"
+    ) in summary
 
 
 def test_cli_aggregate_and_verify_emit_machine_readable_counts(
