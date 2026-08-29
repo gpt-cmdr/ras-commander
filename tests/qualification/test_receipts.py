@@ -93,6 +93,17 @@ def test_near_max_path_records_use_bounded_same_directory_atomic_temps(
         {"value": "replacement"},
         replace=True,
     )
+    bounded_names = (
+        "worker-launcher.json",
+        "cancel-intent.json",
+        "cancel-launcher.json",
+        "cancel-hello.json",
+        "cancel-auth.json",
+    )
+    for name in bounded_names:
+        path = attempt / name
+        assert len(str(path.with_suffix(".sha256"))) <= 259
+        write_json_with_digest(path, {"value": name})
 
     assert len(str(request_path)) == 244
     assert len(str(request_path.with_suffix(".sha256"))) == 246
@@ -109,6 +120,10 @@ def test_near_max_path_records_use_bounded_same_directory_atomic_temps(
         request_path.with_suffix(".sha256"),
         longest_path,
         longest_path.with_suffix(".sha256"),
+    } | {
+        path
+        for name in bounded_names
+        for path in (attempt / name, (attempt / name).with_suffix(".sha256"))
     }
     assert set(replace_destinations) == {
         longest_path,

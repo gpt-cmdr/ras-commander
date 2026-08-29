@@ -71,9 +71,36 @@ def _worker_launch_metadata(attempt_dir: Path) -> dict[str, str]:
     return {
         "launch_nonce": str(uuid.uuid4()),
         "intent_path": str(attempt_dir / "worker-launch-intent.json"),
+        "binding_path": str(attempt_dir / "worker-launcher.json"),
         "hello_path": str(attempt_dir / "worker-hello.json"),
         "authorization_path": str(attempt_dir / "worker-authorization.json"),
     }
+
+
+def _direct_worker_identity(process) -> live.AuthorizedWorkerIdentity:
+    return live.AuthorizedWorkerIdentity(
+        worker_pid=process.pid,
+        worker_process_create_time=12345.0,
+        launcher_pid=process.pid,
+        launcher_process_create_time=12345.0,
+        worker_parent_pid=os.getpid(),
+        worker_parent_process_create_time=12344.0,
+        delegated=False,
+        command=(),
+    )
+
+
+def _delegated_worker_identity(process) -> live.AuthorizedWorkerIdentity:
+    return live.AuthorizedWorkerIdentity(
+        worker_pid=9753,
+        worker_process_create_time=12345.1,
+        launcher_pid=process.pid,
+        launcher_process_create_time=12345.0,
+        worker_parent_pid=process.pid,
+        worker_parent_process_create_time=12345.0,
+        delegated=True,
+        command=("python.exe", "-m", "worker"),
+    )
 
 
 def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> RunContext:
@@ -701,7 +728,7 @@ def test_interrupt_during_popen_after_launch_intent_quarantines_host(
 
     with pytest.raises(
         live.LiveHostQuarantinedError,
-        match="exact worker identity is unverifiable",
+        match="worker launcher binding publication is incomplete",
     ):
         live.execute_live_action(context.run_root, acknowledge_real_ras=True)
 
@@ -741,20 +768,45 @@ def test_parent_authorization_durably_binds_exact_worker_pid_create_time(
     intent_sha256 = live._publish_worker_launch_intent(
         attempt_dir, request, request_sha256
     )
+    intent, _ = read_json_with_digest(attempt_dir / "worker-launch-intent.json")
     pid = 2468
     create_time = 12345.5
+    binding_sha256 = write_json_with_digest(
+        request["worker_launch"]["binding_path"],
+        {
+            "schema_version": 1,
+            "action": "bind_live_worker_launcher",
+            "request_sha256": request_sha256,
+            "launch_intent_sha256": intent_sha256,
+            "launch_nonce": request["worker_launch"]["launch_nonce"],
+            "run_id": request["run_id"],
+            "lane_id": request["lane_id"],
+            "attempt_id": request["attempt_id"],
+            "real_engine_lock_token": request["real_engine_lock"]["token"],
+            "launcher_pid": pid,
+            "launcher_process_create_time": create_time,
+            "expected_command": live._worker_command(
+                request, attempt_dir / "request.json"
+            ),
+        },
+    )
     hello = {
         "schema_version": 1,
         "action": "hello_live_worker",
         "created_at": "2026-08-28T12:00:00+00:00",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "launch_nonce": request["worker_launch"]["launch_nonce"],
         "run_id": request["run_id"],
         "lane_id": request["lane_id"],
         "attempt_id": request["attempt_id"],
         "worker_pid": pid,
         "worker_process_create_time": create_time,
+        "worker_parent_pid": intent["supervisor_pid"],
+        "worker_parent_process_create_time": intent[
+            "supervisor_process_create_time"
+        ],
     }
     hello_sha256 = write_json_with_digest(
         request["worker_launch"]["hello_path"], hello
@@ -764,18 +816,32 @@ def test_parent_authorization_durably_binds_exact_worker_pid_create_time(
         "_live_python_child_identity",
         lambda _process: (pid, create_time),
     )
+    binding_observations: list[bool] = []
+
+    def bind_before_grant(*_args, **_kwargs):
+        binding_observations.append(
+            Path(request["worker_launch"]["authorization_path"]).exists()
+        )
+        return live.AuthorizedWorkerIdentity(
+            worker_pid=pid,
+            worker_process_create_time=create_time,
+            launcher_pid=pid,
+            launcher_process_create_time=create_time,
+            worker_parent_pid=intent["supervisor_pid"],
+            worker_parent_process_create_time=intent[
+                "supervisor_process_create_time"
+            ],
+            delegated=False,
+            command=(),
+        )
+
     monkeypatch.setattr(
         live,
-        "_inspect_exact_worker_identity",
-        lambda observed_pid, observed_create_time: live.WorkerIdentityState(
-            True,
-            "worker_alive",
-            observed_pid,
-            observed_create_time,
-        ),
+        "_bind_launched_worker_identity",
+        bind_before_grant,
     )
 
-    live._authorize_live_child(
+    identity = live._authorize_live_child(
         SimpleNamespace(pid=pid),
         attempt_dir,
         request,
@@ -791,7 +857,472 @@ def test_parent_authorization_durably_binds_exact_worker_pid_create_time(
     assert authorization["worker_hello_sha256"] == hello_sha256
     assert authorization["request_sha256"] == request_sha256
     assert authorization["real_engine_lock_token"] == lock_payload["token"]
+    assert identity.worker_pid == pid
+    assert identity.delegated is False
+    assert binding_observations == [False, False]
     host_lock.release()
+
+
+def test_real_python_subprocess_authorization_accepts_exact_windows_venv_child(
+    tmp_path: Path,
+) -> None:
+    """Exercise the actual venv-launcher topology without HEC-RAS or COM."""
+    context = _context(tmp_path)
+    context.manifest["defaults"]["termination_grace_seconds"] = 10
+    host_lock = ExclusiveQualificationLock(
+        tmp_path / "locks" / "real-engine.lock",
+        kind="real_engine",
+        run_id=context.descriptor["run_id"],
+        lane_id="lane-live",
+        attempt_id="attempt-real-subprocess",
+        git_head=context.descriptor["git_head"],
+    )
+    lock_payload = host_lock.acquire()
+    attempt_dir, request, request_sha256 = live.create_live_attempt_request(
+        context,
+        lane_id="lane-live",
+        attempt_id="attempt-real-subprocess",
+        process_baseline=_empty_inventory(),
+        real_engine_lock_path=host_lock.path,
+        real_engine_lock_payload=lock_payload,
+    )
+    intent_sha256 = live._publish_worker_launch_intent(
+        attempt_dir, request, request_sha256
+    )
+    probe = (
+        "import sys,time; from pathlib import Path; "
+        "from scripts.qualification.execution_evidence.live_worker import "
+        "_register_and_verify_worker_authorization; "
+        "_register_and_verify_worker_authorization(Path(sys.argv[1]), sys.argv[2]); "
+        "time.sleep(0.5)"
+    )
+    command = [
+        request["python_executable"],
+        "-c",
+        probe,
+        str(attempt_dir / "request.json"),
+        request["worker_launch"]["launch_nonce"],
+    ]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(Path(request["repository_root"]))
+    process = subprocess.Popen(
+        command,
+        cwd=request["repository_root"],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=False,
+    )
+    try:
+        live._publish_worker_launcher_binding(
+            process,
+            attempt_dir,
+            request,
+            request_sha256,
+            intent_sha256,
+            command,
+        )
+        identity = live._authorize_live_child(
+            process,
+            attempt_dir,
+            request,
+            request_sha256,
+            intent_sha256,
+            expected_command=command,
+        )
+        stdout, stderr = process.communicate(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.wait(timeout=12)
+        host_lock.release()
+
+    assert process.returncode == 0, (stdout, stderr)
+    assert identity.launcher_pid == process.pid
+    if os.name == "nt" and sys.prefix != sys.base_prefix:
+        assert identity.delegated is True
+        assert identity.worker_pid != identity.launcher_pid
+    else:
+        assert identity.delegated is False
+        assert identity.worker_pid == identity.launcher_pid
+
+
+def test_real_cancel_subprocess_requires_parent_authorization_before_action(
+    tmp_path: Path,
+) -> None:
+    context = _context(tmp_path)
+    context.manifest["defaults"]["termination_grace_seconds"] = 10
+    host_lock = ExclusiveQualificationLock(
+        tmp_path / "locks" / "real-engine.lock",
+        kind="real_engine",
+        run_id=context.descriptor["run_id"],
+        lane_id="lane-live",
+        attempt_id="attempt-real-cancel",
+        git_head=context.descriptor["git_head"],
+    )
+    lock_payload = host_lock.acquire()
+    attempt_dir, request, request_sha256 = live.create_live_attempt_request(
+        context,
+        lane_id="lane-live",
+        attempt_id="attempt-real-cancel",
+        process_baseline=_empty_inventory(),
+        real_engine_lock_path=host_lock.path,
+        real_engine_lock_payload=lock_payload,
+    )
+    cancel_path = live._create_cancellation_request(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    cancel_request, cancel_sha256 = read_json_with_digest(cancel_path)
+    intent_sha256 = live._publish_cancel_launch_intent(
+        attempt_dir,
+        cancel_request,
+        cancel_sha256,
+    )
+    nonce = cancel_request["cancel_launch"]["launch_nonce"]
+    probe = (
+        "import sys,time; from pathlib import Path; "
+        "from scripts.qualification.execution_evidence.live_cancel_worker import "
+        "_register_and_verify_cancel_authorization; "
+        "_register_and_verify_cancel_authorization(Path(sys.argv[1]), sys.argv[2]); "
+        "time.sleep(0.5)"
+    )
+    command = [
+        cancel_request["python_executable"],
+        "-c",
+        probe,
+        str(cancel_path),
+        nonce,
+    ]
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = request["repository_root"]
+    process = subprocess.Popen(
+        command,
+        cwd=request["repository_root"],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=False,
+    )
+    try:
+        binding_sha256 = live._publish_cancel_launcher_binding(
+            process,
+            attempt_dir,
+            cancel_request,
+            cancel_sha256,
+            intent_sha256,
+            command,
+        )
+        identity = live._authorize_cancel_helper(
+            process,
+            attempt_dir,
+            cancel_request,
+            cancel_sha256,
+            intent_sha256,
+            binding_sha256,
+            command,
+        )
+        stdout, stderr = process.communicate(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.wait(timeout=12)
+        host_lock.release()
+
+    assert process.returncode == 0, (stdout, stderr)
+    assert Path(cancel_request["cancel_launch"]["authorization_path"]).is_file()
+    if os.name == "nt" and sys.prefix != sys.base_prefix:
+        assert identity.delegated is True
+        assert identity.worker_pid != identity.launcher_pid
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows launcher topology only")
+def test_windows_launcher_binding_rejects_an_unrelated_direct_sibling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = ["python.exe", "-m", "worker"]
+
+    class ProcessRecord:
+        def __init__(self, pid, create_time, *, parent=None, children=()):
+            self.pid = pid
+            self._create_time = create_time
+            self._parent = parent
+            self._children = list(children)
+
+        def create_time(self):
+            return self._create_time
+
+        def is_running(self):
+            return True
+
+        def cmdline(self):
+            return command
+
+        def parent(self):
+            return self._parent
+
+        def children(self, recursive=False):
+            assert recursive is False
+            return self._children
+
+    launcher = ProcessRecord(100, 10.0)
+    worker = ProcessRecord(101, 10.1, parent=launcher)
+    sibling = ProcessRecord(102, 10.2, parent=launcher)
+    launcher._children = [worker, sibling]
+    records = {record.pid: record for record in (launcher, worker, sibling)}
+    monkeypatch.setattr(live.psutil, "Process", records.__getitem__)
+
+    with pytest.raises(
+        live.LiveSupervisorError,
+        match="does not have one exact worker child",
+    ):
+        live._bind_launched_worker_identity(
+            SimpleNamespace(pid=launcher.pid),
+            launcher_pid=launcher.pid,
+            launcher_create_time=launcher.create_time(),
+            worker_pid=worker.pid,
+            worker_create_time=worker.create_time(),
+            expected_command=command,
+        )
+
+
+def test_delegated_worker_with_child_is_never_signalled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command = ("python.exe", "-m", "worker")
+    signalled: list[int] = []
+
+    class ProcessRecord:
+        def __init__(self, pid, create_time, *, parent=None, children=()):
+            self.pid = pid
+            self._create_time = create_time
+            self._parent = parent
+            self._children = list(children)
+
+        def create_time(self):
+            return self._create_time
+
+        def is_running(self):
+            return True
+
+        def cmdline(self):
+            return list(command)
+
+        def parent(self):
+            return self._parent
+
+        def children(self, recursive=False):
+            assert recursive is False
+            return self._children
+
+        def terminate(self):
+            signalled.append(self.pid)
+
+    launcher = ProcessRecord(100, 10.0)
+    worker = ProcessRecord(101, 10.1, parent=launcher)
+    descendant = ProcessRecord(102, 10.2, parent=worker)
+    launcher._children = [worker]
+    worker._children = [descendant]
+    records = {record.pid: record for record in (launcher, worker, descendant)}
+    monkeypatch.setattr(live.psutil, "Process", records.__getitem__)
+    identity = live.AuthorizedWorkerIdentity(
+        worker_pid=worker.pid,
+        worker_process_create_time=worker.create_time(),
+        launcher_pid=launcher.pid,
+        launcher_process_create_time=launcher.create_time(),
+        worker_parent_pid=launcher.pid,
+        worker_parent_process_create_time=launcher.create_time(),
+        delegated=True,
+        command=command,
+    )
+
+    with pytest.raises(live.LiveSupervisorError, match="changed before signal"):
+        live._terminate_authorized_worker(
+            SimpleNamespace(pid=launcher.pid),
+            identity,
+            grace=1.0,
+        )
+
+    assert signalled == []
+
+
+def test_exact_timeout_termination_targets_authorized_worker_not_launcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+    launcher = SimpleNamespace(
+        pid=2468,
+        wait=lambda timeout: observed.update(launcher_wait=timeout),
+    )
+    identity = _delegated_worker_identity(launcher)
+
+    class Worker:
+        pid = identity.worker_pid
+
+        def children(self, recursive=False):
+            assert recursive is False
+            return []
+
+        def terminate(self):
+            observed["terminated_worker_pid"] = identity.worker_pid
+            observed["terminated_object"] = id(self)
+
+        def wait(self, timeout):
+            observed["worker_wait"] = timeout
+
+    worker = Worker()
+    monkeypatch.setattr(
+        live,
+        "_verified_authorized_worker_process",
+        lambda process, exact_identity, **_kwargs: worker
+        if process is launcher and exact_identity == identity
+        else pytest.fail("termination lost the authorized worker object"),
+    )
+
+    live._terminate_authorized_worker(launcher, identity, grace=2.0)
+
+    assert observed["terminated_worker_pid"] == identity.worker_pid
+    assert observed["terminated_object"] == id(worker)
+    assert observed["worker_wait"] == 2.0
+    assert observed["launcher_wait"] == 2.0
+
+
+def test_exact_timeout_termination_refuses_changed_worker_without_signal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = SimpleNamespace(pid=2468)
+    identity = _delegated_worker_identity(launcher)
+
+    def refuse_binding(*_args, **_kwargs):
+        raise live.LiveSupervisorError("identity changed")
+
+    monkeypatch.setattr(live, "_verified_authorized_worker_process", refuse_binding)
+    monkeypatch.setattr(
+        live.psutil,
+        "Process",
+        lambda _pid: pytest.fail("no process may be opened after binding failure"),
+    )
+
+    with pytest.raises(live.LiveSupervisorError, match="identity changed"):
+        live._terminate_authorized_worker(launcher, identity, grace=2.0)
+
+
+def test_exact_timeout_kill_reuses_the_verified_process_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {"verifications": []}
+    launcher = SimpleNamespace(pid=2468, wait=lambda timeout: 0)
+    identity = _delegated_worker_identity(launcher)
+
+    class Worker:
+        def __init__(self):
+            self.waits = 0
+
+        def terminate(self):
+            observed["terminate_object"] = id(self)
+
+        def kill(self):
+            observed["kill_object"] = id(self)
+
+        def wait(self, timeout):
+            self.waits += 1
+            if self.waits == 1:
+                raise live.psutil.TimeoutExpired(timeout, pid=identity.worker_pid)
+            return 0
+
+    worker = Worker()
+
+    def verify(process, exact_identity, *, worker=None):
+        assert process is launcher
+        assert exact_identity == identity
+        observed["verifications"].append(worker)
+        return worker if worker is not None else globals_worker
+
+    globals_worker = worker
+    monkeypatch.setattr(live, "_verified_authorized_worker_process", verify)
+
+    live._terminate_authorized_worker(launcher, identity, grace=2.0)
+
+    assert observed["verifications"] == [None, worker]
+    assert observed["terminate_object"] == id(worker)
+    assert observed["kill_object"] == id(worker)
+
+
+def test_cancellation_helper_timeout_targets_discovered_interpreter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    cancel_request = attempt / "cancel-request.json"
+    nonce = str(uuid.uuid4())
+    write_json_with_digest(
+        cancel_request,
+        {
+            "python_executable": sys.executable,
+            "timeout_seconds": 2.0,
+            "cancel_launch": {
+                "launch_nonce": nonce,
+                "intent_path": str(attempt / "cancel-intent.json"),
+                "binding_path": str(attempt / "cancel-launcher.json"),
+                "hello_path": str(attempt / "cancel-hello.json"),
+                "authorization_path": str(attempt / "cancel-auth.json"),
+            },
+        },
+    )
+    request = {
+        "python_executable": sys.executable,
+        "repository_root": str(repository),
+        "termination_grace_seconds": 2.0,
+    }
+    observed: dict[str, object] = {}
+
+    class FakeProcess:
+        pid = 2468
+
+        def __init__(self, command, **_kwargs):
+            observed["command"] = command
+
+        def wait(self, timeout):
+            raise subprocess.TimeoutExpired(observed["command"], timeout)
+
+    identity = _delegated_worker_identity(FakeProcess)
+    monkeypatch.setattr(
+        live,
+        "_create_cancellation_request",
+        lambda *_: cancel_request,
+    )
+    monkeypatch.setattr(live.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(live, "_publish_cancel_launch_intent", lambda *_: HASH_A)
+    monkeypatch.setattr(live, "_publish_cancel_launcher_binding", lambda *_: HASH_A)
+    monkeypatch.setattr(
+        live,
+        "_authorize_cancel_helper",
+        lambda process, *_: identity
+        if process.pid == identity.launcher_pid
+        else pytest.fail("cancellation helper authorization lost launch identity"),
+    )
+    monkeypatch.setattr(
+        live,
+        "_terminate_authorized_worker",
+        lambda process, exact_identity, grace: observed.update(
+            termination_pid=exact_identity.worker_pid,
+            launcher_pid=process.pid,
+            grace=grace,
+        ),
+    )
+
+    safe, detail = live._run_cancellation_helper(attempt, request, HASH_A)
+
+    assert safe is False
+    assert detail == "cancellation_helper_timed_out"
+    assert observed["termination_pid"] == identity.worker_pid
+    assert observed["termination_pid"] != observed["launcher_pid"]
 
 
 def _publish_duplicate_invariant_worker(
@@ -1243,18 +1774,34 @@ def test_outer_timeout_uses_exact_python_helper_and_never_raw_process_kill(
 
     monkeypatch.setattr(live.subprocess, "Popen", FakeProcess)
     monkeypatch.setattr(live, "_publish_worker_launch_intent", lambda *_: HASH_A)
-    monkeypatch.setattr(live, "_authorize_live_child", lambda *_: None)
+    monkeypatch.setattr(live, "_publish_worker_launcher_binding", lambda *_: HASH_A)
+    monkeypatch.setattr(
+        live,
+        "_authorize_live_child",
+        lambda process, *_, **__: _delegated_worker_identity(process),
+    )
     monkeypatch.setattr(
         live,
         "_run_cancellation_helper",
         lambda *_: (True, "exact_plan_quiescence_confirmed"),
+    )
+    monkeypatch.setattr(
+        live,
+        "_terminate_authorized_worker",
+        lambda process, identity, grace: observed.update(
+            terminated_worker_pid=identity.worker_pid,
+            launcher_pid=process.pid,
+            termination_grace=grace,
+        ),
     )
 
     outcome = live._run_live_child(attempt, request, "a" * 64)
 
     assert outcome.timed_out is True
     assert outcome.cancellation_safe is True
-    assert observed["terminated"] is True
+    assert outcome.pid == 9753
+    assert observed["terminated_worker_pid"] == 9753
+    assert observed["launcher_pid"] == 2468
     command = observed["command"]
     assert command[1:3] == ["-m", "scripts.qualification.execution_evidence.live_worker"]
     assert all("taskkill" not in str(part).casefold() for part in command)
@@ -1298,7 +1845,12 @@ def test_modern_unproven_timeout_leaves_python_child_and_logs_unterminalized(
 
     monkeypatch.setattr(live.subprocess, "Popen", FakeProcess)
     monkeypatch.setattr(live, "_publish_worker_launch_intent", lambda *_: HASH_A)
-    monkeypatch.setattr(live, "_authorize_live_child", lambda *_: None)
+    monkeypatch.setattr(live, "_publish_worker_launcher_binding", lambda *_: HASH_A)
+    monkeypatch.setattr(
+        live,
+        "_authorize_live_child",
+        lambda process, *_, **__: _direct_worker_identity(process),
+    )
     monkeypatch.setattr(
         live,
         "_run_cancellation_helper",
@@ -1352,7 +1904,12 @@ def test_controller_timeout_never_terminates_python_without_exact_quiescence(
 
     monkeypatch.setattr(live.subprocess, "Popen", FakeProcess)
     monkeypatch.setattr(live, "_publish_worker_launch_intent", lambda *_: HASH_A)
-    monkeypatch.setattr(live, "_authorize_live_child", lambda *_: None)
+    monkeypatch.setattr(live, "_publish_worker_launcher_binding", lambda *_: HASH_A)
+    monkeypatch.setattr(
+        live,
+        "_authorize_live_child",
+        lambda process, *_, **__: _direct_worker_identity(process),
+    )
     monkeypatch.setattr(
         live,
         "_run_cancellation_helper",
@@ -1727,6 +2284,7 @@ def _publish_worker_lease(
     pid: int,
     process_create_time: float,
     authorize: bool = True,
+    delegated_launcher: tuple[int, float] | None = None,
 ) -> None:
     attempt_dir = (
         context.run_root / "attempts" / "lane-live" / "retained-attempt"
@@ -1735,18 +2293,49 @@ def _publish_worker_lease(
     intent_sha256 = live._publish_worker_launch_intent(
         attempt_dir, request, request_sha256
     )
+    intent, _ = read_json_with_digest(attempt_dir / "worker-launch-intent.json")
+    parent_pid, parent_create_time = delegated_launcher or (
+        intent["supervisor_pid"],
+        intent["supervisor_process_create_time"],
+    )
+    launcher_pid, launcher_create_time = delegated_launcher or (
+        pid,
+        process_create_time,
+    )
+    binding_sha256 = write_json_with_digest(
+        request["worker_launch"]["binding_path"],
+        {
+            "schema_version": 1,
+            "action": "bind_live_worker_launcher",
+            "request_sha256": request_sha256,
+            "launch_intent_sha256": intent_sha256,
+            "launch_nonce": request["worker_launch"]["launch_nonce"],
+            "run_id": request["run_id"],
+            "lane_id": request["lane_id"],
+            "attempt_id": request["attempt_id"],
+            "real_engine_lock_token": request["real_engine_lock"]["token"],
+            "launcher_pid": launcher_pid,
+            "launcher_process_create_time": launcher_create_time,
+            "expected_command": live._worker_command(
+                request, attempt_dir / "request.json"
+            ),
+        },
+    )
     hello = {
         "schema_version": 1,
         "action": "hello_live_worker",
         "created_at": "2026-08-28T12:00:00+00:00",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "launch_nonce": request["worker_launch"]["launch_nonce"],
         "run_id": request["run_id"],
         "lane_id": request["lane_id"],
         "attempt_id": request["attempt_id"],
         "worker_pid": pid,
         "worker_process_create_time": process_create_time,
+        "worker_parent_pid": parent_pid,
+        "worker_parent_process_create_time": parent_create_time,
     }
     hello_sha256 = write_json_with_digest(
         request["worker_launch"]["hello_path"], hello
@@ -1758,6 +2347,7 @@ def _publish_worker_lease(
             "authorized_at": "2026-08-28T12:00:01+00:00",
             "request_sha256": request_sha256,
             "launch_intent_sha256": intent_sha256,
+            "launch_binding_sha256": binding_sha256,
             "worker_hello_sha256": hello_sha256,
             "launch_nonce": request["worker_launch"]["launch_nonce"],
             "run_id": request["run_id"],
@@ -1766,11 +2356,284 @@ def _publish_worker_lease(
             "real_engine_lock_token": request["real_engine_lock"]["token"],
             "worker_pid": pid,
             "worker_process_create_time": process_create_time,
-            "supervisor_pid": os.getpid(),
+            "worker_parent_pid": parent_pid,
+            "worker_parent_process_create_time": parent_create_time,
+            "launcher_pid": parent_pid if delegated_launcher else pid,
+            "launcher_process_create_time": (
+                parent_create_time if delegated_launcher else process_create_time
+            ),
+            "launcher_delegated": delegated_launcher is not None,
+            "supervisor_pid": intent["supervisor_pid"],
+            "supervisor_process_create_time": intent[
+                "supervisor_process_create_time"
+            ],
         }
         write_json_with_digest(
             request["worker_launch"]["authorization_path"], authorization
         )
+
+
+def _publish_cancel_lease(
+    context: RunContext,
+    *,
+    publish_hello: bool,
+    worker_pid: int = 9876,
+    worker_create_time: float = 123.0,
+    launcher_pid: int = 8765,
+    launcher_create_time: float = 122.0,
+) -> tuple[Path, dict]:
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    live_request, live_sha256 = read_json_with_digest(attempt_dir / "request.json")
+    cancel_path = live._create_cancellation_request(
+        attempt_dir,
+        live_request,
+        live_sha256,
+    )
+    request, request_sha256 = read_json_with_digest(cancel_path)
+    intent_sha256 = live._publish_cancel_launch_intent(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    nonce = request["cancel_launch"]["launch_nonce"]
+    binding_sha256 = write_json_with_digest(
+        request["cancel_launch"]["binding_path"],
+        {
+            "schema_version": 1,
+            "action": "bind_cancel_helper_launcher",
+            "request_sha256": request_sha256,
+            "launch_intent_sha256": intent_sha256,
+            "launch_nonce": nonce,
+            "run_id": request["run_id"],
+            "lane_id": request["lane_id"],
+            "attempt_id": request["attempt_id"],
+            "real_engine_lock_token": request["real_engine_lock"]["token"],
+            "launcher_pid": launcher_pid,
+            "launcher_process_create_time": launcher_create_time,
+            "expected_command": live._cancel_worker_command(request, cancel_path),
+        },
+    )
+    if publish_hello:
+        write_json_with_digest(
+            request["cancel_launch"]["hello_path"],
+            {
+                "schema_version": 1,
+                "action": "hello_cancel_helper",
+                "request_sha256": request_sha256,
+                "launch_intent_sha256": intent_sha256,
+                "launch_binding_sha256": binding_sha256,
+                "launch_nonce": nonce,
+                "run_id": request["run_id"],
+                "lane_id": request["lane_id"],
+                "attempt_id": request["attempt_id"],
+                "real_engine_lock_token": request["real_engine_lock"]["token"],
+                "worker_pid": worker_pid,
+                "worker_process_create_time": worker_create_time,
+                "worker_parent_pid": launcher_pid,
+                "worker_parent_process_create_time": launcher_create_time,
+            },
+        )
+    return attempt_dir, live_request
+
+
+def test_cancel_recovery_fails_closed_after_launcher_binding_without_hello(
+    tmp_path: Path,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    attempt_dir, live_request = _publish_cancel_lease(
+        context,
+        publish_hello=False,
+    )
+
+    safe, detail = live._cancel_launch_recovery_gate(attempt_dir, live_request)
+
+    assert safe is False
+    assert "hello publication is incomplete" in detail
+    lock.release()
+
+
+def test_cancel_worker_refuses_action_without_exact_launch_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    attempt_dir, _live_request = _publish_cancel_lease(
+        context,
+        publish_hello=False,
+    )
+    cancel_path = attempt_dir / "cancel-request.json"
+    cancel_request, _ = read_json_with_digest(cancel_path)
+    monkeypatch.setattr(
+        live_cancel_worker,
+        "execute_cancellation",
+        lambda *_: pytest.fail("cancellation action ran before authorization"),
+    )
+
+    returncode = live_cancel_worker.main(
+        [
+            "--request",
+            str(cancel_path),
+            "--launch-nonce",
+            cancel_request["cancel_launch"]["launch_nonce"],
+        ]
+    )
+
+    assert returncode == 30
+    lock.release()
+
+
+def test_cancel_recovery_requires_exact_delegated_launcher_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    attempt_dir, live_request = _publish_cancel_lease(
+        context,
+        publish_hello=True,
+    )
+
+    def inspect(pid, create_time):
+        alive = pid == 8765
+        return live.WorkerIdentityState(
+            alive,
+            "worker_alive" if alive else "worker_absent",
+            pid,
+            create_time,
+        )
+
+    monkeypatch.setattr(live, "_inspect_exact_worker_identity", inspect)
+
+    safe, detail = live._cancel_launch_recovery_gate(attempt_dir, live_request)
+
+    assert safe is False
+    assert "cancellation launcher is alive" in detail
+    lock.release()
+
+
+def test_recovery_without_authorization_requires_delegated_launcher_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    _publish_worker_lease(
+        context,
+        pid=9876,
+        process_create_time=123.0,
+        authorize=False,
+        delegated_launcher=(8765, 122.0),
+    )
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+
+    def inspect(pid, create_time):
+        if pid == 9876:
+            return live.WorkerIdentityState(False, "worker_absent", pid, create_time)
+        return live.WorkerIdentityState(True, "worker_alive", pid, create_time)
+
+    monkeypatch.setattr(live, "_inspect_exact_worker_identity", inspect)
+
+    safe, detail = live._worker_launch_recovery_gate(attempt_dir, request)
+
+    assert safe is False
+    assert "delegated Python launcher is still alive" in detail
+    lock.release()
+
+
+def test_recovery_rejects_unbound_non_supervisor_parent_before_authorization(
+    tmp_path: Path,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    _publish_worker_lease(
+        context,
+        pid=9876,
+        process_create_time=123.0,
+        authorize=False,
+        delegated_launcher=(8765, 122.0),
+    )
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+    hello_path = Path(request["worker_launch"]["hello_path"])
+    hello, _ = read_json_with_digest(hello_path)
+    hello["worker_parent_pid"] = 7654
+    write_json_with_digest(hello_path, hello, replace=True)
+
+    safe, detail = live._worker_launch_recovery_gate(attempt_dir, request)
+
+    assert safe is False
+    assert "relationship is unverifiable" in detail
+    lock.release()
+
+
+def test_recovery_without_authorization_accepts_absent_worker_and_launcher(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    _publish_worker_lease(
+        context,
+        pid=9876,
+        process_create_time=123.0,
+        authorize=False,
+        delegated_launcher=(8765, 122.0),
+    )
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+    monkeypatch.setattr(
+        live,
+        "_inspect_exact_worker_identity",
+        lambda pid, create_time: live.WorkerIdentityState(
+            False, "worker_absent", pid, create_time
+        ),
+    )
+
+    safe, detail = live._worker_launch_recovery_gate(attempt_dir, request)
+
+    assert safe is True
+    assert "worker and delegated launcher are absent" in detail
+    lock.release()
+
+
+def test_recovery_uses_digest_bound_delegated_launcher_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    _publish_worker_lease(
+        context,
+        pid=9876,
+        process_create_time=123.0,
+        authorize=True,
+        delegated_launcher=(8765, 122.0),
+    )
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+
+    def inspect(pid, create_time):
+        alive = pid == 8765
+        return live.WorkerIdentityState(
+            alive,
+            "worker_alive" if alive else "worker_absent",
+            pid,
+            create_time,
+        )
+
+    monkeypatch.setattr(live, "_inspect_exact_worker_identity", inspect)
+
+    safe, detail = live._worker_launch_recovery_gate(attempt_dir, request)
+
+    assert safe is False
+    assert "delegated Python launcher is still alive" in detail
+    lock.release()
 
 
 @pytest.mark.parametrize(

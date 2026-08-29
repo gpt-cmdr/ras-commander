@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import sys
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,6 +209,7 @@ def _request(
         "worker_launch": {
             "launch_nonce": str(uuid.uuid4()),
             "intent_path": str(attempt_dir / "worker-launch-intent.json"),
+            "binding_path": str(attempt_dir / "worker-launcher.json"),
             "hello_path": str(attempt_dir / "worker-hello.json"),
             "authorization_path": str(
                 attempt_dir / "worker-authorization.json"
@@ -1297,8 +1299,28 @@ def _write_worker_launch_intent(
         "attempt_id": request["attempt_id"],
         "real_engine_lock_token": request["real_engine_lock"]["token"],
         "supervisor_pid": os.getpid(),
+        "supervisor_process_create_time": psutil.Process(os.getpid()).create_time(),
     }
-    return write_json_with_digest(launch["intent_path"], intent)
+    intent_sha256 = write_json_with_digest(launch["intent_path"], intent)
+    process = psutil.Process(os.getpid())
+    write_json_with_digest(
+        launch["binding_path"],
+        {
+            "schema_version": 1,
+            "action": "bind_live_worker_launcher",
+            "request_sha256": request_sha256,
+            "launch_intent_sha256": intent_sha256,
+            "launch_nonce": launch["launch_nonce"],
+            "run_id": request["run_id"],
+            "lane_id": request["lane_id"],
+            "attempt_id": request["attempt_id"],
+            "real_engine_lock_token": request["real_engine_lock"]["token"],
+            "launcher_pid": os.getpid(),
+            "launcher_process_create_time": process.create_time(),
+            "expected_command": [sys.executable, "-m", "test-worker"],
+        },
+    )
+    return intent_sha256
 
 
 def test_worker_missing_parent_authorization_stops_before_staging(

@@ -9,11 +9,16 @@ sufficient evidence and is never used here.
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+import psutil
 
 from .manifest import _preflight_repository
 from .offline_records import json_safe
@@ -23,6 +28,207 @@ from .receipts import read_json_with_digest, write_json_with_digest
 
 class LiveCancellationError(RuntimeError):
     """Exact cancellation could not be proved safe."""
+
+
+_IDENTITY_TOLERANCE_SECONDS = 0.001
+_AUTHORIZATION_POLL_SECONDS = 0.02
+
+
+def _cancel_launch_paths(
+    request_path: Path,
+    request: Mapping[str, Any],
+) -> tuple[str, Path, Path, Path, Path]:
+    launch = request.get("cancel_launch")
+    if not isinstance(launch, Mapping):
+        raise LiveCancellationError("cancellation request lacks launch metadata")
+    nonce = launch.get("launch_nonce")
+    try:
+        uuid.UUID(str(nonce))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise LiveCancellationError("cancellation launch nonce is invalid") from exc
+    expected = tuple(
+        (request_path.parent / name).resolve(strict=False)
+        for name in (
+            "cancel-intent.json",
+            "cancel-launcher.json",
+            "cancel-hello.json",
+            "cancel-auth.json",
+        )
+    )
+    claimed = tuple(
+        Path(str(launch.get(field, ""))).resolve(strict=False)
+        for field in (
+            "intent_path",
+            "binding_path",
+            "hello_path",
+            "authorization_path",
+        )
+    )
+    if claimed != expected:
+        raise LiveCancellationError("cancellation launch paths escaped the attempt")
+    return str(nonce), *expected
+
+
+def _process_identity(process: psutil.Process) -> tuple[int, float]:
+    try:
+        create_time = float(process.create_time())
+        running = process.is_running()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError) as exc:
+        raise LiveCancellationError("cancellation helper identity is unavailable") from exc
+    if not running or not math.isfinite(create_time) or create_time <= 0:
+        raise LiveCancellationError("cancellation helper identity is not stable")
+    return process.pid, create_time
+
+
+def _register_and_verify_cancel_authorization(
+    request_path: Path,
+    launch_nonce: str | None,
+) -> None:
+    request_path = request_path.resolve(strict=True)
+    request, request_sha256 = read_json_with_digest(request_path)
+    nonce, intent_path, binding_path, hello_path, authorization_path = (
+        _cancel_launch_paths(request_path, request)
+    )
+    if launch_nonce != nonce:
+        raise LiveCancellationError("cancellation launch nonce disagrees with request")
+    intent, intent_sha256 = read_json_with_digest(intent_path)
+    binding, binding_sha256 = read_json_with_digest(binding_path)
+    common = {
+        "request_sha256": request_sha256,
+        "launch_nonce": nonce,
+        "run_id": request.get("run_id"),
+        "lane_id": request.get("lane_id"),
+        "attempt_id": request.get("attempt_id"),
+        "real_engine_lock_token": request.get("real_engine_lock", {}).get("token"),
+    }
+    for field, value in {
+        "schema_version": 1,
+        "action": "launch_cancel_helper",
+        **common,
+    }.items():
+        if intent.get(field) != value:
+            raise LiveCancellationError(f"cancellation launch intent mismatch for {field}")
+    for field, value in {
+        "schema_version": 1,
+        "action": "bind_cancel_helper_launcher",
+        "launch_intent_sha256": intent_sha256,
+        **common,
+    }.items():
+        if binding.get(field) != value:
+            raise LiveCancellationError(f"cancellation launcher mismatch for {field}")
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    if (
+        not isinstance(supervisor_pid, int)
+        or isinstance(supervisor_pid, bool)
+        or supervisor_pid <= 0
+        or not isinstance(supervisor_create_time, (int, float))
+        or isinstance(supervisor_create_time, bool)
+        or not math.isfinite(float(supervisor_create_time))
+        or float(supervisor_create_time) <= 0
+    ):
+        raise LiveCancellationError("cancellation supervisor identity is invalid")
+    worker = psutil.Process(os.getpid())
+    worker_pid, worker_create_time = _process_identity(worker)
+    try:
+        parent = worker.parent()
+        if parent is None:
+            raise LiveCancellationError("cancellation helper parent is unavailable")
+        parent_pid, parent_create_time = _process_identity(parent)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError) as exc:
+        raise LiveCancellationError("cancellation helper parent is unverifiable") from exc
+    launcher_pid = binding.get("launcher_pid")
+    launcher_create_time = binding.get("launcher_process_create_time")
+    if (
+        not isinstance(launcher_pid, int)
+        or isinstance(launcher_pid, bool)
+        or not isinstance(launcher_create_time, (int, float))
+        or isinstance(launcher_create_time, bool)
+        or not math.isfinite(float(launcher_create_time))
+        or (
+            worker_pid == launcher_pid
+            and abs(worker_create_time - float(launcher_create_time))
+            > _IDENTITY_TOLERANCE_SECONDS
+        )
+        or (
+            worker_pid != launcher_pid
+            and (
+                parent_pid != launcher_pid
+                or abs(parent_create_time - float(launcher_create_time))
+                > _IDENTITY_TOLERANCE_SECONDS
+            )
+        )
+    ):
+        raise LiveCancellationError("cancellation helper launcher relationship is invalid")
+    hello = {
+        "schema_version": 1,
+        "action": "hello_cancel_helper",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
+        **common,
+        "worker_pid": worker_pid,
+        "worker_process_create_time": worker_create_time,
+        "worker_parent_pid": parent_pid,
+        "worker_parent_process_create_time": parent_create_time,
+    }
+    hello_sha256 = write_json_with_digest(hello_path, json_safe(hello))
+    deadline = time.monotonic() + min(
+        60.0,
+        max(0.1, float(request.get("timeout_seconds", 0.0))),
+    )
+    while not (
+        authorization_path.exists()
+        and authorization_path.with_suffix(".sha256").exists()
+    ):
+        if time.monotonic() >= deadline:
+            raise LiveCancellationError("parent did not authorize cancellation helper")
+        time.sleep(_AUTHORIZATION_POLL_SECONDS)
+    authorization, _ = read_json_with_digest(authorization_path)
+    expected = {
+        "schema_version": 1,
+        "action": "authorize_cancel_helper",
+        "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
+        "worker_hello_sha256": hello_sha256,
+        **common,
+        "worker_pid": worker_pid,
+        "worker_parent_pid": parent_pid,
+        "launcher_pid": launcher_pid,
+        "supervisor_pid": supervisor_pid,
+    }
+    for field, value in expected.items():
+        if authorization.get(field) != value:
+            raise LiveCancellationError(f"cancellation authorization mismatch for {field}")
+    float_fields = {
+        "worker_process_create_time": worker_create_time,
+        "worker_parent_process_create_time": parent_create_time,
+        "launcher_process_create_time": launcher_create_time,
+        "supervisor_process_create_time": supervisor_create_time,
+    }
+    if any(
+        not isinstance(authorization.get(field), (int, float))
+        or isinstance(authorization.get(field), bool)
+        or abs(float(authorization[field]) - float(value))
+        > _IDENTITY_TOLERANCE_SECONDS
+        for field, value in float_fields.items()
+    ):
+        raise LiveCancellationError("cancellation authorization process time mismatch")
+    if authorization.get("launcher_delegated") is not (
+        worker_pid != launcher_pid
+    ):
+        raise LiveCancellationError("cancellation authorization delegation mismatch")
+    current_pid, current_create_time = _process_identity(worker)
+    current_parent_pid, current_parent_create_time = _process_identity(parent)
+    if (
+        current_pid != worker_pid
+        or abs(current_create_time - worker_create_time)
+        > _IDENTITY_TOLERANCE_SECONDS
+        or current_parent_pid != parent_pid
+        or abs(current_parent_create_time - parent_create_time)
+        > _IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveCancellationError("cancellation helper identity changed after grant")
 
 
 def _field(value: Any, name: str) -> Any:
@@ -276,12 +482,17 @@ def execute_cancellation(path: str | Path) -> dict[str, Any]:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="execution-evidence-live-cancel-worker")
     parser.add_argument("--request", required=True, type=Path)
+    parser.add_argument("--launch-nonce")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
+        _register_and_verify_cancel_authorization(
+            args.request,
+            args.launch_nonce,
+        )
         execute_cancellation(args.request)
     except Exception as exc:
         print(f"live cancellation failed: {exc}", file=sys.stderr)

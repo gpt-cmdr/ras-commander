@@ -99,6 +99,20 @@ class WorkerIdentityState:
     process_create_time: float
 
 
+@dataclass(frozen=True)
+class AuthorizedWorkerIdentity:
+    """Exact worker identity bound to the process launched by the supervisor."""
+
+    worker_pid: int
+    worker_process_create_time: float
+    launcher_pid: int
+    launcher_process_create_time: float
+    worker_parent_pid: int
+    worker_parent_process_create_time: float
+    delegated: bool
+    command: tuple[str, ...]
+
+
 _WORKER_TERMINALS = {
     "passed": 0,
     "expected_failure": 10,
@@ -367,6 +381,7 @@ def create_live_attempt_request(
     worker_launch = {
         "launch_nonce": str(uuid.uuid4()),
         "intent_path": str(attempt_dir / "worker-launch-intent.json"),
+        "binding_path": str(attempt_dir / "worker-launcher.json"),
         "hello_path": str(attempt_dir / "worker-hello.json"),
         "authorization_path": str(attempt_dir / "worker-authorization.json"),
     }
@@ -430,16 +445,6 @@ def _worker_command(request: Mapping[str, Any], request_path: Path) -> list[str]
     ]
 
 
-def _terminate_exact_python_child(process: subprocess.Popen[Any], grace: float) -> None:
-    """Terminate only the exact Python child handle, never a HEC process name."""
-    process.terminate()
-    try:
-        process.wait(timeout=max(0.1, min(grace, 10.0)))
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
-
-
 def _worker_launch_paths(
     attempt_dir: Path,
     request: Mapping[str, Any],
@@ -466,6 +471,55 @@ def _worker_launch_paths(
     if claimed != tuple(lexical_absolute_path(path) for path in expected):
         raise LiveSupervisorError("worker launch handshake paths escaped the attempt")
     return nonce, *expected
+
+
+def _worker_launcher_path(
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+) -> Path:
+    launch = request.get("worker_launch")
+    if not isinstance(launch, Mapping):
+        raise LiveSupervisorError("live request lacks worker launch handshake metadata")
+    expected = lexical_absolute_path(attempt_dir / "worker-launcher.json")
+    claimed = lexical_absolute_path(str(launch.get("binding_path", "")))
+    if claimed != expected:
+        raise LiveSupervisorError("worker launcher binding path escaped the attempt")
+    return expected
+
+
+def _cancel_launch_paths(
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+) -> tuple[str, Path, Path, Path, Path]:
+    launch = request.get("cancel_launch")
+    if not isinstance(launch, Mapping):
+        raise LiveSupervisorError("cancellation request lacks launch handshake metadata")
+    nonce = launch.get("launch_nonce")
+    try:
+        uuid.UUID(str(nonce))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise LiveSupervisorError("cancellation launch nonce is invalid") from exc
+    expected = tuple(
+        lexical_absolute_path(attempt_dir / name)
+        for name in (
+            "cancel-intent.json",
+            "cancel-launcher.json",
+            "cancel-hello.json",
+            "cancel-auth.json",
+        )
+    )
+    claimed = tuple(
+        lexical_absolute_path(str(launch.get(field, "")))
+        for field in (
+            "intent_path",
+            "binding_path",
+            "hello_path",
+            "authorization_path",
+        )
+    )
+    if claimed != expected:
+        raise LiveSupervisorError("cancellation launch paths escaped the attempt")
+    return str(nonce), *expected
 
 
 def _inspect_exact_worker_identity(
@@ -525,6 +579,289 @@ def _live_python_child_identity(process: subprocess.Popen[Any]) -> tuple[int, fl
     return pid, create_time
 
 
+def _bind_launched_worker_identity(
+    process: subprocess.Popen[Any],
+    *,
+    launcher_pid: int,
+    launcher_create_time: float,
+    worker_pid: Any,
+    worker_create_time: Any,
+    expected_command: Sequence[str],
+) -> AuthorizedWorkerIdentity:
+    """Bind a worker hello to the exact process tree created by ``Popen``.
+
+    A Windows virtual-environment ``python.exe`` can be the standard Python
+    launcher. In that case ``Popen.pid`` identifies the launcher, which starts
+    one base-interpreter child and waits for it. Accept only that one-hop shape:
+    the hello process must be the launcher's sole direct child and both process
+    command lines must exactly equal the command supplied to ``Popen``.
+    """
+    if (
+        not isinstance(worker_pid, int)
+        or isinstance(worker_pid, bool)
+        or worker_pid <= 0
+        or not isinstance(worker_create_time, (int, float))
+        or isinstance(worker_create_time, bool)
+        or not math.isfinite(float(worker_create_time))
+        or float(worker_create_time) <= 0
+    ):
+        raise LiveSupervisorError("worker hello lacks a valid PID/create-time identity")
+    if process.pid != launcher_pid:
+        raise LiveSupervisorError("live Python launcher PID changed during authorization")
+    expected = [str(part) for part in expected_command]
+    try:
+        launcher = psutil.Process(launcher_pid)
+        observed_launcher_create_time = float(launcher.create_time())
+        launcher_running = launcher.is_running()
+        launcher_command = launcher.cmdline()
+        launcher_children = launcher.children(recursive=False)
+        worker = psutil.Process(worker_pid)
+        observed_worker_create_time = float(worker.create_time())
+        worker_running = worker.is_running()
+        worker_command = worker.cmdline()
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError(
+            "live Python worker process-tree identity could not be proved"
+        ) from exc
+    if (
+        not launcher_running
+        or not math.isfinite(observed_launcher_create_time)
+        or abs(observed_launcher_create_time - launcher_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveSupervisorError("live Python launcher identity changed before authorization")
+    if launcher_command != expected:
+        raise LiveSupervisorError("live Python launcher command line changed before authorization")
+    expected_worker_create_time = float(worker_create_time)
+    if (
+        not worker_running
+        or not math.isfinite(observed_worker_create_time)
+        or abs(observed_worker_create_time - expected_worker_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveSupervisorError("worker hello create-time identity mismatch")
+    if worker_command != expected:
+        raise LiveSupervisorError("live Python worker command line is not the launched command")
+    try:
+        parent = worker.parent()
+        if parent is None:
+            raise LiveSupervisorError("live Python worker parent identity is unavailable")
+        worker_parent_pid = parent.pid
+        worker_parent_create_time = float(parent.create_time())
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError(
+            "live Python worker parent identity could not be proved"
+        ) from exc
+    if (
+        not isinstance(worker_parent_pid, int)
+        or isinstance(worker_parent_pid, bool)
+        or worker_parent_pid <= 0
+        or not math.isfinite(worker_parent_create_time)
+        or worker_parent_create_time <= 0
+    ):
+        raise LiveSupervisorError("live Python worker parent identity is invalid")
+    if worker_pid == launcher_pid:
+        if (
+            abs(expected_worker_create_time - launcher_create_time)
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        ):
+            raise LiveSupervisorError("worker hello create-time identity mismatch")
+        return AuthorizedWorkerIdentity(
+            worker_pid=worker_pid,
+            worker_process_create_time=expected_worker_create_time,
+            launcher_pid=launcher_pid,
+            launcher_process_create_time=launcher_create_time,
+            worker_parent_pid=worker_parent_pid,
+            worker_parent_process_create_time=worker_parent_create_time,
+            delegated=False,
+            command=tuple(expected),
+        )
+    if os.name != "nt":
+        raise LiveSupervisorError(
+            "worker hello PID is not the exact launched Python process"
+        )
+    try:
+        child_identities = [
+            (child.pid, float(child.create_time())) for child in launcher_children
+        ]
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError(
+            "Windows Python launcher child identity could not be proved"
+        ) from exc
+    if worker_parent_pid != launcher_pid:
+        raise LiveSupervisorError(
+            "worker hello PID is not a direct child of the launched Python process"
+        )
+    if (
+        abs(worker_parent_create_time - launcher_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or len(child_identities) != 1
+        or child_identities[0][0] != worker_pid
+        or abs(child_identities[0][1] - expected_worker_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or expected_worker_create_time
+        < launcher_create_time - _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveSupervisorError(
+            "Windows Python launcher does not have one exact worker child"
+        )
+    return AuthorizedWorkerIdentity(
+        worker_pid=worker_pid,
+        worker_process_create_time=expected_worker_create_time,
+        launcher_pid=launcher_pid,
+        launcher_process_create_time=launcher_create_time,
+        worker_parent_pid=worker_parent_pid,
+        worker_parent_process_create_time=worker_parent_create_time,
+        delegated=True,
+        command=tuple(expected),
+    )
+
+
+def _terminate_authorized_worker(
+    process: subprocess.Popen[Any],
+    identity: AuthorizedWorkerIdentity,
+    grace: float,
+) -> None:
+    """Terminate only a revalidated worker identity, not its launcher wrapper."""
+    worker = _verified_authorized_worker_process(process, identity)
+    timeout = max(0.1, min(grace, 10.0))
+    try:
+        worker.terminate()
+        try:
+            worker.wait(timeout=timeout)
+        except psutil.TimeoutExpired:
+            _verified_authorized_worker_process(
+                process,
+                identity,
+                worker=worker,
+            )
+            worker.kill()
+            worker.wait(timeout=5)
+    except psutil.NoSuchProcess:
+        pass
+    except (
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        psutil.TimeoutExpired,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError(
+            "authorized Python worker could not be terminated exactly"
+        ) from exc
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise LiveSupervisorError(
+            "Python launcher remained alive after exact worker termination"
+        ) from exc
+
+
+def _verified_authorized_worker_process(
+    process: subprocess.Popen[Any],
+    identity: AuthorizedWorkerIdentity,
+    *,
+    worker: psutil.Process | None = None,
+) -> psutil.Process:
+    """Return the same process object whose exact identity is verified for signal."""
+    if process.pid != identity.launcher_pid:
+        raise LiveSupervisorError("authorized Python launcher PID changed")
+    try:
+        launcher = psutil.Process(identity.launcher_pid)
+        if worker is None:
+            worker = psutil.Process(identity.worker_pid)
+        launcher_create_time = float(launcher.create_time())
+        worker_create_time = float(worker.create_time())
+        parent = worker.parent()
+        launcher_children = launcher.children(recursive=False)
+        worker_children = worker.children(recursive=False)
+        launcher_command = launcher.cmdline()
+        worker_command = worker.cmdline()
+        launcher_running = launcher.is_running()
+        worker_running = worker.is_running()
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError(
+            "authorized Python worker signal identity is unverifiable"
+        ) from exc
+    if parent is None:
+        raise LiveSupervisorError("authorized Python worker parent is unavailable")
+    parent_create_time = float(parent.create_time())
+    if (
+        not launcher_running
+        or not worker_running
+        or worker.pid != identity.worker_pid
+        or abs(launcher_create_time - identity.launcher_process_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or abs(worker_create_time - identity.worker_process_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or parent.pid != identity.worker_parent_pid
+        or abs(parent_create_time - identity.worker_parent_process_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or launcher_command != list(identity.command)
+        or worker_command != list(identity.command)
+        or worker_children
+    ):
+        raise LiveSupervisorError("authorized Python worker changed before signal")
+    if identity.delegated:
+        if (
+            identity.worker_parent_pid != identity.launcher_pid
+            or len(launcher_children) != 1
+            or launcher_children[0].pid != identity.worker_pid
+            or abs(
+                float(launcher_children[0].create_time())
+                - identity.worker_process_create_time
+            )
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        ):
+            raise LiveSupervisorError("delegated Python worker tree changed before signal")
+    elif launcher_children:
+        raise LiveSupervisorError("direct Python worker has a child before signal")
+    return worker
+
+
+def _current_supervisor_identity() -> tuple[int, float]:
+    pid = os.getpid()
+    try:
+        process = psutil.Process(pid)
+        create_time = float(process.create_time())
+        running = process.is_running()
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        psutil.ZombieProcess,
+        OSError,
+        ValueError,
+    ) as exc:
+        raise LiveSupervisorError("supervisor process identity could not be proved") from exc
+    if not running or not math.isfinite(create_time) or create_time <= 0:
+        raise LiveSupervisorError("supervisor process identity is not stable")
+    return pid, create_time
+
+
 def _publish_worker_launch_intent(
     attempt_dir: Path,
     request: Mapping[str, Any],
@@ -532,6 +869,7 @@ def _publish_worker_launch_intent(
 ) -> str:
     nonce, intent_path, _, _ = _worker_launch_paths(attempt_dir, request)
     lock = request["real_engine_lock"]
+    supervisor_pid, supervisor_create_time = _current_supervisor_identity()
     intent = {
         "schema_version": 1,
         "action": "launch_live_worker",
@@ -542,9 +880,40 @@ def _publish_worker_launch_intent(
         "lane_id": request["lane_id"],
         "attempt_id": request["attempt_id"],
         "real_engine_lock_token": lock["token"],
-        "supervisor_pid": os.getpid(),
+        "supervisor_pid": supervisor_pid,
+        "supervisor_process_create_time": supervisor_create_time,
     }
     return write_json_with_digest(intent_path, json_safe(intent))
+
+
+def _publish_worker_launcher_binding(
+    process: subprocess.Popen[Any],
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+    request_sha256: str,
+    intent_sha256: str,
+    command: Sequence[str],
+) -> str:
+    """Durably record the exact Popen identity before awaiting child hello."""
+    nonce, _, _, _ = _worker_launch_paths(attempt_dir, request)
+    binding_path = _worker_launcher_path(attempt_dir, request)
+    launcher_pid, launcher_create_time = _live_python_child_identity(process)
+    binding = {
+        "schema_version": 1,
+        "action": "bind_live_worker_launcher",
+        "bound_at": datetime.now(timezone.utc).isoformat(),
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "launcher_pid": launcher_pid,
+        "launcher_process_create_time": launcher_create_time,
+        "expected_command": [str(part) for part in command],
+    }
+    return write_json_with_digest(binding_path, json_safe(binding))
 
 
 def _wait_for_worker_hello(
@@ -570,12 +939,54 @@ def _authorize_live_child(
     request: Mapping[str, Any],
     request_sha256: str,
     intent_sha256: str,
-) -> None:
+    *,
+    expected_command: Sequence[str] | None = None,
+) -> AuthorizedWorkerIdentity:
     """Bind exact parent-observed PID/create-time before worker execution."""
-    pid, create_time = _live_python_child_identity(process)
-    nonce, _, hello_path, authorization_path = _worker_launch_paths(
+    nonce, intent_path, hello_path, authorization_path = _worker_launch_paths(
         attempt_dir, request
     )
+    command = (
+        list(expected_command)
+        if expected_command is not None
+        else _worker_command(request, attempt_dir / "request.json")
+    )
+    intent, observed_intent_sha256 = read_json_with_digest(intent_path)
+    if observed_intent_sha256 != intent_sha256:
+        raise LiveSupervisorError("worker launch intent digest changed before authorization")
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    if (
+        not isinstance(supervisor_pid, int)
+        or isinstance(supervisor_pid, bool)
+        or supervisor_pid <= 0
+        or not isinstance(supervisor_create_time, (int, float))
+        or isinstance(supervisor_create_time, bool)
+        or not math.isfinite(float(supervisor_create_time))
+        or float(supervisor_create_time) <= 0
+    ):
+        raise LiveSupervisorError("worker launch intent lacks supervisor identity")
+    binding, binding_sha256 = read_json_with_digest(
+        _worker_launcher_path(attempt_dir, request)
+    )
+    binding_expected = {
+        "schema_version": 1,
+        "action": "bind_live_worker_launcher",
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "expected_command": [str(part) for part in command],
+    }
+    if any(binding.get(field) != value for field, value in binding_expected.items()):
+        raise LiveSupervisorError("worker launcher binding identity is unverifiable")
+    launcher_pid = binding.get("launcher_pid")
+    launcher_create_time = binding.get("launcher_process_create_time")
+    if not _valid_pid_create_time(launcher_pid, launcher_create_time):
+        raise LiveSupervisorError("worker launcher binding lacks exact process identity")
     hello, hello_sha256 = _wait_for_worker_hello(
         hello_path,
         timeout_seconds=min(
@@ -588,46 +999,91 @@ def _authorize_live_child(
         "action": "hello_live_worker",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "launch_nonce": nonce,
         "run_id": request["run_id"],
         "lane_id": request["lane_id"],
         "attempt_id": request["attempt_id"],
-        "worker_pid": pid,
     }
     for field, value in expected.items():
         if hello.get(field) != value:
             raise LiveSupervisorError(f"worker hello identity mismatch for {field}")
-    hello_create_time = hello.get("worker_process_create_time")
+    identity = _bind_launched_worker_identity(
+        process,
+        launcher_pid=launcher_pid,
+        launcher_create_time=launcher_create_time,
+        worker_pid=hello.get("worker_pid"),
+        worker_create_time=hello.get("worker_process_create_time"),
+        expected_command=command,
+    )
+    hello_parent_pid = hello.get("worker_parent_pid")
+    hello_parent_create_time = hello.get("worker_parent_process_create_time")
     if (
-        not isinstance(hello_create_time, (int, float))
-        or isinstance(hello_create_time, bool)
-        or abs(float(hello_create_time) - create_time)
+        hello_parent_pid != identity.worker_parent_pid
+        or not isinstance(hello_parent_create_time, (int, float))
+        or isinstance(hello_parent_create_time, bool)
+        or not math.isfinite(float(hello_parent_create_time))
+        or float(hello_parent_create_time) <= 0
+        or abs(
+            float(hello_parent_create_time)
+            - identity.worker_parent_process_create_time
+        )
         > _WORKER_IDENTITY_TOLERANCE_SECONDS
     ):
-        raise LiveSupervisorError("worker hello create-time identity mismatch")
+        raise LiveSupervisorError("worker hello parent identity mismatch")
+    if (
+        identity.delegated is False
+        and (
+            identity.worker_parent_pid != supervisor_pid
+            or abs(
+                identity.worker_parent_process_create_time
+                - float(supervisor_create_time)
+            )
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        )
+    ):
+        raise LiveSupervisorError("direct worker is not a child of the supervisor")
     authorization = {
         "schema_version": 1,
         "action": "authorize_live_worker",
         "authorized_at": datetime.now(timezone.utc).isoformat(),
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "worker_hello_sha256": hello_sha256,
         "launch_nonce": nonce,
         "run_id": request["run_id"],
         "lane_id": request["lane_id"],
         "attempt_id": request["attempt_id"],
         "real_engine_lock_token": request["real_engine_lock"]["token"],
-        "worker_pid": pid,
-        "worker_process_create_time": create_time,
-        "supervisor_pid": os.getpid(),
+        "worker_pid": identity.worker_pid,
+        "worker_process_create_time": identity.worker_process_create_time,
+        "worker_parent_pid": identity.worker_parent_pid,
+        "worker_parent_process_create_time": (
+            identity.worker_parent_process_create_time
+        ),
+        "launcher_pid": identity.launcher_pid,
+        "launcher_process_create_time": identity.launcher_process_create_time,
+        "launcher_delegated": identity.delegated,
+        "supervisor_pid": supervisor_pid,
+        "supervisor_process_create_time": float(supervisor_create_time),
     }
-    write_json_with_digest(authorization_path, json_safe(authorization))
-    state = _inspect_exact_worker_identity(pid, create_time)
-    if state.alive is not True:
+    revalidated = _bind_launched_worker_identity(
+        process,
+        launcher_pid=launcher_pid,
+        launcher_create_time=launcher_create_time,
+        worker_pid=identity.worker_pid,
+        worker_create_time=identity.worker_process_create_time,
+        expected_command=command,
+    )
+    if revalidated != identity:
         raise LiveSupervisorError(
-            "live Python child identity changed while authorization was published: "
-            f"{state.reason_code}"
+            "live Python worker identity changed before authorization"
         )
+    # This atomic publication is the final grant action. The child may act as
+    # soon as both files exist, so no post-publication safety check is meaningful.
+    write_json_with_digest(authorization_path, json_safe(authorization))
+    return identity
 
 
 def _create_cancellation_request(
@@ -662,15 +1118,221 @@ def _create_cancellation_request(
         },
         "live_request_path": str(attempt_dir / "request.json"),
         "live_request_sha256": request_sha256,
+        "real_engine_lock": request["real_engine_lock"],
         "cancel_receipt_path": str(attempt_dir / "cancel-receipt.json"),
         "stage_project": str(stage_project),
         "plan_number": request["fixture"]["plan_number"],
         "timeout_seconds": request["termination_grace_seconds"],
         "hec_ras_execution_enabled": True,
+        "cancel_launch": {
+            "launch_nonce": str(uuid.uuid4()),
+            "intent_path": str(attempt_dir / "cancel-intent.json"),
+            "binding_path": str(attempt_dir / "cancel-launcher.json"),
+            "hello_path": str(attempt_dir / "cancel-hello.json"),
+            "authorization_path": str(attempt_dir / "cancel-auth.json"),
+        },
     }
     path = attempt_dir / "cancel-request.json"
     write_json_with_digest(path, cancellation)
     return path
+
+
+def _publish_cancel_launch_intent(
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+    request_sha256: str,
+) -> str:
+    nonce, intent_path, _, _, _ = _cancel_launch_paths(attempt_dir, request)
+    supervisor_pid, supervisor_create_time = _current_supervisor_identity()
+    intent = {
+        "schema_version": 1,
+        "action": "launch_cancel_helper",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "request_sha256": request_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "supervisor_pid": supervisor_pid,
+        "supervisor_process_create_time": supervisor_create_time,
+    }
+    return write_json_with_digest(intent_path, json_safe(intent))
+
+
+def _publish_cancel_launcher_binding(
+    process: subprocess.Popen[Any],
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+    request_sha256: str,
+    intent_sha256: str,
+    command: Sequence[str],
+) -> str:
+    nonce, _, binding_path, _, _ = _cancel_launch_paths(attempt_dir, request)
+    launcher_pid, launcher_create_time = _live_python_child_identity(process)
+    binding = {
+        "schema_version": 1,
+        "action": "bind_cancel_helper_launcher",
+        "bound_at": datetime.now(timezone.utc).isoformat(),
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "launcher_pid": launcher_pid,
+        "launcher_process_create_time": launcher_create_time,
+        "expected_command": [str(part) for part in command],
+    }
+    return write_json_with_digest(binding_path, json_safe(binding))
+
+
+def _authorize_cancel_helper(
+    process: subprocess.Popen[Any],
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+    request_sha256: str,
+    intent_sha256: str,
+    binding_sha256: str,
+    command: Sequence[str],
+) -> AuthorizedWorkerIdentity:
+    nonce, intent_path, binding_path, hello_path, authorization_path = (
+        _cancel_launch_paths(attempt_dir, request)
+    )
+    intent, observed_intent_sha256 = read_json_with_digest(intent_path)
+    binding, observed_binding_sha256 = read_json_with_digest(binding_path)
+    if (
+        observed_intent_sha256 != intent_sha256
+        or observed_binding_sha256 != binding_sha256
+    ):
+        raise LiveSupervisorError("cancellation helper launch evidence changed")
+    expected_binding = {
+        "schema_version": 1,
+        "action": "bind_cancel_helper_launcher",
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "expected_command": [str(part) for part in command],
+    }
+    if any(binding.get(field) != value for field, value in expected_binding.items()):
+        raise LiveSupervisorError("cancellation helper launcher binding is invalid")
+    launcher_pid = binding.get("launcher_pid")
+    launcher_create_time = binding.get("launcher_process_create_time")
+    if not _valid_pid_create_time(launcher_pid, launcher_create_time):
+        raise LiveSupervisorError("cancellation helper launcher identity is invalid")
+    hello, hello_sha256 = _wait_for_worker_hello(
+        hello_path,
+        timeout_seconds=min(
+            60.0,
+            max(0.1, float(request["timeout_seconds"])),
+        ),
+    )
+    expected_hello = {
+        "schema_version": 1,
+        "action": "hello_cancel_helper",
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+    }
+    if any(hello.get(field) != value for field, value in expected_hello.items()):
+        raise LiveSupervisorError("cancellation helper hello identity is invalid")
+    identity = _bind_launched_worker_identity(
+        process,
+        launcher_pid=launcher_pid,
+        launcher_create_time=launcher_create_time,
+        worker_pid=hello.get("worker_pid"),
+        worker_create_time=hello.get("worker_process_create_time"),
+        expected_command=command,
+    )
+    if (
+        hello.get("worker_parent_pid") != identity.worker_parent_pid
+        or not isinstance(hello.get("worker_parent_process_create_time"), (int, float))
+        or isinstance(hello.get("worker_parent_process_create_time"), bool)
+        or abs(
+            float(hello["worker_parent_process_create_time"])
+            - identity.worker_parent_process_create_time
+        )
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveSupervisorError("cancellation helper parent identity is invalid")
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    if not _valid_pid_create_time(supervisor_pid, supervisor_create_time):
+        raise LiveSupervisorError("cancellation helper supervisor identity is invalid")
+    if (
+        not identity.delegated
+        and (
+            identity.worker_parent_pid != supervisor_pid
+            or abs(
+                identity.worker_parent_process_create_time
+                - float(supervisor_create_time)
+            )
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        )
+    ):
+        raise LiveSupervisorError("direct cancellation helper parent is invalid")
+    revalidated = _bind_launched_worker_identity(
+        process,
+        launcher_pid=identity.launcher_pid,
+        launcher_create_time=identity.launcher_process_create_time,
+        worker_pid=identity.worker_pid,
+        worker_create_time=identity.worker_process_create_time,
+        expected_command=command,
+    )
+    if revalidated != identity:
+        raise LiveSupervisorError("cancellation helper changed before authorization")
+    authorization = {
+        "schema_version": 1,
+        "action": "authorize_cancel_helper",
+        "authorized_at": datetime.now(timezone.utc).isoformat(),
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
+        "worker_hello_sha256": hello_sha256,
+        "launch_nonce": nonce,
+        "run_id": request["run_id"],
+        "lane_id": request["lane_id"],
+        "attempt_id": request["attempt_id"],
+        "real_engine_lock_token": request["real_engine_lock"]["token"],
+        "worker_pid": identity.worker_pid,
+        "worker_process_create_time": identity.worker_process_create_time,
+        "worker_parent_pid": identity.worker_parent_pid,
+        "worker_parent_process_create_time": (
+            identity.worker_parent_process_create_time
+        ),
+        "launcher_pid": identity.launcher_pid,
+        "launcher_process_create_time": identity.launcher_process_create_time,
+        "launcher_delegated": identity.delegated,
+        "supervisor_pid": supervisor_pid,
+        "supervisor_process_create_time": float(supervisor_create_time),
+    }
+    write_json_with_digest(authorization_path, json_safe(authorization))
+    return identity
+
+
+def _cancel_worker_command(
+    request: Mapping[str, Any],
+    request_path: Path,
+) -> list[str]:
+    nonce, _, _, _, _ = _cancel_launch_paths(request_path.parent, request)
+    return [
+        str(request["python_executable"]),
+        "-m",
+        "scripts.qualification.execution_evidence.live_cancel_worker",
+        "--request",
+        str(request_path),
+        "--launch-nonce",
+        nonce,
+    ]
 
 
 def _run_cancellation_helper(
@@ -681,13 +1343,10 @@ def _run_cancellation_helper(
     cancel_request_path = _create_cancellation_request(
         attempt_dir, request, request_sha256
     )
-    command = [
-        str(request["python_executable"]),
-        "-m",
-        "scripts.qualification.execution_evidence.live_cancel_worker",
-        "--request",
-        str(cancel_request_path),
-    ]
+    cancel_request, cancel_request_sha256 = read_json_with_digest(
+        cancel_request_path
+    )
+    command = _cancel_worker_command(cancel_request, cancel_request_path)
     environment = os.environ.copy()
     repository_root = Path(str(request["repository_root"])).resolve(strict=True)
     environment["PYTHONPATH"] = str(repository_root) + (
@@ -696,6 +1355,11 @@ def _run_cancellation_helper(
         else ""
     )
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    intent_sha256 = _publish_cancel_launch_intent(
+        attempt_dir,
+        cancel_request,
+        cancel_request_sha256,
+    )
     with (attempt_dir / "cancel.stdout.log").open("xb") as stdout, (
         attempt_dir / "cancel.stderr.log"
     ).open("xb") as stderr:
@@ -708,21 +1372,37 @@ def _run_cancellation_helper(
             stderr=stderr,
             shell=False,
         )
+        binding_sha256 = _publish_cancel_launcher_binding(
+            process,
+            attempt_dir,
+            cancel_request,
+            cancel_request_sha256,
+            intent_sha256,
+            command,
+        )
+        helper_identity = _authorize_cancel_helper(
+            process,
+            attempt_dir,
+            cancel_request,
+            cancel_request_sha256,
+            intent_sha256,
+            binding_sha256,
+            command,
+        )
         try:
             returncode = process.wait(
                 timeout=float(request["termination_grace_seconds"])
             )
         except subprocess.TimeoutExpired:
-            _terminate_exact_python_child(
-                process, float(request["termination_grace_seconds"])
+            _terminate_authorized_worker(
+                process,
+                helper_identity,
+                float(request["termination_grace_seconds"]),
             )
             return False, "cancellation_helper_timed_out"
     if returncode != 0:
         return False, f"cancellation_helper_exit_{returncode}"
     try:
-        cancel_request, cancel_request_sha256 = read_json_with_digest(
-            cancel_request_path
-        )
         receipt, _ = read_json_with_digest(attempt_dir / "cancel-receipt.json")
     except Exception as exc:
         return False, f"cancellation_receipt_unverifiable:{type(exc).__name__}"
@@ -777,8 +1457,9 @@ def _run_live_child(
     with (attempt_dir / "stdout.log").open("xb") as stdout, (
         attempt_dir / "stderr.log"
     ).open("xb") as stderr:
+        command = _worker_command(request, attempt_dir / "request.json")
         process = subprocess.Popen(
-            _worker_command(request, attempt_dir / "request.json"),
+            command,
             cwd=repository_root,
             env=environment,
             stdin=subprocess.DEVNULL,
@@ -786,12 +1467,21 @@ def _run_live_child(
             stderr=stderr,
             shell=False,
         )
-        _authorize_live_child(
+        _publish_worker_launcher_binding(
             process,
             attempt_dir,
             request,
             request_sha256,
             intent_sha256,
+            command,
+        )
+        worker_identity = _authorize_live_child(
+            process,
+            attempt_dir,
+            request,
+            request_sha256,
+            intent_sha256,
+            expected_command=command,
         )
         try:
             outer_deadline = float(request["timeout_seconds"])
@@ -819,8 +1509,10 @@ def _run_live_child(
                     )
             if cancellation_safe is True:
                 try:
-                    _terminate_exact_python_child(
-                        process, float(request["termination_grace_seconds"])
+                    _terminate_authorized_worker(
+                        process,
+                        worker_identity,
+                        float(request["termination_grace_seconds"]),
                     )
                 except Exception as exc:
                     cancellation_safe = False
@@ -829,7 +1521,7 @@ def _run_live_child(
                         f"{type(exc).__name__}:{exc}"
                     )
             return LiveChildOutcome(
-                pid=process.pid,
+                pid=worker_identity.worker_pid,
                 returncode=124,
                 started_at=started,
                 finished_at=datetime.now(timezone.utc),
@@ -838,7 +1530,7 @@ def _run_live_child(
                 cancellation_reason=cancellation_reason,
             )
     return LiveChildOutcome(
-        pid=process.pid,
+        pid=worker_identity.worker_pid,
         returncode=returncode,
         started_at=started,
         finished_at=datetime.now(timezone.utc),
@@ -1738,7 +2430,11 @@ def _worker_launch_recovery_gate(
         )
     except Exception as exc:
         return False, f"worker launch metadata is unverifiable: {type(exc).__name__}: {exc}"
-    record_paths = (intent_path, hello_path, authorization_path)
+    try:
+        binding_path = _worker_launcher_path(attempt_dir, request)
+    except Exception as exc:
+        return False, f"worker launcher metadata is unverifiable: {type(exc).__name__}: {exc}"
+    record_paths = (intent_path, binding_path, hello_path, authorization_path)
     digest_paths = tuple(path.with_suffix(".sha256") for path in record_paths)
     if not any(path.exists() for path in (*record_paths, *digest_paths)):
         return True, "worker launch was never initiated"
@@ -1765,6 +2461,36 @@ def _worker_launch_recovery_gate(
     }
     if any(intent.get(field) != value for field, value in intent_expected.items()):
         return False, "worker launch intent identity is unverifiable"
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    if not _valid_pid_create_time(supervisor_pid, supervisor_create_time):
+        return False, "worker launch intent supervisor identity is unverifiable"
+    if not binding_path.exists() or not binding_path.with_suffix(".sha256").exists():
+        return False, "worker launcher binding publication is incomplete"
+    try:
+        binding, binding_sha256 = read_json_with_digest(binding_path)
+    except Exception as exc:
+        return False, f"worker launcher binding is unverifiable: {type(exc).__name__}: {exc}"
+    binding_expected = {
+        "schema_version": 1,
+        "action": "bind_live_worker_launcher",
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_nonce": nonce,
+        "run_id": request.get("run_id"),
+        "lane_id": request.get("lane_id"),
+        "attempt_id": request.get("attempt_id"),
+        "real_engine_lock_token": request.get("real_engine_lock", {}).get("token"),
+        "expected_command": _worker_command(request, attempt_dir / "request.json"),
+    }
+    if any(binding.get(field) != value for field, value in binding_expected.items()):
+        return False, "worker launcher binding identity is unverifiable"
+    bound_launcher_pid = binding.get("launcher_pid")
+    bound_launcher_create_time = binding.get("launcher_process_create_time")
+    if not _valid_pid_create_time(
+        bound_launcher_pid, bound_launcher_create_time
+    ):
+        return False, "worker launcher binding lacks exact process identity"
     if hello_path.exists() is not True or hello_path.with_suffix(".sha256").exists() is not True:
         return False, "worker launch began but exact worker identity is unverifiable"
     try:
@@ -1776,6 +2502,7 @@ def _worker_launch_recovery_gate(
         "action": "hello_live_worker",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "launch_nonce": nonce,
         "run_id": request.get("run_id"),
         "lane_id": request.get("lane_id"),
@@ -1785,11 +2512,10 @@ def _worker_launch_recovery_gate(
         return False, "worker hello identity is unverifiable"
     pid = hello.get("worker_pid")
     create_time = hello.get("worker_process_create_time")
-    if (
-        not isinstance(pid, int)
-        or isinstance(pid, bool)
-        or not isinstance(create_time, (int, float))
-        or isinstance(create_time, bool)
+    parent_pid = hello.get("worker_parent_pid")
+    parent_create_time = hello.get("worker_parent_process_create_time")
+    if not _valid_pid_create_time(pid, create_time) or not _valid_pid_create_time(
+        parent_pid, parent_create_time
     ):
         return False, "worker hello lacks an exact PID/create-time identity"
     authorization_present = authorization_path.exists() or authorization_path.with_suffix(
@@ -1810,6 +2536,7 @@ def _worker_launch_recovery_gate(
             "action": "authorize_live_worker",
             "request_sha256": request_sha256,
             "launch_intent_sha256": intent_sha256,
+            "launch_binding_sha256": binding_sha256,
             "worker_hello_sha256": hello_sha256,
             "launch_nonce": nonce,
             "run_id": request.get("run_id"),
@@ -1817,19 +2544,278 @@ def _worker_launch_recovery_gate(
             "attempt_id": request.get("attempt_id"),
             "real_engine_lock_token": request.get("real_engine_lock", {}).get("token"),
             "worker_pid": pid,
-            "worker_process_create_time": create_time,
+            "worker_parent_pid": parent_pid,
+            "supervisor_pid": supervisor_pid,
         }
         if any(
             authorization.get(field) != value
             for field, value in authorization_expected.items()
         ):
             return False, "worker authorization identity is unverifiable"
+        float_identity_fields = {
+            "worker_process_create_time": create_time,
+            "worker_parent_process_create_time": parent_create_time,
+            "supervisor_process_create_time": supervisor_create_time,
+        }
+        if any(
+            not isinstance(authorization.get(field), (int, float))
+            or isinstance(authorization.get(field), bool)
+            or abs(float(authorization[field]) - float(value))
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+            for field, value in float_identity_fields.items()
+        ):
+            return False, "worker authorization process times are unverifiable"
+        launcher_pid = authorization.get("launcher_pid")
+        launcher_create_time = authorization.get("launcher_process_create_time")
+        launcher_delegated = authorization.get("launcher_delegated")
+        if (
+            not _valid_pid_create_time(launcher_pid, launcher_create_time)
+            or not isinstance(launcher_delegated, bool)
+            or launcher_pid != bound_launcher_pid
+            or abs(
+                float(launcher_create_time) - float(bound_launcher_create_time)
+            )
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+            or (
+                launcher_delegated
+                and (
+                    launcher_pid != parent_pid
+                    or abs(float(launcher_create_time) - float(parent_create_time))
+                    > _WORKER_IDENTITY_TOLERANCE_SECONDS
+                )
+            )
+            or (
+                not launcher_delegated
+                and (
+                    launcher_pid != pid
+                    or abs(float(launcher_create_time) - float(create_time))
+                    > _WORKER_IDENTITY_TOLERANCE_SECONDS
+                    or parent_pid != supervisor_pid
+                    or abs(float(parent_create_time) - float(supervisor_create_time))
+                    > _WORKER_IDENTITY_TOLERANCE_SECONDS
+                )
+            )
+        ):
+            return False, "worker authorization launcher identity is unverifiable"
+    else:
+        worker_is_bound_launcher = (
+            pid == bound_launcher_pid
+            and abs(float(create_time) - float(bound_launcher_create_time))
+            <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+        )
+        parent_is_bound_launcher = (
+            parent_pid == bound_launcher_pid
+            and abs(float(parent_create_time) - float(bound_launcher_create_time))
+            <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+        )
+        parent_is_supervisor = (
+            parent_pid == supervisor_pid
+            and abs(float(parent_create_time) - float(supervisor_create_time))
+            <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+        )
+        if worker_is_bound_launcher and parent_is_supervisor:
+            launcher_delegated = False
+        elif parent_is_bound_launcher and not worker_is_bound_launcher:
+            launcher_delegated = True
+        else:
+            return False, "pre-authorization worker/launcher relationship is unverifiable"
+        launcher_pid = bound_launcher_pid
+        launcher_create_time = bound_launcher_create_time
     state = _inspect_exact_worker_identity(pid, float(create_time))
     if state.alive is True:
         return False, "exact authorized Python worker is still alive"
     if state.alive is None:
         return False, f"exact Python worker identity is unverifiable: {state.reason_code}"
-    return True, f"exact Python worker is absent: {state.reason_code}"
+    if launcher_delegated:
+        launcher_state = _inspect_exact_worker_identity(
+            launcher_pid, float(launcher_create_time)
+        )
+        if launcher_state.alive is True:
+            return False, "exact delegated Python launcher is still alive"
+        if launcher_state.alive is None:
+            return (
+                False,
+                "exact delegated Python launcher identity is unverifiable: "
+                f"{launcher_state.reason_code}",
+            )
+        return (
+            True,
+            "exact Python worker and delegated launcher are absent: "
+            f"{state.reason_code};{launcher_state.reason_code}",
+        )
+    return True, f"exact direct Python worker is absent: {state.reason_code}"
+
+
+def _cancel_launch_recovery_gate(
+    attempt_dir: Path,
+    live_request: Mapping[str, Any],
+) -> tuple[bool, str]:
+    """Prove an exact cancellation helper and its launcher are absent."""
+    cancel_request_path = attempt_dir / "cancel-request.json"
+    names = (
+        "cancel-intent.json",
+        "cancel-launcher.json",
+        "cancel-hello.json",
+        "cancel-auth.json",
+    )
+    paths = tuple(attempt_dir / name for name in names)
+    digests = tuple(path.with_suffix(".sha256") for path in paths)
+    if not any(path.exists() for path in (*paths, *digests)):
+        return True, "cancellation helper launch was never initiated"
+    try:
+        cancel_request, cancel_request_sha256 = read_json_with_digest(
+            cancel_request_path
+        )
+        nonce, intent_path, binding_path, hello_path, authorization_path = (
+            _cancel_launch_paths(attempt_dir, cancel_request)
+        )
+    except Exception as exc:
+        return False, f"cancellation launch metadata is unverifiable: {type(exc).__name__}: {exc}"
+    if cancel_request.get("live_request_sha256") != stable_sha256(
+        attempt_dir / "request.json"
+    )[0]:
+        return False, "cancellation helper does not bind the live request"
+    if any(
+        cancel_request.get(field) != live_request.get(field)
+        for field in ("run_id", "lane_id", "attempt_id", "manifest_sha256", "git_head")
+    ):
+        return False, "cancellation helper request identity is unverifiable"
+    for path, label in (
+        (intent_path, "intent"),
+        (binding_path, "launcher binding"),
+        (hello_path, "hello"),
+    ):
+        if not path.exists() or not path.with_suffix(".sha256").exists():
+            return False, f"cancellation helper {label} publication is incomplete"
+    try:
+        intent, intent_sha256 = read_json_with_digest(intent_path)
+        binding, binding_sha256 = read_json_with_digest(binding_path)
+        hello, hello_sha256 = read_json_with_digest(hello_path)
+    except Exception as exc:
+        return False, f"cancellation helper launch evidence is unverifiable: {type(exc).__name__}: {exc}"
+    common = {
+        "request_sha256": cancel_request_sha256,
+        "launch_nonce": nonce,
+        "run_id": live_request.get("run_id"),
+        "lane_id": live_request.get("lane_id"),
+        "attempt_id": live_request.get("attempt_id"),
+        "real_engine_lock_token": live_request.get("real_engine_lock", {}).get("token"),
+    }
+    for record, expected in (
+        (intent, {"schema_version": 1, "action": "launch_cancel_helper", **common}),
+        (
+            binding,
+            {
+                "schema_version": 1,
+                "action": "bind_cancel_helper_launcher",
+                "launch_intent_sha256": intent_sha256,
+                **common,
+            },
+        ),
+        (
+            hello,
+            {
+                "schema_version": 1,
+                "action": "hello_cancel_helper",
+                "launch_intent_sha256": intent_sha256,
+                "launch_binding_sha256": binding_sha256,
+                **common,
+            },
+        ),
+    ):
+        if any(record.get(field) != value for field, value in expected.items()):
+            return False, "cancellation helper launch identity is unverifiable"
+    if binding.get("expected_command") != _cancel_worker_command(
+        cancel_request,
+        cancel_request_path,
+    ):
+        return False, "cancellation helper expected command is unverifiable"
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    launcher_pid = binding.get("launcher_pid")
+    launcher_create_time = binding.get("launcher_process_create_time")
+    worker_pid = hello.get("worker_pid")
+    worker_create_time = hello.get("worker_process_create_time")
+    parent_pid = hello.get("worker_parent_pid")
+    parent_create_time = hello.get("worker_parent_process_create_time")
+    if not all(
+        _valid_pid_create_time(pid, create_time)
+        for pid, create_time in (
+            (supervisor_pid, supervisor_create_time),
+            (launcher_pid, launcher_create_time),
+            (worker_pid, worker_create_time),
+            (parent_pid, parent_create_time),
+        )
+    ):
+        return False, "cancellation helper process identities are unverifiable"
+    direct = (
+        worker_pid == launcher_pid
+        and abs(float(worker_create_time) - float(launcher_create_time))
+        <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+        and parent_pid == supervisor_pid
+        and abs(float(parent_create_time) - float(supervisor_create_time))
+        <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+    )
+    delegated = (
+        worker_pid != launcher_pid
+        and parent_pid == launcher_pid
+        and abs(float(parent_create_time) - float(launcher_create_time))
+        <= _WORKER_IDENTITY_TOLERANCE_SECONDS
+    )
+    if not direct and not delegated:
+        return False, "cancellation helper/launcher relationship is unverifiable"
+    authorization_present = authorization_path.exists() or authorization_path.with_suffix(
+        ".sha256"
+    ).exists()
+    if authorization_present:
+        if not authorization_path.exists() or not authorization_path.with_suffix(
+            ".sha256"
+        ).exists():
+            return False, "cancellation authorization publication is incomplete"
+        try:
+            authorization, _ = read_json_with_digest(authorization_path)
+        except Exception as exc:
+            return False, f"cancellation authorization is unverifiable: {type(exc).__name__}: {exc}"
+        expected = {
+            "schema_version": 1,
+            "action": "authorize_cancel_helper",
+            "launch_intent_sha256": intent_sha256,
+            "launch_binding_sha256": binding_sha256,
+            "worker_hello_sha256": hello_sha256,
+            **common,
+            "worker_pid": worker_pid,
+            "worker_parent_pid": parent_pid,
+            "launcher_pid": launcher_pid,
+            "supervisor_pid": supervisor_pid,
+        }
+        if any(authorization.get(field) != value for field, value in expected.items()):
+            return False, "cancellation authorization identity is unverifiable"
+        if authorization.get("launcher_delegated") is not delegated:
+            return False, "cancellation authorization delegation is unverifiable"
+        float_fields = {
+            "worker_process_create_time": worker_create_time,
+            "worker_parent_process_create_time": parent_create_time,
+            "launcher_process_create_time": launcher_create_time,
+            "supervisor_process_create_time": supervisor_create_time,
+        }
+        if any(
+            not isinstance(authorization.get(field), (int, float))
+            or isinstance(authorization.get(field), bool)
+            or abs(float(authorization[field]) - float(value))
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+            for field, value in float_fields.items()
+        ):
+            return False, "cancellation authorization process times are unverifiable"
+    worker_state = _inspect_exact_worker_identity(worker_pid, float(worker_create_time))
+    if worker_state.alive is not False:
+        return False, "exact cancellation helper is alive or unverifiable"
+    if delegated:
+        launcher_state = _inspect_exact_worker_identity(
+            launcher_pid, float(launcher_create_time)
+        )
+        if launcher_state.alive is not False:
+            return False, "exact cancellation launcher is alive or unverifiable"
+    return True, "exact cancellation helper and launcher are absent"
 
 
 def _supervision_recovery_gate(
@@ -1844,6 +2830,9 @@ def _supervision_recovery_gate(
     worker_safe, worker_detail = _worker_launch_recovery_gate(attempt_dir, request)
     if not worker_safe:
         return RecoveryGateOutcome(False, worker_detail)
+    cancel_safe, cancel_detail = _cancel_launch_recovery_gate(attempt_dir, request)
+    if not cancel_safe:
+        return RecoveryGateOutcome(False, cancel_detail)
     try:
         source_project = resolve_plain_path(request["source_project"], kind="file")
         source_after = snapshot_tree(

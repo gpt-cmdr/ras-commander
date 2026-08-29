@@ -209,6 +209,20 @@ def _worker_launch_paths(
     return nonce, *expected
 
 
+def _worker_launcher_path(
+    attempt_dir: Path,
+    request: Mapping[str, Any],
+) -> Path:
+    launch = request.get("worker_launch")
+    if not isinstance(launch, Mapping):
+        raise LiveWorkerError("live request lacks worker launch handshake metadata")
+    expected = (attempt_dir / "worker-launcher.json").resolve(strict=False)
+    claimed = Path(str(launch.get("binding_path", ""))).resolve(strict=False)
+    if claimed != expected:
+        raise LiveWorkerError("worker launcher binding path escaped the attempt")
+    return expected
+
+
 def _current_worker_identity() -> tuple[int, float]:
     pid = os.getpid()
     try:
@@ -219,6 +233,28 @@ def _current_worker_identity() -> tuple[int, float]:
         raise LiveWorkerError("worker process identity could not be proved") from exc
     if not running or not math.isfinite(create_time):
         raise LiveWorkerError("worker process identity is not running and stable")
+    return pid, create_time
+
+
+def _current_worker_parent_identity() -> tuple[int, float]:
+    try:
+        parent = psutil.Process(os.getpid()).parent()
+        if parent is None:
+            raise LiveWorkerError("worker parent process identity is unavailable")
+        pid = parent.pid
+        create_time = float(parent.create_time())
+        running = parent.is_running()
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError) as exc:
+        raise LiveWorkerError("worker parent process identity could not be proved") from exc
+    if (
+        not isinstance(pid, int)
+        or isinstance(pid, bool)
+        or pid <= 0
+        or not running
+        or not math.isfinite(create_time)
+        or create_time <= 0
+    ):
+        raise LiveWorkerError("worker parent process identity is not stable")
     return pid, create_time
 
 
@@ -248,19 +284,52 @@ def _register_and_verify_worker_authorization(
     for field, value in intent_expected.items():
         if intent.get(field) != value:
             raise LiveWorkerError(f"worker launch intent mismatch for {field}")
-    pid, create_time = _current_worker_identity()
-    hello = {
+    supervisor_pid = intent.get("supervisor_pid")
+    supervisor_create_time = intent.get("supervisor_process_create_time")
+    if (
+        not isinstance(supervisor_pid, int)
+        or isinstance(supervisor_pid, bool)
+        or supervisor_pid <= 0
+        or not isinstance(supervisor_create_time, (int, float))
+        or isinstance(supervisor_create_time, bool)
+        or not math.isfinite(float(supervisor_create_time))
+        or float(supervisor_create_time) <= 0
+    ):
+        raise LiveWorkerError("worker launch intent lacks supervisor identity")
+    binding, binding_sha256 = read_json_with_digest(
+        _worker_launcher_path(attempt_dir, request)
+    )
+    binding_expected = {
         "schema_version": 1,
-        "action": "hello_live_worker",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "action": "bind_live_worker_launcher",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
         "launch_nonce": nonce,
         "run_id": request.get("run_id"),
         "lane_id": request.get("lane_id"),
         "attempt_id": request.get("attempt_id"),
+        "real_engine_lock_token": request.get("real_engine_lock", {}).get("token"),
+    }
+    for field, value in binding_expected.items():
+        if binding.get(field) != value:
+            raise LiveWorkerError(f"worker launcher binding mismatch for {field}")
+    pid, create_time = _current_worker_identity()
+    parent_pid, parent_create_time = _current_worker_parent_identity()
+    hello = {
+        "schema_version": 1,
+        "action": "hello_live_worker",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "request_sha256": request_sha256,
+        "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
+        "launch_nonce": nonce,
+        "run_id": request.get("run_id"),
+        "lane_id": request.get("lane_id"),
+        "attempt_id": request.get("attempt_id"),
         "worker_pid": pid,
         "worker_process_create_time": create_time,
+        "worker_parent_pid": parent_pid,
+        "worker_parent_process_create_time": parent_create_time,
     }
     hello_sha256 = write_json_with_digest(hello_path, json_safe(hello))
     timeout = min(
@@ -279,6 +348,7 @@ def _register_and_verify_worker_authorization(
         "action": "authorize_live_worker",
         "request_sha256": request_sha256,
         "launch_intent_sha256": intent_sha256,
+        "launch_binding_sha256": binding_sha256,
         "worker_hello_sha256": hello_sha256,
         "launch_nonce": nonce,
         "run_id": request.get("run_id"),
@@ -286,6 +356,8 @@ def _register_and_verify_worker_authorization(
         "attempt_id": request.get("attempt_id"),
         "real_engine_lock_token": request.get("real_engine_lock", {}).get("token"),
         "worker_pid": pid,
+        "worker_parent_pid": parent_pid,
+        "supervisor_pid": supervisor_pid,
     }
     for field, value in expected.items():
         if authorization.get(field) != value:
@@ -294,10 +366,77 @@ def _register_and_verify_worker_authorization(
     if (
         not isinstance(authorized_create_time, (int, float))
         or isinstance(authorized_create_time, bool)
+        or not math.isfinite(float(authorized_create_time))
+        or float(authorized_create_time) <= 0
         or abs(float(authorized_create_time) - create_time)
         > _WORKER_IDENTITY_TOLERANCE_SECONDS
     ):
         raise LiveWorkerError("worker authorization create-time identity mismatch")
+    authorized_parent_create_time = authorization.get(
+        "worker_parent_process_create_time"
+    )
+    if (
+        not isinstance(authorized_parent_create_time, (int, float))
+        or isinstance(authorized_parent_create_time, bool)
+        or not math.isfinite(float(authorized_parent_create_time))
+        or float(authorized_parent_create_time) <= 0
+        or abs(float(authorized_parent_create_time) - parent_create_time)
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveWorkerError("worker authorization parent create-time identity mismatch")
+    authorized_supervisor_create_time = authorization.get(
+        "supervisor_process_create_time"
+    )
+    if (
+        not isinstance(authorized_supervisor_create_time, (int, float))
+        or isinstance(authorized_supervisor_create_time, bool)
+        or not math.isfinite(float(authorized_supervisor_create_time))
+        or float(authorized_supervisor_create_time) <= 0
+        or abs(float(authorized_supervisor_create_time) - float(supervisor_create_time))
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+    ):
+        raise LiveWorkerError(
+            "worker authorization supervisor create-time identity mismatch"
+        )
+    launcher_pid = authorization.get("launcher_pid")
+    launcher_create_time = authorization.get("launcher_process_create_time")
+    launcher_delegated = authorization.get("launcher_delegated")
+    bound_launcher_pid = binding.get("launcher_pid")
+    bound_launcher_create_time = binding.get("launcher_process_create_time")
+    if (
+        not isinstance(launcher_pid, int)
+        or isinstance(launcher_pid, bool)
+        or launcher_pid <= 0
+        or not isinstance(launcher_create_time, (int, float))
+        or isinstance(launcher_create_time, bool)
+        or not math.isfinite(float(launcher_create_time))
+        or float(launcher_create_time) <= 0
+        or not isinstance(launcher_delegated, bool)
+        or launcher_pid != bound_launcher_pid
+        or not isinstance(bound_launcher_create_time, (int, float))
+        or isinstance(bound_launcher_create_time, bool)
+        or not math.isfinite(float(bound_launcher_create_time))
+        or float(bound_launcher_create_time) <= 0
+        or abs(float(launcher_create_time) - float(bound_launcher_create_time))
+        > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        or (
+            launcher_delegated
+            and (
+                launcher_pid != parent_pid
+                or abs(float(launcher_create_time) - parent_create_time)
+                > _WORKER_IDENTITY_TOLERANCE_SECONDS
+            )
+        )
+        or (
+            not launcher_delegated
+            and (
+                launcher_pid != pid
+                or abs(float(launcher_create_time) - create_time)
+                > _WORKER_IDENTITY_TOLERANCE_SECONDS
+            )
+        )
+    ):
+        raise LiveWorkerError("worker authorization launcher identity mismatch")
     current_pid, current_create_time = _current_worker_identity()
     if (
         current_pid != pid

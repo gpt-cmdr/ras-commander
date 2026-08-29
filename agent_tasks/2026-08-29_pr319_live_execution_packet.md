@@ -3,10 +3,11 @@
 Date: 2026-08-29
 
 Status: approved scope and deterministic design gates complete. The unexecuted
-`5feae3d8` preflight manifest and the prelaunch-failed `31c19acd` manifest are
-both superseded. Live dispatch is held until the Windows receipt-path correction
-is committed, a new exact manifest pins the resulting clean commit, and the
-strict under-lock host inventory is complete and empty.
+`5feae3d8` preflight manifest, prelaunch-failed `31c19acd` manifest, and
+preauthorization-failed `2063b7de` manifest are superseded. Live dispatch is
+held until the Windows launcher/worker identity correction is committed, a new
+exact manifest pins the resulting clean commit, and the strict under-lock host
+inventory is complete and empty.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -88,6 +89,46 @@ worker-authorization record in immutable and replacement modes: the longest
 final digest is 259 characters and every temporary path is 247. The replacement
 campaign must pin the commit containing this correction and use the flattened
 root layout above; the failed campaign must never be resumed.
+
+### Windows launcher identity finding
+
+The next approved pilot selected `steady_1d__6_6__l0` from campaign
+`97baec75-82c7-4b7e-b9cd-efb7235b5810`, pinned to commit `2063b7de`. It also
+generated no simulation dataset. Attempt
+`a56c3508-e29a-477c-8ed4-774fd36608d1` published the request, worker launch
+intent, exact `Popen` launcher binding, and worker hello, then failed before
+authorization, staging, COM, or HEC-RAS. The pinned virtual-environment
+`python.exe` was the Windows Python Launcher wrapper; `Popen.pid` identified
+that wrapper while the hello correctly identified its sole base-interpreter
+child. The previous direct-child-only mock assumption rejected this valid
+one-hop topology.
+
+The host remained clean and both source fingerprint namespaces were unchanged.
+After the actual Python child exited, explicit recovery
+`a4f2441c-578c-4dd4-b663-49aab75b3cf1` revalidated the archived request, exact
+worker absence, exact source content and metadata, and two complete empty global
+RAS inventories before atomically retiring the unchanged host lock. Recovery
+sent no signal. The retained campaign and attempt are diagnostic evidence only
+and must never be resumed.
+
+The remediation binds the exact launcher and worker as separate identities. A
+worker can be either the direct `Popen` process or, on Windows only, the
+launcher's sole one-hop child; both command lines, PID/create times, parentage,
+and topology must match. Atomic authorization is the final action after a
+second full revalidation. Timeout code signals the same verified worker process
+object, never the launcher, and refuses a worker with descendants. The
+cancellation helper uses a distinct digest-bound intent, launcher binding,
+hello, and authorization lease and cannot inspect or cancel a plan before the
+grant. Recovery reconstructs the exact commands from the archived requests and
+proves both the actual worker/helper and any delegated launcher absent. Missing,
+partial, or tampered evidence retains the lock and fails closed.
+
+The focused handshake, timeout, and recovery suite passed 146 no-engine tests;
+the full qualification suite passed 284; Ruff, compileall, and diff checks
+passed. Independent adversarial review returned GO with no P0/P1/P2 finding.
+These tests neither generated datasets nor invoked HEC-RAS, COM, or real-process
+signals. A new manifest must pin the commit containing this remediation before
+another pilot.
 
 ## Immutable project anchors
 
@@ -323,13 +364,18 @@ routes require complete plan-scoped and global post-run process inventories
 before finalization.
 
 The supervisor uses a durable launch handshake rather than inferring ownership
-from a child PID alone: it writes a launch intent, verifies the worker's
-PID/create-time and request/lock/nonce-bound hello, and only then writes the
-authorization that permits staging or HEC-RAS execution. An interrupt before
-authorization has no RAS side effects. An interrupt after authorization retains
-the host lock unless independent exact-process recovery proves the worker
-identity absent and the global inventory complete and empty. Recovery never
-signals a process and never treats an absent PID alone as sufficient evidence.
+from a child PID alone: it writes a request/lock/nonce-bound launch intent,
+persists the exact `Popen` launcher PID/create-time and command, verifies the
+worker hello and the direct-or-sole-one-hop topology, repeats the full
+revalidation, and only then publishes authorization as the final grant that
+permits staging or HEC-RAS execution. The cancellation helper uses its own
+equivalent lease before it may inspect or cancel the selected plan. An interrupt
+before authorization has no RAS side effects. An interrupt after authorization
+retains the host lock unless recovery validates the complete digest-bound
+evidence, proves the exact worker/helper and any delegated launcher absent,
+reproves source immutability, and obtains a complete empty global inventory.
+Recovery never signals a process and never treats an absent PID alone as
+sufficient evidence.
 
 ## Full installed-version expansion
 

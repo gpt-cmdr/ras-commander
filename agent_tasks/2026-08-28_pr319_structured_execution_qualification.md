@@ -635,3 +635,30 @@ complete.
   passed. The replacement live manifest will use one UUID level beneath each
   approved archive/execution root; no additional campaign directory or
   `archive-run` component will consume the Windows path budget.
+- 2026-08-29: replacement campaign
+  `97baec75-82c7-4b7e-b9cd-efb7235b5810`, pinned to clean commit `2063b7de`,
+  selected only `steady_1d__6_6__l0`. It generated no simulation dataset. The
+  worker published launch intent, launcher binding, and hello records, then
+  failed closed before authorization, staging, COM, or HEC-RAS because the
+  pinned Windows virtual-environment `python.exe` was the Python Launcher
+  wrapper while the hello came from its sole base-interpreter child. Attempt
+  `a56c3508-e29a-477c-8ed4-774fd36608d1` is retained as request-only evidence.
+  A strict inventory was complete and empty, the source content and metadata
+  fingerprints remained exact, and explicit lock recovery
+  `a4f2441c-578c-4dd4-b663-49aab75b3cf1` proved the exact worker and global
+  HEC-RAS inventory absent before atomically retiring the unchanged lock. It
+  sent no process signal. This campaign is superseded and must not be resumed.
+- 2026-08-29: the Windows-launcher remediation now persists digest-bound launch
+  intent, exact launcher PID/create-time/command, worker hello, and final
+  authorization. It accepts only a direct supervisor child or the launcher's
+  sole one-hop child, revalidates the complete topology before authorization,
+  and makes atomic authorization publication the final grant. Timeout handling
+  signals the same revalidated worker process object, never the wrapper, and
+  refuses workers or cancellation helpers with descendants. Cancellation uses
+  an independent intent/binding/hello/authorization lease, and recovery proves
+  both the helper/worker and any delegated launcher absent from exact persisted
+  evidence. Focused tests passed 146 cases; the complete qualification suite
+  passed 284 cases; Ruff, compileall, and `git diff --check` passed. An
+  independent adversarial re-audit reported GO with no residual P0/P1/P2
+  finding. No HEC-RAS, COM, or real-process signal occurred during remediation
+  or validation.
