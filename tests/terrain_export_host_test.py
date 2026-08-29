@@ -139,6 +139,10 @@ def test_windows_path_str_path_unc_and_spaces_remain_lossless(monkeypatch, value
         ("6.6.0", "6.6"),
         ("6.60", "6.6"),
         ("66", "6.6"),
+        ("7.0.1", "7.0.1"),
+        ("7.01", "7.0.1"),
+        ("701", "7.0.1"),
+        (r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe", "7.0.1"),
     ],
 )
 def test_exact_qualified_terrain_export_versions(version, canonical):
@@ -146,7 +150,7 @@ def test_exact_qualified_terrain_export_versions(version, canonical):
 
 
 @pytest.mark.parametrize(
-    "version", ["6.4.1.1", "6.6.0.1", "6.6.1", "7.0 Beta", "7.1"]
+    "version", ["6.4.1.1", "6.6.0.1", "6.6.1", "7.0 Beta"]
 )
 def test_unqualified_or_new_version_terms_are_rejected(version):
     with pytest.raises(ValueError):
@@ -170,11 +174,10 @@ def test_hecras_700_is_rejected_with_official_modification_defect_reason():
         host.resolve_supported_hecras_version("7.0", None)
 
 
-def test_hecras_701_fix_is_documented_but_not_silently_accepted():
-    with pytest.raises(
-        ValueError, match="not yet been locally reflected and qualified"
-    ):
-        host.resolve_supported_hecras_version("7.0.1", None)
+@pytest.mark.parametrize("version", ["7.1", "7.10", "71"])
+def test_hecras_71_is_rejected_as_an_unpublished_classic_release(version):
+    with pytest.raises(ValueError, match="not an official published"):
+        host.resolve_supported_hecras_version(version, None)
 
 
 @pytest.mark.parametrize(
@@ -199,7 +202,9 @@ def test_public_api_rejects_unsupported_rasprj_before_filesystem_work(tmp_path):
     project.ras_version = "6.3"
     output = tmp_path / "must-not-be-created" / "terrain.tif"
 
-    with pytest.raises(ValueError, match="exactly 6\\.4\\.1, 6\\.5, and 6\\.6"):
+    with pytest.raises(
+        ValueError, match="exactly 6\\.4\\.1, 6\\.5, 6\\.6, and 7\\.0\\.1"
+    ):
         RasTerrain.export_rasmapper_terrain(
             tmp_path / "missing.prj",
             output,
@@ -250,6 +255,17 @@ def test_rasprj_700_is_rejected_before_filesystem_work(tmp_path):
         )
 
     assert not output.parent.exists()
+
+
+def test_rasprj_701_is_accepted_from_exact_executable_folder():
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = "7.0.1"
+    project.ras_exe_path = (
+        r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe"
+    )
+
+    assert host.resolve_supported_hecras_version(None, project) == "7.0.1"
 
 
 def test_uninitialized_rasprj_is_rejected_even_with_explicit_version():

@@ -27,13 +27,13 @@ single GeoTIFF before promotion, and never registers the derivative in the
 source project.
 
 The follow-up version audit checked official release notes, reflected every
-locally installed runtime from 6.3 through 7.0.0, and ran bounded exports on
-6.4.1, 6.5, 6.6, 6.7 Beta 4/5, and 7.0.0. The public API accepts exactly
-6.4.1, 6.5, and 6.6. It validates `RasPrj.ras_version` and the identifiable
+locally installed runtime from 6.3 through 7.0.1, and ran bounded exports on
+6.4.1, 6.5, 6.6, 6.7 Beta 4/5, 7.0.0, and 7.0.1. The public API accepts exactly
+6.4.1, 6.5, 6.6, and 7.0.1. It validates `RasPrj.ras_version` and the identifiable
 release in `ras_exe_path`, then raises before filesystem or native work for all
 other versions. HEC-RAS 7.0.0 is rejected because HEC documents a terrain-
-modification export defect; 7.0.1 is unqualified because its exact binary was
-not locally available.
+modification export defect; the exact official 7.0.1 binary fixes that issue
+and passed native qualification. No official HEC-RAS Classic 7.1 release exists.
 
 ## Original implementation gap
 
@@ -76,7 +76,7 @@ TerrainLayer.GenerateNewRasTerrain(
 
 Independent reflection corrected two assumptions in the original proposal:
 `GenerateNewRasTerrain` is a **private** instance method in the checked 6.4.1,
-6.5, 6.6, 6.7 Beta 4/5, and 7.0.0 assemblies, and there is no public
+6.5, 6.6, 6.7 Beta 4/5, 7.0.0, and 7.0.1 assemblies, and there is no public
 `RasterFilesInfo` collection on that newer surface.
 The helper resolves the exact non-public nine-parameter contract and uses the
 public `RasterFileCount` plus `RasterFileInfo(int)` inventory.

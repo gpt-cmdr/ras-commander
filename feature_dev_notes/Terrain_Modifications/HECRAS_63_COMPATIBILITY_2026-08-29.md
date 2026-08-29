@@ -5,8 +5,8 @@ Date: 2026-08-29
 ## Decision
 
 `RasTerrain.export_rasmapper_terrain()` does not support HEC-RAS 6.3 or 6.3.1.
-The subsequent full version audit qualifies exactly HEC-RAS 6.4.1, 6.5, and
-6.6. The public API checks an explicitly supplied `RasPrj.ras_version` and its
+The subsequent full version audit qualifies exactly HEC-RAS 6.4.1, 6.5, 6.6,
+and 7.0.1. The public API checks an explicitly supplied `RasPrj.ras_version` and its
 identifiable executable release before filesystem or native work, then raises
 `ValueError` for 6.3, every other unsupported version, or a conflicting exact
 runtime. See `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md`.
@@ -69,6 +69,7 @@ requires.
 | 6.4.1 | Accepted | Native Windows qualified |
 | 6.5 | Accepted | Native Windows qualified |
 | 6.6 | Accepted | Native Windows and Wine qualified |
+| 7.0.1 | Accepted | Native Windows qualified; official 7.0.0 export defect fixed |
 | 6.3 / 6.3.1 | Rejected | Inspected; required bounded export contract absent |
 | all others | Rejected | Unqualified, prerelease, or affected by an official export defect |
 

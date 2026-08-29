@@ -41,7 +41,8 @@ Supported HEC-RAS versions are deliberately narrow:
 | 6.6 | Supported | Native Windows and Wine qualified with bounded modification-aware and stitched exports; HEC's [6.6 terrain manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer) explicitly documents the unified export options |
 | 6.7 beta releases | Unsupported prereleases | HEC's [archive](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) lists Beta, Beta 2, Beta 3, Beta 4a, and Beta 5 before 7.0. The locally installed Beta 4-labeled and Beta 5 runtimes passed bounded checks, but the API accepts no beta runtime |
 | 7.0.0 | Unsupported | Although the checked windows completed, HEC documents a [terrain-modification export defect](https://www.hec.usace.army.mil/confluence/rasdocs/raski/7.0) that can omit the minimum-Y portion of a modification |
-| 7.0.1 | Unqualified | HEC reports the 7.0.0 defect fixed in [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues), but the exact 7.0.1 binary was not locally available for reflection and production qualification |
+| 7.0.1 | Supported | The official installer's signature was validated, then the installed runtime was reflected and natively qualified after HEC reported the 7.0.0 defect fixed in [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues). Bounded UPGU3 modification-aware 2x/4x and two-source stitched exports passed |
+| 7.1 | Unsupported / not published | The official [HEC-RAS downloads page](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) and [HEC download release repository](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases) contain no HEC-RAS Classic 7.1 release. HEC-RAS 2025 is a different product and is not accepted as a substitute |
 | Other versions | Unsupported | Their exact mapper contract and semantics have not been qualified |
 
 When `ras_object` is supplied, it must be an initialized `RasPrj`. The API
@@ -52,9 +53,9 @@ between the explicit version, project version, and executable release. The
 existing `6.4` convenience term resolves to the qualified 6.4.1 installation;
 an actual executable in a `6.4` folder remains rejected.
 
-All three accepted releases are qualified on native Windows. The task-local
-Wine path is qualified with the exact 6.6 runtime; 6.4.1 and 6.5 have not yet
-received matching Wine-runtime qualification.
+All four accepted releases are qualified on native Windows. The task-local
+Wine path is qualified with the exact 6.6 runtime; 6.4.1, 6.5, and 7.0.1 have
+not yet received matching Wine-runtime qualification.
 
 ```python
 from pathlib import Path

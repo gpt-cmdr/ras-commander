@@ -54,6 +54,18 @@ def test_get_ras_exe_keeps_compact_66_mapped_to_66(monkeypatch):
     assert get_ras_exe("66") == str(fake_66)
 
 
+def test_get_ras_exe_maps_compact_701_to_exact_patch_release(monkeypatch):
+    fake_701 = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe")
+
+    monkeypatch.setattr(
+        RasUtils,
+        "discover_ras_versions",
+        staticmethod(lambda: {"7.0.1": fake_701}),
+    )
+
+    assert get_ras_exe("701") == str(fake_701)
+
+
 def test_discover_ras_versions_scans_standard_66_folder(monkeypatch):
     monkeypatch.setitem(sys.modules, "winreg", None)
     fake_exe = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe")
@@ -75,6 +87,30 @@ def test_discover_ras_versions_scans_standard_66_folder(monkeypatch):
     discovered = RasUtils.discover_ras_versions()
 
     assert discovered["6.6"] == fake_exe
+    assert "7.0" not in discovered
+
+
+def test_discover_ras_versions_scans_standard_701_folder(monkeypatch):
+    monkeypatch.setitem(sys.modules, "winreg", None)
+    fake_exe = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe")
+
+    def fake_exists(self):
+        normalized = str(self).replace("\\", "/")
+        return normalized in {
+            "C:/Program Files (x86)/HEC/HEC-RAS",
+            "C:/Program Files/HEC/HEC-RAS",
+        }
+
+    def fake_is_file(self):
+        return Path(self).as_posix() == fake_exe.as_posix()
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(Path, "is_file", fake_is_file)
+    monkeypatch.setattr(Path, "glob", lambda self, pattern: [])
+
+    discovered = RasUtils.discover_ras_versions()
+
+    assert discovered["7.0.1"] == fake_exe
     assert "7.0" not in discovered
 
 

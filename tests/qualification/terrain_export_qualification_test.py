@@ -58,7 +58,12 @@ def _assert_result(result, factor):
 
 @pytest.mark.parametrize(
     ("version", "expected_min_delta"),
-    [("6.4.1", -26.90625), ("6.5", -26.90625), ("6.6", -27.0625)],
+    [
+        ("6.4.1", -26.90625),
+        ("6.5", -26.90625),
+        ("6.6", -27.0625),
+        ("7.0.1", -27.0625),
+    ],
 )
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
 def test_supported_versions_upgu3_modification_aware_2x_and_4x(
@@ -110,7 +115,7 @@ def test_supported_versions_upgu3_modification_aware_2x_and_4x(
     assert np.allclose(on_values[:8, :8], off_values[:8, :8])
 
 
-@pytest.mark.parametrize("version", ["6.4.1", "6.5", "6.6"])
+@pytest.mark.parametrize("version", ["6.4.1", "6.5", "6.6", "7.0.1"])
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
 def test_supported_versions_multi_source_stitched_export(tmp_path, version):
     assert MUNCIE_PROJECT.is_file()

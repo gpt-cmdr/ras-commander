@@ -7,7 +7,7 @@ Base revision: `d7784fcc7714ca75632eef5338612fece28609aa`
 ## Outcome
 
 The focused native helper and Python supervisor passed unit/regression tests,
-bounded native HEC-RAS 6.4.1, 6.5, and 6.6 exports, audit-only checks of the
+bounded native HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 exports, audit-only checks of the
 installed 6.7 Beta 4/5 and 7.0.0 runtimes, and a Wine export using the HEC-RAS
 6.6 mapper runtime. All production-path outputs
 were one single-band Float32 GeoTIFF with CRS and nodata metadata, exact source-
@@ -16,7 +16,7 @@ receipt. No project registration or source project file was changed.
 
 ## Automated tests
 
-- `tests/terrain_export_host_test.py`: 66 passed. Coverage includes exact
+- `tests/terrain_export_host_test.py`: 72 passed. Coverage includes exact
   terrain selection, Path/string/Windows/UNC/space-containing and Wine path
   conversion, factors and cell-size math, negative-coordinate grid snapping,
   source resolution compatibility, overwrite protection, request/response
@@ -24,14 +24,14 @@ receipt. No project registration or source project file was changed.
   state, packaged resources, forced-timeout owned-process cleanup, supported
   version normalization, early unsupported-version `RasPrj` rejection,
   executable-release checks, and explicit/project runtime conflict rejection.
-- Focused regression set: 105 passed after the exact-version compatibility audit
+- Focused regression set: 128 passed after the 7.0.1 qualification update
   (terrain export, existing native helper packaging, GDAL runtime, terrain
   logging/creation, and terrain display settings). This includes explicit
   rejection of unqualified or new version terms.
 - Opt-in real-runtime suite
-  `tests/qualification/terrain_export_qualification_test.py`: 6 passed and the
-  Wine-only case skipped on Windows. The six cases cover modification-aware
-  and stitched exports on 6.4.1, 6.5, and 6.6. The equivalent production Wine
+  `tests/qualification/terrain_export_qualification_test.py`: 8 passed and the
+  Wine-only case skipped on Windows. The eight cases cover modification-aware
+  and stitched exports on 6.4.1, 6.5, 6.6, and 7.0.1. The equivalent production Wine
   invocation was run with the 6.6 runtime on the controlled Linux worker
   described below.
 
@@ -83,7 +83,7 @@ registered sources; both intersected the output, one source deterministically
 anchored the authoritative grid, and the registered stitch behavior completed
 without requiring aligned source origins.
 
-## Audit-only HEC-RAS 7.0.0 compatibility evidence
+## HEC-RAS 7.0-family compatibility evidence
 
 The same packaged helper, compiled against the verified 6.6 signature, loaded
 the checked 7.0.0 mapper assemblies and exported the bounded Muncie window
@@ -93,9 +93,23 @@ free-form resampling vocabulary: it asserts the exact private method contract
 and hard-codes `near`, so new vendor terms cannot be accepted silently. This
 successful window is not support evidence: HEC's official 7.0 known-issues
 record says terrain export can omit the minimum-Y part of a modification.
-Consequently 7.0.0 is rejected. HEC reports the issue fixed in 7.0.1, but that
-exact binary was unavailable for reflection and qualification and is also
-rejected for now.
+Consequently 7.0.0 is rejected. The exact official 7.0.1 installer was later
+downloaded and its Authenticode signature validated as U.S. Army Corps of
+Engineers. The installed `Ras.exe` reports 7.00.0001; exact reflection found
+the same private nine-parameter contract and completion behavior.
+
+The production-path 7.0.1 UPGU3 2x modification-off/on and 4x-on exports
+completed in 2.67, 3.87, and 3.67 seconds. They produced the expected 33 x 48
+and 17 x 24 grids, 73 changed cells, 1,511 unchanged controls, and a delta
+range of `-27.0625` to `-0.09375` feet. The two-source Muncie export completed
+in 1.49 seconds with the expected 16 x 23 grid and checksum 4221. These checked
+pixels are identical to 7.0.0 and 6.6, but HEC's explicit 7.0.1 fix notice is
+what distinguishes the accepted patch from known-defective 7.0.0. The local
+fixtures do not contain the exact triangular-nose/minimum-Y regression.
+
+The official downloads page and HEC release repository contain no HEC-RAS
+Classic 7.1 release. No 7.1 package could therefore be installed or qualified;
+HEC-RAS 2025 was not substituted because it is a different product.
 
 ## HEC-RAS 6.3 and 6.3.1 compatibility decision
 
@@ -168,12 +182,13 @@ explicit environment declaration documented in the public API guide.
 - CLB07 availability remains an infrastructure gap. The alternate-worker Wine
   result qualifies the exact HEC-RAS 6.6 mapper runtime under Wine, but does not
   prove the unavailable CLB07 image configuration.
-- Exactly HEC-RAS 6.4.1, 6.5, and 6.6 are accepted. All three passed the native
-  Windows modification-aware and stitched matrix. Wine qualification covers
-  6.6; matching 6.4.1 and 6.5 Wine runs remain a qualification gap.
+- Exactly HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 are accepted. All four passed the
+  native Windows modification-aware and stitched matrix. Wine qualification
+  covers 6.6; matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap.
 - HEC-RAS 6.3/6.3.1 lack the required contract, 6.4.0 is associated with an
-  official terrain-elevation defect, 6.7 has only prerelease builds, 7.0.0 has
-  an official terrain-modification export defect, and 7.0.1 was unavailable.
+  official terrain-elevation defect, 6.7 has only prerelease builds, and 7.0.0
+  has an official terrain-modification export defect. There is no published
+  HEC-RAS Classic 7.1 release.
   See `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md` for the full matrix.
 - Full-domain UPGU3 export was intentionally not attempted. Bounded windows
   satisfy feature semantics without multi-gigabyte derivative cost.
