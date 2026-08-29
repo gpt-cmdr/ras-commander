@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from ras_commander.ComputeResults import ComputeResult
+from ras_commander.ComputeResults import ComputeParallelResult, ComputeResult
 
 
 rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
@@ -129,6 +129,24 @@ def test_normalize_requested_plan_numbers_returns_two_digit_strings():
     assert RasCmdr._normalize_requested_plan_numbers("4") == ["04"]
 
 
+def test_compute_parallel_result_adds_detached_evidence_without_breaking_mapping():
+    details = {"01": {"nested": {"value": 1}}}
+    results_df = pd.DataFrame({"plan_number": ["01"]})
+
+    result = ComputeParallelResult({"01": True}, results_df, details)
+    legacy_positional = ComputeParallelResult({"02": False}, results_df)
+    details["01"]["nested"]["value"] = 2
+
+    assert result["01"] is True
+    assert list(result.items()) == [("01", True)]
+    assert bool(result) is True
+    assert result.results_df is results_df
+    assert result.execution_details_by_plan == {
+        "01": {"nested": {"value": 1}}
+    }
+    assert legacy_positional.execution_details_by_plan == {}
+
+
 def test_compute_parallel_normalizes_list_plan_numbers_before_filtering(
     monkeypatch, tmp_path
 ):
@@ -148,7 +166,10 @@ def test_compute_parallel_normalizes_list_plan_numbers_before_filtering(
             Path(compute_ras.project_folder)
             / f"{compute_ras.project_name}.p{plan_number}.hdf"
         ).write_text("computed\n", encoding="utf-8")
-        return ComputeResult(success=True)
+        return ComputeResult(
+            success=True,
+            execution_details={"plan_number": plan_number, "worker": True},
+        )
 
     monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
     monkeypatch.setattr(rascmdr_module, "init_ras_project", fake_init_ras_project)
@@ -162,6 +183,10 @@ def test_compute_parallel_normalizes_list_plan_numbers_before_filtering(
 
     assert executed_plans == ["01", "02"]
     assert result.execution_results == {"01": True, "02": True}
+    assert result.execution_details_by_plan == {
+        "01": {"plan_number": "01", "worker": True},
+        "02": {"plan_number": "02", "worker": True},
+    }
     assert result.results_df["plan_number"].tolist() == ["01", "02"]
     assert ras_object.plan_df["plan_number"].tolist() == ["01", "02", "03"]
 
@@ -185,7 +210,10 @@ def test_compute_test_mode_normalizes_list_plan_numbers_before_filtering(
             Path(compute_ras.project_folder)
             / f"{compute_ras.project_name}.p{plan_number}.hdf"
         ).write_text("computed\n", encoding="utf-8")
-        return ComputeResult(success=True)
+        return ComputeResult(
+            success=True,
+            execution_details={"plan_number": plan_number, "sequential": True},
+        )
 
     monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
     monkeypatch.setattr(RasCmdr, "compute_plan", staticmethod(fake_compute_plan))
@@ -198,7 +226,99 @@ def test_compute_test_mode_normalizes_list_plan_numbers_before_filtering(
 
     assert executed_plans == ["01", "02"]
     assert result.execution_results == {"01": True, "02": True}
+    assert result.execution_details_by_plan == {
+        "01": {"plan_number": "01", "sequential": True},
+        "02": {"plan_number": "02", "sequential": True},
+    }
     assert result.results_df["plan_number"].tolist() == ["01", "02"]
+
+
+def test_compute_parallel_records_not_attempted_details_for_source_skip(
+    monkeypatch,
+    tmp_path,
+):
+    project_folder = tmp_path / "parallel-skip"
+    project_folder.mkdir()
+    (project_folder / "TestProject.prj").write_text(
+        "Proj Title=TestProject\n",
+        encoding="utf-8",
+    )
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_result",
+        staticmethod(lambda *_args, **_kwargs: True),
+    )
+
+    result = RasCmdr.compute_parallel(
+        plan_number="01",
+        ras_object=ras_object,
+        skip_existing=True,
+    )
+
+    assert result.execution_results == {"01": True}
+    assert result.execution_details_by_plan["01"] == {
+        "execution_api": "ras_cmdr",
+        "engine_kind": "executable",
+        "selected_result_format": "hdf",
+        "calculation_attempted": False,
+        "solver_quiescence_confirmed": None,
+        "result_artifacts_finalized": False,
+        "actual_engine_provenance_confirmed": False,
+        "selected_executable_path": None,
+        "selected_executable_sha256": None,
+        "launcher_pid": None,
+        "launcher_create_time": None,
+    }
+
+
+def test_compute_test_mode_preserves_structured_failure_details(
+    monkeypatch,
+    tmp_path,
+):
+    project_folder = tmp_path / "test-mode-failure"
+    project_folder.mkdir()
+    (project_folder / "TestProject.prj").write_text(
+        "Proj Title=TestProject\n",
+        encoding="utf-8",
+    )
+    ras_object = FakeRasProject(
+        project_folder=project_folder,
+        plan_numbers=["01"],
+    )
+
+    monkeypatch.setattr(rascmdr_module, "RasPrj", FakeRasProject)
+    monkeypatch.setattr(
+        RasCmdr,
+        "compute_plan",
+        staticmethod(
+            lambda *_args, **_kwargs: ComputeResult(
+                success=False,
+                execution_details={
+                    "calculation_attempted": True,
+                    "failure_stage": "solver",
+                },
+            )
+        ),
+    )
+
+    result = RasCmdr.compute_test_mode(
+        plan_number="01",
+        dest_folder_suffix="[Failure Evidence]",
+        ras_object=ras_object,
+    )
+
+    assert result.execution_results == {"01": False}
+    assert result.execution_details_by_plan == {
+        "01": {
+            "calculation_attempted": True,
+            "failure_stage": "solver",
+        }
+    }
 
 
 def test_compute_parallel_does_not_promote_copied_selected_result(

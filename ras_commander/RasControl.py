@@ -18,6 +18,7 @@ Public functions (HEC-RAS Operations):
 - RasControl.get_comp_msgs(plan, ras_object=None) -> str
 
 Public functions (Process Management):
+- RasControl.inspect_processes() -> RasProcessInventory
 - RasControl.list_processes(show_all=False) -> pandas.DataFrame
 - RasControl.scan_orphans() -> List[SessionLock]
 - RasControl.cleanup_orphans(interactive=True, dry_run=False) -> int
@@ -76,7 +77,7 @@ from .ExecutionArtifacts import (
 from .RasPrj import ras
 
 if TYPE_CHECKING:
-    from .ComputeResults import RasControlResult
+    from .ComputeResults import RasControlResult, RasProcessInventory
 
 logger = get_logger(__name__)
 
@@ -113,15 +114,191 @@ class SessionLock:
     python_exe: str              # sys.executable
     hostname: str                # socket.gethostname()
     detection_confidence: int    # 0-100 score from PID detection
+    ras_create_time: Optional[float] = None  # PID-reuse-resistant identity
+    ras_executable_path: Optional[str] = None  # Verified running image path
+    ras_executable_sha256: Optional[str] = None  # Stable running image digest
+    watchdog_pid: Optional[int] = None
+    watchdog_create_time: Optional[float] = None
+    watchdog_name: Optional[str] = None
+    identity_unverified: bool = False
+    validation_error: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Reject non-finite or non-JSON-safe live session identities."""
+        integer_fields = {
+            'python_pid': self.python_pid,
+            'detection_confidence': self.detection_confidence,
+        }
+        for field_name, value in integer_fields.items():
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"SessionLock {field_name} must be an integer")
+        if self.python_pid < 0:
+            raise ValueError("SessionLock python_pid must be nonnegative")
+        if not 0 <= self.detection_confidence <= 100:
+            raise ValueError(
+                "SessionLock detection_confidence must be between 0 and 100"
+            )
+        for field_name, value in {
+            'ras_pid': self.ras_pid,
+            'watchdog_pid': self.watchdog_pid,
+        }.items():
+            if value is not None and (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value <= 0
+            ):
+                raise ValueError(
+                    f"SessionLock {field_name} must be a positive integer or null"
+                )
+        if (
+            isinstance(self.start_time, bool)
+            or not isinstance(self.start_time, (int, float))
+            or not math.isfinite(float(self.start_time))
+        ):
+            raise ValueError("SessionLock start_time must be finite")
+        for field_name, value in {
+            'ras_create_time': self.ras_create_time,
+            'watchdog_create_time': self.watchdog_create_time,
+        }.items():
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+            ) and value is not None:
+                raise ValueError(
+                    f"SessionLock {field_name} must be finite or null"
+                )
+        for field_name, value in {
+            'project_path': self.project_path,
+            'ras_version': self.ras_version,
+            'session_id': self.session_id,
+            'python_exe': self.python_exe,
+            'hostname': self.hostname,
+        }.items():
+            if not isinstance(value, str) or not value:
+                raise ValueError(
+                    f"SessionLock {field_name} must be a nonempty string"
+                )
+        for field_name, value in {
+            'ras_executable_path': self.ras_executable_path,
+            'ras_executable_sha256': self.ras_executable_sha256,
+            'watchdog_name': self.watchdog_name,
+            'validation_error': self.validation_error,
+        }.items():
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"SessionLock {field_name} must be a string or null"
+                )
+            if isinstance(value, str) and not value:
+                raise ValueError(
+                    f"SessionLock {field_name} must be nonempty or null"
+                )
+        if not isinstance(self.identity_unverified, bool):
+            raise ValueError("SessionLock identity_unverified must be boolean")
+        if self.watchdog_pid is None and (
+            self.watchdog_create_time is not None or self.watchdog_name is not None
+        ):
+            raise ValueError(
+                "SessionLock watchdog identity must be complete or entirely absent"
+            )
+        if (
+            self.watchdog_pid is not None
+            and not self.identity_unverified
+            and (self.watchdog_create_time is None or self.watchdog_name is None)
+        ):
+            raise ValueError(
+                "SessionLock watchdog identity must be complete unless quarantined"
+            )
+        if (
+            self.ras_pid is not None
+            and not self.identity_unverified
+            and (
+                self.ras_create_time is None
+                or self.ras_executable_path is None
+                or self.ras_executable_sha256 is None
+            )
+        ):
+            raise ValueError(
+                "SessionLock Ras.exe identity must be complete unless quarantined"
+            )
 
     def to_json(self) -> str:
         """Serialize to JSON string."""
-        return json.dumps(asdict(self), indent=2)
+        self.__post_init__()
+        return json.dumps(asdict(self), indent=2, allow_nan=False)
 
     @classmethod
     def from_json(cls, data: str) -> 'SessionLock':
         """Deserialize from JSON string."""
-        return cls(**json.loads(data))
+        payload = json.loads(data)
+        # Locks written before execution-provenance capture did not contain a
+        # process creation time. Preserve read compatibility, but cleanup must
+        # never signal such an unproven PID.
+        payload.setdefault('ras_create_time', None)
+        payload.setdefault('ras_executable_path', None)
+        payload.setdefault('ras_executable_sha256', None)
+        payload.setdefault('watchdog_pid', None)
+        payload.setdefault('watchdog_create_time', None)
+        payload.setdefault('watchdog_name', None)
+        payload.setdefault('identity_unverified', False)
+        payload.setdefault('validation_error', None)
+        if payload.get('ras_pid') is not None and any(
+            payload.get(field) is None
+            for field in (
+                'ras_create_time',
+                'ras_executable_path',
+                'ras_executable_sha256',
+            )
+        ):
+            payload['identity_unverified'] = True
+            payload['validation_error'] = (
+                payload.get('validation_error')
+                or "legacy lock lacks complete Ras.exe process provenance"
+            )
+        try:
+            return cls(**payload)
+        except (TypeError, ValueError) as exc:
+            # Syntactically readable legacy evidence is retained in a strict,
+            # JSON-safe quarantine record. It can be reported, but never used
+            # to signal a PID or justify deleting the original lock file.
+            return cls(
+                python_pid=0,
+                ras_pid=None,
+                project_path=(
+                    payload.get('project_path')
+                    if isinstance(payload.get('project_path'), str)
+                    and payload.get('project_path')
+                    else '[invalid legacy project path]'
+                ),
+                ras_version=(
+                    payload.get('ras_version')
+                    if isinstance(payload.get('ras_version'), str)
+                    and payload.get('ras_version')
+                    else '[invalid legacy version]'
+                ),
+                session_id=(
+                    payload.get('session_id')
+                    if isinstance(payload.get('session_id'), str)
+                    and payload.get('session_id')
+                    else '[invalid legacy session]'
+                ),
+                start_time=0.0,
+                python_exe=(
+                    payload.get('python_exe')
+                    if isinstance(payload.get('python_exe'), str)
+                    and payload.get('python_exe')
+                    else '[invalid legacy Python]'
+                ),
+                hostname=(
+                    payload.get('hostname')
+                    if isinstance(payload.get('hostname'), str)
+                    and payload.get('hostname')
+                    else '[invalid legacy host]'
+                ),
+                detection_confidence=0,
+                identity_unverified=True,
+                validation_error=f"{type(exc).__name__}: {exc}",
+            )
 
     @classmethod
     def from_file(cls, path: Path) -> 'SessionLock':
@@ -146,6 +323,48 @@ class _SessionCleanupResult:
     def success(self) -> bool:
         """Return True when no identified Controller-owned process survived."""
         return not self.process_survived
+
+
+@dataclass(frozen=True)
+class _WatchdogIdentity:
+    """Exact watchdog process identity captured immediately after launch."""
+
+    pid: int
+    create_time: Optional[float]
+    name: Optional[str]
+
+    @property
+    def complete(self) -> bool:
+        return (
+            isinstance(self.pid, int)
+            and not isinstance(self.pid, bool)
+            and self.pid > 0
+            and isinstance(self.create_time, (int, float))
+            and not isinstance(self.create_time, bool)
+            and math.isfinite(float(self.create_time))
+            and isinstance(self.name, str)
+            and bool(self.name)
+        )
+
+
+@dataclass(frozen=True)
+class _WatchdogCleanupResult:
+    """Fail-closed result of exact watchdog process cleanup."""
+
+    pid: int
+    identity_state: str
+    terminated: bool = False
+    killed: bool = False
+    error: Optional[str] = None
+
+    @property
+    def safe(self) -> bool:
+        return self.identity_state in {
+            'absent',
+            'pid_reused',
+            'terminated',
+            'killed',
+        }
 
 
 @dataclass
@@ -182,7 +401,79 @@ def _get_lock_file_path(session_id: str) -> Path:
     return LOCK_DIR / filename
 
 
-def _find_our_ras_process(project_path: Path, before_snapshot: Dict[int, Any]) -> Tuple[Optional[int], int]:
+def _file_identity(stat_result: os.stat_result) -> Tuple[int, ...]:
+    """Return fields that must remain stable while hashing an executable."""
+    return (
+        int(stat_result.st_dev),
+        int(stat_result.st_ino),
+        int(stat_result.st_size),
+        int(stat_result.st_mtime_ns),
+        int(stat_result.st_ctime_ns),
+    )
+
+
+def _stable_file_sha256(path: Path) -> str:
+    """Hash one file while rejecting replacement or mutation during reading."""
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        before = _file_identity(os.fstat(stream.fileno()))
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+        after = _file_identity(os.fstat(stream.fileno()))
+    if before != after:
+        raise RuntimeError(f"Executable changed while hashing: {path}")
+    return digest.hexdigest()
+
+
+def _prove_ras_process_image(
+    *,
+    pid: int,
+    create_time: float,
+    snapshot_executable: str,
+) -> Tuple[str, str]:
+    """Prove one running Ras.exe identity and hash its stable image bytes.
+
+    The PID creation time and executable path are checked immediately before
+    and after hashing. This rejects PID reuse, a forged snapshot path, and a
+    file mutation race rather than attributing unproven bytes to a Controller.
+    """
+    from ._process_inspection import _same_windows_path
+
+    process = psutil.Process(pid)
+
+    def verify() -> Path:
+        if int(process.pid) != int(pid):
+            raise RuntimeError("Controller PID changed during image proof")
+        observed_create_time = float(process.create_time())
+        if not math.isclose(
+            observed_create_time,
+            float(create_time),
+            rel_tol=0.0,
+            abs_tol=1e-6,
+        ):
+            raise RuntimeError("Controller PID identity changed during image proof")
+        if process.name().casefold() != 'ras.exe':
+            raise RuntimeError("Controller process image is not Ras.exe")
+        observed_executable = str(process.exe())
+        if not _same_windows_path(observed_executable, snapshot_executable):
+            raise RuntimeError("Controller executable path changed after discovery")
+        executable = Path(observed_executable).resolve(strict=True)
+        if not executable.is_file() or executable.name.casefold() != 'ras.exe':
+            raise RuntimeError("Controller executable is not a regular Ras.exe file")
+        return executable
+
+    executable = verify()
+    executable_sha256 = _stable_file_sha256(executable)
+    final_executable = verify()
+    if not _same_windows_path(str(final_executable), str(executable)):
+        raise RuntimeError("Controller executable identity changed while hashing")
+    return str(final_executable), executable_sha256
+
+
+def _find_our_ras_process(
+    project_path: Path,
+    before_snapshot: Dict[int, Any],
+) -> Tuple[Optional[int], Optional[float], int, Optional[str], Optional[str]]:
     """
     Multi-strategy detection to find the ras.exe process we just launched.
 
@@ -191,70 +482,165 @@ def _find_our_ras_process(project_path: Path, before_snapshot: Dict[int, Any]) -
         before_snapshot: Dict of {pid: proc_info} before COM launch
 
     Returns:
-        Tuple of (pid, confidence_score). PID is None if detection failed.
-        Confidence score is 0-100.
+        Tuple of ``(pid, create_time, confidence_score, executable_path,
+        executable_sha256)``. Identity and image evidence are all absent if
+        detection or proof fails. The initial identity/path is captured from
+        one post-Dispatch process snapshot, then reverified before and after
+        stable hashing so PID reuse or image replacement cannot be credited.
     """
     time.sleep(0.3)  # Give process time to appear
 
-    candidates = {}  # {pid: confidence_score}
+    candidates = {}  # {(pid, create_time): confidence_score}
 
     try:
         after = {
             p.pid: p.info
-            for p in psutil.process_iter(['pid', 'name', 'cmdline', 'create_time'])
+            for p in psutil.process_iter(
+                ['pid', 'name', 'cmdline', 'create_time', 'cwd', 'exe']
+            )
             if p.info['name'] and p.info['name'].lower() == 'ras.exe'
         }
     except Exception as e:
         logger.warning(f"Error scanning for ras.exe processes: {e}")
-        return None, 0
+        return None, None, 0, None, None
 
-    new_pids = set(after.keys()) - set(before_snapshot.keys())
+    # A recycled PID is a new identity only when its process creation time
+    # differs from the pre-dispatch snapshot.
+    new_identities = set()
+    for pid, info in after.items():
+        try:
+            create_time = float(info['create_time'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        before_info = before_snapshot.get(pid)
+        before_create_time = (
+            before_info.get('create_time')
+            if isinstance(before_info, dict)
+            else None
+        )
+        if before_info is None or before_create_time != info.get('create_time'):
+            new_identities.add((pid, create_time))
 
-    for pid in after.keys():
-        proc_info = after[pid]
+    from ._process_inspection import _command_has_exact_path
+
+    unique_new_identity = (
+        next(iter(new_identities)) if len(new_identities) == 1 else None
+    )
+
+    for pid, proc_info in after.items():
+        try:
+            create_time = float(proc_info['create_time'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        identity = (pid, create_time)
         score = 0
+        project_matches = False
 
-        # Criteria 1: Newly appeared (50 points)
-        if pid in new_pids:
+        # Criteria 1: Newly appeared identity (50 points)
+        if identity in new_identities:
             score += 50
 
-        # Criteria 2: Project path in cmdline (40 points)
+        # Criteria 2: Exact project path token (40 points). Basename and
+        # substring matches are deliberately insufficient.
         try:
-            cmdline = ' '.join(proc_info['cmdline'] or [])
-            if str(project_path) in cmdline or project_path.name in cmdline:
+            cmdline = proc_info['cmdline']
+            if (
+                isinstance(cmdline, (list, tuple))
+                and _command_has_exact_path(
+                    tuple(str(item) for item in cmdline),
+                    project_path,
+                    proc_info.get('cwd'),
+                )
+            ):
+                project_matches = True
                 score += 40
-        except (TypeError, AttributeError):
+        except (TypeError, AttributeError, KeyError):
             pass
 
         # Criteria 3: Very recent creation time (30 points)
         try:
-            age = time.time() - proc_info['create_time']
+            age = time.time() - create_time
             if age < 2.0:  # Created within 2 seconds
                 score += 30
         except (TypeError, KeyError):
             pass
 
-        # Criteria 4: Only one new process (20 points)
-        if len(new_pids) == 1 and pid in new_pids:
+        # Criteria 4: Only one new identity (20 points). Under host-exclusive
+        # dispatch this is sufficient attribution even when the Controller
+        # command line omits the project path.
+        if unique_new_identity == identity:
             score += 20
 
-        if score > 0:
-            candidates[pid] = score
+        if project_matches or unique_new_identity == identity:
+            candidates[identity] = score
 
     if not candidates:
         logger.warning(f"Could not reliably identify ras.exe PID for {project_path.name}")
-        return None, 0
+        return None, None, 0, None, None
 
-    # Return highest confidence PID
-    best_pid = max(candidates, key=candidates.get)
-    confidence = candidates[best_pid]
+    # Return highest confidence identity from the atomic snapshot.
+    best_identity = max(candidates, key=candidates.get)
+    best_pid, best_create_time = best_identity
+    confidence = min(100, candidates[best_identity])
+
+    snapshot_executable = after[best_pid].get('exe')
+    if not isinstance(snapshot_executable, str) or not snapshot_executable.strip():
+        logger.warning(
+            "Could not prove ras.exe PID %s because its image path was unavailable",
+            best_pid,
+        )
+        return None, None, 0, None, None
+    try:
+        executable_path, executable_sha256 = _prove_ras_process_image(
+            pid=best_pid,
+            create_time=best_create_time,
+            snapshot_executable=snapshot_executable,
+        )
+    except (
+        psutil.NoSuchProcess,
+        psutil.AccessDenied,
+        OSError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+    ) as exc:
+        logger.warning(
+            "Could not prove ras.exe PID %s image identity: %s",
+            best_pid,
+            exc,
+        )
+        return None, None, 0, None, None
 
     if confidence < 50:
         logger.warning(f"Low confidence ({confidence}/100) for PID {best_pid}")
     else:
         logger.debug(f"Detected ras.exe PID {best_pid} (confidence: {confidence}/100)")
 
-    return best_pid, confidence
+    return (
+        best_pid,
+        best_create_time,
+        confidence,
+        executable_path,
+        executable_sha256,
+    )
+
+
+def _process_matches_lock_identity(proc: Any, lock: SessionLock) -> bool:
+    """Return True only for the exact PID/create-time identity in ``lock``."""
+    if lock.ras_pid is None or lock.ras_create_time is None:
+        return False
+    if int(getattr(proc, 'pid', -1)) != int(lock.ras_pid):
+        return False
+    try:
+        create_time = float(proc.create_time())
+    except (psutil.NoSuchProcess, psutil.AccessDenied, OSError, ValueError, TypeError):
+        return False
+    return math.isclose(
+        create_time,
+        float(lock.ras_create_time),
+        rel_tol=0.0,
+        abs_tol=1e-6,
+    )
 
 
 def _classify_lock_file(lock: SessionLock) -> str:
@@ -266,7 +652,12 @@ def _classify_lock_file(lock: SessionLock) -> str:
         'stale_orphan' - Python dead, ras.exe still running
         'stale_clean' - Both dead, safe to delete
         'foreign_machine' - From different machine, don't touch
+        'identity_unverified' - PID exists but creation time is unavailable;
+                                preserve evidence and never signal it
     """
+    if lock.identity_unverified:
+        return 'identity_unverified'
+
     # Check 1: Different machine?
     if lock.hostname != socket.gethostname():
         return 'foreign_machine'
@@ -279,8 +670,10 @@ def _classify_lock_file(lock: SessionLock) -> str:
             # Verify it's actually Python (not PID reuse)
             if 'python' in python_proc.name().lower():
                 python_alive = True
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
+    except psutil.NoSuchProcess:
         pass
+    except (psutil.AccessDenied, OSError, ValueError, TypeError):
+        return 'identity_unverified'
 
     if python_alive:
         return 'active'
@@ -290,6 +683,12 @@ def _classify_lock_file(lock: SessionLock) -> str:
         try:
             ras_proc = psutil.Process(lock.ras_pid)
             if ras_proc.is_running() and ras_proc.name().lower() == 'ras.exe':
+                if lock.ras_create_time is None:
+                    return 'identity_unverified'
+                if not _process_matches_lock_identity(ras_proc, lock):
+                    # The tracked Controller identity exited and this PID was
+                    # reused. It is not our process and must not be signaled.
+                    return 'stale_clean'
                 # Verify it's working on our project (if cmdline available)
                 try:
                     cmdline = ' '.join(ras_proc.cmdline() or [])
@@ -299,8 +698,10 @@ def _classify_lock_file(lock: SessionLock) -> str:
                     pass
                 # Couldn't verify project, but ras.exe exists - assume orphan if Python dead
                 return 'stale_orphan'
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except psutil.NoSuchProcess:
             pass
+        except (psutil.AccessDenied, OSError, ValueError, TypeError):
+            return 'identity_unverified'
 
     return 'stale_clean'
 
@@ -333,6 +734,16 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
     if lock is None:
         return _SessionCleanupResult(session_id=session_id, ras_pid=None)
 
+    if lock.identity_unverified:
+        lock_retained = _get_lock_file_path(session_id).exists()
+        return _SessionCleanupResult(
+            session_id=session_id,
+            ras_pid=lock.ras_pid,
+            process_survived=True,
+            lock_retained=lock_retained,
+            error=lock.validation_error or "session identity is unverified",
+        )
+
     detected = False
     terminated = False
     killed = False
@@ -342,7 +753,11 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
     if lock.ras_pid:
         try:
             proc = psutil.Process(lock.ras_pid)
-            if proc.is_running() and proc.name().lower() == 'ras.exe':
+            if (
+                proc.is_running()
+                and proc.name().lower() == 'ras.exe'
+                and _process_matches_lock_identity(proc, lock)
+            ):
                 detected = True
                 logger.debug(f"Terminating tracked ras.exe PID {lock.ras_pid}")
                 proc.terminate()
@@ -356,13 +771,52 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
                     proc.kill()
                     killed = True
                     proc.wait(timeout=5)
-                survived = proc.is_running()
+                survived = (
+                    proc.is_running()
+                    and _process_matches_lock_identity(proc, lock)
+                )
+            elif proc.is_running() and proc.name().lower() == 'ras.exe':
+                if lock.ras_create_time is None:
+                    survived = True
+                    error = (
+                        "Tracked ras.exe PID has no creation-time identity; "
+                        "refusing to signal it"
+                    )
+                    logger.warning(error)
+                else:
+                    logger.info(
+                        "Tracked ras.exe PID %s was reused; refusing to signal "
+                        "the replacement process",
+                        lock.ras_pid,
+                    )
         except psutil.NoSuchProcess:
             terminated = detected
         except (psutil.TimeoutExpired, psutil.AccessDenied) as exc:
             survived = True
             error = f"{type(exc).__name__}: {exc}"
             logger.warning(f"Could not verify termination of PID {lock.ras_pid}: {exc}")
+
+    if not survived and lock.watchdog_pid is not None:
+        watchdog_cleanup = _terminate_watchdog(
+            _WatchdogIdentity(
+                pid=lock.watchdog_pid,
+                create_time=lock.watchdog_create_time,
+                name=lock.watchdog_name,
+            )
+        )
+        if not watchdog_cleanup.safe:
+            survived = True
+            error = (
+                "Watchdog identity/exit could not be proved: "
+                f"{watchdog_cleanup.identity_state}; "
+                f"{watchdog_cleanup.error or 'no detail'}"
+            )
+            lock.identity_unverified = True
+            lock.validation_error = error
+            try:
+                _create_session_lock(session_id, lock)
+            except Exception:
+                pass
 
     if survived:
         lock_retained = _get_lock_file_path(session_id).exists()
@@ -402,8 +856,8 @@ def _emergency_cleanup_all() -> None:
         _cleanup_session(session_id)
 
 
-def _spawn_watchdog(parent_pid: int, ras_pid: int, max_runtime: int,
-                    lock_file_path: Path) -> int:
+def _spawn_watchdog(parent_pid: int, ras_pid: int, ras_create_time: float,
+                    max_runtime: int, lock_file_path: Path) -> Optional[_WatchdogIdentity]:
     """
     Spawn independent watchdog process for long-running operations.
 
@@ -413,97 +867,246 @@ def _spawn_watchdog(parent_pid: int, ras_pid: int, max_runtime: int,
     3. Manual cancellation via lock file deletion
 
     Returns:
-        Watchdog process PID
+        Exact watchdog PID/create-time/name identity. ``None`` means no
+        watchdog process survived launch. An incomplete identity is returned
+        only when a launched PID exists but cannot be verified; callers must
+        retain session evidence and fail closed.
     """
-    watchdog_script = f"""
-import psutil
-import time
-import sys
-from pathlib import Path
-
-PARENT_PID = {parent_pid}
-RAS_PID = {ras_pid}
-MAX_RUNTIME = {max_runtime}
-LOCK_FILE = Path({str(lock_file_path)!r})
-CHECK_INTERVAL = 5  # seconds
-
-start_time = time.time()
-
-while True:
-    time.sleep(CHECK_INTERVAL)
-
-    # Check 1: Parent Python still alive?
     try:
-        parent = psutil.Process(PARENT_PID)
-        if not parent.is_running():
-            # Parent died, orphan detected
-            print(f"[Watchdog] Parent {{PARENT_PID}} died, terminating ras.exe {{RAS_PID}}", flush=True)
-            try:
-                ras = psutil.Process(RAS_PID)
-                ras.terminate()
-                ras.wait(timeout=10)
-            except:
-                pass
-            LOCK_FILE.unlink(missing_ok=True)
-            sys.exit(0)
-    except psutil.NoSuchProcess:
-        # Parent already gone
         try:
-            ras = psutil.Process(RAS_PID)
-            ras.terminate()
-            ras.wait(timeout=10)
-        except:
-            pass
-        LOCK_FILE.unlink(missing_ok=True)
-        sys.exit(0)
+            parent = psutil.Process(parent_pid)
+            parent_create_time = float(parent.create_time())
+            parent_name = str(parent.name()).strip()
+            if (
+                not parent.is_running()
+                or not math.isfinite(parent_create_time)
+                or parent_create_time <= 0
+                or not parent_name
+            ):
+                raise RuntimeError("parent process identity is invalid")
+        except (
+            psutil.NoSuchProcess,
+            psutil.AccessDenied,
+            OSError,
+            ValueError,
+            TypeError,
+            RuntimeError,
+        ) as exc:
+            logger.error(
+                "Could not prove watchdog parent PID %s identity: %s",
+                parent_pid,
+                exc,
+            )
+            return None
 
-    # Check 2: Timeout exceeded?
-    if time.time() - start_time > MAX_RUNTIME:
-        print(f"[Watchdog] Timeout exceeded, terminating ras.exe {{RAS_PID}}", flush=True)
-        try:
-            ras = psutil.Process(RAS_PID)
-            ras.terminate()
-            ras.wait(timeout=10)
-        except:
-            pass
-        LOCK_FILE.unlink(missing_ok=True)
-        sys.exit(0)
+        watchdog_worker = Path(__file__).with_name('_orphan_watchdog.py')
+        if not watchdog_worker.is_file():
+            logger.error("Orphan-watchdog worker is unavailable: %s", watchdog_worker)
+            return None
 
-    # Check 3: Lock file deleted? (manual cancel signal)
-    if not LOCK_FILE.exists():
-        print(f"[Watchdog] Lock file deleted, assuming manual cleanup", flush=True)
-        sys.exit(0)
-"""
-
-    try:
         # Launch watchdog as completely independent process
         creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
         proc = subprocess.Popen(
-            [sys.executable, '-c', watchdog_script],
+            [
+                sys.executable,
+                str(watchdog_worker),
+                '--parent-pid',
+                str(parent_pid),
+                '--parent-create-time',
+                repr(parent_create_time),
+                '--parent-name',
+                parent_name,
+                '--ras-pid',
+                str(ras_pid),
+                '--ras-create-time',
+                repr(float(ras_create_time)),
+                '--ras-name',
+                'ras.exe',
+                '--max-runtime',
+                str(max_runtime),
+                '--lock-file',
+                str(lock_file_path),
+            ],
             creationflags=creationflags,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
 
-        logger.debug(f"Spawned watchdog process PID {proc.pid} (monitoring PID {ras_pid})")
-        return proc.pid
+        try:
+            watchdog = psutil.Process(proc.pid)
+            identity = _WatchdogIdentity(
+                pid=int(proc.pid),
+                create_time=float(watchdog.create_time()),
+                name=str(watchdog.name()),
+            )
+            state, _ = _watchdog_process_state(identity)
+            if state == 'absent':
+                return None
+            if state != 'exact':
+                return _WatchdogIdentity(int(proc.pid), None, None)
+        except psutil.NoSuchProcess:
+            return None
+        except (psutil.AccessDenied, OSError, ValueError, TypeError) as exc:
+            logger.error(
+                "Spawned watchdog PID %s but could not prove its identity: %s",
+                proc.pid,
+                exc,
+            )
+            return _WatchdogIdentity(int(proc.pid), None, None)
+
+        logger.debug(
+            "Spawned watchdog process PID %s/create-time %.6f/name %s "
+            "(monitoring PID %s)",
+            identity.pid,
+            identity.create_time,
+            identity.name,
+            ras_pid,
+        )
+        return identity
     except Exception as e:
         logger.error(f"Failed to spawn watchdog process: {e}")
-        return 0
+        return None
 
 
-def _terminate_watchdog(watchdog_pid: int) -> None:
-    """Terminate a watchdog process."""
-    if watchdog_pid == 0:
-        return
-
+def _watchdog_process_state(
+    identity: _WatchdogIdentity,
+) -> Tuple[str, Optional[Any]]:
+    """Return exact/absent/reused/unknown for one watchdog identity."""
+    if not identity.complete:
+        return 'identity_unverified', None
     try:
-        proc = psutil.Process(watchdog_pid)
+        proc = psutil.Process(identity.pid)
+        create_time = float(proc.create_time())
+        name = str(proc.name())
+        running = proc.is_running()
+    except psutil.NoSuchProcess:
+        return 'absent', None
+    except (psutil.AccessDenied, OSError, ValueError, TypeError):
+        return 'identity_unverified', None
+    if not running:
+        return 'absent', None
+    if (
+        not math.isclose(
+            create_time,
+            float(identity.create_time),
+            rel_tol=0.0,
+            abs_tol=1e-6,
+        )
+        or name.casefold() != str(identity.name).casefold()
+    ):
+        return 'pid_reused', None
+    return 'exact', proc
+
+
+def _terminate_watchdog(
+    identity: Optional[_WatchdogIdentity],
+) -> _WatchdogCleanupResult:
+    """Stop only an exact watchdog identity, failing closed on uncertainty."""
+    if identity is None:
+        return _WatchdogCleanupResult(pid=0, identity_state='absent')
+
+    state, proc = _watchdog_process_state(identity)
+    if state != 'exact' or proc is None:
+        return _WatchdogCleanupResult(pid=identity.pid, identity_state=state)
+    try:
+        # The lookup above is the immediate PID/create-time/name proof before
+        # the first signal.
         proc.terminate()
         proc.wait(timeout=3)
-        logger.debug(f"Terminated watchdog process PID {watchdog_pid}")
-    except (psutil.NoSuchProcess, psutil.TimeoutExpired, psutil.AccessDenied):
-        pass
+    except psutil.NoSuchProcess:
+        return _WatchdogCleanupResult(
+            pid=identity.pid,
+            identity_state='terminated',
+            terminated=True,
+        )
+    except psutil.TimeoutExpired:
+        # Re-open and reverify immediately before the stronger signal. A
+        # reused PID is never killed; an unavailable identity retains evidence.
+        kill_state, kill_proc = _watchdog_process_state(identity)
+        if kill_state != 'exact' or kill_proc is None:
+            return _WatchdogCleanupResult(
+                pid=identity.pid,
+                identity_state=kill_state,
+                terminated=True,
+            )
+        try:
+            kill_proc.kill()
+            kill_proc.wait(timeout=3)
+        except psutil.NoSuchProcess:
+            return _WatchdogCleanupResult(
+                pid=identity.pid,
+                identity_state='killed',
+                terminated=True,
+                killed=True,
+            )
+        except (psutil.TimeoutExpired, psutil.AccessDenied, OSError) as exc:
+            return _WatchdogCleanupResult(
+                pid=identity.pid,
+                identity_state='identity_unverified',
+                terminated=True,
+                killed=True,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        final_state, _ = _watchdog_process_state(identity)
+        if final_state in {'absent', 'pid_reused'}:
+            return _WatchdogCleanupResult(
+                pid=identity.pid,
+                identity_state='killed',
+                terminated=True,
+                killed=True,
+            )
+        return _WatchdogCleanupResult(
+            pid=identity.pid,
+            identity_state='identity_unverified',
+            terminated=True,
+            killed=True,
+            error=f"watchdog post-kill state: {final_state}",
+        )
+    except (psutil.AccessDenied, OSError) as exc:
+        return _WatchdogCleanupResult(
+            pid=identity.pid,
+            identity_state='identity_unverified',
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+    final_state, _ = _watchdog_process_state(identity)
+    if final_state in {'absent', 'pid_reused'}:
+        logger.debug(f"Terminated watchdog process PID {identity.pid}")
+        return _WatchdogCleanupResult(
+            pid=identity.pid,
+            identity_state='terminated',
+            terminated=True,
+        )
+    return _WatchdogCleanupResult(
+        pid=identity.pid,
+        identity_state='identity_unverified',
+        terminated=True,
+        error=f"watchdog post-terminate state: {final_state}",
+    )
+
+
+def _inspect_controller_post_close_processes(
+    *,
+    project_path: Path,
+    plan_number: str,
+):
+    """Capture one strict host snapshot and narrow it to the executed plan."""
+    from ._process_inspection import match_plan_processes, scan_ras_processes
+
+    project_path = project_path.resolve(strict=False)
+    plan_path = project_path.parent / f"{project_path.stem}.p{plan_number}"
+    tmp_hdf_path = project_path.parent / (
+        f"{project_path.stem}.p{plan_number}.tmp.hdf"
+    )
+    host_inventory = scan_ras_processes(psutil_module=psutil)
+    plan_inventory = match_plan_processes(
+        host_inventory,
+        plan_number=plan_number,
+        project_path=project_path,
+        plan_path=plan_path,
+        tmp_hdf_path=tmp_hdf_path,
+    )
+    return plan_inventory, host_inventory
 
 
 # Register atexit cleanup handler
@@ -846,6 +1449,7 @@ class RasControl:
         close_outcome_callback: Optional[
             Callable[[bool, _SessionCleanupResult, Optional[BaseException]], None]
         ] = None,
+        session_open_callback: Optional[Callable[[SessionLock], None]] = None,
     ) -> Any:
         """
         PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
@@ -892,7 +1496,13 @@ class RasControl:
             com_rc.Project_Open(str(project_path))
 
             # Detect ras.exe PID after COM launch
-            ras_pid, confidence = _find_our_ras_process(project_path, before_snapshot)
+            (
+                ras_pid,
+                ras_create_time,
+                confidence,
+                ras_executable_path,
+                ras_executable_sha256,
+            ) = _find_our_ras_process(project_path, before_snapshot)
 
             # Create session lock
             lock_data = SessionLock(
@@ -904,7 +1514,10 @@ class RasControl:
                 start_time=time.time(),
                 python_exe=sys.executable,
                 hostname=socket.gethostname(),
-                detection_confidence=confidence
+                detection_confidence=confidence,
+                ras_create_time=ras_create_time,
+                ras_executable_path=ras_executable_path,
+                ras_executable_sha256=ras_executable_sha256,
             )
 
             # Track session globally
@@ -912,6 +1525,8 @@ class RasControl:
 
             # Create lock file
             _create_session_lock(session_id, lock_data)
+            if session_open_callback is not None:
+                session_open_callback(lock_data)
 
             # Perform operation
             logger.debug("Executing operation...")
@@ -1045,7 +1660,11 @@ class RasControl:
                 ``messages``: List of computation messages.
                 ``results_df_row``: Single row from results_df (pd.Series or None).
                 ``execution_details``: JSON-safe Controller identity, mode,
-                watchdog, message-count, and timing provenance.
+                watchdog, message-count, timing provenance, owned PID plus
+                creation time, verified ``Ras.exe`` path and SHA-256,
+                safe-close/owned-exit state, post-close plan/global process
+                quiescence, and result-family finalization. Calculated success
+                requires every terminal gate.
                 Existing code ``success, msgs = RasControl.run_plan("01")`` still works via __iter__.
 
         Example:
@@ -1085,7 +1704,11 @@ class RasControl:
             When computation occurs, the selected controller version governs
             permanent, plan-scoped result cleanup. HEC-RAS 5+ preserves HDF;
             HEC-RAS 3-4 preserves legacy .O##. Skipped runs do not mutate
-            execution artifacts.
+            execution artifacts. Before any plan mutation or cleanup, live
+            Controller execution requires a complete and empty strict global
+            HEC-RAS process inventory. This intentionally enforces exclusive
+            host use; an incomplete or occupied inventory raises while
+            preserving existing plan artifacts.
         """
         if isinstance(max_runtime, bool) or not isinstance(
             max_runtime, (int, float)
@@ -1137,6 +1760,10 @@ class RasControl:
             ]
 
         def _json_scalar(value):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError(
+                    "Controller execution detail floats must be finite"
+                )
             if value is None or isinstance(value, (str, int, float, bool)):
                 return value
             if isinstance(value, bytes):
@@ -1153,14 +1780,40 @@ class RasControl:
             except (TypeError, ValueError):
                 returned_count = None
             details = {
+                'execution_api': 'ras_control',
+                'engine_kind': 'controller',
+                'selected_result_format': execution_result_format,
+                'calculation_attempted': calculation_attempted,
+                'solver_quiescence_confirmed': (
+                    solver_quiescence_confirmed
+                    if calculation_attempted else None
+                ),
+                'result_artifacts_finalized': result_artifacts_finalized,
+                'actual_engine_provenance_confirmed': (
+                    actual_engine_provenance_confirmed
+                ),
                 'requested_controller_version': requested_controller_version,
                 'resolved_controller_version': resolved_controller_version,
                 'controller_progid': controller_progid,
+                'controller_pid': controller_pid,
+                'controller_create_time': controller_create_time,
+                'controller_executable_path': controller_executable_path,
+                'controller_executable_sha256': controller_executable_sha256,
+                'controller_close_safe': controller_close_safe,
+                'owned_process_exit_confirmed': owned_process_exit_confirmed,
+                'post_close_plan_processes_quiescent': (
+                    post_close_plan_processes_quiescent
+                ),
+                'post_close_global_processes_quiescent': (
+                    post_close_global_processes_quiescent
+                ),
                 'compute_mode': mode,
                 'message_count': len(messages),
                 'controller_message_count': returned_count,
                 'watchdog_requested': use_watchdog,
                 'watchdog_started': watchdog_pid != 0,
+                'strict_close_requested': bool(strict_close),
+                'max_runtime_seconds': float(max_runtime_seconds),
                 'duration_seconds': float(duration_seconds),
             }
             details.update({key: _json_scalar(value) for key, value in extra.items()})
@@ -1192,6 +1845,20 @@ class RasControl:
             if execution_result_format == "legacy"
             else artifact_paths.legacy_output
         )
+
+        calculation_attempted = False
+        solver_quiescence_confirmed = False
+        result_artifacts_finalized = False
+        controller_pid = None
+        controller_create_time = None
+        controller_executable_path = None
+        controller_executable_sha256 = None
+        controller_detection_confidence = 0
+        controller_close_safe = False
+        owned_process_exit_confirmed = False
+        actual_engine_provenance_confirmed = False
+        post_close_plan_processes_quiescent = None
+        post_close_global_processes_quiescent = None
 
         if not force_recompute:
             current_check_close_safe = False
@@ -1266,46 +1933,140 @@ class RasControl:
 
         # This plan-file mutation belongs to execution, not inspection. Keep
         # the skip path byte-for-byte read-only.
+        pre_run_inventory, pre_run_host_inventory = (
+            _inspect_controller_post_close_processes(
+                project_path=info.project_path,
+                plan_number=info.plan_number,
+            )
+        )
+        if not pre_run_inventory.complete:
+            raise RuntimeError(
+                "Exact-plan process inventory was incomplete before Controller "
+                "execution; result artifacts were preserved"
+            )
+        if pre_run_inventory.matched:
+            raise RuntimeError(
+                "An exact-plan HEC-RAS process was already active before "
+                "Controller execution; result artifacts were preserved"
+            )
+        host_query_errors = getattr(
+            pre_run_host_inventory, 'query_errors', None
+        )
+        host_processes = getattr(pre_run_host_inventory, 'processes', None)
+        if (
+            pre_run_host_inventory.complete is not True
+            or not isinstance(host_query_errors, (list, tuple))
+            or bool(host_query_errors)
+            or not isinstance(host_processes, (list, tuple))
+        ):
+            raise RuntimeError(
+                "Strict global HEC-RAS process inventory was incomplete before "
+                "Controller execution; result artifacts were preserved"
+            )
+        if host_processes:
+            raise RuntimeError(
+                "A HEC-RAS process was already active on this host before "
+                "Controller execution; exclusive-host execution is required "
+                "and result artifacts were preserved"
+            )
+
         from .RasBco import BcoMonitor
         plan_file = info.project_path.parent / f"{info.project_path.stem}.p{info.plan_number}"
         BcoMonitor.enable_detailed_logging(plan_file)
         logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
 
-        calculation_attempted = False
-        solver_quiescence_confirmed = False
-        controller_close_safe = False
-
         def _record_close_outcome(
             safe: bool,
-            _cleanup_result: _SessionCleanupResult,
+            cleanup_result: _SessionCleanupResult,
             _close_error: Optional[BaseException],
         ) -> None:
-            nonlocal controller_close_safe
+            nonlocal controller_close_safe, owned_process_exit_confirmed
             controller_close_safe = bool(safe)
+            owned_process_exit_confirmed = bool(
+                controller_pid is not None
+                and controller_create_time is not None
+                and cleanup_result.ras_pid == controller_pid
+                and not cleanup_result.process_survived
+            )
+
+        def _record_controller_session(lock: SessionLock) -> None:
+            nonlocal controller_pid
+            nonlocal controller_create_time
+            nonlocal controller_executable_path
+            nonlocal controller_executable_sha256
+            nonlocal controller_detection_confidence
+            nonlocal actual_engine_provenance_confirmed
+            controller_pid = lock.ras_pid
+            controller_create_time = lock.ras_create_time
+            controller_executable_path = lock.ras_executable_path
+            controller_executable_sha256 = lock.ras_executable_sha256
+            controller_detection_confidence = int(lock.detection_confidence)
+            actual_engine_provenance_confirmed = bool(
+                controller_pid is not None
+                and controller_create_time is not None
+                and controller_executable_path is not None
+                and controller_executable_sha256 is not None
+                and controller_detection_confidence >= 50
+                and RasControl.get_controller_progid(
+                    requested_controller_version
+                ) == controller_progid
+                and RasControl._CONTROLLER_CANONICAL_VERSIONS.get(
+                    controller_progid
+                ) == resolved_controller_version
+            )
 
         def _run_operation(com_rc):
             nonlocal calculation_attempted, solver_quiescence_confirmed
             watchdog_pid = 0
+            watchdog_identity = None
+            current_session = None
 
             # Set current plan if we have plan_name (using plan number)
             _set_current_plan(com_rc)
             # Spawn watchdog if requested
             if use_watchdog:
                 # Find our session to get ras_pid and lock file
-                current_session = None
                 for session in _active_sessions.values():
                     if session.project_path == str(info.project_path):
                         current_session = session
                         break
 
-                if current_session and current_session.ras_pid:
+                if (
+                    current_session
+                    and current_session.ras_pid
+                    and current_session.ras_create_time is not None
+                    ):
                     lock_file = _get_lock_file_path(current_session.session_id)
-                    watchdog_pid = _spawn_watchdog(
+                    watchdog_identity = _spawn_watchdog(
                         parent_pid=os.getpid(),
                         ras_pid=current_session.ras_pid,
+                        ras_create_time=current_session.ras_create_time,
                         max_runtime=max_runtime_seconds,
                         lock_file_path=str(lock_file)
                     )
+                    if watchdog_identity is not None:
+                        watchdog_pid = watchdog_identity.pid
+                        current_session.watchdog_pid = watchdog_identity.pid
+                        current_session.watchdog_create_time = (
+                            watchdog_identity.create_time
+                        )
+                        current_session.watchdog_name = watchdog_identity.name
+                        if not watchdog_identity.complete:
+                            current_session.identity_unverified = True
+                            current_session.validation_error = (
+                                "watchdog PID was launched but its exact "
+                                "create-time/name identity is unverified"
+                            )
+                        if isinstance(current_session, SessionLock):
+                            _create_session_lock(
+                                current_session.session_id, current_session
+                            )
+                        if not watchdog_identity.complete:
+                            raise RuntimeError(
+                                "Watchdog process identity could not be proved; "
+                                "session evidence was retained and computation "
+                                "was not started"
+                            )
                 else:
                     logger.warning("Could not spawn watchdog - ras.exe PID not detected")
 
@@ -1427,8 +2188,25 @@ class RasControl:
 
             finally:
                 # Always terminate watchdog on completion (even if error)
-                if watchdog_pid:
-                    _terminate_watchdog(watchdog_pid)
+                if watchdog_identity is not None:
+                    watchdog_cleanup = _terminate_watchdog(watchdog_identity)
+                    if not watchdog_cleanup.safe:
+                        if current_session is not None:
+                            current_session.identity_unverified = True
+                            current_session.validation_error = (
+                                "watchdog cleanup identity is unverified: "
+                                f"{watchdog_cleanup.identity_state}; "
+                                f"{watchdog_cleanup.error or 'no detail'}"
+                            )
+                            if isinstance(current_session, SessionLock):
+                                _create_session_lock(
+                                    current_session.session_id,
+                                    current_session,
+                                )
+                        raise RuntimeError(
+                            "Watchdog cleanup could not prove exact process exit; "
+                            "session evidence was retained"
+                        )
 
         try:
             close_kwargs = {"strict_close": True} if strict_close else {}
@@ -1438,12 +2216,56 @@ class RasControl:
                 _run_operation,
                 require_safe_close=True,
                 close_outcome_callback=_record_close_outcome,
+                session_open_callback=_record_controller_session,
                 **close_kwargs,
             )
-            if not solver_quiescence_confirmed or not controller_close_safe:
+            (
+                post_close_plan_inventory,
+                post_close_global_inventory,
+            ) = _inspect_controller_post_close_processes(
+                project_path=info.project_path,
+                plan_number=info.plan_number,
+            )
+            post_close_plan_processes_quiescent = bool(
+                post_close_plan_inventory.complete
+                and not post_close_plan_inventory.matched
+            )
+            post_close_global_processes_quiescent = bool(
+                post_close_global_inventory.complete
+                and not post_close_global_inventory.processes
+            )
+            if (
+                not post_close_plan_inventory.complete
+                or not post_close_global_inventory.complete
+            ):
+                solver_quiescence_confirmed = False
                 raise RuntimeError(
-                    "Plan execution did not establish solver quiescence and "
-                    "a safe Controller close"
+                    "Controller post-close HEC-RAS process inventory was "
+                    "incomplete; opposing result artifacts were preserved"
+                )
+            if (
+                post_close_plan_inventory.matched
+                or post_close_global_inventory.processes
+            ):
+                solver_quiescence_confirmed = False
+                raise RuntimeError(
+                    "A HEC-RAS compute process remained after Controller "
+                    "close; opposing result artifacts were preserved"
+                )
+            if not all(
+                (
+                    solver_quiescence_confirmed,
+                    controller_close_safe,
+                    owned_process_exit_confirmed,
+                    actual_engine_provenance_confirmed,
+                    post_close_plan_processes_quiescent,
+                    post_close_global_processes_quiescent,
+                )
+            ):
+                raise RuntimeError(
+                    "Plan execution did not establish exact Controller "
+                    "provenance, solver quiescence, safe close, and owned "
+                    "process exit"
                 )
         finally:
             # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
@@ -1452,6 +2274,10 @@ class RasControl:
                 calculation_attempted
                 and solver_quiescence_confirmed
                 and controller_close_safe
+                and owned_process_exit_confirmed
+                and actual_engine_provenance_confirmed
+                and post_close_plan_processes_quiescent
+                and post_close_global_processes_quiescent
             ):
                 finalize_plan_execution_artifacts(
                     info.plan_number,
@@ -1460,6 +2286,7 @@ class RasControl:
                     project_folder=info.project_path.parent,
                     project_name=info.project_path.stem,
                 )
+                result_artifacts_finalized = True
             elif calculation_attempted:
                 logger.warning(
                     "Preserving opposing result artifacts for plan %s because "
@@ -1472,6 +2299,49 @@ class RasControl:
         _success = bool(raw_result[0]) if raw_result else False
         _messages = list(raw_result[1]) if raw_result and len(raw_result) > 1 else []
         _details = raw_result[2] if raw_result and len(raw_result) > 2 else {}
+        _details.update(
+            {
+                'execution_api': 'ras_control',
+                'engine_kind': 'controller',
+                'selected_result_format': execution_result_format,
+                'calculation_attempted': calculation_attempted,
+                'solver_quiescence_confirmed': (
+                    bool(solver_quiescence_confirmed)
+                    if calculation_attempted else None
+                ),
+                'result_artifacts_finalized': result_artifacts_finalized,
+                'actual_engine_provenance_confirmed': (
+                    actual_engine_provenance_confirmed
+                ),
+                'controller_pid': controller_pid,
+                'controller_create_time': controller_create_time,
+                'controller_executable_path': controller_executable_path,
+                'controller_executable_sha256': controller_executable_sha256,
+                'controller_close_safe': controller_close_safe,
+                'owned_process_exit_confirmed': owned_process_exit_confirmed,
+                'post_close_plan_processes_quiescent': (
+                    post_close_plan_processes_quiescent
+                ),
+                'post_close_global_processes_quiescent': (
+                    post_close_global_processes_quiescent
+                ),
+                'strict_close_requested': bool(strict_close),
+                'max_runtime_seconds': float(max_runtime_seconds),
+            }
+        )
+        if _success and not all(
+            (
+                _details['calculation_attempted'] is True,
+                _details['solver_quiescence_confirmed'] is True,
+                _details['result_artifacts_finalized'] is True,
+                _details['actual_engine_provenance_confirmed'] is True,
+                _details['controller_close_safe'] is True,
+                _details['owned_process_exit_confirmed'] is True,
+                _details['post_close_plan_processes_quiescent'] is True,
+                _details['post_close_global_processes_quiescent'] is True,
+            )
+        ):
+            _success = False
         _results_df_row = None
 
         # Refresh DataFrames and capture results_df row (even on failure for diagnostics)
@@ -2352,6 +3222,34 @@ class RasControl:
 
     @staticmethod
     @log_call
+    def inspect_processes() -> 'RasProcessInventory':
+        """Return a strict host-wide HEC-RAS process inventory.
+
+        Unlike :meth:`list_processes`, this safety-oriented API includes exact
+        legacy and modern HEC-RAS launcher, solver, sediment/water-quality,
+        and geometry-preprocessor names. It preserves PID plus creation-time
+        identity and reports every query failure. Active sessions are tracked
+        by that complete identity, never PID alone. Callers must require
+        ``result.complete`` before treating an empty inventory as proof that
+        the host is clear.
+
+        Returns:
+            RasProcessInventory: Immutable, JSON-safe process evidence.
+        """
+        from ._process_inspection import scan_ras_processes
+
+        tracked_sessions = {
+            (lock.ras_pid, lock.ras_create_time): lock.session_id
+            for lock in _active_sessions.values()
+            if lock.ras_pid and lock.ras_create_time is not None
+        }
+        return scan_ras_processes(
+            tracked_sessions=tracked_sessions,
+            psutil_module=psutil,
+        )
+
+    @staticmethod
+    @log_call
     def list_processes(show_all: bool = False) -> pd.DataFrame:
         """
         List ras.exe processes with tracking status.
@@ -2513,6 +3411,13 @@ class RasControl:
         for orphan in orphans:
             try:
                 proc = psutil.Process(orphan.ras_pid)
+                if not _process_matches_lock_identity(proc, orphan):
+                    logger.warning(
+                        "Refusing to terminate PID %s because its creation "
+                        "time does not match the session lock",
+                        orphan.ras_pid,
+                    )
+                    continue
                 proc.terminate()
                 proc.wait(timeout=10)
                 print(f"✅ Terminated PID {orphan.ras_pid}")
@@ -2525,6 +3430,13 @@ class RasControl:
             except psutil.TimeoutExpired:
                 # Force kill if graceful termination fails
                 try:
+                    if not _process_matches_lock_identity(proc, orphan):
+                        logger.warning(
+                            "Refusing to kill PID %s because its identity "
+                            "changed after terminate()",
+                            orphan.ras_pid,
+                        )
+                        continue
                     proc.kill()
                     print(f"⚠️  Force killed PID {orphan.ras_pid}")
                     logger.warning(f"Force killed orphaned PID {orphan.ras_pid}")

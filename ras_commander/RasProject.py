@@ -60,6 +60,14 @@ _STAGE_METADATA_DIR = ".ras-commander"
 _STAGE_MANIFEST = "stage.json"
 _TEMP_SENTINEL = ".rascommander-stage-owned"
 
+# Public namespace for the framed tree digest returned by ``stage_project``.
+# It includes directory population plus relative path, size, and SHA-256 for
+# every regular file, and must not be compared to qualification snapshot
+# fingerprints produced by a different serialization contract.
+STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM = (
+    "ras_commander.stage_project.framed_tree.v1"
+)
+
 
 class ProjectStageError(RuntimeError):
     """Base exception for fail-closed project staging failures."""
@@ -137,7 +145,13 @@ _ACTIVE_INVENTORY_HASH_CACHE: ContextVar[Optional[_InventoryHashCache]] = Contex
 
 @dataclass(frozen=True)
 class StageProjectResult:
-    """Evidence returned after a project tree is atomically published."""
+    """Evidence returned after a project tree is atomically published.
+
+    ``fingerprint_algorithm`` identifies the namespace shared by
+    ``source_fingerprint_before``, ``source_fingerprint_after``,
+    ``copied_fingerprint``, and ``published_fingerprint``. These framed tree
+    digests are not qualification snapshot content fingerprints.
+    """
 
     source_project_file: Path
     destination_project_file: Path
@@ -152,6 +166,14 @@ class StageProjectResult:
     execution_readiness: Literal["ready", "not_ready", "unknown"]
     assets: pd.DataFrame
     ras_object: RasPrj
+    fingerprint_algorithm: str = STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+
+    def __post_init__(self) -> None:
+        if self.fingerprint_algorithm != STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM:
+            raise ValueError(
+                "fingerprint_algorithm must identify the stage_project framed "
+                f"tree contract: {STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM!r}"
+            )
 
 
 @dataclass(frozen=True)
@@ -2641,6 +2663,7 @@ def stage_project(
         manifest = {
             "schema_version": 1,
             "operation_id": operation_id,
+            "fingerprint_algorithm": STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
             "source_project_file": str(source_project),
             "destination_project_file": str(destination_root / source_project.name),
             "source_fingerprint_before": source_before,
@@ -2807,6 +2830,7 @@ def stage_project(
             execution_readiness=readiness,
             assets=final_assets,
             ras_object=final_ras,
+            fingerprint_algorithm=STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
         )
     except Exception as stage_error:
         publication_outcome = getattr(

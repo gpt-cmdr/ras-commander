@@ -36,7 +36,8 @@ List of Functions in RasCmdr:
         
         
 """
-import logging
+import hashlib
+import math
 import ntpath
 import os
 import shlex
@@ -50,12 +51,18 @@ from datetime import datetime
 from itertools import cycle
 from numbers import Number
 from pathlib import Path
-from threading import Lock, Thread
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
-from .ComputeResults import ComputeParallelResult, ComputeResult
+from .ComputeResults import (
+    ComputeParallelResult,
+    ComputeResult,
+    PlanCancellationResult,
+    PlanProcessInventory,
+    RasProcessQueryError,
+    RasProcessRecord,
+)
 from .Decorators import log_call
 from .ExecutionEvidence import (
     ExecutionEvidence,
@@ -73,12 +80,13 @@ from .ExecutionArtifacts import (
 )
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
-from .RasGeo import RasGeo
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj, init_ras_project, ras
 from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
+
+_WINDOWS_PROCESS_CONTROL = os.name == "nt"
 
 # Module code starts here
 
@@ -95,6 +103,35 @@ class RasCmdr:
         compute_parallel(): Execute multiple plans in parallel using worker folders
         compute_test_mode(): Execute multiple plans sequentially in a test folder
     """
+
+    @staticmethod
+    def _resolve_executable_provenance(
+        executable: Union[str, Path],
+    ) -> tuple[Path, str]:
+        """Resolve and hash the exact executable selected for a plan run."""
+        candidate = Path(executable).expanduser()
+        if not candidate.is_absolute():
+            resolved_command = shutil.which(str(candidate))
+            if resolved_command is None:
+                raise FileNotFoundError(
+                    f"HEC-RAS executable could not be resolved: {executable}"
+                )
+            candidate = Path(resolved_command)
+        resolved = candidate.resolve(strict=True)
+        if not resolved.is_file():
+            raise FileNotFoundError(f"HEC-RAS executable is not a file: {resolved}")
+        digest = hashlib.sha256()
+        with resolved.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return resolved, digest.hexdigest()
+
+    @staticmethod
+    def _launcher_create_time(pid: int) -> float:
+        """Capture PID-reuse-resistant launcher identity immediately after launch."""
+        import psutil
+
+        return float(psutil.Process(pid).create_time())
 
     @staticmethod
     def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
@@ -676,8 +713,27 @@ class RasCmdr:
         """
         import psutil
 
+        from ._process_inspection import (
+            _same_windows_path,
+            normalize_windows_path_token,
+        )
+
         target_path = Path(tmp_hdf_path)
         target_text = os.path.normcase(os.path.abspath(str(target_path)))
+        target_cwd = normalize_windows_path_token(
+            str(target_path.parent),
+            cwd=None,
+        )
+        target_name = target_path.name.casefold()
+        plan_marker = None
+        marker_index = target_name.rfind(".p")
+        marker_suffix = ".tmp.hdf"
+        if marker_index >= 0 and target_name.endswith(marker_suffix):
+            plan_token = target_name[
+                marker_index + 2 : -len(marker_suffix)
+            ]
+            if plan_token.isdigit():
+                plan_marker = f"b{plan_token.zfill(2)}"
         uncertain = False
 
         try:
@@ -719,6 +775,7 @@ class RasCmdr:
                     cwd = info.get("cwd")
                     found_tmp_argument = False
                     process_uncertain = False
+                    normalized_arguments = []
 
                     for raw_argument in cmdline:
                         if not isinstance(raw_argument, (str, os.PathLike)):
@@ -731,6 +788,7 @@ class RasCmdr:
                             and argument[-1] == '"'
                         ):
                             argument = argument[1:-1]
+                        normalized_arguments.append(argument.casefold())
                         if not argument.casefold().endswith(".tmp.hdf"):
                             continue
 
@@ -757,7 +815,32 @@ class RasCmdr:
                             # evidence that the solver is unrelated.
                             process_uncertain = True
 
-                    if not found_tmp_argument or process_uncertain:
+                    process_cwd = (
+                        normalize_windows_path_token(str(cwd), cwd=None)
+                        if cwd
+                        else ""
+                    )
+                    has_batch_marker = any(
+                        value.startswith("b") and value[1:].isdigit()
+                        for value in normalized_arguments
+                    )
+                    if (
+                        plan_marker is not None
+                        and _same_windows_path(process_cwd, target_cwd)
+                        and plan_marker in normalized_arguments
+                    ):
+                        return True
+
+                    # A complete cwd+bNN signature for another plan/project is
+                    # a proven nonmatch. Missing identity fields remain
+                    # uncertain and therefore cannot establish quiescence.
+                    if (
+                        process_uncertain
+                        or (
+                            not found_tmp_argument
+                            and not (process_cwd and has_batch_marker)
+                        )
+                    ):
                         uncertain = True
                 except (psutil.NoSuchProcess, psutil.ZombieProcess):
                     # A process that vanished during enumeration is stopped.
@@ -917,6 +1000,499 @@ class RasCmdr:
         return False if observed_async else None
 
     @staticmethod
+    def _confirm_plan_solver_quiescence(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+    ) -> bool:
+        """Prove exact-plan launcher/solver absence with strict inventory."""
+        try:
+            inventory = RasCmdr.inspect_plan_processes(
+                plan_number,
+                ras_object=ras_object,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect exact-plan processes for plan %s: %s",
+                plan_number,
+                exc,
+            )
+            return False
+        if not inventory.complete:
+            logger.warning(
+                "Exact-plan process inventory is incomplete for plan %s",
+                plan_number,
+            )
+            return False
+        if inventory.matched:
+            logger.warning(
+                "Exact-plan HEC-RAS process still active for plan %s: %s",
+                plan_number,
+                [process.pid for process in inventory.matched],
+            )
+            return False
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        tmp_hdf_path = (
+            Path(ras_object.project_folder)
+            / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
+        )
+        if tmp_hdf_path.exists():
+            logger.warning(
+                "Temporary result HDF remains for plan %s after launcher exit",
+                plan_number,
+            )
+            return False
+        return True
+
+    @staticmethod
+    @log_call
+    def inspect_plan_processes(
+        plan_number: Union[str, Number],
+        ras_object=None,
+    ) -> PlanProcessInventory:
+        """Return strict process evidence narrowed to one project plan.
+
+        Matching uses complete command-line tokens after Windows path
+        normalization. A launcher must contain the exact project and plan
+        paths. A steady solver must contain the exact project ``.rNN`` run
+        file. An unsteady solver must contain either the exact plan
+        ``.tmp.hdf`` path or the exact project working directory plus complete
+        ``bNN`` plan token used by native unsteady launches. When the plan's
+        geometry reference is readable, that form must also contain the exact
+        project ``.cNN`` computation-file path. Basenames and substrings are
+        never sufficient. The host-wide inventory also covers
+        exact legacy and modern compute/preprocess names whose plan-specific
+        command signature is not established.
+        """
+        import psutil
+
+        from ._process_inspection import (
+            match_plan_processes,
+            scan_ras_processes,
+        )
+
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+        plan_num, project_path, plan_path, tmp_hdf_path = (
+            RasCmdr._resolve_plan_process_paths(plan_number, ras_obj)
+        )
+        inventory = scan_ras_processes(psutil_module=psutil)
+        return match_plan_processes(
+            inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+
+    @staticmethod
+    def _resolve_plan_process_paths(
+        plan_number: Union[str, Number],
+        ras_object,
+    ):
+        """Resolve canonical process-matching paths for one plan."""
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        project_path = Path(ras_object.prj_file).resolve(strict=False)
+        resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_object)
+        if resolved_plan_path is None:
+            raise FileNotFoundError(f"Plan file not found: {plan_num}")
+        plan_path = Path(resolved_plan_path).resolve(strict=False)
+        tmp_hdf_path = (
+            Path(ras_object.project_folder)
+            / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
+        ).resolve(strict=False)
+        return plan_num, project_path, plan_path, tmp_hdf_path
+
+    @staticmethod
+    def _process_error(
+        process: Any,
+        operation: str,
+        error: BaseException,
+    ) -> RasProcessQueryError:
+        """Create JSON-safe cancellation query evidence."""
+        pid = getattr(process, "pid", None)
+        try:
+            normalized_pid = None if pid is None else int(pid)
+        except (TypeError, ValueError):
+            normalized_pid = None
+        exception_type = type(error).__name__
+        normalized_type = exception_type.casefold()
+        if "accessdenied" in normalized_type:
+            reason_code = "access_denied"
+        elif "nosuchprocess" in normalized_type:
+            reason_code = "process_exited_during_operation"
+        else:
+            reason_code = "process_operation_failed"
+        return RasProcessQueryError(
+            pid=normalized_pid,
+            operation=operation,
+            reason_code=reason_code,
+            exception_type=exception_type,
+            detail=str(error),
+        )
+
+    @staticmethod
+    def _record_process_for_cancellation(
+        process: Any,
+        *,
+        tracked: bool = False,
+    ) -> RasProcessRecord:
+        """Capture a child process using the same strong identity contract."""
+        info = getattr(process, "info", {})
+
+        def read(field: str):
+            if isinstance(info, dict) and info.get(field) is not None:
+                return info[field]
+            if field == "pid":
+                return process.pid
+            return getattr(process, field)()
+
+        pid = int(read("pid"))
+        create_time = float(read("create_time"))
+        name = str(read("name")).strip()
+        raw_command_line = read("cmdline")
+        if pid <= 0:
+            raise ValueError("process pid must be positive")
+        if not 0 < create_time < float("inf"):
+            raise ValueError("process create_time must be finite and positive")
+        if not name:
+            raise ValueError("process name is empty")
+        if not isinstance(raw_command_line, (list, tuple)) or not raw_command_line:
+            raise ValueError("process command line is missing or malformed")
+        exe = read("exe")
+        cwd = read("cwd")
+        return RasProcessRecord(
+            pid=pid,
+            create_time=create_time,
+            name=name,
+            executable_path=None if exe is None else str(exe),
+            command_line=tuple(str(token) for token in raw_command_line),
+            working_directory=None if cwd is None else str(cwd),
+            tracked=tracked,
+            session_id=None,
+        )
+
+    @staticmethod
+    def _same_process_identity(process: Any, record: RasProcessRecord) -> bool:
+        """Return false when the captured process exited or its PID was reused."""
+        # Do not reuse ``process.info`` here: it is the cached snapshot that
+        # created ``record`` and therefore cannot detect later PID reuse.
+        current = process.create_time()
+        return float(current) == record.create_time
+
+    @staticmethod
+    @log_call
+    def cancel_plan_exact(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        timeout_seconds: float = 10.0,
+    ) -> PlanCancellationResult:
+        """Stop only one exact plan process tree and prove final quiescence.
+
+        The result is deliberately tri-state: ``quiescence_confirmed=True``
+        proves all matched identities stopped and a complete final scan found
+        no exact plan process; ``False`` reports a known survivor; ``None``
+        reports query uncertainty. The structured result cannot be coerced to
+        bool. ``cancellation_attempted`` records whether a terminate or kill
+        method was invoked; ``matched_count`` records initial exact matches.
+        """
+        if not _WINDOWS_PROCESS_CONTROL:
+            raise NotImplementedError(
+                "RasCmdr.cancel_plan_exact() currently supports Windows "
+                "HEC-RAS process trees only."
+            )
+
+        if isinstance(timeout_seconds, bool) or not isinstance(
+            timeout_seconds, (int, float)
+        ):
+            raise ValueError("timeout_seconds must be a positive number of seconds")
+        timeout_value = float(timeout_seconds)
+        if not math.isfinite(timeout_value) or timeout_value <= 0:
+            raise ValueError(
+                "timeout_seconds must be a positive finite number of seconds"
+            )
+        cancellation_started_at = time.time()
+
+        import psutil
+
+        from ._process_inspection import (
+            _scan_ras_process_handles,
+            match_plan_processes,
+        )
+
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+        plan_num, project_path, plan_path, tmp_hdf_path = (
+            RasCmdr._resolve_plan_process_paths(plan_number, ras_obj)
+        )
+        initial_scan = _scan_ras_process_handles(psutil_module=psutil)
+        initial_plan = match_plan_processes(
+            initial_scan.inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+        matched = initial_plan.matched
+        errors = list(initial_scan.inventory.query_errors)
+
+        target_records = {record.identity: record for record in matched}
+        target_handles = {
+            identity: initial_scan.handles[identity]
+            for identity in target_records
+            if identity in initial_scan.handles
+        }
+        child_query_uncertain = False
+        for root in matched:
+            process = target_handles.get(root.identity)
+            if process is None:
+                child_query_uncertain = True
+                errors.append(
+                    RasProcessQueryError(
+                        pid=root.pid,
+                        operation="resolve_process_handle",
+                        reason_code="process_handle_missing",
+                        exception_type="ProcessHandleMissing",
+                        detail="No process handle was retained for captured identity",
+                    )
+                )
+                continue
+            try:
+                children = process.children(recursive=True)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "query_process_children",
+                        error,
+                    )
+                )
+                continue
+            for child in children:
+                try:
+                    record = RasCmdr._record_process_for_cancellation(child)
+                except Exception as error:
+                    child_query_uncertain = True
+                    errors.append(
+                        RasCmdr._process_error(
+                            child,
+                            "query_child_identity",
+                            error,
+                        )
+                    )
+                    continue
+                target_records[record.identity] = record
+                target_handles[record.identity] = child
+
+        termination_requested = []
+        kill_requested = []
+        stopped = []
+        known_survivors = []
+        signalled = []
+        cancellation_attempted = False
+
+        # Children are returned before their root after reversal, minimizing
+        # the chance that a launcher loses track of a still-running solver.
+        ordered_targets = list(target_records.values())
+        for record in reversed(ordered_targets):
+            process = target_handles.get(record.identity)
+            if process is None:
+                continue
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    continue
+                cancellation_attempted = True
+                process.terminate()
+                termination_requested.append(record)
+                signalled.append(process)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+            except Exception as error:
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "terminate_process",
+                        error,
+                    )
+                )
+
+        alive = []
+        if signalled:
+            try:
+                _, alive = psutil.wait_procs(
+                    signalled,
+                    timeout=timeout_value,
+                )
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        signalled[0],
+                        "wait_after_terminate",
+                        error,
+                    )
+                )
+                alive = list(signalled)
+
+        record_by_identity = target_records
+        for process in alive:
+            candidates = [
+                record
+                for identity, record in record_by_identity.items()
+                if identity[0] == getattr(process, "pid", None)
+            ]
+            if not candidates:
+                continue
+            record = candidates[0]
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    continue
+                cancellation_attempted = True
+                process.kill()
+                kill_requested.append(record)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+            except Exception as error:
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "kill_process",
+                        error,
+                    )
+                )
+
+        if kill_requested:
+            killed_handles = [
+                target_handles[item.identity] for item in kill_requested
+            ]
+            try:
+                psutil.wait_procs(killed_handles, timeout=3.0)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        killed_handles[0],
+                        "wait_after_kill",
+                        error,
+                    )
+                )
+
+        survivor_identities = {item.identity for item in known_survivors}
+        stopped_identities = {item.identity for item in stopped}
+        for identity, record in target_records.items():
+            if identity in survivor_identities or identity in stopped_identities:
+                continue
+            process = target_handles.get(identity)
+            if process is None:
+                continue
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    stopped_identities.add(identity)
+                    continue
+                is_running = getattr(process, "is_running", None)
+                if is_running is None:
+                    child_query_uncertain = True
+                    errors.append(
+                        RasProcessQueryError(
+                            pid=record.pid,
+                            operation="verify_process_stopped",
+                            reason_code="process_status_unavailable",
+                            exception_type="ProcessStatusUnavailable",
+                            detail="Process handle has no is_running() method",
+                        )
+                    )
+                elif bool(is_running()):
+                    known_survivors.append(record)
+                    survivor_identities.add(identity)
+                else:
+                    stopped.append(record)
+                    stopped_identities.add(identity)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+                stopped_identities.add(identity)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "verify_process_stopped",
+                        error,
+                    )
+                )
+
+        final_scan = _scan_ras_process_handles(psutil_module=psutil)
+        final_plan = match_plan_processes(
+            final_scan.inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+        errors.extend(final_scan.inventory.query_errors)
+
+        final_matches = final_plan.matched
+        all_survivors = {
+            item.identity: item for item in (*known_survivors, *final_matches)
+        }
+        if all_survivors:
+            quiescence_confirmed: Optional[bool] = False
+        elif (
+            not initial_scan.inventory.complete
+            or not final_scan.inventory.complete
+            or child_query_uncertain
+            or errors
+        ):
+            quiescence_confirmed = None
+        else:
+            quiescence_confirmed = True
+
+        result = PlanCancellationResult(
+            plan_number=plan_num,
+            project_path=str(project_path),
+            plan_path=str(plan_path),
+            tmp_hdf_path=str(tmp_hdf_path),
+            cancellation_attempted=cancellation_attempted,
+            pre_scan_complete=initial_scan.inventory.complete,
+            post_scan_complete=final_scan.inventory.complete,
+            matched=matched,
+            stopped=tuple(
+                sorted(
+                    {item.identity: item for item in stopped}.values(),
+                    key=lambda item: item.identity,
+                )
+            ),
+            survivors=tuple(
+                sorted(all_survivors.values(), key=lambda item: item.identity)
+            ),
+            query_errors=tuple(errors),
+            quiescence_confirmed=quiescence_confirmed,
+            started_at=cancellation_started_at,
+            finished_at=time.time(),
+        )
+        if result.quiescence_confirmed is True:
+            logger.info(
+                "Confirmed HEC-RAS process quiescence for plan %s "
+                "(%s exact match(es))",
+                plan_num,
+                result.matched_count,
+            )
+        elif result.quiescence_confirmed is False:
+            logger.warning(
+                "HEC-RAS process survivor(s) remain for plan %s: %s",
+                plan_num,
+                [item.pid for item in result.survivors],
+            )
+        else:
+            logger.warning(
+                "Could not prove HEC-RAS process quiescence for plan %s",
+                plan_num,
+            )
+        return result
+
+    @staticmethod
     @log_call
     def cancel_plan(
         plan_number: Union[str, Number],
@@ -926,8 +1502,11 @@ class RasCmdr:
         """Stop only the active Windows process tree for one project plan.
 
         Process matching is deliberately strict: a ``Ras.exe`` launcher must
-        contain both the initialized project path and resolved plan path, while
-        a solver must contain the exact plan ``.tmp.hdf`` path. Unrelated RAS
+        contain both the initialized project path and resolved plan path. A
+        steady solver must contain the exact project ``.rNN`` file. An
+        unsteady solver must contain either the exact plan ``.tmp.hdf`` path or
+        the jointly exact project directory, ``.cNN`` computation file, and
+        complete ``bNN`` plan marker used by native launches. Unrelated RAS
         sessions are never selected by executable name alone.
 
         Args:
@@ -941,93 +1520,19 @@ class RasCmdr:
             ``True`` when a matching process tree was found and stopped;
             ``False`` when no matching active process existed.
         """
-        if os.name != "nt":
-            raise NotImplementedError(
-                "RasCmdr.cancel_plan() currently supports Windows HEC-RAS "
-                "process trees only."
-            )
+        try:
+            legacy_timeout = max(0.1, float(timeout_seconds))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeout_seconds must be numeric") from exc
+        if not math.isfinite(legacy_timeout):
+            raise ValueError("timeout_seconds must be finite")
 
-        import psutil
-
-        ras_obj = ras_object if ras_object is not None else ras
-        ras_obj.check_initialized()
-        plan_num = RasUtils.normalize_ras_number(plan_number)
-        project_path = Path(ras_obj.prj_file).resolve(strict=False)
-        resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
-        if resolved_plan_path is None:
-            raise FileNotFoundError(f"Plan file not found: {plan_num}")
-        plan_path = Path(resolved_plan_path).resolve(strict=False)
-        tmp_hdf_path = (
-            Path(ras_obj.project_folder)
-            / f"{ras_obj.project_name}.p{plan_num}.tmp.hdf"
-        ).resolve(strict=False)
-
-        def command_needle(path: Path) -> str:
-            return str(path).replace("/", "\\").lower()
-
-        project_needle = command_needle(project_path)
-        plan_needle = command_needle(plan_path)
-        tmp_hdf_needle = command_needle(tmp_hdf_path)
-        roots = []
-
-        for process in psutil.process_iter(["pid", "name", "cmdline"]):
-            try:
-                name = str(process.info.get("name") or "").lower()
-                command_line = " ".join(
-                    str(part) for part in (process.info.get("cmdline") or [])
-                ).replace("/", "\\").lower()
-                is_launcher = (
-                    name == "ras.exe"
-                    and project_needle in command_line
-                    and plan_needle in command_line
-                )
-                is_solver = (
-                    name == "rasunsteady.exe"
-                    and tmp_hdf_needle in command_line
-                )
-                if is_launcher or is_solver:
-                    roots.append(process)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-
-        if not roots:
-            logger.info("No active HEC-RAS process found for plan %s", plan_num)
-            return False
-
-        targets = {}
-        for root in roots:
-            try:
-                for child in root.children(recursive=True):
-                    targets[child.pid] = child
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-            targets[root.pid] = root
-
-        ordered_targets = list(targets.values())
-        for process in reversed(ordered_targets):
-            try:
-                process.terminate()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-
-        _, alive = psutil.wait_procs(
-            ordered_targets,
-            timeout=max(0.1, float(timeout_seconds)),
+        result = RasCmdr.cancel_plan_exact(
+            plan_number,
+            ras_object=ras_object,
+            timeout_seconds=legacy_timeout,
         )
-        for process in alive:
-            try:
-                process.kill()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        if alive:
-            psutil.wait_procs(alive, timeout=3.0)
-
-        logger.info(
-            "Stopped HEC-RAS process tree for plan %s (%s matched process(es))",
-            plan_num,
-            len(targets),
-        )
-        return True
+        return result.matched_count > 0 and result.quiescence_confirmed is True
     
     @staticmethod
     @log_call
@@ -1125,6 +1630,10 @@ class RasCmdr:
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
                 ``completion_verified`` is None unless ``verify=True``.
+                ``execution_details`` is always JSON-safe and distinguishes
+                selected executable identity, calculation attempts, launcher
+                PID/create-time identity, solver quiescence, and result-family
+                finalization. Calculated success requires every terminal gate.
 
         Raises:
             ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
@@ -1191,7 +1700,21 @@ class RasCmdr:
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
         _execution_quiesced = False
         _execution_result_format = None
+        _result_artifacts_finalized = False
         _watchdog = None
+        _execution_details: Dict[str, Any] = {
+            "execution_api": "ras_cmdr",
+            "engine_kind": "executable",
+            "selected_result_format": None,
+            "calculation_attempted": False,
+            "solver_quiescence_confirmed": None,
+            "result_artifacts_finalized": False,
+            "actual_engine_provenance_confirmed": False,
+            "selected_executable_path": None,
+            "selected_executable_sha256": None,
+            "launcher_pid": None,
+            "launcher_create_time": None,
+        }
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
@@ -1236,12 +1759,19 @@ class RasCmdr:
             if not compute_prj_path or not compute_plan_path:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 _success = False
-                return ComputeResult(success=False, results_df_row=None)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=dict(_execution_details),
+                )
 
             # Resolve the actual selected engine before making any skip or
             # cleanup decision. An unresolved version fails closed and leaves
             # both result families untouched.
             _execution_result_format = infer_execution_result_format(compute_ras)
+            _execution_details["selected_result_format"] = (
+                _execution_result_format
+            )
 
             # Skip existing check - runs regardless of force_rerun (for resume capability)
             if skip_existing:
@@ -1275,6 +1805,7 @@ class RasCmdr:
                         success=True,
                         results_df_row=None,
                         completion_verified=True if verify else None,
+                        execution_details=dict(_execution_details),
                     )
 
             # Smart skip: check file modification times (unless force_rerun or skip_existing)
@@ -1299,6 +1830,7 @@ class RasCmdr:
                         success=True,
                         results_df_row=None,
                         completion_verified=True if verify else None,
+                        execution_details=dict(_execution_details),
                     )
                 else:
                     logger.debug(f"Plan {plan_number} needs execution: {reason}")
@@ -1414,8 +1946,19 @@ class RasCmdr:
             if stream_callback and hasattr(stream_callback, 'on_prep_complete'):
                 stream_callback.on_prep_complete(str(plan_number))
 
-            # Prepare the command for HEC-RAS execution
-            cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+            # Prepare a display-only command for callbacks. The executable is
+            # resolved and hashed again immediately before result cleanup and
+            # launch, and execution always uses the exact argv with no shell.
+            _callback_executable, _ = RasCmdr._resolve_executable_provenance(
+                compute_ras.ras_exe_path
+            )
+            command_argv = [
+                str(_callback_executable),
+                "-c",
+                str(Path(compute_prj_path).resolve()),
+                str(Path(compute_plan_path).resolve()),
+            ]
+            cmd = subprocess.list2cmdline(command_argv)
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 
@@ -1446,104 +1989,157 @@ class RasCmdr:
                     _watchdog = DialogWatchdog()
                     _watchdog.start()
 
-                # Choose execution method based on whether callback is provided
-                if stream_callback and bco_monitor:
-                    # Use Popen for real-time monitoring. Redirect stdio to the
-                    # per-plan log file (not PIPE) to avoid the inherited-pipe
-                    # deadlock (CLB-880). monitor_until_signal() polls the .bco
-                    # file and process.poll(); it never reads process.stdout, so
-                    # nothing here depends on a pipe.
-                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
-                        # Couple cleanup to the launch attempt: callbacks,
-                        # watchdog startup, and log creation have all succeeded.
-                        prepare_plan_execution_artifacts(
-                            plan_number,
-                            output_format=_execution_result_format,
-                            ras_object=compute_ras,
+                # Both callback and non-callback runs use one exact launch
+                # path. This avoids cmd.exe identity ambiguity and keeps the
+                # recorded launcher PID tied to the selected Ras.exe bytes.
+                with open(
+                    _run_log_path,
+                    "w",
+                    encoding="utf-8",
+                    errors="ignore",
+                ) as _run_log_fh:
+                    selected_executable, executable_sha256 = (
+                        RasCmdr._resolve_executable_provenance(
+                            compute_ras.ras_exe_path
                         )
-                        _did_execute = True
-                        process = subprocess.Popen(
-                            cmd,
-                            stdout=_run_log_fh,
-                            stderr=subprocess.STDOUT,
-                            cwd=str(compute_ras.project_folder),
-                            shell=True
-                        )
-                        try:
-                            if _watchdog:
-                                _watchdog.add_pid(process.pid)
+                    )
+                    command_argv = [
+                        str(selected_executable),
+                        "-c",
+                        str(Path(compute_prj_path).resolve()),
+                        str(Path(compute_plan_path).resolve()),
+                    ]
+                    _execution_details.update(
+                        {
+                            "selected_executable_path": str(selected_executable),
+                            "selected_executable_sha256": executable_sha256,
+                        }
+                    )
 
-                            # Monitor .bco file until process completes
-                            # (BcoMonitor will call on_exec_message callback as messages appear)
+                    # The plan's previous launcher/solver tree must be proved
+                    # absent before result-family cleanup. A stale exact-plan
+                    # process could otherwise keep writing the files this run
+                    # is about to remove or replace.
+                    pre_run_inventory = RasCmdr.inspect_plan_processes(
+                        plan_number,
+                        ras_object=compute_ras,
+                    )
+                    if not pre_run_inventory.complete:
+                        raise RuntimeError(
+                            "Exact-plan process inventory was incomplete before "
+                            "execution; result artifacts were preserved"
+                        )
+                    if pre_run_inventory.matched:
+                        raise RuntimeError(
+                            "An exact-plan HEC-RAS process was already active "
+                            "before execution; result artifacts were preserved"
+                        )
+
+                    # Destructive result-family cleanup is coupled to this
+                    # exact, freshly proven launch attempt.
+                    prepare_plan_execution_artifacts(
+                        plan_number,
+                        output_format=_execution_result_format,
+                        ras_object=compute_ras,
+                    )
+                    _did_execute = True
+                    _execution_details["calculation_attempted"] = True
+                    process = subprocess.Popen(
+                        command_argv,
+                        stdout=_run_log_fh,
+                        stderr=subprocess.STDOUT,
+                        cwd=str(compute_ras.project_folder),
+                        shell=False,
+                    )
+                    try:
+                        launcher_pid = process.pid
+                        if (
+                            not isinstance(launcher_pid, int)
+                            or isinstance(launcher_pid, bool)
+                            or launcher_pid <= 0
+                        ):
+                            raise ValueError(
+                                "launcher PID must be a positive integer"
+                            )
+                        launcher_create_time = RasCmdr._launcher_create_time(
+                            launcher_pid
+                        )
+                        if (
+                            isinstance(launcher_create_time, bool)
+                            or not isinstance(launcher_create_time, (int, float))
+                            or not math.isfinite(float(launcher_create_time))
+                            or float(launcher_create_time) <= 0
+                        ):
+                            raise ValueError(
+                                "launcher create_time must be finite and positive"
+                            )
+                        _execution_details["launcher_pid"] = launcher_pid
+                        _execution_details["launcher_create_time"] = float(
+                            launcher_create_time
+                        )
+                        _execution_details[
+                            "actual_engine_provenance_confirmed"
+                        ] = True
+                    except Exception as provenance_error:
+                        logger.error(
+                            "Could not capture launcher PID/create-time identity "
+                            "for plan %s: %s",
+                            plan_number,
+                            provenance_error,
+                        )
+
+                    try:
+                        if _watchdog:
+                            _watchdog.add_pid(process.pid)
+
+                        if stream_callback and bco_monitor:
+                            # Monitor .bco messages while the exact process is
+                            # active; the same process wait path is used below.
                             bco_monitor.monitor_until_signal(process)
 
-                            # Wait for process to complete
-                            return_code = process.wait()
-                        except BaseException:
-                            if process.poll() is None:
-                                try:
-                                    RasCmdr._terminate_launched_process_tree(process)
-                                except Exception as termination_error:
-                                    logger.critical(
-                                        "Could not confirm termination of plan %s "
-                                        "after callback failure: %s",
-                                        plan_number,
-                                        termination_error,
-                                    )
-                                else:
-                                    _execution_quiesced = True
-                            elif _execution_result_format == "hdf":
-                                # The Ras.exe launcher may have exited while a
-                                # RasUnsteady child still owns the tmp HDF.
-                                _async_wait_result = RasCmdr._wait_for_async_plan_completion(
+                        return_code = process.wait()
+                    except BaseException:
+                        if process.poll() is None:
+                            try:
+                                RasCmdr._terminate_launched_process_tree(process)
+                            except Exception as termination_error:
+                                logger.critical(
+                                    "Could not confirm termination of plan %s "
+                                    "after callback failure: %s",
                                     plan_number,
-                                    compute_ras,
-                                    check_errors=False,
-                                    modified_after=start_time,
-                                )
-                                _tmp_hdf_path = (
-                                    Path(compute_ras.project_folder)
-                                    / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
-                                )
-                                _execution_quiesced = (
-                                    _async_wait_result is not False
-                                    or (
-                                        RasCmdr._rasunsteady_process_running_for_tmp_hdf(
-                                            _tmp_hdf_path
-                                        ) is False
-                                        and not _tmp_hdf_path.exists()
-                                    )
+                                    termination_error,
                                 )
                             else:
                                 _execution_quiesced = True
-                            raise
+                        elif _execution_result_format == "hdf":
+                            # The Ras.exe launcher may have exited while a
+                            # RasUnsteady child still owns the tmp HDF.
+                            _async_wait_result = RasCmdr._wait_for_async_plan_completion(
+                                plan_number,
+                                compute_ras,
+                                check_errors=False,
+                                modified_after=start_time,
+                            )
+                            _execution_quiesced = (
+                                RasCmdr._confirm_plan_solver_quiescence(
+                                    plan_number,
+                                    compute_ras,
+                                )
+                            )
+                        else:
+                            _execution_quiesced = (
+                                RasCmdr._confirm_plan_solver_quiescence(
+                                    plan_number,
+                                    compute_ras,
+                                )
+                            )
+                        raise
 
-                    # Check if subprocess succeeded
-                    if return_code != 0:
-                        raise subprocess.CalledProcessError(return_code, cmd)
-
-                else:
-                    # Original behavior when no callback. Redirect stdio to the
-                    # per-plan log file instead of capture_output/PIPE: with
-                    # shell=True the PIPE write handle is inherited by the
-                    # cmd.exe -> Ras.exe -> RasUnsteady.exe tree, and
-                    # subprocess.run() blocks on pipe EOF until every grandchild
-                    # exits -- the intermittent CLB-880 hang. A file handle has no
-                    # EOF wait, so run() returns as soon as the process exits.
-                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
-                        prepare_plan_execution_artifacts(
-                            plan_number,
-                            output_format=_execution_result_format,
-                            ras_object=compute_ras,
-                        )
-                        _did_execute = True
-                        subprocess.run(
-                            cmd,
-                            check=True,
-                            shell=True,
-                            stdout=_run_log_fh,
-                            stderr=subprocess.STDOUT,
-                        )
+                if return_code != 0:
+                    raise subprocess.CalledProcessError(
+                        return_code,
+                        command_argv,
+                    )
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -1563,21 +2159,19 @@ class RasCmdr:
                     else None
                 )
                 if _execution_result_format == "hdf":
-                    _tmp_hdf_path = (
-                        Path(compute_ras.project_folder)
-                        / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
-                    )
                     _execution_quiesced = (
-                        async_verified is not False
-                        or (
-                            RasCmdr._rasunsteady_process_running_for_tmp_hdf(
-                                _tmp_hdf_path
-                            ) is False
-                            and not _tmp_hdf_path.exists()
+                        RasCmdr._confirm_plan_solver_quiescence(
+                            plan_number,
+                            compute_ras,
                         )
                     )
                 else:
-                    _execution_quiesced = True
+                    _execution_quiesced = (
+                        RasCmdr._confirm_plan_solver_quiescence(
+                            plan_number,
+                            compute_ras,
+                        )
+                    )
                 if async_verified is True:
                     logger.debug(
                         "Verified final HDF for plan %s after Ras.exe returned",
@@ -1644,21 +2238,19 @@ class RasCmdr:
                     else None
                 )
                 if _execution_result_format == "hdf":
-                    _tmp_hdf_path = (
-                        Path(compute_ras.project_folder)
-                        / f"{compute_ras.project_name}.p{RasUtils.normalize_ras_number(plan_number)}.tmp.hdf"
-                    )
                     _execution_quiesced = (
-                        async_verified is not False
-                        or (
-                            RasCmdr._rasunsteady_process_running_for_tmp_hdf(
-                                _tmp_hdf_path
-                            ) is False
-                            and not _tmp_hdf_path.exists()
+                        RasCmdr._confirm_plan_solver_quiescence(
+                            plan_number,
+                            compute_ras,
                         )
                     )
                 else:
-                    _execution_quiesced = True
+                    _execution_quiesced = (
+                        RasCmdr._confirm_plan_solver_quiescence(
+                            plan_number,
+                            compute_ras,
+                        )
+                    )
                 if async_verified is True:
                     logger.info(
                         "Ras.exe returned exit code %s for plan %s, but the final HDF verified after solver completion",
@@ -1734,6 +2326,7 @@ class RasCmdr:
                         output_format=_execution_result_format,
                         ras_object=compute_ras,
                     )
+                    _result_artifacts_finalized = True
                 except Exception as cleanup_error:
                     logger.error(
                         "Could not normalize result artifacts after plan %s: %s",
@@ -1746,6 +2339,34 @@ class RasCmdr:
                     "Skipped final result normalization for plan %s because "
                     "solver termination could not be confirmed; opposing "
                     "artifacts were left visible rather than racing an active run.",
+                    plan_number,
+                )
+                _success = False
+
+            _execution_details.update(
+                {
+                    "selected_result_format": _execution_result_format,
+                    "calculation_attempted": _did_execute,
+                    "solver_quiescence_confirmed": (
+                        bool(_execution_quiesced) if _did_execute else None
+                    ),
+                    "result_artifacts_finalized": (
+                        _result_artifacts_finalized
+                    ),
+                }
+            )
+            if _did_execute and not all(
+                (
+                    _execution_details[
+                        "actual_engine_provenance_confirmed"
+                    ] is True,
+                    _execution_quiesced,
+                    _result_artifacts_finalized,
+                )
+            ):
+                logger.error(
+                    "Plan %s did not prove all execution provenance and "
+                    "terminal-safety gates",
                     plan_number,
                 )
                 _success = False
@@ -1804,6 +2425,7 @@ class RasCmdr:
             success=_success,
             results_df_row=_results_df_row,
             completion_verified=bool(_success) if verify else None,
+            execution_details=dict(_execution_details),
         )
 
 
@@ -1873,6 +2495,8 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``execution_details_by_plan``: JSON-safe execution details
+                keyed by plan number, or an empty object when unavailable.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1933,6 +2557,7 @@ class RasCmdr:
             - verify is passed through to compute_plan() for each worker execution.
         """
         execution_results: Dict[str, bool] = {}
+        execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
         filtered_plan_numbers: List[str] = []
 
         try:
@@ -1988,6 +2613,19 @@ class RasCmdr:
                     ):
                         plans_to_skip.append(plan_num)
                         execution_results[plan_num] = True  # Mark as successful (results exist)
+                        execution_details_by_plan[plan_num] = {
+                            "execution_api": "ras_cmdr",
+                            "engine_kind": "executable",
+                            "selected_result_format": execution_result_format,
+                            "calculation_attempted": False,
+                            "solver_quiescence_confirmed": None,
+                            "result_artifacts_finalized": False,
+                            "actual_engine_provenance_confirmed": False,
+                            "selected_executable_path": None,
+                            "selected_executable_sha256": None,
+                            "launcher_pid": None,
+                            "launcher_create_time": None,
+                        }
                     else:
                         if mixed_results:
                             logger.warning(
@@ -2018,7 +2656,11 @@ class RasCmdr:
                             _results_df = ras_obj.results_df[mask].copy()
                 except Exception:
                     pass
-                return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+                return ComputeParallelResult(
+                    execution_results=execution_results,
+                    results_df=_results_df,
+                    execution_details_by_plan=execution_details_by_plan,
+                )
 
             max_workers = min(max_workers, num_plans)
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
@@ -2092,12 +2734,17 @@ class RasCmdr:
                         compute_result = future.result()
                         # Extract bool from ComputeResult for execution_results dict
                         execution_results[plan_num] = bool(compute_result)
+                        details = getattr(compute_result, "execution_details", None)
+                        execution_details_by_plan[plan_num] = (
+                            dict(details) if isinstance(details, dict) else {}
+                        )
                         if compute_result:
                             logger.debug(f"Plan {plan_num} executed in worker {worker_id}: Successful")
                         else:
                             logger.warning(f"Plan {plan_num} executed in worker {worker_id}: Failed")
                     except Exception as e:
                         execution_results[plan_num] = False
+                        execution_details_by_plan[plan_num] = {}
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
 
             # Consolidate results: use dest_folder if provided, otherwise back to original folder
@@ -2283,13 +2930,23 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for parallel plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            for plan_num in execution_results:
+                execution_details_by_plan.setdefault(plan_num, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                execution_details_by_plan=execution_details_by_plan,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
             for plan_num in filtered_plan_numbers:
                 execution_results.setdefault(plan_num, False)
-            return ComputeParallelResult(execution_results=execution_results)
+                execution_details_by_plan.setdefault(plan_num, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                execution_details_by_plan=execution_details_by_plan,
+            )
 
     @staticmethod
     @log_call
@@ -2350,6 +3007,8 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``execution_details_by_plan``: JSON-safe execution details
+                keyed by plan number, or an empty object when unavailable.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -2485,6 +3144,7 @@ class RasCmdr:
             )
 
             execution_results = {}
+            execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
                 current_plan_number = plan["plan_number"]
@@ -2527,12 +3187,17 @@ class RasCmdr:
                     )
                     # Extract bool from ComputeResult for execution_results dict
                     execution_results[current_plan_number] = bool(compute_result)
+                    details = getattr(compute_result, "execution_details", None)
+                    execution_details_by_plan[current_plan_number] = (
+                        dict(details) if isinstance(details, dict) else {}
+                    )
                     if compute_result:
                         logger.debug(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
                     execution_results[current_plan_number] = False
+                    execution_details_by_plan[current_plan_number] = {}
                     logger.error(f"Error computing plan {current_plan_number}: {str(e)}")
                 finally:
                     end_time = time.time()
@@ -2653,7 +3318,13 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for test mode plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            for current_plan_number in execution_results:
+                execution_details_by_plan.setdefault(current_plan_number, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                execution_details_by_plan=execution_details_by_plan,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")

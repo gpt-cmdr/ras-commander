@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -69,6 +70,8 @@ def _write_project(root: Path, version: str) -> _ComputeRas:
         f"Plan Title=Base\nProgram Version={version}\n",
         encoding="ascii",
     )
+    ras_obj.ras_exe_path.parent.mkdir(parents=True, exist_ok=True)
+    ras_obj.ras_exe_path.write_bytes(b"synthetic ras executable")
     return ras_obj
 
 
@@ -95,6 +98,48 @@ def _patch_compute_scaffolding(monkeypatch, ras_obj: _ComputeRas) -> None:
         "_rasunsteady_process_running_for_tmp_hdf",
         staticmethod(lambda *_args, **_kwargs: False),
     )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_confirm_plan_solver_quiescence",
+        staticmethod(lambda *_args, **_kwargs: True),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda _pid: 123.5),
+    )
+
+    class RunAdapterPopen:
+        pid = 2468
+
+        def __init__(self, argv, **kwargs):
+            self.argv = argv
+            self.kwargs = kwargs
+            self.returncode = None
+
+        def wait(self, timeout=None):
+            del timeout
+            try:
+                completed = rascmdr_module.subprocess.run(
+                    self.argv,
+                    shell=False,
+                )
+                self.returncode = int(getattr(completed, "returncode", 0))
+            except rascmdr_module.subprocess.CalledProcessError as exc:
+                self.returncode = int(exc.returncode)
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        RunAdapterPopen,
+    )
 
 
 def _fake_safe_com_open_close(controller):
@@ -108,13 +153,52 @@ def _fake_safe_com_open_close(controller):
         close_outcome_callback=None,
         **_kwargs,
     ):
+        executable = Path(_path).parent / "Ras.exe"
+        executable.write_bytes(b"fake Controller executable")
+        session_callback = _kwargs.get("session_open_callback")
+        if session_callback is not None:
+            session_callback(
+                SimpleNamespace(
+                    ras_pid=4321,
+                    ras_create_time=123.5,
+                    detection_confidence=100,
+                    ras_executable_path=str(executable),
+                    ras_executable_sha256=hashlib.sha256(
+                        executable.read_bytes()
+                    ).hexdigest(),
+                )
+            )
         try:
             return operation(controller)
         finally:
             if close_outcome_callback is not None:
-                close_outcome_callback(True, SimpleNamespace(), None)
+                close_outcome_callback(
+                    True,
+                    SimpleNamespace(
+                        ras_pid=4321,
+                        process_survived=False,
+                    ),
+                    None,
+                )
 
     return open_close
+
+
+@pytest.fixture(autouse=True)
+def _empty_controller_post_close_inventory(monkeypatch):
+    rascontrol_module = importlib.import_module("ras_commander.RasControl")
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_inspect_controller_post_close_processes",
+        lambda **_kwargs: (
+            SimpleNamespace(complete=True, matched=()),
+            SimpleNamespace(
+                complete=True,
+                processes=(),
+                query_errors=(),
+            ),
+        ),
+    )
 
 
 def test_modern_compute_removes_legacy_before_and_after_run(
@@ -526,6 +610,7 @@ def test_compute_unknown_solver_state_skips_final_cleanup(
     ras_obj = _write_project(tmp_path / "unknown-solver-state", "6.60")
     legacy = ras_obj.project_folder / "Model.O01"
     hdf = ras_obj.project_folder / "Model.p01.hdf"
+    _patch_compute_scaffolding(monkeypatch, ras_obj)
     monkeypatch.setattr(
         rascmdr_module.RasPlan,
         "get_plan_path",
@@ -545,6 +630,11 @@ def test_compute_unknown_solver_state_skips_final_cleanup(
         RasCmdr,
         "_rasunsteady_process_running_for_tmp_hdf",
         staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_confirm_plan_solver_quiescence",
+        staticmethod(lambda *_args, **_kwargs: False),
     )
 
     def fake_run(*_args, **_kwargs):
@@ -906,6 +996,15 @@ def test_rascontrol_current_single_result_skip_preserves_plan_bytes(
     )
 
     assert result.success is True
+    assert result.execution_details["execution_api"] == "ras_control"
+    assert result.execution_details["engine_kind"] == "controller"
+    assert result.execution_details["selected_result_format"] == "hdf"
+    assert result.execution_details["calculation_attempted"] is False
+    assert result.execution_details["solver_quiescence_confirmed"] is None
+    assert result.execution_details["result_artifacts_finalized"] is False
+    assert result.execution_details["actual_engine_provenance_confirmed"] is False
+    assert result.execution_details["controller_close_safe"] is False
+    assert result.execution_details["owned_process_exit_confirmed"] is False
     assert plan_path.read_bytes() == original_plan_bytes
 
 
@@ -1359,3 +1458,185 @@ def test_rascontrol_modern_run_normalizes_recreated_legacy_output(
     assert calls == ["current", "compute"]
     assert hdf.read_bytes() == b"new hdf"
     assert not legacy.exists()
+
+
+@pytest.mark.parametrize(
+    ("plan_complete", "host_complete", "plan_matched", "host_processes", "message"),
+    [
+        (False, True, (), (), "inventory was incomplete"),
+        (
+            True,
+            True,
+            (SimpleNamespace(pid=7001),),
+            (SimpleNamespace(pid=7001),),
+            "compute process remained",
+        ),
+    ],
+)
+def test_rascontrol_post_close_process_gate_preserves_opposing_output(
+    tmp_path: Path,
+    monkeypatch,
+    plan_complete,
+    host_complete,
+    plan_matched,
+    host_processes,
+    message,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / f"post-close-{plan_complete}", "6.6")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            hdf.write_bytes(b"complete hdf")
+            legacy.write_bytes(b"post-close writer evidence")
+            return True, 0, ["Complete Process"], 0
+
+        def Compute_Complete(self):
+            return True
+
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(_fake_safe_com_open_close(Controller())),
+    )
+    rascontrol_module = importlib.import_module("ras_commander.RasControl")
+    inventories = iter(
+        [
+            (
+                SimpleNamespace(complete=True, matched=()),
+                SimpleNamespace(
+                    complete=True,
+                    processes=(),
+                    query_errors=(),
+                ),
+            ),
+            (
+                SimpleNamespace(complete=plan_complete, matched=plan_matched),
+                SimpleNamespace(
+                    complete=host_complete,
+                    processes=host_processes,
+                    query_errors=(),
+                ),
+            ),
+        ]
+    )
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_inspect_controller_post_close_processes",
+        lambda **_kwargs: next(inventories),
+    )
+
+    with pytest.raises(RuntimeError, match=message):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"complete hdf"
+    assert legacy.read_bytes() == b"post-close writer evidence"
+
+
+def test_rascontrol_pre_run_exact_process_gate_precedes_artifact_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    ras_obj = _write_project(tmp_path / "control-pre-run-active", "6.6")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    hdf.write_bytes(b"existing hdf")
+    legacy.write_bytes(b"existing legacy")
+    rascontrol_module = importlib.import_module("ras_commander.RasControl")
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_inspect_controller_post_close_processes",
+        lambda **_kwargs: (
+            SimpleNamespace(
+                complete=True,
+                matched=(SimpleNamespace(pid=7001),),
+            ),
+            SimpleNamespace(
+                complete=True,
+                processes=(),
+                query_errors=(),
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(
+            lambda *_args, **_kwargs: pytest.fail(
+                "Controller activation must follow the pre-run process gate"
+            )
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="already active before Controller"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"existing hdf"
+    assert legacy.read_bytes() == b"existing legacy"
+
+
+def test_rascmdr_pre_run_exact_process_gate_precedes_artifact_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
+    ras_obj = _write_project(tmp_path / "cmdr-pre-run-active", "6.6")
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    hdf.write_bytes(b"existing hdf")
+    legacy.write_bytes(b"existing legacy")
+    _patch_compute_scaffolding(monkeypatch, ras_obj)
+    monkeypatch.setattr(
+        RasCmdr,
+        "inspect_plan_processes",
+        staticmethod(
+            lambda *_args, **_kwargs: SimpleNamespace(
+                complete=True,
+                matched=(SimpleNamespace(pid=7001),),
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module,
+        "prepare_plan_execution_artifacts",
+        lambda *_args, **_kwargs: pytest.fail(
+            "artifact cleanup must follow the pre-run process gate"
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
+    assert hdf.read_bytes() == b"existing hdf"
+    assert legacy.read_bytes() == b"existing legacy"

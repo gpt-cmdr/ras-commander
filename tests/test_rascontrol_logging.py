@@ -54,7 +54,7 @@ def test_com_open_close_logs_project_open_at_debug(
     monkeypatch.setattr(
         rascontrol_module,
         "_find_our_ras_process",
-        lambda project_path, before_snapshot: (1234, 100),
+        lambda project_path, before_snapshot: (None, None, 0, None, None),
     )
     monkeypatch.setattr(
         rascontrol_module,

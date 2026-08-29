@@ -1,10 +1,10 @@
 """Focused control-flow regression tests for ``RasCmdr.compute_plan()``."""
 
 import importlib
+import hashlib
 import inspect
 import logging
 import os
-import subprocess
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -60,6 +60,53 @@ class _DummyRas:
         self.refresh_calls.append(("results", plan_numbers))
 
 
+def _patch_compute_launcher(
+    monkeypatch,
+    tmp_path,
+    ras_obj,
+    *,
+    returncode=0,
+    on_wait=None,
+):
+    """Install an exact-path, immediate fake for compute_plan launch tests."""
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"synthetic ras executable")
+    ras_obj.ras_exe_path = executable
+
+    class FakePopen:
+        pid = 2468
+
+        def __init__(self, argv, **kwargs):
+            self.argv = argv
+            self.kwargs = kwargs
+            self.returncode = returncode
+
+        def wait(self, timeout=None):
+            del timeout
+            if on_wait is not None:
+                on_wait()
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda pid: 123.5),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_confirm_plan_solver_quiescence",
+        staticmethod(lambda plan_number, ras_object: True),
+    )
+    return executable
+
+
 def test_compute_plan_returns_failed_result_for_regular_exception():
     """Regular Exception paths should stay bool-compatible and non-raising."""
     ras_obj = _DummyRas(init_exception=RuntimeError("boom"))
@@ -77,7 +124,12 @@ def test_compute_plan_keeps_domain_artifact_contracts_out_of_execution_api():
     parameters = inspect.signature(RasCmdr.compute_plan).parameters
 
     assert "required_hdf_datasets" not in parameters
-    result = ComputeResult(success=True)
+    result = ComputeResult(True, None, None)
+    assert bool(result) is True
+    assert result.execution_details == {}
+    assert repr(result) == (
+        "ComputeResult(SUCCESS, unverified, results_df_row=None)"
+    )
     assert not hasattr(result, "artifact_verification_passed")
     assert not hasattr(result, "verification_failures")
 
@@ -129,10 +181,14 @@ def test_cancel_plan_terminates_only_exact_project_process_tree(
     class FakeProcess:
         def __init__(self, pid, name, command_line):
             self.pid = pid
+            self.running = True
             self.info = {
                 "pid": pid,
                 "name": name,
                 "cmdline": command_line,
+                "create_time": float(pid),
+                "cwd": str(tmp_path),
+                "exe": str(tmp_path / name),
             }
             self._children = []
             self.terminated = False
@@ -146,6 +202,15 @@ def test_cancel_plan_terminates_only_exact_project_process_tree(
 
         def kill(self):
             self.killed = True
+            self.running = False
+
+        def create_time(self):
+            if not self.running:
+                raise psutil.NoSuchProcess(self.pid)
+            return self.info["create_time"]
+
+        def is_running(self):
+            return self.running
 
     launcher = FakeProcess(
         100,
@@ -168,13 +233,20 @@ def test_cancel_plan_terminates_only_exact_project_process_tree(
     monkeypatch.setattr(
         psutil,
         "process_iter",
-        lambda _attrs: [launcher, solver, plotter, unrelated],
+        lambda _attrs: [
+            process
+            for process in (launcher, solver, plotter, unrelated)
+            if process.running
+        ],
     )
-    monkeypatch.setattr(
-        psutil,
-        "wait_procs",
-        lambda processes, timeout: (list(processes), []),
-    )
+    def wait_procs(processes, timeout):
+        del timeout
+        processes = list(processes)
+        for process in processes:
+            process.running = False
+        return processes, []
+
+    monkeypatch.setattr(psutil, "wait_procs", wait_procs)
 
     assert RasCmdr.cancel_plan("01", ras_object=FakeRas()) is True
     assert launcher.terminated is True
@@ -233,9 +305,8 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
             )
             return self.results_df
 
-    def fake_run(*args, **kwargs):
+    def complete_run():
         hdf_path.write_text("computed\n", encoding="utf-8")
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
         rascmdr_module.RasPlan,
@@ -254,12 +325,18 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
         "_rasunsteady_process_running_for_tmp_hdf",
         staticmethod(lambda tmp_hdf_path: False),
     )
-    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    ras_obj = MissingPrjAfterRunRas()
+    _patch_compute_launcher(
+        monkeypatch,
+        tmp_path,
+        ras_obj,
+        on_wait=complete_run,
+    )
 
     result = RasCmdr.compute_plan(
         "01",
         force_rerun=True,
-        ras_object=MissingPrjAfterRunRas(),
+        ras_object=ras_obj,
     )
 
     assert result.success is True
@@ -338,9 +415,8 @@ def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
         "rebuilt": False,
     }
 
-    def fake_run(*args, **kwargs):
+    def complete_run():
         calls["ran"] = True
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     def fake_rebuild(geom_hdf, **kwargs):
         calls["rebuilt"] = True
@@ -389,7 +465,12 @@ def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
         "_rasunsteady_process_running_for_tmp_hdf",
         staticmethod(lambda tmp_hdf_path: False),
     )
-    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    _patch_compute_launcher(
+        monkeypatch,
+        tmp_path,
+        ras_obj,
+        on_wait=complete_run,
+    )
 
     return ras_obj, calls
 
@@ -402,6 +483,204 @@ def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp
 
     assert result.success is True
     assert calls["ran"] is False
+    assert result.execution_details == {
+        "execution_api": "ras_cmdr",
+        "engine_kind": "executable",
+        "selected_result_format": "hdf",
+        "calculation_attempted": False,
+        "solver_quiescence_confirmed": None,
+        "result_artifacts_finalized": False,
+        "actual_engine_provenance_confirmed": False,
+        "selected_executable_path": None,
+        "selected_executable_sha256": None,
+        "launcher_pid": None,
+        "launcher_create_time": None,
+    }
+
+
+@pytest.mark.parametrize("with_callback", [False, True])
+def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
+    monkeypatch,
+    tmp_path,
+    with_callback,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    launches = []
+    monitor_calls = []
+
+    class CapturingPopen:
+        pid = 7654
+
+        def __init__(self, argv, **kwargs):
+            launches.append((argv, kwargs))
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", CapturingPopen)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda pid: 456.75),
+    )
+
+    callback = None
+    if with_callback:
+        class FakeMonitor:
+            @staticmethod
+            def enable_detailed_logging(*_args, **_kwargs):
+                return None
+
+            def __init__(self, **_kwargs):
+                pass
+
+            def monitor_until_signal(self, process):
+                monitor_calls.append(process.pid)
+
+        monkeypatch.setattr(rascmdr_module, "BcoMonitor", FakeMonitor)
+        callback = object()
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=callback,
+    )
+
+    executable = Path(ras_obj.ras_exe_path).resolve(strict=True)
+    expected_argv = [
+        str(executable),
+        "-c",
+        str(Path(ras_obj.prj_file).resolve()),
+        str((Path(ras_obj.project_folder) / "TestProject.p01").resolve()),
+    ]
+    assert len(launches) == 1
+    assert launches[0][0] == expected_argv
+    assert launches[0][1]["shell"] is False
+    assert launches[0][1]["cwd"] == str(ras_obj.project_folder)
+    assert monitor_calls == ([7654] if with_callback else [])
+    assert result.success is True
+    assert result.execution_details == {
+        "execution_api": "ras_cmdr",
+        "engine_kind": "executable",
+        "selected_result_format": "hdf",
+        "calculation_attempted": True,
+        "solver_quiescence_confirmed": True,
+        "result_artifacts_finalized": True,
+        "actual_engine_provenance_confirmed": True,
+        "selected_executable_path": str(executable),
+        "selected_executable_sha256": hashlib.sha256(
+            executable.read_bytes()
+        ).hexdigest(),
+        "launcher_pid": 7654,
+        "launcher_create_time": 456.75,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("pid", True),
+        ("pid", 0),
+        ("pid", -1),
+        ("create_time", True),
+        ("create_time", 0.0),
+        ("create_time", -1.0),
+        ("create_time", float("nan")),
+        ("create_time", float("inf")),
+    ],
+)
+def test_compute_plan_rejects_invalid_launcher_identity_before_provenance(
+    monkeypatch,
+    tmp_path,
+    field,
+    invalid,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    if field == "pid":
+        monkeypatch.setattr(rascmdr_module.subprocess.Popen, "pid", invalid)
+    else:
+        monkeypatch.setattr(
+            RasCmdr,
+            "_launcher_create_time",
+            staticmethod(lambda _pid: invalid),
+        )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
+    assert result.execution_details["actual_engine_provenance_confirmed"] is False
+    assert result.execution_details["launcher_pid"] is None
+    assert result.execution_details["launcher_create_time"] is None
+
+
+@pytest.mark.parametrize(
+    ("failed_gate", "expected_quiescence", "expected_finalized"),
+    [
+        ("provenance", True, True),
+        ("quiescence", False, False),
+        ("finalization", True, False),
+    ],
+)
+def test_compute_plan_never_reports_success_with_an_unproven_terminal_gate(
+    monkeypatch,
+    tmp_path,
+    failed_gate,
+    expected_quiescence,
+    expected_finalized,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    if failed_gate == "provenance":
+        monkeypatch.setattr(
+            RasCmdr,
+            "_launcher_create_time",
+            staticmethod(
+                lambda _pid: (_ for _ in ()).throw(
+                    OSError("process identity unavailable")
+                )
+            ),
+        )
+    elif failed_gate == "quiescence":
+        monkeypatch.setattr(
+            RasCmdr,
+            "_confirm_plan_solver_quiescence",
+            staticmethod(lambda *_args, **_kwargs: False),
+        )
+    else:
+        monkeypatch.setattr(
+            rascmdr_module,
+            "finalize_plan_execution_artifacts",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                OSError("finalization failed")
+            ),
+        )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    details = result.execution_details
+    assert result.success is False
+    assert details["calculation_attempted"] is True
+    assert details["solver_quiescence_confirmed"] is expected_quiescence
+    assert details["result_artifacts_finalized"] is expected_finalized
+    assert details["actual_engine_provenance_confirmed"] is (
+        failed_gate != "provenance"
+    )
 
 
 def test_compute_plan_force_geompre_bypasses_smart_skip(monkeypatch, tmp_path):
@@ -587,11 +866,7 @@ def test_compute_plan_success_logging_is_concise(monkeypatch, tmp_path, caplog):
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
     )
-    monkeypatch.setattr(
-        rascmdr_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
-    )
+    _patch_compute_launcher(monkeypatch, tmp_path, ras_obj)
     # This is a logging test around a synthetic launcher, so process discovery
     # must not depend on another user's live RasUnsteady.exe session.
     monkeypatch.setattr(
@@ -675,10 +950,12 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
         staticmethod(lambda plan_path: None),
     )
 
-    def fake_run(*args, **kwargs):
-        raise subprocess.CalledProcessError(1, "Ras.exe")
-
-    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    _patch_compute_launcher(
+        monkeypatch,
+        tmp_path,
+        ras_obj,
+        returncode=1,
+    )
     monkeypatch.setattr(
         RasCmdr,
         "_wait_for_async_plan_completion",
@@ -757,11 +1034,7 @@ def test_compute_plan_treats_verified_hdf_after_normal_return_as_success(
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
     )
-    monkeypatch.setattr(
-        rascmdr_module.subprocess,
-        "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
-    )
+    _patch_compute_launcher(monkeypatch, tmp_path, ras_obj)
     monkeypatch.setattr(
         RasCmdr,
         "_wait_for_async_plan_completion",
@@ -855,6 +1128,54 @@ def test_process_query_failure_returns_unknown(monkeypatch, tmp_path):
     ) is None
 
 
+@pytest.mark.parametrize(
+    ("complete", "matched", "tmp_exists", "expected"),
+    [
+        (False, (), False, False),
+        (
+            True,
+            (SimpleNamespace(pid=10, name="Ras.exe"),),
+            False,
+            False,
+        ),
+        (
+            True,
+            (SimpleNamespace(pid=11, name="RasUnsteady.exe"),),
+            False,
+            False,
+        ),
+        (True, (), True, False),
+        (True, (), False, True),
+    ],
+)
+def test_confirm_plan_solver_quiescence_requires_complete_empty_inventory(
+    monkeypatch,
+    tmp_path,
+    complete,
+    matched,
+    tmp_exists,
+    expected,
+):
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name="TestProject",
+    )
+    if tmp_exists:
+        (tmp_path / "TestProject.p01.tmp.hdf").write_bytes(b"partial")
+    monkeypatch.setattr(
+        RasCmdr,
+        "inspect_plan_processes",
+        staticmethod(
+            lambda *_args, **_kwargs: SimpleNamespace(
+                complete=complete,
+                matched=matched,
+            )
+        ),
+    )
+
+    assert RasCmdr._confirm_plan_solver_quiescence("01", ras_obj) is expected
+
+
 def test_solver_process_match_is_literal_and_resolves_relative_path(tmp_path):
     target_folder = tmp_path / "model [literal]"
     target_folder.mkdir()
@@ -899,6 +1220,41 @@ def test_solver_process_match_infers_executable_from_cmdline_when_name_unavailab
         target,
         [process],
     ) is True
+
+
+def test_solver_process_match_supports_native_cwd_batch_signature(tmp_path):
+    target = tmp_path / "TestProject.p08.tmp.hdf"
+    exact = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": [
+                "RasUnsteady.exe",
+                str(tmp_path / "TestProject.c01"),
+                "b08",
+            ],
+            "cwd": str(tmp_path),
+        }
+    )
+    wrong_plan = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": [
+                "RasUnsteady.exe",
+                str(tmp_path / "TestProject.c01"),
+                "b09",
+            ],
+            "cwd": str(tmp_path),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [exact],
+    ) is True
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [wrong_plan],
+    ) is False
 
 
 def test_solver_process_match_treats_missing_process_identity_as_unknown(tmp_path):
@@ -1154,10 +1510,12 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
         staticmethod(lambda plan_path: None),
     )
 
-    def fake_run(*args, **kwargs):
-        raise subprocess.CalledProcessError(1, "Ras.exe")
-
-    monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
+    _patch_compute_launcher(
+        monkeypatch,
+        tmp_path,
+        ras_obj,
+        returncode=1,
+    )
     monkeypatch.setattr(
         RasCmdr,
         "_wait_for_async_plan_completion",

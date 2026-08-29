@@ -116,7 +116,16 @@ staged = stage_project(
 
 print(staged.destination_project_file)
 print(staged.execution_readiness)
+print(staged.fingerprint_algorithm)
 ```
+
+The four `StageProjectResult` fingerprint fields share the explicitly versioned
+`ras_commander.stage_project.framed_tree.v1` algorithm. That digest covers the
+staged tree's directory population and framed file records. It is deliberately
+not interchangeable with a qualification-harness source snapshot, whose
+canonical-JSON digest has a separate algorithm identifier. Consumers should
+compare fingerprints only when their algorithm identifiers also match. The
+same stage algorithm identifier is persisted in `.ras-commander/stage.json`.
 
 ::: ras_commander.RasProject.stage_project
     options:
@@ -188,8 +197,10 @@ treated as requiring manual review.
       heading_level: 3
       members:
         - inspect_execution_evidence
+        - inspect_plan_processes
         - remove_plan_execution_artifacts
         - compute_plan
+        - cancel_plan_exact
         - cancel_plan
         - compute_parallel
         - compute_test_mode
@@ -219,6 +230,23 @@ skipped runs do not delete result artifacts. Cleanup requires a resolvable selec
 version and fails before mutation when that version is unknown. Worker and
 Docker promotion accepts only a successful plan's exact final result family;
 Linux preprocessing `.tmp.hdf` files are never published as results.
+
+### Structured process safety
+
+`RasControl.inspect_processes()` returns a strict host-wide inventory of
+recognized HEC-RAS launchers, solvers, preprocessors, sediment, and
+water-quality engines. `RasCmdr.inspect_plan_processes()` narrows that evidence
+to one initialized project and plan using exact path/token signatures. Both
+records expose `complete` and explicit query errors; callers making safety
+decisions must fail closed when inspection is incomplete.
+
+`RasCmdr.cancel_plan_exact()` revalidates process identity as `(pid,
+create_time)` before signalling and returns matched, stopped, survivor, query-
+error, timing, and tri-state quiescence evidence. Use this structured method
+for supervision and recovery. The older Boolean `cancel_plan()` remains a
+compatibility wrapper: it returns `True` only when it found an exact match and
+quiescence was positively proved. Process creation, observation, and
+cancellation start/finish times are Unix epoch seconds.
 
 ::: ras_commander.ExecutionEvidence.ExecutionEvidence
     options:
@@ -360,6 +388,7 @@ All callback methods are **optional** - implement only what you need. The protoc
       heading_level: 3
       members:
         - run_plan
+        - inspect_processes
         - get_steady_results
         - get_unsteady_results
         - get_output_times

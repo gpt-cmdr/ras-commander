@@ -18,6 +18,7 @@ from ras_commander.schemas import DATAFRAME_SCHEMAS
 from ras_commander import (
     ProjectPathAmbiguityError,
     ProjectPublicationError,
+    STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
     inspect_project_assets,
     stage_project,
 )
@@ -527,6 +528,7 @@ def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Pa
     result = stage_project(source_project, destination)
 
     assert result.publication_state == "published"
+    assert result.fingerprint_algorithm == STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
     assert result.source_fingerprint_before == result.source_fingerprint_after
     assert result.source_project_file == source_project
     assert result.destination_project_file == destination / source_project.name
@@ -539,6 +541,10 @@ def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Pa
     manifest_path = destination / ".ras-commander" / "stage.json"
     assert manifest_path.is_file()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert (
+        manifest["fingerprint_algorithm"]
+        == STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+    )
     assert {item["provenance"] for item in manifest["artifacts"]} == {
         "copied_source",
         "generated_stage_metadata",
