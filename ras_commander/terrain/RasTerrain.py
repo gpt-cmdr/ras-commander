@@ -147,8 +147,8 @@ class RasTerrain:
                 modifications through ``resampleVecMods``.
             overwrite: Replace existing output and receipt when true.
             timeout_seconds: Total bounded runtime, including validation.
-            hecras_version: Exact qualified HEC-RAS runtime: 6.4.1, 6.5, 6.6,
-                or 7.0.1. The existing ``6.4`` installation alias resolves to
+            hecras_version: Accepted HEC-RAS runtime: 6.4.1, 6.5, 6.6, 7.0.1,
+                or forward-open 7.1. The existing ``6.4`` installation alias resolves to
                 6.4.1. When omitted, use the exact runtime recorded by
                 ``ras_object``.
             ras_object: Optional initialized project object for multi-project
@@ -164,12 +164,13 @@ class RasTerrain:
             invalid inputs raise before native execution.
 
         Notes:
-            Supported releases are exactly HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1.
+            Qualified releases are HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1.
             HEC-RAS 6.3 lacks the required bounded contract, 6.4 has an
             official terrain-elevation defect, 6.7 is beta-only, and 7.0.0
             has an official terrain-modification export defect. HEC-RAS 7.0.1
-            fixes that defect and is qualified on native Windows. No official
-            HEC-RAS Classic 7.1 release exists; HEC-RAS 2025 is not a substitute.
+            fixes that defect and is qualified on native Windows. HEC-RAS 7.1
+            is forward-open for its future official binary, with the helper's
+            exact managed-contract check retained as the runtime safety gate.
             The base export is always nearest-neighbor. The derivative is not
             registered in or otherwise written back to the source project.
             ``RasTerrainMod.compute_modified_terrain_raster()`` remains an

@@ -5,8 +5,9 @@
 
 ## Decision
 
-`RasTerrain.export_rasmapper_terrain()` accepts exactly HEC-RAS 6.4.1, 6.5,
-6.6, and 7.0.1. It rejects every other version before output directories or native
+`RasTerrain.export_rasmapper_terrain()` qualifies exactly HEC-RAS 6.4.1, 6.5,
+6.6, and 7.0.1 and leaves exact 7.1 forward-open for its future official binary.
+It rejects every other version before output directories or native
 processes are created. When an initialized `RasPrj` is supplied, both
 `ras_version` and the identifiable release folder in `ras_exe_path` are
 checked, and an explicit `hecras_version` must name the same exact release.
@@ -36,7 +37,7 @@ contract.
 | 6.7 prereleases | HEC's [official download archive](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) lists 6.7 Beta, Beta 2, Beta 3, Beta 4a, and Beta 5, followed by 7.0 rather than a final 6.7. The [7.0 new-features page](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/7.0/new-features) calls 7.0 the official release of the software previously titled 6.7 Beta. The [Beta terrain tutorial](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/beta/tutorials/adding-terrain-mods-land-cover-and-n-values) uses Generate New RAS Terrain to rasterize vector pier modifications. | Local folders labeled Beta 4 and Beta 5 passed probes, but all 6.7 prereleases remain unsupported. The Beta 4 folder's identity cannot be equated silently with HEC's archived Beta 4a package; the earlier binaries were unavailable. |
 | 7.0.0 | HEC's [7.0 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/7.0) say a new raster can omit the bottom, minimum-Y portion of a terrain modification, especially a triangular-nose pier; no workaround is given. | Unsupported even though the available bounded probes passed. Those fixtures do not disprove the documented defect. |
 | 7.0.1 | HEC's [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues) list the 7.0.0 terrain-modification export issue as fixed. | Supported after exact installed-binary reflection and native semantic qualification. The defect-specific triangular-nose/minimum-Y fixture was not available, so the official fix notice and broader modification checks are both recorded. |
-| 7.1 | The official [HEC-RAS downloads page](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) and [HEC download releases](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases) publish no HEC-RAS Classic 7.1 installer or release. The latest Classic package is 7.0.1. | Unsupported because there is no official binary to install, reflect, or qualify. HEC-RAS 2025 is a different product and is not treated as 7.1. |
+| 7.1 | The official [HEC-RAS downloads page](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) and [HEC download releases](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases) do not yet publish a HEC-RAS Classic 7.1 installer or release. | Forward-open, not qualified. Exact 7.1 terms and installation folders are accepted; helper reflection remains the runtime safety gate if HEC changes the private contract. |
 
 ## Installed managed API matrix
 
@@ -112,11 +113,11 @@ hidden by ras-commander.
 
 ## Final public contract and qualification gaps
 
-- Accepted exact releases: 6.4.1, 6.5, 6.6, and 7.0.1.
+- Qualified exact releases: 6.4.1, 6.5, 6.6, and 7.0.1. Exact 7.1 is forward-open without a qualification claim.
 - The existing public `6.4` alias is accepted only because `get_ras_exe()` maps it to the fixed 6.4.1 installation. An executable actually located in a `6.4` release folder is rejected.
 - Compact/plan-file spellings normalize to the same exact accepted release: `6.41`/`641`, `6.50`/`65`, `6.60`/`66`, and `7.01`/`701`.
 - Any patch/build version not explicitly qualified, including 6.4.1.1, 6.6.0.1, and 6.6.1, fails closed.
 - Native Windows qualification covers all four accepted releases.
 - Wine qualification covers the exact 6.6 runtime. Matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap, not an implied result.
 - The local fixtures do not contain the exact triangular-nose/minimum-Y regression described in HEC's 7.0.0 known issue. HEC's explicit 7.0.1 fix notice plus the bounded 73-cell modification comparison and stitched export support acceptance, while this defect-specific fixture remains a documented qualification gap.
-- HEC-RAS Classic 7.1 cannot be added until HEC publishes an exact release that can be independently reflected and qualified. HEC-RAS 2025 must be evaluated under its own product/version contract if support is later requested.
+- HEC-RAS Classic 7.1 can be selected as `7.1`, `7.1.0`, `7.10`, or `71` when its official binary lands. It should then be independently reflected and semantically qualified; until that occurs, runtime signature checks protect the forward-open path but do not establish semantic parity.

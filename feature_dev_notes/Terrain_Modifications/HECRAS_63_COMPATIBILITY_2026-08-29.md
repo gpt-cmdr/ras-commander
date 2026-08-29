@@ -70,6 +70,7 @@ requires.
 | 6.5 | Accepted | Native Windows qualified |
 | 6.6 | Accepted | Native Windows and Wine qualified |
 | 7.0.1 | Accepted | Native Windows qualified; official 7.0.0 export defect fixed |
+| 7.1 | Forward-open | Awaiting official binary; exact helper contract checked at runtime |
 | 6.3 / 6.3.1 | Rejected | Inspected; required bounded export contract absent |
 | all others | Rejected | Unqualified, prerelease, or affected by an official export defect |
 

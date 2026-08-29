@@ -16,7 +16,7 @@ receipt. No project registration or source project file was changed.
 
 ## Automated tests
 
-- `tests/terrain_export_host_test.py`: 72 passed. Coverage includes exact
+- `tests/terrain_export_host_test.py`: 76 passed. Coverage includes exact
   terrain selection, Path/string/Windows/UNC/space-containing and Wine path
   conversion, factors and cell-size math, negative-coordinate grid snapping,
   source resolution compatibility, overwrite protection, request/response
@@ -24,7 +24,7 @@ receipt. No project registration or source project file was changed.
   state, packaged resources, forced-timeout owned-process cleanup, supported
   version normalization, early unsupported-version `RasPrj` rejection,
   executable-release checks, and explicit/project runtime conflict rejection.
-- Focused regression set: 128 passed after the 7.0.1 qualification update
+- Focused regression set: 134 passed after the forward-open 7.1 update
   (terrain export, existing native helper packaging, GDAL runtime, terrain
   logging/creation, and terrain display settings). This includes explicit
   rejection of unqualified or new version terms.
@@ -109,7 +109,8 @@ fixtures do not contain the exact triangular-nose/minimum-Y regression.
 
 The official downloads page and HEC release repository contain no HEC-RAS
 Classic 7.1 release. No 7.1 package could therefore be installed or qualified;
-HEC-RAS 2025 was not substituted because it is a different product.
+the exact 7.1 release term is nevertheless forward-open so the future official
+installation can run behind the helper's exact runtime contract check.
 
 ## HEC-RAS 6.3 and 6.3.1 compatibility decision
 
@@ -187,8 +188,8 @@ explicit environment declaration documented in the public API guide.
   covers 6.6; matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap.
 - HEC-RAS 6.3/6.3.1 lack the required contract, 6.4.0 is associated with an
   official terrain-elevation defect, 6.7 has only prerelease builds, and 7.0.0
-  has an official terrain-modification export defect. There is no published
-  HEC-RAS Classic 7.1 release.
+  has an official terrain-modification export defect. HEC-RAS Classic 7.1 is
+  forward-open but remains unqualified until an official binary is published.
   See `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md` for the full matrix.
 - Full-domain UPGU3 export was intentionally not attempted. Bounded windows
   satisfy feature semantics without multi-gigabyte derivative cost.

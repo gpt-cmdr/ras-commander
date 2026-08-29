@@ -33,7 +33,7 @@ Contract decisions:
 - `downsample_factor` is restricted to the exact source-derived set `{1, 2, 4, 8}`. A free-form target cell size and arbitrary resampling terms are intentionally not public.
 - The base export always uses nearest-neighbor resampling. `rasterize_modifications` maps directly to native `resampleVecMods`.
 - `overwrite` defaults to false. Output and receipt collisions are checked before native work begins.
-- `hecras_version` is explicit or inherited from `ras_object.ras_version`; it is resolved through existing HEC-RAS installation conventions. The accepted exact releases are 6.4.1, 6.5, 6.6, and 7.0.1. The later compatibility audit rejects 6.3.x, 6.4.0, 6.7 betas, known-defective 7.0.0, unpublished 7.1, and unqualified patch terms with version-specific guidance.
+- `hecras_version` is explicit or inherited from `ras_object.ras_version`; it is resolved through existing HEC-RAS installation conventions. Qualified exact releases are 6.4.1, 6.5, 6.6, and 7.0.1; exact 7.1 is forward-open for its future official binary and remains protected by the helper's runtime contract check. The compatibility audit rejects 6.3.x, 6.4.0, 6.7 betas, known-defective 7.0.0, and other unqualified patch terms with version-specific guidance.
 - `ras_object` must be an initialized `RasPrj` when supplied. Its version and identifiable executable release are checked before output or native work and must not conflict with an explicit exact runtime, preserving multi-project context without making global state authoritative.
 - `receipt_path` defaults to `<output_tif>.receipt.json`. The receipt is always emitted for a promoted success and contains no hashes.
 

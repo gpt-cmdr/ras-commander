@@ -33,6 +33,7 @@ SUPPORTED_TERRAIN_EXPORT_VERSIONS = {
     (6, 5, 0): "6.5",
     (6, 6, 0): "6.6",
     (7, 0, 1): "7.0.1",
+    (7, 1, 0): "7.1",
 }
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
 _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
@@ -121,16 +122,10 @@ def _require_supported_hecras_version(
             " HEC-RAS 7.0.0 has an official known Terrain Modifications - Export "
             "defect that can omit the minimum-Y portion of a modification."
         )
-    elif key[:2] == (7, 1):
-        reason = (
-            " HEC-RAS 7.1 is not an official published HEC-RAS Classic release. "
-            "The official Classic release line currently ends at 7.0.1; HEC-RAS "
-            "2025 is a different product and is not accepted as a substitute."
-        )
     raise ValueError(
         f"HEC-RAS {version!r} is unsupported by "
         "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
-        f"6.4.1, 6.5, 6.6, and 7.0.1.{reason}"
+        f"6.4.1, 6.5, 6.6, 7.0.1, and 7.1.{reason}"
     )
 
 

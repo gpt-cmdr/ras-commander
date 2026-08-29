@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 
 import pandas as pd
+import pytest
 
 from ras_commander.RasUtils import RasUtils
 from ras_commander.RasPrj import get_ras_exe
@@ -66,6 +67,21 @@ def test_get_ras_exe_maps_compact_701_to_exact_patch_release(monkeypatch):
     assert get_ras_exe("701") == str(fake_701)
 
 
+def test_get_ras_exe_maps_future_71_terms_to_release_folder(monkeypatch):
+    fake_71 = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.1\Ras.exe")
+
+    monkeypatch.setattr(
+        RasUtils,
+        "discover_ras_versions",
+        staticmethod(lambda: {"7.1": fake_71}),
+    )
+
+    assert get_ras_exe("7.1") == str(fake_71)
+    assert get_ras_exe("7.1.0") == str(fake_71)
+    assert get_ras_exe("7.10") == str(fake_71)
+    assert get_ras_exe("71") == str(fake_71)
+
+
 def test_discover_ras_versions_scans_standard_66_folder(monkeypatch):
     monkeypatch.setitem(sys.modules, "winreg", None)
     fake_exe = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe")
@@ -90,9 +106,14 @@ def test_discover_ras_versions_scans_standard_66_folder(monkeypatch):
     assert "7.0" not in discovered
 
 
-def test_discover_ras_versions_scans_standard_701_folder(monkeypatch):
+@pytest.mark.parametrize("version", ["7.0.1", "7.1"])
+def test_discover_ras_versions_scans_future_and_current_7x_folders(
+    monkeypatch, version
+):
     monkeypatch.setitem(sys.modules, "winreg", None)
-    fake_exe = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe")
+    fake_exe = Path(
+        rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe"
+    )
 
     def fake_exists(self):
         normalized = str(self).replace("\\", "/")
@@ -110,8 +131,7 @@ def test_discover_ras_versions_scans_standard_701_folder(monkeypatch):
 
     discovered = RasUtils.discover_ras_versions()
 
-    assert discovered["7.0.1"] == fake_exe
-    assert "7.0" not in discovered
+    assert discovered[version] == fake_exe
 
 
 def test_discover_ras_versions_normalizes_compact_66_folder(monkeypatch):

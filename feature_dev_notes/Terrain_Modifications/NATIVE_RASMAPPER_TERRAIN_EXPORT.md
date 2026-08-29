@@ -33,7 +33,8 @@ locally installed runtime from 6.3 through 7.0.1, and ran bounded exports on
 release in `ras_exe_path`, then raises before filesystem or native work for all
 other versions. HEC-RAS 7.0.0 is rejected because HEC documents a terrain-
 modification export defect; the exact official 7.0.1 binary fixes that issue
-and passed native qualification. No official HEC-RAS Classic 7.1 release exists.
+and passed native qualification. Exact 7.1 is forward-open for its future
+official binary, with the exact helper contract still checked at runtime.
 
 ## Original implementation gap
 
