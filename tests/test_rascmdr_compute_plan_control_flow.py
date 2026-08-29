@@ -247,6 +247,13 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
     )
+    # This unit test supplies a fully synthetic subprocess result. Keep its
+    # outcome independent of unrelated RasUnsteady.exe processes on the host.
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(lambda tmp_hdf_path: False),
+    )
     monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
 
     result = RasCmdr.compute_plan(
@@ -374,6 +381,13 @@ def _make_skip_scenario(monkeypatch, tmp_path, rebuild_error=None):
         rascmdr_module.BcoMonitor,
         "enable_detailed_logging",
         staticmethod(lambda plan_path: None),
+    )
+    # The fake launcher below cannot own a real solver process. Isolate these
+    # control-flow tests from any unrelated RasUnsteady.exe on the test host.
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(lambda tmp_hdf_path: False),
     )
     monkeypatch.setattr(rascmdr_module.subprocess, "run", fake_run)
 
@@ -577,6 +591,13 @@ def test_compute_plan_success_logging_is_concise(monkeypatch, tmp_path, caplog):
         rascmdr_module.subprocess,
         "run",
         lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+    # This is a logging test around a synthetic launcher, so process discovery
+    # must not depend on another user's live RasUnsteady.exe session.
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(lambda tmp_hdf_path: False),
     )
     with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
         result = RasCmdr.compute_plan(
@@ -816,16 +837,224 @@ def test_async_wait_does_not_finalize_while_completed_hdf_has_active_solver(
 
 
 def test_process_query_failure_returns_unknown(monkeypatch, tmp_path):
+    import psutil
+
     monkeypatch.setattr(rascmdr_module, "os", SimpleNamespace(name="nt"))
+
+    def fail_process_query(*_args, **_kwargs):
+        raise psutil.AccessDenied(pid=1234)
+
     monkeypatch.setattr(
-        rascmdr_module.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout=""),
+        psutil,
+        "process_iter",
+        fail_process_query,
     )
 
     assert RasCmdr._rasunsteady_process_running_for_tmp_hdf(
         tmp_path / "TestProject.p01.tmp.hdf"
     ) is None
+
+
+def test_solver_process_match_is_literal_and_resolves_relative_path(tmp_path):
+    target_folder = tmp_path / "model [literal]"
+    target_folder.mkdir()
+    target = target_folder / "TestProject.p01.tmp.hdf"
+    target.write_bytes(b"active")
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": [
+                "RasUnsteady.exe",
+                '"TestProject.p01.tmp.hdf"',
+                "x01",
+            ],
+            "cwd": str(target_folder),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is True
+
+
+def test_solver_process_match_infers_executable_from_cmdline_when_name_unavailable(
+    tmp_path,
+):
+    target = tmp_path / "TestProject.p01.tmp.hdf"
+    target.write_bytes(b"active")
+    process = SimpleNamespace(
+        info={
+            "name": None,
+            "cmdline": [
+                r"C:\Program Files (x86)\HEC\HEC-RAS\7.0\x64\RasUnsteady.exe",
+                str(target),
+                "x01",
+            ],
+            "cwd": str(tmp_path),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is True
+
+
+def test_solver_process_match_treats_missing_process_identity_as_unknown(tmp_path):
+    target = tmp_path / "TestProject.p01.tmp.hdf"
+    target.write_bytes(b"active")
+    process = SimpleNamespace(
+        info={
+            "name": None,
+            "cmdline": None,
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "alias",
+    [
+        r"Z:\Models\TestProject.p01.tmp.hdf",
+        r"\\server\share\Models\TestProject.p01.tmp.hdf",
+        r"C:\MODELS~1\TestProject.p01.tmp.hdf",
+        r"C:\links\TestProject.p01.tmp.hdf",
+    ],
+    ids=["mapped-drive", "unc", "short-path", "symlink"],
+)
+@pytest.mark.skipif(os.name != "nt", reason="Windows path aliases")
+def test_solver_process_match_uses_file_identity_for_path_aliases(
+    monkeypatch,
+    tmp_path,
+    alias,
+):
+    target = tmp_path / "TestProject.p01.tmp.hdf"
+    target.write_bytes(b"active")
+    comparisons = []
+
+    def samefile(candidate, expected):
+        comparisons.append((str(candidate), str(expected)))
+        return str(candidate) == alias and Path(expected) == target
+
+    monkeypatch.setattr(rascmdr_module.os.path, "samefile", samefile)
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", alias, "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is True
+    assert comparisons == [(alias, str(target))]
+
+
+def test_solver_process_match_uses_actual_file_identity(tmp_path):
+    target = tmp_path / "TestProject.p01.tmp.hdf"
+    alias = tmp_path / "TestProject-alias.p01.tmp.hdf"
+    target.write_bytes(b"active")
+    os.link(target, alias)
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(alias), "x01"],
+            "cwd": str(tmp_path),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is True
+
+
+def test_solver_process_match_treats_identity_failure_as_unknown(
+    monkeypatch,
+    tmp_path,
+):
+    target = tmp_path / "target" / "TestProject.p01.tmp.hdf"
+    alias = tmp_path / "unavailable" / "TestProject.p01.tmp.hdf"
+    target.parent.mkdir()
+    target.write_bytes(b"active")
+    monkeypatch.setattr(
+        rascmdr_module.os.path,
+        "samefile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PermissionError("identity unavailable")
+        ),
+    )
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(alias), "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "process_info",
+    [
+        {"name": "RasUnsteady.exe", "cmdline": None, "cwd": None},
+        {
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", "unrecognized-input"],
+            "cwd": None,
+        },
+        {
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", "TestProject.p01.tmp.hdf"],
+            "cwd": None,
+        },
+    ],
+    ids=["unreadable-command-line", "unparsed-command-line", "relative-without-cwd"],
+)
+def test_solver_process_match_treats_parsing_uncertainty_as_unknown(
+    tmp_path,
+    process_info,
+):
+    target = tmp_path / "TestProject.p01.tmp.hdf"
+    target.write_bytes(b"active")
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [SimpleNamespace(info=process_info)],
+    ) is None
+
+
+def test_solver_process_match_distinguishes_confirmed_unrelated_solver(tmp_path):
+    target = tmp_path / "target" / "TestProject.p01.tmp.hdf"
+    unrelated = tmp_path / "other" / "TestProject.p01.tmp.hdf"
+    target.parent.mkdir()
+    unrelated.parent.mkdir()
+    target.write_bytes(b"target")
+    unrelated.write_bytes(b"other")
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(unrelated), "x01"],
+            "cwd": str(unrelated.parent),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        target,
+        [process],
+    ) is False
 
 
 def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(

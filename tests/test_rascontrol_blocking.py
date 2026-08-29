@@ -59,9 +59,21 @@ def test_blocking_run_uses_exact_controller_and_returns_execution_details(
         def Compute_Complete(self):
             raise AssertionError("blocking execution must not poll Compute_Complete")
 
-    def fake_open_close(project_path, version, operation_func, *, strict_close=False):
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        strict_close=False,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
         calls.append(("open", project_path, version, strict_close))
-        return operation_func(FakeCom())
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
 
     monkeypatch.setattr(
         RasControl,
@@ -117,9 +129,21 @@ def test_default_run_retains_async_polling_contract(monkeypatch, tmp_path):
             calls.append(("poll",))
             return True
 
-    def fake_open_close(project_path, version, operation_func, *, strict_close=False):
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        strict_close=False,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
         calls.append(("open", project_path, version, strict_close))
-        return operation_func(FakeCom())
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
 
     monkeypatch.setattr(
         RasControl,
@@ -169,6 +193,143 @@ def test_blocking_rejects_legacy_controller_before_open(monkeypatch, tmp_path):
         RasControl.run_plan("01", blocking=True)
 
 
+@pytest.mark.parametrize(
+    "max_runtime",
+    [0, -1, True, None, "60", float("nan"), float("inf")],
+)
+def test_run_plan_rejects_invalid_max_runtime(max_runtime):
+    with pytest.raises(ValueError, match="max_runtime must be a positive"):
+        RasControl.run_plan("01", max_runtime=max_runtime)
+
+
+def test_strict_close_failure_during_current_check_does_not_start_compute(
+    monkeypatch,
+    tmp_path,
+):
+    info = _project_info(tmp_path)
+    calls = []
+
+    class FakeCom:
+        def Plan_SetCurrent(self, plan_name):
+            calls.append(("plan", plan_name))
+
+        def PlanOutput_IsCurrent(self):
+            calls.append(("current",))
+            return True
+
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        strict_close=False,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        calls.append(("open", project_path, version, strict_close))
+        result = operation_func(FakeCom())
+        close_error = OSError("close failed")
+        if close_outcome_callback is not None:
+            close_outcome_callback(True, SimpleNamespace(), close_error)
+        assert result is True
+        raise RuntimeError("QuitRas() failed: close failed") from close_error
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(lambda plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    monkeypatch.setattr(
+        rasbco_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(
+            lambda *_args, **_kwargs: pytest.fail(
+                "strict current-check close failure must not start execution"
+            )
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match=r"QuitRas\(\) failed: close failed"):
+        RasControl.run_plan(
+            "01",
+            use_watchdog=False,
+            refresh_results=False,
+            strict_close=True,
+        )
+
+    assert calls == [
+        ("open", info.project_path, info.version, True),
+        ("plan", info.plan_name),
+        ("current",),
+    ]
+
+
+def test_non_strict_current_check_failure_retains_compute_fallback(
+    monkeypatch,
+    tmp_path,
+):
+    info = _project_info(tmp_path)
+    calls = []
+
+    class FakeCom:
+        def Plan_SetCurrent(self, plan_name):
+            calls.append(("plan", plan_name))
+
+        def PlanOutput_IsCurrent(self):
+            calls.append(("current",))
+            raise OSError("currency query unavailable")
+
+        def Compute_CurrentPlan(self, *args):
+            calls.append(("compute", args))
+            return True, 1, ("Computations Started",), False
+
+        def Compute_Complete(self):
+            calls.append(("poll",))
+            return True
+
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        strict_close=False,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        calls.append(("open", project_path, version, strict_close))
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(lambda plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    _disable_detailed_logging(monkeypatch)
+
+    result = RasControl.run_plan(
+        "01",
+        use_watchdog=False,
+        refresh_results=False,
+    )
+
+    assert result.success is True
+    assert calls == [
+        ("open", info.project_path, info.version, False),
+        ("plan", info.plan_name),
+        ("current",),
+        ("open", info.project_path, info.version, False),
+        ("plan", info.plan_name),
+        ("compute", (None, None)),
+        ("poll",),
+    ]
+
+
 def test_blocking_normalizes_scalar_message_and_rejects_malformed_return(
     monkeypatch,
     tmp_path,
@@ -188,8 +349,19 @@ def test_blocking_normalizes_scalar_message_and_rejects_malformed_return(
         def Compute_CurrentPlan(self, *args):
             return next(returns)
 
-    def fake_open_close(project_path, version, operation_func, *, strict_close=False):
-        return operation_func(FakeCom())
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
 
     monkeypatch.setattr(
         RasControl,
@@ -241,11 +413,20 @@ def test_watchdog_starts_before_blocking_compute(monkeypatch, tmp_path):
             events.append("compute")
             return True, 1, ("Computations Completed",), True
 
-    def fake_open_close(project_path, version, operation_func, *, strict_close=False):
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
         rascontrol_module._active_sessions[session.session_id] = session
         try:
             return operation_func(FakeCom())
         finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
             rascontrol_module._active_sessions.clear()
 
     monkeypatch.setattr(
@@ -291,8 +472,19 @@ def test_watchdog_receipt_reports_requested_but_not_started(monkeypatch, tmp_pat
         def Compute_CurrentPlan(self, *args):
             return True, 1, ("Computations Completed",), True
 
-    def fake_open_close(project_path, version, operation_func, *, strict_close=False):
-        return operation_func(FakeCom())
+    def fake_open_close(
+        project_path,
+        version,
+        operation_func,
+        *,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
 
     monkeypatch.setattr(
         RasControl,
@@ -445,6 +637,64 @@ def test_strict_close_reports_surviving_owned_process(monkeypatch, tmp_path):
     rascontrol_module._active_sessions.clear()
 
 
+def test_required_safe_close_reports_survivor_in_non_strict_mode(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    fake_com = SimpleNamespace(Project_Open=lambda path: None, QuitRas=lambda: None)
+    dispatched = []
+    _patch_com_session(monkeypatch, tmp_path, fake_com, dispatched)
+    cleanup_result = rascontrol_module._SessionCleanupResult(
+        session_id="unsafe-session",
+        ras_pid=4321,
+        process_detected=True,
+        process_survived=True,
+        lock_retained=True,
+    )
+    outcomes = []
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_cleanup_session",
+        lambda _session_id: cleanup_result,
+    )
+
+    with pytest.raises(RuntimeError, match="owned ras.exe PID 4321 survived"):
+        RasControl._com_open_close(
+            project_path,
+            "6.3.0.2",
+            lambda com_rc: "computed",
+            require_safe_close=True,
+            close_outcome_callback=lambda *args: outcomes.append(args),
+        )
+
+    assert outcomes == [(False, cleanup_result, None)]
+    rascontrol_module._active_sessions.clear()
+
+
+def test_required_safe_close_rejects_failed_quit_without_owned_pid(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    fake_com = SimpleNamespace(
+        Project_Open=lambda path: None,
+        QuitRas=lambda: (_ for _ in ()).throw(OSError("close failed")),
+    )
+    dispatched = []
+    _patch_com_session(monkeypatch, tmp_path, fake_com, dispatched)
+
+    with pytest.raises(RuntimeError, match="process exit could not be confirmed"):
+        RasControl._com_open_close(
+            project_path,
+            "6.3.0.2",
+            lambda com_rc: "computed",
+            require_safe_close=True,
+        )
+
+
 def _tracked_lock(tmp_path, pid=4321):
     return rascontrol_module.SessionLock(
         python_pid=123,
@@ -487,7 +737,7 @@ def test_cleanup_force_kills_then_verifies_exit(monkeypatch, tmp_path):
             self.running = False
 
     lock = _tracked_lock(tmp_path)
-    rascontrol_module._active_sessions[lock.session_id] = lock
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
     monkeypatch.setattr(rascontrol_module.psutil, "Process", FakeProcess)
     monkeypatch.setattr(
         rascontrol_module, "_remove_session_lock", lambda session_id: None
@@ -520,7 +770,7 @@ def test_cleanup_retains_session_evidence_when_process_survives(monkeypatch, tmp
     lock = _tracked_lock(tmp_path)
     lock_path = tmp_path / "session.lock"
     lock_path.write_text("evidence", encoding="utf-8")
-    rascontrol_module._active_sessions[lock.session_id] = lock
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
     monkeypatch.setattr(rascontrol_module.psutil, "Process", FakeProcess)
     monkeypatch.setattr(
         rascontrol_module,

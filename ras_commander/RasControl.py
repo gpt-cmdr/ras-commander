@@ -39,6 +39,7 @@ Session tracking infrastructure:
 """
 
 import hashlib
+import math
 import psutil
 import pandas as pd
 from pathlib import Path
@@ -841,6 +842,10 @@ class RasControl:
         operation_func: Callable[[Any], Any],
         *,
         strict_close: bool = False,
+        require_safe_close: bool = False,
+        close_outcome_callback: Optional[
+            Callable[[bool, _SessionCleanupResult, Optional[BaseException]], None]
+        ] = None,
     ) -> Any:
         """
         PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
@@ -849,6 +854,9 @@ class RasControl:
         Includes session tracking for robust cleanup on crashes/kernel restarts.
         When ``strict_close`` is True, a failed ``QuitRas()`` or a verified
         surviving owned process fails an otherwise successful operation.
+        ``require_safe_close`` is used by destructive execution workflows that
+        must not proceed unless Controller close or owned-process cleanup
+        positively establishes that no result writer survived.
         """
         # Normalize version (handles "7.0" → "7.0", "66" → "7.0", etc.)
         normalized_version = RasControl._normalize_version(version)
@@ -937,6 +945,19 @@ class RasControl:
 
             # Clean up session tracking (terminates only our tracked PID)
             cleanup_result = _cleanup_session(session_id)
+            close_safe = (
+                not cleanup_result.process_survived
+                and (
+                    close_error is None
+                    or cleanup_result.ras_pid is not None
+                )
+            )
+            if close_outcome_callback is not None:
+                close_outcome_callback(
+                    close_safe,
+                    cleanup_result,
+                    close_error,
+                )
 
             # Check if our specific process is still running
             if cleanup_result.process_survived:
@@ -949,13 +970,21 @@ class RasControl:
             else:
                 logger.debug("Session cleanup completed successfully")
 
-            if strict_close and operation_error is None:
+            if (strict_close or require_safe_close) and operation_error is None:
                 strict_errors = []
-                if close_error is not None:
+                if strict_close and close_error is not None:
                     strict_errors.append(f"QuitRas() failed: {close_error}")
-                if cleanup_result.process_survived:
+                if (
+                    (strict_close or require_safe_close)
+                    and cleanup_result.process_survived
+                ):
                     strict_errors.append(
                         f"owned ras.exe PID {cleanup_result.ras_pid} survived cleanup"
+                    )
+                elif require_safe_close and not close_safe:
+                    strict_errors.append(
+                        "Controller close and owned-process exit could not be "
+                        "confirmed"
                     )
                 if strict_errors:
                     raise RuntimeError("; ".join(strict_errors)) from close_error
@@ -989,8 +1018,10 @@ class RasControl:
                 terminate ras.exe if Python crashes/kernel restarts. Provides
                 protection against orphaned processes in Jupyter notebooks.
                 Defaults to True (recommended). Set to False to disable.
-            max_runtime: Maximum runtime in seconds before watchdog terminates the
-                process. Only used if use_watchdog=True. Defaults to 86400 (24 hours).
+            max_runtime: Maximum runtime in seconds. The nonblocking Controller
+                poll loop always enforces this deadline; when ``use_watchdog``
+                is enabled, the independent watchdog enforces it as well.
+                Defaults to 86400 (24 hours).
             refresh_results: Refresh ``plan_df`` and ``results_df`` after the
                 controller returns. Disable for compute-only validation when
                 detailed legacy result extraction is unnecessary. Defaults to True.
@@ -1002,9 +1033,11 @@ class RasControl:
                 Use ``"6.3.0.2"`` to select
                 ``RAS630.HECRASController`` while leaving the project's
                 executable family label unchanged.
-            strict_close: Raise if ``QuitRas()`` fails or an identified owned
-                ``ras.exe`` process survives cleanup after an otherwise
-                successful operation. Defaults to False for compatibility.
+            strict_close: Raise if ``QuitRas()`` fails after an otherwise
+                successful operation. An owned ``ras.exe`` process surviving
+                cleanup always fails plan execution, including in the default
+                non-strict mode. Defaults to False for compatibility with
+                recoverable ``QuitRas()`` failures.
 
         Returns:
             RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
@@ -1054,6 +1087,21 @@ class RasControl:
             HEC-RAS 3-4 preserves legacy .O##. Skipped runs do not mutate
             execution artifacts.
         """
+        if isinstance(max_runtime, bool) or not isinstance(
+            max_runtime, (int, float)
+        ):
+            raise ValueError("max_runtime must be a positive number of seconds")
+        try:
+            max_runtime_seconds = float(max_runtime)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds"
+            ) from exc
+        if not math.isfinite(max_runtime_seconds) or max_runtime_seconds <= 0:
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds"
+            )
+
         info = RasControl._get_project_info(plan, ras_object)
         _ras_obj = ras_object if ras_object is not None else ras
         if info.plan_number is None:
@@ -1146,6 +1194,16 @@ class RasControl:
         )
 
         if not force_recompute:
+            current_check_close_safe = False
+
+            def _record_current_check_close(
+                safe: bool,
+                _cleanup_result: _SessionCleanupResult,
+                _close_error: Optional[BaseException],
+            ) -> None:
+                nonlocal current_check_close_safe
+                current_check_close_safe = bool(safe)
+
             def _check_current(com_rc):
                 _set_current_plan(com_rc)
                 return bool(com_rc.PlanOutput_IsCurrent())
@@ -1156,8 +1214,15 @@ class RasControl:
                     info.project_path,
                     requested_controller_version,
                     _check_current,
+                    require_safe_close=True,
+                    close_outcome_callback=_record_current_check_close,
                     **close_kwargs,
                 )
+                if not current_check_close_safe:
+                    raise RuntimeError(
+                        "Could not confirm safe Controller close after the "
+                        "plan-currency check"
+                    )
                 if is_current and selected_result.is_file() and not opposing_result.is_file():
                     logger.info(
                         f"Plan {info.plan_number} results are current. "
@@ -1185,6 +1250,17 @@ class RasControl:
                         resolved_controller_version,
                     )
             except Exception as e:
+                if not current_check_close_safe:
+                    raise RuntimeError(
+                        "Could not confirm safe Controller close after the "
+                        "plan-currency check; computation was not started"
+                    ) from e
+                if strict_close:
+                    # The caller explicitly requested that any otherwise
+                    # successful COM session fail when QuitRas() fails. Do not
+                    # downgrade that close failure to the historical
+                    # PlanOutput_IsCurrent fallback and start a second session.
+                    raise
                 logger.warning(f"Could not check PlanOutput_IsCurrent(): {e}")
                 logger.warning("Proceeding with computation...")
 
@@ -1196,9 +1272,19 @@ class RasControl:
         logger.debug(f"Enabled Write Detailed= 1 for plan {info.plan_number}")
 
         calculation_attempted = False
+        solver_quiescence_confirmed = False
+        controller_close_safe = False
+
+        def _record_close_outcome(
+            safe: bool,
+            _cleanup_result: _SessionCleanupResult,
+            _close_error: Optional[BaseException],
+        ) -> None:
+            nonlocal controller_close_safe
+            controller_close_safe = bool(safe)
 
         def _run_operation(com_rc):
-            nonlocal calculation_attempted
+            nonlocal calculation_attempted, solver_quiescence_confirmed
             watchdog_pid = 0
 
             # Set current plan if we have plan_name (using plan number)
@@ -1217,7 +1303,7 @@ class RasControl:
                     watchdog_pid = _spawn_watchdog(
                         parent_pid=os.getpid(),
                         ras_pid=current_session.ras_pid,
-                        max_runtime=max_runtime,
+                        max_runtime=max_runtime_seconds,
                         lock_file_path=str(lock_file)
                     )
                 else:
@@ -1248,6 +1334,9 @@ class RasControl:
                         raise RuntimeError(
                             "Blocking Compute_CurrentPlan returned an unsupported result"
                         )
+                    # A valid blocking Controller return arrives only after the
+                    # calculation has stopped writing its result artifacts.
+                    solver_quiescence_confirmed = True
                     status = raw_compute[0]
                     controller_message_count = raw_compute[1]
                     messages = _normalize_messages(raw_compute[2])
@@ -1275,17 +1364,39 @@ class RasControl:
                 # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
                 logger.info("Waiting for computation to complete...")
                 poll_count = 0
+                completion_deadline = compute_started + max_runtime_seconds
                 while True:
                     try:
+                        remaining = completion_deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError(
+                                "HEC-RAS computation exceeded max_runtime="
+                                f"{max_runtime} seconds; solver quiescence "
+                                "was not confirmed and opposing result "
+                                "artifacts were preserved"
+                            )
+
                         # Check if computation is complete
                         is_complete = com_rc.Compute_Complete()
 
+                        # A Controller call can itself block. Do not credit a
+                        # late completion after the monotonic deadline.
+                        remaining = completion_deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError(
+                                "HEC-RAS computation exceeded max_runtime="
+                                f"{max_runtime} seconds; solver quiescence "
+                                "was not confirmed and opposing result "
+                                "artifacts were preserved"
+                            )
+
                         if is_complete:
                             logger.info(f"Computation completed (polled {poll_count} times)")
+                            solver_quiescence_confirmed = True
                             break
 
                         # Still computing - wait and poll again
-                        time.sleep(1)  # Poll every second
+                        time.sleep(min(1.0, remaining))
                         poll_count += 1
 
                         # Log progress every 30 seconds
@@ -1296,10 +1407,14 @@ class RasControl:
                                 max_runtime,
                             )
 
+                    except TimeoutError:
+                        raise
                     except Exception as e:
                         logger.error(f"Error checking completion status: {e}")
-                        # If we can't check status, break and hope for the best
-                        break
+                        raise RuntimeError(
+                            "Could not confirm HEC-RAS solver quiescence; "
+                            "opposing result artifacts were preserved"
+                        ) from e
 
                 return status, messages, _execution_details(
                     'poll',
@@ -1321,18 +1436,35 @@ class RasControl:
                 info.project_path,
                 requested_controller_version,
                 _run_operation,
+                require_safe_close=True,
+                close_outcome_callback=_record_close_outcome,
                 **close_kwargs,
             )
+            if not solver_quiescence_confirmed or not controller_close_safe:
+                raise RuntimeError(
+                    "Plan execution did not establish solver quiescence and "
+                    "a safe Controller close"
+                )
         finally:
             # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
             # the selected engine's output family after the controller closes.
-            if calculation_attempted:
+            if (
+                calculation_attempted
+                and solver_quiescence_confirmed
+                and controller_close_safe
+            ):
                 finalize_plan_execution_artifacts(
                     info.plan_number,
                     output_format=execution_result_format,
                     ras_object=_ras_obj,
                     project_folder=info.project_path.parent,
                     project_name=info.project_path.stem,
+                )
+            elif calculation_attempted:
+                logger.warning(
+                    "Preserving opposing result artifacts for plan %s because "
+                    "solver quiescence or safe Controller close was not confirmed",
+                    info.plan_number,
                 )
 
         # Wrap tuple result into RasControlResult with results_df_row

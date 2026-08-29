@@ -89,10 +89,12 @@ assert result.execution_details["watchdog_started"] is False
 `Compute_Complete()`. `use_watchdog=False` is intended only when an outer batch
 supervisor already owns the process tree and hard timeout. `strict_close=True`
 makes a `QuitRas()` failure or a verified surviving owned `ras.exe` process
-fail the operation instead of logging only a warning. If the internal watchdog
-is requested but PID detection fails, `watchdog_started` is `False` and
-`max_runtime` is not enforced; batch callers must inspect that field or provide
-an outer supervisor. The default values preserve existing interactive behavior.
+fail the operation instead of logging only a warning. For blocking execution,
+if the internal watchdog is requested but PID detection fails,
+`watchdog_started` is `False` and `max_runtime` is not enforced; batch callers
+must inspect that field or provide an outer supervisor. The nonblocking poll
+loop enforces `max_runtime` independently of watchdog startup. The default
+values preserve existing interactive behavior.
 
 `execution_details` contains JSON-safe provenance. Its stable common keys are
 `requested_controller_version`, `resolved_controller_version`,

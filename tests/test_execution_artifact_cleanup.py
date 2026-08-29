@@ -97,6 +97,26 @@ def _patch_compute_scaffolding(monkeypatch, ras_obj: _ComputeRas) -> None:
     )
 
 
+def _fake_safe_com_open_close(controller):
+    """Run a fake Controller operation and report a positively safe close."""
+
+    def open_close(
+        _path,
+        _version,
+        operation,
+        *,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        try:
+            return operation(controller)
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, SimpleNamespace(), None)
+
+    return open_close
+
+
 def test_modern_compute_removes_legacy_before_and_after_run(
     tmp_path: Path,
     monkeypatch,
@@ -827,7 +847,7 @@ def test_rascontrol_current_but_ambiguous_plan_reruns_and_normalizes(
     monkeypatch.setattr(
         RasControl,
         "_com_open_close",
-        staticmethod(lambda _path, _version, operation: operation(controller)),
+        staticmethod(_fake_safe_com_open_close(controller)),
     )
 
     result = RasControl.run_plan(
@@ -875,7 +895,7 @@ def test_rascontrol_current_single_result_skip_preserves_plan_bytes(
     monkeypatch.setattr(
         RasControl,
         "_com_open_close",
-        staticmethod(lambda _path, _version, operation: operation(controller)),
+        staticmethod(_fake_safe_com_open_close(controller)),
     )
 
     result = RasControl.run_plan(
@@ -887,6 +907,76 @@ def test_rascontrol_current_single_result_skip_preserves_plan_bytes(
 
     assert result.success is True
     assert plan_path.read_bytes() == original_plan_bytes
+
+
+@pytest.mark.parametrize("strict_close", [False, True])
+def test_rascontrol_current_check_surviving_process_is_not_a_successful_skip(
+    tmp_path: Path,
+    monkeypatch,
+    strict_close: bool,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / f"control-skip-survivor-{strict_close}", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    plan_path = ras_obj.project_folder / "Model.p01"
+    original_plan_bytes = plan_path.read_bytes()
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    hdf.write_bytes(b"current hdf")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def PlanOutput_IsCurrent(self):
+            return True
+
+    def unsafe_open_close(
+        _path,
+        _version,
+        operation,
+        *,
+        close_outcome_callback=None,
+        require_safe_close=False,
+        **_kwargs,
+    ):
+        result = operation(Controller())
+        if close_outcome_callback is not None:
+            close_outcome_callback(
+                False,
+                SimpleNamespace(process_survived=True, ras_pid=4321),
+                None,
+            )
+        if require_safe_close:
+            raise RuntimeError("owned ras.exe PID 4321 survived cleanup")
+        return result
+
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(
+            lambda *_args, **_kwargs: pytest.fail(
+                "unsafe currency close must not proceed to computation"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(unsafe_open_close),
+    )
+
+    with pytest.raises(RuntimeError, match="computation was not started"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            use_watchdog=False,
+            refresh_results=False,
+            strict_close=strict_close,
+        )
+
+    assert plan_path.read_bytes() == original_plan_bytes
+    assert hdf.read_bytes() == b"current hdf"
 
 
 def test_rascontrol_com_activation_failure_preserves_both_result_families(
@@ -930,6 +1020,290 @@ def test_rascontrol_com_activation_failure_preserves_both_result_families(
     assert legacy.read_bytes() == b"legacy"
 
 
+def test_rascontrol_compute_complete_failure_preserves_recreated_opposing_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / "control-completion-unknown", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            assert not legacy.exists()
+            hdf.write_bytes(b"possibly incomplete hdf")
+            legacy.write_bytes(b"possibly active legacy writer")
+            return True, 0, ["Computing"], 0
+
+        def Compute_Complete(self):
+            raise OSError("completion status unavailable")
+
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(_fake_safe_com_open_close(Controller())),
+    )
+
+    with pytest.raises(RuntimeError, match="Could not confirm HEC-RAS solver quiescence"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"possibly incomplete hdf"
+    assert legacy.read_bytes() == b"possibly active legacy writer"
+
+
+def test_rascontrol_compute_failure_preserves_recreated_opposing_output(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / "control-compute-failure", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            assert not legacy.exists()
+            hdf.write_bytes(b"partial hdf")
+            legacy.write_bytes(b"possibly active legacy writer")
+            raise OSError("compute dispatch failed")
+
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(_fake_safe_com_open_close(Controller())),
+    )
+
+    with pytest.raises(OSError, match="compute dispatch failed"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"partial hdf"
+    assert legacy.read_bytes() == b"possibly active legacy writer"
+
+
+@pytest.mark.parametrize("strict_close", [False, True])
+def test_rascontrol_surviving_owned_process_preserves_opposing_output(
+    tmp_path: Path,
+    monkeypatch,
+    strict_close: bool,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / f"control-survivor-{strict_close}", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            assert not legacy.exists()
+            hdf.write_bytes(b"complete hdf")
+            legacy.write_bytes(b"owned process may still write")
+            return True, 0, ["Complete Process"], 0
+
+        def Compute_Complete(self):
+            return True
+
+    def unsafe_open_close(
+        _path,
+        _version,
+        operation,
+        *,
+        close_outcome_callback=None,
+        require_safe_close=False,
+        **_kwargs,
+    ):
+        result = operation(Controller())
+        if close_outcome_callback is not None:
+            close_outcome_callback(
+                False,
+                SimpleNamespace(process_survived=True, ras_pid=4321),
+                None,
+            )
+        if require_safe_close:
+            raise RuntimeError("owned ras.exe PID 4321 survived cleanup")
+        return result
+
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(unsafe_open_close),
+    )
+
+    with pytest.raises(RuntimeError, match="owned ras.exe PID 4321 survived"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+            strict_close=strict_close,
+        )
+
+    assert hdf.read_bytes() == b"complete hdf"
+    assert legacy.read_bytes() == b"owned process may still write"
+
+
+@pytest.mark.parametrize("use_watchdog", [False, True])
+def test_rascontrol_nonblocking_deadline_preserves_opposing_output(
+    tmp_path: Path,
+    monkeypatch,
+    use_watchdog: bool,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / f"control-timeout-{use_watchdog}", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            assert not legacy.exists()
+            hdf.write_bytes(b"partial hdf")
+            legacy.write_bytes(b"possibly active writer")
+            return True, 0, ["Computing"], 0
+
+        def Compute_Complete(self):
+            return False
+
+    monotonic_values = iter([100.0, 101.0])
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(_fake_safe_com_open_close(Controller())),
+    )
+    monkeypatch.setattr(
+        importlib.import_module("ras_commander.RasControl").time,
+        "monotonic",
+        lambda: next(monotonic_values),
+    )
+
+    with pytest.raises(TimeoutError, match="exceeded max_runtime"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=use_watchdog,
+            max_runtime=0.5,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"partial hdf"
+    assert legacy.read_bytes() == b"possibly active writer"
+
+
+def test_rascontrol_nonblocking_deadline_rejects_late_complete_poll(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from ras_commander.RasBco import BcoMonitor
+
+    ras_obj = _write_project(tmp_path / "control-late-complete", "6.60")
+    ras_obj.plan_df["Plan Title"] = ["Base"]
+    hdf = ras_obj.project_folder / "Model.p01.hdf"
+    legacy = ras_obj.project_folder / "Model.O01"
+    legacy.write_bytes(b"stale legacy")
+
+    class Controller:
+        def Plan_SetCurrent(self, _name):
+            return None
+
+        def Compute_CurrentPlan(self, *_args):
+            assert not legacy.exists()
+            hdf.write_bytes(b"late hdf")
+            legacy.write_bytes(b"late legacy")
+            return True, 0, ["Complete Process"], 0
+
+        def Compute_Complete(self):
+            return True
+
+    # Compute starts at 100.0 and enters its first poll at 100.1, but the COM
+    # poll only returns after the 100.5 deadline. A late True is not proof that
+    # the solver completed within the permitted runtime.
+    monotonic_values = iter([100.0, 100.1, 101.0])
+    monkeypatch.setattr(
+        BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasControl,
+        "_com_open_close",
+        staticmethod(_fake_safe_com_open_close(Controller())),
+    )
+    monkeypatch.setattr(
+        importlib.import_module("ras_commander.RasControl").time,
+        "monotonic",
+        lambda: next(monotonic_values),
+    )
+
+    with pytest.raises(TimeoutError, match="exceeded max_runtime"):
+        RasControl.run_plan(
+            "01",
+            ras_object=ras_obj,
+            force_recompute=True,
+            use_watchdog=False,
+            max_runtime=0.5,
+            refresh_results=False,
+        )
+
+    assert hdf.read_bytes() == b"late hdf"
+    assert legacy.read_bytes() == b"late legacy"
+
+
 def test_rascontrol_modern_run_normalizes_recreated_legacy_output(
     tmp_path: Path,
     monkeypatch,
@@ -971,7 +1345,7 @@ def test_rascontrol_modern_run_normalizes_recreated_legacy_output(
     monkeypatch.setattr(
         RasControl,
         "_com_open_close",
-        staticmethod(lambda _path, _version, operation: operation(controller)),
+        staticmethod(_fake_safe_com_open_close(controller)),
     )
 
     result = RasControl.run_plan(

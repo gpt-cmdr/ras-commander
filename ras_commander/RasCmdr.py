@@ -37,6 +37,7 @@ List of Functions in RasCmdr:
         
 """
 import logging
+import ntpath
 import os
 import shlex
 import shutil
@@ -643,30 +644,15 @@ class RasCmdr:
             return False
 
         try:
-            needle = str(tmp_hdf_path).replace("'", "''")
-            ps_command = (
-                f"$needle = '{needle}'; "
-                "$proc = Get-CimInstance Win32_Process "
-                "-Filter \"Name='RasUnsteady.exe'\" | "
-                "Where-Object { $_.CommandLine -like \"*$needle*\" } | "
-                "Select-Object -First 1 -ExpandProperty ProcessId; "
-                "if ($proc) { Write-Output $proc }"
+            import psutil
+
+            processes = psutil.process_iter(
+                ["pid", "name", "cmdline", "cwd"]
             )
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps_command],
-                capture_output=True,
-                text=True,
-                timeout=5,
+            return RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+                tmp_hdf_path,
+                processes,
             )
-            if result.returncode != 0:
-                logger.warning(
-                    "Could not establish RasUnsteady process state for %s: "
-                    "PowerShell query exited with code %s",
-                    tmp_hdf_path.name,
-                    result.returncode,
-                )
-                return None
-            return bool(result.stdout.strip())
         except Exception as exc:
             logger.debug(
                 "Could not query RasUnsteady process state for %s: %s",
@@ -674,6 +660,119 @@ class RasCmdr:
                 exc,
             )
             return None
+
+    @staticmethod
+    def _rasunsteady_processes_reference_tmp_hdf(
+        tmp_hdf_path: Path,
+        processes,
+    ) -> Optional[bool]:
+        """Match a solver to one tmp HDF without wildcard path comparison.
+
+        ``psutil`` supplies already-tokenized command lines and process working
+        directories. File-identity comparison therefore handles mapped/UNC,
+        short/long, and symlink spellings when both paths are accessible. Any
+        relevant access, parsing, or identity uncertainty returns ``None`` so
+        callers cannot mistake an unproven nonmatch for solver quiescence.
+        """
+        import psutil
+
+        target_path = Path(tmp_hdf_path)
+        target_text = os.path.normcase(os.path.abspath(str(target_path)))
+        uncertain = False
+
+        try:
+            for process in processes:
+                try:
+                    info = process.info
+                    raw_name = info.get("name")
+                    name = str(raw_name or "").casefold()
+                    cmdline = info.get("cmdline")
+                    if name != "rasunsteady.exe" and not raw_name:
+                        if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                            uncertain = True
+                            continue
+                        raw_executable = cmdline[0]
+                        if not isinstance(raw_executable, (str, os.PathLike)):
+                            uncertain = True
+                            continue
+                        executable = os.fspath(raw_executable).strip()
+                        if (
+                            len(executable) >= 2
+                            and executable[0] == '"'
+                            and executable[-1] == '"'
+                        ):
+                            executable = executable[1:-1]
+                        if not executable:
+                            uncertain = True
+                            continue
+                        # RasUnsteady is Windows-only. Use Windows basename
+                        # rules even when this helper is exercised by tests on
+                        # another host OS.
+                        name = ntpath.basename(executable).casefold()
+                    if name != "rasunsteady.exe":
+                        continue
+
+                    if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                        uncertain = True
+                        continue
+
+                    cwd = info.get("cwd")
+                    found_tmp_argument = False
+                    process_uncertain = False
+
+                    for raw_argument in cmdline:
+                        if not isinstance(raw_argument, (str, os.PathLike)):
+                            process_uncertain = True
+                            continue
+                        argument = os.fspath(raw_argument).strip()
+                        if (
+                            len(argument) >= 2
+                            and argument[0] == '"'
+                            and argument[-1] == '"'
+                        ):
+                            argument = argument[1:-1]
+                        if not argument.casefold().endswith(".tmp.hdf"):
+                            continue
+
+                        found_tmp_argument = True
+                        candidate = Path(argument)
+                        if not candidate.is_absolute():
+                            if not cwd:
+                                process_uncertain = True
+                                continue
+                            candidate = Path(cwd) / candidate
+
+                        candidate_text = os.path.normcase(
+                            os.path.abspath(str(candidate))
+                        )
+                        if candidate_text == target_text:
+                            return True
+
+                        try:
+                            if os.path.samefile(candidate, target_path):
+                                return True
+                        except (OSError, ValueError, TypeError):
+                            # A path alias may be equivalent even when one
+                            # spelling cannot currently be opened. That is not
+                            # evidence that the solver is unrelated.
+                            process_uncertain = True
+
+                    if not found_tmp_argument or process_uncertain:
+                        uncertain = True
+                except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                    # A process that vanished during enumeration is stopped.
+                    continue
+                except (psutil.AccessDenied, OSError, ValueError, TypeError):
+                    uncertain = True
+        except Exception as exc:
+            logger.debug(
+                "RasUnsteady process enumeration became uncertain for %s: %s",
+                target_path.name,
+                exc,
+            )
+            return None
+
+        return None if uncertain else False
 
     @staticmethod
     def _terminate_launched_process_tree(process: subprocess.Popen) -> None:
