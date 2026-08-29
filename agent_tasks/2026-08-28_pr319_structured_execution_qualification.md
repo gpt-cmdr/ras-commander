@@ -614,3 +614,24 @@ complete.
   evidence, WSL, and promotion tests plus 121 live harness tests. No HEC-RAS,
   COM, or process-signalling action occurred. The earlier unexecuted manifest
   pinned to `5feae3d8` is superseded and must not be dispatched.
+- 2026-08-29: the first approved L0 dispatch attempt used manifest campaign
+  `99860d39-cb16-430c-beaf-14ce9123ddd1`, pinned to clean commit `31c19acd`,
+  and selected only lane `steady_1d__6_6__l0`. It failed closed while trying
+  to publish `request.json`: resolving the mapped H: archive path to UNC made
+  the attempt directory 237 characters and the old destination-derived atomic
+  temporary name 264 characters. No request or worker authorization was
+  published; no project was staged; no HEC-RAS, COM, or process-signalling
+  action occurred. A strict post-failure inventory was complete and empty, the
+  host-lock directory was empty, the source remained unchanged, and the empty
+  failed attempt directory is retained as prelaunch evidence. This manifest is
+  superseded and must not be resumed.
+- 2026-08-29: receipt publication now uses a short fixed temporary prefix in
+  the same destination directory, preserving the existing atomic hard-link and
+  replacement semantics without repeating long destination basenames. A real
+  filesystem boundary regression exercises both modes with the longest live
+  handshake record: its final digest is 259 characters while every atomic
+  temporary is 247 characters. The focused receipt suite passed 17 tests, the
+  complete qualification suite passed 269 tests, and Ruff and diff checks
+  passed. The replacement live manifest will use one UUID level beneath each
+  approved archive/execution root; no additional campaign directory or
+  `archive-run` component will consume the Windows path budget.

@@ -35,6 +35,97 @@ def test_json_digest_round_trip_is_canonical_and_immutable(tmp_path: Path) -> No
         write_json_with_digest(path, payload)
 
 
+def test_near_max_path_records_use_bounded_same_directory_atomic_temps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep request and longest live-record paths below legacy MAX_PATH."""
+    receipts_module = __import__(
+        "scripts.qualification.execution_evidence.receipts",
+        fromlist=["os", "tempfile"],
+    )
+    absolute_root = Path(receipts_module.os.path.abspath(tmp_path))
+    longest_record = Path("worker-authorization.json")
+    longest_digest = longest_record.with_suffix(".sha256")
+    attempt_length = 259 - 1 - len(longest_digest.name)
+    padding_length = attempt_length - len(str(absolute_root)) - 1
+    assert 0 < padding_length <= 255
+    attempt = absolute_root / ("p" * padding_length)
+    attempt.mkdir()
+    assert len(str(attempt)) == attempt_length
+
+    temporary_paths: list[Path] = []
+    link_destinations: list[Path] = []
+    replace_destinations: list[Path] = []
+    original_mkstemp = receipts_module.tempfile.mkstemp
+    original_link = receipts_module.os.link
+    original_replace = receipts_module.os.replace
+
+    def recording_mkstemp(*args, **kwargs):
+        descriptor, name = original_mkstemp(*args, **kwargs)
+        temporary_paths.append(Path(name))
+        return descriptor, name
+
+    def recording_link(source, destination):
+        source_path = Path(source)
+        destination_path = Path(destination)
+        assert source_path.parent == destination_path.parent
+        link_destinations.append(destination_path)
+        return original_link(source, destination)
+
+    def recording_replace(source, destination):
+        source_path = Path(source)
+        destination_path = Path(destination)
+        assert source_path.parent == destination_path.parent
+        replace_destinations.append(destination_path)
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(receipts_module.tempfile, "mkstemp", recording_mkstemp)
+    monkeypatch.setattr(receipts_module.os, "link", recording_link)
+    monkeypatch.setattr(receipts_module.os, "replace", recording_replace)
+
+    request_path = attempt / "request.json"
+    request_digest = write_json_with_digest(request_path, {"value": "request"})
+    longest_path = attempt / longest_record
+    first_longest_digest = write_json_with_digest(longest_path, {"value": "first"})
+    second_longest_digest = write_json_with_digest(
+        longest_path,
+        {"value": "replacement"},
+        replace=True,
+    )
+
+    assert len(str(request_path)) == 244
+    assert len(str(request_path.with_suffix(".sha256"))) == 246
+    assert len(str(longest_path)) == 257
+    assert len(str(longest_path.with_suffix(".sha256"))) == 259
+    assert {len(str(path)) for path in temporary_paths} == {247}
+    assert all(path.parent == attempt for path in temporary_paths)
+    assert all(path.name.startswith(".q-") for path in temporary_paths)
+    assert all(path.name.endswith(".tmp") for path in temporary_paths)
+    assert all(len(str(path)) < 260 for path in temporary_paths)
+
+    assert set(link_destinations) == {
+        request_path,
+        request_path.with_suffix(".sha256"),
+        longest_path,
+        longest_path.with_suffix(".sha256"),
+    }
+    assert set(replace_destinations) == {
+        longest_path,
+        longest_path.with_suffix(".sha256"),
+    }
+    assert read_json_with_digest(request_path) == (
+        {"value": "request"},
+        request_digest,
+    )
+    assert read_json_with_digest(longest_path) == (
+        {"value": "replacement"},
+        second_longest_digest,
+    )
+    assert second_longest_digest != first_longest_digest
+    assert not any(path.exists() for path in temporary_paths)
+
+
 def test_digest_tampering_is_detected(tmp_path: Path) -> None:
     path = tmp_path / "record.json"
     write_json_with_digest(path, {"value": 1})

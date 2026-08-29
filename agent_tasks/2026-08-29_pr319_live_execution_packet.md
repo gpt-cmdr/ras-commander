@@ -2,10 +2,11 @@
 
 Date: 2026-08-29
 
-Status: approved scope and deterministic design gates complete; the unexecuted
-`5feae3d8` preflight manifest is superseded by later safety fixes. Live dispatch
-is held until those fixes are committed, a new exact manifest pins the resulting
-clean commit, and the strict under-lock host inventory is complete and empty.
+Status: approved scope and deterministic design gates complete. The unexecuted
+`5feae3d8` preflight manifest and the prelaunch-failed `31c19acd` manifest are
+both superseded. Live dispatch is held until the Windows receipt-path correction
+is committed, a new exact manifest pins the resulting clean commit, and the
+strict under-lock host inventory is complete and empty.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -63,8 +64,30 @@ attempt.
   `%LOCALAPPDATA%/ras-commander/qualification-locks/`
 
 Each campaign receives a new UUID execution root and a new archive run root.
-An attempt always receives a new UUID stage. Failed, timed-out, or interrupted
-attempts are retained and never resumed in place.
+The UUID is the direct child of each approved root; an additional campaign UUID
+or `archive-run` directory must not be inserted. This layout leaves the longest
+known UNC archive record (`worker-authorization.sha256` for the longest lane)
+at 257 characters, below the tested 259-character boundary. An attempt always
+receives a new UUID stage. Failed, timed-out, or interrupted attempts are
+retained and never resumed in place.
+
+### Prelaunch path-boundary finding
+
+The first approved single-lane pilot selected `steady_1d__6_6__l0` from
+campaign `99860d39-cb16-430c-beaf-14ce9123ddd1`. It generated no simulation
+dataset. Before staging or worker launch, atomic `request.json` publication
+failed because the mapped archive path expanded to a 237-character UNC attempt
+directory and the former destination-derived temporary name reached 264
+characters. The retained attempt directory contains no request. A strict
+post-failure process inventory was complete and empty, the host-lock directory
+was empty, and no HEC-RAS, COM, cancellation, or process signal occurred.
+
+The correction retains same-directory atomic publication but uses a bounded
+`.q-` temporary prefix. Regression coverage writes the request and the longest
+worker-authorization record in immutable and replacement modes: the longest
+final digest is 259 characters and every temporary path is 247. The replacement
+campaign must pin the commit containing this correction and use the flattened
+root layout above; the failed campaign must never be resumed.
 
 ## Immutable project anchors
 

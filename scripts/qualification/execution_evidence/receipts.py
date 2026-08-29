@@ -39,6 +39,7 @@ class VerifiedAttempt:
 _LOWER_HEX = frozenset("0123456789abcdef")
 _SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _INVARIANT_RE = re.compile(r"R(?:0[1-9]|1[0-2])")
+_ATOMIC_TEMP_PREFIX = ".q-"
 
 
 def _require_utc_timestamp(value: Any, label: str) -> datetime:
@@ -73,8 +74,14 @@ def _write_bytes_atomic(path: Path, contents: bytes, *, replace: bool) -> None:
         assert_plain_ancestry(path.parent)
     except (OSError, SnapshotError) as exc:
         raise ReceiptError(f"record path is not a plain filesystem path: {path}") from exc
+    # Keep the temporary basename independent of the destination basename.
+    # Qualification attempts can sit close to legacy Windows MAX_PATH after a
+    # mapped drive is expanded to its UNC spelling. Repeating destination names
+    # such as ``worker-authorization.sha256`` made temporary paths needlessly
+    # longer. A fixed prefix preserves same-directory atomicity
+    # while bounding every temporary basename to 15 characters on CPython.
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        prefix=_ATOMIC_TEMP_PREFIX, suffix=".tmp", dir=path.parent
     )
     temporary = Path(temporary_name)
     try:
