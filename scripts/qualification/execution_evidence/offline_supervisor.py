@@ -101,7 +101,7 @@ def _request_source_snapshot(
     source_project: Path,
 ) -> Any:
     fixture = select_lane(context, lane_id)[1]
-    return snapshot_tree(
+    snapshot = snapshot_tree(
         source_project.parent,
         run_id=context.descriptor["run_id"],
         lane_id=lane_id,
@@ -111,6 +111,16 @@ def _request_source_snapshot(
         data_origin=fixture["data_origin"],
         known_paths=known_result_paths(source_project, fixture["plan_number"]),
     )
+    if (
+        snapshot.fingerprint_algorithm
+        != fixture["source_content_fingerprint_algorithm"]
+        or snapshot.content_fingerprint
+        != fixture["source_content_fingerprint"]
+    ):
+        raise OfflineSupervisorError(
+            f"qualification source fingerprint pin changed before lane {lane_id}"
+        )
+    return snapshot
 
 
 def create_attempt_request(
@@ -191,6 +201,9 @@ def create_attempt_request(
         "engine": engine,
         "required_invariants": required_invariants,
         "source_project": str(source_project),
+        "source_snapshot_content_fingerprint_algorithm": (
+            source_snapshot.fingerprint_algorithm
+        ),
         "source_snapshot_content_fingerprint": source_snapshot.content_fingerprint,
         "source_snapshot_metadata_fingerprint": source_snapshot.metadata_fingerprint,
         "source_hdf_exists": source_hdf,
@@ -234,7 +247,9 @@ def _synthesize_failure_receipt(
         known_paths=known_paths,
     )
     source_immutable = (
-        source_after.content_fingerprint
+        source_after.fingerprint_algorithm
+        == request["source_snapshot_content_fingerprint_algorithm"]
+        and source_after.content_fingerprint
         == request["source_snapshot_content_fingerprint"]
         and source_after.metadata_fingerprint
         == request["source_snapshot_metadata_fingerprint"]

@@ -1,4 +1,4 @@
-"""No-engine CLI for manifest and receipt qualification foundations."""
+"""Qualification CLI for offline evidence and gated live orchestration."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .aggregate import aggregate_run, verify_run
+from .live_cli import add_live_subcommands, dispatch_live
 from .manifest import load_and_normalize_manifest
 from .offline_cli import add_offline_subcommands, dispatch_offline
 from .receipts import write_json_with_digest
@@ -18,8 +19,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="execution-evidence-qualification",
         description=(
-            "Validate qualification manifests and rebuild verified receipt aggregates. "
-            "This pre-engine CLI cannot execute HEC-RAS."
+            "Validate manifests, run process-isolated qualification phases, and "
+            "rebuild verified receipt aggregates. Live execution requires explicit "
+            "acknowledgement and complete structured safety evidence."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -47,6 +49,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     report.add_argument("--run-root", required=True, type=Path)
     add_offline_subcommands(subparsers)
+    add_live_subcommands(subparsers)
     return parser
 
 
@@ -55,6 +58,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     offline_result = dispatch_offline(args)
     if offline_result is not None:
         return offline_result
+    live_result = dispatch_live(args)
+    if live_result is not None:
+        return live_result
     if args.command == "validate":
         normalized = load_and_normalize_manifest(args.manifest)
         normalized_file_sha256 = None

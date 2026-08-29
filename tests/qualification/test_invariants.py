@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from ras_commander.RasProject import STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+from scripts.qualification.execution_evidence.fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from scripts.qualification.execution_evidence.invariants import evaluate_invariants
 from scripts.qualification.execution_evidence.schemas import table_from_rows
 
@@ -49,11 +53,22 @@ def _passing_facts() -> dict:
             "stable_hashes": True,
         },
         "source_fingerprints": {
+            "fingerprint_algorithm": (
+                QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+            ),
             "before_content": "e",
             "after_content": "e",
             "before_metadata": "f",
             "after_metadata": "f",
         },
+        "expected_source_fingerprint_algorithm": (
+            QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+        ),
+        "expected_source_content_fingerprint": "e",
+        "stage_fingerprint_algorithm": STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
+        "stage_source_fingerprint_before": "stage",
+        "stage_source_fingerprint_after": "stage",
+        "stage_copied_fingerprint": "stage",
         "remaining_owned_processes": [],
     }
 
@@ -87,23 +102,35 @@ def test_content_drift_fails_read_only_and_source_invariants() -> None:
     assert statuses == {"R01": "fail", "R11": "fail"}
 
 
-def test_pinned_source_must_match_source_and_both_stage_project_fingerprints() -> None:
+def test_pinned_source_and_stage_project_fingerprint_namespaces_are_independent() -> None:
     facts = _passing_facts()
     facts["source_fingerprints"] = {
+        "fingerprint_algorithm": QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
         "before_content": "pinned",
         "after_content": "pinned",
         "before_metadata": "metadata",
         "after_metadata": "metadata",
     }
     facts["expected_source_content_fingerprint"] = "pinned"
-    facts["stage_source_fingerprint_before"] = "pinned"
-    facts["stage_source_fingerprint_after"] = "pinned"
+    facts["stage_source_fingerprint_before"] = "stage"
+    facts["stage_source_fingerprint_after"] = "stage"
+    facts["stage_copied_fingerprint"] = "stage"
     assert evaluate_invariants(facts, required=["R11"])[0].status == "pass"
 
     facts["stage_source_fingerprint_after"] = "drifted"
     failed = evaluate_invariants(facts, required=["R11"])[0]
     assert failed.status == "fail"
     assert failed.reason_code == "source_drift"
+
+    facts["stage_source_fingerprint_after"] = "stage"
+    facts["source_fingerprints"]["before_content"] = "unpinned"
+    assert evaluate_invariants(facts, required=["R11"])[0].status == "fail"
+
+    facts = _passing_facts()
+    facts["stage_fingerprint_algorithm"] = (
+        QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+    )
+    assert evaluate_invariants(facts, required=["R11"])[0].status == "fail"
 
 
 def test_required_filter_is_deterministic_and_rejects_unknown_ids() -> None:

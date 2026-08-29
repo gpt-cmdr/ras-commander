@@ -170,6 +170,9 @@ def lane_row(
         "plan_number": fixture["plan_number"],
         "source_kind": fixture["source_kind"],
         "source_project": request["source_project"],
+        "source_content_fingerprint_algorithm": request[
+            "source_snapshot_content_fingerprint_algorithm"
+        ],
         "source_content_fingerprint": request["source_snapshot_content_fingerprint"],
         "stage_project": stage_project_file,
         "execution_api": engine["execution_api"],

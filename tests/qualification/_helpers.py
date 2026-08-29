@@ -3,6 +3,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from scripts.qualification.execution_evidence.fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from scripts.qualification.execution_evidence.receipts import write_json_with_digest
 
 
@@ -37,6 +40,9 @@ def valid_table_rows(
         "plan_number": "01",
         "source_kind": "project_file",
         "source_project": "C:/source/Model.prj",
+        "source_content_fingerprint_algorithm": (
+            QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+        ),
         "source_content_fingerprint": HASH_B,
         "stage_project": "C:/stage/Model.prj",
         "execution_api": "ras_cmdr",
@@ -89,6 +95,7 @@ def valid_table_rows(
         "file_id": "2",
         "sha256": HASH_A,
         "stable_read": True,
+        "fingerprint_algorithm": QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
         "content_fingerprint": HASH_A,
         "metadata_fingerprint": HASH_B,
         "reason_code": "stable_file_hashed",

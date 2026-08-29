@@ -18,6 +18,9 @@ from typing import Any, Mapping, Sequence
 import psutil
 import pyarrow
 
+from .fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from .manifest import canonical_sha256
 from .offline_records import (
     available_value,
@@ -238,12 +241,22 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         known_paths=known_paths,
     )
     if (
-        source_before.content_fingerprint
+        source_before.fingerprint_algorithm
+        != request["source_snapshot_content_fingerprint_algorithm"]
+        or source_before.fingerprint_algorithm
+        != request["fixture"]["source_content_fingerprint_algorithm"]
+        or source_before.fingerprint_algorithm
+        != QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+        or source_before.content_fingerprint
         != request["source_snapshot_content_fingerprint"]
+        or source_before.content_fingerprint
+        != request["fixture"]["source_content_fingerprint"]
         or source_before.metadata_fingerprint
         != request["source_snapshot_metadata_fingerprint"]
     ):
-        raise OfflineWorkerError("source changed after request publication")
+        raise OfflineWorkerError(
+            "qualification source fingerprint gate failed before staging"
+        )
     events.append(
         phase="source",
         event_name="source_verified",
@@ -255,6 +268,7 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         RasCmdr,
         RasPrj,
         ResultArtifactAmbiguityError,
+        STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
         init_ras_project,
         stage_project,
     )
@@ -264,14 +278,14 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
     stage_project_relative = stage_result.destination_project_file.relative_to(
         stage_result.destination_root
     ).as_posix()
-    expected_stage_fingerprint = request["fixture"].get("source_content_fingerprint")
+    expected_source_fingerprint = request["fixture"]["source_content_fingerprint"]
     stage_source_valid = (
-        stage_result.source_fingerprint_before
+        stage_result.publication_state == "published"
+        and stage_result.fingerprint_algorithm
+        == STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+        and stage_result.source_fingerprint_before
         == stage_result.source_fingerprint_after
-        and (
-            expected_stage_fingerprint is None
-            or stage_result.source_fingerprint_before == expected_stage_fingerprint
-        )
+        == stage_result.copied_fingerprint
     )
     if not stage_source_valid:
         raise OfflineWorkerError("public stage_project source fingerprint gate failed")
@@ -415,8 +429,12 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         known_paths=known_paths,
     )
     source_immutable = (
-        source_before.content_fingerprint == source_final.content_fingerprint
+        source_before.fingerprint_algorithm
+        == source_final.fingerprint_algorithm
+        == request["fixture"]["source_content_fingerprint_algorithm"]
+        and source_before.content_fingerprint == source_final.content_fingerprint
         and source_before.metadata_fingerprint == source_final.metadata_fingerprint
+        and source_before.content_fingerprint == expected_source_fingerprint
     )
     inspect_read_only = (
         stage_before.content_fingerprint == stage_after.content_fingerprint
@@ -450,14 +468,28 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
             name="Source immutability",
             passed=source_immutable and stage_source_valid,
             expected={
+                "qualification_fingerprint_algorithm": request["fixture"][
+                    "source_content_fingerprint_algorithm"
+                ],
+                "qualification_source_fingerprint": expected_source_fingerprint,
                 "source_snapshot": "unchanged",
-                "stage_project_source_fingerprint": expected_stage_fingerprint,
+                "stage_project_fingerprint_algorithm": (
+                    STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+                ),
+                "stage_project_fingerprint_chain": "before == after == copied",
             },
             observed={
+                "qualification_fingerprint_algorithm": (
+                    source_before.fingerprint_algorithm
+                ),
                 "source_before": source_before.content_fingerprint,
                 "source_after": source_final.content_fingerprint,
+                "stage_project_fingerprint_algorithm": (
+                    stage_result.fingerprint_algorithm
+                ),
                 "stage_source_before": stage_result.source_fingerprint_before,
                 "stage_source_after": stage_result.source_fingerprint_after,
+                "stage_copied": stage_result.copied_fingerprint,
             },
             reason_code=("source_immutable" if source_immutable and stage_source_valid else "source_drift"),
             snapshot_ids=snapshot_ids,
@@ -613,6 +645,7 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         "stage_result": {
             "publication_state": stage_result.publication_state,
             "execution_readiness": stage_result.execution_readiness,
+            "fingerprint_algorithm": stage_result.fingerprint_algorithm,
             "source_fingerprint_before": stage_result.source_fingerprint_before,
             "source_fingerprint_after": stage_result.source_fingerprint_after,
             "copied_fingerprint": stage_result.copied_fingerprint,

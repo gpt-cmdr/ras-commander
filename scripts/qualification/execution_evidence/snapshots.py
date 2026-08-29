@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from .schemas import QUALIFICATION_SCHEMA_VERSION
 
 
@@ -27,6 +30,7 @@ class TreeSnapshot:
     captured_at: datetime
     root: Path
     root_kind: str
+    fingerprint_algorithm: str
     content_fingerprint: str
     metadata_fingerprint: str
     rows: tuple[dict[str, Any], ...]
@@ -275,6 +279,9 @@ def snapshot_tree(
                     "file_id": None,
                     "sha256": None,
                     "stable_read": None,
+                    "fingerprint_algorithm": (
+                        QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+                    ),
                     "content_fingerprint": None,
                     "metadata_fingerprint": None,
                     "reason_code": "known_path_absent",
@@ -307,6 +314,9 @@ def snapshot_tree(
                 "file_id": str(info.st_ino),
                 "sha256": digest,
                 "stable_read": True,
+                "fingerprint_algorithm": (
+                    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+                ),
                 "content_fingerprint": None,
                 "metadata_fingerprint": None,
                 "reason_code": "stable_file_hashed",
@@ -325,6 +335,7 @@ def snapshot_tree(
         captured_at=captured_at,
         root=root_path,
         root_kind=root_kind,
+        fingerprint_algorithm=QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
         content_fingerprint=content_fingerprint,
         metadata_fingerprint=metadata_fingerprint,
         rows=tuple(rows),

@@ -65,6 +65,7 @@ def _manifest(tmp_path: Path) -> dict:
                 "source_kind": "project_file",
                 "source_project": str(project),
                 "source_immutable": True,
+                "source_content_fingerprint_algorithm": "ras_commander.qualification_snapshot.canonical_json.v1",
                 "source_content_fingerprint": "f" * 64,
                 "data_origin": "captured_real",
                 "plan_number": 1,
@@ -182,14 +183,39 @@ def test_source_fingerprint_is_validated_and_preserved(tmp_path: Path) -> None:
     payload = _manifest(tmp_path)
     normalized = normalize_manifest(payload)
     assert normalized["fixtures"][0]["source_content_fingerprint"] == "f" * 64
+    assert normalized["fixtures"][0]["source_content_fingerprint_algorithm"] == (
+        "ras_commander.qualification_snapshot.canonical_json.v1"
+    )
 
     payload["fixtures"][0]["source_content_fingerprint"] = "not-a-hash"
     with pytest.raises(ManifestError, match="source_content_fingerprint"):
         normalize_manifest(payload)
 
 
+def test_source_fingerprint_is_required_at_manifest_validation(tmp_path: Path) -> None:
+    payload = _manifest(tmp_path)
+    del payload["fixtures"][0]["source_content_fingerprint"]
+
+    with pytest.raises(ManifestError, match="source_content_fingerprint is required"):
+        normalize_manifest(payload)
+
+
+def test_source_fingerprint_algorithm_is_required_and_exact(tmp_path: Path) -> None:
+    payload = _manifest(tmp_path)
+    del payload["fixtures"][0]["source_content_fingerprint_algorithm"]
+    with pytest.raises(ManifestError, match="source_content_fingerprint_algorithm"):
+        normalize_manifest(payload)
+
+    payload["fixtures"][0]["source_content_fingerprint_algorithm"] = "unknown.v1"
+    with pytest.raises(ManifestError, match="source_content_fingerprint_algorithm"):
+        normalize_manifest(payload)
+
+
 def test_rascontrol_identity_uses_canonical_static_mapping(tmp_path: Path) -> None:
     payload = _manifest(tmp_path)
+    controller_executable = tmp_path / "controller-630" / "Ras.exe"
+    controller_executable.parent.mkdir()
+    controller_executable.write_bytes(b"controller 630 test image")
     payload["engines"] = [
         {
             "engine_id": "controller-630",
@@ -200,20 +226,58 @@ def test_rascontrol_identity_uses_canonical_static_mapping(tmp_path: Path) -> No
             "controller_version": "6.3.0.2",
             "resolved_controller_version": "6.3.0.2",
             "controller_progid": "RAS630.HECRASController",
+            "controller_executable": str(controller_executable),
+            "controller_executable_sha256": hashlib.sha256(
+                controller_executable.read_bytes()
+            ).hexdigest(),
             "blocking": True,
         }
     ]
     payload["lanes"][0]["engine_id"] = "controller-630"
     normalized = normalize_manifest(payload)
     assert normalized["engines"][0]["controller_progid"] == "RAS630.HECRASController"
+    assert Path(
+        normalized["engines"][0]["controller_executable"]
+    ).samefile(controller_executable)
 
     payload["engines"][0]["controller_progid"] = "RAS631.HECRASController"
     with pytest.raises(ManifestError, match="controller_progid mismatch"):
         normalize_manifest(payload)
 
 
+def test_rascontrol_manifest_rejects_controller_binary_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    payload = _manifest(tmp_path)
+    controller_executable = tmp_path / "controller-41" / "Ras.exe"
+    controller_executable.parent.mkdir()
+    controller_executable.write_bytes(b"controller 41 test image")
+    payload["engines"] = [
+        {
+            "engine_id": "controller-41",
+            "execution_api": "ras_control",
+            "version_requested": "4.1.0",
+            "expected_result_format": "legacy",
+            "support_state": "supported",
+            "controller_version": "4.1.0",
+            "resolved_controller_version": "4.1",
+            "controller_progid": "RAS41.HECRASController",
+            "controller_executable": str(controller_executable),
+            "controller_executable_sha256": "0" * 64,
+            "blocking": False,
+        }
+    ]
+    payload["lanes"][0]["engine_id"] = "controller-41"
+
+    with pytest.raises(ManifestError, match="Controller executable hash mismatch"):
+        normalize_manifest(payload)
+
+
 def test_rascontrol_canonical_version_mismatch_is_rejected(tmp_path: Path) -> None:
     payload = _manifest(tmp_path)
+    controller_executable = tmp_path / "controller-64" / "Ras.exe"
+    controller_executable.parent.mkdir()
+    controller_executable.write_bytes(b"controller 64 test image")
     payload["engines"] = [
         {
             "engine_id": "controller-64",
@@ -224,6 +288,10 @@ def test_rascontrol_canonical_version_mismatch_is_rejected(tmp_path: Path) -> No
             "controller_version": "6.4",
             "resolved_controller_version": "6.4",
             "controller_progid": "RAS641.HECRASController",
+            "controller_executable": str(controller_executable),
+            "controller_executable_sha256": hashlib.sha256(
+                controller_executable.read_bytes()
+            ).hexdigest(),
             "blocking": True,
         }
     ]

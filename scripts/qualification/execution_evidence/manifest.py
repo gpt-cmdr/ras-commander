@@ -11,6 +11,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
 
+from .fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from .snapshots import (
     SnapshotError,
     assert_plain_ancestry,
@@ -89,6 +92,7 @@ _FIXTURE_COMMON_FIELDS = {
     "fixture_id",
     "source_kind",
     "source_immutable",
+    "source_content_fingerprint_algorithm",
     "source_content_fingerprint",
     "data_origin",
     "plan_number",
@@ -120,6 +124,8 @@ _ENGINE_API_FIELDS = {
         "controller_version",
         "resolved_controller_version",
         "controller_progid",
+        "controller_executable",
+        "controller_executable_sha256",
         "blocking",
     },
 }
@@ -534,15 +540,30 @@ def _normalize_fixture(raw: Any, index: int) -> dict[str, Any]:
         )
     if fixture.get("source_immutable") is not True:
         raise ManifestError(f"fixture {fixture_id} must assert source_immutable=true")
+    source_fingerprint_algorithm = fixture.get(
+        "source_content_fingerprint_algorithm"
+    )
+    if (
+        source_fingerprint_algorithm
+        != QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+    ):
+        raise ManifestError(
+            f"fixture {fixture_id}.source_content_fingerprint_algorithm is "
+            "required and must be "
+            f"{QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM!r}"
+        )
+    normalized["source_content_fingerprint_algorithm"] = (
+        source_fingerprint_algorithm
+    )
     source_fingerprint = fixture.get("source_content_fingerprint")
-    if source_fingerprint is not None:
-        if not isinstance(source_fingerprint, str) or not _SHA256_RE.fullmatch(
-            source_fingerprint
-        ):
-            raise ManifestError(
-                f"fixture {fixture_id}.source_content_fingerprint must be lowercase SHA-256"
-            )
-        normalized["source_content_fingerprint"] = source_fingerprint
+    if not isinstance(source_fingerprint, str) or not _SHA256_RE.fullmatch(
+        source_fingerprint
+    ):
+        raise ManifestError(
+            f"fixture {fixture_id}.source_content_fingerprint is required and "
+            "must be lowercase SHA-256"
+        )
+    normalized["source_content_fingerprint"] = source_fingerprint
 
     if source_kind == "project_file":
         normalized["source_project"] = _absolute_path(
@@ -720,6 +741,38 @@ def _normalize_engine(raw: Any, index: int) -> dict[str, Any]:
                 f"{canonical_version}, observed {normalized['resolved_controller_version']}"
             )
         normalized["controller_progid"] = progid
+        controller_executable = Path(
+            _absolute_path(
+                engine.get("controller_executable"),
+                f"engine {engine_id}.controller_executable",
+                must_exist=True,
+                kind="file",
+            )
+        )
+        if (
+            not controller_executable.is_file()
+            or controller_executable.name.casefold() != "ras.exe"
+        ):
+            raise ManifestError(
+                f"engine {engine_id}.controller_executable must identify Ras.exe"
+            )
+        expected_controller_hash = _require_text(
+            engine.get("controller_executable_sha256"),
+            f"engine {engine_id}.controller_executable_sha256",
+        )
+        if not _SHA256_RE.fullmatch(expected_controller_hash):
+            raise ManifestError(
+                f"engine {engine_id}.controller_executable_sha256 is invalid"
+            )
+        actual_controller_hash = _file_sha256(controller_executable)
+        if actual_controller_hash != expected_controller_hash:
+            raise ManifestError(
+                f"engine {engine_id} Controller executable hash mismatch: "
+                f"expected {expected_controller_hash}, observed "
+                f"{actual_controller_hash}"
+            )
+        normalized["controller_executable"] = str(controller_executable)
+        normalized["controller_executable_sha256"] = actual_controller_hash
         if not isinstance(engine.get("blocking"), bool):
             raise ManifestError(f"engine {engine_id}.blocking must be true or false")
         normalized["blocking"] = engine["blocking"]

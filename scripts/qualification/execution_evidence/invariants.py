@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
+from ras_commander.RasProject import STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+
+from .fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from .schemas import QUALIFICATION_SCHEMA_VERSION
 
 
@@ -304,27 +309,37 @@ def evaluate_invariants(
 
     source_pair = facts.get("source_fingerprints")
     source_applicable = isinstance(source_pair, Mapping)
+    expected_source_algorithm = facts.get("expected_source_fingerprint_algorithm")
     expected_source = facts.get("expected_source_content_fingerprint")
+    stage_algorithm = facts.get("stage_fingerprint_algorithm")
     stage_source_before = facts.get("stage_source_fingerprint_before")
     stage_source_after = facts.get("stage_source_fingerprint_after")
+    stage_copied = facts.get("stage_copied_fingerprint")
     pin_applicable = isinstance(expected_source, str)
+    stage_applicable = all(
+        isinstance(value, str)
+        for value in (stage_source_before, stage_source_after, stage_copied)
+    )
     source_passed = bool(
         source_applicable
+        and pin_applicable
+        and stage_applicable
+        and expected_source_algorithm
+        == QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+        and source_pair.get("fingerprint_algorithm")
+        == QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+        and stage_algorithm == STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
         and source_pair.get("before_content") == source_pair.get("after_content")
         and source_pair.get("before_metadata") == source_pair.get("after_metadata")
-        and (
-            not pin_applicable
-            or (
-                source_pair.get("before_content") == expected_source
-                and stage_source_before == expected_source
-                and stage_source_after == expected_source
-            )
-        )
+        and source_pair.get("before_content") == expected_source
+        and stage_source_before == stage_source_after == stage_copied
     )
     source_observed = {
-        "source": source_pair,
+        "qualification_snapshot": source_pair,
+        "stage_project_fingerprint_algorithm": stage_algorithm,
         "stage_source_fingerprint_before": stage_source_before,
         "stage_source_fingerprint_after": stage_source_after,
+        "stage_copied_fingerprint": stage_copied,
     }
     results.append(
         _result(
@@ -332,8 +347,15 @@ def evaluate_invariants(
             applicable=source_applicable,
             passed=source_passed,
             expected={
+                "qualification_fingerprint_algorithm": (
+                    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+                ),
                 "source_content_and_metadata": "unchanged",
                 "pinned_source_content_fingerprint": expected_source,
+                "stage_project_fingerprint_algorithm": (
+                    STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+                ),
+                "stage_project_fingerprint_chain": "before == after == copied",
             },
             observed=source_observed,
             reason_code="source_immutable" if source_passed else "source_drift",

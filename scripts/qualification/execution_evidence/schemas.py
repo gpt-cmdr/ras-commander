@@ -15,6 +15,9 @@ except ImportError as exc:  # pragma: no cover - environment preflight
         "The execution-evidence qualification harness requires pyarrow>=14"
     ) from exc
 
+from .fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 
 QUALIFICATION_SCHEMA_VERSION = 1
 _UTC_NS = pa.timestamp("ns", tz="UTC")
@@ -37,6 +40,7 @@ LANES_SCHEMA = pa.schema(
         _field("plan_number", pa.string(), nullable=False),
         _field("source_kind", pa.string(), nullable=False),
         _field("source_project", pa.string(), nullable=False),
+        _field("source_content_fingerprint_algorithm", pa.string(), nullable=False),
         _field("source_content_fingerprint", pa.string(), nullable=False),
         _field("stage_project", pa.string(), nullable=False),
         _field("execution_api", pa.string(), nullable=False),
@@ -95,6 +99,7 @@ ARTIFACTS_SCHEMA = pa.schema(
         _field("file_id", pa.string()),
         _field("sha256", pa.string()),
         _field("stable_read", pa.bool_()),
+        _field("fingerprint_algorithm", pa.string(), nullable=False),
         _field("content_fingerprint", pa.string()),
         _field("metadata_fingerprint", pa.string()),
         _field("reason_code", pa.string()),
@@ -307,6 +312,14 @@ def _validate_rows(table_name: str, rows: list[dict[str, Any]]) -> None:
                 f"{prefix}.source_content_fingerprint",
                 allow_none=False,
             )
+            if (
+                row.get("source_content_fingerprint_algorithm")
+                != QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+            ):
+                raise SchemaValidationError(
+                    f"{prefix}.source_content_fingerprint_algorithm must be "
+                    f"{QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM!r}"
+                )
             _validate_hash(
                 row.get("engine_executable_sha256"),
                 f"{prefix}.engine_executable_sha256",
@@ -376,6 +389,14 @@ def _validate_rows(table_name: str, rows: list[dict[str, Any]]) -> None:
                         f"{prefix} ras_control lane cannot claim executable identity"
                     )
         elif table_name == "artifacts":
+            if (
+                row.get("fingerprint_algorithm")
+                != QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+            ):
+                raise SchemaValidationError(
+                    f"{prefix}.fingerprint_algorithm must be "
+                    f"{QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM!r}"
+                )
             _validate_hash(row.get("sha256"), f"{prefix}.sha256")
             _validate_hash(row.get("content_fingerprint"), f"{prefix}.content_fingerprint")
             _validate_hash(row.get("metadata_fingerprint"), f"{prefix}.metadata_fingerprint")

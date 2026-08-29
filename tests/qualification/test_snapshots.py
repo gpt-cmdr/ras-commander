@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from scripts.qualification.execution_evidence.fingerprint_contracts import (
+    QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM,
+)
 from scripts.qualification.execution_evidence.snapshots import (
     SnapshotError,
     diff_snapshots,
@@ -38,6 +41,13 @@ def test_snapshot_hashes_regular_files_and_records_known_absence(tmp_path: Path)
     assert rows["Model.p01.hdf"]["result_family"] == "hdf"
     assert rows["Model.p01.hdf"]["stable_read"] is True
     assert rows["Model.O01"]["exists"] is False
+    assert (
+        snapshot.fingerprint_algorithm
+        == QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM
+    )
+    assert {
+        row["fingerprint_algorithm"] for row in snapshot.rows
+    } == {QUALIFICATION_SNAPSHOT_FINGERPRINT_ALGORITHM}
     assert len(snapshot.content_fingerprint) == 64
     assert len(snapshot.metadata_fingerprint) == 64
 

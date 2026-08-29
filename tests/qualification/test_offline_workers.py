@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from ras_commander import STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
 from scripts.qualification.execution_evidence.receipts import (
     read_json_with_digest,
     verify_attempt_receipt,
@@ -158,6 +159,9 @@ def test_stage_workers_are_fresh_and_byte_preserving(completed_offline_run: dict
     assert first["hec_ras_invoked"] is second["hec_ras_invoked"] is False
     assert first["stage_result"]["publication_state"] == "published"
     assert second["stage_result"]["publication_state"] == "published"
+    assert first["stage_result"]["fingerprint_algorithm"] == (
+        STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
+    )
     assert first["stage_result"]["source_fingerprint_before"] == first["stage_result"]["source_fingerprint_after"]
     assert {
         item["relative_path"] for item in first["replay_artifacts"]
@@ -171,6 +175,9 @@ def test_stage_workers_are_fresh_and_byte_preserving(completed_offline_run: dict
     first_request = attempts[0].request
     second_request = attempts[1].request
     assert first_request["required_invariants"] == ["R11"]
+    assert first_request["source_snapshot_content_fingerprint_algorithm"] == (
+        first_request["fixture"]["source_content_fingerprint_algorithm"]
+    )
     assert second_request["required_invariants"] == ["R11"]
     assert first["required_invariants"] == ["R11"]
     assert first_request["stage_root"] != second_request["stage_root"]
@@ -270,6 +277,9 @@ def test_source_project_remains_immutable_across_all_workers(
         data_origin="captured_real",
     )
     assert snapshot.content_fingerprint == request["source_snapshot_content_fingerprint"]
+    assert snapshot.fingerprint_algorithm == (
+        request["source_snapshot_content_fingerprint_algorithm"]
+    )
     assert snapshot.metadata_fingerprint == request["source_snapshot_metadata_fingerprint"]
 
 

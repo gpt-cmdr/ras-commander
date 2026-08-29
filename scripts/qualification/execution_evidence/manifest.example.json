@@ -26,6 +26,7 @@
       "plan_title": "Replace with exact title",
       "plan_type": "steady_1d",
       "source_immutable": true,
+      "source_content_fingerprint_algorithm": "ras_commander.qualification_snapshot.canonical_json.v1",
       "source_content_fingerprint": "replace-with-lowercase-sha256",
       "source_kind": "project_file",
       "source_project": "C:/immutable-model/Model.prj"

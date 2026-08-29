@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.qualification.execution_evidence.snapshots import snapshot_tree
+
 
 def _run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -144,6 +146,15 @@ def make_offline_manifest(
     engine_dir.mkdir()
     executable = engine_dir / "Ras.exe"
     executable.write_bytes(b"pinned but never executed")
+    source_snapshot = snapshot_tree(
+        source_project.parent,
+        run_id="offline-manifest",
+        lane_id="offline-manifest",
+        attempt_id="offline-manifest",
+        phase="source_manifest_pin",
+        root_kind="source",
+        data_origin="captured_real",
+    )
     payload = {
         "schema_version": 1,
         "run_name": "offline-process-test",
@@ -167,6 +178,10 @@ def make_offline_manifest(
                 "source_kind": "project_file",
                 "source_project": str(source_project),
                 "source_immutable": True,
+                "source_content_fingerprint_algorithm": (
+                    source_snapshot.fingerprint_algorithm
+                ),
+                "source_content_fingerprint": source_snapshot.content_fingerprint,
                 "data_origin": "captured_real",
                 "replay_artifacts": {
                     "source_root": str(replay_root),
