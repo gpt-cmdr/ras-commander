@@ -14,10 +14,14 @@ from shapely.geometry import shape
 from ras_commander import HdfResultsQuery
 from ras_commander.dotnet.clr_bootstrap import is_hecras_available
 
-pytestmark = pytest.mark.skipif(
-    not is_hecras_available(),
-    reason="HEC-RAS install + pythonnet required",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.skipif(
+        not is_hecras_available(),
+        reason="HEC-RAS install + pythonnet required",
+    ),
+]
 
 DATA_DIR = Path(__file__).parent / "data"
 DEFAULT_DAVIS_PIPE_PLAN = Path(

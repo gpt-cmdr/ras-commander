@@ -19,10 +19,14 @@ from ras_commander.dotnet.clr_bootstrap import is_hecras_available
 hdf_results_query_module = importlib.import_module("ras_commander.hdf.HdfResultsQuery")
 profile_interop_module = importlib.import_module("ras_commander.dotnet._profile_interop")
 
-pytestmark = pytest.mark.skipif(
-    not is_hecras_available(),
-    reason="HEC-RAS install + pythonnet required",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.skipif(
+        not is_hecras_available(),
+        reason="HEC-RAS install + pythonnet required",
+    ),
+]
 
 EXPECTED_COLUMNS = [
     "station",

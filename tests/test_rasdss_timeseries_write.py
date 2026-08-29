@@ -197,6 +197,7 @@ def test_dataframe_writer_rejects_timezone_aware_index_before_jvm(
         )
 
 
+@pytest.mark.integration
 def test_write_timeseries_round_trips_through_real_java_bridge(tmp_path) -> None:
     output = tmp_path / "modern-timeseries.dss"
     script = textwrap.dedent(
