@@ -82,8 +82,8 @@ HEC-RAS implementation.
 | Exact Controller execution | `RasControl.run_plan()` | Explicit `controller_version`, appropriate `blocking`, `strict_close=True`, watchdog enabled, and JSON-safe `execution_details` |
 | Offline result inspection | `RasCmdr.inspect_execution_evidence()` | No execution or COM; fixed observation registry; optional stable SHA-256 provenance; typed ambiguity errors |
 | Explicit cleanup/state setup | `RasCmdr.remove_plan_execution_artifacts()` | Only the exact plan HDF, `.O##`, and optional message sidecars can be removed |
-| Exact cancellation after an outer timeout | `RasCmdr.cancel_plan()` | Project-and-plan-scoped process cancellation; never process-name-wide termination |
-| Controller process inventory | `RasControl.list_processes()` | Baseline and post-lane `ras.exe` inventory |
+| Exact cancellation after an outer timeout | `RasCmdr.cancel_plan_exact()` | Structured project-and-plan-scoped matches, stopped identities, survivors, query errors, and tri-state quiescence; never process-name-wide termination |
+| Strict host process inventory | `RasControl.inspect_processes()` | Complete-or-explicitly-incomplete launcher and solver inventory with PID/create-time identity and query errors |
 | Controller mapping | `RasControl.get_controller_progid()` | Record and assert exact requested/resolved Controller identity |
 | Real example acquisition | `RasExamples.extract_project()` | Use when the source comes from the pinned public example archive |
 
@@ -98,7 +98,8 @@ requested version, resolved canonical version, ProgID, compute mode, Controller
 message count, watchdog state, duration, and mode-specific fields. Do not claim
 that the configured `Ras.exe` hash is the binary actually activated by COM; for
 Controller lanes the authoritative engine identity is the ProgID plus resolved
-Controller version.
+Controller version. The final implementation additionally records the
+PID/create-time-bound Controller `Ras.exe` path and SHA-256 after activation.
 
 ## Tracked implementation layout
 
@@ -294,9 +295,10 @@ active. It supervises only the Python child and owns all shared aggregation.
 - A `RasControl` lane passes its lane timeout as `max_runtime`, enables the
   watchdog, and requests `strict_close=True`.
 - A `RasCmdr` lane is supervised by the outer Python-process deadline. At the
-  deadline, the parent starts a separate cancellation helper which initializes
-  the staged project and calls `RasCmdr.cancel_plan(plan_number)`. It never uses
-  `taskkill`, `Stop-Process`, or process-name matching.
+  deadline, the parent starts a separate digest-bound cancellation helper which
+  initializes only the staged project and calls
+  `RasCmdr.cancel_plan_exact(plan_number)`. It never uses `taskkill`,
+  `Stop-Process`, or process-name matching.
 - After cancellation is confirmed or no exact process is found, the parent
   terminates the unresponsive Python worker and writes a synthesized failed
   receipt. If exact cancellation cannot be confirmed, the run is quarantined
@@ -330,14 +332,16 @@ Every harness lock is created with `O_CREAT | O_EXCL`, fsynced, and contains:
 
 A process may remove only a lock whose token it owns. Locks are not stolen or
 automatically aged out. `recover-lock` requires an explicit command, proves the
-recorded process is absent, calls `RasControl.list_processes(show_all=True)` for
-the real-engine lock, records the recovery receipt, and then removes only the
-named lock. An uncertain state remains locked and fails closed.
+recorded process is absent, requires a complete empty
+`RasControl.inspect_processes()` result for the real-engine lock, records the
+recovery receipt, rechecks those proofs immediately before retirement, and then
+archives only the named lock identity. An uncertain state remains locked and
+fails closed.
 
-Before acquiring a real-engine attempt, the harness uses
-`RasControl.list_processes(show_all=True)` and fails if an unaccounted HEC-RAS
-GUI or batch session is already present. This protects the user's manual work
-and keeps producer attribution unambiguous.
+Before and again inside the acquired real-engine lock, the harness uses
+`RasControl.inspect_processes()` and requires both a complete query and an
+empty recognized HEC-RAS launcher/solver inventory. This protects the user's
+manual work and keeps producer attribution unambiguous.
 
 ## Staging and initial state
 
@@ -420,6 +424,13 @@ case-insensitive sort order:
 - `metadata_fingerprint`: the content fields plus `mtime_ns`, volume ID, and
   file ID.
 
+These qualification snapshots persist the algorithm identifier
+`ras_commander.qualification_snapshot.canonical_json.v1`. The manifest pins
+both that identifier and the content fingerprint. `stage_project()` uses the
+separate `ras_commander.stage_project.framed_tree.v1` algorithm, which also
+represents directory population. Its before/after/copied chain is compared
+only to itself, never to the manifest's qualification snapshot value.
+
 The source-immutability gate requires the source content and metadata
 fingerprints to remain unchanged from `source_before_stage` through
 `source_final`. The stage is expected to change; its before/after diff is the
@@ -460,7 +471,8 @@ and receipt committed.
 evaluation. It includes:
 
 - request identity and digest;
-- worker PID, host, Python, package version, git HEAD, and dirty-state digest;
+- worker PID, host, Python, package version, pinned git HEAD, and independently
+  revalidated clean-worktree proof;
 - source/stage identities and fingerprints;
 - selected execution API and exact engine/Controller identity;
 - normalized `ComputeResult` or `RasControlResult` fields;
@@ -509,7 +521,7 @@ final table, and never appends in place.
 | `run_id`, `lane_id`, `attempt_id` | `string not null` | UUID run/attempt; stable lane key |
 | `manifest_sha256`, `git_head` | `string not null` | 64/40 lowercase hex |
 | `fixture_id`, `plan_type`, `plan_number` | `string not null` | Requested real fixture identity |
-| `source_kind`, `source_project`, `source_content_fingerprint` | `string not null` | Immutable source proof |
+| `source_kind`, `source_project`, `source_content_fingerprint_algorithm`, `source_content_fingerprint` | `string not null` | Versioned immutable source proof |
 | `stage_project`, `execution_api`, `engine_id`, `engine_version_requested` | `string not null` | Execution identity |
 | `engine_executable`, `engine_executable_sha256` | `string nullable` | Null for Controller-authoritative lanes when not proved |
 | `controller_version`, `controller_progid`, `compute_mode` | `string nullable` | Controller receipt fields |
@@ -536,6 +548,7 @@ final table, and never appends in place.
 | `exists`, `is_file`, `is_dir` | `bool not null` |
 | `size_bytes`, `mtime_ns`, `volume_id`, `file_id`, `sha256` | `int64 nullable`, `int64 nullable`, `string nullable`, `string nullable`, `string nullable` |
 | `stable_read` | `bool nullable` |
+| `fingerprint_algorithm` | `string not null` |
 | `content_fingerprint`, `metadata_fingerprint` | `string nullable` |
 | `reason_code`, `detail` | `string nullable` |
 
@@ -608,13 +621,14 @@ Evaluate invariants from receipts and snapshots, not log-text guesses:
   selected result and do not promote `.tmp.hdf` as final evidence.
 - **R10 Stable evidence:** evidence is immutable, JSON-safe, schema-valid, and
   backed by stable source hashes when hashing was requested.
-- **R11 Source immutability:** the original source tree's content and metadata
-  fingerprints are unchanged.
-- **R12 Process hygiene:** no lane-owned HEC-RAS process remains. Controller
-  lanes require strict close and no new `ras.exe` relative to baseline;
-  command-line lanes perform an exact post-run `RasCmdr.cancel_plan()` probe
-  only after result/evidence snapshots. A returned cancellation means a
-  survivor was found and causes failure even though it is cleaned up.
+- **R11 Source immutability:** the original qualification snapshot's content
+  and metadata fingerprints are unchanged and match the manifest pin, while
+  the independently namespaced stage-project before/after/copied chain is
+  internally equal.
+- **R12 Process hygiene:** no lane-owned HEC-RAS process remains. Both routes
+  require complete empty exact-plan and global structured inventories after
+  execution. Timeout recovery alone may call `RasCmdr.cancel_plan_exact()`;
+  ordinary post-run verification never signals a process.
 
 Message errors/warnings are health observations. Mechanical completion does not
 mean hydraulic acceptability; the harness must not invent an engineering
@@ -812,8 +826,9 @@ PR #319 is ready to retarget to `main` only when:
 ## Known API gap to keep visible
 
 `RasCmdr.compute_plan()` does not expose a public per-call hard timeout, so v1
-must use the process-isolated supervisor plus exact `RasCmdr.cancel_plan()` on
-deadline. If this proves awkward in the representative run, the clean library
+must use the process-isolated supervisor plus structured
+`RasCmdr.cancel_plan_exact()` on deadline. If this proves awkward in the
+representative run, the clean library
 improvement is a public timeout parameter wired through the existing
 quiescence/cancellation logic. The harness must not work around that gap with a
 raw process kill.

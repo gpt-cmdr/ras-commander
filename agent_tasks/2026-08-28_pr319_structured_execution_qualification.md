@@ -28,6 +28,12 @@ immutable. Any materially different project, executable, destination, public
 API change, release action, or destructive operation requires a new review of
 scope and authority.
 
+The exact representative lanes, engine identities, live-run invariants, and
+audited additive process/cancellation/provenance API prerequisite are recorded
+in `agent_tasks/2026-08-29_pr319_live_execution_packet.md`. The additive API is
+implemented and tested only on this draft branch; its exact public names and
+compatibility posture remain a highlighted merge-review decision.
+
 ## Repository state
 
 - Draft PR: <https://github.com/gpt-cmdr/ras-commander/pull/319>
@@ -208,14 +214,16 @@ Stop dispatching new engine lanes immediately if any of the following occurs:
 A numerical or application failure confined to a disposable lane is recorded
 and may allow the campaign to continue after the supervisor proves containment.
 
-### Current host hold
+### Host-process gate
 
 The 2026-08-28 read-only preflight through `RasControl.list_processes()` found
 an unrelated untracked HEC-RAS process, PID 320624, associated with
-`UPGU3.prj`. Qualification must not terminate or adopt that process. No real-
-engine lane may start while it remains active because process ownership and
-engine attribution would be ambiguous. Deterministic, staging, and offline
-inspection work may continue because it does not dispatch HEC-RAS or COM.
+`UPGU3.prj`. Qualification did not terminate or adopt that process. A later
+strict `RasControl.inspect_processes()` scan on 2026-08-29 was complete with no
+query errors and no HEC-RAS process; the historical PID is not a current host
+hold. Every live attempt must still acquire the host lock and repeat the strict
+complete-empty inventory proof immediately before dispatch. A new unrelated or
+unverifiable process closes the gate without being signalled.
 
 ## Required reviews and work products
 
@@ -264,8 +272,9 @@ raised two hard pre-engine blockers.
 - Real-engine lanes are serialized and isolated in fresh Python processes.
 - `RasCmdr.compute_plan()` does not currently expose a public hard timeout.
   The supervisor must therefore time-bound the worker and use only
-  plan-scoped `RasCmdr.cancel_plan()` for cancellation; raw process-name kills
-  are prohibited.
+  plan-scoped `RasCmdr.cancel_plan_exact()` for structured cancellation proof;
+  raw process-name kills are prohibited. The Boolean `cancel_plan()` remains a
+  compatibility wrapper and is not sufficient supervisor evidence.
 
 ### Adversarial findings and current hard stop
 
@@ -443,3 +452,122 @@ complete.
 - 2026-08-28: post-replay RasControl process preflight still finds the unrelated
   untracked HEC-RAS PID 320624 (`UPGU3.prj`). The `dev_human-in-loop` live-engine
   gate therefore remains closed; no process was adopted, terminated, or used.
+- 2026-08-29: the representative live-execution packet pinned 13 L0/L1 lanes,
+  five exact engine routes, disposable roots, mixed-family/cross-declaration
+  phases, required invariants, timeout behavior, and the distinction between
+  newly generated live datasets and read-only captured replay evidence.
+- 2026-08-29: API consistency audit found that the legacy process DataFrame and
+  Boolean cancellation cannot prove complete host inventory, exact plan
+  ownership, PID reuse safety, survivor absence, or cancellation quiescence.
+  It specified an additive structured process/cancellation contract and common
+  modern/Controller execution provenance details while preserving existing
+  compatibility behavior. Implementation and deterministic tests are in
+  progress on the draft branch.
+- 2026-08-29: the first no-engine live supervisor/worker integration exposed
+  and corrected contract drift, unsafe Python-child termination when solver
+  quiescence was unknown, terminal-receipt publication from mutable logs, and
+  resume skipping of failed attempts. Current supervisor tests leave uncertain
+  children untouched, retain the host lock, publish no terminal receipt, and
+  resume only exact verified successful outcomes from new attempts as needed.
+- 2026-08-29: the first real-host `inspect_processes()` query exposed and fixed
+  a deterministic Windows PID 0 classification bug. The focused process suite
+  passed 21 tests, and the repeated strict query was complete with no query
+  errors. It identified the unrelated untracked UPGU3 launcher PID 320624 and
+  solver PID 312248; both remain untouched and keep live dispatch closed.
+- 2026-08-29: the integrated no-engine process/provenance/live-harness gate
+  passed 366 tests. Ruff passed on every changed file (with the package
+  initializer's pre-existing E402 exemption) and compileall passed. No HEC-RAS
+  or COM execution occurred.
+- 2026-08-29: independent adversarial review kept L0/L1 at no-go and found five
+  additional proof gaps: incomplete steady/legacy solver taxonomy, Controller
+  finalization without a strict post-close solver scan, Controller provenance
+  without actual Ras.exe path/hash, interrupt/recovery races around an
+  authorized Python worker, and parent terminal verification that accepted
+  derived booleans without the underlying TCU/execution/process records.
+  Remediation and deterministic regression tests were assigned before any
+  live dispatch. Read-only installed-file inspection confirmed exact legacy
+  `Steady.exe`, `Unsteady.exe`, and `Sediment.exe` binaries and modern
+  `RasSteady.exe`/related solver binaries; it did not execute them.
+- 2026-08-29: the no-go findings were remediated without live execution. The
+  strict host taxonomy now covers the installed legacy and modern launcher,
+  hydraulic, geometry-preprocess, sediment, and water-quality executables while
+  retaining exact plan matching only for signatures that can be proved. The
+  Controller path records the actual PID/create-time-bound `Ras.exe` path and
+  SHA-256, performs complete empty global preflight, and requires complete
+  empty exact-plan and global post-close inventories before finalization.
+  Watchdog actions revalidate PID, creation time, and name before signalling;
+  nonfinite or identity-incomplete session locks are quarantined.
+- 2026-08-29: the live supervisor now requires a durable
+  intent/hello/authorization handshake before a child may stage or execute,
+  retains its host lock across uncertain interrupts, and independently verifies
+  that the materialized `execution_result.json`, `evidence.json`, and
+  `events.jsonl` exactly agree with their receipt claims as well as their stable
+  hashes. Manual recovery requires the original worker identity to be absent
+  and a complete empty global inventory; it never signals processes.
+- 2026-08-29: an API consistency pass added finite positive timeout validation
+  to `cancel_plan_exact()` and retained the existing Boolean `cancel_plan()` as
+  a compatibility wrapper. The final affected no-engine integration gate passed
+  436 tests. A separate marker-safe audit passed 62 tests and deselected 38
+  native/real-engine tests. This audit found two previously unmarked tests that
+  launched HEC-RAS; their pytest parents are now explicitly marked. The two
+  resulting RAS processes were not signalled and exited naturally.
+- 2026-08-29: upstream `main` advanced from `cd56e7cc` to `d7784fcc` through
+  PRs 318 and 320. The live manifest and dispatch remain held until the reviewed
+  changes are committed, the latest main tip is merged, and all deterministic
+  gates are rerun at the resulting clean commit.
+- 2026-08-29: making fixture source fingerprints mandatory exposed a latent
+  qualification-fixture defect: the manifest's canonical `snapshot_tree`
+  digest had been compared with `stage_project()`'s independent, length-framed
+  tree digest. Identical source bytes therefore failed the worker gate. The
+  corrected R11 contract verifies the manifest pin against qualification
+  source snapshots and separately requires the public staging
+  before/after/copied fingerprints to match. The retained failed receipt and
+  per-file hashes proved this was a digest-domain mismatch, not source drift.
+- 2026-08-29: the two digest domains are now persisted as explicit versioned
+  contracts. Qualification manifests, requests, lane rows, and artifact rows
+  identify `ras_commander.qualification_snapshot.canonical_json.v1`; public
+  staging results and `.ras-commander/stage.json` identify
+  `ras_commander.stage_project.framed_tree.v1`. Offline and live supervisors
+  verify the manifest's qualification pin before publishing a request, and
+  workers reverify that same pin before calling `stage_project()`. R11 records
+  and checks both namespaces while comparing values only within a namespace.
+- 2026-08-29: after that correction, the explicit no-engine integration gate
+  passed 501 tests. Ruff passed for all production, harness, and focused test
+  files; compileall and `git diff --check` passed. No HEC-RAS or COM execution
+  occurred. Live dispatch remains closed pending latest-main reconciliation,
+  a clean committed HEAD, final independent review, and an under-lock
+  complete-empty strict host inventory.
+- 2026-08-29: the final API audit found and closed a cancellation constructor
+  contradiction: terminate/kill errors followed by natural process exit now
+  return indeterminate quiescence instead of attempting to claim confirmed
+  quiescence alongside query errors. Cancellation receipts include start/finish
+  times, incomplete inventories require explicit query errors, and the legacy
+  Boolean wrapper retains its prior numeric timeout coercion while returning
+  true only for a matched, positively quiescent result.
+- 2026-08-29: `ComputeParallelResult` now carries defaulted, JSON-safe
+  `execution_details_by_plan`, and both parallel/test-mode execution preserve
+  direct `ComputeResult` evidence for success, failure, and explicit source
+  skips without changing mapping, Boolean, or two-positional construction
+  compatibility.
+- 2026-08-29: fingerprint namespaces are now explicit end to end:
+  `ras_commander.qualification_snapshot.canonical_json.v1` for manifest and
+  qualification snapshots, and `ras_commander.stage_project.framed_tree.v1`
+  for public staging. The manifest pin is checked before staging; the public
+  staging chain is checked independently. The parent supervisor additionally
+  validates the exact worker stage receipt against the persisted
+  `.ras-commander/stage.json`, including namespace, chain, copy totals, and
+  artifact inventory. Omission, wrong-namespace, chain, digest, total, and
+  persisted-record tampering all fail deterministically.
+- 2026-08-29: the post-remediation explicit no-engine integration gate passed
+  514 tests; the expanded parent-stage proof shard passed 74 tests. Ruff passed
+  across all changed production/harness/focused-test files, compileall passed,
+  and `git diff --check` reported only the repository's existing line-ending
+  notices. Independent adversarial review found the prior stage-proof P1
+  closed and no remaining HEC-RAS authorization or process-control bypass.
+- 2026-08-29: the final API-consistency re-audit approved the additive public
+  API with no remaining blocker. The last constructor invariant now rejects an
+  incomplete cancellation scan without explanatory query errors, and all
+  process/cancellation float timestamps are documented as Unix epoch seconds.
+  The final integrated no-engine baseline passed 518 tests in 151.22 seconds;
+  its focused process shard passed 83 tests and Ruff passed. No HEC-RAS, COM,
+  or process-signalling action occurred.
