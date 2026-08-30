@@ -30,17 +30,32 @@ def _source() -> str:
     )
 
 
-def test_native_terrain_export_notebook_has_clean_executable_source():
+def test_native_terrain_export_notebook_has_fresh_executed_source():
     notebook = _notebook()
 
     assert "".join(notebook["cells"][0]["source"]).startswith(
         "# Native RAS Mapper Terrain Export"
     )
+    code_cells = [
+        cell for cell in notebook["cells"]
+        if cell.get("cell_type") == "code"
+    ]
+    assert [cell.get("execution_count") for cell in code_cells] == list(range(1, 10))
+    assert all(cell.get("outputs") for cell in code_cells)
+    assert not any(
+        output.get("output_type") == "error"
+        for cell in code_cells
+        for output in cell.get("outputs", [])
+    )
+    assert sum(
+        "image/png" in output.get("data", {})
+        for cell in code_cells
+        for output in cell.get("outputs", [])
+    ) == 1
+
     for index, cell in enumerate(notebook["cells"]):
         if cell.get("cell_type") != "code":
             continue
-        assert cell.get("execution_count") is None
-        assert cell.get("outputs", []) == []
         ast.parse(
             "".join(cell.get("source", [])),
             filename=f"{NOTEBOOK_PATH.name}:cell-{index}",
@@ -51,6 +66,7 @@ def test_native_terrain_export_notebook_keeps_native_work_opt_in_and_bounded():
     source = _source()
 
     assert "RUN_NATIVE_EXPORT = False" in source
+    assert "RAS_COMMANDER_RUN_NATIVE_TERRAIN_EXPORT" in source
     assert "OVERWRITE_EXISTING = False" in source
     assert 'RAS_VERSION = "6.6"' in source
     assert 'TERRAIN_NAME = "TerrainWithChannel"' in source
@@ -75,6 +91,8 @@ def test_native_terrain_export_notebook_covers_public_contract_and_evidence():
         "result.source_inventory",
         "result.validation",
         "result.receipt_path",
+        'receipt_payload["native_helper"]["resample_method"] == "near"',
+        'receipt_payload["native_helper"]["resample_to_one_rfi"] is True',
         "pd.testing.assert_frame_equal",
         "fig.savefig",
         "Requested extent",
@@ -84,9 +102,9 @@ def test_native_terrain_export_notebook_covers_public_contract_and_evidence():
 
     for release_statement in (
         "6.3 / 6.3.1",
-        "6.4.1, 6.5, 6.6",
+        "6.4.1, 6.5, 6.6 | Qualified on native Windows and under task-local Wine",
         "7.0.0",
-        "7.0.1",
+        "7.0.1 | Qualified on native Windows and under task-local Wine",
         "7.1 | Forward-open, not pre-qualified",
     ):
         assert release_statement in source
@@ -105,7 +123,7 @@ def test_native_terrain_export_notebook_is_registered_for_the_gallery():
 
     assert entry["filename"] == NOTEBOOK_PATH.name
     assert entry["data_project"] == "Muncie"
-    assert entry["executed_cells"] == 0
+    assert entry["executed_cells"] == 9
     assert "RasTerrain.export_rasmapper_terrain" in entry["functions_used"]
     assert {"terrain", "rasmapper"}.issubset(entry["tags"])
 

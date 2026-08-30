@@ -3765,7 +3765,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 0
+  executed_cells: 9
 - id: 950_ebfe_spring_creek
   filename: 950_ebfe_spring_creek.ipynb
   title: 'Using eBFE Models: Spring Creek 2D Analysis'
