@@ -38,6 +38,7 @@ SUPPORTED_TERRAIN_EXPORT_VERSIONS = {
 _HELPER_NAME = "RasMapperTerrainExportHelper.exe"
 _NATIVE_HDF_LIBRARIES = ("hdf5.dll", "hdf5_hl.dll", "szip.dll", "zlib.dll")
 _WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+_BETA_LABEL_TOKEN = re.compile(r"(?<![A-Za-z0-9])beta(?![A-Za-z0-9])", re.IGNORECASE)
 
 
 def _executable_runtime_label(executable: Any) -> str:
@@ -52,6 +53,7 @@ def _hecras_version_key(
     value: Any, *, allow_install_aliases: bool = True
 ) -> tuple[int, ...]:
     """Parse an exact HEC-RAS release key used by the mapper contract."""
+    _reject_prerelease_hecras_version(value)
     text = str(value).strip()
     if text.lower().endswith(".exe"):
         parts = [part for part in re.split(r"[\\/]", text) if part]
@@ -99,37 +101,54 @@ def _hecras_version_key(
     return parts if len(parts) >= 3 else (*parts, 0)
 
 
-def _is_prerelease_version_label(version: Any) -> bool:
-    """Return whether an explicit term or executable release folder is beta."""
-    label = (
+def _version_release_label(version: Any) -> str:
+    """Return only the explicit term or executable's release-folder label."""
+    return (
         _executable_runtime_label(version)
         if str(version).strip().lower().endswith(".exe")
         else str(version).strip()
     )
-    return re.search(r"\bbeta\b", label, re.IGNORECASE) is not None
 
 
-def _reject_prerelease_hecras_version(version: Any, key: tuple[int, ...]) -> None:
-    """Fail before a beta label can reuse a supported stable release key."""
-    if _is_prerelease_version_label(version):
-        _require_supported_hecras_version(version, key)
+def _is_prerelease_version_label(version: Any) -> bool:
+    """Match beta only as a start/end or non-alphanumeric-delimited label token."""
+    return _BETA_LABEL_TOKEN.search(_version_release_label(version)) is not None
+
+
+def _reject_prerelease_hecras_version(version: Any) -> None:
+    """Fail before any beta label can be parsed or reuse a stable release key."""
+    if not _is_prerelease_version_label(version):
+        return
+    label = _version_release_label(version)
+    release = re.match(r"(\d+)\.(\d+)", label)
+    if release and (int(release.group(1)), int(release.group(2))) == (6, 7):
+        reason = (
+            " HEC-RAS 6.7 was released only as beta builds. The locally installed "
+            "Beta 4-labeled and Beta 5 runtimes passed bounded compatibility "
+            "probes, but prerelease builds are not accepted by this production API."
+        )
+    else:
+        reason = (
+            " Prerelease HEC-RAS builds are not accepted by this production API; "
+            "use a qualified official release instead."
+        )
+    raise ValueError(
+        f"HEC-RAS {version!r} is unsupported by "
+        "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
+        f"6.4.1, 6.5, 6.6, 7.0.1, and 7.1.{reason}"
+    )
 
 
 def _require_supported_hecras_version(
     version: Any, key: tuple[int, ...]
 ) -> str:
     """Raise with actionable, version-specific compatibility guidance."""
-    is_prerelease = _is_prerelease_version_label(version)
-    if not is_prerelease and key in SUPPORTED_TERRAIN_EXPORT_VERSIONS:
+    _reject_prerelease_hecras_version(version)
+    if key in SUPPORTED_TERRAIN_EXPORT_VERSIONS:
         return SUPPORTED_TERRAIN_EXPORT_VERSIONS[key]
 
     reason = ""
-    if is_prerelease and key[:2] != (6, 7):
-        reason = (
-            " Prerelease HEC-RAS builds are not accepted by this production API; "
-            "use a qualified official release instead."
-        )
-    elif key[:2] == (6, 3):
+    if key[:2] == (6, 3):
         reason = (
             " HEC-RAS 6.3 lacks the bounded TerrainLayer.GenerateNewRasTerrain"
             " (..., resampleVecMods, ...) contract required to bake terrain "
@@ -162,12 +181,13 @@ def _require_supported_hecras_version(
 def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
     """Resolve a RasPrj's exact runtime, preferring its executable folder."""
     project_version = getattr(project, "ras_version", None)
+    _reject_prerelease_hecras_version(project_version)
     project_key = _hecras_version_key(project_version)
-    _reject_prerelease_hecras_version(project_version, project_key)
     executable = getattr(project, "ras_exe_path", None)
     if not executable or str(executable).strip().lower() == "ras.exe":
         return project_key
 
+    _reject_prerelease_hecras_version(executable)
     try:
         executable_key = _hecras_version_key(
             executable, allow_install_aliases=False
@@ -176,8 +196,6 @@ def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
         # Non-standard installation folders still retain the initialized
         # RasPrj's explicit version term as the best available identity.
         return project_key
-
-    _reject_prerelease_hecras_version(executable, executable_key)
 
     if executable_key != project_key:
         raise ValueError(
@@ -217,6 +235,7 @@ def resolve_supported_hecras_version(
             project_version, project_key
         )
         if hecras_version is not None:
+            _reject_prerelease_hecras_version(hecras_version)
             explicit_key = _hecras_version_key(hecras_version)
             _require_supported_hecras_version(hecras_version, explicit_key)
             if explicit_key != project_key:
@@ -591,14 +610,13 @@ def _resolve_hecras_source(
         wine_config = None
 
     expected_key = _hecras_version_key(version_text)
+    _reject_prerelease_hecras_version(directory / "Ras.exe")
     try:
         installed_key = _hecras_version_key(
             directory / "Ras.exe", allow_install_aliases=False
         )
     except ValueError:
         installed_key = None
-    if installed_key is not None:
-        _reject_prerelease_hecras_version(directory / "Ras.exe", installed_key)
     if installed_key is not None and installed_key != expected_key:
         raise ValueError(
             f"Resolved HEC-RAS installation {directory.name!r} conflicts with "
