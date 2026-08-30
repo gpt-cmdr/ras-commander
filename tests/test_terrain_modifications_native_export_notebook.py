@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import base64
 import json
 from pathlib import Path
 
@@ -30,18 +31,88 @@ def _native_cells() -> list[dict]:
     ]
 
 
-def test_notebook_316_native_cells_are_default_safe_and_parseable():
+def _output_text(cell: dict) -> str:
+    parts = []
+    for output in cell.get("outputs", []):
+        if output.get("output_type") == "stream":
+            stream_text = output.get("text", "")
+            parts.append(
+                "".join(stream_text)
+                if isinstance(stream_text, list)
+                else stream_text
+            )
+        plain_text = output.get("data", {}).get("text/plain", "")
+        parts.append(
+            "".join(plain_text) if isinstance(plain_text, list) else plain_text
+        )
+    return "\n".join(parts)
+
+
+def test_notebook_316_native_cells_are_default_safe_parseable_and_executed():
     source = _source()
     native_cells = _native_cells()
 
     assert "RUN_NATIVE_TERRAIN_EXPORT = False" in source
+    assert "RAS_COMMANDER_RUN_NATIVE_TERRAIN_EXPORT" in source
+    assert "RAS_COMMANDER_EXAMPLE_RUN_ROOT" in source
     assert "OVERWRITE_NATIVE_TERRAIN_EXPORT = False" in source
     assert len(native_cells) == 2
     for index, cell in enumerate(native_cells):
         assert cell["cell_type"] == "code"
-        assert cell["execution_count"] is None
-        assert cell["outputs"] == []
+        assert cell["execution_count"] == index + 6
+        assert cell["outputs"]
+        assert "execution" in cell["metadata"]
+        assert not any(
+            output.get("output_type") == "error" for output in cell["outputs"]
+        )
         ast.parse("".join(cell["source"]), filename=f"native-cell-{index}")
+
+
+def test_notebook_316_commits_real_portable_native_outputs_and_figure():
+    export_cell, evidence_cell = _native_cells()
+    export_text = _output_text(export_cell)
+    evidence_text = _output_text(evidence_cell)
+
+    for expected in (
+        "Terrain50.baldeagledem.tif",
+        "Terrain50.dtm_20ft.tif",
+        "36.504512049933",
+        "[20, 40, 80, 160, 320, 640]",
+        "modifications_off",
+        "modifications_on",
+        "49168",
+        "48517",
+        "terrain50_modifications_off_2x.tif.receipt.json",
+        "terrain50_modifications_on_2x.tif.receipt.json",
+    ):
+        assert expected in export_text
+
+    for expected in (
+        "3721",
+        "264",
+        "0.15625",
+        "9.625",
+        "1769",
+        "terrain50_native_modification_evidence.png",
+    ):
+        assert expected in evidence_text
+
+    for output_text in (export_text, evidence_text):
+        assert "C:\\" not in output_text
+        assert "C:/" not in output_text
+        assert "G:\\" not in output_text
+        assert "H:\\" not in output_text
+        assert "billk_clb" not in output_text
+
+    png_outputs = [
+        output["data"]["image/png"]
+        for output in evidence_cell["outputs"]
+        if "image/png" in output.get("data", {})
+    ]
+    assert len(png_outputs) == 1
+    png_bytes = base64.b64decode(png_outputs[0])
+    assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(png_bytes) > 50_000
 
 
 def test_notebook_316_exports_original_mixed_source_terrain50_only():

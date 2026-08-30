@@ -1946,7 +1946,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 14
-  executed_cells: 12
+  executed_cells: 14
 - id: 317_restart_file_settings
   filename: 317_restart_file_settings.ipynb
   title: Restart File Output and Warm-Start Settings
