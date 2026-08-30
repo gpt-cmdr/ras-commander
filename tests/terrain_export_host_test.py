@@ -43,6 +43,79 @@ def _source(
     }
 
 
+def _valid_gdalinfo() -> dict:
+    return {
+        "driverShortName": "GTiff",
+        "size": [4, 4],
+        "geoTransform": [0.0, 5.0, 0.0, 20.0, 0.0, -5.0],
+        "coordinateSystem": {"wkt": "PROJCRS[...]"},
+        "bands": [{
+            "type": "Float32",
+            "noDataValue": -9999.0,
+            "computedMin": 1.0,
+            "computedMax": 8.0,
+            "checksum": 42,
+        }],
+    }
+
+
+def _configure_successful_export(monkeypatch, tmp_path, *, sidecars=()):
+    rasmap = tmp_path / "project with spaces.rasmap"
+    rasmap.write_text("<RASMapper><Terrains/></RASMapper>", encoding="utf-8")
+    output = tmp_path / "output with spaces.tif"
+    monkeypatch.setattr(
+        RasMap,
+        "list_terrain_layers",
+        staticmethod(lambda *_args, **_kwargs: pd.DataFrame([{
+            "name": "Terrain",
+            "resolved_path": str(tmp_path / "Terrain.hdf"),
+        }])),
+    )
+    monkeypatch.setattr(
+        host,
+        "_resolve_hecras_source",
+        lambda *_args: ("6.6", tmp_path / "fake-ras", None),
+    )
+    monkeypatch.setattr(
+        host,
+        "_stage_runtime",
+        lambda stage, *_args: (stage / "helper.exe", tmp_path / "fake-ras", None),
+    )
+
+    def fake_helper(_helper, _ras, _config, request, _stage, _timeout):
+        response = {
+            "schema_version": 1,
+            "helper": "RasMapperTerrainExportHelper",
+            "success": True,
+            "operation": request["operation"],
+            "terrain_extent": {"min_x": 0, "min_y": 0, "max_x": 20, "max_y": 20},
+            "sources": [_source(0, 5.0, 0, min_x=0, max_y=20)],
+        }
+        if request["operation"] == "inspect":
+            return response
+        partial = Path(request["output_path"])
+        partial.write_bytes(b"new valid TIFF")
+        for construction, suffix in sidecars:
+            sidecar = (
+                Path(str(partial) + suffix)
+                if construction == "append"
+                else partial.with_suffix(suffix)
+            )
+            sidecar.write_text("owned sidecar", encoding="utf-8")
+        return {
+            **response,
+            "resample_method": "near",
+            "resample_to_one_rfi": True,
+            "generate_method_is_public": False,
+            "new_rfis": [str(partial)],
+            "messages": [],
+        }
+
+    monkeypatch.setattr(host, "_run_helper", fake_helper)
+    monkeypatch.setattr(host, "_run_gdalinfo", lambda *_args: _valid_gdalinfo())
+    return rasmap, output
+
+
 def test_terrain_selection_requires_unambiguous_exact_name():
     layers = pd.DataFrame(
         [
@@ -188,6 +261,20 @@ def test_hecras_640_is_rejected_with_official_elevation_defect_reason():
 def test_hecras_700_is_rejected_with_official_modification_defect_reason():
     with pytest.raises(ValueError, match="omit the minimum-Y portion"):
         host.resolve_supported_hecras_version("7.0", None)
+
+
+def test_hecras_70_beta_is_rejected_as_prerelease_not_release_defect():
+    with pytest.raises(ValueError) as error:
+        host.resolve_supported_hecras_version("7.0 Beta", None)
+    message = str(error.value)
+    assert (
+        message
+        == "HEC-RAS '7.0 Beta' is unsupported by "
+        "RasTerrain.export_rasmapper_terrain(). Supported versions are exactly "
+        "6.4.1, 6.5, 6.6, 7.0.1, and 7.1. Prerelease HEC-RAS builds are not "
+        "accepted by this production API; use a qualified official release instead."
+    )
+    assert "minimum-Y" not in message
 
 
 def test_hecras_71_is_forward_open_before_the_binary_is_published():
@@ -444,6 +531,42 @@ def test_request_and_response_schema_validation():
         host.validate_helper_response({**response, "resample_method": "average"}, "export")
 
 
+def test_inspect_response_requires_deep_valid_extent_and_source_shape():
+    response = {
+        "schema_version": 1,
+        "helper": "RasMapperTerrainExportHelper",
+        "success": True,
+        "operation": "inspect",
+        "terrain_extent": {"min_x": 0, "min_y": 0, "max_x": 20, "max_y": 20},
+        "sources": [_source(0, 5.0, 0)],
+    }
+    host.validate_helper_response(response, "inspect")
+
+    malformed_extent = {**response, "terrain_extent": {"min_x": 0}}
+    with pytest.raises(RuntimeError, match="terrain_extent is missing fields: min_y"):
+        host.validate_helper_response(malformed_extent, "inspect")
+
+    malformed_type = {
+        **response,
+        "terrain_extent": {**response["terrain_extent"], "max_x": "20"},
+    }
+    with pytest.raises(RuntimeError, match=r"terrain_extent\.max_x must be a finite number"):
+        host.validate_helper_response(malformed_type, "inspect")
+
+    malformed_source = dict(response["sources"][0])
+    malformed_source.pop("cell_sizes")
+    with pytest.raises(RuntimeError, match=r"sources\[0\] is missing fields: cell_sizes"):
+        host.validate_helper_response(
+            {**response, "sources": [malformed_source]}, "inspect"
+        )
+
+    malformed_source = {**response["sources"][0], "columns": "100"}
+    with pytest.raises(RuntimeError, match=r"sources\[0\]\.columns must be an integer"):
+        host.validate_helper_response(
+            {**response, "sources": [malformed_source]}, "inspect"
+        )
+
+
 def test_semantic_validation_enforces_grid_type_crs_nodata_and_no_sidecars(tmp_path):
     tif = tmp_path / "bounded.tif"
     tif.write_bytes(b"TIFF")
@@ -529,6 +652,124 @@ def test_operational_failure_cleans_owned_partial_and_stage(monkeypatch, tmp_pat
     assert "hash" not in json.dumps(receipt).lower()
 
 
+def test_semantic_rejection_cleans_all_owned_partial_sidecars(monkeypatch, tmp_path):
+    rasmap, output = _configure_successful_export(
+        monkeypatch,
+        tmp_path,
+        sidecars=(
+            ("append", ".tfw"),
+            ("replace", ".tfw"),
+            ("append", ".prj"),
+            ("replace", ".prj"),
+        ),
+    )
+    result = host.export_rasmapper_terrain(
+        rasmap,
+        output,
+        terrain_name="Terrain",
+        extent=(0, 0, 20, 20),
+        hecras_version="6.6",
+    )
+    assert not result
+    assert "unexpected sidecars" in result.error
+    assert not output.exists()
+    assert not list(tmp_path.glob("*.tfw"))
+    assert not list(tmp_path.glob("*.prj"))
+    assert not list(tmp_path.glob("*.tif.tfw"))
+    assert not list(tmp_path.glob("*.tif.prj"))
+
+
+def test_overwrite_promotes_valid_tiff_and_receipt_transactionally(monkeypatch, tmp_path):
+    rasmap, output = _configure_successful_export(monkeypatch, tmp_path)
+    receipt = Path(str(output) + ".receipt.json")
+    output.write_bytes(b"old TIFF")
+    receipt.write_text('{"status":"old"}\n', encoding="utf-8")
+
+    result = host.export_rasmapper_terrain(
+        rasmap,
+        output,
+        terrain_name="Terrain",
+        extent=(0, 0, 20, 20),
+        overwrite=True,
+        hecras_version="6.6",
+    )
+    assert result
+    assert output.read_bytes() == b"new valid TIFF"
+    assert json.loads(receipt.read_text(encoding="utf-8"))["status"] == "success"
+    assert not list(tmp_path.glob("*.backup"))
+    assert not list(tmp_path.glob(".ras-terrain-export-*"))
+
+
+def test_receipt_promotion_failure_restores_previous_pair(monkeypatch, tmp_path):
+    rasmap, output = _configure_successful_export(monkeypatch, tmp_path)
+    receipt = Path(str(output) + ".receipt.json")
+    output.write_bytes(b"old TIFF")
+    old_receipt = '{"status":"old"}\n'
+    receipt.write_text(old_receipt, encoding="utf-8")
+    real_replace = host.os.replace
+
+    def fail_success_receipt_promotion(source, destination):
+        source_path = Path(source)
+        destination_path = Path(destination)
+        if destination_path == receipt and source_path.name.endswith(".partial"):
+            raise OSError("forced receipt promotion failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(host.os, "replace", fail_success_receipt_promotion)
+    result = host.export_rasmapper_terrain(
+        rasmap,
+        output,
+        terrain_name="Terrain",
+        extent=(0, 0, 20, 20),
+        overwrite=True,
+        hecras_version="6.6",
+    )
+    assert not result
+    assert result.error == "Output promotion was rolled back because receipt promotion failed"
+    assert output.read_bytes() == b"old TIFF"
+    assert receipt.read_text(encoding="utf-8") == old_receipt
+    assert result.receipt_path != receipt
+    assert json.loads(result.receipt_path.read_text(encoding="utf-8"))["status"] == "failed"
+
+
+@pytest.mark.parametrize("backup_kind", ["TIFF", "receipt"])
+def test_stale_backup_delete_error_retains_committed_success(
+    monkeypatch, tmp_path, backup_kind
+):
+    rasmap, output = _configure_successful_export(monkeypatch, tmp_path)
+    receipt = Path(str(output) + ".receipt.json")
+    output.write_bytes(b"old TIFF")
+    receipt.write_text('{"status":"old"}\n', encoding="utf-8")
+    real_unlink = Path.unlink
+
+    def fail_selected_backup(path, *args, **kwargs):
+        is_selected = (
+            backup_kind == "TIFF" and path.name == "previous.tif"
+        ) or (
+            backup_kind == "receipt" and path.name.endswith(".backup")
+        )
+        if is_selected:
+            raise OSError(f"forced stale {backup_kind} backup delete failure")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_selected_backup)
+    result = host.export_rasmapper_terrain(
+        rasmap,
+        output,
+        terrain_name="Terrain",
+        extent=(0, 0, 20, 20),
+        overwrite=True,
+        hecras_version="6.6",
+    )
+    assert result
+    assert output.read_bytes() == b"new valid TIFF"
+    assert json.loads(receipt.read_text(encoding="utf-8"))["status"] == "success"
+    assert any(
+        f"stale {backup_kind} backup could not be removed" in message
+        for message in result.messages
+    )
+
+
 @pytest.mark.skipif(platform.system() not in {"Windows", "Linux"}, reason="process groups")
 def test_forced_timeout_terminates_only_owned_process_tree(tmp_path):
     psutil = pytest.importorskip("psutil")
@@ -559,6 +800,7 @@ def test_packaged_helper_resources_are_present():
     package = resources_for_native()
     assert package.joinpath("RasMapperTerrainExportHelper.exe").is_file()
     assert package.joinpath("RasMapperTerrainExportHelper.cs").is_file()
+    assert package.joinpath("BuildRasMapperTerrainExportHelper.ps1").is_file()
 
 
 def resources_for_native():

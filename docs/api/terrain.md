@@ -33,6 +33,14 @@ The method writes to a unique same-directory partial, validates the GeoTIFF,
 then atomically promotes it. `overwrite=False` is the default. A JSON receipt
 is written beside the TIFF by default, and the returned `TerrainExportResult`
 is bool-compatible. The derivative is not registered back into the project.
+Windows-drive and UNC project/input paths retain their supported normalization.
+Direct output to a real UNC share is not qualified: the host stages its owned
+GDAL junction beside the output, and Windows junction creation generally cannot
+target a remote volume. This fails before export rather than silently changing
+destinations. Write to a short local path, then copy the committed TIFF and
+receipt to the share. A qualification path whose fully qualified helper response
+name exceeded the legacy .NET 260-character limit also failed cleanly; long-path
+output staging remains unqualified.
 
 Supported HEC-RAS versions are deliberately narrow:
 

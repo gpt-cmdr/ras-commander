@@ -107,7 +107,13 @@ def _require_supported_hecras_version(
         return SUPPORTED_TERRAIN_EXPORT_VERSIONS[key]
 
     reason = ""
-    if key[:2] == (6, 3):
+    is_prerelease = re.search(r"\bbeta\b", str(version), re.IGNORECASE) is not None
+    if is_prerelease and key[:2] != (6, 7):
+        reason = (
+            " Prerelease HEC-RAS builds are not accepted by this production API; "
+            "use a qualified official release instead."
+        )
+    elif key[:2] == (6, 3):
         reason = (
             " HEC-RAS 6.3 lacks the bounded TerrainLayer.GenerateNewRasTerrain"
             " (..., resampleVecMods, ...) contract required to bake terrain "
@@ -397,6 +403,9 @@ def validate_helper_response(
         raise RuntimeError("Terrain helper response operation does not match its request")
     if not isinstance(response.get("sources"), list) or not response["sources"]:
         raise RuntimeError("Terrain helper returned no registered source inventory")
+    _validate_source_inventory(response["sources"])
+    if operation == "inspect":
+        _validate_response_extent(response.get("terrain_extent"), "terrain_extent")
     if operation == "export":
         if response.get("resample_method") != "near":
             raise RuntimeError("Native terrain helper did not use nearest-neighbor")
@@ -406,6 +415,88 @@ def validate_helper_response(
             raise RuntimeError("Native terrain helper resolved an unexpected API surface")
         if len(response.get("new_rfis", [])) != 1:
             raise RuntimeError("Native terrain helper did not report exactly one output TIFF")
+
+
+def _response_number(value: Any, field: str) -> float:
+    """Return one finite JSON number with an actionable response-schema error."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RuntimeError(f"Terrain helper response {field} must be a finite number")
+    converted = float(value)
+    if not math.isfinite(converted):
+        raise RuntimeError(f"Terrain helper response {field} must be a finite number")
+    return converted
+
+
+def _validate_response_extent(value: Any, field: str) -> None:
+    """Deep-check one helper extent before downstream code dereferences it."""
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Terrain helper response {field} must be an object")
+    keys = ("min_x", "min_y", "max_x", "max_y")
+    missing = [key for key in keys if key not in value]
+    if missing:
+        raise RuntimeError(
+            f"Terrain helper response {field} is missing fields: {', '.join(missing)}"
+        )
+    bounds = [_response_number(value[key], f"{field}.{key}") for key in keys]
+    if bounds[0] >= bounds[2] or bounds[1] >= bounds[3]:
+        raise RuntimeError(
+            f"Terrain helper response {field} must have positive width and height"
+        )
+
+
+def _validate_source_inventory(sources: list[Any]) -> None:
+    """Validate registered source records before grid selection or intersection use."""
+    required = {
+        "index",
+        "filename",
+        "priority",
+        "columns",
+        "rows",
+        "extent",
+        "cell_sizes",
+        "levels",
+    }
+    indexes: set[int] = set()
+    for position, source in enumerate(sources):
+        prefix = f"sources[{position}]"
+        if not isinstance(source, dict):
+            raise RuntimeError(f"Terrain helper response {prefix} must be an object")
+        missing = sorted(required.difference(source))
+        if missing:
+            raise RuntimeError(
+                f"Terrain helper response {prefix} is missing fields: {', '.join(missing)}"
+            )
+        for field in ("index", "priority", "columns", "rows", "levels"):
+            value = source[field]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise RuntimeError(
+                    f"Terrain helper response {prefix}.{field} must be an integer"
+                )
+        if source["index"] < 0 or source["index"] in indexes:
+            raise RuntimeError(
+                f"Terrain helper response {prefix}.index must be unique and non-negative"
+            )
+        indexes.add(source["index"])
+        if source["columns"] <= 0 or source["rows"] <= 0 or source["levels"] <= 0:
+            raise RuntimeError(
+                f"Terrain helper response {prefix} dimensions and levels must be positive"
+            )
+        if not isinstance(source["filename"], str) or not source["filename"].strip():
+            raise RuntimeError(
+                f"Terrain helper response {prefix}.filename must be a non-empty string"
+            )
+        _validate_response_extent(source["extent"], f"{prefix}.extent")
+        cell_sizes = source["cell_sizes"]
+        if not isinstance(cell_sizes, list) or not cell_sizes:
+            raise RuntimeError(
+                f"Terrain helper response {prefix}.cell_sizes must be a non-empty array"
+            )
+        for index, value in enumerate(cell_sizes):
+            cell = _response_number(value, f"{prefix}.cell_sizes[{index}]")
+            if cell <= 0:
+                raise RuntimeError(
+                    f"Terrain helper response {prefix}.cell_sizes[{index}] must be positive"
+                )
 
 
 def _normalize_host_path(value: Union[str, os.PathLike[str]]) -> Path:
@@ -862,10 +953,7 @@ def validate_output_semantics(
     if not tif_path.is_file() or tif_path.stat().st_size <= 0:
         failures.append("output TIFF is missing or empty")
 
-    sidecars = [
-        Path(str(tif_path) + suffix)
-        for suffix in (".aux.xml", ".ovr")
-    ] + [tif_path.with_suffix(suffix) for suffix in (".tfw", ".prj")]
+    sidecars = _terrain_sidecar_paths(tif_path)
     unexpected = [str(path) for path in sidecars if path.exists()]
     if unexpected:
         failures.append("native export created unexpected sidecars: " + ", ".join(unexpected))
@@ -893,6 +981,19 @@ def validate_output_semantics(
         "crs_present": True,
         "sidecars": [],
     }
+
+
+def _terrain_sidecar_paths(tif_path: Path) -> list[Path]:
+    """Return every owned sidecar spelling rejected by semantic validation."""
+    candidates = [
+        Path(str(tif_path) + suffix)
+        for suffix in (".aux.xml", ".ovr", ".tfw", ".prj")
+    ]
+    candidates.extend(
+        tif_path.with_suffix(suffix)
+        for suffix in (".aux.xml", ".ovr", ".tfw", ".prj")
+    )
+    return list(dict.fromkeys(candidates))
 
 
 def _json_safe(value: Any) -> Any:
@@ -1040,6 +1141,7 @@ def export_rasmapper_terrain(
     helper_response: Optional[dict[str, Any]] = None
     promoted = False
     receipt_promoted = False
+    commit_finalized = False
     success_receipt_partial: Optional[Path] = None
     output_existed_before = output.exists()
     receipt_existed_before = receipt.exists()
@@ -1160,10 +1262,22 @@ def export_rasmapper_terrain(
         os.replace(success_receipt_partial, receipt)
         success_receipt_partial = None
         receipt_promoted = True
-        with contextlib.suppress(FileNotFoundError):
-            output_backup.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            receipt_backup.unlink()
+        commit_finalized = True
+        for label, backup in (
+            ("TIFF", output_backup),
+            ("receipt", receipt_backup),
+        ):
+            try:
+                backup.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                message = (
+                    f"Terrain export committed, but the stale {label} backup "
+                    f"could not be removed: {backup} ({exc})"
+                )
+                result.messages.append(message)
+                logger.warning(message)
         return result
     except subprocess.TimeoutExpired as exc:
         result.success = False
@@ -1179,12 +1293,27 @@ def export_rasmapper_terrain(
         result.elapsed_seconds = time.monotonic() - started
         with contextlib.suppress(FileNotFoundError):
             partial_tif.unlink()
-        for suffix in (".aux.xml", ".ovr"):
+        for sidecar in _terrain_sidecar_paths(partial_tif):
             with contextlib.suppress(FileNotFoundError):
-                Path(str(partial_tif) + suffix).unlink()
+                sidecar.unlink()
         if success_receipt_partial is not None:
             with contextlib.suppress(FileNotFoundError):
                 success_receipt_partial.unlink()
+        if not commit_finalized:
+            if promoted:
+                with contextlib.suppress(OSError):
+                    output.unlink()
+            if output_backup.exists():
+                os.replace(output_backup, output)
+            if receipt_backup.exists():
+                with contextlib.suppress(OSError):
+                    receipt.unlink()
+                os.replace(receipt_backup, receipt)
+            if promoted and not receipt_promoted:
+                result.success = False
+                result.error = (
+                    "Output promotion was rolled back because receipt promotion failed"
+                )
         if not result.success:
             try:
                 failure_receipt = receipt
@@ -1199,24 +1328,12 @@ def export_rasmapper_terrain(
                 _write_receipt_atomic(failure_receipt, payload)
             except Exception as receipt_error:
                 result.messages.append(f"Could not write failure receipt: {receipt_error}")
-        if promoted and (not result.success or not receipt_promoted):
-            with contextlib.suppress(OSError):
-                output.unlink()
-        if output_backup.exists():
-            os.replace(output_backup, output)
-        if receipt_backup.exists():
-            with contextlib.suppress(OSError):
-                receipt.unlink()
-            os.replace(receipt_backup, receipt)
         if stage.exists():
             try:
                 _cleanup_stage(stage)
             except Exception:
                 logger.warning("Could not completely remove terrain export stage %s", stage)
                 logger.debug("Terrain stage cleanup failed", exc_info=True)
-        if promoted and not receipt_promoted:
-            result.success = False
-            result.error = "Output promotion was rolled back because receipt promotion failed"
     return result
 
 

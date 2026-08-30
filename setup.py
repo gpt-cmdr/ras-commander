@@ -82,6 +82,7 @@ setup(
             "RasStoreMapHelper.cs",
             "RasMapperTerrainExportHelper.exe",
             "RasMapperTerrainExportHelper.cs",
+            "BuildRasMapperTerrainExportHelper.ps1",
         ],
     },
     python_requires='>=3.10',

@@ -135,6 +135,33 @@ Independent reflection corrected two assumptions in the original proposal:
 The helper resolves the exact non-public nine-parameter contract and uses the
 public `RasterFileCount` plus `RasterFileInfo(int)` inventory.
 
+### Reproducible managed-helper build
+
+`ras_commander/native/BuildRasMapperTerrainExportHelper.ps1` is the canonical
+build recipe for `RasMapperTerrainExportHelper.cs`. It uses the 32-bit .NET
+Framework compiler at `C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe`,
+passes `/platform:x86`, `/target:exe`, `/nostdlib+`, `/optimize+`, and `/debug-`,
+and names every framework reference. It compiles against the installed HEC-RAS
+6.6 `RasMapperLib.dll` 2.0.0.0, `Utility.Core.dll` 1.0.0.0, and
+`TiffAssist.dll` 1.0.0.0. These assumptions match the host's x86 `bin32` native
+library staging. The script refuses to overwrite the tracked executable unless
+`-ReplaceTrackedHelper` is explicit and validates I386 PE32 plus CLR flags
+`ILONLY | 32BITREQUIRED (0x3)` after compilation.
+
+Build to a review location without touching the packaged executable:
+
+```powershell
+& .\ras_commander\native\BuildRasMapperTerrainExportHelper.ps1 `
+  -HecRasDirectory 'C:\Program Files (x86)\HEC\HEC-RAS\6.6' `
+  -OutputPath '.\working\native-helper-build\RasMapperTerrainExportHelper.exe'
+```
+
+The 2026-08-29 QA/QC rebuild produced the same 15,360-byte length and the same
+PE32/managed flags as the tracked helper. A direct byte-for-byte comparison was
+not identical, as expected for a fresh legacy `csc` build with new PE/managed
+module identity metadata; no hash was produced and the tracked helper was not
+replaced.
+
 Related public API:
 
 ```text

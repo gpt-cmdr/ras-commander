@@ -168,9 +168,16 @@ class RasTerrain:
             HEC-RAS 6.3 lacks the required bounded contract, 6.4 has an
             official terrain-elevation defect, 6.7 is beta-only, and 7.0.0
             has an official terrain-modification export defect. HEC-RAS 7.0.1
-            fixes that defect and is qualified on native Windows. HEC-RAS 7.1
+            fixes that defect. HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 are qualified
+            on native Windows and under Wine. HEC-RAS 7.1
             is forward-open for its future official binary, with the helper's
             exact managed-contract check retained as the runtime safety gate.
+            Windows-drive and UNC project/input paths are supported, but direct
+            output to a UNC share is not qualified because the task-local GDAL
+            junction may not be staged on a remote volume; use a local output
+            and copy the committed TIFF and receipt afterward. Fully qualified
+            helper response paths beyond the legacy .NET 260-character limit
+            are also unqualified; select a shorter local output path.
             The base export is always nearest-neighbor. The derivative is not
             registered in or otherwise written back to the source project.
             ``RasTerrainMod.compute_modified_terrain_raster()`` remains an

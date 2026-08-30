@@ -1,7 +1,7 @@
 """Opt-in real-runtime qualification for native RAS Mapper terrain export.
 
-Run with ``RAS_COMMANDER_RUN_TERRAIN_EXPORT_QUALIFICATION=1``. Fixture paths
-may be overridden with the environment variables used below. Exact-input
+Run with ``RAS_COMMANDER_RUN_TERRAIN_EXPORT_QUALIFICATION=1``. Each test skips
+unless its documented fixture environment variable is configured. Exact-input
 Windows/Wine pixel parity is additionally enabled by setting all three of
 ``RAS_COMMANDER_TERRAIN_PARITY_PROJECT``,
 ``RAS_COMMANDER_TERRAIN_PARITY_WINDOWS_OFF``, and
@@ -28,18 +28,6 @@ if os.environ.get("RAS_COMMANDER_RUN_TERRAIN_EXPORT_QUALIFICATION") != "1":
 
 rasterio = pytest.importorskip("rasterio")
 
-UPGU3_PROJECT = Path(os.environ.get(
-    "RAS_COMMANDER_UPGU3_PROJECT",
-    r"H:\Testing\eBFE Model Organization\Organized\UpperGuadalupe_12100201\RAS Model\UPGU3\UPGU3.prj",
-))
-MUNCIE_PROJECT = Path(os.environ.get(
-    "RAS_COMMANDER_MUNCIE_PROJECT",
-    r"H:\CLB-Repos\ras-commander\example_projects\Muncie\Muncie.prj",
-))
-BALD_EAGLE_PROJECT = Path(os.environ.get(
-    "RAS_COMMANDER_BALD_EAGLE_PROJECT",
-    r"H:\CLB-Repos\ras-commander\example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.prj",
-))
 UPGU3_WINDOW = (
     1996495.92929205,
     13858745.25719928,
@@ -58,6 +46,16 @@ BALD_EAGLE_WINDOW = (
     2044060.41918676,
     349430.9951331958,
 )
+
+
+def _required_project(variable_name: str) -> Path:
+    configured = os.environ.get(variable_name)
+    if not configured:
+        pytest.skip(f"{variable_name} must point to the opt-in project fixture")
+    path = Path(configured)
+    if not path.is_file():
+        pytest.fail(f"{variable_name} does not point to a project file: {path}")
+    return path
 
 
 def _assert_result(result, factor):
@@ -124,9 +122,9 @@ def _read_raster_for_parity(path: Path) -> tuple[np.ma.MaskedArray, dict]:
 def test_supported_versions_upgu3_modification_aware_2x_and_4x(
     tmp_path, version, expected_min_delta
 ):
-    assert UPGU3_PROJECT.is_file()
+    upgu3_project = _required_project("RAS_COMMANDER_UPGU3_PROJECT")
     common = dict(
-        ras_project_path=UPGU3_PROJECT,
+        ras_project_path=upgu3_project,
         terrain_name="Terrain",
         extent=UPGU3_WINDOW,
         hecras_version=version,
@@ -173,9 +171,9 @@ def test_supported_versions_upgu3_modification_aware_2x_and_4x(
 @pytest.mark.parametrize("version", ["6.4.1", "6.5", "6.6", "7.0.1"])
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
 def test_supported_versions_multi_source_stitched_export(tmp_path, version):
-    assert MUNCIE_PROJECT.is_file()
+    muncie_project = _required_project("RAS_COMMANDER_MUNCIE_PROJECT")
     common = dict(
-        ras_project_path=MUNCIE_PROJECT,
+        ras_project_path=muncie_project,
         terrain_name="TerrainWithChannel",
         extent=MUNCIE_WINDOW,
         downsample_factor=2,
@@ -198,9 +196,9 @@ def test_supported_versions_multi_source_stitched_export(tmp_path, version):
 @pytest.mark.skipif(platform.system() != "Windows", reason="native Windows qualification")
 def test_hecras_66_mixed_noninteger_source_resolutions_export_to_one_tiff(tmp_path):
     """RAS Mapper owns consolidation at the explicit selected output cell size."""
-    assert BALD_EAGLE_PROJECT.is_file()
+    bald_eagle_project = _required_project("RAS_COMMANDER_BALD_EAGLE_PROJECT")
     result = RasTerrain.export_rasmapper_terrain(
-        ras_project_path=BALD_EAGLE_PROJECT,
+        ras_project_path=bald_eagle_project,
         output_tif=tmp_path / "bald-eagle-terrain50-mixed-2x.tif",
         terrain_name="Terrain50",
         extent=BALD_EAGLE_WINDOW,
@@ -228,10 +226,9 @@ def test_hecras_66_mixed_noninteger_source_resolutions_export_to_one_tiff(tmp_pa
 @pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")
 def test_hecras_66_wine_matches_native_muncie_semantics(tmp_path):
     """The host must be configured with a task-copyable HEC-RAS 6.6 prefix."""
-    if not MUNCIE_PROJECT.is_file():
-        pytest.skip("Wine Muncie fixture is not configured")
+    muncie_project = _required_project("RAS_COMMANDER_MUNCIE_PROJECT")
     result = RasTerrain.export_rasmapper_terrain(
-        MUNCIE_PROJECT,
+        muncie_project,
         tmp_path / "muncie-wine-66.tif",
         terrain_name="TerrainWithChannel",
         extent=MUNCIE_WINDOW,
@@ -249,10 +246,9 @@ def test_hecras_66_wine_matches_native_muncie_semantics(tmp_path):
 @pytest.mark.skipif(platform.system() != "Linux", reason="Wine qualification")
 def test_hecras_66_wine_mixed_noninteger_sources_export_to_one_tiff(tmp_path):
     """RAS Mapper consolidates mixed source grids under the configured Wine runtime."""
-    if not BALD_EAGLE_PROJECT.is_file():
-        pytest.skip("Wine Bald Eagle fixture is not configured")
+    bald_eagle_project = _required_project("RAS_COMMANDER_BALD_EAGLE_PROJECT")
     result = RasTerrain.export_rasmapper_terrain(
-        BALD_EAGLE_PROJECT,
+        bald_eagle_project,
         tmp_path / "bald-eagle-terrain50-mixed-wine-2x.tif",
         terrain_name="Terrain50",
         extent=BALD_EAGLE_WINDOW,

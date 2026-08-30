@@ -20,6 +20,13 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - HDF access: `Hdf*` classes and `ras_commander/hdf/`
 - USGS IC generation: `usgs/initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, generate IC table from USGS snapshot)
 - Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
+- Terrain derivatives: `RasTerrain.export_rasmapper_terrain()` is the production
+  path for a bounded, single-GeoTIFF export of an exact registered RAS Mapper
+  terrain. It preserves native source order, stitches, masks, and optional
+  vector modifications, returns a `TerrainExportResult`, and is qualified on
+  Windows and Wine for HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1. Keep
+  `RasTerrainMod.compute_modified_terrain_raster()` scoped to small analytical
+  row-sampled work; it is not the production consolidation fallback.
 
 ## Coding Rules
 

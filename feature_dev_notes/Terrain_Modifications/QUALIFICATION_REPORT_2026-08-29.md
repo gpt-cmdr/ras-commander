@@ -215,9 +215,15 @@ Earlier useful failures were retained as findings rather than hidden:
 5. A repeat harness directory whose fully qualified helper response path
    exceeded the legacy .NET 260-character limit failed cleanly before export.
    Repeating from the shorter task-local `working/mr50b` path passed. Extreme
-   Windows path length therefore remains a runtime limitation; ordinary
-   `Path`/string, UNC, Wine, and space-containing cases retain their existing
-   coverage.
+   Windows path length therefore remains a runtime limitation. Ordinary
+   `Path`/string, Wine, and space-containing cases retain their existing
+   coverage. Windows-drive and UNC project/input normalization remain covered;
+   direct output to a UNC share is not qualified because the task-local GDAL
+   junction may not be created on a remote volume.
+
+The opt-in qualification module contains no private machine-default fixture
+paths. Each real project must be supplied explicitly through its documented
+environment variable; an unset fixture skips with the required variable name.
 
 The production host now stages the required `bin32` libraries beside the helper
 and clones a configured Wine prefix into per-call state by default. It never
