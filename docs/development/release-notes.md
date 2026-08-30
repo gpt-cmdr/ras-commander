@@ -2,7 +2,7 @@
 
 ## Version History
 
-### Unreleased
+### v0.99.2 (Current published release — August 2026)
 
 **Native Registered-Terrain Export**
 
@@ -81,7 +81,7 @@
 - Normalize relative components in mapped-drive fallbacks without converting
   HEC-RAS-compatible drive-letter paths to UNC paths.
 
-### v0.99.1 (Current published release — July 2026)
+### v0.99.1 (July 2026)
 
 **Qualified Raster Processing on Linux/Wine**
 
