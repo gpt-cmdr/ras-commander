@@ -16,6 +16,10 @@ def _notebook_source() -> str:
     )
 
 
+def _notebook() -> dict:
+    return json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
+
+
 def test_benefit_area_notebook_prefers_native_registered_terrain_export():
     source = _notebook_source()
 
@@ -50,3 +54,25 @@ def test_benefit_area_notebook_separates_hydraulic_and_export_versions():
     assert 'TERRAIN_EXPORT_RAS_VERSION = "7.0.1"' in source
     assert "Do not select 7.0.0 for modification-aware terrain export" in source
     assert "7.0.1 contains the fix" in source
+
+
+def test_benefit_area_notebook_labels_retained_execution_evidence():
+    source = _notebook_source()
+    notebook = _notebook()
+
+    assert "retained from this notebook's last completed run" in source
+    assert "They were not recomputed for this terrain-export documentation revision" in source
+
+    code_cells = [
+        cell for cell in notebook["cells"] if cell.get("cell_type") == "code"
+    ]
+    assert len(code_cells) == 11
+    assert [cell.get("execution_count") for cell in code_cells] == list(range(1, 12))
+    assert all("execution" in cell.get("metadata", {}) for cell in code_cells)
+
+    final_map_outputs = [
+        output
+        for output in code_cells[-1].get("outputs", [])
+        if "image/png" in output.get("data", {})
+    ]
+    assert len(final_map_outputs) == 4
