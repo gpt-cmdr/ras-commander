@@ -2,7 +2,8 @@
 
 Date: 2026-08-28
 
-Status: approved design for implementation; no HEC-RAS execution performed by this task
+Status: implemented; corrected short-root and representative-depth HEC-RAS 6.6
+A/B pilots complete; broader representative and installed-version matrices remain
 
 Target branch: `codex/structured-execution-evidence-integration`
 Target PR: #319

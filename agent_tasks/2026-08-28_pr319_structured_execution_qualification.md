@@ -792,3 +792,36 @@ complete.
   proved. No HEC-RAS, COM, or process-signalling action occurred during these
   corrections or deterministic tests. A new clean-commit-pinned short-root
   receipt is still required.
+- 2026-08-30: corrected A/B execution completed at clean pushed commit
+  `c4e811f5`. Short-root run `0eddef23-d970-48b3-aeda-20f1a6f79b49`, attempt
+  `e2f38dfe-6978-4df3-af03-d348923b454b`, and representative-depth run
+  `d7d8858e-cb17-4537-92a4-1d236d93dcc3`, attempt
+  `df53b7b6-bc23-4cfc-bd5b-9ae1c9a7597d`, each generated a fresh disposable
+  EX1 plan-01 dataset through the exact HEC-RAS 6.6 binary and terminalized
+  `passed`. Both selected the sole final HDF, identified producer
+  `HEC-RAS 6.6 September 2024`, confirmed completion and quiescence, reported
+  zero parsed errors/warnings, passed R01/R02/R03/R04/R06/R10/R11/R12, and
+  preserved source content `915cc1eb...2925` plus metadata
+  `5ac662f1...aa82`. Preparation found the four legacy cleanup targets absent;
+  HEC-RAS transiently created `EX1.O01`; finalization removed it; and R04
+  independently reported exactly `["EX1.O01"]`. New or modified plan, run,
+  geometry-HDF, result-HDF, and compute-log files are classified
+  `staged_execution_output`, while stage metadata is
+  `generated_harness_receipt`. Both PyArrow aggregate/verify/report passes
+  reproduced 80 artifacts, 13 events, eight invariants, one lane, and 17
+  observations. B exercised a 253-character engine-facing path and reproduced
+  A's semantic evidence. Status reports action-local invocation false for its
+  read-only call and historical verified-attempt invocation true. Foreign
+  UPGU3 runs repeatedly closed the global gate during preflight; they were left
+  untouched, and dispatch occurred only in complete-empty windows. Both final
+  attempts released all locks and retained no process.
+- 2026-08-30: final read-only API audit returned GO with no P0/P1. It confirmed
+  receipt cryptographic validation, full supervisor semantics, source identity,
+  and fresh receipt-to-PyArrow rebuild equality for both pilots. The comparison
+  is execution-evidence equivalence rather than byte-identical or numerically
+  compared hydraulic equivalence; HDF digests and structured runtimes differ
+  as expected (1.671 versus 1.517 seconds). A nonblocking P2 remains: both
+  stderr logs contain an early RasPrj diagnostic that execution will fail and
+  TCU is unaccepted, although the exact pinned executable then succeeds and the
+  structured TCU gate records acceptance. That message is a logging-consistency
+  backlog item, not contradictory terminal evidence.

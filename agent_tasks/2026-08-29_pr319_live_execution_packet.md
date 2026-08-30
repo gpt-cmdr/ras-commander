@@ -2,16 +2,15 @@
 
 Date: 2026-08-30
 
-Status: approved scope; modern runtime/launch correction passed its 740-test
-affected no-engine gate plus final API and adversarial review. The earlier
-preflight, path-boundary, launcher-identity, overnight-stall, and partial-intent
-campaigns are superseded. Audited recovery of the partial-intent host lock is
-complete. A later short-root 6.6 run generated a valid disposable result and
-passed its eight recorded invariants, but review found three receipt-quality
-defects in provenance, status scope, and transient-cleanup reporting. Its
-immutable receipt is diagnostic rather than qualifying. The corrected
-replacement campaign must pin a new clean commit and pass before the
-representative-depth repeat.
+Status: the corrected short-root and representative-depth A/B pilots are
+complete at clean commit `c4e811f5`. Both fresh HEC-RAS 6.6 attempts generated
+disposable EX1 results, terminalized `passed`, selected only the HDF family,
+passed all eight required invariants, reproduced identical semantic cleanup
+and provenance evidence, preserved the source tree, and ended with no retained
+process or lock. Their PyArrow aggregates and Markdown reports rebuild from
+immutable receipts. Earlier preflight, path-boundary, launcher-identity,
+overnight-stall, partial-intent, and first-receipt campaigns remain superseded
+diagnostics and must not be reused.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -208,6 +207,71 @@ paths with snapshot-visible initial-state removals. Each successful cleanup
 record must exactly partition its implied target set between disjoint
 `removed_paths` and `missing_paths`. A fresh commit-pinned short-root attempt is
 required before the representative-depth A/B.
+
+### Corrected short-root and representative-depth A/B
+
+The corrected implementation was committed and pushed as `c4e811f5` after 432
+affected tests and 377 complete qualification tests passed. Ruff, compileall,
+and `git diff --check` also passed. Final API-consistency and adversarial audits
+reported no P0/P1 finding. The supervisor now rejects the first receipt because
+it lacks the complete structured cleanup contract, so resume cannot silently
+reuse superseded evidence. Repository binding also runs before every resume or
+no-op decision.
+
+Short-root campaign `f94c2d3b-ba5b-43c4-b157-4260257b4f21`, execution run
+`0eddef23-d970-48b3-aeda-20f1a6f79b49`, lane `s66`, attempt
+`e2f38dfe-6978-4df3-af03-d348923b454b`, generated a new disposable EX1 plan-01
+dataset beneath `C:/rcq`. It terminalized `passed` in 4.68 seconds. The exact
+HEC-RAS 6.6 executable hash matched `a34e56a1...134`; launcher return code was
+zero; calculation, completion, quiescence, and result finalization were all
+confirmed; and the HDF identified `HEC-RAS 6.6 September 2024`, reported a
+1.671-second structured runtime, and contained zero parsed errors or warnings.
+
+The preparation cleanup found all four legacy targets missing. HEC-RAS then
+created transient `EX1.O01`; finalization removed that one file, and R04
+independently recomputed the same exact allowlisted deletion. The final HDF was
+the sole result family. New `EX1.g01.hdf`, `EX1.P01.hdf`, and `_compute_p01.log`,
+plus modified `EX1.P01` and `EX1.r01`, are labeled
+`staged_execution_output`. `.ras-commander/stage.json` is
+`generated_harness_receipt`; unchanged source-stage files remain
+`captured_real`. The source content fingerprint remained
+`915cc1eb...2925` and its metadata fingerprint remained `5ac662f1...aa82`.
+
+Representative-depth campaign `bc417988-74f4-4e18-8825-caae72a75a0b`,
+execution run `d7d8858e-cb17-4537-92a4-1d236d93dcc3`, lane `s66b`, attempt
+`df53b7b6-bc23-4cfc-bd5b-9ae1c9a7597d`, repeated the same calculation from a
+fresh stage beneath the approved long local root. Its longest HEC-RAS-facing
+path was the 253-character `EX1.p01.computeMsgs.txt`; final stage metadata was
+255 characters and used the staging API's extended-length path adapter. The B
+attempt also terminalized `passed` and reproduced A's result family, producer,
+completion, exact cleanup partitions, R04 observation, artifact-origin map,
+source fingerprint, eight passing invariants, zero errors/warnings, and empty
+terminal process inventory. Each run rebuilt exactly 80 artifact rows, 13 event
+rows, eight invariant rows, one lane row, and 17 observation rows through
+PyArrow, and verification reproduced those tables from the receipts.
+
+An unrelated ras2fim UPGU3 workflow repeatedly occupied the global HEC-RAS
+slot during both preflights. The harness and independent auditor rejected each
+occupied window. No foreign process was adopted, cancelled, or signalled; each
+pilot dispatched only after consecutive complete-empty inventories and the
+in-lock gate. Read-only status correctly reports its own action-local
+`hec_ras_invoked=false` while separately reporting historical verified-attempt
+invocation as `true`.
+
+The plan file does not declare `Program Version`, so both receipts retain the
+diagnostic conflict `program_version_unresolved`. This is not producer
+ambiguity: each final stage has exactly one result family and the HDF itself
+identifies its 6.6 producer.
+
+The A/B conclusion is execution-evidence equivalence, not byte-identical or
+numerically compared hydraulic-result equivalence. Regenerated HDF digests and
+structured runtimes differ as expected: A reported 1.671 seconds and B reported
+1.517 seconds. Both stderr logs also contain an early RasPrj diagnostic that
+HEC-RAS will fail and TCU is unaccepted, even though the exact pinned executable
+subsequently succeeded and the structured TCU gate recorded acceptance. This
+misleading pre-execution logging is retained as a nonblocking API/logging P2;
+the later digest-bound launch, HDF, TCU, completion, and terminal evidence is
+internally consistent.
 
 Omitting `max_runtime` preserves the existing unbounded launcher wait and the
 existing 7,200-second asynchronous-solver bound. Supplying a finite value gives
