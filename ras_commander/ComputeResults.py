@@ -8,6 +8,7 @@ Classes:
     ComputeResult: Result of compute_plan() - backward compatible with bool
     ComputeParallelResult: Result of compute_parallel/test_mode - backward compatible with Dict[str, bool]
     RasControlResult: Result of RasControl.run_plan() - backward compatible with Tuple[bool, List[str]]
+    TerrainExportResult: Native RAS Mapper terrain export - backward compatible with bool
 """
 
 from dataclasses import dataclass, field
@@ -364,4 +365,48 @@ class GeometryCompleteResult:
             f"edge_lines={self.edge_lines_written}, "
             f"interp_surface={self.interpolation_surface_written}, "
             f"flow_paths={self.flow_paths_written}, time={time_str})"
+        )
+
+
+@dataclass
+class TerrainExportResult:
+    """Result of a supervised native RAS Mapper terrain export.
+
+    ``bool(result)`` is true only when the native output passed semantic
+    validation and both the GeoTIFF and machine-readable receipt were
+    promoted to their requested paths.
+    """
+
+    success: bool
+    output_path: Path
+    receipt_path: Path
+    terrain_name: str = ""
+    terrain_hdf_path: Optional[Path] = None
+    requested_extent: Optional[tuple[float, float, float, float]] = None
+    snapped_extent: Optional[tuple[float, float, float, float]] = None
+    native_cell_size: Optional[float] = None
+    output_cell_size: Optional[float] = None
+    downsample_factor: int = 1
+    rasterize_modifications: bool = True
+    source_inventory: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
+    validation: Dict[str, Any] = field(default_factory=dict)
+    messages: List[str] = field(default_factory=list)
+    elapsed_seconds: float = 0.0
+    timed_out: bool = False
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        status = "SUCCESS" if self.success else "FAILED"
+        time_str = (
+            f"{self.elapsed_seconds:.1f}s"
+            if self.elapsed_seconds > 0
+            else "N/A"
+        )
+        return (
+            "TerrainExportResult("
+            f"{status}, terrain={self.terrain_name!r}, "
+            f"factor={self.downsample_factor}x, time={time_str})"
         )

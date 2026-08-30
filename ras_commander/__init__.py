@@ -156,7 +156,7 @@ _LAZY_EXPORTS = {
         for name in (
             'RasControlResult', 'PreprocessResult',
             'GeometryPreprocessResult', 'GeometryLayerResult',
-            'GeometryCompleteResult',
+            'GeometryCompleteResult', 'TerrainExportResult',
         )
     },
     **{
@@ -251,7 +251,9 @@ _FIXIT_EXPORTS = {
 }
 
 # Terrain module - HEC-RAS terrain creation and manipulation
-_TERRAIN_EXPORTS = {'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter'}
+_TERRAIN_EXPORTS = {
+    'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter',
+}
 
 # Results module - Compute message parsing and execution summary
 _RESULTS_EXPORTS = {'ResultsParser', 'ResultsSummary'}
@@ -347,7 +349,7 @@ __all__ = [
     'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
-    'GeometryLayerResult', 'GeometryCompleteResult',
+    'GeometryLayerResult', 'GeometryCompleteResult', 'TerrainExportResult',
     'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',

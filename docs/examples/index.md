@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*134 notebooks indexed - 121 with runtime data, 13 without.*
+*135 notebooks indexed - 122 with runtime data, 13 without.*
 
 ## 100s - Initialization & Execution
 
@@ -85,7 +85,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [313 - HMS-to-RAS Boundary Condition Matching](../notebooks/313_hms_to_ras_boundary_matching.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/313_hms_to_ras_boundary_matching.ipynb) | 5 s |
 | [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
 | [315 - 2D Computation Options](../notebooks/315_2d_computation_options.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/315_2d_computation_options.ipynb) | 2.4 min |
-| [316 - Terrain Modifications: High-Ground and Polygon Writer Validation](../notebooks/316_terrain_modifications.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/316_terrain_modifications.ipynb) | 2.8 min |
+| [316 - Terrain Modifications: High-Ground and Polygon Writer Validation](../notebooks/316_terrain_modifications.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/316_terrain_modifications.ipynb) | 2.9 min |
 | [317 - Restart File Output and Warm-Start Settings](../notebooks/317_restart_file_settings.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/317_restart_file_settings.ipynb) | 24 s |
 | [318 - Validating DSS File Paths and Data Availability](../notebooks/318_validating_dss_paths.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/318_validating_dss_paths.ipynb) | 4 s |
 | [319 - Post-fire debris-flow 2D modeling, built from scratch (non-Newtonian)](../notebooks/319_post_fire_debris_flow_nonnewtonian.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/319_post_fire_debris_flow_nonnewtonian.ipynb) | 6.3 min |
@@ -193,9 +193,10 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [920 - RAS Terrain Creation](../notebooks/920_terrain_creation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | 2.0 h |
+| [920 - RAS Terrain Creation](../notebooks/920_terrain_creation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/920_terrain_creation.ipynb) | 12 s |
 | [925 - Cross-Section Interpolation Surface](../notebooks/925_xs_interpolation_surface.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/925_xs_interpolation_surface.ipynb) | 6 s |
 | [930 - Terrain Modification Analysis](../notebooks/930_terrain_modification_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/930_terrain_modification_analysis.ipynb) | 15 s |
+| [931 - Native RAS Mapper Terrain Export](../notebooks/931_native_rasmapper_terrain_export.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/931_native_rasmapper_terrain_export.ipynb) | 3 s |
 
 ## 950s - eBFE Delivery
 

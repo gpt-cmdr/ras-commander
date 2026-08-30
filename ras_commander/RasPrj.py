@@ -2777,15 +2777,15 @@ def get_ras_exe(ras_version=None):
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number (e.g., "7.0") or 
-                                     a full path to the HEC-RAS executable 
+        ras_version (str, optional): Either a version number (e.g., "7.0.1") or
+                                     a full path to the HEC-RAS executable
                                      (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
     Returns:
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
-        - HEC-RAS version numbers include: "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
+        - HEC-RAS version numbers include: "7.1", "7.0.1", "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
         - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
@@ -2805,9 +2805,9 @@ def get_ras_exe(ras_version=None):
     candidate_paths = []
     
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
-    # This list matches the exact folder names on disk (verified 2026-04-19)
+    # This list matches the exact folder names on disk (verified 2026-08-29)
     ras_version_folders = [
-        "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "7.1", "7.1.0", "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1.0", "4.0"
     ]
@@ -2846,6 +2846,9 @@ def get_ras_exe(ras_version=None):
         "6.7.0": "6.7 Beta 5", # Legacy dotted normalization rewrites 6.70 to 6.7.0
         "67": "6.7 Beta 5",
         "70": "7.0",
+        "701": "7.0.1",
+        "7.1.0": "7.1",
+        "71": "7.1",
     }
 
     # Check if input is a direct path to an executable
