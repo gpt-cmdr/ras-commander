@@ -167,6 +167,8 @@ def make_offline_manifest(
         "archive_root": str(tmp_path / "archive"),
         "execution_root": str(tmp_path / "execution"),
         "defaults": {
+            "preflight_timeout_seconds": 1800,
+            "postflight_timeout_seconds": 1800,
             "timeout_seconds": 30,
             "termination_grace_seconds": 5,
             "hash_files": True,

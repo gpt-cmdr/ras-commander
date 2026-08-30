@@ -75,6 +75,68 @@ _ENGINE_DETAILS_COMMON = (
 )
 _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
 _WORKER_AUTHORIZATION_POLL_SECONDS = 0.02
+_SUPERVISOR_RECEIPT_MARGIN_SECONDS = 5.0
+_RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
+    {
+        "plan_number",
+        "command",
+        "executable_path",
+        "executable_sha256",
+        "project_path",
+        "plan_path",
+        "working_directory",
+        "launcher_pid",
+        "launcher_create_time",
+        "max_runtime_seconds",
+    }
+)
+_RASCMD_RUNTIME_DETAIL_FIELDS = frozenset(
+    {
+        "artifact_finalization_failure",
+        "launcher_returncode",
+        "max_runtime_seconds",
+        "launch_details",
+        "runtime_timed_out",
+        "failure_stage",
+        "failure_type",
+        "failure_detail",
+        "cancellation_details",
+    }
+)
+_ARTIFACT_FINALIZATION_FAILURE_FIELDS = frozenset(
+    {"failure_stage", "failure_type", "failure_detail"}
+)
+_FAILED_INSPECTION_EVIDENCE_KIND = "execution_evidence_inspection_failure"
+_CANCELLATION_DETAIL_FIELDS = frozenset(
+    {
+        "plan_number",
+        "project_path",
+        "plan_path",
+        "tmp_hdf_path",
+        "cancellation_attempted",
+        "pre_scan_complete",
+        "post_scan_complete",
+        "matched",
+        "stopped",
+        "survivors",
+        "query_errors",
+        "quiescence_confirmed",
+        "started_at",
+        "finished_at",
+    }
+)
+_PROCESS_RECORD_FIELDS = frozenset(
+    {
+        "pid",
+        "create_time",
+        "name",
+        "executable_path",
+        "command_line",
+        "working_directory",
+        "tracked",
+        "session_id",
+    }
+)
 
 
 class LiveWorkerError(RuntimeError):
@@ -126,6 +188,357 @@ def _valid_process_identity(pid: Any, create_time: Any) -> bool:
         and math.isfinite(float(create_time))
         and float(create_time) > 0
     )
+
+
+def _strict_positive_seconds(value: Any, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise LiveCapabilityError(f"{label} must be a positive finite number")
+    try:
+        normalized = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise LiveCapabilityError(
+            f"{label} must be a positive finite number"
+        ) from exc
+    if not math.isfinite(normalized) or normalized <= 0:
+        raise LiveCapabilityError(f"{label} must be a positive finite number")
+    return normalized
+
+
+def _validate_artifact_finalization_evidence(details: Mapping[str, Any]) -> bool:
+    """Validate the independent RasCmdr result-artifact finalization claim."""
+    finalized = details.get("result_artifacts_finalized")
+    if not isinstance(finalized, bool):
+        raise LiveCapabilityError(
+            "RasCmdr result_artifacts_finalized is not boolean"
+        )
+    if "artifact_finalization_failure" not in details:
+        raise LiveCapabilityError(
+            "RasCmdr execution_details lacks artifact_finalization_failure"
+        )
+    failure = details["artifact_finalization_failure"]
+    if finalized:
+        if failure is not None:
+            raise LiveCapabilityError(
+                "finalized RasCmdr artifacts contain secondary failure metadata"
+            )
+        return True
+    if (
+        not isinstance(failure, Mapping)
+        or set(failure) != _ARTIFACT_FINALIZATION_FAILURE_FIELDS
+        or failure.get("failure_stage") != "result_artifact_finalization"
+        or any(
+            not isinstance(failure.get(field), str)
+            or not failure[field].strip()
+            for field in _ARTIFACT_FINALIZATION_FAILURE_FIELDS
+        )
+    ):
+        raise LiveCapabilityError(
+            "unfinalized RasCmdr artifacts lack complete secondary failure metadata"
+        )
+    return False
+
+
+def _failed_inspection_evidence(
+    details: Mapping[str, Any],
+    exc: BaseException,
+    *,
+    started_at: datetime,
+    failed_at: datetime,
+) -> dict[str, Any]:
+    """Serialize one narrowly scoped post-failure ambiguity diagnostic."""
+    return json_safe({
+        "schema_version": 1,
+        "evidence_kind": _FAILED_INSPECTION_EVIDENCE_KIND,
+        "evidence_id": str(uuid.uuid4()),
+        "inspection_api": "RasCmdr.inspect_execution_evidence",
+        "inspection_state": "failed",
+        "inspection_started_at": started_at,
+        "inspection_failed_at": failed_at,
+        "failure_type": type(exc).__name__,
+        "reason_code": getattr(exc, "reason_code", None),
+        "detail": str(exc),
+        "plan_number": getattr(exc, "plan_number", None),
+        "declared_program_version": getattr(
+            exc, "declared_program_version", None
+        ),
+        "declared_expected_result_format": getattr(exc, "expected_format", None),
+        "selected_result_format": details["selected_result_format"],
+        "hdf_path": str(getattr(exc, "hdf_path", "")),
+        "legacy_output_path": str(getattr(exc, "legacy_output_path", "")),
+        "hdf_mtime_ns": getattr(exc, "hdf_mtime_ns", None),
+        "legacy_mtime_ns": getattr(exc, "legacy_mtime_ns", None),
+        "conflicts": ["multiple_result_formats_present"],
+        "safe_failed_execution": True,
+        "result_artifacts_finalized": details["result_artifacts_finalized"],
+        "runtime_timed_out": details["runtime_timed_out"],
+    })
+
+
+def _validated_process_identities(
+    value: Any,
+    *,
+    label: str,
+) -> set[tuple[int, float]]:
+    """Validate one JSON-safe ``RasProcessRecord.to_dict()`` collection."""
+    if not isinstance(value, list):
+        raise LiveCapabilityError(f"{label} is not an array")
+    identities: list[tuple[int, float]] = []
+    for record in value:
+        if not isinstance(record, Mapping) or set(record) != _PROCESS_RECORD_FIELDS:
+            raise LiveCapabilityError(f"{label} contains a malformed process record")
+        pid = record["pid"]
+        create_time = record["create_time"]
+        name = record["name"]
+        command_line = record["command_line"]
+        if (
+            not _valid_process_identity(pid, create_time)
+            or not isinstance(name, str)
+            or not name
+            or not isinstance(command_line, list)
+            or any(not isinstance(token, str) for token in command_line)
+            or not isinstance(record["tracked"], bool)
+            or any(
+                optional is not None
+                and (not isinstance(optional, str) or not optional)
+                for optional in (
+                    record["executable_path"],
+                    record["working_directory"],
+                    record["session_id"],
+                )
+            )
+        ):
+            raise LiveCapabilityError(f"{label} contains a malformed process record")
+        identities.append((pid, float(create_time)))
+    if len(identities) != len(set(identities)):
+        raise LiveCapabilityError(f"{label} contains duplicate process identities")
+    return set(identities)
+
+
+def _validate_safe_rascmd_failure(
+    request: Mapping[str, Any],
+    details: Mapping[str, Any],
+    launch: Mapping[str, Any],
+) -> None:
+    """Require a closed, exact cancellation receipt for a failed modern run."""
+    runtime_timed_out = details["runtime_timed_out"]
+    failure_stage = details["failure_stage"]
+    failure_type = details["failure_type"]
+    failure_detail = details["failure_detail"]
+    if not isinstance(runtime_timed_out, bool):
+        raise LiveCapabilityError("RasCmdr runtime_timed_out is not boolean")
+    if any(
+        not isinstance(value, str) or not value.strip()
+        for value in (failure_stage, failure_type, failure_detail)
+    ):
+        raise LiveCapabilityError(
+            "RasCmdr failed result lacks complete failure metadata"
+        )
+    if runtime_timed_out and failure_type != "TimeoutError":
+        raise LiveCapabilityError(
+            "RasCmdr timeout flag and failure type are inconsistent"
+        )
+
+    cancellation = details["cancellation_details"]
+    if (
+        not isinstance(cancellation, Mapping)
+        or set(cancellation) != _CANCELLATION_DETAIL_FIELDS
+    ):
+        raise LiveCapabilityError(
+            "RasCmdr failed result lacks a complete exact-cancellation receipt"
+        )
+    if (
+        not isinstance(cancellation["cancellation_attempted"], bool)
+        or cancellation["pre_scan_complete"] is not True
+        or cancellation["post_scan_complete"] is not True
+        or cancellation["quiescence_confirmed"] is not True
+        or cancellation["survivors"] != []
+        or cancellation["query_errors"] != []
+    ):
+        raise LiveProcessGateError(
+            "RasCmdr failed result did not prove exact cancellation and quiescence"
+        )
+    started_at = cancellation["started_at"]
+    finished_at = cancellation["finished_at"]
+    if (
+        isinstance(started_at, bool)
+        or not isinstance(started_at, (int, float))
+        or not math.isfinite(float(started_at))
+        or float(started_at) <= 0
+        or isinstance(finished_at, bool)
+        or not isinstance(finished_at, (int, float))
+        or not math.isfinite(float(finished_at))
+        or float(finished_at) < float(started_at)
+    ):
+        raise LiveCapabilityError(
+            "RasCmdr exact-cancellation timestamps are invalid"
+        )
+    matched = _validated_process_identities(
+        cancellation["matched"], label="RasCmdr cancellation matched"
+    )
+    stopped = _validated_process_identities(
+        cancellation["stopped"], label="RasCmdr cancellation stopped"
+    )
+    if not matched.issubset(stopped):
+        raise LiveProcessGateError(
+            "RasCmdr exact cancellation did not stop every initial match"
+        )
+    if cancellation["cancellation_attempted"] and not matched:
+        raise LiveCapabilityError(
+            "RasCmdr exact cancellation claims signalling without a match"
+        )
+
+    expected_project = Path(str(launch["project_path"])).resolve(strict=True)
+    expected_plan = Path(str(launch["plan_path"])).resolve(strict=True)
+    expected_tmp_hdf = expected_project.with_suffix(
+        f".p{request['fixture']['plan_number']}.tmp.hdf"
+    ).resolve(strict=False)
+    try:
+        observed_project = Path(str(cancellation["project_path"])).resolve(
+            strict=True
+        )
+        observed_plan = Path(str(cancellation["plan_path"])).resolve(strict=True)
+        observed_tmp_hdf = Path(str(cancellation["tmp_hdf_path"])).resolve(
+            strict=False
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise LiveCapabilityError(
+            "RasCmdr exact-cancellation paths are unverifiable"
+        ) from exc
+    if (
+        cancellation["plan_number"] != request["fixture"]["plan_number"]
+        or not _same_file(observed_project, expected_project)
+        or not _same_file(observed_plan, expected_plan)
+        or observed_tmp_hdf != expected_tmp_hdf
+    ):
+        raise LiveCapabilityError(
+            "RasCmdr exact-cancellation identity disagrees with the launch"
+        )
+
+
+def _normalize_rascmd_launch_details(
+    request: Mapping[str, Any],
+    launch_details: Any,
+    *,
+    stage_project: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate the post-Popen callback and build its durable event payload."""
+    if not isinstance(launch_details, Mapping):
+        raise LiveCapabilityError("RasCmdr launch callback did not provide a mapping")
+    details = json_safe(dict(launch_details))
+    if set(details) != _RASCMD_LAUNCH_DETAIL_FIELDS:
+        raise LiveCapabilityError("RasCmdr launch callback field set is incomplete")
+
+    plan_number = request["fixture"]["plan_number"]
+    if details["plan_number"] != plan_number:
+        raise LiveCapabilityError("RasCmdr launch callback plan number mismatch")
+    expected_executable = Path(request["engine"]["executable"]).resolve(strict=True)
+    expected_project = stage_project.resolve(strict=True)
+    expected_plan = expected_project.with_suffix(f".p{plan_number}").resolve(strict=True)
+    expected_working_directory = expected_project.parent.resolve(strict=True)
+    try:
+        callback_executable = Path(details["executable_path"]).resolve(strict=True)
+        callback_project = Path(details["project_path"]).resolve(strict=True)
+        callback_plan = Path(details["plan_path"]).resolve(strict=True)
+        callback_working_directory = Path(details["working_directory"]).resolve(
+            strict=True
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise LiveCapabilityError(
+            "RasCmdr launch callback paths were not proved"
+        ) from exc
+    for observed, expected, label in (
+        (callback_executable, expected_executable, "executable"),
+        (callback_project, expected_project, "project"),
+        (callback_plan, expected_plan, "plan"),
+        (
+            callback_working_directory,
+            expected_working_directory,
+            "working directory",
+        ),
+    ):
+        if not _same_file(observed, expected):
+            raise LiveCapabilityError(f"RasCmdr launch callback {label} mismatch")
+    if details["executable_sha256"] != request["engine"]["executable_sha256"]:
+        raise LiveCapabilityError("RasCmdr launch callback executable hash mismatch")
+    if not _valid_process_identity(
+        details["launcher_pid"], details["launcher_create_time"]
+    ):
+        raise LiveCapabilityError(
+            "RasCmdr launch callback PID/create-time identity was not proved"
+        )
+    max_runtime = _strict_positive_seconds(
+        details["max_runtime_seconds"],
+        label="RasCmdr launch callback max_runtime_seconds",
+    )
+    if max_runtime != float(request["timeout_seconds"]):
+        raise LiveCapabilityError("RasCmdr launch callback max-runtime mismatch")
+
+    logical_argv = [
+        str(expected_executable),
+        "-c",
+        str(expected_project),
+        str(expected_plan),
+    ]
+    if any('"' in token for token in logical_argv):
+        raise LiveCapabilityError("RasCmdr launch callback path contains a quote")
+    expected_raw_command = (
+        f'"{logical_argv[0]}" -c "{logical_argv[2]}" "{logical_argv[3]}"'
+    )
+    if details["command"] != expected_raw_command:
+        raise LiveCapabilityError("RasCmdr launch callback raw command mismatch")
+    event_payload = {
+        "plan_number": plan_number,
+        "raw_command": expected_raw_command,
+        "logical_argv": logical_argv,
+        "executable_path": str(expected_executable),
+        "executable_sha256": request["engine"]["executable_sha256"],
+        "project_path": str(expected_project),
+        "plan_path": str(expected_plan),
+        "cwd": str(expected_working_directory),
+        "launch_method": "direct_subprocess_shell_false_exact_executable",
+        "launcher_pid": details["launcher_pid"],
+        "launcher_create_time": float(details["launcher_create_time"]),
+        "max_runtime_seconds": max_runtime,
+    }
+    return details, event_payload
+
+
+class _LiveLaunchRecorder:
+    """Duck-typed callback that durably records exact modern launch evidence."""
+
+    def __init__(
+        self,
+        *,
+        events: EventJournal,
+        request: Mapping[str, Any],
+        stage_project: Path,
+    ) -> None:
+        self._events = events
+        self._request = request
+        self._stage_project = stage_project
+        self.launch_details: dict[str, Any] | None = None
+        self.event: dict[str, Any] | None = None
+
+    def on_exec_launched(self, plan_number: str, launch_details: Any) -> None:
+        if self.launch_details is not None:
+            raise LiveCapabilityError("RasCmdr published more than one launch callback")
+        if plan_number != self._request["fixture"]["plan_number"]:
+            raise LiveCapabilityError("RasCmdr launch callback argument mismatch")
+        details, payload = _normalize_rascmd_launch_details(
+            self._request,
+            launch_details,
+            stage_project=self._stage_project,
+        )
+        event = self._events.append(
+            phase="execution",
+            event_name="engine_process_launched",
+            status="running",
+            api="RasCmdr.compute_plan.on_exec_launched",
+            pid=details["launcher_pid"],
+            payload=payload,
+        )
+        self.launch_details = details
+        self.event = event
 
 
 def _artifact_reference(attempt_dir: Path, path: Path) -> dict[str, str]:
@@ -489,6 +902,38 @@ def _verify_request(request_path: Path) -> tuple[dict[str, Any], str, Any]:
         or engine != request.get("engine")
     ):
         raise LiveWorkerError("live request lane expansion disagrees with manifest")
+    preflight_timeout_seconds = _strict_positive_seconds(
+        request.get("preflight_timeout_seconds"),
+        label="live request preflight_timeout_seconds",
+    )
+    timeout_seconds = _strict_positive_seconds(
+        request.get("timeout_seconds"),
+        label="live request timeout_seconds",
+    )
+    termination_grace_seconds = _strict_positive_seconds(
+        request.get("termination_grace_seconds"),
+        label="live request termination_grace_seconds",
+    )
+    postflight_timeout_seconds = _strict_positive_seconds(
+        request.get("postflight_timeout_seconds"),
+        label="live request postflight_timeout_seconds",
+    )
+    receipt_margin_seconds = _strict_positive_seconds(
+        request.get("supervisor_receipt_margin_seconds"),
+        label="live request supervisor_receipt_margin_seconds",
+    )
+    if (
+        preflight_timeout_seconds
+        != float(context.manifest["defaults"]["preflight_timeout_seconds"])
+        or timeout_seconds
+        != float(context.manifest["defaults"]["timeout_seconds"])
+        or termination_grace_seconds
+        != float(context.manifest["defaults"]["termination_grace_seconds"])
+        or postflight_timeout_seconds
+        != float(context.manifest["defaults"]["postflight_timeout_seconds"])
+        or receipt_margin_seconds != _SUPERVISOR_RECEIPT_MARGIN_SECONDS
+    ):
+        raise LiveWorkerError("live request timeout contract disagrees with manifest")
     if fixture.get("source_kind") != "project_file":
         raise LiveWorkerError("live worker currently requires source_kind=project_file")
     if engine.get("support_state") != "supported":
@@ -995,6 +1440,8 @@ def _write_messages(
 def _validate_execution_result(
     request: Mapping[str, Any],
     result: Any,
+    *,
+    expected_launch_details: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool, bool | None, int, list[dict[str, str]]]:
     success = getattr(result, "success", None)
     if not isinstance(success, bool):
@@ -1013,7 +1460,6 @@ def _validate_execution_result(
         "calculation_attempted": details["calculation_attempted"] is True,
         "selected_result_format": details["selected_result_format"] == expected_format,
         "solver_quiescence_confirmed": details["solver_quiescence_confirmed"] is True,
-        "result_artifacts_finalized": details["result_artifacts_finalized"] is True,
     }
     failed = [field for field, passed in common_checks.items() if not passed]
     if failed:
@@ -1026,6 +1472,37 @@ def _validate_execution_result(
     if details.get("execution_api") != engine["execution_api"]:
         raise LiveCapabilityError("execution_details API identity mismatch")
     if engine["execution_api"] == "ras_cmdr":
+        missing_runtime = [
+            field for field in _RASCMD_RUNTIME_DETAIL_FIELDS if field not in details
+        ]
+        if missing_runtime:
+            raise LiveCapabilityError(
+                "RasCmdr execution_details is missing runtime fields: "
+                + ", ".join(sorted(missing_runtime))
+            )
+        artifacts_finalized = _validate_artifact_finalization_evidence(details)
+        max_runtime = _strict_positive_seconds(
+            details["max_runtime_seconds"],
+            label="RasCmdr execution_details max_runtime_seconds",
+        )
+        if max_runtime != float(request["timeout_seconds"]):
+            raise LiveCapabilityError("RasCmdr max-runtime evidence mismatch")
+        if expected_launch_details is None:
+            raise LiveCapabilityError(
+                "RasCmdr returned without a durable post-launch callback"
+            )
+        if details["launch_details"] != json_safe(dict(expected_launch_details)):
+            raise LiveCapabilityError(
+                "RasCmdr returned launch details disagree with the durable callback"
+            )
+        launcher_returncode = details["launcher_returncode"]
+        if launcher_returncode is not None and (
+            isinstance(launcher_returncode, bool)
+            or not isinstance(launcher_returncode, int)
+        ):
+            raise LiveCapabilityError(
+                "RasCmdr launcher return code is not an integer or null"
+            )
         executable = Path(engine["executable"]).resolve(strict=True)
         detail_path = Path(str(details.get("selected_executable_path", ""))).resolve(
             strict=True
@@ -1043,10 +1520,59 @@ def _validate_execution_result(
             raise LiveCapabilityError(
                 "RasCmdr launcher PID/create-time identity was not proved"
             )
+        if (
+            details["launcher_pid"] != expected_launch_details["launcher_pid"]
+            or float(details["launcher_create_time"])
+            != float(expected_launch_details["launcher_create_time"])
+        ):
+            raise LiveCapabilityError(
+                "RasCmdr returned launcher identity disagrees with launch callback"
+            )
         completion_verified = getattr(result, "completion_verified", None)
-        if completion_verified is not True:
-            raise LiveCapabilityError("RasCmdr verify=True did not confirm completion")
+        if success:
+            if not artifacts_finalized:
+                raise LiveCapabilityError(
+                    "successful RasCmdr result did not finalize result artifacts"
+                )
+            if launcher_returncode is None:
+                raise LiveCapabilityError(
+                    "RasCmdr successful result lacks a launcher return code"
+                )
+            if details["runtime_timed_out"] is not False:
+                raise LiveProcessGateError(
+                    "RasCmdr successful result claims a runtime timeout"
+                )
+            failure_values = {
+                field: details[field]
+                for field in ("failure_stage", "failure_type", "failure_detail")
+            }
+            if any(value is not None for value in failure_values.values()):
+                raise LiveCapabilityError(
+                    "RasCmdr successful result contains failure metadata"
+                )
+            if details["cancellation_details"] is not None:
+                raise LiveCapabilityError(
+                    "RasCmdr successful result contains cancellation metadata"
+                )
+            if completion_verified is not True:
+                raise LiveCapabilityError(
+                    "RasCmdr verify=True did not confirm completion"
+                )
+        else:
+            if not isinstance(completion_verified, bool):
+                raise LiveCapabilityError(
+                    "RasCmdr failed result lacks a boolean completion claim"
+                )
+            _validate_safe_rascmd_failure(
+                request,
+                details,
+                expected_launch_details,
+            )
     else:
+        if details["result_artifacts_finalized"] is not True:
+            raise LiveProcessGateError(
+                "RasControl execution did not prove safe result finalization"
+            )
         if details.get("engine_kind") != "controller":
             raise LiveCapabilityError("RasControl execution_details engine_kind mismatch")
         if details.get("requested_controller_version") != engine["controller_version"]:
@@ -1169,6 +1695,7 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         RasControl,
         RasPrj,
         RasTcu,
+        ResultArtifactAmbiguityError,
         STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM,
         init_ras_project,
         stage_project,
@@ -1393,7 +1920,13 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
     )
 
     hec_ras_invoked = True
+    launch_recorder: _LiveLaunchRecorder | None = None
     if request["engine"]["execution_api"] == "ras_cmdr":
+        launch_recorder = _LiveLaunchRecorder(
+            events=events,
+            request=request,
+            stage_project=stage_result.destination_project_file,
+        )
         result = RasCmdr.compute_plan(
             plan_number,
             ras_object=explicit_ras,
@@ -1401,6 +1934,8 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
             skip_existing=False,
             verify=True,
             dialog_watchdog=True,
+            max_runtime=request["timeout_seconds"],
+            stream_callback=launch_recorder,
         )
     else:
         result = RasControl.run_plan(
@@ -1415,7 +1950,11 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
             strict_close=True,
         )
     details, process_success, completion_verified, _, _ = _validate_execution_result(
-        request, result
+        request,
+        result,
+        expected_launch_details=(
+            None if launch_recorder is None else launch_recorder.launch_details
+        ),
     )
     message_count, message_reference = _write_messages(
         attempt_dir, getattr(result, "messages", None)
@@ -1480,24 +2019,41 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         known_paths=stage_known_paths,
         origin_overrides=post_origins,
     )
-    evidence = RasCmdr.inspect_execution_evidence(
-        plan_number,
-        ras_object=explicit_ras,
-        hash_files=request["hash_files"],
-    )
-    evidence_payload = evidence.to_dict()
-    evidence_rows = flatten_evidence(
-        evidence,
-        run_id=request["run_id"],
-        lane_id=request["lane_id"],
-        attempt_id=request["attempt_id"],
-    )
+    inspection_started_at = datetime.now(timezone.utc)
+    evidence = None
+    inspection_failure = None
+    try:
+        evidence = RasCmdr.inspect_execution_evidence(
+            plan_number,
+            ras_object=explicit_ras,
+            hash_files=request["hash_files"],
+        )
+    except ResultArtifactAmbiguityError as exc:
+        if process_success or details["result_artifacts_finalized"] is not False:
+            raise
+        inspection_failure = exc
+        evidence_payload = _failed_inspection_evidence(
+            details,
+            exc,
+            started_at=inspection_started_at,
+            failed_at=datetime.now(timezone.utc),
+        )
+        evidence_rows = []
+    else:
+        evidence_payload = evidence.to_dict()
+        evidence_rows = flatten_evidence(
+            evidence,
+            run_id=request["run_id"],
+            lane_id=request["lane_id"],
+            attempt_id=request["attempt_id"],
+        )
     table_from_rows("observations", evidence_rows)
     evidence_path = attempt_dir / "evidence.json"
     evidence_sha256 = write_json_with_digest(evidence_path, evidence_payload)
     stored_evidence, stored_evidence_sha256 = read_json_with_digest(evidence_path)
     evidence_frozen = bool(
-        getattr(type(evidence), "__dataclass_params__", None)
+        evidence is not None
+        and getattr(type(evidence), "__dataclass_params__", None)
         and type(evidence).__dataclass_params__.frozen
     )
     evidence_contract = {
@@ -1517,14 +2073,31 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         known_paths=stage_known_paths,
         origin_overrides=post_origins,
     )
-    events.append(
-        phase="inspection",
-        event_name="execution_evidence_inspected",
-        status="passed",
-        api="RasCmdr.inspect_execution_evidence",
-        relative_path=stage_relative,
-        payload={"evidence_id": evidence.evidence_id},
-    )
+    if inspection_failure is None:
+        events.append(
+            phase="inspection",
+            event_name="execution_evidence_inspected",
+            status="passed",
+            api="RasCmdr.inspect_execution_evidence",
+            relative_path=stage_relative,
+            payload={"evidence_id": evidence.evidence_id},
+        )
+    else:
+        events.append(
+            phase="inspection",
+            event_name="execution_evidence_inspection_failed",
+            status="failed",
+            severity="error",
+            api="RasCmdr.inspect_execution_evidence",
+            reason_code=evidence_payload["reason_code"],
+            relative_path=stage_relative,
+            payload={
+                "evidence_id": evidence_payload["evidence_id"],
+                "evidence_kind": evidence_payload["evidence_kind"],
+                "failure_type": evidence_payload["failure_type"],
+                "reason_code": evidence_payload["reason_code"],
+            },
+        )
 
     source_final = snapshot_tree(
         source_project.parent,
@@ -1544,7 +2117,11 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         and source_before.content_fingerprint == expected_source
         and source_before.metadata_fingerprint == source_final.metadata_fingerprint
     )
-    selected_format = selected_result_format(evidence)
+    selected_format = (
+        details["selected_result_format"]
+        if inspection_failure is not None
+        else selected_result_format(evidence)
+    )
     final_hdf, final_legacy = result_population(
         post_evidence.rows,
         project_file=stage_result.destination_project_file,
@@ -1565,7 +2142,7 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
     ]
     facts = {
         "snapshot_ids": snapshot_ids,
-        "evidence_ids": [evidence.evidence_id],
+        "evidence_ids": [evidence_payload["evidence_id"]],
         "inspection_fingerprints": {
             "before_content": post_api.content_fingerprint,
             "after_content": post_evidence.content_fingerprint,
@@ -1575,10 +2152,15 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         "execution_attempted": details["calculation_attempted"] is True,
         "selected_result_format": selected_format,
         "cleanup_output_format": request["engine"]["expected_result_format"],
-        "authoritative_evidence_channels": _authoritative_channels(evidence),
+        "authoritative_evidence_channels": (
+            [] if inspection_failure is not None else _authoritative_channels(evidence)
+        ),
         "deleted_relative_paths": list(stage_diff.removed),
         "allowed_deleted_relative_paths": list(stage_known_paths),
-        "finalization_attempted": details["result_artifacts_finalized"] is True,
+        "finalization_attempted": (
+            details["result_artifacts_finalized"] is True
+            or details.get("artifact_finalization_failure") is not None
+        ),
         "quiescence_confirmed": details["solver_quiescence_confirmed"] is True,
         "evidence_contract": evidence_contract,
         "source_fingerprints": {
@@ -1619,9 +2201,13 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         and final_family_valid
     )
     mechanical = (
-        evidence.mechanical_completion.value
-        if evidence.mechanical_completion.state == "available"
-        else None
+        None
+        if inspection_failure is not None
+        else (
+            evidence.mechanical_completion.value
+            if evidence.mechanical_completion.state == "available"
+            else None
+        )
     )
     execution_passed = process_success and mechanical is True
     if not execution_passed:
@@ -1650,15 +2236,31 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         source_immutable=source_immutable,
         all_invariants_passed=all_invariants_passed,
         mechanical_completion=mechanical,
-        error_count=available_value(evidence, "message_error_count"),
-        warning_count=available_value(evidence, "message_warning_count"),
-        conflicts=evidence.conflicts,
+        error_count=(
+            None
+            if inspection_failure is not None
+            else available_value(evidence, "message_error_count")
+        ),
+        warning_count=(
+            None
+            if inspection_failure is not None
+            else available_value(evidence, "message_warning_count")
+        ),
+        conflicts=(
+            evidence_payload["conflicts"]
+            if inspection_failure is not None
+            else evidence.conflicts
+        ),
         failure_reason_code=failure_reason,
         detail="live disposable-stage execution through ras-commander APIs",
     )
     lane["compute_mode"] = details.get("compute_mode")
     lane["process_success"] = process_success
-    lane["completion_verified"] = completion_verified or mechanical
+    lane["completion_verified"] = (
+        completion_verified
+        if request["engine"]["execution_api"] == "ras_cmdr"
+        else mechanical
+    )
 
     events.append(
         phase="invariants",

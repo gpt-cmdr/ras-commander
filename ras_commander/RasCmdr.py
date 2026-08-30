@@ -87,8 +87,13 @@ from .RasUtils import RasUtils
 logger = get_logger(__name__)
 
 _WINDOWS_PROCESS_CONTROL = os.name == "nt"
+_MAX_SUBPROCESS_WAIT_SECONDS = (2**32 - 2) / 1000.0
 
 # Module code starts here
+
+
+class _RuntimeDeadlineExceeded(TimeoutError):
+    """Internal marker for the public ``max_runtime`` deadline."""
 
 
 
@@ -108,7 +113,7 @@ class RasCmdr:
     def _resolve_executable_provenance(
         executable: Union[str, Path],
     ) -> tuple[Path, str]:
-        """Resolve and hash the exact executable selected for a plan run."""
+        """Resolve and stably hash the exact executable selected for a plan run."""
         candidate = Path(executable).expanduser()
         if not candidate.is_absolute():
             resolved_command = shutil.which(str(candidate))
@@ -122,9 +127,30 @@ class RasCmdr:
             raise FileNotFoundError(f"HEC-RAS executable is not a file: {resolved}")
         digest = hashlib.sha256()
         with resolved.open("rb") as stream:
+            before = RasCmdr._file_identity(os.fstat(stream.fileno()))
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
+            after = RasCmdr._file_identity(os.fstat(stream.fileno()))
+        path_after = RasCmdr._file_identity(resolved.stat())
+        # Windows can report a slightly different ctime for the open handle
+        # and a fresh path lookup. The replacement-sensitive device, inode,
+        # size, and mtime fields must still identify the same path target.
+        if before != after or after[:4] != path_after[:4]:
+            raise RuntimeError(
+                f"HEC-RAS executable changed while hashing: {resolved}"
+            )
         return resolved, digest.hexdigest()
+
+    @staticmethod
+    def _file_identity(stat_result: os.stat_result) -> tuple[int, ...]:
+        """Return fields that must remain stable while hashing an executable."""
+        return (
+            int(stat_result.st_dev),
+            int(stat_result.st_ino),
+            int(stat_result.st_size),
+            int(stat_result.st_mtime_ns),
+            int(stat_result.st_ctime_ns),
+        )
 
     @staticmethod
     def _launcher_create_time(pid: int) -> float:
@@ -132,6 +158,72 @@ class RasCmdr:
         import psutil
 
         return float(psutil.Process(pid).create_time())
+
+    @staticmethod
+    def _normalize_max_runtime(max_runtime: Optional[float]) -> Optional[float]:
+        """Validate an optional public execution deadline in seconds."""
+        if max_runtime is None:
+            return None
+        if isinstance(max_runtime, bool) or not isinstance(max_runtime, (int, float)):
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds or None"
+            )
+        try:
+            normalized = float(max_runtime)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds or None"
+            ) from exc
+        if (
+            not math.isfinite(normalized)
+            or normalized <= 0
+            or normalized > _MAX_SUBPROCESS_WAIT_SECONDS
+        ):
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds no "
+                f"greater than {_MAX_SUBPROCESS_WAIT_SECONDS}, or None"
+            )
+        return normalized
+
+    @staticmethod
+    def _remaining_runtime(
+        deadline_monotonic: Optional[float],
+        *,
+        plan_number: Union[str, Number, Path],
+        max_runtime_seconds: Optional[float],
+    ) -> Optional[float]:
+        """Return the remaining bounded runtime or raise at the one deadline."""
+        if deadline_monotonic is None:
+            return None
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise _RuntimeDeadlineExceeded(
+                f"Plan {plan_number} exceeded max_runtime="
+                f"{max_runtime_seconds} seconds"
+            )
+        return remaining
+
+    @staticmethod
+    def _direct_windows_compute_command(
+        executable: Union[str, Path],
+        project_path: Union[str, Path],
+        plan_path: Union[str, Path],
+    ) -> str:
+        """Build the direct raw Windows command line expected by ``Ras.exe``.
+
+        The three filesystem arguments are quoted unconditionally.  Windows
+        paths cannot contain a literal double quote, so accepting one here
+        would make the command ambiguous and is rejected before launch.
+        """
+        arguments = tuple(
+            str(value) for value in (executable, project_path, plan_path)
+        )
+        if any('"' in value for value in arguments):
+            raise ValueError("HEC-RAS execution paths cannot contain a double quote")
+        executable_text, project_text, plan_text = arguments
+        return (
+            f'"{executable_text}" -c "{project_text}" "{plan_text}"'
+        )
 
     @staticmethod
     def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
@@ -1803,6 +1895,9 @@ class RasCmdr:
         poll_interval: float = 5.0,
         timeout_seconds: float = 7200.0,
         modified_after: Optional[float] = None,
+        deadline_monotonic: Optional[float] = None,
+        max_runtime_seconds: Optional[float] = None,
+        stage_callback: Optional[Callable[[str], None]] = None,
     ) -> Optional[bool]:
         """
         Wait for a solver child process that outlives ``Ras.exe -c``.
@@ -1824,73 +1919,144 @@ class RasCmdr:
             normal success/failure behavior.
         """
         plan_num = RasUtils.normalize_ras_number(plan_number)
+        caller_deadline = deadline_monotonic is not None
+        deadline = (
+            float(deadline_monotonic)
+            if caller_deadline
+            else time.monotonic() + timeout_seconds
+        )
+        if caller_deadline:
+            RasCmdr._remaining_runtime(
+                deadline,
+                plan_number=plan_num,
+                max_runtime_seconds=max_runtime_seconds,
+            )
         hdf_path = RasCmdr._get_hdf_path(plan_num, ras_object)
         tmp_hdf_path = (
             Path(ras_object.project_folder)
             / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
         )
 
-        verified = RasCmdr._verify_completion(
-            hdf_path,
-            check_errors=check_errors,
-            modified_after=modified_after,
-        )
+        def verify_completion() -> bool:
+            if stage_callback is not None:
+                stage_callback("result_verification")
+            verified_result = RasCmdr._verify_completion(
+                hdf_path,
+                check_errors=check_errors,
+                modified_after=modified_after,
+            )
+            if stage_callback is not None:
+                stage_callback("async_solver_completion")
+            return verified_result
+
+        verified = verify_completion()
         active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
         partial_exists = tmp_hdf_path.exists()
         if verified and active is False and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
             return True
         if active is False and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
             return None
         if active is None and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
             return False
 
         logger.debug(
             "Waiting for RasUnsteady to finish plan %s after Ras.exe returned",
             plan_num,
         )
-        deadline = time.time() + timeout_seconds
         observed_async = True
 
-        while time.time() < deadline:
-            verified = RasCmdr._verify_completion(
-                hdf_path,
-                check_errors=check_errors,
-                modified_after=modified_after,
-            )
+        while time.monotonic() < deadline:
+            verified = verify_completion()
             active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
             partial_exists = tmp_hdf_path.exists()
             if verified and active is False and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
                 return True
             if active is False and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
                 return False
             if active is None and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
                 return False
 
             if active is False and partial_exists:
                 # Give HEC-RAS a short grace window to rename/close files after
                 # the solver process exits, then verify one final time.
-                time.sleep(min(poll_interval, 2.0))
-                verified = RasCmdr._verify_completion(
-                    hdf_path,
-                    check_errors=check_errors,
-                    modified_after=modified_after,
-                )
+                remaining = max(0.0, deadline - time.monotonic())
+                time.sleep(min(poll_interval, 2.0, remaining))
+                verified = verify_completion()
                 active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(
                     tmp_hdf_path
                 )
                 partial_exists = tmp_hdf_path.exists()
                 if verified and active is False and not partial_exists:
+                    if caller_deadline:
+                        RasCmdr._remaining_runtime(
+                            deadline,
+                            plan_number=plan_num,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
                     return True
                 if active is False:
+                    if caller_deadline:
+                        RasCmdr._remaining_runtime(
+                            deadline,
+                            plan_number=plan_num,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
                     return False
 
-            time.sleep(poll_interval)
+            remaining = max(0.0, deadline - time.monotonic())
+            time.sleep(min(poll_interval, remaining))
 
         logger.warning(
             "Timed out waiting for RasUnsteady to finish plan %s after %.0f seconds",
             plan_num,
-            timeout_seconds,
+            (
+                max_runtime_seconds
+                if caller_deadline and max_runtime_seconds is not None
+                else timeout_seconds
+            ),
         )
+        if caller_deadline:
+            raise _RuntimeDeadlineExceeded(
+                f"Plan {plan_num} exceeded max_runtime="
+                f"{max_runtime_seconds} seconds while waiting for asynchronous "
+                "solver completion"
+            )
         return False if observed_async else None
 
     @staticmethod
@@ -2482,6 +2648,7 @@ class RasCmdr:
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
+        max_runtime: Optional[float] = None,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -2531,6 +2698,10 @@ class RasCmdr:
                 - on_prep_start(plan_number): Called before geometry preprocessing
                 - on_prep_complete(plan_number): Called after preprocessing
                 - on_exec_start(plan_number, command): Called when HEC-RAS subprocess starts
+                - on_exec_launched(plan_number, launch_details): Optional
+                  duck-typed hook called after exact launcher identity and
+                  executable provenance are captured. This additive hook is
+                  intentionally not part of the exported callback protocol.
                 - on_exec_message(plan_number, message): Called for each .bco file message (real-time)
                 - on_exec_complete(plan_number, success, duration): Called when execution finishes
                 - on_verify_result(plan_number, verified): Called after verification (if verify=True)
@@ -2550,6 +2721,15 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            max_runtime (float, optional): Maximum elapsed execution time in
+                seconds, measured against one monotonic deadline spanning the
+                direct launcher wait, callback monitoring, and asynchronous
+                solver completion. Values above 4,294,967.294 seconds are
+                rejected because the Windows subprocess wait cannot represent
+                them. ``None`` adds no caller-wide deadline and preserves the
+                historical launcher/callback behavior plus the existing
+                7,200-second asynchronous-solver bound. A timeout uses
+                exact-plan structured cancellation.
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
@@ -2563,10 +2743,12 @@ class RasCmdr:
                 finalization. Calculated success requires every terminal gate.
 
         Raises:
-            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
-            FileNotFoundError: If the plan file or project file cannot be found.
-            PermissionError: If there are issues accessing or writing to the destination folder.
-            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+            ValueError: If ``max_runtime`` is not a positive finite number
+                within the Windows subprocess-wait range, or ``None``.
+
+        Setup, launch, verification, and filesystem failures that occur after
+        runtime validation are represented by ``ComputeResult(success=False)``
+        and its structured ``execution_details`` rather than propagated.
 
         Examples:
             # Run a plan in the original project folder
@@ -2616,11 +2798,18 @@ class RasCmdr:
             - Verification is version-aware: modern plans inspect HDF completion;
               legacy plans require a fresh ``.O##`` and inspect available stored
               messages for errors.
+            - Execution failures are returned as
+              ``ComputeResult(success=False)`` with structured failure evidence.
             - Actual runs permanently remove the opposing result family and
               stale compute-message sidecars before launch, then remove any
               opposing result recreated by HEC-RAS after completion. Skipped
               runs do not mutate execution artifacts.
+            - Exact-plan cancellation and final evidence collection happen
+              after the engine deadline when necessary, so wall-clock return
+              time can exceed ``max_runtime`` while ras-commander proves a
+              safe terminal state.
         """
+        max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
         _results_df_row = None
         _ras_obj = None
@@ -2628,7 +2817,17 @@ class RasCmdr:
         _execution_quiesced = False
         _execution_result_format = None
         _result_artifacts_finalized = False
+        _completion_verified: Optional[bool] = None
         _watchdog = None
+        _launch_observed = False
+        _post_launch_failure_handled = False
+        _active_failure_stage = None
+        _deadline_monotonic = None
+
+        def _record_async_stage(stage: str) -> None:
+            nonlocal _active_failure_stage
+            _active_failure_stage = stage
+
         _execution_details: Dict[str, Any] = {
             "execution_api": "ras_cmdr",
             "engine_kind": "executable",
@@ -2641,6 +2840,15 @@ class RasCmdr:
             "selected_executable_sha256": None,
             "launcher_pid": None,
             "launcher_create_time": None,
+            "launcher_returncode": None,
+            "max_runtime_seconds": max_runtime_seconds,
+            "launch_details": None,
+            "runtime_timed_out": False,
+            "failure_stage": None,
+            "failure_type": None,
+            "failure_detail": None,
+            "cancellation_details": None,
+            "artifact_finalization_failure": None,
         }
         try:
             ras_obj = ras_object if ras_object is not None else ras
@@ -2875,17 +3083,16 @@ class RasCmdr:
 
             # Prepare a display-only command for callbacks. The executable is
             # resolved and hashed again immediately before result cleanup and
-            # launch, and execution always uses the exact argv with no shell.
+            # launch, and execution always uses the fully quoted raw Windows
+            # command line with the exact executable and no shell.
             _callback_executable, _ = RasCmdr._resolve_executable_provenance(
                 compute_ras.ras_exe_path
             )
-            command_argv = [
-                str(_callback_executable),
-                "-c",
-                str(Path(compute_prj_path).resolve()),
-                str(Path(compute_plan_path).resolve()),
-            ]
-            cmd = subprocess.list2cmdline(command_argv)
+            cmd = RasCmdr._direct_windows_compute_command(
+                _callback_executable,
+                Path(compute_prj_path).resolve(),
+                Path(compute_plan_path).resolve(),
+            )
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 
@@ -2909,7 +3116,7 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
-            start_time = time.time()
+            start_time = None
             try:
                 if dialog_watchdog:
                     from .RasDialogWatchdog import DialogWatchdog
@@ -2925,24 +3132,6 @@ class RasCmdr:
                     encoding="utf-8",
                     errors="ignore",
                 ) as _run_log_fh:
-                    selected_executable, executable_sha256 = (
-                        RasCmdr._resolve_executable_provenance(
-                            compute_ras.ras_exe_path
-                        )
-                    )
-                    command_argv = [
-                        str(selected_executable),
-                        "-c",
-                        str(Path(compute_prj_path).resolve()),
-                        str(Path(compute_plan_path).resolve()),
-                    ]
-                    _execution_details.update(
-                        {
-                            "selected_executable_path": str(selected_executable),
-                            "selected_executable_sha256": executable_sha256,
-                        }
-                    )
-
                     # The plan's previous launcher/solver tree must be proved
                     # absent before result-family cleanup. A stale exact-plan
                     # process could otherwise keep writing the files this run
@@ -2962,6 +3151,29 @@ class RasCmdr:
                             "before execution; result artifacts were preserved"
                         )
 
+                    # Re-prove the selected executable after process preflight
+                    # so the digest-to-launch interval contains only the
+                    # targeted result cleanup and immediate Popen call.
+                    selected_executable, executable_sha256 = (
+                        RasCmdr._resolve_executable_provenance(
+                            compute_ras.ras_exe_path
+                        )
+                    )
+                    resolved_project_path = Path(compute_prj_path).resolve()
+                    resolved_plan_path = Path(compute_plan_path).resolve()
+                    command_line = RasCmdr._direct_windows_compute_command(
+                        selected_executable,
+                        resolved_project_path,
+                        resolved_plan_path,
+                    )
+                    launch_working_directory = str(compute_ras.project_folder)
+                    _execution_details.update(
+                        {
+                            "selected_executable_path": str(selected_executable),
+                            "selected_executable_sha256": executable_sha256,
+                        }
+                    )
+
                     # Destructive result-family cleanup is coupled to this
                     # exact, freshly proven launch attempt.
                     prepare_plan_execution_artifacts(
@@ -2969,103 +3181,142 @@ class RasCmdr:
                         output_format=_execution_result_format,
                         ras_object=compute_ras,
                     )
+                    # The public max_runtime budget measures the engine launch
+                    # and completion path. Executable hashing, exact-plan
+                    # preflight, and artifact preparation above must finish
+                    # before this clock starts, so a small remaining budget
+                    # can never launch Ras.exe and immediately expire.
+                    start_time = time.time()
+                    execution_started_monotonic = time.monotonic()
+                    _deadline_monotonic = (
+                        execution_started_monotonic + max_runtime_seconds
+                        if max_runtime_seconds is not None
+                        else None
+                    )
                     _did_execute = True
                     _execution_details["calculation_attempted"] = True
+                    _active_failure_stage = "launcher_start"
                     process = subprocess.Popen(
-                        command_argv,
+                        command_line,
+                        executable=str(selected_executable),
                         stdout=_run_log_fh,
                         stderr=subprocess.STDOUT,
-                        cwd=str(compute_ras.project_folder),
+                        cwd=launch_working_directory,
                         shell=False,
                     )
+                    _launch_observed = True
+                    _active_failure_stage = "launcher_identity"
+                    launcher_pid = process.pid
+                    if (
+                        not isinstance(launcher_pid, int)
+                        or isinstance(launcher_pid, bool)
+                        or launcher_pid <= 0
+                    ):
+                        raise ValueError(
+                            "launcher PID must be a positive integer"
+                        )
+                    launcher_create_time = RasCmdr._launcher_create_time(
+                        launcher_pid
+                    )
+                    if (
+                        isinstance(launcher_create_time, bool)
+                        or not isinstance(launcher_create_time, (int, float))
+                        or not math.isfinite(float(launcher_create_time))
+                        or float(launcher_create_time) <= 0
+                    ):
+                        raise ValueError(
+                            "launcher create_time must be finite and positive"
+                        )
+                    launch_details = {
+                        "plan_number": RasUtils.normalize_ras_number(
+                            plan_number
+                        ),
+                        "command": command_line,
+                        "executable_path": str(selected_executable),
+                        "executable_sha256": executable_sha256,
+                        "project_path": str(resolved_project_path),
+                        "plan_path": str(resolved_plan_path),
+                        "working_directory": launch_working_directory,
+                        "launcher_pid": launcher_pid,
+                        "launcher_create_time": float(launcher_create_time),
+                        "max_runtime_seconds": max_runtime_seconds,
+                    }
+                    _execution_details["launcher_pid"] = launcher_pid
+                    _execution_details["launcher_create_time"] = float(
+                        launcher_create_time
+                    )
+                    _execution_details[
+                        "actual_engine_provenance_confirmed"
+                    ] = True
+                    _execution_details["launch_details"] = dict(
+                        launch_details
+                    )
+
+                    if _watchdog:
+                        _watchdog.add_pid(process.pid)
+
+                    _active_failure_stage = "on_exec_launched_callback"
+                    if stream_callback and hasattr(
+                        stream_callback, "on_exec_launched"
+                    ):
+                        stream_callback.on_exec_launched(
+                            str(plan_number),
+                            dict(launch_details),
+                        )
+                    RasCmdr._remaining_runtime(
+                        _deadline_monotonic,
+                        plan_number=plan_number,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
+
+                    if stream_callback and bco_monitor:
+                        # Bound the existing synchronous message-monitor loop
+                        # by the same monotonic deadline used for the launcher
+                        # and asynchronous solver completion.
+                        _active_failure_stage = "callback_monitoring"
+                        remaining = RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
+                        if remaining is not None:
+                            bco_monitor.max_wait_seconds = min(
+                                float(bco_monitor.max_wait_seconds),
+                                remaining,
+                            )
+                        bco_monitor.monitor_until_signal(process)
+                        RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
+
+                    _active_failure_stage = "launcher_wait"
                     try:
-                        launcher_pid = process.pid
-                        if (
-                            not isinstance(launcher_pid, int)
-                            or isinstance(launcher_pid, bool)
-                            or launcher_pid <= 0
-                        ):
-                            raise ValueError(
-                                "launcher PID must be a positive integer"
+                        return_code = process.wait(
+                            timeout=RasCmdr._remaining_runtime(
+                                _deadline_monotonic,
+                                plan_number=plan_number,
+                                max_runtime_seconds=max_runtime_seconds,
                             )
-                        launcher_create_time = RasCmdr._launcher_create_time(
-                            launcher_pid
                         )
-                        if (
-                            isinstance(launcher_create_time, bool)
-                            or not isinstance(launcher_create_time, (int, float))
-                            or not math.isfinite(float(launcher_create_time))
-                            or float(launcher_create_time) <= 0
-                        ):
-                            raise ValueError(
-                                "launcher create_time must be finite and positive"
-                            )
-                        _execution_details["launcher_pid"] = launcher_pid
-                        _execution_details["launcher_create_time"] = float(
-                            launcher_create_time
+                        RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
                         )
-                        _execution_details[
-                            "actual_engine_provenance_confirmed"
-                        ] = True
-                    except Exception as provenance_error:
-                        logger.error(
-                            "Could not capture launcher PID/create-time identity "
-                            "for plan %s: %s",
-                            plan_number,
-                            provenance_error,
-                        )
-
-                    try:
-                        if _watchdog:
-                            _watchdog.add_pid(process.pid)
-
-                        if stream_callback and bco_monitor:
-                            # Monitor .bco messages while the exact process is
-                            # active; the same process wait path is used below.
-                            bco_monitor.monitor_until_signal(process)
-
-                        return_code = process.wait()
-                    except BaseException:
-                        if process.poll() is None:
-                            try:
-                                RasCmdr._terminate_launched_process_tree(process)
-                            except Exception as termination_error:
-                                logger.critical(
-                                    "Could not confirm termination of plan %s "
-                                    "after callback failure: %s",
-                                    plan_number,
-                                    termination_error,
-                                )
-                            else:
-                                _execution_quiesced = True
-                        elif _execution_result_format == "hdf":
-                            # The Ras.exe launcher may have exited while a
-                            # RasUnsteady child still owns the tmp HDF.
-                            _async_wait_result = RasCmdr._wait_for_async_plan_completion(
-                                plan_number,
-                                compute_ras,
-                                check_errors=False,
-                                modified_after=start_time,
-                            )
-                            _execution_quiesced = (
-                                RasCmdr._confirm_plan_solver_quiescence(
-                                    plan_number,
-                                    compute_ras,
-                                )
-                            )
-                        else:
-                            _execution_quiesced = (
-                                RasCmdr._confirm_plan_solver_quiescence(
-                                    plan_number,
-                                    compute_ras,
-                                )
-                            )
-                        raise
+                        _execution_details["launcher_returncode"] = return_code
+                    except subprocess.TimeoutExpired as timeout_error:
+                        raise _RuntimeDeadlineExceeded(
+                            f"Plan {plan_number} exceeded max_runtime="
+                            f"{max_runtime_seconds} seconds while waiting for "
+                            "the HEC-RAS launcher"
+                        ) from timeout_error
 
                 if return_code != 0:
                     raise subprocess.CalledProcessError(
                         return_code,
-                        command_argv,
+                        command_line,
                     )
 
                 end_time = time.time()
@@ -3075,41 +3326,58 @@ class RasCmdr:
                     f"in {run_time:.2f} seconds"
                 )
 
+                _active_failure_stage = "async_solver_completion"
                 async_verified = (
                     RasCmdr._wait_for_async_plan_completion(
                         plan_number,
                         compute_ras,
                         check_errors=verify,
                         modified_after=start_time,
+                        # Preserve the existing 7,200-second asynchronous-
+                        # solver bound when max_runtime is omitted.  An
+                        # explicit max_runtime supplies the caller deadline;
+                        # the helper then consumes only its remaining budget.
+                        timeout_seconds=7200.0,
+                        deadline_monotonic=_deadline_monotonic,
+                        max_runtime_seconds=max_runtime_seconds,
+                        stage_callback=_record_async_stage,
                     )
                     if _execution_result_format == "hdf"
                     else None
                 )
-                if _execution_result_format == "hdf":
-                    _execution_quiesced = (
-                        RasCmdr._confirm_plan_solver_quiescence(
-                            plan_number,
-                            compute_ras,
-                        )
+                _active_failure_stage = "solver_quiescence"
+                _execution_quiesced = (
+                    RasCmdr._confirm_plan_solver_quiescence(
+                        plan_number,
+                        compute_ras,
                     )
-                else:
-                    _execution_quiesced = (
-                        RasCmdr._confirm_plan_solver_quiescence(
-                            plan_number,
-                            compute_ras,
-                        )
+                )
+                if not _execution_quiesced:
+                    raise RuntimeError(
+                        "Could not confirm exact-plan solver quiescence after "
+                        f"plan {plan_number} launcher completion"
                     )
+                RasCmdr._remaining_runtime(
+                    _deadline_monotonic,
+                    plan_number=plan_number,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
                 if async_verified is True:
+                    if verify:
+                        _completion_verified = True
                     logger.debug(
                         "Verified final HDF for plan %s after Ras.exe returned",
                         plan_number,
                     )
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), True, run_time)
                     if verify and stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        _active_failure_stage = "on_verify_result_callback"
                         stream_callback.on_verify_result(str(plan_number), True)
                     _success = True
                 elif async_verified is False and verify:
+                    _completion_verified = False
                     logger.error(
                         "Verification failed for plan %s after Ras.exe returned. "
                         "See: https://rascommander.info/ras/user-guide/plan-execution/",
@@ -3117,14 +3385,22 @@ class RasCmdr:
                     )
                     _success = False
                     if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        _active_failure_stage = "on_verify_result_callback"
                         stream_callback.on_verify_result(str(plan_number), False)
+                    _active_failure_stage = "result_verification"
+                    raise RuntimeError(
+                        "Plan result verification failed after exact-plan "
+                        f"quiescence for plan {plan_number}"
+                    )
                 else:
                     # Callback: execution complete
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), True, run_time)
 
                     # Verify completion if requested
                     if verify:
+                        _active_failure_stage = "result_verification"
                         verified = (
                             async_verified is True
                             or RasCmdr._verify_result(
@@ -3134,9 +3410,11 @@ class RasCmdr:
                                 modified_after=start_time,
                             )
                         )
+                        _completion_verified = bool(verified)
 
                         # Callback: verification result
                         if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                            _active_failure_stage = "on_verify_result_callback"
                             stream_callback.on_verify_result(str(plan_number), verified)
 
                         if verified:
@@ -3147,45 +3425,97 @@ class RasCmdr:
                                 f"Verification failed for plan {plan_number}: no complete, current {_execution_result_format} result was found. "
                                 f"See: https://rascommander.info/ras/user-guide/plan-execution/"
                             )
-                            _success = False
+                            _active_failure_stage = "result_verification"
+                            raise RuntimeError(
+                                "Plan result verification failed after "
+                                "exact-plan quiescence for plan "
+                                f"{plan_number}"
+                            )
                     else:
                         _success = True
 
             except subprocess.CalledProcessError as e:
+                _execution_details.update(
+                    {
+                        "launcher_returncode": e.returncode,
+                        "failure_stage": "launcher_exit",
+                        "failure_type": type(e).__name__,
+                        "failure_detail": str(e),
+                    }
+                )
                 end_time = time.time()
                 run_time = end_time - start_time
+                _active_failure_stage = "async_solver_completion"
                 async_verified = (
                     RasCmdr._wait_for_async_plan_completion(
                         plan_number,
                         compute_ras,
                         check_errors=True,
                         modified_after=start_time,
+                        # Preserve the existing 7,200-second asynchronous-
+                        # solver bound when max_runtime is omitted.  An
+                        # explicit max_runtime supplies the caller deadline;
+                        # the helper then consumes only its remaining budget.
+                        timeout_seconds=7200.0,
+                        deadline_monotonic=_deadline_monotonic,
+                        max_runtime_seconds=max_runtime_seconds,
+                        stage_callback=_record_async_stage,
                     )
                     if _execution_result_format == "hdf"
                     else None
                 )
-                if _execution_result_format == "hdf":
-                    _execution_quiesced = (
-                        RasCmdr._confirm_plan_solver_quiescence(
-                            plan_number,
-                            compute_ras,
-                        )
+                _active_failure_stage = "solver_quiescence"
+                _execution_quiesced = (
+                    RasCmdr._confirm_plan_solver_quiescence(
+                        plan_number,
+                        compute_ras,
                     )
-                else:
-                    _execution_quiesced = (
-                        RasCmdr._confirm_plan_solver_quiescence(
-                            plan_number,
-                            compute_ras,
-                        )
+                )
+                if not _execution_quiesced:
+                    raise RuntimeError(
+                        "Could not confirm exact-plan solver quiescence after "
+                        f"plan {plan_number} launcher completion"
                     )
+                RasCmdr._remaining_runtime(
+                    _deadline_monotonic,
+                    plan_number=plan_number,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
                 if async_verified is True:
+                    if verify:
+                        _completion_verified = True
+                    # A modern Ras.exe launcher may exit nonzero even though
+                    # its delegated solver completes and produces a verified
+                    # final HDF. Preserve the launcher code as evidence, but
+                    # do not mislabel this established success path as a
+                    # terminal execution failure.
+                    _execution_details.update(
+                        {
+                            "failure_stage": None,
+                            "failure_type": None,
+                            "failure_detail": None,
+                        }
+                    )
                     logger.info(
                         "Ras.exe returned exit code %s for plan %s, but the final HDF verified after solver completion",
                         e.returncode,
                         plan_number,
                     )
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
-                        stream_callback.on_exec_complete(str(plan_number), True, run_time)
+                        _active_failure_stage = "on_exec_complete_callback"
+                        # ExecutionCallback defines this flag as the direct
+                        # subprocess exit outcome. The overall ComputeResult
+                        # can still succeed because the delegated solver's HDF
+                        # verified after a nonzero launcher exit.
+                        stream_callback.on_exec_complete(str(plan_number), False, run_time)
+                    if verify and stream_callback and hasattr(
+                        stream_callback, "on_verify_result"
+                    ):
+                        _active_failure_stage = "on_verify_result_callback"
+                        stream_callback.on_verify_result(
+                            str(plan_number),
+                            True,
+                        )
                     _success = True
                 else:
                     logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
@@ -3228,12 +3558,72 @@ class RasCmdr:
 
                     # Callback: execution complete (failure case)
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), False, run_time)
 
-                    _success = False
-        except Exception as e:
-            logger.critical(f"Error in compute_plan: {str(e)}")
-            _success = False
+                    _active_failure_stage = "launcher_exit"
+                    raise e
+        except BaseException as e:
+            runtime_timed_out = isinstance(e, _RuntimeDeadlineExceeded)
+            failure_type = (
+                "TimeoutError" if runtime_timed_out else type(e).__name__
+            )
+            if _did_execute and not _launch_observed:
+                _execution_details.update(
+                    {
+                        "runtime_timed_out": runtime_timed_out,
+                        "failure_stage": (
+                            _active_failure_stage or "launcher_start"
+                        ),
+                        "failure_type": failure_type,
+                        "failure_detail": str(e),
+                    }
+                )
+            if _launch_observed and not _post_launch_failure_handled:
+                _execution_details.update(
+                    {
+                        "runtime_timed_out": runtime_timed_out,
+                        "failure_stage": (
+                            _active_failure_stage or "post_launch_execution"
+                        ),
+                        "failure_type": failure_type,
+                        "failure_detail": str(e),
+                    }
+                )
+                try:
+                    cancellation = RasCmdr.cancel_plan_exact(
+                        plan_number,
+                        ras_object=compute_ras,
+                    )
+                    cancellation_details = cancellation.to_dict()
+                    cancellation_quiesced = (
+                        cancellation.quiescence_confirmed is True
+                    )
+                except Exception as cancellation_error:
+                    _execution_details["cancellation_details"] = {
+                        "error_type": type(cancellation_error).__name__,
+                        "error_detail": str(cancellation_error),
+                        "quiescence_confirmed": None,
+                    }
+                    _execution_quiesced = False
+                    logger.critical(
+                        "Exact-plan cancellation failed for plan %s after %s: %s",
+                        plan_number,
+                        _execution_details["failure_stage"],
+                        cancellation_error,
+                    )
+                else:
+                    _execution_details[
+                        "cancellation_details"
+                    ] = cancellation_details
+                    _execution_quiesced = cancellation_quiesced
+                _post_launch_failure_handled = True
+
+            if isinstance(e, Exception):
+                logger.critical(f"Error in compute_plan: {str(e)}")
+                _success = False
+            else:
+                raise
         finally:
             if _watchdog:
                 _watchdog.stop()
@@ -3260,6 +3650,39 @@ class RasCmdr:
                         plan_number,
                         cleanup_error,
                     )
+                    finalization_failure = {
+                        "failure_stage": "result_artifact_finalization",
+                        "failure_type": type(cleanup_error).__name__,
+                        "failure_detail": str(cleanup_error),
+                    }
+                    _execution_details[
+                        "artifact_finalization_failure"
+                    ] = finalization_failure
+                    if _execution_details["failure_stage"] is None:
+                        _execution_details.update(finalization_failure)
+                    if _launch_observed and not _post_launch_failure_handled:
+                        try:
+                            cancellation = RasCmdr.cancel_plan_exact(
+                                plan_number,
+                                ras_object=compute_ras,
+                            )
+                            cancellation_details = cancellation.to_dict()
+                            _execution_quiesced = (
+                                _execution_quiesced
+                                and cancellation.quiescence_confirmed is True
+                            )
+                        except Exception as cancellation_error:
+                            _execution_details["cancellation_details"] = {
+                                "error_type": type(cancellation_error).__name__,
+                                "error_detail": str(cancellation_error),
+                                "quiescence_confirmed": None,
+                            }
+                            _execution_quiesced = False
+                        else:
+                            _execution_details[
+                                "cancellation_details"
+                            ] = cancellation_details
+                        _post_launch_failure_handled = True
                     _success = False
             elif _did_execute and not _execution_quiesced:
                 logger.critical(
@@ -3298,15 +3721,26 @@ class RasCmdr:
                 )
                 _success = False
 
+            if verify and _did_execute and _completion_verified is None:
+                _completion_verified = False
+
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
-            if _ras_obj and dest_folder is None:
+            if (
+                _ras_obj
+                and dest_folder is None
+                and (
+                    not _did_execute
+                    or not _launch_observed
+                    or _execution_quiesced
+                )
+            ):
                 try:
                     _ras_obj.plan_df = _ras_obj.get_plan_entries()
                     _ras_obj.geom_df = _ras_obj.get_geom_entries()
                     _ras_obj.flow_df = _ras_obj.get_flow_entries()
                     _ras_obj.unsteady_df = _ras_obj.get_unsteady_entries()
-                    if _did_execute:
+                    if _did_execute and _result_artifacts_finalized:
                         normalized_plan_number = RasUtils.normalize_ras_number(
                             plan_number
                         )
@@ -3323,7 +3757,7 @@ class RasCmdr:
                             logger.debug(f"Could not extract results_df_row: {e}")
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
-                    if _did_execute:
+                    if _did_execute and _result_artifacts_finalized:
                         try:
                             normalized_plan_number = RasUtils.normalize_ras_number(
                                 plan_number
@@ -3347,11 +3781,25 @@ class RasCmdr:
                                 plan_number,
                                 e_results,
                             )
+            elif (
+                _ras_obj
+                and dest_folder is None
+                and _did_execute
+                and _launch_observed
+                and not _execution_quiesced
+            ):
+                logger.critical(
+                    "Skipped DataFrame/result refresh for plan %s because "
+                    "post-launch solver quiescence was not confirmed",
+                    plan_number,
+                )
 
         return ComputeResult(
             success=_success,
             results_df_row=_results_df_row,
-            completion_verified=bool(_success) if verify else None,
+            completion_verified=(
+                _completion_verified if verify else None
+            ),
             execution_details=dict(_execution_details),
         )
 

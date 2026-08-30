@@ -112,6 +112,10 @@ def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> R
     source_root.mkdir()
     source_project = source_root / "Model.prj"
     source_project.write_text("Proj Title=Live qualification\n", encoding="ascii")
+    (source_root / "Model.p01").write_text(
+        "Plan Title=Live qualification\nProgram Version=7.00\n",
+        encoding="ascii",
+    )
     engine_path = tmp_path / "Ras.exe"
     engine_path.write_bytes(b"not-an-executable-test-pin")
     source = snapshot_tree(
@@ -184,8 +188,10 @@ def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> R
             "bind_running_code": True,
         },
         "defaults": {
+            "preflight_timeout_seconds": 1800,
             "timeout_seconds": 1,
             "termination_grace_seconds": 1,
+            "postflight_timeout_seconds": 1800,
             "real_engine_jobs": 1,
             "hash_files": True,
         },
@@ -320,6 +326,62 @@ def _publish_passing_worker_record(
         "matched": [],
         "query_errors": [],
     }
+    stage_project_path = Path(stage_project).resolve(strict=True)
+    stage_plan_path = stage_project_path.with_suffix(
+        f".p{request['fixture']['plan_number']}"
+    ).resolve(strict=True)
+    executable_path = Path(request["engine"]["executable"]).resolve(strict=True)
+    logical_argv = [
+        str(executable_path),
+        "-c",
+        str(stage_project_path),
+        str(stage_plan_path),
+    ]
+    raw_command = (
+        f'"{logical_argv[0]}" -c "{logical_argv[2]}" "{logical_argv[3]}"'
+    )
+    launch_details = {
+        "plan_number": request["fixture"]["plan_number"],
+        "command": raw_command,
+        "executable_path": str(executable_path),
+        "executable_sha256": request["engine"]["executable_sha256"],
+        "project_path": str(stage_project_path),
+        "plan_path": str(stage_plan_path),
+        "working_directory": str(stage_project_path.parent),
+        "launcher_pid": 1234,
+        "launcher_create_time": 12345.0,
+        "max_runtime_seconds": request["timeout_seconds"],
+    }
+    launch_payload = {
+        "plan_number": request["fixture"]["plan_number"],
+        "raw_command": raw_command,
+        "logical_argv": logical_argv,
+        "executable_path": str(executable_path),
+        "executable_sha256": request["engine"]["executable_sha256"],
+        "project_path": str(stage_project_path),
+        "plan_path": str(stage_plan_path),
+        "cwd": str(stage_project_path.parent),
+        "launch_method": "direct_subprocess_shell_false_exact_executable",
+        "launcher_pid": 1234,
+        "launcher_create_time": 12345.0,
+        "max_runtime_seconds": request["timeout_seconds"],
+    }
+    rows["events"][0].update(
+        phase="execution",
+        event_name="engine_process_launched",
+        status="running",
+        severity="info",
+        api="RasCmdr.compute_plan.on_exec_launched",
+        reason_code=None,
+        detail=None,
+        relative_path=None,
+        pid=1234,
+        payload_json=json.dumps(
+            launch_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
     worker = {
         "schema_version": 1,
         "action": "run",
@@ -381,6 +443,7 @@ def _publish_passing_worker_record(
                 "calculation_attempted": True,
                 "solver_quiescence_confirmed": True,
                 "result_artifacts_finalized": True,
+                "artifact_finalization_failure": None,
                 "actual_engine_provenance_confirmed": True,
                 "selected_executable_path": request["engine"]["executable"],
                 "selected_executable_sha256": request["engine"][
@@ -388,6 +451,14 @@ def _publish_passing_worker_record(
                 ],
                 "launcher_pid": 1234,
                 "launcher_create_time": 12345.0,
+                "launcher_returncode": 0,
+                "max_runtime_seconds": request["timeout_seconds"],
+                "launch_details": launch_details,
+                "runtime_timed_out": False,
+                "failure_stage": None,
+                "failure_type": None,
+                "failure_detail": None,
+                "cancellation_details": None,
             },
         },
         "evidence": {"evidence_id": "evidence-1"},
@@ -429,6 +500,316 @@ def _publish_passing_worker_record(
         finished_at=started,
         timed_out=False,
     )
+
+
+def _publish_safe_failed_worker_record(
+    attempt_dir: Path,
+    request: dict,
+    request_sha256: str,
+) -> live.LiveChildOutcome:
+    """Publish a modern timeout that the public result proved fully quiescent."""
+    outcome = _publish_passing_worker_record(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    execution = worker["execution_result"]
+    details = execution["execution_details"]
+    launch = details["launch_details"]
+    process_record = {
+        "pid": launch["launcher_pid"],
+        "create_time": launch["launcher_create_time"],
+        "name": "Ras.exe",
+        "executable_path": launch["executable_path"],
+        "command_line": [launch["command"]],
+        "working_directory": launch["working_directory"],
+        "tracked": True,
+        "session_id": None,
+    }
+    project = Path(launch["project_path"])
+    plan_number = request["fixture"]["plan_number"]
+    execution.update(success=False, completion_verified=False)
+    details.update(
+        launcher_returncode=None,
+        runtime_timed_out=True,
+        failure_stage="subprocess_wait",
+        failure_type="TimeoutError",
+        failure_detail="maximum runtime expired",
+        cancellation_details={
+            "plan_number": plan_number,
+            "project_path": launch["project_path"],
+            "plan_path": launch["plan_path"],
+            "tmp_hdf_path": str(
+                project.with_suffix(f".p{plan_number}.tmp.hdf")
+            ),
+            "cancellation_attempted": True,
+            "pre_scan_complete": True,
+            "post_scan_complete": True,
+            "matched": [process_record],
+            "stopped": [process_record],
+            "survivors": [],
+            "query_errors": [],
+            "quiescence_confirmed": True,
+            "started_at": 1787923200.0,
+            "finished_at": 1787923201.0,
+        },
+    )
+    worker.update(terminal_category="execution_failed", worker_exit_code=20)
+    lane = worker["tables"]["lanes"][0]
+    lane.update(
+        terminal_category="execution_failed",
+        worker_exit_code=20,
+        process_success=False,
+        completion_verified=False,
+        final_hdf_exists=False,
+        final_legacy_exists=False,
+        failure_reason_code="mechanical_execution_not_confirmed",
+    )
+    write_json_with_digest(
+        attempt_dir / "execution_result.json",
+        execution,
+        replace=True,
+    )
+    next(
+        item
+        for item in worker["referenced_artifacts"]
+        if item["relative_path"] == "execution_result.json"
+    )["sha256"] = live.stable_sha256(
+        attempt_dir / "execution_result.json"
+    )[0]
+    write_json_with_digest(
+        attempt_dir / "worker_receipt.json",
+        worker,
+        replace=True,
+    )
+    return replace(outcome, returncode=20)
+
+
+def _rewrite_worker_execution_result(
+    attempt_dir: Path,
+    worker: dict,
+) -> None:
+    execution = worker["execution_result"]
+    write_json_with_digest(
+        attempt_dir / "execution_result.json",
+        execution,
+        replace=True,
+    )
+    next(
+        item
+        for item in worker["referenced_artifacts"]
+        if item["relative_path"] == "execution_result.json"
+    )["sha256"] = live.stable_sha256(
+        attempt_dir / "execution_result.json"
+    )[0]
+    write_json_with_digest(
+        attempt_dir / "worker_receipt.json",
+        worker,
+        replace=True,
+    )
+
+
+def _publish_safe_finalization_failed_worker_record(
+    attempt_dir: Path,
+    request: dict,
+    request_sha256: str,
+) -> live.LiveChildOutcome:
+    """Publish solver completion followed by a safely contained refresh failure."""
+    outcome = _publish_safe_failed_worker_record(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    execution = worker["execution_result"]
+    execution["completion_verified"] = True
+    details = execution["execution_details"]
+    details.update(
+        launcher_returncode=0,
+        runtime_timed_out=False,
+        failure_stage="result_artifact_finalization",
+        failure_type="OSError",
+        failure_detail="result inventory refresh failed",
+        result_artifacts_finalized=False,
+        artifact_finalization_failure={
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "result inventory refresh failed",
+        },
+    )
+    lane = worker["tables"]["lanes"][0]
+    lane.update(
+        completion_verified=True,
+        final_hdf_exists=True,
+        final_legacy_exists=False,
+    )
+    _rewrite_worker_execution_result(attempt_dir, worker)
+    return outcome
+
+
+def _publish_timeout_with_secondary_finalization_failure(
+    attempt_dir: Path,
+    request: dict,
+    request_sha256: str,
+) -> live.LiveChildOutcome:
+    """Publish a timeout whose later artifact refresh also failed."""
+    outcome = _publish_safe_failed_worker_record(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    details = worker["execution_result"]["execution_details"]
+    details.update(
+        result_artifacts_finalized=False,
+        artifact_finalization_failure={
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "post-timeout result refresh failed",
+        },
+    )
+    _rewrite_worker_execution_result(attempt_dir, worker)
+    return outcome
+
+
+def _publish_callback_timeout_error_worker_record(
+    attempt_dir: Path,
+    request: dict,
+    request_sha256: str,
+) -> live.LiveChildOutcome:
+    """Publish a callback TimeoutError that is not an engine deadline."""
+    outcome = _publish_safe_failed_worker_record(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    execution = worker["execution_result"]
+    execution["completion_verified"] = True
+    details = execution["execution_details"]
+    details.update(
+        runtime_timed_out=False,
+        failure_stage="stream_callback",
+        failure_detail="callback raised its own TimeoutError",
+    )
+    worker["tables"]["lanes"][0]["completion_verified"] = True
+    _rewrite_worker_execution_result(attempt_dir, worker)
+    return outcome
+
+
+def _rewrite_worker_inspection_evidence(
+    attempt_dir: Path,
+    worker: dict,
+) -> None:
+    write_json_with_digest(
+        attempt_dir / "evidence.json",
+        worker["evidence"],
+        replace=True,
+    )
+    (attempt_dir / "events.jsonl").write_bytes(
+        b"".join(
+            (
+                json.dumps(
+                    event,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+                + "\n"
+            ).encode("utf-8")
+            for event in worker["tables"]["events"]
+        )
+    )
+    for relative_path in ("evidence.json", "events.jsonl"):
+        next(
+            item
+            for item in worker["referenced_artifacts"]
+            if item["relative_path"] == relative_path
+        )["sha256"] = live.stable_sha256(attempt_dir / relative_path)[0]
+    write_json_with_digest(
+        attempt_dir / "worker_receipt.json",
+        worker,
+        replace=True,
+    )
+
+
+def _publish_failed_inspection_worker_record(
+    attempt_dir: Path,
+    request: dict,
+    request_sha256: str,
+) -> live.LiveChildOutcome:
+    """Publish a digest-bound ambiguity diagnostic after safe compute failure."""
+    outcome = _publish_safe_finalization_failed_worker_record(
+        attempt_dir,
+        request,
+        request_sha256,
+    )
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    stage_project = Path(request["stage_root"]) / Path(request["source_project"]).name
+    plan_number = request["fixture"]["plan_number"]
+    hdf = stage_project.with_suffix(f".p{plan_number}.hdf")
+    legacy = stage_project.with_suffix(f".O{plan_number}")
+    hdf.write_bytes(b"modern result")
+    legacy.write_bytes(b"legacy result")
+    os.utime(hdf, ns=(1787923200000000000, 1787923200000000000))
+    os.utime(legacy, ns=(1787923201000000000, 1787923201000000000))
+    evidence_id = str(uuid.uuid4())
+    worker["evidence"] = {
+        "schema_version": 1,
+        "evidence_kind": "execution_evidence_inspection_failure",
+        "evidence_id": evidence_id,
+        "inspection_api": "RasCmdr.inspect_execution_evidence",
+        "inspection_state": "failed",
+        "inspection_started_at": "2026-08-28T12:00:02+00:00",
+        "inspection_failed_at": "2026-08-28T12:00:03+00:00",
+        "failure_type": "ResultArtifactAmbiguityError",
+        "reason_code": "legacy_output_timestamp_after_hdf",
+        "detail": "mixed result families prevent safe inspection",
+        "plan_number": plan_number,
+        "declared_program_version": "7.00",
+        "declared_expected_result_format": "hdf",
+        "selected_result_format": "hdf",
+        "hdf_path": str(hdf),
+        "legacy_output_path": str(legacy),
+        "hdf_mtime_ns": hdf.stat().st_mtime_ns,
+        "legacy_mtime_ns": legacy.stat().st_mtime_ns,
+        "conflicts": ["multiple_result_formats_present"],
+        "safe_failed_execution": True,
+        "result_artifacts_finalized": False,
+        "runtime_timed_out": False,
+    }
+    worker["tables"]["observations"] = []
+    worker["tables"]["lanes"][0].update(
+        final_hdf_exists=True,
+        final_legacy_exists=True,
+        conflicts=["multiple_result_formats_present"],
+    )
+    event = dict(worker["tables"]["events"][-1])
+    event.update(
+        sequence=event["sequence"] + 1,
+        event_name="execution_evidence_inspection_failed",
+        event_at="2026-08-28T12:00:03+00:00",
+        phase="inspection",
+        status="failed",
+        severity="error",
+        api="RasCmdr.inspect_execution_evidence",
+        reason_code=worker["evidence"]["reason_code"],
+        pid=None,
+        payload_json=json.dumps(
+            {
+                "evidence_id": evidence_id,
+                "evidence_kind": worker["evidence"]["evidence_kind"],
+                "failure_type": worker["evidence"]["failure_type"],
+                "reason_code": worker["evidence"]["reason_code"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+    worker["tables"]["events"].append(event)
+    _rewrite_worker_inspection_evidence(attempt_dir, worker)
+    return outcome
 
 
 def _enable_test_orchestration(
@@ -571,6 +952,11 @@ def test_live_run_parent_terminalizes_worker_receipt_and_closed_logs(
     assert request["hec_ras_execution_enabled"] is True
     assert request["process_baseline"] == []
     assert request["real_engine_lock"]["attempt_id"] == request["attempt_id"]
+    assert request["timeout_seconds"] == 1
+    assert request["termination_grace_seconds"] == 1
+    assert request["preflight_timeout_seconds"] == 1800
+    assert request["postflight_timeout_seconds"] == 1800
+    assert request["supervisor_receipt_margin_seconds"] == 5.0
 
 
 def test_passing_worker_source_drift_quarantines_without_terminal(
@@ -1351,6 +1737,9 @@ def _publish_duplicate_invariant_worker(
         ("wrong_tcu_install", "TCU install directory"),
         ("forged_execution", "calculation/provenance/finalization"),
         ("zero_create_time", "executable provenance"),
+        ("runtime_timeout", "runtime evidence"),
+        ("launch_runtime_mismatch", "launch identity"),
+        ("launch_event_mismatch", "launch event disagrees"),
         ("forged_process", "complete-empty worker inventory"),
         ("truncated_global", "complete-empty worker inventory"),
         ("truncated_plan", "complete-empty exact-plan inventory"),
@@ -1412,6 +1801,70 @@ def test_parent_rejects_minimal_or_forged_worker_execution_proof(
                     item["sha256"] = live.stable_sha256(
                         attempt_dir / "execution_result.json"
                     )[0]
+        elif forgery == "runtime_timeout":
+            worker["execution_result"]["execution_details"][
+                "runtime_timed_out"
+            ] = True
+            write_json_with_digest(
+                attempt_dir / "execution_result.json",
+                worker["execution_result"],
+                replace=True,
+            )
+            next(
+                item
+                for item in worker["referenced_artifacts"]
+                if item["relative_path"] == "execution_result.json"
+            )["sha256"] = live.stable_sha256(
+                attempt_dir / "execution_result.json"
+            )[0]
+        elif forgery == "launch_runtime_mismatch":
+            worker["execution_result"]["execution_details"]["launch_details"][
+                "max_runtime_seconds"
+            ] += 1
+            write_json_with_digest(
+                attempt_dir / "execution_result.json",
+                worker["execution_result"],
+                replace=True,
+            )
+            next(
+                item
+                for item in worker["referenced_artifacts"]
+                if item["relative_path"] == "execution_result.json"
+            )["sha256"] = live.stable_sha256(
+                attempt_dir / "execution_result.json"
+            )[0]
+        elif forgery == "launch_event_mismatch":
+            launch_event = next(
+                event
+                for event in worker["tables"]["events"]
+                if event["event_name"] == "engine_process_launched"
+            )
+            payload = json.loads(launch_event["payload_json"])
+            payload["launch_method"] = "forged"
+            launch_event["payload_json"] = json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            (attempt_dir / "events.jsonl").write_bytes(
+                b"".join(
+                    (
+                        json.dumps(
+                            event,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            allow_nan=False,
+                        )
+                        + "\n"
+                    ).encode("utf-8")
+                    for event in worker["tables"]["events"]
+                )
+            )
+            next(
+                item
+                for item in worker["referenced_artifacts"]
+                if item["relative_path"] == "events.jsonl"
+            )["sha256"] = live.stable_sha256(attempt_dir / "events.jsonl")[0]
         elif forgery == "forged_process":
             worker["process_evidence"]["post_execution_global"]["processes"] = [
                 {"pid": 4321}
@@ -1745,8 +2198,11 @@ def test_outer_timeout_uses_exact_python_helper_and_never_raw_process_kill(
     request = {
         "python_executable": sys.executable,
         "repository_root": str(repository),
+        "preflight_timeout_seconds": 0.01,
         "timeout_seconds": 0.01,
         "termination_grace_seconds": 0.01,
+        "postflight_timeout_seconds": 0.01,
+        "supervisor_receipt_margin_seconds": 5.0,
         "engine": {"execution_api": "ras_cmdr"},
         "worker_launch": _worker_launch_metadata(attempt),
     }
@@ -1762,6 +2218,7 @@ def test_outer_timeout_uses_exact_python_helper_and_never_raw_process_kill(
 
         def wait(self, timeout):
             self.waits += 1
+            observed["wait_timeout"] = timeout
             if self.waits == 1:
                 raise subprocess.TimeoutExpired(observed["command"], timeout)
             return 0
@@ -1802,6 +2259,7 @@ def test_outer_timeout_uses_exact_python_helper_and_never_raw_process_kill(
     assert outcome.pid == 9753
     assert observed["terminated_worker_pid"] == 9753
     assert observed["launcher_pid"] == 2468
+    assert observed["wait_timeout"] == pytest.approx(35.03)
     command = observed["command"]
     assert command[1:3] == ["-m", "scripts.qualification.execution_evidence.live_worker"]
     assert all("taskkill" not in str(part).casefold() for part in command)
@@ -1820,8 +2278,11 @@ def test_modern_unproven_timeout_leaves_python_child_and_logs_unterminalized(
     request = {
         "python_executable": sys.executable,
         "repository_root": str(repository),
+        "preflight_timeout_seconds": 0.01,
         "timeout_seconds": 0.01,
         "termination_grace_seconds": 0.01,
+        "postflight_timeout_seconds": 0.01,
+        "supervisor_receipt_margin_seconds": 5.0,
         "engine": {"execution_api": "ras_cmdr"},
         "worker_launch": _worker_launch_metadata(attempt),
     }
@@ -1835,6 +2296,7 @@ def test_modern_unproven_timeout_leaves_python_child_and_logs_unterminalized(
             observed["command"] = command
 
         def wait(self, timeout):
+            observed["wait_timeout"] = timeout
             raise subprocess.TimeoutExpired(observed["command"], timeout)
 
         def terminate(self):
@@ -1861,6 +2323,7 @@ def test_modern_unproven_timeout_leaves_python_child_and_logs_unterminalized(
 
     assert outcome.timed_out is True
     assert outcome.cancellation_safe is cancellation_safe
+    assert observed["wait_timeout"] == pytest.approx(35.03)
     assert "terminated" not in observed
     assert "killed" not in observed
     assert (attempt / "stdout.log").is_file()
@@ -1879,8 +2342,11 @@ def test_controller_timeout_never_terminates_python_without_exact_quiescence(
     request = {
         "python_executable": sys.executable,
         "repository_root": str(repository),
+        "preflight_timeout_seconds": 0.01,
         "timeout_seconds": 0.01,
         "termination_grace_seconds": 0.01,
+        "postflight_timeout_seconds": 0.01,
+        "supervisor_receipt_margin_seconds": 5.0,
         "engine": {"execution_api": "ras_control"},
         "worker_launch": _worker_launch_metadata(attempt),
     }
@@ -1894,6 +2360,7 @@ def test_controller_timeout_never_terminates_python_without_exact_quiescence(
             observed["command"] = command
 
         def wait(self, timeout):
+            observed["wait_timeout"] = timeout
             raise subprocess.TimeoutExpired(observed["command"], timeout)
 
         def terminate(self):
@@ -1921,8 +2388,76 @@ def test_controller_timeout_never_terminates_python_without_exact_quiescence(
     assert outcome.timed_out is True
     assert outcome.cancellation_safe is False
     assert outcome.cancellation_reason == "controller_outer_deadline_exceeded"
+    assert observed["wait_timeout"] == pytest.approx(35.03)
     assert "terminated" not in observed
     assert "killed" not in observed
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("preflight_timeout_seconds", None),
+        ("postflight_timeout_seconds", 0),
+        ("timeout_seconds", None),
+        ("timeout_seconds", True),
+        ("timeout_seconds", float("nan")),
+        ("termination_grace_seconds", 0),
+        ("supervisor_receipt_margin_seconds", 4.0),
+    ],
+)
+def test_outer_worker_deadline_rejects_unbound_or_nonfinite_durations(
+    field: str,
+    invalid_value: object,
+) -> None:
+    request = {
+        "preflight_timeout_seconds": 10.0,
+        "timeout_seconds": 30.0,
+        "termination_grace_seconds": 2.0,
+        "postflight_timeout_seconds": 10.0,
+        "supervisor_receipt_margin_seconds": 5.0,
+    }
+    request[field] = invalid_value
+
+    with pytest.raises(live.LiveSupervisorError):
+        live._outer_worker_deadline_seconds(request)
+
+
+def test_outer_worker_deadline_reserves_preflight_engine_cancel_and_postflight() -> None:
+    request = {
+        "preflight_timeout_seconds": 10.0,
+        "timeout_seconds": 30.0,
+        "termination_grace_seconds": 2.0,
+        "postflight_timeout_seconds": 10.0,
+        "supervisor_receipt_margin_seconds": 5.0,
+    }
+
+    assert live._outer_worker_deadline_seconds(request) == pytest.approx(85.0)
+
+
+def test_outer_worker_deadline_rejects_nonfinite_sum() -> None:
+    request = {
+        "preflight_timeout_seconds": 1e308,
+        "timeout_seconds": 1e308,
+        "termination_grace_seconds": 30.0,
+        "postflight_timeout_seconds": 1e308,
+        "supervisor_receipt_margin_seconds": 5.0,
+    }
+
+    with pytest.raises(live.LiveSupervisorError, match="not finite"):
+        live._outer_worker_deadline_seconds(request)
+
+
+def test_outer_worker_deadline_rejects_unrepresentable_windows_wait() -> None:
+    request = {
+        "preflight_timeout_seconds": 10.0,
+        "timeout_seconds": 4_294_967.0,
+        "termination_grace_seconds": 30.0,
+        "postflight_timeout_seconds": 10.0,
+        "supervisor_receipt_margin_seconds": 5.0,
+    }
+
+    with pytest.raises(live.LiveSupervisorError, match="subprocess-wait range"):
+        live._outer_worker_deadline_seconds(request)
 
 
 def test_cancel_helper_refuses_legacy_boolean_api(
@@ -2082,6 +2617,392 @@ def test_resume_reuses_verified_terminal_without_capability_probe(
         acknowledge_real_ras=True,
         resume=True,
     ) == ()
+
+
+def test_safe_modern_timeout_is_terminalized_but_never_reused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_run_live_child",
+        _publish_safe_failed_worker_record,
+    )
+
+    failed = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+    )
+
+    assert len(failed) == 1
+    failed_receipt = failed[0].receipt
+    assert failed_receipt["terminal_category"] == "execution_failed"
+    assert failed_receipt["execution_result"]["success"] is False
+    assert failed_receipt["execution_result"]["completion_verified"] is False
+    assert host_lock.exists() is False
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+    monkeypatch.setattr(live, "_run_live_child", _publish_passing_worker_record)
+    retried = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+        resume=True,
+    )
+
+    assert len(retried) == 1
+    assert retried[0].receipt["terminal_category"] == "passed"
+    assert retried[0].receipt["attempt_id"] != failed_receipt["attempt_id"]
+
+
+def test_safe_modern_finalization_failure_is_terminalized_but_never_reused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_run_live_child",
+        _publish_safe_finalization_failed_worker_record,
+    )
+
+    failed = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+    )
+
+    assert len(failed) == 1
+    receipt = failed[0].receipt
+    execution = receipt["execution_result"]
+    assert receipt["terminal_category"] == "execution_failed"
+    assert execution["success"] is False
+    assert execution["completion_verified"] is True
+    assert execution["execution_details"]["result_artifacts_finalized"] is False
+    assert receipt["tables"]["lanes"][0]["completion_verified"] is True
+    assert host_lock.exists() is False
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+    monkeypatch.setattr(live, "_run_live_child", _publish_passing_worker_record)
+    retried = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+        resume=True,
+    )
+    assert len(retried) == 1
+    assert retried[0].receipt["terminal_category"] == "passed"
+    assert retried[0].receipt["attempt_id"] != receipt["attempt_id"]
+
+
+def test_parent_preserves_timeout_primary_with_secondary_finalization_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_run_live_child",
+        _publish_timeout_with_secondary_finalization_failure,
+    )
+
+    failed = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+    )
+
+    details = failed[0].receipt["execution_result"]["execution_details"]
+    assert details["runtime_timed_out"] is True
+    assert details["failure_stage"] == "subprocess_wait"
+    assert details["failure_type"] == "TimeoutError"
+    assert details["artifact_finalization_failure"]["failure_type"] == "OSError"
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+def test_parent_accepts_callback_timeout_error_without_runtime_deadline_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_run_live_child",
+        _publish_callback_timeout_error_worker_record,
+    )
+
+    failed = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+    )
+
+    execution = failed[0].receipt["execution_result"]
+    details = execution["execution_details"]
+    assert failed[0].receipt["terminal_category"] == "execution_failed"
+    assert execution["completion_verified"] is True
+    assert details["runtime_timed_out"] is False
+    assert details["failure_type"] == "TimeoutError"
+    assert details["failure_stage"] == "stream_callback"
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+def test_parent_accepts_digest_bound_failed_inspection_as_nonreusable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_run_live_child",
+        _publish_failed_inspection_worker_record,
+    )
+
+    failed = live.execute_live_action(
+        context.run_root,
+        acknowledge_real_ras=True,
+    )
+
+    receipt = failed[0].receipt
+    assert receipt["terminal_category"] == "execution_failed"
+    assert receipt["evidence"]["evidence_kind"] == (
+        "execution_evidence_inspection_failure"
+    )
+    assert receipt["tables"]["observations"] == []
+    assert receipt["tables"]["lanes"][0]["final_hdf_exists"] is True
+    assert receipt["tables"]["lanes"][0]["final_legacy_exists"] is True
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["reason", "path", "mtime", "order", "version", "event", "observations"],
+)
+def test_parent_rejects_tampered_failed_inspection_proof(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+
+    def publish_forgery(
+        attempt_dir: Path,
+        request: dict,
+        digest: str,
+    ) -> live.LiveChildOutcome:
+        outcome = _publish_failed_inspection_worker_record(
+            attempt_dir,
+            request,
+            digest,
+        )
+        worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+        evidence = worker["evidence"]
+        if tamper == "reason":
+            evidence["reason_code"] = "invented_ambiguity_reason"
+        elif tamper == "path":
+            evidence["hdf_path"] = evidence["legacy_output_path"]
+        elif tamper == "mtime":
+            evidence["hdf_mtime_ns"] += 1
+        elif tamper == "order":
+            hdf = Path(evidence["hdf_path"])
+            legacy = Path(evidence["legacy_output_path"])
+            os.utime(hdf, ns=(1787923202000000000, 1787923202000000000))
+            os.utime(legacy, ns=(1787923201000000000, 1787923201000000000))
+            evidence["hdf_mtime_ns"] = hdf.stat().st_mtime_ns
+            evidence["legacy_mtime_ns"] = legacy.stat().st_mtime_ns
+        elif tamper == "version":
+            evidence["declared_program_version"] = "6.6"
+        elif tamper == "event":
+            next(
+                row
+                for row in worker["tables"]["events"]
+                if row["event_name"] == "execution_evidence_inspection_failed"
+            )["status"] = "passed"
+        elif tamper == "observations":
+            worker["tables"]["observations"] = valid_table_rows(
+                run_id=request["run_id"],
+                lane_id=request["lane_id"],
+                attempt_id=request["attempt_id"],
+            )["observations"]
+        else:  # pragma: no cover - closed parametrization above
+            raise AssertionError(tamper)
+        _rewrite_worker_inspection_evidence(attempt_dir, worker)
+        return outcome
+
+    monkeypatch.setattr(live, "_run_live_child", publish_forgery)
+    with pytest.raises(live.LiveSupervisorError):
+        live.execute_live_action(
+            context.run_root,
+            acknowledge_real_ras=True,
+        )
+    assert host_lock.exists() is False
+
+
+def test_parent_rejects_success_with_secondary_finalization_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+
+    def publish_forgery(
+        attempt_dir: Path,
+        request: dict,
+        digest: str,
+    ) -> live.LiveChildOutcome:
+        outcome = _publish_passing_worker_record(attempt_dir, request, digest)
+        worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+        worker["execution_result"]["execution_details"][
+            "artifact_finalization_failure"
+        ] = {
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "forged secondary failure",
+        }
+        _rewrite_worker_execution_result(attempt_dir, worker)
+        return outcome
+
+    monkeypatch.setattr(live, "_run_live_child", publish_forgery)
+    with pytest.raises(live.LiveSupervisorError, match="secondary failure metadata"):
+        live.execute_live_action(
+            context.run_root,
+            acknowledge_real_ras=True,
+        )
+    assert host_lock.exists() is False
+
+
+def test_parent_rejects_success_without_observation_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+
+    def publish_forgery(
+        attempt_dir: Path,
+        request: dict,
+        digest: str,
+    ) -> live.LiveChildOutcome:
+        outcome = _publish_passing_worker_record(attempt_dir, request, digest)
+        worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+        worker["tables"]["observations"] = []
+        _rewrite_worker_inspection_evidence(attempt_dir, worker)
+        return outcome
+
+    monkeypatch.setattr(live, "_run_live_child", publish_forgery)
+    with pytest.raises(
+        live.LiveSupervisorError,
+        match="lacks nonempty observation evidence",
+    ):
+        live.execute_live_action(
+            context.run_root,
+            acknowledge_real_ras=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "forgery",
+    [
+        "completion_not_boolean",
+        "timeout_type_mismatch",
+        "missing_finalization_failure",
+        "invalid_finalization_failure",
+        "missing_cancellation",
+        "unconfirmed_cancellation",
+        "known_survivor",
+        "initial_match_not_stopped",
+    ],
+)
+def test_parent_rejects_incoherent_modern_failure_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    forgery: str,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+
+    def publish_forgery(
+        attempt_dir: Path,
+        request: dict,
+        digest: str,
+    ) -> live.LiveChildOutcome:
+        outcome = _publish_safe_failed_worker_record(attempt_dir, request, digest)
+        worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+        execution = worker["execution_result"]
+        details = execution["execution_details"]
+        if forgery == "completion_not_boolean":
+            execution["completion_verified"] = None
+        elif forgery == "timeout_type_mismatch":
+            details["failure_type"] = "RuntimeError"
+        elif forgery == "missing_finalization_failure":
+            details["result_artifacts_finalized"] = False
+            details["artifact_finalization_failure"] = None
+        elif forgery == "invalid_finalization_failure":
+            details["result_artifacts_finalized"] = False
+            details["artifact_finalization_failure"] = {
+                "failure_stage": "solver_quiescence",
+                "failure_type": "OSError",
+                "failure_detail": "wrong stage",
+            }
+        elif forgery == "missing_cancellation":
+            details["cancellation_details"] = None
+        elif forgery == "unconfirmed_cancellation":
+            details["cancellation_details"]["quiescence_confirmed"] = None
+        elif forgery == "known_survivor":
+            details["cancellation_details"]["survivors"] = list(
+                details["cancellation_details"]["matched"]
+            )
+        elif forgery == "initial_match_not_stopped":
+            details["cancellation_details"]["stopped"] = []
+        else:  # pragma: no cover - closed parametrization above
+            raise AssertionError(forgery)
+        write_json_with_digest(
+            attempt_dir / "execution_result.json",
+            execution,
+            replace=True,
+        )
+        next(
+            item
+            for item in worker["referenced_artifacts"]
+            if item["relative_path"] == "execution_result.json"
+        )["sha256"] = live.stable_sha256(
+            attempt_dir / "execution_result.json"
+        )[0]
+        write_json_with_digest(
+            attempt_dir / "worker_receipt.json",
+            worker,
+            replace=True,
+        )
+        return outcome
+
+    monkeypatch.setattr(live, "_run_live_child", publish_forgery)
+
+    with pytest.raises(live.LiveSupervisorError):
+        live.execute_live_action(
+            context.run_root,
+            acknowledge_real_ras=True,
+        )
+    assert host_lock.exists() is False
 
 
 @pytest.mark.parametrize(

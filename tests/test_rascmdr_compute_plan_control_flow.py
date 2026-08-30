@@ -4,6 +4,7 @@ import importlib
 import hashlib
 import inspect
 import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -84,6 +85,18 @@ class _DummyRas:
         self.refresh_calls.append(("results", plan_numbers))
 
 
+def _cancellation_outcome(quiescence_confirmed=True):
+    payload = {
+        "plan_number": "01",
+        "cancellation_attempted": True,
+        "quiescence_confirmed": quiescence_confirmed,
+    }
+    return SimpleNamespace(
+        quiescence_confirmed=quiescence_confirmed,
+        to_dict=lambda: dict(payload),
+    )
+
+
 def _patch_compute_launcher(
     monkeypatch,
     tmp_path,
@@ -96,6 +109,7 @@ def _patch_compute_launcher(
     executable = tmp_path / "Ras.exe"
     executable.write_bytes(b"synthetic ras executable")
     ras_obj.ras_exe_path = executable
+    ras_obj.process_inspection_calls = []
 
     class FakePopen:
         pid = 2468
@@ -127,6 +141,18 @@ def _patch_compute_launcher(
         RasCmdr,
         "_confirm_plan_solver_quiescence",
         staticmethod(lambda plan_number, ras_object: True),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "inspect_plan_processes",
+        staticmethod(
+            lambda plan_number, *, ras_object: (
+                ras_obj.process_inspection_calls.append(
+                    (plan_number, ras_object)
+                )
+                or SimpleNamespace(complete=True, matched=[])
+            )
+        ),
     )
     return executable
 
@@ -519,6 +545,15 @@ def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp
         "selected_executable_sha256": None,
         "launcher_pid": None,
         "launcher_create_time": None,
+        "launcher_returncode": None,
+        "max_runtime_seconds": None,
+        "launch_details": None,
+        "runtime_timed_out": False,
+        "failure_stage": None,
+        "failure_type": None,
+        "failure_detail": None,
+        "cancellation_details": None,
+        "artifact_finalization_failure": None,
     }
 
 
@@ -531,6 +566,7 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
     ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
     launches = []
     monitor_calls = []
+    wait_timeouts = []
 
     class CapturingPopen:
         pid = 7654
@@ -540,7 +576,7 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
             self.returncode = 0
 
         def wait(self, timeout=None):
-            del timeout
+            wait_timeouts.append(timeout)
             return self.returncode
 
         def poll(self):
@@ -578,17 +614,19 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
     )
 
     executable = Path(ras_obj.ras_exe_path).resolve(strict=True)
-    expected_argv = [
-        str(executable),
-        "-c",
-        str(Path(ras_obj.prj_file).resolve()),
-        str((Path(ras_obj.project_folder) / "TestProject.p01").resolve()),
-    ]
+    project_path = Path(ras_obj.prj_file).resolve()
+    plan_path = (Path(ras_obj.project_folder) / "TestProject.p01").resolve()
+    expected_command = (
+        f'"{executable}" -c "{project_path}" "{plan_path}"'
+    )
     assert len(launches) == 1
-    assert launches[0][0] == expected_argv
+    assert launches[0][0] == expected_command
+    assert launches[0][1]["executable"] == str(executable)
     assert launches[0][1]["shell"] is False
     assert launches[0][1]["cwd"] == str(ras_obj.project_folder)
+    assert wait_timeouts == [None]
     assert monitor_calls == ([7654] if with_callback else [])
+    assert ras_obj.process_inspection_calls == [("01", ras_obj)]
     assert result.success is True
     assert result.execution_details == {
         "execution_api": "ras_cmdr",
@@ -604,7 +642,706 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
         ).hexdigest(),
         "launcher_pid": 7654,
         "launcher_create_time": 456.75,
+        "launcher_returncode": 0,
+        "max_runtime_seconds": None,
+        "launch_details": {
+            "plan_number": "01",
+            "command": expected_command,
+            "executable_path": str(executable),
+            "executable_sha256": hashlib.sha256(
+                executable.read_bytes()
+            ).hexdigest(),
+            "project_path": str(project_path),
+            "plan_path": str(plan_path),
+            "working_directory": str(ras_obj.project_folder),
+            "launcher_pid": 7654,
+            "launcher_create_time": 456.75,
+            "max_runtime_seconds": None,
+        },
+        "runtime_timed_out": False,
+        "failure_stage": None,
+        "failure_type": None,
+        "failure_detail": None,
+        "cancellation_details": None,
+        "artifact_finalization_failure": None,
     }
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        True,
+        False,
+        "10",
+        0,
+        -1,
+        1e308,
+        pytest.param(10**10_000, id="overflowing-int"),
+        float("nan"),
+        float("inf"),
+        -float("inf"),
+    ],
+)
+def test_compute_plan_rejects_invalid_max_runtime_before_project_access(invalid):
+    ras_obj = _DummyRas(init_exception=AssertionError("project must not be read"))
+
+    with pytest.raises(ValueError, match="max_runtime must be a positive finite"):
+        RasCmdr.compute_plan("01", ras_object=ras_obj, max_runtime=invalid)
+
+    assert ras_obj.refresh_calls == []
+
+
+def test_compute_plan_accepts_exact_windows_wait_limit_before_project_access():
+    ras_obj = _DummyRas(init_exception=RuntimeError("normal project failure"))
+
+    result = RasCmdr.compute_plan(
+        "01",
+        ras_object=ras_obj,
+        max_runtime=rascmdr_module._MAX_SUBPROCESS_WAIT_SECONDS,
+    )
+
+    assert result.success is False
+    assert result.execution_details["max_runtime_seconds"] == pytest.approx(
+        rascmdr_module._MAX_SUBPROCESS_WAIT_SECONDS
+    )
+
+
+def test_compute_plan_rejects_next_float_above_windows_wait_limit():
+    ras_obj = _DummyRas(init_exception=AssertionError("project must not be read"))
+    above_limit = math.nextafter(
+        rascmdr_module._MAX_SUBPROCESS_WAIT_SECONDS,
+        math.inf,
+    )
+
+    with pytest.raises(ValueError, match="max_runtime must be a positive finite"):
+        RasCmdr.compute_plan("01", ras_object=ras_obj, max_runtime=above_limit)
+
+    assert ras_obj.refresh_calls == []
+
+
+def test_direct_windows_compute_command_quotes_every_filesystem_argument():
+    command = RasCmdr._direct_windows_compute_command(
+        r"C:\HEC\Ras.exe",
+        r"C:\models\A&B\Demo.prj",
+        r"C:\models\A&B\Demo.p01",
+    )
+
+    assert command == (
+        '"C:\\HEC\\Ras.exe" -c '
+        '"C:\\models\\A&B\\Demo.prj" '
+        '"C:\\models\\A&B\\Demo.p01"'
+    )
+
+
+def test_direct_windows_compute_command_rejects_ambiguous_quote():
+    with pytest.raises(ValueError, match="cannot contain a double quote"):
+        RasCmdr._direct_windows_compute_command(
+            r"C:\HEC\Ras.exe",
+            'C:\\models\\bad"name\\Demo.prj',
+            r"C:\models\Demo.p01",
+        )
+
+
+def test_executable_provenance_rejects_identity_change_while_hashing(
+    monkeypatch,
+    tmp_path,
+):
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"synthetic executable")
+    identities = iter(
+        ((1, 2, 3, 4, 5), (1, 2, 3, 4, 5), (1, 2, 4, 4, 5))
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_file_identity",
+        staticmethod(lambda _stat: next(identities)),
+    )
+
+    with pytest.raises(RuntimeError, match="changed while hashing"):
+        RasCmdr._resolve_executable_provenance(executable)
+
+
+def test_compute_plan_emits_detached_post_launch_identity_payload(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    events = []
+    observed = {}
+
+    class FakeMonitor:
+        max_wait_seconds = 300.0
+
+        @staticmethod
+        def enable_detailed_logging(*_args, **_kwargs):
+            return None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, process):
+            events.append(("monitor", process.pid))
+
+    class FakeProcess:
+        pid = 8642
+        returncode = 0
+
+        def __init__(self, command, **kwargs):
+            events.append(("popen", command, kwargs))
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    class Callback:
+        def on_exec_start(self, plan_number, command):
+            events.append(("start", plan_number, command))
+
+        def on_exec_launched(self, plan_number, launch_details):
+            events.append(("launched", plan_number))
+            observed.update(launch_details)
+            launch_details["launcher_pid"] = -1
+
+    monkeypatch.setattr(rascmdr_module, "BcoMonitor", FakeMonitor)
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda _pid: 789.25),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=Callback(),
+        max_runtime=30,
+    )
+
+    assert result.success is True
+    assert [event[0] for event in events] == [
+        "start",
+        "popen",
+        "launched",
+        "monitor",
+        "wait",
+    ]
+    command = events[0][2]
+    popen_kwargs = events[1][2]
+    assert events[1][1] == command
+    assert popen_kwargs["executable"] == observed["executable_path"]
+    assert popen_kwargs["shell"] is False
+    assert popen_kwargs["cwd"] == observed["working_directory"]
+    assert observed == {
+        "plan_number": "01",
+        "command": command,
+        "executable_path": str(Path(ras_obj.ras_exe_path).resolve()),
+        "executable_sha256": hashlib.sha256(
+            Path(ras_obj.ras_exe_path).read_bytes()
+        ).hexdigest(),
+        "project_path": str(Path(ras_obj.prj_file).resolve()),
+        "plan_path": str(
+            (Path(ras_obj.project_folder) / "TestProject.p01").resolve()
+        ),
+        "working_directory": str(ras_obj.project_folder),
+        "launcher_pid": 8642,
+        "launcher_create_time": 789.25,
+        "max_runtime_seconds": 30.0,
+    }
+    assert result.execution_details["launch_details"] == observed
+    assert result.execution_details["launch_details"]["launcher_pid"] == 8642
+    assert result.execution_details["max_runtime_seconds"] == 30.0
+
+
+def test_compute_plan_uses_one_deadline_across_monitor_and_launcher_wait(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    clock = {"now": 100.0}
+    waits = []
+
+    class FakeMonitor:
+        max_wait_seconds = 300.0
+
+        @staticmethod
+        def enable_detailed_logging(*_args, **_kwargs):
+            return None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, _process):
+            assert self.max_wait_seconds == pytest.approx(10.0)
+            clock["now"] += 3.0
+
+    class FakeProcess:
+        pid = 9753
+        returncode = 0
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            clock["now"] += 2.0
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(rascmdr_module, "BcoMonitor", FakeMonitor)
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(rascmdr_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda _pid: 456.5),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=object(),
+        max_runtime=10,
+    )
+
+    assert result.success is True
+    assert waits == [pytest.approx(7.0)]
+    assert result.execution_details["runtime_timed_out"] is False
+
+
+def test_compute_plan_starts_runtime_deadline_after_prelaunch_preparation(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    clock = {"now": 100.0}
+    launches = []
+    waits = []
+
+    class FakeProcess:
+        pid = 9755
+        returncode = 0
+
+        def __init__(self, *_args, **_kwargs):
+            launches.append(clock["now"])
+
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    def prepare(*_args, **_kwargs):
+        clock["now"] += 1_000.0
+
+    monkeypatch.setattr(rascmdr_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(
+        rascmdr_module,
+        "prepare_plan_execution_artifacts",
+        prepare,
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        max_runtime=10,
+    )
+
+    assert result.success is True
+    assert launches == [1_100.0]
+    assert waits == [pytest.approx(10.0)]
+
+
+def test_compute_plan_records_launcher_start_failure_without_cancellation(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    def fail_popen(*_args, **_kwargs):
+        raise OSError("launcher could not start")
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", fail_popen)
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *_args, **_kwargs: pytest.fail(
+                "no exact process exists when Popen never returned"
+            )
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        verify=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        max_runtime=10,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is False
+    details = result.execution_details
+    assert details["calculation_attempted"] is True
+    assert details["failure_stage"] == "launcher_start"
+    assert details["failure_type"] == "OSError"
+    assert details["failure_detail"] == "launcher could not start"
+    assert details["runtime_timed_out"] is False
+    assert details["cancellation_details"] is None
+    assert details["launch_details"] is None
+
+
+def test_compute_plan_timeout_uses_only_exact_cancellation_and_records_evidence(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    cancellation_calls = []
+    finalization_calls = []
+
+    class HangingProcess:
+        pid = 1357
+        returncode = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            raise rascmdr_module.subprocess.TimeoutExpired("Ras.exe", timeout)
+
+        def poll(self):
+            return None
+
+    def cancel(plan_number, *, ras_object, timeout_seconds=10.0):
+        cancellation_calls.append((plan_number, ras_object, timeout_seconds))
+        return _cancellation_outcome(True)
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", HangingProcess)
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(cancel),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_terminate_launched_process_tree",
+        staticmethod(
+            lambda _process: (_ for _ in ()).throw(
+                AssertionError("raw process-tree termination is forbidden")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module,
+        "finalize_plan_execution_artifacts",
+        lambda *args, **kwargs: finalization_calls.append((args, kwargs)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        max_runtime=0.25,
+    )
+
+    assert result.success is False
+    assert cancellation_calls == [("01", ras_obj, 10.0)]
+    assert len(finalization_calls) == 1
+    details = result.execution_details
+    assert details["runtime_timed_out"] is True
+    assert details["failure_stage"] == "launcher_wait"
+    assert details["failure_type"] == "TimeoutError"
+    assert "exceeded max_runtime=0.25" in details["failure_detail"]
+    assert details["cancellation_details"] == {
+        "plan_number": "01",
+        "cancellation_attempted": True,
+        "quiescence_confirmed": True,
+    }
+    assert details["solver_quiescence_confirmed"] is True
+    assert details["result_artifacts_finalized"] is True
+
+
+def test_timeout_primary_evidence_survives_finalization_failure(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    class HangingProcess:
+        pid = 1358
+        returncode = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            raise rascmdr_module.subprocess.TimeoutExpired("Ras.exe", timeout)
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", HangingProcess)
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(True)),
+    )
+    monkeypatch.setattr(
+        rascmdr_module,
+        "finalize_plan_execution_artifacts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("post-timeout cleanup failed")
+        ),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        max_runtime=0.25,
+    )
+
+    assert result.success is False
+    details = result.execution_details
+    assert details["runtime_timed_out"] is True
+    assert details["failure_stage"] == "launcher_wait"
+    assert details["failure_type"] == "TimeoutError"
+    assert details["result_artifacts_finalized"] is False
+    assert details["artifact_finalization_failure"] == {
+        "failure_stage": "result_artifact_finalization",
+        "failure_type": "OSError",
+        "failure_detail": "post-timeout cleanup failed",
+    }
+
+
+def test_callback_monitoring_is_bounded_by_the_same_runtime_deadline(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    clock = {"now": 50.0}
+    cancellations = []
+
+    class DeadlineMonitor:
+        max_wait_seconds = 300.0
+
+        @staticmethod
+        def enable_detailed_logging(*_args, **_kwargs):
+            return None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, _process):
+            assert self.max_wait_seconds == pytest.approx(1.0)
+            clock["now"] += 1.0
+
+    class FakeProcess:
+        pid = 9754
+        returncode = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            raise AssertionError("launcher wait must not begin after deadline")
+
+        def poll(self):
+            return None
+
+    def cancel(*_args, **_kwargs):
+        cancellations.append(True)
+        return _cancellation_outcome(True)
+
+    monkeypatch.setattr(rascmdr_module, "BcoMonitor", DeadlineMonitor)
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(rascmdr_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(RasCmdr, "cancel_plan_exact", staticmethod(cancel))
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=object(),
+        max_runtime=1,
+    )
+
+    assert result.success is False
+    assert cancellations == [True]
+    assert result.execution_details["runtime_timed_out"] is True
+    assert result.execution_details["failure_stage"] == "callback_monitoring"
+
+
+def test_post_launch_callback_failure_preserves_evidence_and_fails_closed(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    callback_payloads = []
+    waits = []
+    finalization_calls = []
+
+    class FakeProcess:
+        pid = 2469
+        returncode = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            waits.append(timeout)
+            return 0
+
+        def poll(self):
+            return None
+
+    class Callback:
+        def on_exec_launched(self, _plan_number, details):
+            callback_payloads.append(details)
+            raise RuntimeError("launch observer failed")
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(None)),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_terminate_launched_process_tree",
+        staticmethod(
+            lambda _process: (_ for _ in ()).throw(
+                AssertionError("raw process-tree termination is forbidden")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module,
+        "finalize_plan_execution_artifacts",
+        lambda *args, **kwargs: finalization_calls.append((args, kwargs)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=Callback(),
+        max_runtime=30,
+    )
+
+    assert result.success is False
+    assert waits == []
+    assert len(callback_payloads) == 1
+    details = result.execution_details
+    assert details["launch_details"] == callback_payloads[0]
+    assert details["failure_stage"] == "on_exec_launched_callback"
+    assert details["failure_type"] == "RuntimeError"
+    assert details["runtime_timed_out"] is False
+    assert details["cancellation_details"]["quiescence_confirmed"] is None
+    assert details["solver_quiescence_confirmed"] is False
+    assert details["result_artifacts_finalized"] is False
+    assert finalization_calls == []
+    assert ras_obj.refresh_calls == []
+
+
+def test_callback_timeout_error_is_not_mislabeled_as_runtime_deadline(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+
+    class Callback:
+        def on_exec_launched(self, _plan_number, _details):
+            raise TimeoutError("observer timed out independently")
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(True)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+        stream_callback=Callback(),
+        max_runtime=30,
+    )
+
+    assert result.success is False
+    details = result.execution_details
+    assert details["runtime_timed_out"] is False
+    assert details["failure_stage"] == "on_exec_launched_callback"
+    assert details["failure_type"] == "TimeoutError"
+    assert details["solver_quiescence_confirmed"] is True
+
+
+def test_post_launch_baseexception_is_cancelled_then_propagated(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    cancellations = []
+
+    class FakeProcess:
+        pid = 2470
+        returncode = None
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def wait(self, timeout=None):
+            raise AssertionError("wait must not follow the failing launch hook")
+
+        def poll(self):
+            return None
+
+    class Callback:
+        def on_exec_launched(self, _plan_number, _details):
+            raise KeyboardInterrupt()
+
+    def cancel(*_args, **_kwargs):
+        cancellations.append(True)
+        return _cancellation_outcome(True)
+
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(RasCmdr, "cancel_plan_exact", staticmethod(cancel))
+    monkeypatch.setattr(
+        rascmdr_module,
+        "finalize_plan_execution_artifacts",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        RasCmdr.compute_plan(
+            "01",
+            force_rerun=True,
+            ras_object=ras_obj,
+            dialog_watchdog=False,
+            stream_callback=Callback(),
+            max_runtime=30,
+        )
+
+    assert cancellations == [True]
 
 
 @pytest.mark.parametrize(
@@ -627,6 +1364,16 @@ def test_compute_plan_rejects_invalid_launcher_identity_before_provenance(
     invalid,
 ):
     ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    cancellations = []
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *_args, **_kwargs: (
+                cancellations.append(True) or _cancellation_outcome(True)
+            )
+        ),
+    )
     if field == "pid":
         monkeypatch.setattr(rascmdr_module.subprocess.Popen, "pid", invalid)
     else:
@@ -647,6 +1394,7 @@ def test_compute_plan_rejects_invalid_launcher_identity_before_provenance(
     assert result.execution_details["actual_engine_provenance_confirmed"] is False
     assert result.execution_details["launcher_pid"] is None
     assert result.execution_details["launcher_create_time"] is None
+    assert cancellations == [True]
 
 
 @pytest.mark.parametrize(
@@ -665,6 +1413,20 @@ def test_compute_plan_never_reports_success_with_an_unproven_terminal_gate(
     expected_finalized,
 ):
     ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    cancellations = []
+    if failed_gate in {"provenance", "quiescence", "finalization"}:
+        monkeypatch.setattr(
+            RasCmdr,
+            "cancel_plan_exact",
+            staticmethod(
+                lambda *_args, **_kwargs: (
+                    cancellations.append(True)
+                    or _cancellation_outcome(
+                        failed_gate in {"provenance", "finalization"}
+                    )
+                )
+            ),
+        )
     if failed_gate == "provenance":
         monkeypatch.setattr(
             RasCmdr,
@@ -705,6 +1467,123 @@ def test_compute_plan_never_reports_success_with_an_unproven_terminal_gate(
     assert details["actual_engine_provenance_confirmed"] is (
         failed_gate != "provenance"
     )
+    assert cancellations == [True]
+    assert details["cancellation_details"] is not None
+
+
+def test_verified_completion_survives_artifact_finalization_failure(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *_args, **_kwargs: True),
+    )
+    monkeypatch.setattr(
+        rascmdr_module,
+        "finalize_plan_execution_artifacts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            OSError("finalization failed after verified HDF")
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(True)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        verify=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is True
+    details = result.execution_details
+    assert details["result_artifacts_finalized"] is False
+    assert details["artifact_finalization_failure"] == {
+        "failure_stage": "result_artifact_finalization",
+        "failure_type": "OSError",
+        "failure_detail": "finalization failed after verified HDF",
+    }
+
+
+def test_result_verification_exception_records_its_own_failure_stage(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_result",
+        staticmethod(
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                OSError("verification reader failed")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(True)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        verify=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is False
+    assert result.execution_details["failure_stage"] == "result_verification"
+    assert result.execution_details["failure_type"] == "OSError"
+
+
+def test_async_hdf_reader_exception_records_result_verification_stage(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_completion",
+        staticmethod(
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                OSError("async HDF reader failed")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(lambda *_args, **_kwargs: _cancellation_outcome(True)),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        verify=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is False
+    assert result.completion_verified is False
+    assert result.execution_details["failure_stage"] == "result_verification"
+    assert result.execution_details["failure_type"] == "OSError"
 
 
 def test_compute_plan_force_geompre_bypasses_smart_skip(monkeypatch, tmp_path):
@@ -931,6 +1810,7 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
     monkeypatch, tmp_path, caplog
 ):
     """A nonzero Ras.exe launcher return can still yield a valid final HDF."""
+    callback_events = []
     rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
     prj_path = tmp_path / "TestProject.prj"
     plan_path = tmp_path / "TestProject.p01"
@@ -980,17 +1860,49 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
         ras_obj,
         returncode=1,
     )
+    async_wait_calls = []
+
+    def fake_async_wait(*args, **kwargs):
+        async_wait_calls.append((args, kwargs))
+        return True
+
     monkeypatch.setattr(
         RasCmdr,
         "_wait_for_async_plan_completion",
-        staticmethod(lambda *args, **kwargs: True),
+        staticmethod(fake_async_wait),
     )
+
+    class FakeMonitor:
+        max_wait_seconds = 300.0
+
+        @staticmethod
+        def enable_detailed_logging(*_args, **_kwargs):
+            return None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, _process):
+            return None
+
+    class Callback:
+        def on_exec_complete(self, plan_number, succeeded, runtime):
+            callback_events.append(
+                ("exec", plan_number, succeeded, isinstance(runtime, float))
+            )
+
+        def on_verify_result(self, plan_number, verified):
+            callback_events.append(("verify", plan_number, verified))
+
+    monkeypatch.setattr(rascmdr_module, "BcoMonitor", FakeMonitor)
 
     with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
         result = RasCmdr.compute_plan(
             "01",
             ras_object=ras_obj,
             dialog_watchdog=False,
+            verify=True,
+            stream_callback=Callback(),
         )
 
     error_text = "\n".join(
@@ -1007,7 +1919,20 @@ def test_compute_plan_treats_verified_hdf_after_launcher_error_as_success(
     )
 
     assert result.success is True
+    assert result.completion_verified is True
+    assert callback_events == [
+        ("exec", "01", False, True),
+        ("verify", "01", True),
+    ]
     assert result.results_df_row["plan_number"] == "01"
+    assert len(async_wait_calls) == 1
+    assert async_wait_calls[0][1]["timeout_seconds"] == 7200.0
+    assert async_wait_calls[0][1]["deadline_monotonic"] is None
+    assert async_wait_calls[0][1]["max_runtime_seconds"] is None
+    assert result.execution_details["launcher_returncode"] == 1
+    assert result.execution_details["failure_stage"] is None
+    assert result.execution_details["failure_type"] is None
+    assert result.execution_details["failure_detail"] is None
     assert "Error running plan" not in error_text
     assert "final HDF verified after solver completion" in info_text
 
@@ -1131,6 +2056,56 @@ def test_async_wait_does_not_finalize_while_completed_hdf_has_active_solver(
         timeout_seconds=1,
     ) is True
     assert len(active_checks) == 2
+
+
+def test_async_wait_uses_callers_existing_monotonic_deadline(
+    monkeypatch,
+    tmp_path,
+):
+    tmp_hdf = tmp_path / "TestProject.p01.tmp.hdf"
+    tmp_hdf.write_bytes(b"active partial")
+    ras_obj = SimpleNamespace(
+        project_folder=tmp_path,
+        project_name="TestProject",
+    )
+    clock = {"now": 10.0}
+
+    monkeypatch.setattr(
+        RasCmdr,
+        "_get_hdf_path",
+        staticmethod(lambda *_args, **_kwargs: tmp_path / "TestProject.p01.hdf"),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_verify_completion",
+        staticmethod(lambda *_args, **_kwargs: False),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_rasunsteady_process_running_for_tmp_hdf",
+        staticmethod(lambda _path: True),
+    )
+    monkeypatch.setattr(rascmdr_module.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(
+        rascmdr_module.time,
+        "sleep",
+        lambda duration: clock.__setitem__("now", clock["now"] + duration),
+    )
+
+    with pytest.raises(
+        TimeoutError,
+        match="exceeded max_runtime=2.0 seconds.*asynchronous solver",
+    ):
+        RasCmdr._wait_for_async_plan_completion(
+            "01",
+            ras_obj,
+            poll_interval=0.75,
+            timeout_seconds=999,
+            deadline_monotonic=12.0,
+            max_runtime_seconds=2.0,
+        )
+
+    assert clock["now"] == pytest.approx(12.0)
 
 
 def test_process_query_failure_returns_unknown(monkeypatch, tmp_path):
@@ -1504,6 +2479,7 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
     monkeypatch, tmp_path, caplog
 ):
     """Real launcher failures should still be reported as failed plans."""
+    cancellations = []
     rascurrency_module = importlib.import_module("ras_commander.RasCurrency")
     prj_path = tmp_path / "TestProject.prj"
     plan_path = tmp_path / "TestProject.p01"
@@ -1545,6 +2521,15 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
         "_wait_for_async_plan_completion",
         staticmethod(lambda *args, **kwargs: False),
     )
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *_args, **_kwargs: (
+                cancellations.append(True) or _cancellation_outcome(True)
+            )
+        ),
+    )
 
     with caplog.at_level(logging.DEBUG, logger="ras_commander.RasCmdr"):
         result = RasCmdr.compute_plan(
@@ -1561,6 +2546,12 @@ def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(
     )
 
     assert result.success is False
+    assert cancellations == [True]
+    assert result.execution_details["cancellation_details"] == {
+        "plan_number": "01",
+        "cancellation_attempted": True,
+        "quiescence_confirmed": True,
+    }
     assert "Error running plan: 01 (exit code 1)" in error_text
 
 

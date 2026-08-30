@@ -108,6 +108,16 @@ def _patch_compute_scaffolding(monkeypatch, ras_obj: _ComputeRas) -> None:
         "_launcher_create_time",
         staticmethod(lambda _pid: 123.5),
     )
+    monkeypatch.setattr(
+        RasCmdr,
+        "inspect_plan_processes",
+        staticmethod(
+            lambda *_args, **_kwargs: SimpleNamespace(
+                complete=True,
+                matched=[],
+            )
+        ),
+    )
 
     class RunAdapterPopen:
         pid = 2468
@@ -139,6 +149,18 @@ def _patch_compute_scaffolding(monkeypatch, ras_obj: _ComputeRas) -> None:
         rascmdr_module.subprocess,
         "Popen",
         RunAdapterPopen,
+    )
+
+
+def _cancellation_outcome(quiescence_confirmed):
+    payload = {
+        "plan_number": "01",
+        "cancellation_attempted": True,
+        "quiescence_confirmed": quiescence_confirmed,
+    }
+    return SimpleNamespace(
+        quiescence_confirmed=quiescence_confirmed,
+        to_dict=lambda: dict(payload),
     )
 
 
@@ -485,7 +507,7 @@ def test_compute_callback_failure_before_launch_preserves_results(
     assert sidecar.read_text(encoding="ascii") == "existing message\n"
 
 
-def test_compute_callback_monitor_failure_stops_child_before_final_cleanup(
+def test_compute_callback_monitor_failure_uses_exact_cancellation_before_cleanup(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -493,7 +515,7 @@ def test_compute_callback_monitor_failure_stops_child_before_final_cleanup(
     ras_obj = _write_project(tmp_path / "callback-monitor-failure", "6.60")
     legacy = ras_obj.project_folder / "Model.O01"
     _patch_compute_scaffolding(monkeypatch, ras_obj)
-    terminated = []
+    cancellations = []
 
     class FakeProcess:
         pid = 1234
@@ -516,11 +538,14 @@ def test_compute_callback_monitor_failure_stops_child_before_final_cleanup(
             legacy.write_bytes(b"recreated by active solver")
             raise RuntimeError("monitor failed after launch")
 
-    def terminate_tree(started_process):
-        assert started_process is process
+    def cancel_exact(plan_number, *, ras_object, timeout_seconds=10.0):
+        assert plan_number == "01"
+        assert ras_object is ras_obj
+        assert timeout_seconds == 10.0
         assert legacy.exists()
-        started_process.active = False
-        terminated.append(True)
+        process.active = False
+        cancellations.append(True)
+        return _cancellation_outcome(True)
 
     monkeypatch.setattr(rascmdr_module, "BcoMonitor", FailingMonitor)
     monkeypatch.setattr(
@@ -530,8 +555,17 @@ def test_compute_callback_monitor_failure_stops_child_before_final_cleanup(
     )
     monkeypatch.setattr(
         RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(cancel_exact),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
         "_terminate_launched_process_tree",
-        staticmethod(terminate_tree),
+        staticmethod(
+            lambda _process: (_ for _ in ()).throw(
+                AssertionError("raw process-tree termination is forbidden")
+            )
+        ),
     )
 
     result = RasCmdr.compute_plan(
@@ -543,11 +577,16 @@ def test_compute_callback_monitor_failure_stops_child_before_final_cleanup(
     )
 
     assert result.success is False
-    assert terminated == [True]
+    assert cancellations == [True]
     assert not legacy.exists()
+    assert result.execution_details["cancellation_details"] == {
+        "plan_number": "01",
+        "cancellation_attempted": True,
+        "quiescence_confirmed": True,
+    }
 
 
-def test_compute_callback_unconfirmed_termination_skips_final_cleanup(
+def test_compute_callback_unconfirmed_exact_cancellation_skips_final_cleanup(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -582,10 +621,17 @@ def test_compute_callback_unconfirmed_termination_skips_final_cleanup(
     )
     monkeypatch.setattr(
         RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *_args, **_kwargs: _cancellation_outcome(None)
+        ),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
         "_terminate_launched_process_tree",
         staticmethod(
             lambda _process: (_ for _ in ()).throw(
-                RuntimeError("child termination unconfirmed")
+                AssertionError("raw process-tree termination is forbidden")
             )
         ),
     )
@@ -600,6 +646,9 @@ def test_compute_callback_unconfirmed_termination_skips_final_cleanup(
 
     assert result.success is False
     assert legacy.read_bytes() == b"possibly still being written"
+    assert result.execution_details["cancellation_details"][
+        "quiescence_confirmed"
+    ] is None
 
 
 def test_compute_unknown_solver_state_skips_final_cleanup(
@@ -636,6 +685,17 @@ def test_compute_unknown_solver_state_skips_final_cleanup(
         "_confirm_plan_solver_quiescence",
         staticmethod(lambda *_args, **_kwargs: False),
     )
+    cancellation_calls = []
+    monkeypatch.setattr(
+        RasCmdr,
+        "cancel_plan_exact",
+        staticmethod(
+            lambda *_args, **_kwargs: (
+                cancellation_calls.append(True)
+                or _cancellation_outcome(None)
+            )
+        ),
+    )
 
     def fake_run(*_args, **_kwargs):
         hdf.write_bytes(b"new hdf")
@@ -653,6 +713,7 @@ def test_compute_unknown_solver_state_skips_final_cleanup(
 
     assert result.success is False
     assert legacy.read_bytes() == b"possibly active writer"
+    assert cancellation_calls == [True]
 
 
 def test_compute_skip_existing_reruns_ambiguous_plan(

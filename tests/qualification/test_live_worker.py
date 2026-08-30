@@ -17,16 +17,21 @@ import pyarrow
 import pytest
 
 import ras_commander
-from ras_commander.ExecutionArtifacts import PlanExecutionCleanup
+from ras_commander.ExecutionArtifacts import (
+    PlanExecutionCleanup,
+    PlanResultArtifactPaths,
+    ResultArtifactAmbiguityError,
+)
 from ras_commander.ExecutionEvidence import (
     EXECUTION_OBSERVATION_NAMES,
     EvidenceObservation,
     ExecutionEvidence,
 )
-from scripts.qualification.execution_evidence import live_worker
+from scripts.qualification.execution_evidence import live_worker, receipts
 from scripts.qualification.execution_evidence.locks import ExclusiveQualificationLock
 from scripts.qualification.execution_evidence.planning import file_sha256
 from scripts.qualification.execution_evidence.receipts import (
+    read_event_journal,
     read_json_with_digest,
     write_json_with_digest,
 )
@@ -48,6 +53,136 @@ class _PublicRecord:
 
 class _FakeRasPrj:
     pass
+
+
+def _launch_details(
+    request: dict[str, Any],
+    project: Path,
+    *,
+    launcher_pid: int = 2468,
+    launcher_create_time: float = 12345.0,
+) -> dict[str, Any]:
+    executable = str(Path(request["engine"]["executable"]).resolve(strict=True))
+    project = project.resolve(strict=True)
+    plan_number = request["fixture"]["plan_number"]
+    plan = project.with_suffix(f".p{plan_number}").resolve(strict=True)
+    logical_argv = [executable, "-c", str(project), str(plan)]
+    raw_command = (
+        f'"{logical_argv[0]}" -c "{logical_argv[2]}" "{logical_argv[3]}"'
+    )
+    return {
+        "plan_number": plan_number,
+        "command": raw_command,
+        "executable_path": executable,
+        "executable_sha256": request["engine"]["executable_sha256"],
+        "project_path": str(project),
+        "plan_path": str(plan),
+        "working_directory": str(project.parent),
+        "launcher_pid": launcher_pid,
+        "launcher_create_time": launcher_create_time,
+        "max_runtime_seconds": request["timeout_seconds"],
+    }
+
+
+def _modern_execution_details(
+    request: dict[str, Any],
+    launch_details: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "execution_api": "ras_cmdr",
+        "calculation_attempted": True,
+        "selected_result_format": "hdf",
+        "solver_quiescence_confirmed": True,
+        "result_artifacts_finalized": True,
+        "artifact_finalization_failure": None,
+        "engine_kind": "executable",
+        "selected_executable_path": request["engine"]["executable"],
+        "selected_executable_sha256": request["engine"]["executable_sha256"],
+        "launcher_pid": launch_details["launcher_pid"],
+        "launcher_create_time": launch_details["launcher_create_time"],
+        "launcher_returncode": 0,
+        "actual_engine_provenance_confirmed": True,
+        "compute_mode": "subprocess",
+        "max_runtime_seconds": request["timeout_seconds"],
+        "launch_details": launch_details,
+        "runtime_timed_out": False,
+        "failure_stage": None,
+        "failure_type": None,
+        "failure_detail": None,
+        "cancellation_details": None,
+    }
+
+
+def _safe_timeout_execution_details(
+    request: dict[str, Any],
+    launch_details: dict[str, Any],
+) -> dict[str, Any]:
+    details = _modern_execution_details(request, launch_details)
+    process_record = {
+        "pid": launch_details["launcher_pid"],
+        "create_time": launch_details["launcher_create_time"],
+        "name": "Ras.exe",
+        "executable_path": launch_details["executable_path"],
+        "command_line": [launch_details["command"]],
+        "working_directory": launch_details["working_directory"],
+        "tracked": True,
+        "session_id": None,
+    }
+    project = Path(launch_details["project_path"])
+    plan_number = request["fixture"]["plan_number"]
+    details.update(
+        launcher_returncode=None,
+        runtime_timed_out=True,
+        failure_stage="subprocess_wait",
+        failure_type="TimeoutError",
+        failure_detail="maximum runtime expired",
+        cancellation_details={
+            "plan_number": plan_number,
+            "project_path": launch_details["project_path"],
+            "plan_path": launch_details["plan_path"],
+            "tmp_hdf_path": str(
+                project.with_suffix(f".p{plan_number}.tmp.hdf")
+            ),
+            "cancellation_attempted": True,
+            "pre_scan_complete": True,
+            "post_scan_complete": True,
+            "matched": [process_record],
+            "stopped": [process_record],
+            "survivors": [],
+            "query_errors": [],
+            "quiescence_confirmed": True,
+            "started_at": 1787923200.0,
+            "finished_at": 1787923201.0,
+        },
+    )
+    return details
+
+
+def _safe_finalization_failure_execution_details(
+    request: dict[str, Any],
+    launch_details: dict[str, Any],
+) -> dict[str, Any]:
+    details = _safe_timeout_execution_details(request, launch_details)
+    cancellation = details["cancellation_details"]
+    cancellation.update(
+        cancellation_attempted=False,
+        matched=[],
+        stopped=[],
+    )
+    details.update(
+        launcher_returncode=0,
+        runtime_timed_out=False,
+        failure_stage="result_artifact_finalization",
+        failure_type="OSError",
+        failure_detail="result inventory refresh failed",
+        result_artifacts_finalized=False,
+        artifact_finalization_failure={
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "result inventory refresh failed",
+        },
+    )
+    return details
 
 
 def _project(root: Path) -> Path:
@@ -189,8 +324,11 @@ def _request(
         "source_snapshot_content_fingerprint": source_snapshot.content_fingerprint,
         "source_snapshot_metadata_fingerprint": source_snapshot.metadata_fingerprint,
         "stage_root": str(execution_root / "lane-1" / "attempt-1" / "stage"),
+        "preflight_timeout_seconds": 1800,
         "timeout_seconds": 30,
         "termination_grace_seconds": 0.01,
+        "postflight_timeout_seconds": 1800,
+        "supervisor_receipt_margin_seconds": 5.0,
         "hash_files": True,
         "process_baseline": [],
         "process_baseline_evidence": {
@@ -423,6 +561,7 @@ def _install_public_api_fakes(
         "global_inventory": 0,
         "plan_inventory": 0,
         "tcu_status": [],
+        "launch_event_before_wait": False,
     }
 
     def tcu_status(*, ras_version: str) -> Any:
@@ -506,21 +645,16 @@ def _install_public_api_fakes(
     def compute(plan_number: str, **kwargs: Any) -> Any:
         calls["compute"].append((plan_number, kwargs))
         project = kwargs["ras_object"].prj_file
+        launch = _launch_details(request, project)
+        kwargs["stream_callback"].on_exec_launched(plan_number, launch)
+        attempt_dir = Path(request["worker_launch"]["intent_path"]).parent
+        persisted = read_event_journal(attempt_dir / "events.jsonl")[-1]
+        calls["launch_event_before_wait"] = (
+            persisted["event_name"] == "engine_process_launched"
+            and persisted["pid"] == launch["launcher_pid"]
+        )
         (project.parent / "Model.p01.hdf").write_bytes(b"fake modern result")
-        details = {
-            "execution_api": "ras_cmdr",
-            "calculation_attempted": True,
-            "selected_result_format": "hdf",
-            "solver_quiescence_confirmed": True,
-            "result_artifacts_finalized": True,
-            "engine_kind": "executable",
-            "selected_executable_path": request["engine"].get("executable"),
-            "selected_executable_sha256": request["engine"].get("executable_sha256"),
-            "launcher_pid": 2468,
-            "launcher_create_time": 12345.0,
-            "actual_engine_provenance_confirmed": True,
-            "compute_mode": "subprocess",
-        }
+        details = _modern_execution_details(request, launch)
         if invalid_details:
             details.pop("solver_quiescence_confirmed")
         return SimpleNamespace(
@@ -648,13 +782,14 @@ def test_modern_live_attempt_uses_only_public_apis_and_publishes_worker_receipt(
     assert calls["compute"]
     assert calls["control"] == []
     _, kwargs = calls["compute"][0]
-    assert kwargs == {
-        "ras_object": kwargs["ras_object"],
-        "force_rerun": True,
-        "skip_existing": False,
-        "verify": True,
-        "dialog_watchdog": True,
-    }
+    assert kwargs["ras_object"] is not None
+    assert kwargs["force_rerun"] is True
+    assert kwargs["skip_existing"] is False
+    assert kwargs["verify"] is True
+    assert kwargs["dialog_watchdog"] is True
+    assert kwargs["max_runtime"] == request["timeout_seconds"]
+    assert isinstance(kwargs["stream_callback"], live_worker._LiveLaunchRecorder)
+    assert calls["launch_event_before_wait"] is True
     assert calls["global_inventory"] == 3
     assert calls["plan_inventory"] == 2
     assert calls["cleanup"][0][1]["result_format"] == "both"
@@ -690,6 +825,21 @@ def test_modern_live_attempt_uses_only_public_apis_and_publishes_worker_receipt(
     ]
     assert len(tcu_events) == 1
     assert json.loads(tcu_events[0]["payload_json"])["tcu_status"]["accepted"] is True
+    launch_events = [
+        row
+        for row in receipt["tables"]["events"]
+        if row["event_name"] == "engine_process_launched"
+    ]
+    assert len(launch_events) == 1
+    launch_payload = json.loads(launch_events[0]["payload_json"])
+    assert launch_payload["raw_command"] == receipt["execution_result"][
+        "execution_details"
+    ]["launch_details"]["command"]
+    assert launch_payload["logical_argv"][0] == request["engine"]["executable"]
+    assert launch_payload["launch_method"] == (
+        "direct_subprocess_shell_false_exact_executable"
+    )
+    assert launch_payload["max_runtime_seconds"] == request["timeout_seconds"]
     final_hdf = [
         row
         for row in receipt["tables"]["artifacts"]
@@ -697,6 +847,79 @@ def test_modern_live_attempt_uses_only_public_apis_and_publishes_worker_receipt(
         and row["relative_path"] == "Model.p01.hdf"
     ][0]
     assert final_hdf["data_origin"] == "staged_execution_output"
+
+
+def test_modern_launch_callback_fsyncs_event_before_fake_wait(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    attempt_dir = Path(request["worker_launch"]["intent_path"]).parent
+    journal = receipts.EventJournal(
+        attempt_dir / "events.jsonl",
+        run_id=request["run_id"],
+        lane_id=request["lane_id"],
+        attempt_id=request["attempt_id"],
+    )
+    recorder = live_worker._LiveLaunchRecorder(
+        events=journal,
+        request=request,
+        stage_project=Path(request["source_project"]),
+    )
+    fsync_calls: list[int] = []
+    monkeypatch.setattr(receipts.os, "fsync", fsync_calls.append)
+    try:
+        recorder.on_exec_launched(
+            request["fixture"]["plan_number"],
+            _launch_details(request, Path(request["source_project"])),
+        )
+
+        def fake_wait() -> None:
+            assert fsync_calls
+            persisted = read_event_journal(journal.path)
+            assert persisted[-1]["event_name"] == "engine_process_launched"
+
+        fake_wait()
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("command", "Ras.exe -c forged"),
+        ("executable_sha256", "0" * 64),
+        ("launcher_pid", 0),
+        ("max_runtime_seconds", 31),
+    ],
+)
+def test_modern_launch_callback_rejects_unproved_identity_before_event(
+    tmp_path: Path,
+    field: str,
+    invalid_value: Any,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    attempt_dir = Path(request["worker_launch"]["intent_path"]).parent
+    journal = receipts.EventJournal(
+        attempt_dir / "events.jsonl",
+        run_id=request["run_id"],
+        lane_id=request["lane_id"],
+        attempt_id=request["attempt_id"],
+    )
+    recorder = live_worker._LiveLaunchRecorder(
+        events=journal,
+        request=request,
+        stage_project=Path(request["source_project"]),
+    )
+    launch = _launch_details(request, Path(request["source_project"]))
+    launch[field] = invalid_value
+    try:
+        with pytest.raises(live_worker.LiveCapabilityError):
+            recorder.on_exec_launched(request["fixture"]["plan_number"], launch)
+    finally:
+        lock.release()
+
+    assert not journal.path.exists()
 
 
 @pytest.mark.parametrize("asset_kind", ["dss_file", "gridded_dataset", "terrain"])
@@ -1059,19 +1282,8 @@ def test_modern_live_result_requires_exact_launcher_identity(
     invalid_value: Any,
 ) -> None:
     request, _, lock = _request(tmp_path)
-    details = {
-        "execution_api": "ras_cmdr",
-        "engine_kind": "executable",
-        "calculation_attempted": True,
-        "selected_result_format": "hdf",
-        "solver_quiescence_confirmed": True,
-        "result_artifacts_finalized": True,
-        "actual_engine_provenance_confirmed": True,
-        "selected_executable_path": request["engine"]["executable"],
-        "selected_executable_sha256": request["engine"]["executable_sha256"],
-        "launcher_pid": 2468,
-        "launcher_create_time": 12345.0,
-    }
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _modern_execution_details(request, launch)
     details[field] = invalid_value
     result = SimpleNamespace(
         success=True,
@@ -1083,7 +1295,309 @@ def test_modern_live_result_requires_exact_launcher_identity(
             live_worker.LiveCapabilityError,
             match="launcher PID/create-time",
         ):
-            live_worker._validate_execution_result(request, result)
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=launch,
+            )
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("max_runtime_seconds", None),
+        ("max_runtime_seconds", 31),
+        ("runtime_timed_out", True),
+        ("failure_stage", "wait"),
+        ("failure_type", "TimeoutError"),
+        ("failure_detail", "timed out"),
+        ("cancellation_details", {"quiescence_confirmed": True}),
+        (
+            "artifact_finalization_failure",
+            {
+                "failure_stage": "result_artifact_finalization",
+                "failure_type": "OSError",
+                "failure_detail": "unexpected secondary failure",
+            },
+        ),
+    ],
+)
+def test_modern_live_result_requires_coherent_runtime_contract(
+    tmp_path: Path,
+    field: str,
+    invalid_value: Any,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _modern_execution_details(request, launch)
+    details[field] = invalid_value
+    result = SimpleNamespace(
+        success=True,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        with pytest.raises(live_worker.LiveWorkerError):
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=launch,
+            )
+    finally:
+        lock.release()
+
+
+def test_modern_live_result_requires_callback_returned_launch_agreement(
+    tmp_path: Path,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _modern_execution_details(request, launch)
+    forged = dict(launch)
+    forged["launcher_pid"] = 9753
+    result = SimpleNamespace(
+        success=True,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="disagree with the durable callback",
+        ):
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=forged,
+            )
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize(
+    "forgery",
+    [
+        "completion_not_boolean",
+        "timeout_type_mismatch",
+        "missing_failure_detail",
+        "missing_cancellation",
+        "unconfirmed_quiescence",
+        "known_survivor",
+        "initial_match_not_stopped",
+    ],
+)
+def test_modern_failed_result_requires_safe_exact_cancellation_contract(
+    tmp_path: Path,
+    forgery: str,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _safe_timeout_execution_details(request, launch)
+    completion_verified = False
+    if forgery == "completion_not_boolean":
+        completion_verified = None
+    elif forgery == "timeout_type_mismatch":
+        details["failure_type"] = "RuntimeError"
+    elif forgery == "missing_failure_detail":
+        details["failure_detail"] = ""
+    elif forgery == "missing_cancellation":
+        details["cancellation_details"] = None
+    elif forgery == "unconfirmed_quiescence":
+        details["cancellation_details"]["quiescence_confirmed"] = None
+    elif forgery == "known_survivor":
+        details["cancellation_details"]["survivors"] = list(
+            details["cancellation_details"]["matched"]
+        )
+    elif forgery == "initial_match_not_stopped":
+        details["cancellation_details"]["stopped"] = []
+    else:  # pragma: no cover - closed parametrization above
+        raise AssertionError(forgery)
+    result = SimpleNamespace(
+        success=False,
+        completion_verified=completion_verified,
+        execution_details=details,
+    )
+    try:
+        with pytest.raises(live_worker.LiveWorkerError):
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=launch,
+            )
+    finally:
+        lock.release()
+
+
+def test_modern_finalization_failure_preserves_completion_evidence(
+    tmp_path: Path,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _safe_finalization_failure_execution_details(request, launch)
+    result = SimpleNamespace(
+        success=False,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        validated, success, completion, _, _ = live_worker._validate_execution_result(
+            request,
+            result,
+            expected_launch_details=launch,
+        )
+    finally:
+        lock.release()
+
+    assert success is False
+    assert completion is True
+    assert validated["result_artifacts_finalized"] is False
+    assert validated["artifact_finalization_failure"]["failure_type"] == "OSError"
+
+
+def test_modern_timeout_preserves_primary_failure_with_secondary_finalization(
+    tmp_path: Path,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _safe_timeout_execution_details(request, launch)
+    details.update(
+        result_artifacts_finalized=False,
+        artifact_finalization_failure={
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "post-timeout result refresh failed",
+        },
+    )
+    result = SimpleNamespace(
+        success=False,
+        completion_verified=False,
+        execution_details=details,
+    )
+    try:
+        validated, success, completion, _, _ = live_worker._validate_execution_result(
+            request,
+            result,
+            expected_launch_details=launch,
+        )
+    finally:
+        lock.release()
+
+    assert success is False
+    assert completion is False
+    assert validated["runtime_timed_out"] is True
+    assert validated["failure_stage"] == "subprocess_wait"
+    assert validated["failure_type"] == "TimeoutError"
+    assert validated["artifact_finalization_failure"]["failure_type"] == "OSError"
+
+
+def test_modern_callback_timeout_error_does_not_claim_runtime_deadline(
+    tmp_path: Path,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _safe_timeout_execution_details(request, launch)
+    details.update(
+        runtime_timed_out=False,
+        failure_stage="stream_callback",
+        failure_detail="callback raised its own TimeoutError",
+    )
+    result = SimpleNamespace(
+        success=False,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        validated, success, completion, _, _ = live_worker._validate_execution_result(
+            request,
+            result,
+            expected_launch_details=launch,
+        )
+    finally:
+        lock.release()
+
+    assert success is False
+    assert completion is True
+    assert validated["runtime_timed_out"] is False
+    assert validated["failure_type"] == "TimeoutError"
+    assert validated["failure_stage"] == "stream_callback"
+
+
+def test_modern_success_rejects_secondary_finalization_failure(
+    tmp_path: Path,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _modern_execution_details(request, launch)
+    details["artifact_finalization_failure"] = {
+        "failure_stage": "result_artifact_finalization",
+        "failure_type": "OSError",
+        "failure_detail": "forged secondary failure",
+    }
+    result = SimpleNamespace(
+        success=True,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="secondary failure metadata",
+        ):
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=launch,
+            )
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        {},
+        {
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+        },
+        {
+            "failure_stage": "solver_quiescence",
+            "failure_type": "OSError",
+            "failure_detail": "wrong stage",
+        },
+        {
+            "failure_stage": "result_artifact_finalization",
+            "failure_type": "OSError",
+            "failure_detail": "",
+        },
+    ],
+)
+def test_modern_unfinalized_result_rejects_invalid_secondary_failure(
+    tmp_path: Path,
+    failure: Any,
+) -> None:
+    request, _, lock = _request(tmp_path)
+    launch = _launch_details(request, Path(request["source_project"]))
+    details = _safe_finalization_failure_execution_details(request, launch)
+    details["artifact_finalization_failure"] = failure
+    result = SimpleNamespace(
+        success=False,
+        completion_verified=True,
+        execution_details=details,
+    )
+    try:
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="complete secondary failure metadata",
+        ):
+            live_worker._validate_execution_result(
+                request,
+                result,
+                expected_launch_details=launch,
+            )
     finally:
         lock.release()
 
@@ -1232,26 +1746,13 @@ def test_unsuccessful_calculation_cannot_publish_a_passing_live_path(
     def unsuccessful_compute(plan_number: str, **kwargs: Any) -> Any:
         assert plan_number == "01"
         project = kwargs["ras_object"].prj_file
+        launch = _launch_details(request, project)
+        kwargs["stream_callback"].on_exec_launched(plan_number, launch)
         (project.parent / "Model.p01.hdf").write_bytes(b"failed calculation result")
         return SimpleNamespace(
             success=False,
-            completion_verified=True,
-            execution_details={
-                "execution_api": "ras_cmdr",
-                "calculation_attempted": True,
-                "selected_result_format": "hdf",
-                "solver_quiescence_confirmed": True,
-                "result_artifacts_finalized": True,
-                "engine_kind": "executable",
-                "selected_executable_path": request["engine"]["executable"],
-                "selected_executable_sha256": request["engine"][
-                    "executable_sha256"
-                ],
-                "launcher_pid": 2468,
-                "launcher_create_time": 12345.0,
-                "actual_engine_provenance_confirmed": True,
-                "compute_mode": "subprocess",
-            },
+            completion_verified=False,
+            execution_details=_safe_timeout_execution_details(request, launch),
         )
 
     monkeypatch.setattr(
@@ -1269,6 +1770,107 @@ def test_unsuccessful_calculation_cannot_publish_a_passing_live_path(
     receipt, _ = read_json_with_digest(attempt / "worker_receipt.json")
     assert receipt["terminal_category"] == "execution_failed"
     assert receipt["tables"]["lanes"][0]["process_success"] is False
+    assert receipt["tables"]["lanes"][0]["completion_verified"] is False
+    assert receipt["execution_result"]["execution_details"][
+        "runtime_timed_out"
+    ] is True
+
+
+def test_failed_finalization_with_ambiguous_results_publishes_diagnostic_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request, context, lock = _request(tmp_path)
+    _install_public_api_fakes(monkeypatch, request)
+
+    def failed_compute(plan_number: str, **kwargs: Any) -> Any:
+        project = kwargs["ras_object"].prj_file
+        launch = _launch_details(request, project)
+        kwargs["stream_callback"].on_exec_launched(plan_number, launch)
+        hdf = project.with_suffix(f".p{plan_number}.hdf")
+        legacy = project.with_suffix(f".O{plan_number}")
+        hdf.write_bytes(b"modern result")
+        legacy.write_bytes(b"legacy result")
+        os.utime(hdf, ns=(1787923200000000000, 1787923200000000000))
+        os.utime(legacy, ns=(1787923201000000000, 1787923201000000000))
+        return SimpleNamespace(
+            success=False,
+            completion_verified=True,
+            execution_details=_safe_finalization_failure_execution_details(
+                request,
+                launch,
+            ),
+        )
+
+    def ambiguous_inspection(
+        plan_number: str,
+        *,
+        ras_object: Any,
+        hash_files: bool,
+    ) -> Any:
+        assert hash_files is True
+        project = ras_object.prj_file
+        hdf = project.with_suffix(f".p{plan_number}.hdf")
+        legacy = project.with_suffix(f".O{plan_number}")
+        raise ResultArtifactAmbiguityError(
+            paths=PlanResultArtifactPaths(
+                plan_number=plan_number,
+                plan_file=project.with_suffix(f".p{plan_number}"),
+                hdf=hdf,
+                legacy_output=legacy,
+                message_sidecars=(),
+            ),
+            declared_program_version="6.6",
+            expected_format="hdf",
+            reason_code="legacy_output_timestamp_after_hdf",
+            hdf_mtime_ns=hdf.stat().st_mtime_ns,
+            legacy_mtime_ns=legacy.stat().st_mtime_ns,
+            detail="mixed result families prevent safe inspection",
+        )
+
+    monkeypatch.setattr(
+        ras_commander.RasCmdr,
+        "compute_plan",
+        staticmethod(failed_compute),
+    )
+    monkeypatch.setattr(
+        ras_commander.RasCmdr,
+        "inspect_execution_evidence",
+        staticmethod(ambiguous_inspection),
+    )
+    try:
+        exit_code = live_worker._perform(request, "e" * 64, context)
+    finally:
+        lock.release()
+
+    assert exit_code == 20
+    attempt = context.run_root / "attempts" / "lane-1" / "attempt-1"
+    receipt, _ = read_json_with_digest(attempt / "worker_receipt.json")
+    evidence, evidence_sha256 = read_json_with_digest(attempt / "evidence.json")
+    assert receipt["terminal_category"] == "execution_failed"
+    assert receipt["execution_result"]["completion_verified"] is True
+    assert receipt["tables"]["lanes"][0]["final_hdf_exists"] is True
+    assert receipt["tables"]["lanes"][0]["final_legacy_exists"] is True
+    assert receipt["tables"]["observations"] == []
+    assert evidence == receipt["evidence"]
+    assert evidence["evidence_kind"] == "execution_evidence_inspection_failure"
+    assert evidence["failure_type"] == "ResultArtifactAmbiguityError"
+    assert evidence["reason_code"] == "legacy_output_timestamp_after_hdf"
+    invariant_rows = {
+        row["invariant_id"]: row for row in receipt["tables"]["invariants"]
+    }
+    assert invariant_rows["R06"]["status"] == "pass"
+    assert next(
+        item
+        for item in receipt["referenced_artifacts"]
+        if item["relative_path"] == "evidence.json"
+    )["sha256"] == evidence_sha256
+    failed_events = [
+        row
+        for row in receipt["tables"]["events"]
+        if row["event_name"] == "execution_evidence_inspection_failed"
+    ]
+    assert len(failed_events) == 1
 
 
 def test_main_rejects_tampered_digest_before_live_imports(

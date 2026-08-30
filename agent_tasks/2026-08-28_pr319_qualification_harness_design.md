@@ -194,8 +194,10 @@ Top-level fields:
   "archive_root": "H:/.../working/qualification/pr319",
   "execution_root": "C:/.../ras-commander/qualification",
   "defaults": {
+    "preflight_timeout_seconds": 1800,
     "timeout_seconds": 14400,
     "termination_grace_seconds": 120,
+    "postflight_timeout_seconds": 1800,
     "hash_files": true,
     "real_engine_jobs": 1
   },
@@ -823,15 +825,16 @@ PR #319 is ready to retarget to `main` only when:
     `events.parquet`, `invariants.parquet`, and `summary.md` are attached to the
     PR or archived at a stable reviewable location.
 
-## Known API gap to keep visible
+## Resolved API gap and remaining evidence limit
 
-`RasCmdr.compute_plan()` does not expose a public per-call hard timeout, so v1
-must use the process-isolated supervisor plus structured
-`RasCmdr.cancel_plan_exact()` on deadline. If this proves awkward in the
-representative run, the clean library
-improvement is a public timeout parameter wired through the existing
-quiescence/cancellation logic. The harness must not work around that gap with a
-raw process kill.
+`RasCmdr.compute_plan(max_runtime=...)` now exposes the approved positive,
+finite per-call engine deadline. It spans the direct launcher, callback
+monitoring, asynchronous solver completion, and quiescence check through one
+monotonic budget, then uses structured `RasCmdr.cancel_plan_exact()` when the
+deadline fires. Cancellation and final evidence collection may extend the
+method's wall-clock return time beyond the engine deadline. The isolated parent
+supervisor therefore retains separate bounded preflight, cancellation, and
+postflight allowances; neither layer may fall back to a raw process kill.
 
 Likewise, a Controller ProgID proves Controller product identity but does not by
 itself prove the COM server executable hash. Do not overstate that evidence. If

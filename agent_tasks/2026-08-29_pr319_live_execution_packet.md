@@ -1,13 +1,14 @@
 # PR 319 representative live-execution packet
 
-Date: 2026-08-29
+Date: 2026-08-30
 
-Status: approved scope and deterministic design gates complete. The unexecuted
-`5feae3d8` preflight manifest, prelaunch-failed `31c19acd` manifest, and
-preauthorization-failed `2063b7de` manifest are superseded. Live dispatch is
-held until the Windows launcher/worker identity correction is committed, a new
-exact manifest pins the resulting clean commit, and the strict under-lock host
-inventory is complete and empty.
+Status: approved scope; modern runtime/launch correction passed its 740-test
+affected no-engine gate plus final API and adversarial review. The earlier
+preflight, path-boundary, launcher-identity, and overnight-stall campaigns are
+superseded. Live dispatch is held until the approved correction is committed
+at a clean head, a fresh short-root manifest pins that commit, and the strict
+under-lock host inventory is complete and empty. The short-root pilot must pass
+before the representative-depth repeat.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -129,6 +130,38 @@ passed. Independent adversarial review returned GO with no P0/P1/P2 finding.
 These tests neither generated datasets nor invoked HEC-RAS, COM, or real-process
 signals. A new manifest must pin the commit containing this remediation before
 another pilot.
+
+### Overnight pre-launch diagnostic and approved correction
+
+Campaign `40f9b6fe-0b95-41a4-984a-766d02f2c3f0` used execution run
+`addd81a7-8028-4109-bfcf-353b490cffec` and selected only
+`steady_1d__6_6__l0`. Attempt
+`db47054d-0346-437e-b97a-2f5abbc77b97` verified its request, process and TCU
+gates, staged a disposable EX1 copy, prepared the `neither` state, and wrote
+`execution_starting`, then remained stalled overnight. It contains no
+post-launch event, terminal worker receipt, or computed result dataset. A
+contemporaneous strict inventory did observe the exact HEC-RAS 6.6
+`Ras.exe -c <stage-project> <stage-plan>` launcher bound to the disposable
+attempt, so HEC-RAS was launched even though no calculation or result artifact
+was observed. Recovery `067d3b0f-a83e-40ed-86e8-f560de24b308` records
+`hec_ras_invoked=false` for the recovery action itself, proves the exact Python
+worker and delegated launcher absent, reproduces the exact source content and
+metadata fingerprints, and obtains two complete-empty global inventories
+before atomically retiring the lock without a process signal. This campaign is
+diagnostic-only, is superseded, and must not be resumed.
+
+The maintainer approved an additive finite modern-runtime contract, direct
+fully quoted Windows command launch with `shell=False`, an optional
+`on_exec_launched()` callback, a short-root versus representative-depth A/B,
+and exact-plan early cancellation if a retained attempt still required it.
+The retained attempt had already exited and was safely recovered, so no early
+cancellation signal was necessary. The short-root A/B is the next live step;
+it has not yet been run and has generated no new dataset.
+
+Omitting `max_runtime` preserves the existing unbounded launcher wait and the
+existing 7,200-second asynchronous-solver bound. Supplying a finite value gives
+qualification one monotonic deadline across launcher, callback monitoring,
+asynchronous solver completion, and final quiescence.
 
 ## Immutable project anchors
 
@@ -261,11 +294,31 @@ of hydraulic acceptability.
 
 - Controller lanes pass the lane timeout to `RasControl.run_plan()` as
   `max_runtime`, enable the watchdog, and require `strict_close=True`.
-- Modern lanes are supervised by the parent deadline. On timeout, a separate
-  digest-bound Python helper initializes only the staged project and calls
-  `RasCmdr.cancel_plan_exact(plan_number)`. The helper must return structured
-  matched, stopped, survivor, query-error, and tri-state-quiescence evidence.
-  Raw `taskkill`, `Stop-Process`, direct
+- Modern lanes pass the same finite lane limit to
+  `RasCmdr.compute_plan(max_runtime=...)`. The API owns its monotonic deadline,
+  exact-plan cancellation, and quiescence proof. The live callback fsyncs a
+  structured post-launch event before the engine wait. Its event binds the
+  exact executable/hash, raw command and logical argv, project/plan/cwd,
+  direct-shell-free launch method, launcher PID/create time, UTC timestamp, and
+  finite maximum runtime. Returned execution details must reproduce that
+  launch record and report either a coherent success or a structured failure
+  with positively confirmed exact-plan cancellation and quiescence. A safe
+  failure is retained as non-reusable `execution_failed` evidence; it never
+  satisfies resume.
+- The parent deadline allocates separate bounded windows for worker
+  preflight/staging and postflight snapshots, hashing, Arrow validation, and
+  receipt construction. The complete outer budget is preflight timeout plus
+  engine maximum plus the greater of termination grace or the core
+  30-second exact-cancellation allowance, plus postflight timeout and a
+  five-second final receipt-publication margin. The default preflight and
+  postflight allowances are each 1,800 seconds and may be reduced in a small
+  diagnostic manifest. This allocation prevents source copying or legitimate
+  postflight evidence work from consuming the engine's runtime window. If the
+  worker still outlives that outer boundary,
+  the existing digest-bound helper may initialize only the staged project and
+  call `RasCmdr.cancel_plan_exact(plan_number)` as a fail-closed fallback. The
+  helper must return structured matched, stopped, survivor, query-error, and
+  tri-state-quiescence evidence. Raw `taskkill`, `Stop-Process`, direct
   `Ras.exe`, or process-name killing are forbidden.
 - The parent may terminate its Python child only after exact cancellation is
   confirmed or after ras-commander proves no exact plan process exists.
@@ -295,6 +348,9 @@ Before L0 begins, all of the following must be true at the same clean Git HEAD:
   engine route and the terminal quiescence, close, and result-finalization
   gates used by the worker. A worker must not infer those facts from success
   alone;
+- the short-root pilot passes before the representative-depth repeat; the two
+  attempts use fresh stages and compare semantic launch/terminal evidence, not
+  generated file hashes;
 - the live manifest validates and pins the current commit, interpreter,
   sources, engines, archive root, and execution root;
 - archive and execution roots are empty/new and disjoint from sources;
@@ -357,7 +413,11 @@ Common execution details include the execution API, engine kind, selected
 result format, whether calculation was attempted, solver quiescence,
 result-artifact finalization, and engine-provenance confirmation. Modern runs
 also record the resolved executable path and SHA-256 plus launcher PID and
-creation time. Controller runs retain requested/resolved Controller identity
+creation time, finite `max_runtime_seconds`, exact `launch_details`, whether
+the runtime deadline fired, structured failure fields, and any structured
+exact-plan cancellation result. The qualification callback reconciles the
+returned launch details with its already-fsynced launch event. Controller runs
+retain requested/resolved Controller identity
 and ProgID and add Controller PID/creation time, safe close, and owned-process
 exit confirmation, plus the actual verified `Ras.exe` path and SHA-256. Both
 routes require complete plan-scoped and global post-run process inventories

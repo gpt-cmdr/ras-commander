@@ -52,6 +52,7 @@ success = RasCmdr.compute_plan("01")
 | `clear_geompre` | bool | Clear geometry preprocessor files first |
 | `num_cores` | int | Number of CPU cores to use |
 | `overwrite_dest` | bool | Overwrite destination if exists |
+| `max_runtime` | float/None | Optional positive finite execution limit in seconds |
 
 ### Examples
 
@@ -69,6 +70,73 @@ success = RasCmdr.compute_plan(
 # Force geometry preprocessing
 success = RasCmdr.compute_plan("01", clear_geompre=True)
 ```
+
+### Bounded Execution and Launch Evidence
+
+`max_runtime` is an additive execution-safety option for direct
+`RasCmdr.compute_plan()` runs. Supply a positive finite number of seconds when
+the caller needs a hard plan-specific engine deadline:
+
+```python
+result = RasCmdr.compute_plan(
+    "01",
+    force_rerun=True,
+    verify=True,
+    max_runtime=900,
+)
+
+details = result.execution_details
+if details["runtime_timed_out"]:
+    print(details["failure_stage"], details["cancellation_details"])
+```
+
+Boolean values, strings, zero, negative values, NaN, infinity, and values above
+4,294,967.294 seconds are rejected before project access or execution begins.
+The upper limit keeps the value representable by the Windows subprocess wait
+API. An explicit value establishes one monotonic engine deadline immediately
+before `Ras.exe` launch, after executable proof, process preflight, and
+result-artifact preparation. The remaining budget is shared by compute-message
+callback monitoring, the direct launcher wait, asynchronous solver completion,
+and exact-plan quiescence confirmation; each phase does not receive a fresh
+timeout.
+
+`max_runtime=None` is the compatibility default. It does not add a deadline to
+the direct `Ras.exe` launcher wait. The existing 7,200-second bound for an
+asynchronous `RasUnsteady.exe` solver that outlives its launcher remains in
+place.
+
+When an explicit deadline expires, ras-commander records the timeout and calls
+only `RasCmdr.cancel_plan_exact()` for that initialized project and plan. It
+does not fall back to a process-name kill. Opposing result-family artifacts are
+finalized only when the structured cancellation or final process inspection
+positively confirms exact-plan quiescence. An uncertain cancellation therefore
+returns a failed `ComputeResult` and leaves potentially active artifacts
+untouched. Exact-plan cancellation and terminal evidence collection can extend
+the method's wall-clock return time beyond `max_runtime`; the deadline limits
+the engine attempt, not the safety work needed to prove what remains running.
+
+`ComputeResult.execution_details` provides JSON-safe audit evidence, including:
+
+- `max_runtime_seconds` and `runtime_timed_out`;
+- `launch_details`, with the exact command, working directory, executable path
+  and SHA-256, project and plan paths, and launcher PID/create-time identity;
+- `launcher_returncode`, which can remain nonzero when a delegated modern solver
+  nevertheless produces a verified final HDF;
+- `failure_stage`, `failure_type`, and `failure_detail`;
+- structured `cancellation_details`, including tri-state quiescence evidence;
+  and
+- `result_artifacts_finalized` plus `artifact_finalization_failure`, which keep a
+  cleanup defect separate from an earlier timeout or execution failure.
+
+`completion_verified` is independent of overall `ComputeResult.success`. For
+example, a complete HDF may verify and then result-family finalization may fail;
+that outcome is `success=False`, `completion_verified=True`, and remains safe to
+inspect as a failed execution receipt when exact-plan quiescence is proven.
+
+Advanced supervisors can implement the optional duck-typed
+`on_exec_launched(plan_number, launch_details)` callback to persist the launch
+identity immediately after it is captured. This additive hook does not change
+the exported `ExecutionCallback` protocol.
 
 ## Sequential Execution
 

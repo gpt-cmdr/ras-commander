@@ -30,7 +30,12 @@ from .locks import (
     _retire_verified_lock,
     inspect_lock,
 )
-from .manifest import _preflight_repository
+from .manifest import (
+    _MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS,
+    _MIN_INTERNAL_CANCELLATION_ALLOWANCE_SECONDS,
+    _SUPERVISOR_RECEIPT_MARGIN_SECONDS,
+    _preflight_repository,
+)
 from .offline_records import json_safe, known_result_paths, lane_row, result_population
 from .planning import RunContext, load_run, select_lane
 from .receipts import (
@@ -132,6 +137,85 @@ _SUPPORTED_LIVE_INVARIANTS = {
 }
 _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
 _WORKER_AUTHORIZATION_POLL_SECONDS = 0.02
+_RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
+    {
+        "plan_number",
+        "command",
+        "executable_path",
+        "executable_sha256",
+        "project_path",
+        "plan_path",
+        "working_directory",
+        "launcher_pid",
+        "launcher_create_time",
+        "max_runtime_seconds",
+    }
+)
+_CANCELLATION_DETAIL_FIELDS = frozenset(
+    {
+        "plan_number",
+        "project_path",
+        "plan_path",
+        "tmp_hdf_path",
+        "cancellation_attempted",
+        "pre_scan_complete",
+        "post_scan_complete",
+        "matched",
+        "stopped",
+        "survivors",
+        "query_errors",
+        "quiescence_confirmed",
+        "started_at",
+        "finished_at",
+    }
+)
+_PROCESS_RECORD_FIELDS = frozenset(
+    {
+        "pid",
+        "create_time",
+        "name",
+        "executable_path",
+        "command_line",
+        "working_directory",
+        "tracked",
+        "session_id",
+    }
+)
+_FAILED_INSPECTION_EVIDENCE_KIND = "execution_evidence_inspection_failure"
+_FAILED_INSPECTION_EVIDENCE_FIELDS = frozenset(
+    {
+        "schema_version",
+        "evidence_kind",
+        "evidence_id",
+        "inspection_api",
+        "inspection_state",
+        "inspection_started_at",
+        "inspection_failed_at",
+        "failure_type",
+        "reason_code",
+        "detail",
+        "plan_number",
+        "declared_program_version",
+        "declared_expected_result_format",
+        "selected_result_format",
+        "hdf_path",
+        "legacy_output_path",
+        "hdf_mtime_ns",
+        "legacy_mtime_ns",
+        "conflicts",
+        "safe_failed_execution",
+        "result_artifacts_finalized",
+        "runtime_timed_out",
+    }
+)
+_RESULT_ARTIFACT_AMBIGUITY_REASONS = frozenset(
+    {
+        "hdf_timestamp_after_legacy_output",
+        "legacy_output_timestamp_after_hdf",
+        "program_version_unresolved_multiple_formats",
+        "result_artifact_timestamp_unavailable",
+    }
+)
 
 
 def _field(value: Any, name: str) -> Any:
@@ -418,10 +502,17 @@ def create_live_attempt_request(
         "source_hdf_exists": source_hdf,
         "source_legacy_exists": source_legacy,
         "stage_root": str(stage_root),
+        "preflight_timeout_seconds": context.manifest["defaults"][
+            "preflight_timeout_seconds"
+        ],
         "timeout_seconds": context.manifest["defaults"]["timeout_seconds"],
         "termination_grace_seconds": context.manifest["defaults"][
             "termination_grace_seconds"
         ],
+        "postflight_timeout_seconds": context.manifest["defaults"][
+            "postflight_timeout_seconds"
+        ],
+        "supervisor_receipt_margin_seconds": _SUPERVISOR_RECEIPT_MARGIN_SECONDS,
         "hash_files": context.manifest["defaults"]["hash_files"],
         "process_baseline": list(process_baseline.records),
         "process_baseline_evidence": process_baseline.raw,
@@ -1427,6 +1518,83 @@ def _run_cancellation_helper(
     return True, "exact_plan_quiescence_confirmed"
 
 
+def _positive_finite_seconds(value: Any, *, label: str) -> float:
+    """Return a strict positive finite duration used by live supervision."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise LiveSupervisorError(f"{label} must be a positive finite number")
+    try:
+        normalized = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise LiveSupervisorError(
+            f"{label} must be a positive finite number"
+        ) from exc
+    if not math.isfinite(normalized) or normalized <= 0:
+        raise LiveSupervisorError(f"{label} must be a positive finite number")
+    return normalized
+
+
+def _outer_worker_deadline_seconds(request: Mapping[str, Any]) -> float:
+    """Keep the parent deadline strictly outside the engine timeout window.
+
+    The parent reserves independent allowances for staging/preflight and
+    postflight evidence work around the engine's finite ``max_runtime``.  Its
+    cancellation allowance is never shorter than the core exact-cancellation
+    worst case, even if a diagnostic manifest requests a smaller worker-close
+    grace.  A final publication margin covers the last atomic receipt write.
+    """
+    preflight = _positive_finite_seconds(
+        request.get("preflight_timeout_seconds"),
+        label="request.preflight_timeout_seconds",
+    )
+    engine_max_runtime = _positive_finite_seconds(
+        request.get("timeout_seconds"),
+        label="request.timeout_seconds",
+    )
+    termination_grace = _positive_finite_seconds(
+        request.get("termination_grace_seconds"),
+        label="request.termination_grace_seconds",
+    )
+    cancellation_allowance = max(
+        termination_grace,
+        _MIN_INTERNAL_CANCELLATION_ALLOWANCE_SECONDS,
+    )
+    postflight = _positive_finite_seconds(
+        request.get("postflight_timeout_seconds"),
+        label="request.postflight_timeout_seconds",
+    )
+    receipt_margin = _positive_finite_seconds(
+        request.get("supervisor_receipt_margin_seconds"),
+        label="request.supervisor_receipt_margin_seconds",
+    )
+    if receipt_margin != _SUPERVISOR_RECEIPT_MARGIN_SECONDS:
+        raise LiveSupervisorError(
+            "request supervisor receipt margin disagrees with the harness contract"
+        )
+    try:
+        outer = math.fsum(
+            (
+                preflight,
+                engine_max_runtime,
+                cancellation_allowance,
+                postflight,
+                receipt_margin,
+            )
+        )
+    except OverflowError as exc:
+        raise LiveSupervisorError(
+            "live worker outer deadline is not finite"
+        ) from exc
+    if not math.isfinite(outer):
+        raise LiveSupervisorError(
+            "live worker outer deadline is not finite"
+        )
+    if outer > _MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS:
+        raise LiveSupervisorError(
+            "live worker outer deadline exceeds the Windows subprocess-wait range"
+        )
+    return outer
+
+
 def _run_live_child(
     attempt_dir: Path,
     request: Mapping[str, Any],
@@ -1484,9 +1652,7 @@ def _run_live_child(
             expected_command=command,
         )
         try:
-            outer_deadline = float(request["timeout_seconds"])
-            if request["engine"]["execution_api"] == "ras_control":
-                outer_deadline += float(request["termination_grace_seconds"])
+            outer_deadline = _outer_worker_deadline_seconds(request)
             returncode = process.wait(
                 timeout=outer_deadline
             )
@@ -1628,6 +1794,522 @@ def _valid_pid_create_time(pid: Any, create_time: Any) -> bool:
     )
 
 
+def _verify_artifact_finalization_evidence(details: Mapping[str, Any]) -> bool:
+    """Independently validate serialized RasCmdr finalization evidence."""
+    finalized = details.get("result_artifacts_finalized")
+    if not isinstance(finalized, bool):
+        raise LiveSupervisorError(
+            "live RasCmdr result_artifacts_finalized is not boolean"
+        )
+    if "artifact_finalization_failure" not in details:
+        raise LiveSupervisorError(
+            "live RasCmdr execution lacks artifact finalization evidence"
+        )
+    failure = details["artifact_finalization_failure"]
+    expected_fields = {"failure_stage", "failure_type", "failure_detail"}
+    if finalized:
+        if failure is not None:
+            raise LiveSupervisorError(
+                "finalized live RasCmdr artifacts contain secondary failure metadata"
+            )
+        return True
+    if (
+        not isinstance(failure, Mapping)
+        or set(failure) != expected_fields
+        or failure.get("failure_stage") != "result_artifact_finalization"
+        or any(
+            not isinstance(failure.get(field), str)
+            or not failure[field].strip()
+            for field in expected_fields
+        )
+    ):
+        raise LiveSupervisorError(
+            "unfinalized live RasCmdr artifacts lack complete secondary failure metadata"
+        )
+    return False
+
+
+def _verify_failed_inspection_evidence(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+    engine: Mapping[str, Any],
+    details: Mapping[str, Any],
+    *,
+    execution_succeeded: bool,
+) -> None:
+    """Validate the exact diagnostic used when failed-result inspection aborts."""
+    evidence = worker.get("evidence")
+    tables = worker.get("tables")
+    observations = tables.get("observations") if isinstance(tables, Mapping) else None
+    diagnostic_claimed = (
+        isinstance(evidence, Mapping)
+        and evidence.get("evidence_kind") == _FAILED_INSPECTION_EVIDENCE_KIND
+    )
+    if execution_succeeded and (
+        not isinstance(observations, list) or not observations
+    ):
+        raise LiveSupervisorError(
+            "successful live execution lacks nonempty observation evidence"
+        )
+    if not diagnostic_claimed and observations != []:
+        return
+    if (
+        not isinstance(evidence, Mapping)
+        or set(evidence) != _FAILED_INSPECTION_EVIDENCE_FIELDS
+        or evidence.get("schema_version") != 1
+        or evidence.get("evidence_kind") != _FAILED_INSPECTION_EVIDENCE_KIND
+        or evidence.get("inspection_api") != "RasCmdr.inspect_execution_evidence"
+        or evidence.get("inspection_state") != "failed"
+        or evidence.get("failure_type") != "ResultArtifactAmbiguityError"
+        or evidence.get("reason_code") not in _RESULT_ARTIFACT_AMBIGUITY_REASONS
+        or not isinstance(evidence.get("detail"), str)
+        or not evidence["detail"].strip()
+        or evidence.get("plan_number") != request["fixture"]["plan_number"]
+        or evidence.get("selected_result_format")
+        != engine["expected_result_format"]
+        or evidence.get("declared_expected_result_format")
+        not in {None, "hdf", "legacy"}
+        or evidence.get("conflicts") != ["multiple_result_formats_present"]
+        or evidence.get("safe_failed_execution") is not True
+        or evidence.get("result_artifacts_finalized") is not False
+        or evidence.get("runtime_timed_out") is not details.get("runtime_timed_out")
+        or observations != []
+        or execution_succeeded
+        or details.get("result_artifacts_finalized") is not False
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection evidence contract is invalid"
+        )
+    try:
+        uuid.UUID(str(evidence["evidence_id"]))
+        started_at = datetime.fromisoformat(str(evidence["inspection_started_at"]))
+        failed_at = datetime.fromisoformat(str(evidence["inspection_failed_at"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise LiveSupervisorError(
+            "live failed-inspection identity or timestamps are invalid"
+        ) from exc
+    if (
+        started_at.tzinfo is None
+        or started_at.utcoffset() != timezone.utc.utcoffset(started_at)
+        or failed_at.tzinfo is None
+        or failed_at.utcoffset() != timezone.utc.utcoffset(failed_at)
+        or failed_at < started_at
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection timestamps are invalid"
+        )
+    declared_program_version = evidence.get("declared_program_version")
+    if declared_program_version is not None and (
+        not isinstance(declared_program_version, str)
+        or not declared_program_version.strip()
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection declared version is invalid"
+        )
+    for field in ("hdf_mtime_ns", "legacy_mtime_ns"):
+        value = evidence.get(field)
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise LiveSupervisorError(
+                "live failed-inspection artifact timestamp is invalid"
+            )
+    stage_project = lexical_absolute_path(
+        Path(request["stage_root"]) / Path(request["source_project"]).name
+    )
+    expected_hdf = lexical_absolute_path(
+        stage_project.with_suffix(f".p{request['fixture']['plan_number']}.hdf")
+    )
+    expected_legacy = lexical_absolute_path(
+        stage_project.with_suffix(f".O{request['fixture']['plan_number']}")
+    )
+    expected_plan = lexical_absolute_path(
+        stage_project.with_suffix(f".p{request['fixture']['plan_number']}")
+    )
+    try:
+        plan_bytes = resolve_plain_path(expected_plan, kind="file").read_bytes()
+        observed_hdf = resolve_plain_path(evidence.get("hdf_path", ""), kind="file")
+        observed_legacy = resolve_plain_path(
+            evidence.get("legacy_output_path", ""), kind="file"
+        )
+        exact_hdf = resolve_plain_path(expected_hdf, kind="file")
+        exact_legacy = resolve_plain_path(expected_legacy, kind="file")
+        current_hdf_mtime = exact_hdf.stat().st_mtime_ns
+        current_legacy_mtime = exact_legacy.stat().st_mtime_ns
+    except (OSError, TypeError, ValueError, SnapshotError) as exc:
+        raise LiveSupervisorError(
+            "live failed-inspection exact artifacts are unavailable"
+        ) from exc
+    if plan_bytes.startswith(b"\xef\xbb\xbf"):
+        plan_text = plan_bytes.decode("utf-8-sig", errors="replace")
+    else:
+        try:
+            plan_text = plan_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            plan_text = plan_bytes.decode("cp1252")
+    staged_program_version = None
+    for line in plan_text.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "Program Version":
+            staged_program_version = value.strip() or None
+            break
+    if declared_program_version != staged_program_version:
+        raise LiveSupervisorError(
+            "live failed-inspection declared version disagrees with the staged plan"
+        )
+    if observed_hdf != exact_hdf or observed_legacy != exact_legacy:
+        raise LiveSupervisorError(
+            "live failed-inspection artifact paths are invalid"
+        )
+    hdf_mtime = evidence.get("hdf_mtime_ns")
+    legacy_mtime = evidence.get("legacy_mtime_ns")
+    reason = evidence["reason_code"]
+    if reason == "result_artifact_timestamp_unavailable":
+        if hdf_mtime is not None or legacy_mtime is not None:
+            raise LiveSupervisorError(
+                "timestamp-unavailable ambiguity contains artifact timestamps"
+            )
+    elif (
+        hdf_mtime != current_hdf_mtime
+        or legacy_mtime != current_legacy_mtime
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection artifact timestamps are stale"
+        )
+    if (
+        reason == "legacy_output_timestamp_after_hdf"
+        and not legacy_mtime > hdf_mtime
+        or reason == "hdf_timestamp_after_legacy_output"
+        and not hdf_mtime > legacy_mtime
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection timestamp ordering contradicts its reason"
+        )
+    if (
+        reason == "legacy_output_timestamp_after_hdf"
+        and evidence.get("declared_expected_result_format") != "hdf"
+        or reason == "hdf_timestamp_after_legacy_output"
+        and evidence.get("declared_expected_result_format") != "legacy"
+        or reason == "program_version_unresolved_multiple_formats"
+        and evidence.get("declared_expected_result_format") is not None
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection declared format contradicts its reason"
+        )
+    failed_events = [
+        event
+        for event in tables.get("events", [])
+        if isinstance(event, Mapping)
+        and event.get("event_name") == "execution_evidence_inspection_failed"
+    ]
+    if len(failed_events) != 1:
+        raise LiveSupervisorError(
+            "live failed-inspection event proof is not exact"
+        )
+    event = failed_events[0]
+    try:
+        event_payload = json.loads(event.get("payload_json"))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise LiveSupervisorError(
+            "live failed-inspection event payload is invalid"
+        ) from exc
+    if (
+        event.get("phase") != "inspection"
+        or event.get("status") != "failed"
+        or event.get("severity") != "error"
+        or event.get("api") != "RasCmdr.inspect_execution_evidence"
+        or event.get("reason_code") != evidence["reason_code"]
+        or event_payload
+        != {
+            "evidence_id": evidence["evidence_id"],
+            "evidence_kind": evidence["evidence_kind"],
+            "failure_type": evidence["failure_type"],
+            "reason_code": evidence["reason_code"],
+        }
+    ):
+        raise LiveSupervisorError(
+            "live failed-inspection event disagrees with its evidence record"
+        )
+
+
+def _serialized_process_identities(
+    value: Any,
+    *,
+    label: str,
+) -> set[tuple[int, float]]:
+    """Independently validate serialized public process identities."""
+    if not isinstance(value, list):
+        raise LiveSupervisorError(f"{label} is not an array")
+    identities: list[tuple[int, float]] = []
+    for record in value:
+        if not isinstance(record, Mapping) or set(record) != _PROCESS_RECORD_FIELDS:
+            raise LiveSupervisorError(f"{label} contains a malformed process record")
+        pid = record["pid"]
+        create_time = record["create_time"]
+        if (
+            not _valid_pid_create_time(pid, create_time)
+            or not isinstance(record["name"], str)
+            or not record["name"]
+            or not isinstance(record["command_line"], list)
+            or any(not isinstance(token, str) for token in record["command_line"])
+            or not isinstance(record["tracked"], bool)
+            or any(
+                optional is not None
+                and (not isinstance(optional, str) or not optional)
+                for optional in (
+                    record["executable_path"],
+                    record["working_directory"],
+                    record["session_id"],
+                )
+            )
+        ):
+            raise LiveSupervisorError(f"{label} contains a malformed process record")
+        identities.append((pid, float(create_time)))
+    if len(identities) != len(set(identities)):
+        raise LiveSupervisorError(f"{label} contains duplicate process identities")
+    return set(identities)
+
+
+def _verify_safe_rascmd_failure(
+    request: Mapping[str, Any],
+    details: Mapping[str, Any],
+    launch: Mapping[str, Any],
+) -> None:
+    """Verify that a failed modern compute is terminal and process-safe."""
+    runtime_timed_out = details.get("runtime_timed_out")
+    failure_stage = details.get("failure_stage")
+    failure_type = details.get("failure_type")
+    failure_detail = details.get("failure_detail")
+    if not isinstance(runtime_timed_out, bool) or any(
+        not isinstance(value, str) or not value.strip()
+        for value in (failure_stage, failure_type, failure_detail)
+    ):
+        raise LiveSupervisorError(
+            "live RasCmdr failure metadata is incomplete"
+        )
+    if runtime_timed_out and failure_type != "TimeoutError":
+        raise LiveSupervisorError(
+            "live RasCmdr timeout flag and failure type are inconsistent"
+        )
+
+    cancellation = details.get("cancellation_details")
+    if (
+        not isinstance(cancellation, Mapping)
+        or set(cancellation) != _CANCELLATION_DETAIL_FIELDS
+        or not isinstance(cancellation.get("cancellation_attempted"), bool)
+        or cancellation.get("pre_scan_complete") is not True
+        or cancellation.get("post_scan_complete") is not True
+        or cancellation.get("quiescence_confirmed") is not True
+        or cancellation.get("survivors") != []
+        or cancellation.get("query_errors") != []
+    ):
+        raise LiveSupervisorError(
+            "live RasCmdr failure lacks safe exact-cancellation proof"
+        )
+    started_at = cancellation["started_at"]
+    finished_at = cancellation["finished_at"]
+    if (
+        isinstance(started_at, bool)
+        or not isinstance(started_at, (int, float))
+        or not math.isfinite(float(started_at))
+        or float(started_at) <= 0
+        or isinstance(finished_at, bool)
+        or not isinstance(finished_at, (int, float))
+        or not math.isfinite(float(finished_at))
+        or float(finished_at) < float(started_at)
+    ):
+        raise LiveSupervisorError(
+            "live RasCmdr exact-cancellation timestamps are invalid"
+        )
+    matched = _serialized_process_identities(
+        cancellation["matched"], label="live RasCmdr cancellation matched"
+    )
+    stopped = _serialized_process_identities(
+        cancellation["stopped"], label="live RasCmdr cancellation stopped"
+    )
+    if not matched.issubset(stopped):
+        raise LiveSupervisorError(
+            "live RasCmdr exact cancellation left an initial match unproved"
+        )
+    if cancellation["cancellation_attempted"] and not matched:
+        raise LiveSupervisorError(
+            "live RasCmdr exact cancellation claims signalling without a match"
+        )
+
+    expected_project = resolve_plain_path(launch["project_path"], kind="file")
+    expected_plan = resolve_plain_path(launch["plan_path"], kind="file")
+    expected_tmp_hdf = lexical_absolute_path(
+        expected_project.with_suffix(
+            f".p{request['fixture']['plan_number']}.tmp.hdf"
+        )
+    )
+    try:
+        observed_project = resolve_plain_path(
+            cancellation["project_path"], kind="file"
+        )
+        observed_plan = resolve_plain_path(cancellation["plan_path"], kind="file")
+        observed_tmp_hdf = lexical_absolute_path(cancellation["tmp_hdf_path"])
+    except (KeyError, OSError, TypeError, ValueError, SnapshotError) as exc:
+        raise LiveSupervisorError(
+            "live RasCmdr exact-cancellation paths are unverifiable"
+        ) from exc
+    if (
+        cancellation["plan_number"] != request["fixture"]["plan_number"]
+        or observed_project != expected_project
+        or observed_plan != expected_plan
+        or observed_tmp_hdf != expected_tmp_hdf
+    ):
+        raise LiveSupervisorError(
+            "live RasCmdr exact-cancellation identity disagrees with the launch"
+        )
+
+
+def _verify_modern_launch_proof(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+    details: Mapping[str, Any],
+    *,
+    execution_succeeded: bool,
+) -> None:
+    """Reconcile returned modern launch details with the fsynced event."""
+    max_runtime = details.get("max_runtime_seconds")
+    launch = details.get("launch_details")
+    launcher_returncode = details.get("launcher_returncode")
+    if (
+        isinstance(max_runtime, bool)
+        or not isinstance(max_runtime, (int, float))
+        or not math.isfinite(float(max_runtime))
+        or float(max_runtime) != float(request["timeout_seconds"])
+    ):
+        raise LiveSupervisorError("live RasCmdr runtime evidence is inconsistent")
+    if launcher_returncode is not None and (
+        isinstance(launcher_returncode, bool)
+        or not isinstance(launcher_returncode, int)
+    ):
+        raise LiveSupervisorError("live RasCmdr launcher return code is invalid")
+    if execution_succeeded and launcher_returncode is None:
+        raise LiveSupervisorError(
+            "successful live RasCmdr execution lacks a launcher return code"
+        )
+    if not isinstance(launch, Mapping) or set(launch) != _RASCMD_LAUNCH_DETAIL_FIELDS:
+        raise LiveSupervisorError("live RasCmdr launch detail set is incomplete")
+    launch_max_runtime = launch.get("max_runtime_seconds")
+    if (
+        isinstance(launch_max_runtime, bool)
+        or not isinstance(launch_max_runtime, (int, float))
+        or not math.isfinite(float(launch_max_runtime))
+        or float(launch_max_runtime) <= 0
+    ):
+        raise LiveSupervisorError("live RasCmdr launch runtime is invalid")
+
+    expected_executable = resolve_plain_path(
+        request["engine"]["executable"], kind="file"
+    )
+    expected_project = resolve_plain_path(
+        Path(request["stage_root"]) / Path(request["source_project"]).name,
+        kind="file",
+    )
+    plan_number = request["fixture"]["plan_number"]
+    expected_plan = resolve_plain_path(
+        expected_project.with_suffix(f".p{plan_number}"), kind="file"
+    )
+    expected_working_directory = resolve_plain_path(
+        expected_project.parent, kind="directory"
+    )
+    try:
+        observed_executable = resolve_plain_path(launch["executable_path"], kind="file")
+        observed_project = resolve_plain_path(launch["project_path"], kind="file")
+        observed_plan = resolve_plain_path(launch["plan_path"], kind="file")
+        observed_working_directory = resolve_plain_path(
+            launch["working_directory"], kind="directory"
+        )
+    except (KeyError, OSError, TypeError, ValueError, SnapshotError) as exc:
+        raise LiveSupervisorError("live RasCmdr launch paths are unverifiable") from exc
+    if (
+        launch.get("plan_number") != plan_number
+        or observed_executable != expected_executable
+        or observed_project != expected_project
+        or observed_plan != expected_plan
+        or observed_working_directory != expected_working_directory
+        or launch.get("executable_sha256")
+        != request["engine"]["executable_sha256"]
+        or not _valid_pid_create_time(
+            launch.get("launcher_pid"), launch.get("launcher_create_time")
+        )
+        or launch.get("launcher_pid") != details.get("launcher_pid")
+        or float(launch.get("launcher_create_time"))
+        != float(details.get("launcher_create_time"))
+        or float(launch_max_runtime) != float(max_runtime)
+    ):
+        raise LiveSupervisorError("live RasCmdr launch identity is inconsistent")
+    logical_argv = [
+        str(expected_executable),
+        "-c",
+        str(expected_project),
+        str(expected_plan),
+    ]
+    if any('"' in token for token in logical_argv):
+        raise LiveSupervisorError("live RasCmdr launch path contains a quote")
+    raw_command = (
+        f'"{logical_argv[0]}" -c "{logical_argv[2]}" "{logical_argv[3]}"'
+    )
+    if launch.get("command") != raw_command:
+        raise LiveSupervisorError("live RasCmdr raw launch command is invalid")
+
+    events = worker.get("tables", {}).get("events")
+    launch_events = [
+        event
+        for event in events or []
+        if isinstance(event, Mapping)
+        and event.get("event_name") == "engine_process_launched"
+    ]
+    if len(launch_events) != 1:
+        raise LiveSupervisorError("live terminal requires one durable launch event")
+    event = launch_events[0]
+    try:
+        event_at = datetime.fromisoformat(str(event.get("event_at")))
+        payload = json.loads(event.get("payload_json"))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise LiveSupervisorError("live RasCmdr launch event is invalid") from exc
+    if event_at.tzinfo is None or event_at.utcoffset() != timezone.utc.utcoffset(event_at):
+        raise LiveSupervisorError("live RasCmdr launch event timestamp is not UTC")
+    expected_payload = {
+        "plan_number": plan_number,
+        "raw_command": raw_command,
+        "logical_argv": logical_argv,
+        "executable_path": str(expected_executable),
+        "executable_sha256": request["engine"]["executable_sha256"],
+        "project_path": str(expected_project),
+        "plan_path": str(expected_plan),
+        "cwd": str(expected_working_directory),
+        "launch_method": "direct_subprocess_shell_false_exact_executable",
+        "launcher_pid": launch["launcher_pid"],
+        "launcher_create_time": float(launch["launcher_create_time"]),
+        "max_runtime_seconds": float(max_runtime),
+    }
+    if (
+        event.get("phase") != "execution"
+        or event.get("status") != "running"
+        or event.get("api") != "RasCmdr.compute_plan.on_exec_launched"
+        or event.get("pid") != launch["launcher_pid"]
+        or payload != expected_payload
+    ):
+        raise LiveSupervisorError(
+            "live RasCmdr launch event disagrees with returned execution details"
+        )
+    if execution_succeeded:
+        if (
+            details.get("runtime_timed_out") is not False
+            or details.get("failure_stage") is not None
+            or details.get("failure_type") is not None
+            or details.get("failure_detail") is not None
+            or details.get("cancellation_details") is not None
+        ):
+            raise LiveSupervisorError("live RasCmdr runtime evidence is inconsistent")
+    else:
+        _verify_safe_rascmd_failure(request, details, launch)
+
+
 def _verify_worker_execution_proof(
     worker: Mapping[str, Any],
     request: Mapping[str, Any],
@@ -1701,9 +2383,22 @@ def _verify_worker_execution_proof(
                 f"live terminal lacks complete-empty exact-plan inventory: {field}"
             )
 
+    # Direct proof-unit callers predate the enclosing receipt category; the
+    # persisted worker path has already validated that field independently.
+    terminal = worker.get("terminal_category", "passed")
+    if terminal not in {"passed", "execution_failed"}:
+        raise LiveSupervisorError(
+            "live terminal has no independently verifiable execution semantics"
+        )
+    execution_succeeded = terminal == "passed"
     execution = worker.get("execution_result")
-    if not isinstance(execution, Mapping) or execution.get("success") is not True:
-        raise LiveSupervisorError("live terminal lacks a successful execution result")
+    if (
+        not isinstance(execution, Mapping)
+        or execution.get("success") is not execution_succeeded
+    ):
+        raise LiveSupervisorError(
+            "live terminal execution success disagrees with its category"
+        )
     details = execution.get("execution_details")
     if not isinstance(details, Mapping):
         raise LiveSupervisorError("live terminal lacks structured execution details")
@@ -1712,7 +2407,6 @@ def _verify_worker_execution_proof(
         "selected_result_format": engine["expected_result_format"],
         "calculation_attempted": True,
         "solver_quiescence_confirmed": True,
-        "result_artifacts_finalized": True,
         "actual_engine_provenance_confirmed": True,
     }
     if any(details.get(field) != value for field, value in common.items()):
@@ -1720,6 +2414,18 @@ def _verify_worker_execution_proof(
             "live terminal execution details fail calculation/provenance/finalization gates"
         )
     if engine["execution_api"] == "ras_cmdr":
+        artifacts_finalized = _verify_artifact_finalization_evidence(details)
+        _verify_failed_inspection_evidence(
+            worker,
+            request,
+            engine,
+            details,
+            execution_succeeded=execution_succeeded,
+        )
+        if execution_succeeded and not artifacts_finalized:
+            raise LiveSupervisorError(
+                "successful live RasCmdr execution did not finalize result artifacts"
+            )
         if details.get("engine_kind") != "executable":
             raise LiveSupervisorError("live RasCmdr engine kind is invalid")
         try:
@@ -1740,9 +2446,32 @@ def _verify_worker_execution_proof(
             )
         ):
             raise LiveSupervisorError("live RasCmdr executable provenance is invalid")
-        if execution.get("completion_verified") is not True:
-            raise LiveSupervisorError("live RasCmdr completion was not verified")
+        _verify_modern_launch_proof(
+            worker,
+            request,
+            details,
+            execution_succeeded=execution_succeeded,
+        )
+        completion_verified = execution.get("completion_verified")
+        if (
+            execution_succeeded
+            and completion_verified is not True
+            or not execution_succeeded
+            and not isinstance(completion_verified, bool)
+        ):
+            raise LiveSupervisorError(
+                "live RasCmdr completion claim disagrees with its category"
+            )
         return
+
+    if details.get("result_artifacts_finalized") is not True:
+        raise LiveSupervisorError(
+            "live Controller execution did not finalize result artifacts"
+        )
+    if not execution_succeeded:
+        raise LiveSupervisorError(
+            "Controller execution failures lack the modern exact-cancellation receipt"
+        )
 
     controller_common = {
         "engine_kind": "controller",
@@ -1935,7 +2664,7 @@ def _verify_live_terminal_semantics(
     engine: Mapping[str, Any],
     expected_stage_root: Path,
 ) -> None:
-    """Prove that a receipt is a reusable successful live terminal."""
+    """Prove a safe worker-authored success or non-reusable execution failure."""
     expected_stage_root = lexical_absolute_path(expected_stage_root)
     source_project = resolve_plain_path(fixture["source_project"], kind="file")
     stage_project = expected_stage_root / source_project.name
@@ -1983,8 +2712,14 @@ def _verify_live_terminal_semantics(
         raise LiveSupervisorError("live terminal source algorithm identity is stale")
     if lexical_absolute_path(request.get("stage_root", "")) != expected_stage_root:
         raise LiveSupervisorError("live terminal stage root identity is stale")
-    if receipt.get("terminal_category") != "passed":
-        raise LiveSupervisorError("live terminal is not passed")
+    terminal = receipt.get("terminal_category")
+    if terminal not in {"passed", "execution_failed"}:
+        raise LiveSupervisorError("live terminal category is not verifiable")
+    execution_succeeded = terminal == "passed"
+    if not execution_succeeded and engine.get("execution_api") != "ras_cmdr":
+        raise LiveSupervisorError(
+            "only modern exact-cancellation failures can be terminalized"
+        )
     if receipt.get("hec_ras_invoked") is not True:
         raise LiveSupervisorError("live terminal lacks real HEC-RAS invocation evidence")
     if receipt.get("supervisor_synthesized") is not False:
@@ -1996,6 +2731,10 @@ def _verify_live_terminal_semantics(
         raise LiveSupervisorError("worker/live request digest binding is stale")
     if worker.get("tables") != receipt.get("tables"):
         raise LiveSupervisorError("supervisor terminal tables differ from worker tables")
+    if worker.get("execution_result") != receipt.get("execution_result"):
+        raise LiveSupervisorError(
+            "supervisor terminal execution result differs from worker proof"
+        )
     _verify_stage_project_proof(
         worker,
         source_project=source_project,
@@ -2021,9 +2760,12 @@ def _verify_live_terminal_semantics(
     if (
         len(invariant_ids) != len(set(invariant_ids))
         or set(invariant_ids) != set(required)
-        or any(row.get("status") != "pass" for row in invariants)
     ):
-        raise LiveSupervisorError("live terminal invariants are not exact unique passes")
+        raise LiveSupervisorError("live terminal invariant identities are not exact")
+    if execution_succeeded and any(
+        row.get("status") != "pass" for row in invariants
+    ):
+        raise LiveSupervisorError("passing live terminal invariants are not all passes")
     lane_rows = tables.get("lanes")
     if not isinstance(lane_rows, list) or len(lane_rows) != 1:
         raise LiveSupervisorError("live terminal requires exactly one lane row")
@@ -2046,7 +2788,7 @@ def _verify_live_terminal_semantics(
         "engine_executable_sha256": engine.get("executable_sha256"),
         "initial_state": "neither",
         "expected_terminal_category": "passed",
-        "terminal_category": "passed",
+        "terminal_category": terminal,
     }
     if any(lane_row_record.get(key) != value for key, value in lane_identity.items()):
         raise LiveSupervisorError("live terminal lane identity or stage binding is stale")
@@ -2056,22 +2798,69 @@ def _verify_live_terminal_semantics(
         or lane_row_record.get("selected_result_format") != expected_format
     ):
         raise LiveSupervisorError("live terminal selected the wrong result family")
-    expected_flags = (True, False) if expected_format == "hdf" else (False, True)
     observed_flags = (
         lane_row_record.get("final_hdf_exists"),
         lane_row_record.get("final_legacy_exists"),
     )
-    if observed_flags != expected_flags:
-        raise LiveSupervisorError("live terminal final result-family gate failed")
-    for field in (
-        "all_invariants_passed",
-        "source_immutable",
-        "process_success",
-        "completion_verified",
-        "mechanical_completion",
-    ):
-        if lane_row_record.get(field) is not True:
-            raise LiveSupervisorError(f"live terminal lane gate failed: {field}")
+    if execution_succeeded:
+        expected_flags = (
+            (True, False) if expected_format == "hdf" else (False, True)
+        )
+        if observed_flags != expected_flags:
+            raise LiveSupervisorError("live terminal final result-family gate failed")
+        for field in (
+            "all_invariants_passed",
+            "source_immutable",
+            "process_success",
+            "completion_verified",
+            "mechanical_completion",
+        ):
+            if lane_row_record.get(field) is not True:
+                raise LiveSupervisorError(f"live terminal lane gate failed: {field}")
+    else:
+        execution = worker["execution_result"]
+        execution_completion = execution.get("completion_verified")
+        if not isinstance(execution_completion, bool):
+            raise LiveSupervisorError(
+                "failed live terminal lacks a boolean API completion claim"
+            )
+        details = execution["execution_details"]
+        failed_inspection = (
+            isinstance(worker.get("evidence"), Mapping)
+            and worker["evidence"].get("evidence_kind")
+            == _FAILED_INSPECTION_EVIDENCE_KIND
+        )
+        if failed_inspection and observed_flags != (True, True):
+            raise LiveSupervisorError(
+                "failed-inspection terminal does not expose both result families"
+            )
+        if details.get("result_artifacts_finalized") is False:
+            if any(not isinstance(flag, bool) for flag in observed_flags):
+                raise LiveSupervisorError(
+                    "unfinalized live terminal has non-boolean result-family evidence"
+                )
+        else:
+            opposing_exists = (
+                lane_row_record.get("final_legacy_exists")
+                if expected_format == "hdf"
+                else lane_row_record.get("final_hdf_exists")
+            )
+            if opposing_exists is not False:
+                raise LiveSupervisorError(
+                    "failed live terminal retained an opposing result family"
+                )
+        if lane_row_record.get("source_immutable") is not True:
+            raise LiveSupervisorError(
+                "failed live terminal did not preserve its source"
+            )
+        if lane_row_record.get("process_success") is not False:
+            raise LiveSupervisorError(
+                "failed live terminal does not explicitly deny process success"
+            )
+        if lane_row_record.get("completion_verified") is not execution_completion:
+            raise LiveSupervisorError(
+                "failed live terminal lane disagrees with API completion evidence"
+            )
     if not _inventory_record_is_complete_empty(
         receipt.get("supervisor_post_inventory")
     ):
@@ -2998,6 +3787,10 @@ def _lane_has_verified_terminal(context: RunContext, lane_id: str) -> bool:
         try:
             verified = verify_attempt_receipt(child)
         except Exception:
+            continue
+        if verified.receipt.get("terminal_category") != "passed":
+            # A safely terminalized execution failure is audit evidence, not a
+            # reusable qualification success. Resume must always retry it.
             continue
         request = verified.request
         current_request_identity = {

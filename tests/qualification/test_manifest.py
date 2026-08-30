@@ -54,6 +54,8 @@ def _manifest(tmp_path: Path) -> dict:
         "archive_root": str(tmp_path / "archive"),
         "execution_root": str(tmp_path / "execution"),
         "defaults": {
+            "preflight_timeout_seconds": 1800,
+            "postflight_timeout_seconds": 1800,
             "timeout_seconds": 60,
             "termination_grace_seconds": 10,
             "hash_files": True,
@@ -107,6 +109,33 @@ def test_normalization_is_deterministic_and_resolves_paths(tmp_path: Path) -> No
     assert first["fixtures"][0]["plan_number"] == "01"
     assert first["lanes"][0]["tags"] == ["real_ras"]
     assert Path(first["fixtures"][0]["source_project"]).is_absolute()
+    assert first["defaults"]["preflight_timeout_seconds"] == 1800
+    assert first["defaults"]["postflight_timeout_seconds"] == 1800
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["preflight_timeout_seconds", "postflight_timeout_seconds"],
+)
+def test_phase_timeout_defaults_must_be_positive_integers(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    payload = _manifest(tmp_path)
+    payload["defaults"][field] = 0
+
+    with pytest.raises(ManifestError, match=field):
+        normalize_manifest(payload)
+
+
+def test_manifest_rejects_unrepresentable_windows_worker_deadline(
+    tmp_path: Path,
+) -> None:
+    payload = _manifest(tmp_path)
+    payload["defaults"]["timeout_seconds"] = 4_294_967
+
+    with pytest.raises(ManifestError, match="phase timeouts exceed"):
+        normalize_manifest(payload)
 
 
 @pytest.mark.parametrize("field", ["command", "argv", "raw_command"])

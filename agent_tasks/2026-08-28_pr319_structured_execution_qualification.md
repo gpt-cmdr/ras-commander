@@ -662,3 +662,52 @@ complete.
   independent adversarial re-audit reported GO with no residual P0/P1/P2
   finding. No HEC-RAS, COM, or real-process signal occurred during remediation
   or validation.
+- 2026-08-30: campaign `40f9b6fe-0b95-41a4-984a-766d02f2c3f0`
+  (execution run `addd81a7-8028-4109-bfcf-353b490cffec`, attempt
+  `db47054d-0346-437e-b97a-2f5abbc77b97`) retained an overnight diagnostic
+  stall. The worker verified the request, proved the global process gate and
+  TCU acceptance, published a disposable EX1 stage, prepared the `neither`
+  initial state, and recorded `execution_starting`; it never recorded an
+  engine-launch event, terminal worker receipt, or computed result dataset. A
+  contemporaneous strict host inventory nevertheless observed the exact 6.6
+  `Ras.exe -c <stage-project> <stage-plan>` launcher for this disposable
+  attempt. HEC-RAS was therefore launched, but no calculation or result
+  artifact was observed. Recovery `067d3b0f-a83e-40ed-86e8-f560de24b308`
+  records `hec_ras_invoked=false` for the recovery action itself, proves the
+  exact Python worker and delegated launcher absent, reproduces the exact
+  source content and metadata fingerprints, and obtains two complete-empty
+  global inventories before atomically retiring the host lock. Recovery sent
+  no process signal. The campaign is diagnostic-only, is superseded, and must
+  not be resumed.
+- 2026-08-30: the maintainer approved the additive modern timeout/launch
+  contract, direct fully quoted Windows launch, optional post-launch callback,
+  short-root versus representative-depth diagnostics, and exact-plan early
+  cancellation if still required. `RasCmdr.compute_plan(max_runtime=None)`
+  preserves the existing unbounded launcher wait and 7,200-second asynchronous
+  solver bound; qualification supplies one finite positive maximum across both.
+  The live worker now fsyncs one `engine_process_launched`
+  event from `on_exec_launched()` before the engine wait, including the exact
+  executable/hash, raw command, derived logical argv, project/plan/cwd, launch
+  method, PID/create-time, UTC event timestamp, and maximum runtime. A returned
+  success must reproduce those launch details, report the same finite runtime,
+  state `runtime_timed_out=false`, and contain no failure or cancellation
+  metadata. The supervisor deadline separately reserves preflight, engine,
+  cancellation (at least 30 seconds), postflight, and a fixed five-second
+  receipt-publication margin, so it cannot race the engine's own
+  cancellation/finalization window. Deterministic no-engine tests cover
+  callback durability before the fake wait, detail/event reconciliation,
+  timeout contradictions, and both modern and Controller outer deadlines.
+  The short-root A/B live diagnostics remain planned and have not generated a
+  new dataset.
+- 2026-08-30: the approved modern launch correction and fail-closed live
+  evidence contract completed deterministic qualification. The final API
+  consistency and independent adversarial audits both returned GO with no
+  P0/P1 finding. Their remaining P2 observations were closed: fractional BCO
+  budgets, Windows subprocess-wait ceilings in both public API and manifest,
+  truthful exception documentation, finalization-attempt evidence, and
+  staged-plan reconciliation of ambiguity diagnostics. The focused gate
+  passed 398 tests in 89.58 seconds; the complete affected gate passed 740
+  tests in 168.77 seconds; Ruff and `git diff --check` passed. No HEC-RAS,
+  COM, process signaling, or dataset generation occurred in this validation.
+  The next authorized action is a fresh, commit-pinned short-root live pilot;
+  it must precede the representative-depth repeat.

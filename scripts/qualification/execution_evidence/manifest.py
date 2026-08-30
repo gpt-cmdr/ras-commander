@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -28,6 +29,9 @@ class ManifestError(ValueError):
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_RE = re.compile(r"^[0-9a-f]{40}$")
+_MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS = (2**32 - 2) / 1000.0
+_MIN_INTERNAL_CANCELLATION_ALLOWANCE_SECONDS = 30.0
+_SUPERVISOR_RECEIPT_MARGIN_SECONDS = 5.0
 _FORBIDDEN_COMMAND_KEYS = {
     "argv",
     "command",
@@ -83,6 +87,8 @@ _REPOSITORY_FIELDS = {
     "bind_running_code",
 }
 _DEFAULT_FIELDS = {
+    "preflight_timeout_seconds",
+    "postflight_timeout_seconds",
     "timeout_seconds",
     "termination_grace_seconds",
     "hash_files",
@@ -899,12 +905,36 @@ def normalize_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
 
     defaults = _require_mapping(source.get("defaults", {}), "defaults")
     _reject_unknown_fields(defaults, _DEFAULT_FIELDS, "defaults")
+    preflight_timeout = defaults.get("preflight_timeout_seconds", 1_800)
+    postflight_timeout = defaults.get("postflight_timeout_seconds", 1_800)
     timeout = defaults.get("timeout_seconds", 14_400)
     grace = defaults.get("termination_grace_seconds", 120)
     jobs = defaults.get("real_engine_jobs", 1)
-    for value, label in ((timeout, "timeout_seconds"), (grace, "termination_grace_seconds")):
+    for value, label in (
+        (preflight_timeout, "preflight_timeout_seconds"),
+        (postflight_timeout, "postflight_timeout_seconds"),
+        (timeout, "timeout_seconds"),
+        (grace, "termination_grace_seconds"),
+    ):
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ManifestError(f"defaults.{label} must be a positive integer")
+    if timeout > _MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS:
+        raise ManifestError(
+            "defaults.timeout_seconds exceeds the Windows subprocess-wait range"
+        )
+    outer_timeout = math.fsum(
+        (
+            preflight_timeout,
+            timeout,
+            max(grace, _MIN_INTERNAL_CANCELLATION_ALLOWANCE_SECONDS),
+            postflight_timeout,
+            _SUPERVISOR_RECEIPT_MARGIN_SECONDS,
+        )
+    )
+    if outer_timeout > _MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS:
+        raise ManifestError(
+            "defaults phase timeouts exceed the Windows subprocess-wait range"
+        )
     if jobs != 1:
         raise ManifestError("pre-engine schema requires defaults.real_engine_jobs=1")
     if not isinstance(defaults.get("hash_files", True), bool):
@@ -977,6 +1007,8 @@ def normalize_manifest(payload: Mapping[str, Any]) -> dict[str, Any]:
         "archive_root": archive_root,
         "execution_root": execution_root,
         "defaults": {
+            "preflight_timeout_seconds": preflight_timeout,
+            "postflight_timeout_seconds": postflight_timeout,
             "timeout_seconds": timeout,
             "termination_grace_seconds": grace,
             "hash_files": defaults.get("hash_files", True),
