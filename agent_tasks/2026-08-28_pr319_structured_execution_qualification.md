@@ -728,3 +728,12 @@ complete.
   qualification suite passed 363 tests in 169.26 seconds and an independent
   no-edit re-audit returned GO with no P0/P1 finding. Lock recovery has not yet
   run and no process signal has been sent.
+- 2026-08-30: the first acknowledged descendant-code recovery remained
+  fail-closed because Windows PID 0 exposed no process name to the exact
+  Python-worker scan. Its structured diagnostic had `complete=false`, no
+  worker matches, and the single reason `process_name_unavailable` for PID 0;
+  the lock remained retained and no process signal or HEC-RAS action occurred.
+  Recovery now treats only Windows' reserved System Idle PID 0 as a proved
+  noncandidate; every positive PID with an unavailable name remains a query
+  error. The focused supervisor gate passed 135 tests and Ruff passed before
+  the next recovery attempt.

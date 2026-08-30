@@ -774,6 +774,11 @@ def _worker_command_recovery_gate(
             try:
                 pid = process.info.get("pid")
                 name_value = process.info.get("name")
+                # Windows reserves PID 0 for the System Idle Process. It can
+                # expose no name through psutil, but it cannot be the positive-
+                # PID Python worker launched by this harness.
+                if os.name == "nt" and pid == 0:
+                    continue
                 if (
                     not isinstance(pid, int)
                     or isinstance(pid, bool)

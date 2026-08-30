@@ -3757,6 +3757,24 @@ def test_worker_command_recovery_fails_when_process_name_is_unavailable(
     ]
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows reserves PID 0")
+def test_worker_command_recovery_ignores_windows_idle_pid_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = SimpleNamespace(pid=0, info={"pid": 0, "name": None})
+    monkeypatch.setattr(live.psutil, "process_iter", lambda attrs: [process])
+
+    safe, detail, inventory = live._worker_command_recovery_gate(
+        ["python.exe", "-m", "worker"]
+    )
+
+    assert safe is True
+    assert detail == "exact archived worker command is absent"
+    assert inventory["complete"] is True
+    assert inventory["matches"] == []
+    assert inventory["query_errors"] == []
+
+
 def test_partial_intent_supervisor_must_match_retained_lock_owner(
     tmp_path: Path,
 ) -> None:
