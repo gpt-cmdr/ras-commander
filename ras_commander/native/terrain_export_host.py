@@ -99,15 +99,31 @@ def _hecras_version_key(
     return parts if len(parts) >= 3 else (*parts, 0)
 
 
+def _is_prerelease_version_label(version: Any) -> bool:
+    """Return whether an explicit term or executable release folder is beta."""
+    label = (
+        _executable_runtime_label(version)
+        if str(version).strip().lower().endswith(".exe")
+        else str(version).strip()
+    )
+    return re.search(r"\bbeta\b", label, re.IGNORECASE) is not None
+
+
+def _reject_prerelease_hecras_version(version: Any, key: tuple[int, ...]) -> None:
+    """Fail before a beta label can reuse a supported stable release key."""
+    if _is_prerelease_version_label(version):
+        _require_supported_hecras_version(version, key)
+
+
 def _require_supported_hecras_version(
     version: Any, key: tuple[int, ...]
 ) -> str:
     """Raise with actionable, version-specific compatibility guidance."""
-    if key in SUPPORTED_TERRAIN_EXPORT_VERSIONS:
+    is_prerelease = _is_prerelease_version_label(version)
+    if not is_prerelease and key in SUPPORTED_TERRAIN_EXPORT_VERSIONS:
         return SUPPORTED_TERRAIN_EXPORT_VERSIONS[key]
 
     reason = ""
-    is_prerelease = re.search(r"\bbeta\b", str(version), re.IGNORECASE) is not None
     if is_prerelease and key[:2] != (6, 7):
         reason = (
             " Prerelease HEC-RAS builds are not accepted by this production API; "
@@ -147,6 +163,7 @@ def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
     """Resolve a RasPrj's exact runtime, preferring its executable folder."""
     project_version = getattr(project, "ras_version", None)
     project_key = _hecras_version_key(project_version)
+    _reject_prerelease_hecras_version(project_version, project_key)
     executable = getattr(project, "ras_exe_path", None)
     if not executable or str(executable).strip().lower() == "ras.exe":
         return project_key
@@ -159,6 +176,8 @@ def _rasprj_runtime_key(project: Any) -> tuple[int, ...]:
         # Non-standard installation folders still retain the initialized
         # RasPrj's explicit version term as the best available identity.
         return project_key
+
+    _reject_prerelease_hecras_version(executable, executable_key)
 
     if executable_key != project_key:
         raise ValueError(
@@ -578,6 +597,8 @@ def _resolve_hecras_source(
         )
     except ValueError:
         installed_key = None
+    if installed_key is not None:
+        _reject_prerelease_hecras_version(directory / "Ras.exe", installed_key)
     if installed_key is not None and installed_key != expected_key:
         raise ValueError(
             f"Resolved HEC-RAS installation {directory.name!r} conflicts with "

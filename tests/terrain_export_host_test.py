@@ -277,6 +277,22 @@ def test_hecras_70_beta_is_rejected_as_prerelease_not_release_defect():
     assert "minimum-Y" not in message
 
 
+@pytest.mark.parametrize(
+    "version",
+    [
+        "6.5 Beta",
+        "6.6 Beta 2",
+        "7.1 Beta",
+        r"C:\Program Files (x86)\HEC\HEC-RAS\6.5 Beta\Ras.exe",
+        r"C:\Program Files (x86)\HEC\HEC-RAS\6.6 Beta 2\Ras.exe",
+        r"C:\Program Files (x86)\HEC\HEC-RAS\7.1 Beta\Ras.exe",
+    ],
+)
+def test_supported_release_keys_never_accept_prerelease_labels(version):
+    with pytest.raises(ValueError, match="Prerelease HEC-RAS builds are not accepted"):
+        host.resolve_supported_hecras_version(version, None)
+
+
 def test_hecras_71_is_forward_open_before_the_binary_is_published():
     assert host.resolve_supported_hecras_version("7.1", None) == "7.1"
 
@@ -323,6 +339,51 @@ def test_explicit_version_must_match_exact_rasprj_version():
 
     with pytest.raises(ValueError, match="conflicts with ras_object\\.ras_version"):
         host.resolve_supported_hecras_version("6.5", project)
+
+
+@pytest.mark.parametrize("project_version", ["6.5 Beta", "6.6 Beta", "7.1 Beta"])
+def test_initialized_rasprj_beta_version_is_rejected(project_version):
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = project_version
+
+    with pytest.raises(ValueError, match="Prerelease HEC-RAS builds are not accepted"):
+        host.resolve_supported_hecras_version(None, project)
+
+
+@pytest.mark.parametrize("stable", ["6.5", "6.6", "7.1"])
+def test_initialized_rasprj_beta_executable_folder_is_rejected(stable):
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = stable
+    project.ras_exe_path = (
+        rf"C:\Program Files (x86)\HEC\HEC-RAS\{stable} Beta\Ras.exe"
+    )
+
+    with pytest.raises(ValueError, match="Prerelease HEC-RAS builds are not accepted"):
+        host.resolve_supported_hecras_version(None, project)
+
+
+@pytest.mark.parametrize(
+    ("project_version", "explicit_version"),
+    [
+        ("6.5 Beta", "6.5"),
+        ("6.6 Beta", "6.6"),
+        ("7.1 Beta", "7.1"),
+        ("6.5", "6.5 Beta"),
+        ("6.6", "6.6 Beta"),
+        ("7.1", "7.1 Beta"),
+    ],
+)
+def test_explicit_stable_and_project_beta_combinations_reject_prerelease(
+    project_version, explicit_version
+):
+    project = RasPrj()
+    project.initialized = True
+    project.ras_version = project_version
+
+    with pytest.raises(ValueError, match="Prerelease HEC-RAS builds are not accepted"):
+        host.resolve_supported_hecras_version(explicit_version, project)
 
 
 def test_rasprj_executable_folder_conflict_is_rejected():
@@ -424,6 +485,26 @@ def test_resolved_installation_must_match_qualified_release(monkeypatch, tmp_pat
 
     with pytest.raises(ValueError, match="installation '7\\.0' conflicts"):
         host._resolve_hecras_source("6.6", None)
+
+
+@pytest.mark.parametrize("stable", ["6.5", "6.6", "7.1"])
+def test_resolved_beta_installation_cannot_reuse_supported_release_key(
+    monkeypatch, tmp_path, stable
+):
+    ras_prj_module = importlib.import_module("ras_commander.RasPrj")
+    installation = tmp_path / f"{stable} Beta"
+    installation.mkdir()
+    (installation / "Ras.exe").touch()
+    (installation / "RasMapperLib.dll").touch()
+    monkeypatch.setattr(host.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        ras_prj_module,
+        "get_ras_exe",
+        lambda _version: str(installation / "Ras.exe"),
+    )
+
+    with pytest.raises(ValueError, match="Prerelease HEC-RAS builds are not accepted"):
+        host._resolve_hecras_source(stable, None)
 
 
 def test_wine_path_conversion_uses_configured_winepath(monkeypatch):
