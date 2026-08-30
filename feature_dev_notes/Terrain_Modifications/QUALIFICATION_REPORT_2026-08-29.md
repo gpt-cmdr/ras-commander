@@ -8,8 +8,10 @@ Base revision: `d7784fcc7714ca75632eef5338612fece28609aa`
 
 The focused native helper and Python supervisor passed unit/regression tests,
 bounded native HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 exports, audit-only checks of the
-installed 6.7 Beta 4/5 and 7.0.0 runtimes, and HEC-RAS 6.6 Wine exports on both
-the alternate CLB09 worker and the dedicated CLB07 CT212 worker. An exact copy
+installed 6.7 Beta 4/5 and 7.0.0 runtimes, and Wine exports for every supported
+release. HEC-RAS 6.6 passed on both the alternate CLB09 worker and the dedicated
+CLB07 CT212 worker; 6.4.1, 6.5, and 7.0.1 subsequently passed an independent
+three-export-per-release matrix on CT212. An exact copy
 of the notebook-316 modified project also produced identical native-Windows
 and CLB07 Wine arrays, validity masks, metadata, source inventory, and receipt
 semantics with a maximum valid-cell difference of 0.0 feet. All production-path
@@ -55,13 +57,15 @@ Five notebook revisions cover the public workflow: modification-aware Bald
 Eagle evidence (`316`), benefit-area terrain preparation guidance (`612`), the
 creation-versus-export distinction (`920`), analytical-sampler scope (`930`),
 and a focused bounded stitched-terrain tutorial (`931`). The new native-export
-cells are opt-in. Their review figures are written only to ignored task-local
-folders; no new notebook outputs or generated visual artifacts are committed.
-The final combined terrain-export/public/adjacent and notebook-contract gate
-passed 152 tests in 3.56 seconds. JSON and Python-AST checks passed all five
-notebooks (70 code cells), and the output audit found no stored exceptions. A
-fresh opt-in HEC-RAS 6.6 mixed-resolution `Terrain50` qualification passed in
-2.69 seconds, including 1.77 seconds in the native test call.
+cells remain opt-in in source, but the committed examples now include executed
+review evidence. Notebook 316's safe native section was freshly executed while
+its hydraulic cells were not rerun; notebooks 920, 930, and 931 were freshly
+executed end to end with their heavy or hydraulic paths disabled. Their
+committed outputs include terrain/source tables and review figures. Notebook
+612 retains its coherent prior outputs, eight embedded images, and four final
+maps without rerunning its four hydraulic simulations. JSON and Python-AST
+checks cover all five notebooks (70 code cells), and the output audit found no
+stored exceptions.
 
 ## Native Windows HEC-RAS 6.6
 
@@ -145,8 +149,9 @@ and 17 x 24 grids, 73 changed cells, 1,511 unchanged controls, and a delta
 range of `-27.0625` to `-0.09375` feet. The two-source Muncie export completed
 in 1.49 seconds with the expected 16 x 23 grid and checksum 4221. These checked
 pixels are identical to 7.0.0 and 6.6, but HEC's explicit 7.0.1 fix notice is
-what distinguishes the accepted patch from known-defective 7.0.0. The local
-fixtures do not contain the exact triangular-nose/minimum-Y regression.
+what distinguishes the accepted patch from known-defective 7.0.0. The operator
+directed that the dedicated triangular-nose/minimum-Y regression fixture be
+skipped, so this matrix does not claim that defect-specific geometry.
 
 The official downloads page and HEC release repository contain no HEC-RAS
 Classic 7.1 release. No 7.1 package could therefore be installed or qualified;
@@ -264,6 +269,41 @@ runtime label was empty. The branch now parses Windows and UNC executable paths
 with Windows path semantics and includes a focused cross-platform regression;
 the rejection message reports the expected runtime release.
 
+### Independent CLB07 6.4.1, 6.5, and 7.0.1 matrix
+
+CT212 was reused for a separate Ubuntu 24.04, Wine 11.0 qualification of the
+three remaining supported releases. Exact installed runtime payloads, a known-
+good .NET Framework 4.8 Wine prefix, and source projects were copied into
+task-local state. Each runtime independently passed the helper's exact private
+nine-parameter reflection check, including the final by-reference
+`TiffMetadata<float>` parameter, and produced three successful receipts:
+
+| Runtime | Muncie stitched 2x | `Terrain50` modifications off | `Terrain50` modifications on | Total |
+|---|---:|---:|---:|---:|
+| 6.4.1 | 58.208 s | 58.300 s | 58.389 s | 174.993 s |
+| 6.5 | 58.240 s | 58.385 s | 58.477 s | 175.124 s |
+| 7.0.1 | 58.266 s | 58.415 s | 58.492 s | 175.196 s |
+
+All nine receipts confirmed nearest-neighbor resampling, one output RFI,
+`resampleTo1RFI=True`, the requested modification flag, and semantic GeoTIFF
+validation. For every runtime, Muncie consolidated both registered sources to
+one 16 x 23 Float32 raster at 10-foot cells. `Terrain50` consolidated its
+registered 36.504512049933-foot and 20-foot sources to one 61 x 61 Float32
+raster at 40-foot cells. Enabling modifications raised 264 of 3,721 valid cells
+by 0.15625 to 9.625 feet; all 1,769 geometric control cells remained exactly
+unchanged. The Muncie, modifications-off, and modifications-on arrays and
+validity masks were pixel-identical across 6.4.1, 6.5, and 7.0.1, with a maximum
+valid-cell absolute difference of 0.0 feet.
+
+Recursive comparison found no source-project mutation or derivative
+registration. No partial, stage directory, helper, GDAL, Wine, or `wineserver`
+process survived. CT212 was stopped with `onboot=0`, the admission lock was
+released, and the neighboring guests remained stopped and unchanged. The
+first 6.4.1 Muncie export itself succeeded, but an independent harness
+diagnostic initially expected `.NET` primitive spelling `System.Double`
+instead of the reflected signature's `Double`; that useful failed experiment
+was preserved before the corrected complete rerun.
+
 ## Artifact and receipt checks
 
 - Native `resampleTo1RFI=true` produced exactly one TIFF in all bounded runs.
@@ -278,20 +318,22 @@ the rejection message reports the expected runtime release.
 ## Qualification gaps and limitations
 
 - Exactly HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 are accepted. All four passed the
-  native Windows modification-aware and stitched matrix. Wine qualification
-  covers 6.6; matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap.
+  native Windows modification-aware and stitched matrix and real Wine export.
 - HEC-RAS 6.3/6.3.1 lack the required contract, 6.4.0 is associated with an
   official terrain-elevation defect, 6.7 has only prerelease builds, and 7.0.0
   has an official terrain-modification export defect. HEC-RAS Classic 7.1 is
   forward-open but remains unqualified until an official binary is published.
   See `HECRAS_VERSION_COMPATIBILITY_2026-08-29.md` for the full matrix.
+- The operator explicitly directed that the dedicated triangular-nose/minimum-Y
+  regression fixture be skipped. The broader 7.0.1 modification evidence and
+  HEC's official fix notice support acceptance, but no defect-specific fixture
+  result is claimed.
 - Full-domain UPGU3 export was intentionally not attempted. Bounded windows
   satisfy feature semantics without multi-gigabyte derivative cost.
 - The output is a derivative GeoTIFF only. Terrain HDF construction,
   registration, UI actions, hydraulic simulation, and modification-math
   reimplementation remain out of scope.
-- `mkdocs build --strict` reached the repository's pre-existing
-  `docs/api/core.md` collection failure for
-  `ras_commander.inspect_project_assets`; direct Python imports confirmed that
-  symbol exists. The edited terrain page introduced no reported Markdown or
-  navigation error before that unrelated abort.
+- The final production-equivalent non-strict `mkdocs build` passed in 39.43
+  seconds. Strict mode completed content processing and then aborted on 33
+  existing git-history and missing-notebook-link warnings; no terrain page,
+  feature note, navigation, or API-collection error occurred.

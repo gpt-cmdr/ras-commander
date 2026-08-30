@@ -40,12 +40,12 @@ Supported HEC-RAS versions are deliberately narrow:
 |---------|--------|----------|
 | 6.3 / 6.3.1 | Unsupported | The installed API lacks the bounded `GenerateNewRasTerrain(..., resampleVecMods, ...)` contract; its public single-file method always uses the full terrain extent |
 | 6.4.0 | Unsupported | Not locally installed or qualified; HEC's [6.4.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4.1/resolved-issues) report that creating a terrain in 6.4 could add 1.0 to elevations |
-| 6.4.1 | Supported | Exact private contract reflected; bounded 2x/4x modification-aware and two-source stitched exports qualified on native Windows |
-| 6.5 | Supported | Exact private contract reflected; the same native Windows qualification passed, including 73 changed modification cells and 1,511 unaffected controls |
+| 6.4.1 | Supported | Exact private contract reflected; bounded modification-aware, mixed-source, and two-source stitched exports qualified on native Windows and Wine |
+| 6.5 | Supported | Exact private contract reflected; bounded modification-aware, mixed-source, and two-source stitched exports qualified on native Windows and Wine |
 | 6.6 | Supported | Native Windows and Wine qualified with bounded modification-aware and stitched exports; HEC's [6.6 terrain manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer) explicitly documents the unified export options |
 | 6.7 beta releases | Unsupported prereleases | HEC's [archive](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) lists Beta, Beta 2, Beta 3, Beta 4a, and Beta 5 before 7.0. The locally installed Beta 4-labeled and Beta 5 runtimes passed bounded checks, but the API accepts no beta runtime |
 | 7.0.0 | Unsupported | Although the checked windows completed, HEC documents a [terrain-modification export defect](https://www.hec.usace.army.mil/confluence/rasdocs/raski/7.0) that can omit the minimum-Y portion of a modification |
-| 7.0.1 | Supported | The official installer's signature was validated, then the installed runtime was reflected and natively qualified after HEC reported the 7.0.0 defect fixed in [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues). Bounded UPGU3 modification-aware 2x/4x and two-source stitched exports passed |
+| 7.0.1 | Supported | The official installer's signature was validated, then the installed runtime was reflected and qualified on native Windows and Wine after HEC reported the 7.0.0 defect fixed in [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues). Bounded modification-aware, mixed-source, and stitched exports passed |
 | 7.1 | Forward-open; not yet qualified | The API and installation discovery accept the exact 7.1 term so the official release can run when installed. The helper still verifies the exact managed method contract at runtime. The official [HEC-RAS downloads page](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) currently contains no HEC-RAS Classic 7.1 release |
 | Other versions | Unsupported | Their exact mapper contract and semantics have not been qualified |
 
@@ -57,9 +57,15 @@ between the explicit version, project version, and executable release. The
 existing `6.4` convenience term resolves to the qualified 6.4.1 installation;
 an actual executable in a `6.4` folder remains rejected.
 
-The four qualified releases all passed on native Windows. The task-local
-Wine path is qualified with the exact 6.6 runtime; 6.4.1, 6.5, and 7.0.1 have
-not yet received matching Wine-runtime qualification.
+The four qualified releases all passed on native Windows and under Wine. The
+Wine matrix used task-local runtime/project copies and nine successful receipts:
+for each of 6.4.1, 6.5, and 7.0.1 it exported a bounded two-source Muncie terrain,
+the mixed-resolution `Terrain50` terrain with modifications disabled, and the
+same terrain with modifications enabled. Arrays and validity masks were
+pixel-identical across those three releases; the modification comparison raised
+264 cells by 0.15625 to 9.625 feet while 1,769 control cells remained exactly
+unchanged. HEC-RAS 6.6 additionally passed exact-input native-Windows/Wine
+pixel-parity checks.
 
 HEC-RAS 7.1 is deliberately forward-open rather than pre-qualified. Until HEC
 publishes the binary, no claim is made about its export semantics. When the
@@ -233,3 +239,8 @@ print(comparison[['station', 'existing_elevation', 'proposed_elevation', 'differ
 | `920_terrain_creation.ipynb` | Terrain HDF creation from rasters |
 | `930_terrain_modification_analysis.ipynb` | Cut/fill analysis with RasTerrainMod |
 | `931_native_rasmapper_terrain_export.ipynb` | Bounded native export, typed result, receipt, and visual grid evidence |
+
+Notebooks 316, 920, 930, and 931 include freshly executed review outputs and
+figures for their bounded terrain workflows. Notebook 612 retains its coherent
+previously computed hydraulic outputs and four final maps; its four hydraulic
+simulations were deliberately not rerun for this terrain-export change.

@@ -31,12 +31,12 @@ contract.
 | 6.3 | The [6.3 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.3/terrain-layer) documents separate resample/clip operations, not the later unified export options. The internal `6.3.0.2` spelling encountered in model/runtime provenance is treated as part of this unsupported line. | Unsupported; installed binary also lacks the required bounded modification-aware method. |
 | 6.3.1 | The [6.3.1 release notes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.3.1) describe a bug-fix release; its [resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.3.1/resolved-issues) do not add the required export contract. | Unsupported; installed binary matches 6.3's old surface. |
 | 6.4.0 | The [6.4 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.4/terrain-layer) still documents the older three export operations. The later 6.4.1 notes identify a terrain-creation elevation defect in 6.4. | Unsupported and not locally installed. |
-| 6.4.1 | HEC's [6.4.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4.1/resolved-issues) say that creating a new terrain in 6.4 could sometimes add 1.0 to elevations; 6.4.1 is the fixed release. | Supported after exact reflection and native semantic qualification. |
-| 6.5 | The [6.5 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.5/resolved-issues) fix geometry-extent clipping and creation of encroachment terrains without the source terrain's modifications. The [6.5 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.5/terrain-layer) still presents the older UI. | Supported after exact reflection and native semantic qualification. |
+| 6.4.1 | HEC's [6.4.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4.1/resolved-issues) say that creating a new terrain in 6.4 could sometimes add 1.0 to elevations; 6.4.1 is the fixed release. | Supported after exact reflection and native Windows/Wine semantic qualification. |
+| 6.5 | The [6.5 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.5/resolved-issues) fix geometry-extent clipping and creation of encroachment terrains without the source terrain's modifications. The [6.5 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.5/terrain-layer) still presents the older UI. | Supported after exact reflection and native Windows/Wine semantic qualification. |
 | 6.6 | The [6.6 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer) explicitly documents Extent, Cell Size, Export to Single Raster, and Rasterize Terrain Modifications in one operation. | Supported; qualified on native Windows and under Wine. |
 | 6.7 prereleases | HEC's [official download archive](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) lists 6.7 Beta, Beta 2, Beta 3, Beta 4a, and Beta 5, followed by 7.0 rather than a final 6.7. The [7.0 new-features page](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/7.0/new-features) calls 7.0 the official release of the software previously titled 6.7 Beta. The [Beta terrain tutorial](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/beta/tutorials/adding-terrain-mods-land-cover-and-n-values) uses Generate New RAS Terrain to rasterize vector pier modifications. | Local folders labeled Beta 4 and Beta 5 passed probes, but all 6.7 prereleases remain unsupported. The Beta 4 folder's identity cannot be equated silently with HEC's archived Beta 4a package; the earlier binaries were unavailable. |
 | 7.0.0 | HEC's [7.0 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/7.0) say a new raster can omit the bottom, minimum-Y portion of a terrain modification, especially a triangular-nose pier; no workaround is given. | Unsupported even though the available bounded probes passed. Those fixtures do not disprove the documented defect. |
-| 7.0.1 | HEC's [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues) list the 7.0.0 terrain-modification export issue as fixed. | Supported after exact installed-binary reflection and native semantic qualification. The defect-specific triangular-nose/minimum-Y fixture was not available, so the official fix notice and broader modification checks are both recorded. |
+| 7.0.1 | HEC's [7.0.1 resolved issues](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/latest/resolved-issues) list the 7.0.0 terrain-modification export issue as fixed. | Supported after exact installed-binary reflection and native Windows/Wine semantic qualification. The operator directed that the defect-specific triangular-nose/minimum-Y fixture be skipped, so the official fix notice and broader modification checks are recorded without claiming that fixture. |
 | 7.1 | The official [HEC-RAS downloads page](https://www.hec.usace.army.mil/software/hec-ras/download.aspx) and [HEC download releases](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases) do not yet publish a HEC-RAS Classic 7.1 installer or release. | Forward-open, not qualified. Exact 7.1 terms and installation folders are accepted; helper reflection remains the runtime safety gate if HEC changes the private contract. |
 
 ## Installed managed API matrix
@@ -111,6 +111,29 @@ to +0.34375 feet. The 6.6 results differ more broadly from 6.4.1, while the
 This is recorded as version-dependent vendor behavior, not normalized or
 hidden by ras-commander.
 
+## Linux/Wine semantic matrix
+
+The independent CLB07 CT212 run used Ubuntu 24.04, Wine 11.0, task-local copies
+of the exact runtimes and projects, and the same packaged helper. For each of
+6.4.1, 6.5, and 7.0.1 it produced three successful receipts: bounded Muncie
+stitched 2x, mixed-resolution `Terrain50` modifications off, and the same
+terrain modifications on. All receipts confirmed nearest-neighbor,
+`resampleTo1RFI=True`, one output RFI, and semantic validation.
+
+| Runtime | Successful receipts | Total elapsed | Raised cells | Unchanged controls |
+|---|---:|---:|---:|---:|
+| 6.4.1 | 3 | 174.993 s | 264, +0.15625 to +9.625 ft | 1,769, max delta 0.0 ft |
+| 6.5 | 3 | 175.124 s | 264, +0.15625 to +9.625 ft | 1,769, max delta 0.0 ft |
+| 7.0.1 | 3 | 175.196 s | 264, +0.15625 to +9.625 ft | 1,769, max delta 0.0 ft |
+
+The Muncie, modification-off, and modification-on arrays and validity masks
+were pixel-identical across those three releases; every maximum valid-cell
+absolute difference was 0.0 feet. Each runtime reported and passed the exact
+private nine-parameter/by-reference managed contract. No source project was
+mutated, no partial/stage/native process survived, and CT212 was stopped with
+`onboot=0` after the admission lock was released. HEC-RAS 6.6 remains separately
+qualified under Wine, including exact-input native-Windows/Wine pixel parity.
+
 ## Final public contract and qualification gaps
 
 - Qualified exact releases: 6.4.1, 6.5, 6.6, and 7.0.1. Exact 7.1 is forward-open without a qualification claim.
@@ -118,6 +141,6 @@ hidden by ras-commander.
 - Compact/plan-file spellings normalize to the same exact accepted release: `6.41`/`641`, `6.50`/`65`, `6.60`/`66`, and `7.01`/`701`.
 - Any patch/build version not explicitly qualified, including 6.4.1.1, 6.6.0.1, and 6.6.1, fails closed.
 - Native Windows qualification covers all four accepted releases.
-- Wine qualification covers the exact 6.6 runtime. Matching 6.4.1, 6.5, and 7.0.1 Wine runs remain a qualification gap, not an implied result.
-- The local fixtures do not contain the exact triangular-nose/minimum-Y regression described in HEC's 7.0.0 known issue. HEC's explicit 7.0.1 fix notice plus the bounded 73-cell modification comparison and stitched export support acceptance, while this defect-specific fixture remains a documented qualification gap.
+- Wine qualification covers every accepted runtime: 6.4.1, 6.5, 6.6, and 7.0.1.
+- The operator explicitly directed that the dedicated triangular-nose/minimum-Y regression fixture be skipped. HEC's explicit 7.0.1 fix notice plus the broader bounded modification comparisons and stitched exports support acceptance, while this defect-specific result is not claimed.
 - HEC-RAS Classic 7.1 can be selected as `7.1`, `7.1.0`, `7.10`, or `71` when its official binary lands. It should then be independently reflected and semantically qualified; until that occurs, runtime signature checks protect the forward-open path but do not establish semantic parity.

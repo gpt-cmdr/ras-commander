@@ -27,14 +27,18 @@ single GeoTIFF before promotion, and never registers the derivative in the
 source project.
 
 Notebook integration is also complete. Five accepted revisions document the
-feature without committing generated outputs: `316_terrain_modifications`
-contains real HEC-RAS 6.6 mixed-source modification-off/on semantic and visual
-evidence; `612_benefit_area_analysis` points registered terrains to the native
-export while preserving loose-raster creation guidance;
-`920_terrain_creation` distinguishes creation from registered-terrain export;
-`930_terrain_modification_analysis` preserves the analytical sampler's scope;
-and the new `931_native_rasmapper_terrain_export` provides the focused bounded
-selection, result, receipt, grid, source-inventory, and review-figure workflow.
+feature with reviewable committed outputs: `316_terrain_modifications`
+contains freshly executed HEC-RAS 6.6 mixed-source modification-off/on semantic
+and visual evidence; `612_benefit_area_analysis` points registered terrains to
+the native export while preserving its coherent prior hydraulic outputs and
+four final maps without rerunning four hydraulic simulations;
+`920_terrain_creation` freshly executes the creation-versus-export distinction
+with heavy paths disabled; `930_terrain_modification_analysis` freshly executes
+the analytical sampler workflow; and the new, freshly executed
+`931_native_rasmapper_terrain_export` provides the focused bounded selection,
+result, receipt, grid, source-inventory, and review-figure workflow. The
+notebook-specific commits are `b94f98c`, `c80c8c2`, `d90f478`, `0bef6af`, and
+`9b183370`, respectively.
 
 A post-implementation correction removed an invalid Python preflight that
 required every source resolution to be an integer multiple of the finest
@@ -43,9 +47,17 @@ and reconciles them at the explicit `resampleCellSize`. HEC-RAS 6.6 now passes
 the original Bald Eagle `Terrain50` fixture with 36.504512049933-foot and
 20-foot sources, including bounded modification-off/on semantic evidence.
 
-Independent Linux qualification is complete on CLB07 CT212 with Ubuntu 24.04,
-Wine 11.0, and HEC-RAS 6.6. The bounded two-source Muncie export and original
-mixed-resolution `Terrain50` export passed, as did native modification-off/on
+Independent Linux qualification is complete on CLB07 CT212 with Ubuntu 24.04
+and Wine 11.0 for every supported HEC-RAS release. For 6.4.1, 6.5, and 7.0.1,
+nine receipts covered bounded two-source Muncie 2x, mixed-resolution
+`Terrain50` modifications off, and modifications on. Arrays and validity masks
+were pixel-identical across those releases; every modification pair raised 264
+cells by 0.15625 to 9.625 feet and left 1,769 controls unchanged, with about
+175 seconds total per release. The exact private nine-parameter/by-reference
+contract passed for each runtime and no partial/stage/native process survived.
+
+HEC-RAS 6.6 received additional depth. The bounded two-source Muncie export and
+original mixed-resolution `Terrain50` export passed, as did native modification-off/on
 semantics. A follow-up run staged the exact notebook-316 modified project and
 HDF used by native Windows. Its Windows and Wine Float32 arrays, validity and
 affected/control masks, transform, bounds, CRS, nodata, dimensions, normalized
@@ -55,6 +67,12 @@ Owned-process and partial-output cleanup passed. CT212 was stopped with
 `onboot=0`; logical scratch usage was restored, while physical thin-pool
 reclamation is deferred to scheduled guest trim because no manual host-wide
 trim or discard was run.
+
+The operator explicitly directed that the dedicated triangular-nose/minimum-Y
+regression fixture be skipped. HEC's 7.0.1 fix notice and the broader bounded
+modification checks remain the acceptance evidence; no defect-specific fixture
+result is claimed. Exact 7.1 remains forward-open and unqualified until the
+official release exists.
 
 The independent run also found a diagnostic-only Linux formatting defect for
 conflicting Windows-style `RasPrj.ras_exe_path` values. Runtime rejection was
