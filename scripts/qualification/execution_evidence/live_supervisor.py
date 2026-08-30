@@ -31,10 +31,13 @@ from .locks import (
     inspect_lock,
 )
 from .manifest import (
+    ManifestError,
     _MAX_WINDOWS_SUBPROCESS_WAIT_SECONDS,
     _MIN_INTERNAL_CANCELLATION_ALLOWANCE_SECONDS,
     _SUPERVISOR_RECEIPT_MARGIN_SECONDS,
+    _git_read,
     _preflight_repository,
+    canonical_json_bytes,
 )
 from .offline_records import json_safe, known_result_paths, lane_row, result_population
 from .planning import RunContext, load_run, select_lane
@@ -94,6 +97,7 @@ class RecoveryGateOutcome:
     detail: str
     inventory: ProcessInventorySnapshot | None = None
     source_snapshot: dict[str, Any] | None = None
+    worker_command_inventory: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -137,6 +141,7 @@ _SUPPORTED_LIVE_INVARIANTS = {
 }
 _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
 _WORKER_AUTHORIZATION_POLL_SECONDS = 0.02
+_MAX_QUALIFICATION_RECORD_PATH_CHARS = 259
 _RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
     {
         "plan_number",
@@ -214,6 +219,21 @@ _RESULT_ARTIFACT_AMBIGUITY_REASONS = frozenset(
         "legacy_output_timestamp_after_hdf",
         "program_version_unresolved_multiple_formats",
         "result_artifact_timestamp_unavailable",
+    }
+)
+_PARTIAL_WORKER_INTENT_FIELDS = frozenset(
+    {
+        "schema_version",
+        "action",
+        "created_at",
+        "request_sha256",
+        "launch_nonce",
+        "run_id",
+        "lane_id",
+        "attempt_id",
+        "real_engine_lock_token",
+        "supervisor_pid",
+        "supervisor_process_create_time",
     }
 )
 
@@ -311,6 +331,69 @@ def _bind_live_context(context: RunContext) -> None:
         raise LiveSupervisorError("live execution requires defaults.real_engine_jobs=1")
 
 
+def _bind_recovery_context(
+    context: RunContext,
+    *,
+    acknowledge_code_upgrade: bool,
+) -> str:
+    """Bind recovery to the archived head or a clean descendant commit."""
+    archived_head = str(context.descriptor["git_head"]).casefold()
+    try:
+        _bind_live_context(context)
+    except ManifestError as exact_error:
+        repository_root = Path(context.descriptor["repository_root"]).resolve(
+            strict=True
+        )
+        current_head = _git_read(
+            repository_root,
+            "rev-parse",
+            "--verify",
+            "HEAD",
+        ).casefold()
+        if current_head == archived_head:
+            raise exact_error
+        if not acknowledge_code_upgrade:
+            raise LiveSupervisorError(
+                "cross-head recovery requires explicit code-upgrade acknowledgement"
+            ) from exact_error
+        _preflight_repository(
+            repository_root,
+            required_head=current_head,
+            require_clean=True,
+        )
+        command = [
+            "git",
+            "-c",
+            f"safe.directory={repository_root}",
+            "-C",
+            str(repository_root),
+            "merge-base",
+            "--is-ancestor",
+            archived_head,
+            current_head,
+        ]
+        try:
+            ancestry = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise LiveSupervisorError(
+                "could not prove recovery-code ancestry"
+            ) from exc
+        if ancestry.returncode != 0:
+            raise LiveSupervisorError(
+                "recovery code must be the archived head or a clean descendant"
+            ) from exact_error
+        return current_head
+    return archived_head
+
+
 def _host_lock_path() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
@@ -339,6 +422,29 @@ def _create_plain_descendant(root: str | Path, relative: Path) -> Path:
             f"qualification descendant is not confined to a plain root: {relative}"
         ) from exc
     return resolved
+
+
+def _validate_live_attempt_path_budget(run_root: Path, lane_id: str) -> None:
+    """Reject an attempt whose immutable records exceed the tested Win32 limit."""
+    placeholder_attempt = "0" * 36
+    attempt = lexical_absolute_path(
+        run_root / "attempts" / lane_id / placeholder_attempt
+    )
+    record_names = (
+        "request.sha256",
+        "worker-launch-intent.sha256",
+        "worker-launcher.sha256",
+        "worker-hello.sha256",
+        "worker-authorization.sha256",
+        "worker_receipt.sha256",
+        "receipt.sha256",
+    )
+    longest = max((attempt / name for name in record_names), key=lambda path: len(str(path)))
+    if len(str(longest)) > _MAX_QUALIFICATION_RECORD_PATH_CHARS:
+        raise LiveSupervisorError(
+            "live attempt archive path exceeds the tested 259-character "
+            f"record boundary: {longest}"
+        )
 
 
 def _select_live_lanes(
@@ -651,6 +757,97 @@ def _inspect_exact_worker_identity(
     if not running:
         return WorkerIdentityState(False, "worker_absent", pid, expected)
     return WorkerIdentityState(True, "worker_alive", pid, expected)
+
+
+def _worker_command_recovery_gate(
+    expected_command: Sequence[str],
+) -> tuple[bool, str, dict[str, Any]]:
+    """Prove no Python process has the exact archived worker command."""
+    expected = [str(part) for part in expected_command]
+    candidate_name = Path(expected[0]).name.casefold()
+    query_errors: list[dict[str, Any]] = []
+    matched: list[dict[str, Any]] = []
+    observed_at = time.time()
+    try:
+        processes = psutil.process_iter(["pid", "name"])
+        for process in processes:
+            try:
+                pid = process.info.get("pid")
+                name_value = process.info.get("name")
+                if (
+                    not isinstance(pid, int)
+                    or isinstance(pid, bool)
+                    or pid <= 0
+                    or not isinstance(name_value, str)
+                    or not name_value.strip()
+                ):
+                    query_errors.append(
+                        {
+                            "pid": pid if isinstance(pid, int) else None,
+                            "reason_code": "process_name_unavailable",
+                            "detail": "could not classify process as a Python candidate",
+                        }
+                    )
+                    continue
+                name = name_value.casefold()
+                if name != candidate_name:
+                    continue
+                command = process.cmdline()
+                create_time = float(process.create_time())
+            except psutil.NoSuchProcess:
+                continue
+            except (psutil.AccessDenied, psutil.ZombieProcess, OSError, ValueError) as exc:
+                query_errors.append(
+                    {
+                        "pid": process.pid,
+                        "reason_code": "candidate_query_failed",
+                        "detail": type(exc).__name__,
+                    }
+                )
+                continue
+            if (
+                not isinstance(command, list)
+                or any(not isinstance(part, str) for part in command)
+                or not math.isfinite(create_time)
+                or create_time <= 0
+            ):
+                query_errors.append(
+                    {
+                        "pid": process.pid,
+                        "reason_code": "candidate_identity_invalid",
+                        "detail": "command line or create time is invalid",
+                    }
+                )
+                continue
+            if command == expected:
+                matched.append(
+                    {
+                        "pid": process.pid,
+                        "create_time": create_time,
+                        "name": name_value,
+                        "command_line": command,
+                    }
+                )
+    except (psutil.AccessDenied, psutil.ZombieProcess, OSError, ValueError) as exc:
+        query_errors.append(
+            {
+                "pid": None,
+                "reason_code": "process_iteration_failed",
+                "detail": type(exc).__name__,
+            }
+        )
+    inventory = {
+        "observed_at": observed_at,
+        "complete": not query_errors,
+        "expected_command": expected,
+        "matches": matched,
+        "query_errors": query_errors,
+    }
+    if query_errors:
+        return False, "worker command inventory contains query errors", inventory
+    if matched:
+        return False, "exact archived worker command is still active", inventory
+    return True, "exact archived worker command is absent", inventory
 
 
 def _live_python_child_identity(process: subprocess.Popen[Any]) -> tuple[int, float]:
@@ -3211,6 +3408,9 @@ def _synthesize_failure_receipt(
 def _worker_launch_recovery_gate(
     attempt_dir: Path,
     request: Mapping[str, Any],
+    *,
+    command_inventories: list[dict[str, Any]] | None = None,
+    expected_supervisor_identity: tuple[int, float] | None = None,
 ) -> tuple[bool, str]:
     """Prove the exact authorized Python worker is absent or never launched."""
     try:
@@ -3227,8 +3427,136 @@ def _worker_launch_recovery_gate(
     digest_paths = tuple(path.with_suffix(".sha256") for path in record_paths)
     if not any(path.exists() for path in (*record_paths, *digest_paths)):
         return True, "worker launch was never initiated"
-    if intent_path.exists() is not True or intent_path.with_suffix(".sha256").exists() is not True:
-        return False, "worker launch intent publication is incomplete"
+    intent_digest_path = intent_path.with_suffix(".sha256")
+    if intent_path.exists() is not True or intent_digest_path.exists() is not True:
+        later_records = (*record_paths[1:], *digest_paths[1:])
+        if (
+            intent_path.exists() is not True
+            or intent_digest_path.exists()
+            or any(path.exists() for path in later_records)
+        ):
+            return False, "worker launch intent publication is incomplete"
+        allowed_partial_names = {
+            "request.json",
+            "request.sha256",
+            "worker-launch-intent.json",
+        }
+        try:
+            actual_entries = list(attempt_dir.iterdir())
+        except OSError as exc:
+            return False, f"partial attempt inventory is unavailable: {exc}"
+        if (
+            {path.name for path in actual_entries} != allowed_partial_names
+            or any(not path.is_file() for path in actual_entries)
+        ):
+            return False, "partial worker launch attempt contains unexpected records"
+        try:
+            stage_root = assert_plain_ancestry(Path(str(request["stage_root"])))
+            if stage_root.exists() and (
+                not stage_root.is_dir() or any(stage_root.iterdir())
+            ):
+                return False, "partial worker launch attempt has a populated stage"
+        except (KeyError, OSError, SnapshotError) as exc:
+            return False, f"partial worker launch stage is unverifiable: {exc}"
+        try:
+            candidate = resolve_plain_path(intent_path, kind="file")
+            before = candidate.stat()
+            raw_intent = candidate.read_bytes()
+            after = candidate.stat()
+            partial_intent = json.loads(raw_intent)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, SnapshotError) as exc:
+            return False, (
+                "partial worker launch intent is unverifiable: "
+                f"{type(exc).__name__}: {exc}"
+            )
+        if (
+            (before.st_size, before.st_mtime_ns, before.st_dev, before.st_ino)
+            != (after.st_size, after.st_mtime_ns, after.st_dev, after.st_ino)
+            or not isinstance(partial_intent, Mapping)
+            or canonical_json_bytes(dict(partial_intent)) != raw_intent
+        ):
+            return False, "partial worker launch intent identity is unstable"
+        try:
+            created_at = datetime.fromisoformat(
+                str(partial_intent.get("created_at", ""))
+            )
+        except ValueError:
+            return False, "partial worker launch intent timestamp is invalid"
+        if (
+            set(partial_intent) != _PARTIAL_WORKER_INTENT_FIELDS
+            or created_at.tzinfo is None
+            or created_at.utcoffset() != timezone.utc.utcoffset(created_at)
+        ):
+            return False, "partial worker launch intent schema is invalid"
+        try:
+            archived_request, request_sha256 = read_json_with_digest(
+                attempt_dir / "request.json"
+            )
+        except Exception as exc:
+            return False, (
+                "worker launch request is unverifiable: "
+                f"{type(exc).__name__}: {exc}"
+            )
+        partial_expected = {
+            "schema_version": 1,
+            "action": "launch_live_worker",
+            "request_sha256": request_sha256,
+            "launch_nonce": nonce,
+            "run_id": request.get("run_id"),
+            "lane_id": request.get("lane_id"),
+            "attempt_id": request.get("attempt_id"),
+            "real_engine_lock_token": request.get("real_engine_lock", {}).get(
+                "token"
+            ),
+        }
+        if archived_request != request or any(
+            partial_intent.get(field) != value
+            for field, value in partial_expected.items()
+        ):
+            return False, "partial worker launch intent identity is unverifiable"
+        supervisor_pid = partial_intent.get("supervisor_pid")
+        supervisor_create_time = partial_intent.get(
+            "supervisor_process_create_time"
+        )
+        if (
+            expected_supervisor_identity is None
+            or supervisor_pid != expected_supervisor_identity[0]
+            or not isinstance(supervisor_create_time, (int, float))
+            or isinstance(supervisor_create_time, bool)
+            or abs(
+                float(supervisor_create_time)
+                - float(expected_supervisor_identity[1])
+            )
+            > _WORKER_IDENTITY_TOLERANCE_SECONDS
+        ):
+            return False, "partial intent supervisor does not match the retained lock owner"
+        supervisor_state = _inspect_exact_worker_identity(
+            supervisor_pid,
+            supervisor_create_time,
+        )
+        if supervisor_state.alive is not False:
+            return False, "partial-intent supervisor is alive or unverifiable"
+        command_safe, command_detail, command_inventory = _worker_command_recovery_gate(
+            _worker_command(request, attempt_dir / "request.json")
+        )
+        command_inventory["partial_intent_supervisor_identity"] = {
+            "pid": supervisor_pid,
+            "create_time": float(supervisor_create_time),
+        }
+        command_inventory["retained_lock_owner_identity"] = {
+            "pid": expected_supervisor_identity[0],
+            "create_time": float(expected_supervisor_identity[1]),
+        }
+        command_inventory["supervisor_lock_identity_match"] = True
+        if command_inventories is not None:
+            command_inventories.append(command_inventory)
+        if not command_safe:
+            return False, command_detail
+        return (
+            True,
+            "partial worker launch intent publication observed; exact "
+            f"supervisor and worker command are currently absent: {command_detail}",
+        )
     try:
         archived_request, request_sha256 = read_json_with_digest(
             attempt_dir / "request.json"
@@ -3610,18 +3938,37 @@ def _cancel_launch_recovery_gate(
 def _supervision_recovery_gate(
     attempt_dir: Path,
     request: Mapping[str, Any],
+    *,
+    expected_supervisor_identity: tuple[int, float] | None = None,
 ) -> RecoveryGateOutcome:
     """Independently reprove source immutability and global quiescence.
 
     This is the sole parent-owned host-safety proof before terminalization or
     host-lock release.  It never publishes a terminal receipt.
     """
-    worker_safe, worker_detail = _worker_launch_recovery_gate(attempt_dir, request)
+    command_inventories: list[dict[str, Any]] = []
+    worker_safe, worker_detail = _worker_launch_recovery_gate(
+        attempt_dir,
+        request,
+        command_inventories=command_inventories,
+        expected_supervisor_identity=expected_supervisor_identity,
+    )
+    worker_command_inventory = (
+        command_inventories[0] if command_inventories else None
+    )
     if not worker_safe:
-        return RecoveryGateOutcome(False, worker_detail)
+        return RecoveryGateOutcome(
+            False,
+            worker_detail,
+            worker_command_inventory=worker_command_inventory,
+        )
     cancel_safe, cancel_detail = _cancel_launch_recovery_gate(attempt_dir, request)
     if not cancel_safe:
-        return RecoveryGateOutcome(False, cancel_detail)
+        return RecoveryGateOutcome(
+            False,
+            cancel_detail,
+            worker_command_inventory=worker_command_inventory,
+        )
     try:
         source_project = resolve_plain_path(request["source_project"], kind="file")
         source_after = snapshot_tree(
@@ -3644,7 +3991,11 @@ def _supervision_recovery_gate(
             or source_after.metadata_fingerprint
             != request["source_snapshot_metadata_fingerprint"]
         ):
-            return RecoveryGateOutcome(False, "source snapshot drifted")
+            return RecoveryGateOutcome(
+                False,
+                "source snapshot drifted",
+                worker_command_inventory=worker_command_inventory,
+            )
         source_proof = {
             "fingerprint_algorithm": source_after.fingerprint_algorithm,
             "content_fingerprint": source_after.content_fingerprint,
@@ -3665,11 +4016,13 @@ def _supervision_recovery_gate(
                 False,
                 "global HEC-RAS process inventory is not empty",
                 inventory,
+                worker_command_inventory=worker_command_inventory,
             )
     except Exception as exc:
         return RecoveryGateOutcome(
             False,
             f"recovery proof failed: {type(exc).__name__}: {exc}",
+            worker_command_inventory=worker_command_inventory,
         )
     # A failed supervisor must not have committed a terminal.  An unexpected
     # receipt is itself tampering/uncertainty and therefore retains the lock.
@@ -3680,12 +4033,14 @@ def _supervision_recovery_gate(
             False,
             "unexpected terminal receipt exists after supervision failure",
             inventory,
+            worker_command_inventory=worker_command_inventory,
         )
     return RecoveryGateOutcome(
         True,
         f"{worker_detail}; source and global process hygiene reproved",
         inventory,
         source_proof,
+        worker_command_inventory,
     )
 
 
@@ -3887,6 +4242,8 @@ def execute_live_action(
             return ()
     _bind_live_context(context)
     _require_strict_live_api_contracts(context, selected)
+    for lane_id in selected:
+        _validate_live_attempt_path_budget(context.run_root, lane_id)
     results: list[VerifiedAttempt] = []
     with ExclusiveQualificationLock(
         context.run_root / "run.lock",
@@ -3978,6 +4335,7 @@ def recover_live_host_lock(
     run_root: str | Path,
     *,
     acknowledge_recovery: bool,
+    acknowledge_code_upgrade: bool = False,
 ) -> dict[str, Any]:
     """Recover one retained real-engine lock after exact fail-closed proofs."""
     if not acknowledge_recovery:
@@ -3985,7 +4343,10 @@ def recover_live_host_lock(
             "real-engine lock recovery requires explicit acknowledgement"
         )
     context = load_run(run_root)
-    _bind_live_context(context)
+    recovery_git_head = _bind_recovery_context(
+        context,
+        acknowledge_code_upgrade=acknowledge_code_upgrade,
+    )
     lock_path = _host_lock_path()
     state = inspect_lock(lock_path)
     if state.payload.get("kind") != "real_engine":
@@ -4053,7 +4414,12 @@ def recover_live_host_lock(
         }.items()
     ):
         raise LiveSupervisorError("attempt does not bind the exact retained lock")
-    recovery_gate = _supervision_recovery_gate(attempt_dir, request)
+    retained_owner_identity = (pid, float(process_create_time))
+    recovery_gate = _supervision_recovery_gate(
+        attempt_dir,
+        request,
+        expected_supervisor_identity=retained_owner_identity,
+    )
     if not recovery_gate.safe_to_release or recovery_gate.inventory is None:
         raise LiveSupervisorError(
             "worker/source/process recovery proof failed; refusing lock recovery: "
@@ -4078,13 +4444,18 @@ def recover_live_host_lock(
         "authorized_at": datetime.now(timezone.utc).isoformat(),
         **request_identity,
         "request_sha256": request_sha256,
+        "recovery_git_head": recovery_git_head,
+        "recovery_code_upgrade_acknowledged": acknowledge_code_upgrade,
         "lock_path": str(lock_path),
         "lock_payload": payload,
         "lock_file_identity": list(state.file_identity),
         "recovery_gate_proof": recovery_gate.detail,
+        "worker_command_inventory": recovery_gate.worker_command_inventory,
         "source_snapshot": recovery_gate.source_snapshot,
         "global_inventory": inventory.raw,
         "hec_ras_invoked": False,
+        "hec_ras_invocation_scope": "recovery_action_only",
+        "retained_attempt_hec_ras_invocation_state": "unknown",
     }
     intent_sha256 = write_json_with_digest(
         recovery_dir / "recovery-intent.json",
@@ -4096,7 +4467,11 @@ def recover_live_host_lock(
         raise LiveSupervisorError(
             "retained lock changed after recovery authorization; refusing retirement"
         )
-    final_recovery_gate = _supervision_recovery_gate(attempt_dir, request)
+    final_recovery_gate = _supervision_recovery_gate(
+        attempt_dir,
+        request,
+        expected_supervisor_identity=retained_owner_identity,
+    )
     if (
         not final_recovery_gate.safe_to_release
         or final_recovery_gate.inventory is None
@@ -4116,6 +4491,9 @@ def recover_live_host_lock(
         "intent_sha256": intent_sha256,
         "recovered_at": datetime.now(timezone.utc).isoformat(),
         "final_recovery_gate_proof": final_recovery_gate.detail,
+        "final_worker_command_inventory": (
+            final_recovery_gate.worker_command_inventory
+        ),
         "final_source_snapshot": final_recovery_gate.source_snapshot,
         "final_global_inventory": final_inventory.raw,
         "retirement_state": "atomically_retired",

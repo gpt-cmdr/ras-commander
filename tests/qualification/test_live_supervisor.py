@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import psutil
 import pytest
 
 from ras_commander.RasProject import STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM
@@ -874,6 +875,48 @@ def test_live_run_preflight_rejects_existing_process_before_worker(
         path.is_dir()
         for path in (context.run_root / "attempts" / "lane-live").iterdir()
     )
+
+
+def test_live_attempt_path_budget_rejects_untested_record_length(
+    tmp_path: Path,
+) -> None:
+    long_root = tmp_path / ("archive" * 18)
+
+    with pytest.raises(live.LiveSupervisorError, match="259-character"):
+        live._validate_live_attempt_path_budget(
+            long_root,
+            "steady_1d__6_6__short_root",
+        )
+
+    live._validate_live_attempt_path_budget(tmp_path, "s66")
+
+
+def test_all_selected_lane_path_budgets_are_checked_before_any_host_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path, lane_ids=("lane-a", "lane-b"))
+    monkeypatch.setattr(live, "load_run", lambda _: context)
+    monkeypatch.setattr(live, "_bind_live_context", lambda _: None)
+    monkeypatch.setattr(live, "_require_strict_live_api_contracts", lambda *_: None)
+    checked: list[str] = []
+
+    def validate(_root: Path, lane_id: str) -> None:
+        checked.append(lane_id)
+        if lane_id == "lane-b":
+            raise live.LiveSupervisorError("path budget rejected")
+
+    monkeypatch.setattr(live, "_validate_live_attempt_path_budget", validate)
+    monkeypatch.setattr(
+        live,
+        "_host_lock_path",
+        lambda: pytest.fail("host lock must not be considered"),
+    )
+
+    with pytest.raises(live.LiveSupervisorError, match="path budget rejected"):
+        live.execute_live_action(context.run_root, acknowledge_real_ras=True)
+
+    assert checked == ["lane-a", "lane-b"]
 
 
 def _directory_link_or_skip(link: Path, target: Path) -> None:
@@ -2187,6 +2230,36 @@ def test_crashed_worker_source_drift_publishes_no_terminal(
     host_lock.unlink()
 
 
+def test_worker_intent_publication_failure_precedes_logs_and_popen(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    monkeypatch.setattr(
+        live,
+        "_publish_worker_launch_intent",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("intent digest failed")),
+    )
+    monkeypatch.setattr(
+        live.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail("Popen must not be reached"),
+    )
+
+    with pytest.raises(RuntimeError, match="intent digest failed"):
+        live._run_live_child(
+            attempt,
+            {"repository_root": str(repository)},
+            HASH_A,
+        )
+
+    assert not (attempt / "stdout.log").exists()
+    assert not (attempt / "stderr.log").exists()
+
+
 def test_outer_timeout_uses_exact_python_helper_and_never_raw_process_kill(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3199,6 +3272,33 @@ def _retained_lock_fixture(
     return context, lock_path, lock, inspect_lock(lock_path)
 
 
+def _publish_partial_worker_intent(context: RunContext) -> Path:
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, request_sha256 = read_json_with_digest(attempt_dir / "request.json")
+    intent_path = attempt_dir / "worker-launch-intent.json"
+    process = psutil.Process(os.getpid())
+    intent_path.write_bytes(
+        live.canonical_json_bytes(
+            {
+                "schema_version": 1,
+                "action": "launch_live_worker",
+                "created_at": "2026-08-30T12:00:00+00:00",
+                "request_sha256": request_sha256,
+                "launch_nonce": request["worker_launch"]["launch_nonce"],
+                "run_id": request["run_id"],
+                "lane_id": request["lane_id"],
+                "attempt_id": request["attempt_id"],
+                "real_engine_lock_token": request["real_engine_lock"]["token"],
+                "supervisor_pid": process.pid,
+                "supervisor_process_create_time": process.create_time(),
+            }
+        )
+    )
+    return intent_path
+
+
 def _publish_worker_lease(
     context: RunContext,
     *,
@@ -3362,7 +3462,7 @@ def _publish_cancel_lease(
 def test_cancel_recovery_fails_closed_after_launcher_binding_without_hello(
     tmp_path: Path,
 ) -> None:
-    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    context, _lock_path, lock, state = _retained_lock_fixture(tmp_path)
     attempt_dir, live_request = _publish_cancel_lease(
         context,
         publish_hello=False,
@@ -3557,6 +3657,130 @@ def test_recovery_uses_digest_bound_delegated_launcher_identity(
     lock.release()
 
 
+def test_partial_intent_recovery_requires_exact_supervisor_and_command_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, state = _retained_lock_fixture(tmp_path)
+    _publish_partial_worker_intent(context)
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+    monkeypatch.setattr(
+        live,
+        "_inspect_exact_worker_identity",
+        lambda pid, create_time: live.WorkerIdentityState(
+            False,
+            "worker_absent",
+            pid,
+            create_time,
+        ),
+    )
+    monkeypatch.setattr(
+        live,
+        "_worker_command_recovery_gate",
+        lambda command: (
+            True,
+            "exact archived worker command is absent",
+            {
+                "observed_at": 1.0,
+                "complete": True,
+                "expected_command": command,
+                "matches": [],
+                "query_errors": [],
+            },
+        ),
+    )
+
+    safe, detail = live._worker_launch_recovery_gate(
+        attempt_dir,
+        request,
+        expected_supervisor_identity=(
+            state.payload["pid"],
+            state.payload["process_create_time"],
+        ),
+    )
+
+    assert safe is True
+    assert "partial worker launch intent publication" in detail
+    assert "worker command is absent" in detail
+    lock.release()
+
+
+def test_partial_intent_recovery_rejects_any_later_launch_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _lock_path, lock, _state = _retained_lock_fixture(tmp_path)
+    _publish_partial_worker_intent(context)
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+    (attempt_dir / "worker-launcher.json").write_text("{}\n", encoding="ascii")
+    monkeypatch.setattr(
+        live,
+        "_worker_command_recovery_gate",
+        lambda command: pytest.fail("later records must fail before process scan"),
+    )
+
+    safe, detail = live._worker_launch_recovery_gate(attempt_dir, request)
+
+    assert safe is False
+    assert detail == "worker launch intent publication is incomplete"
+    lock.release()
+
+
+def test_worker_command_recovery_fails_when_process_name_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = SimpleNamespace(
+        pid=7,
+        info={"pid": 7, "name": None},
+    )
+    monkeypatch.setattr(live.psutil, "process_iter", lambda attrs: [process])
+
+    safe, detail, inventory = live._worker_command_recovery_gate(
+        ["python.exe", "-m", "worker"]
+    )
+
+    assert safe is False
+    assert detail == "worker command inventory contains query errors"
+    assert inventory["complete"] is False
+    assert inventory["query_errors"] == [
+        {
+            "pid": 7,
+            "reason_code": "process_name_unavailable",
+            "detail": "could not classify process as a Python candidate",
+        }
+    ]
+
+
+def test_partial_intent_supervisor_must_match_retained_lock_owner(
+    tmp_path: Path,
+) -> None:
+    context, _lock_path, lock, state = _retained_lock_fixture(tmp_path)
+    _publish_partial_worker_intent(context)
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    request, _ = read_json_with_digest(attempt_dir / "request.json")
+
+    safe, detail = live._worker_launch_recovery_gate(
+        attempt_dir,
+        request,
+        expected_supervisor_identity=(
+            state.payload["pid"] + 1,
+            state.payload["process_create_time"],
+        ),
+    )
+
+    assert safe is False
+    assert "retained lock owner" in detail
+    lock.release()
+
+
 @pytest.mark.parametrize(
     ("alive", "reason_code", "expected_message"),
     [
@@ -3637,9 +3861,76 @@ def test_recovery_accepts_reused_pid_as_exact_worker_absence(
     )
 
     assert receipt["retirement_state"] == "atomically_retired"
+    assert receipt["recovery_git_head"] == context.descriptor["git_head"]
     assert "worker_pid_reused" in receipt["final_recovery_gate_proof"]
     assert receipt["source_snapshot"] == receipt["final_source_snapshot"]
     assert not lock_path.exists()
+
+
+def test_recovery_context_accepts_only_a_clean_descendant(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    current_head = "d" * 40
+    monkeypatch.setattr(
+        live,
+        "_bind_live_context",
+        lambda _: (_ for _ in ()).throw(live.ManifestError("HEAD mismatch")),
+    )
+    monkeypatch.setattr(live, "_git_read", lambda *_: current_head)
+    monkeypatch.setattr(
+        live,
+        "_preflight_repository",
+        lambda root, *, required_head, require_clean: {
+            "observed_head": required_head,
+            "observed_clean": require_clean,
+        },
+    )
+    monkeypatch.setattr(
+        live.subprocess,
+        "run",
+        lambda *_, **__: SimpleNamespace(returncode=0),
+    )
+
+    with pytest.raises(live.LiveSupervisorError, match="explicit code-upgrade"):
+        live._bind_recovery_context(
+            context,
+            acknowledge_code_upgrade=False,
+        )
+    assert live._bind_recovery_context(
+        context,
+        acknowledge_code_upgrade=True,
+    ) == current_head
+
+
+def test_recovery_context_rejects_non_descendant_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    monkeypatch.setattr(
+        live,
+        "_bind_live_context",
+        lambda _: (_ for _ in ()).throw(live.ManifestError("HEAD mismatch")),
+    )
+    monkeypatch.setattr(live, "_git_read", lambda *_: "d" * 40)
+    monkeypatch.setattr(
+        live,
+        "_preflight_repository",
+        lambda *_, **__: {"observed_head": "d" * 40, "observed_clean": True},
+    )
+    monkeypatch.setattr(
+        live.subprocess,
+        "run",
+        lambda *_, **__: SimpleNamespace(returncode=1),
+    )
+
+    with pytest.raises(live.LiveSupervisorError, match="clean descendant"):
+        live._bind_recovery_context(
+            context,
+            acknowledge_code_upgrade=True,
+        )
 
 
 @pytest.mark.parametrize("reason", ["lock_owner_absent", "lock_pid_reused"])
@@ -3666,6 +3957,8 @@ def test_acknowledged_recovery_atomically_retires_proved_stale_real_engine_lock(
 
     assert receipt["retirement_state"] == "atomically_retired"
     assert receipt["global_inventory"]["processes"] == []
+    assert receipt["hec_ras_invocation_scope"] == "recovery_action_only"
+    assert receipt["retained_attempt_hec_ras_invocation_state"] == "unknown"
     assert receipt["source_snapshot"] == receipt["final_source_snapshot"]
     assert not lock_path.exists()
     recovery_receipts = list(
@@ -3674,6 +3967,87 @@ def test_acknowledged_recovery_atomically_retires_proved_stale_real_engine_lock(
     assert len(recovery_receipts) == 1
     verified, _ = read_json_with_digest(recovery_receipts[0])
     assert verified == receipt
+
+
+def test_partial_intent_recovery_is_separate_audited_nonterminal_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, lock_path, _lock, state = _retained_lock_fixture(tmp_path)
+    _publish_partial_worker_intent(context)
+    attempt_dir = (
+        context.run_root / "attempts" / "lane-live" / "retained-attempt"
+    )
+    before = {
+        path.name: path.read_bytes()
+        for path in attempt_dir.iterdir()
+        if path.is_file()
+    }
+    monkeypatch.setattr(live, "load_run", lambda _: context)
+    monkeypatch.setattr(live, "_bind_live_context", lambda _: None)
+    monkeypatch.setattr(live, "_host_lock_path", lambda: lock_path)
+    monkeypatch.setattr(
+        live,
+        "inspect_lock",
+        lambda _: replace(
+            state,
+            owner_alive=False,
+            reason_code="lock_owner_absent",
+        ),
+    )
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(
+        live,
+        "_inspect_exact_worker_identity",
+        lambda pid, create_time: live.WorkerIdentityState(
+            False,
+            "worker_absent",
+            pid,
+            create_time,
+        ),
+    )
+    scan_count = 0
+
+    def command_inventory(command):
+        nonlocal scan_count
+        scan_count += 1
+        return (
+            True,
+            "exact archived worker command is absent",
+            {
+                "observed_at": float(scan_count),
+                "complete": True,
+                "expected_command": command,
+                "matches": [],
+                "query_errors": [],
+            },
+        )
+
+    monkeypatch.setattr(live, "_worker_command_recovery_gate", command_inventory)
+
+    receipt = live.recover_live_host_lock(
+        context.run_root,
+        acknowledge_recovery=True,
+    )
+
+    after = {
+        path.name: path.read_bytes()
+        for path in attempt_dir.iterdir()
+        if path.is_file()
+    }
+    assert before == after
+    assert set(after) == {
+        "request.json",
+        "request.sha256",
+        "worker-launch-intent.json",
+    }
+    assert not (attempt_dir / "receipt.json").exists()
+    assert "terminal_category" not in receipt
+    assert receipt["worker_command_inventory"]["observed_at"] == 1.0
+    assert receipt["final_worker_command_inventory"]["observed_at"] == 2.0
+    assert receipt["retained_attempt_hec_ras_invocation_state"] == "unknown"
+    assert receipt["hec_ras_invoked"] is False
+    assert not lock_path.exists()
 
 
 def test_recovery_refuses_live_owner(

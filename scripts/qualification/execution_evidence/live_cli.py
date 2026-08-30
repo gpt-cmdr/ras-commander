@@ -49,6 +49,11 @@ def add_live_subcommands(subparsers: argparse._SubParsersAction) -> None:
         required=True,
         action="store_true",
     )
+    recover.add_argument(
+        "--ack-recovery-code-upgrade",
+        action="store_true",
+        help="allow recovery from a clean descendant of the archived git head",
+    )
 
 
 def _attempt_outcomes(attempts) -> list[dict[str, object]]:
@@ -97,6 +102,7 @@ def dispatch_live(args: argparse.Namespace) -> int | None:
         receipt = recover_live_host_lock(
             args.run_root,
             acknowledge_recovery=args.ack_recover_real_engine_lock,
+            acknowledge_code_upgrade=args.ack_recovery_code_upgrade,
         )
         print(json.dumps(receipt, sort_keys=True))
         return 0

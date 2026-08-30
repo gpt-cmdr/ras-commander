@@ -711,3 +711,20 @@ complete.
   COM, process signaling, or dataset generation occurred in this validation.
   The next authorized action is a fresh, commit-pinned short-root live pilot;
   it must precede the representative-depth repeat.
+- 2026-08-30: short-root campaign
+  `e37ac7ae-36b0-4e82-b6cf-63a1a1efb7ec`, run
+  `92102bbc-e8c9-42ba-92ee-87a40dbc5488`, pinned to `1499f02c`, failed
+  before worker `Popen`, staging, HEC-RAS, or dataset generation. The UNC
+  archive path made `worker-launch-intent.sha256` 261 characters; the target
+  JSON published but its digest did not. Attempt
+  `a2a05078-cd61-48a2-87f6-d0963f99df74` remains immutable, nonterminal, and
+  non-reusable with only the digest-bound request pair and target-only intent.
+  The host lock was retained. Recovery now requires separate recovery and
+  descendant-code acknowledgements, exact partial-state and empty-stage
+  proofs, lock-owner binding, two complete-empty Python-worker and HEC-RAS
+  inventories, repeated source/lock proofs, and a separate receipt that labels
+  retained-attempt invocation history unknown. Every selected lane's archive
+  path budget is now checked before any run or host lock. The complete
+  qualification suite passed 363 tests in 169.26 seconds and an independent
+  no-edit re-audit returned GO with no P0/P1 finding. Lock recovery has not yet
+  run and no process signal has been sent.

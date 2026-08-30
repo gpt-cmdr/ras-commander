@@ -5,10 +5,13 @@ Date: 2026-08-30
 Status: approved scope; modern runtime/launch correction passed its 740-test
 affected no-engine gate plus final API and adversarial review. The earlier
 preflight, path-boundary, launcher-identity, and overnight-stall campaigns are
-superseded. Live dispatch is held until the approved correction is committed
-at a clean head, a fresh short-root manifest pins that commit, and the strict
-under-lock host inventory is complete and empty. The short-root pilot must pass
-before the representative-depth repeat.
+superseded. A later short-root attempt exposed a 261-character UNC archive
+record and retained the host lock before worker launch; the separate audited
+recovery must complete before any new dispatch. A replacement campaign must
+pin the recovery commit, use a lane/archive layout that passes the new
+259-character preflight, and obtain a strict complete-empty inventory under
+the host lock. The short-root pilot must pass before the representative-depth
+repeat.
 
 Branch: `codex/structured-execution-evidence-integration`
 
