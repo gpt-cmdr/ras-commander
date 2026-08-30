@@ -25,8 +25,9 @@ This file is the canonical local instruction file for the `ras_commander/` packa
   terrain. It preserves native source order, stitches, masks, and optional
   vector modifications, returns a `TerrainExportResult`, and is qualified on
   Windows and Wine for HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1. Keep
-  `RasTerrainMod.compute_modified_terrain_raster()` scoped to small analytical
-  row-sampled work; it is not the production consolidation fallback.
+  `RasTerrainMod.compute_modified_terrain_raster()` is a deprecated row-sampled
+  compatibility path scheduled for removal in 1.1; do not use it for new work
+  or as the production consolidation fallback.
 
 ## Coding Rules
 

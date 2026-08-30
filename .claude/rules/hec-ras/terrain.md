@@ -228,7 +228,8 @@ ev = RasTerrainMod.get_terrain_volume_elevation(
 of a registered terrain. The native export is qualified on Windows and Wine for
 HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 and preserves native source order, stitches,
 masks, and optional vector modifications. Use `RasTerrainMod.get_terrain_profile()`
-and `compute_modified_terrain_raster()` for small analytical sampling, not as a
-fallback for production consolidation. Register terrains with
+for analytical sampling. `compute_modified_terrain_raster()` is deprecated and
+must not be used for new work or as a fallback for production consolidation.
+Register terrains with
 `RasMap.add_terrain_layer()`; for cut/fill, use
 `RasTerrainMod.compare_terrain_volumes()`.

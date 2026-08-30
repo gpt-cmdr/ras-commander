@@ -110,9 +110,13 @@ system that already supplies a prefix owned exclusively by the current task
 may set `RAS_COMMANDER_TERRAIN_WINE_PREFIX_IS_TASK_LOCAL=1`; do not set it for
 a shared prefix.
 
-`RasTerrainMod.compute_modified_terrain_raster()` remains available for small,
-row-sampled analytical rasters. It is not a fallback for this native,
-modification-aware consolidation operation.
+`RasTerrainMod.compute_modified_terrain_raster()` is deprecated as of 0.99.2
+and is scheduled for removal in 1.1. It samples one horizontal
+`TerrainProfile` per row of a caller-supplied GeoTIFF grid and interpolates the
+profile onto cell centers. Existing callers may use it during the compatibility
+window, but new code should call `export_rasmapper_terrain()` with
+`downsample_factor=1` and `rasterize_modifications=True`. Native export failures
+are reported rather than rerouted through the numerically different sampler.
 
 ### Utility Methods
 
@@ -218,7 +222,7 @@ Terrain profile and volume comparison with modifications applied. Uses RasMapper
 
 ### Raster Export
 
-- `compute_modified_terrain_raster(rasmap_path, geom_hdf_path, terrain_tif_path, output_tif_path=None, ...)` - Compute full-resolution raster of terrain with modifications applied
+- `compute_modified_terrain_raster(rasmap_path, geom_hdf_path, terrain_tif_path, output_tif_path=None, ...)` - **Deprecated:** row-sampled compatibility raster; use `RasTerrain.export_rasmapper_terrain()`
 
 ### Usage
 

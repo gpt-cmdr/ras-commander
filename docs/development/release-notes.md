@@ -4,6 +4,16 @@
 
 ### Unreleased
 
+**Native Registered-Terrain Export**
+
+- Add `RasTerrain.export_rasmapper_terrain()` for supervised, bounded RAS
+  Mapper single-raster export with native source ordering, stitches, masks,
+  optional vector modifications, semantic validation, and Windows/Wine support.
+- Deprecate the row-sampled
+  `RasTerrainMod.compute_modified_terrain_raster()` compatibility method in
+  0.99.2. New callers should use the native registered-terrain export; removal
+  is scheduled for 1.1.
+
 **Lean Command-Line Compute Integration**
 
 - Add `ras-commander[compute]` (and the `execution` alias) for command-line

@@ -3,6 +3,16 @@
 Date: 2026-08-29
 Status: approved contract, recorded before production implementation
 
+## Post-audit deprecation decision (2026-08-30)
+
+After native export qualification and a downstream-usage audit, the operator
+approved deprecation of `RasTerrainMod.compute_modified_terrain_raster()`.
+The implementation remains available during a compatibility window, emits a
+`DeprecationWarning` beginning in 0.99.2, and is scheduled for removal in 1.1.
+The `RasTerrainMod` analytical profile, extent, volume, and comparison APIs are
+not deprecated. Known callers must migrate to
+`RasTerrain.export_rasmapper_terrain()` before removal.
+
 ## Audit result
 
 No equivalent public API exists on the base revision. The feature should extend `RasTerrain` with one supervised native operation, reuse `RasMap.list_terrain_layers()` for inventory and selection, and return a bool-compatible typed result following `ComputeResults` conventions. `RasTerrainMod.compute_modified_terrain_raster()` remains unchanged and is explicitly not a production fallback.
@@ -66,7 +76,9 @@ Terrain selection begins with `RasMap.list_terrain_layers()`. That preserves the
 
 ### RasTerrainMod
 
-The row-by-row sampler is preserved for compatibility and analytical workflows. Falling back to it would silently change interpolation, masks, stitches, and modification mathematics, so native export failure is reported instead.
+The row-by-row sampler is preserved temporarily as a deprecated compatibility
+path. Falling back to it would silently change interpolation, masks, stitches,
+and modification mathematics, so native export failure is reported instead.
 
 ### RasGeometryCompute and ComputeResults
 

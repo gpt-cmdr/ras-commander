@@ -180,8 +180,9 @@ class RasTerrain:
             are also unqualified; select a shorter local output path.
             The base export is always nearest-neighbor. The derivative is not
             registered in or otherwise written back to the source project.
-            ``RasTerrainMod.compute_modified_terrain_raster()`` remains an
-            analytical row sampler and is not used as a production fallback.
+            ``RasTerrainMod.compute_modified_terrain_raster()`` is a deprecated
+            row-sampled compatibility method scheduled for removal in 1.1; it
+            is not used as a production fallback.
         """
         from ..native.terrain_export_host import export_rasmapper_terrain
 
