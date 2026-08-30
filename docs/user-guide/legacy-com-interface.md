@@ -100,8 +100,13 @@ values preserve existing interactive behavior.
 `requested_controller_version`, `resolved_controller_version`,
 `controller_progid`, `compute_mode`, `message_count`,
 `controller_message_count`, `watchdog_requested`, `watchdog_started`, and
-`duration_seconds`. Blocking results also include `blocking_result`; polled
-results include `poll_count`.
+`duration_seconds`. The common result-family fields include
+`selected_result_format`, `artifact_preparation_cleanup`,
+`artifact_finalization_cleanup`, and `result_artifacts_finalized`. A cleanup
+record's `result_format` names the opposing family targeted for deletion;
+`removed_paths` and `missing_paths` partition its complete exact target set.
+Both cleanup records are `None` for a current-result skip. Blocking results
+also include `blocking_result`; polled results include `poll_count`.
 
 ## Steady State Results
 

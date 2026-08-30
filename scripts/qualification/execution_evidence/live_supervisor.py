@@ -174,6 +174,24 @@ _CANCELLATION_DETAIL_FIELDS = frozenset(
         "finished_at",
     }
 )
+_ARTIFACT_CLEANUP_FIELDS = frozenset(
+    {
+        "plan_number",
+        "result_format",
+        "include_message_sidecars",
+        "removed_paths",
+        "missing_paths",
+    }
+)
+_ARTIFACT_IDENTITY_FIELDS = (
+    "exists",
+    "is_file",
+    "size_bytes",
+    "mtime_ns",
+    "volume_id",
+    "file_id",
+    "sha256",
+)
 _PROCESS_RECORD_FIELDS = frozenset(
     {
         "pid",
@@ -2031,6 +2049,328 @@ def _verify_artifact_finalization_evidence(details: Mapping[str, Any]) -> bool:
     return False
 
 
+def _verify_cleanup_record(
+    request: Mapping[str, Any],
+    cleanup: Any,
+    *,
+    label: str,
+    expected_result_format: str,
+    expected_include_message_sidecars: bool,
+) -> tuple[str, ...]:
+    """Validate one complete exact-target cleanup partition independently."""
+    if not isinstance(cleanup, Mapping) or set(cleanup) != _ARTIFACT_CLEANUP_FIELDS:
+        raise LiveSupervisorError(f"{label} is not a complete cleanup record")
+    plan_number = request["fixture"]["plan_number"]
+    if cleanup.get("plan_number") != plan_number:
+        raise LiveSupervisorError(f"{label} plan number mismatch")
+    if cleanup.get("result_format") != expected_result_format:
+        raise LiveSupervisorError(f"{label} result format mismatch")
+    if (
+        cleanup.get("include_message_sidecars")
+        is not expected_include_message_sidecars
+    ):
+        raise LiveSupervisorError(f"{label} sidecar flag mismatch")
+
+    stage_root = lexical_absolute_path(request["stage_root"])
+    stage_project = stage_root / Path(request["source_project"]).name
+    known_paths = known_result_paths(stage_project, plan_number)
+    allowed = {relative.casefold(): relative for relative in known_paths}
+    expected_targets = []
+    if expected_result_format in {"hdf", "both"}:
+        expected_targets.append(known_paths[0])
+    if expected_result_format in {"legacy", "both"}:
+        expected_targets.append(known_paths[1])
+    if expected_include_message_sidecars:
+        expected_targets.extend(known_paths[2:])
+
+    normalized: dict[str, list[str]] = {}
+    for field in ("removed_paths", "missing_paths"):
+        raw_paths = cleanup.get(field)
+        if not isinstance(raw_paths, list) or any(
+            not isinstance(raw, str) or not raw for raw in raw_paths
+        ):
+            raise LiveSupervisorError(f"{label} {field} is not a path array")
+        relatives = []
+        for raw in raw_paths:
+            try:
+                candidate = assert_plain_ancestry(raw, stop=stage_root)
+                relative = candidate.relative_to(stage_root).as_posix()
+            except (OSError, TypeError, ValueError, SnapshotError) as exc:
+                raise LiveSupervisorError(
+                    f"{label} path escaped the stage: {raw}"
+                ) from exc
+            canonical = allowed.get(relative.casefold())
+            if canonical is None:
+                raise LiveSupervisorError(
+                    f"{label} path is outside the exact cleanup allowlist: "
+                    f"{relative}"
+                )
+            relatives.append(canonical)
+        keys = [relative.casefold() for relative in relatives]
+        if len(keys) != len(set(keys)):
+            raise LiveSupervisorError(f"{label} {field} contains duplicates")
+        normalized[field] = relatives
+
+    removed = {path.casefold() for path in normalized["removed_paths"]}
+    missing = {path.casefold() for path in normalized["missing_paths"]}
+    if removed & missing:
+        raise LiveSupervisorError(
+            f"{label} reports a path as both removed and missing"
+        )
+    if removed | missing != {
+        path.casefold() for path in expected_targets
+    }:
+        raise LiveSupervisorError(f"{label} target set mismatch")
+    return tuple(normalized["removed_paths"])
+
+
+def _verify_execution_cleanup_records(
+    request: Mapping[str, Any],
+    details: Mapping[str, Any],
+) -> tuple[str, ...]:
+    expected = request["engine"]["expected_result_format"]
+    opposing = "legacy" if expected == "hdf" else "hdf"
+    removed = list(
+        _verify_cleanup_record(
+            request,
+            details.get("artifact_preparation_cleanup"),
+            label="live artifact preparation cleanup",
+            expected_result_format=opposing,
+            expected_include_message_sidecars=True,
+        )
+    )
+    finalization = details.get("artifact_finalization_cleanup")
+    if details.get("result_artifacts_finalized") is True:
+        removed.extend(
+            _verify_cleanup_record(
+                request,
+                finalization,
+                label="live artifact finalization cleanup",
+                expected_result_format=opposing,
+                expected_include_message_sidecars=False,
+            )
+        )
+    elif finalization is not None:
+        raise LiveSupervisorError(
+            "unfinalized live artifacts contain a finalization cleanup record"
+        )
+    return tuple(removed)
+
+
+def _stage_artifact_rows(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+    phase: str,
+) -> dict[str, Mapping[str, Any]]:
+    tables = worker.get("tables")
+    artifacts = tables.get("artifacts") if isinstance(tables, Mapping) else None
+    stage_root = lexical_absolute_path(request["stage_root"])
+    rows = [
+        row
+        for row in artifacts or []
+        if isinstance(row, Mapping)
+        and row.get("root_kind") == "stage"
+        and row.get("phase") == phase
+        and lexical_absolute_path(row.get("root_path", "")) == stage_root
+    ]
+    snapshot_ids = {row.get("snapshot_id") for row in rows}
+    if not rows or len(snapshot_ids) != 1 or None in snapshot_ids:
+        raise LiveSupervisorError(
+            f"live terminal lacks one complete stage snapshot for {phase}"
+        )
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        relative = row.get("relative_path")
+        if not isinstance(relative, str) or not relative:
+            raise LiveSupervisorError(
+                f"live terminal {phase} artifact path is invalid"
+            )
+        key = relative.casefold()
+        if key in indexed:
+            raise LiveSupervisorError(
+                f"live terminal {phase} contains case-colliding artifact rows"
+            )
+        indexed[key] = row
+    return indexed
+
+
+def _verify_post_execution_artifact_origins(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> None:
+    """Reject stale receipts that misclassify generated or changed stage files."""
+    before = _stage_artifact_rows(worker, request, "pre_execution")
+    replay = request["fixture"].get("replay_artifacts")
+    replay_origin = (replay or {}).get("data_origin")
+    replay_pins = {
+        item["relative_path"].casefold(): item
+        for item in (replay or {}).get("files", [])
+    }
+    stage_metadata = ".ras-commander/stage.json"
+    known = {
+        path.casefold()
+        for path in known_result_paths(
+            request["source_project"],
+            request["fixture"]["plan_number"],
+        )
+    }
+    required = known | {stage_metadata.casefold()}
+    if not required.issubset(before):
+        raise LiveSupervisorError(
+            "live terminal pre-execution snapshot omits known artifact paths"
+        )
+    source_origin = request["fixture"]["data_origin"]
+    for key, row in before.items():
+        if key == stage_metadata.casefold():
+            expected_origin = "generated_harness_receipt"
+        elif key in replay_pins:
+            expected_origin = replay_origin
+        else:
+            expected_origin = source_origin
+        if row.get("data_origin") != expected_origin:
+            raise LiveSupervisorError(
+                "live terminal pre-execution artifact provenance is invalid: "
+                f"{row.get('relative_path')}"
+            )
+    for phase in ("post_process_hygiene", "post_evidence_inspection"):
+        after = _stage_artifact_rows(worker, request, phase)
+        if not required.issubset(after):
+            raise LiveSupervisorError(
+                f"live terminal {phase} snapshot omits known artifact paths"
+            )
+        for key, row in after.items():
+            prior = before.get(key)
+            pin = replay_pins.get(key)
+            exact_replay = (
+                pin is not None
+                and row.get("exists") is True
+                and row.get("sha256") == pin.get("sha256")
+                and row.get("size_bytes") == pin.get("size_bytes")
+                and row.get("mtime_ns") == pin.get("mtime_ns")
+            )
+            unchanged = prior is not None and all(
+                prior.get(field) == row.get(field)
+                for field in _ARTIFACT_IDENTITY_FIELDS
+            )
+            if key == stage_metadata.casefold():
+                expected_origin = "generated_harness_receipt"
+            elif exact_replay:
+                expected_origin = replay_origin
+            elif unchanged:
+                expected_origin = prior.get("data_origin")
+            else:
+                expected_origin = "staged_execution_output"
+            if (
+                not isinstance(expected_origin, str)
+                or row.get("data_origin") != expected_origin
+            ):
+                raise LiveSupervisorError(
+                    "live terminal post-execution artifact provenance is invalid: "
+                    f"{phase}/{row.get('relative_path')}"
+                )
+
+
+def _verify_initial_cleanup_records(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> tuple[str, ...]:
+    records = worker.get("initial_state_cleanup")
+    if not isinstance(records, list):
+        raise LiveSupervisorError(
+            "live terminal initial-state cleanup records are unavailable"
+        )
+    initial_state = request["lane"]["initial_state"]
+    selected = request["engine"]["expected_result_format"]
+    expected_calls: list[tuple[str, bool]] = []
+    if initial_state == "neither":
+        expected_calls.append(("both", True))
+    elif initial_state == "expected_only":
+        expected_calls.append(("legacy" if selected == "hdf" else "hdf", False))
+    elif initial_state == "opposing_only":
+        expected_calls.append((selected, False))
+    if len(records) != len(expected_calls):
+        raise LiveSupervisorError(
+            "live terminal initial-state cleanup record count is invalid"
+        )
+    removed = []
+    for index, (record, (result_format, include_sidecars)) in enumerate(
+        zip(records, expected_calls)
+    ):
+        removed.extend(
+            _verify_cleanup_record(
+                request,
+                record,
+                label=f"live initial-state cleanup {index}",
+                expected_result_format=result_format,
+                expected_include_message_sidecars=include_sidecars,
+            )
+        )
+    return tuple(removed)
+
+
+def _verify_r04_cleanup_evidence(
+    worker: Mapping[str, Any],
+    request: Mapping[str, Any],
+    execution_removed: Sequence[str],
+) -> None:
+    """Recompute R04 from snapshots and structured cleanup records."""
+    initial_removed = _verify_initial_cleanup_records(worker, request)
+    published = _stage_artifact_rows(worker, request, "stage_published")
+    post = _stage_artifact_rows(worker, request, "post_process_hygiene")
+    snapshot_removed = [
+        row["relative_path"]
+        for key, row in published.items()
+        if row.get("exists") is True
+        and (key not in post or post[key].get("exists") is not True)
+    ]
+    plan_number = request["fixture"]["plan_number"]
+    known_paths = known_result_paths(request["source_project"], plan_number)
+    canonical = {path.casefold(): path for path in known_paths}
+    observed_removed = {
+        path.casefold(): canonical.get(path.casefold(), path)
+        for path in (*snapshot_removed, *initial_removed, *execution_removed)
+    }
+    invariant_rows = worker.get("tables", {}).get("invariants", [])
+    r04_rows = [
+        row
+        for row in invariant_rows
+        if isinstance(row, Mapping) and row.get("invariant_id") == "R04"
+    ]
+    if len(r04_rows) != 1:
+        raise LiveSupervisorError("live terminal requires exactly one R04 row")
+    try:
+        claimed_expected = json.loads(r04_rows[0].get("expected"))
+        claimed_observed = json.loads(r04_rows[0].get("observed"))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise LiveSupervisorError("live terminal R04 payload is invalid") from exc
+    expected_keys = (
+        [path.casefold() for path in claimed_expected]
+        if isinstance(claimed_expected, list)
+        and all(isinstance(path, str) and path for path in claimed_expected)
+        else None
+    )
+    observed_keys = (
+        [path.casefold() for path in claimed_observed]
+        if isinstance(claimed_observed, list)
+        and all(isinstance(path, str) and path for path in claimed_observed)
+        else None
+    )
+    if (
+        r04_rows[0].get("status") != "pass"
+        or expected_keys is None
+        or observed_keys is None
+        or len(expected_keys) != len(set(expected_keys))
+        or len(observed_keys) != len(set(observed_keys))
+        or set(expected_keys)
+        != {path.casefold() for path in known_paths}
+        or set(observed_keys) != set(observed_removed)
+        or any(path.casefold() not in canonical for path in observed_removed.values())
+    ):
+        raise LiveSupervisorError(
+            "live terminal R04 cleanup evidence disagrees with structured proof"
+        )
+
+
 def _verify_failed_inspection_evidence(
     worker: Mapping[str, Any],
     request: Mapping[str, Any],
@@ -2516,7 +2856,7 @@ def _verify_worker_execution_proof(
     worker: Mapping[str, Any],
     request: Mapping[str, Any],
     engine: Mapping[str, Any],
-) -> None:
+) -> tuple[str, ...]:
     """Revalidate the worker's underlying preflight and execution records."""
     tcu = worker.get("tcu_status")
     ras_version_argument = engine.get("executable") or engine.get(
@@ -2615,6 +2955,7 @@ def _verify_worker_execution_proof(
         raise LiveSupervisorError(
             "live terminal execution details fail calculation/provenance/finalization gates"
         )
+    execution_removed = _verify_execution_cleanup_records(request, details)
     if engine["execution_api"] == "ras_cmdr":
         artifacts_finalized = _verify_artifact_finalization_evidence(details)
         _verify_failed_inspection_evidence(
@@ -2664,7 +3005,7 @@ def _verify_worker_execution_proof(
             raise LiveSupervisorError(
                 "live RasCmdr completion claim disagrees with its category"
             )
-        return
+        return execution_removed
 
     if details.get("result_artifacts_finalized") is not True:
         raise LiveSupervisorError(
@@ -2715,6 +3056,7 @@ def _verify_worker_execution_proof(
         ) from exc
     if selected != expected:
         raise LiveSupervisorError("live Controller executable path is invalid")
+    return execution_removed
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -2942,7 +3284,13 @@ def _verify_live_terminal_semantics(
         source_project=source_project,
         expected_stage_root=expected_stage_root,
     )
-    _verify_worker_execution_proof(worker, request, engine)
+    execution_removed = _verify_worker_execution_proof(worker, request, engine)
+    _verify_post_execution_artifact_origins(worker, request)
+    _verify_r04_cleanup_evidence(
+        worker,
+        request,
+        execution_removed,
+    )
     required = request.get("required_invariants")
     if (
         not isinstance(required, list)
@@ -4237,6 +4585,9 @@ def execute_live_action(
         lane_ids=lane_ids,
         phase=phase,
     )
+    # Repository/runtime binding is a prerequisite for trusting historical
+    # receipts.  A resume no-op must not bypass the clean-HEAD gate.
+    _bind_live_context(context)
     if resume:
         selected = [
             lane_id
@@ -4245,7 +4596,6 @@ def execute_live_action(
         ]
         if not selected:
             return ()
-    _bind_live_context(context)
     _require_strict_live_api_contracts(context, selected)
     for lane_id in selected:
         _validate_live_attempt_path_budget(context.run_root, lane_id)
@@ -4511,7 +4861,12 @@ def recover_live_host_lock(
 
 
 def live_status(run_root: str | Path) -> dict[str, Any]:
-    """Return run/attempt/lock state without creating files or inspecting HEC-RAS."""
+    """Return run/attempt/lock state without creating files or inspecting HEC-RAS.
+
+    The legacy top-level ``hec_ras_invoked`` field describes this read-only
+    status action.  Historical execution is reported separately per verified
+    attempt and in ``any_verified_attempt_hec_ras_invoked``.
+    """
     context = load_run(run_root)
     attempts: list[dict[str, Any]] = []
     attempt_root = context.run_root / "attempts"
@@ -4528,6 +4883,7 @@ def live_status(run_root: str | Path) -> dict[str, Any]:
                 assert_plain_ancestry(attempt_dir, stop=lane_dir)
                 state = "incomplete"
                 terminal = None
+                attempt_hec_ras_invoked = None
                 try:
                     verified = verify_attempt_receipt(attempt_dir)
                 except Exception:
@@ -4538,12 +4894,19 @@ def live_status(run_root: str | Path) -> dict[str, Any]:
                 else:
                     state = "verified_terminal"
                     terminal = verified.receipt["terminal_category"]
+                    invocation_claim = verified.receipt.get("hec_ras_invoked")
+                    attempt_hec_ras_invoked = (
+                        invocation_claim
+                        if isinstance(invocation_claim, bool)
+                        else None
+                    )
                 attempts.append(
                     {
                         "lane_id": lane_dir.name,
                         "attempt_id": attempt_dir.name,
                         "state": state,
                         "terminal_category": terminal,
+                        "hec_ras_invoked": attempt_hec_ras_invoked,
                     }
                 )
     lock_paths = [context.run_root / "run.lock", _host_lock_path()]
@@ -4565,6 +4928,19 @@ def live_status(run_root: str | Path) -> dict[str, Any]:
                 "attempt_id": state.payload.get("attempt_id"),
             }
         )
+    verified_invocations = [
+        attempt["hec_ras_invoked"]
+        for attempt in attempts
+        if attempt["state"] == "verified_terminal"
+    ]
+    if any(value is True for value in verified_invocations):
+        any_verified_invocation = True
+    elif verified_invocations and all(
+        value is False for value in verified_invocations
+    ):
+        any_verified_invocation = False
+    else:
+        any_verified_invocation = None
     return {
         "run_id": context.descriptor["run_id"],
         "run_root": str(context.run_root),
@@ -4572,6 +4948,9 @@ def live_status(run_root: str | Path) -> dict[str, Any]:
         "git_head": context.descriptor["git_head"],
         "attempts": attempts,
         "locks": locks,
+        "status_action_hec_ras_invoked": False,
+        "any_verified_attempt_hec_ras_invoked": any_verified_invocation,
+        # Backward-compatible action-local field.  Prefer the explicit fields above.
         "hec_ras_invoked": False,
     }
 

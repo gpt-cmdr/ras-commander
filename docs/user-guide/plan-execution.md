@@ -125,8 +125,17 @@ the engine attempt, not the safety work needed to prove what remains running.
 - `failure_stage`, `failure_type`, and `failure_detail`;
 - structured `cancellation_details`, including tri-state quiescence evidence;
   and
-- `result_artifacts_finalized` plus `artifact_finalization_failure`, which keep a
-  cleanup defect separate from an earlier timeout or execution failure.
+- `artifact_preparation_cleanup` and `artifact_finalization_cleanup`, which
+  report the exact removed and already-missing target paths before and after
+  execution; and
+- `result_artifacts_finalized` plus `artifact_finalization_failure`, which keep
+  a cleanup defect separate from an earlier timeout or execution failure.
+
+Within either cleanup record, `result_format` is the result family targeted for
+deletion—the opposing family—not the run's selected output format. On a
+successful cleanup, `removed_paths` and `missing_paths` are disjoint and their
+union is the complete plan-scoped target set. Both cleanup fields are `None`
+when calculation is skipped before cleanup.
 
 `completion_verified` is independent of overall `ComputeResult.success`. For
 example, a complete HDF may verify and then result-family finalization may fail;

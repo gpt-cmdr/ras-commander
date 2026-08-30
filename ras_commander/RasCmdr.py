@@ -2740,7 +2740,10 @@ class RasCmdr:
                 ``execution_details`` is always JSON-safe and distinguishes
                 selected executable identity, calculation attempts, launcher
                 PID/create-time identity, solver quiescence, and result-family
-                finalization. Calculated success requires every terminal gate.
+                finalization, including exact preparation and finalization
+                cleanup records. In those records, ``result_format`` names the
+                family targeted for deletion. Calculated success requires
+                every terminal gate.
 
         Raises:
             ValueError: If ``max_runtime`` is not a positive finite number
@@ -2848,6 +2851,8 @@ class RasCmdr:
             "failure_type": None,
             "failure_detail": None,
             "cancellation_details": None,
+            "artifact_preparation_cleanup": None,
+            "artifact_finalization_cleanup": None,
             "artifact_finalization_failure": None,
         }
         try:
@@ -3176,10 +3181,13 @@ class RasCmdr:
 
                     # Destructive result-family cleanup is coupled to this
                     # exact, freshly proven launch attempt.
-                    prepare_plan_execution_artifacts(
+                    preparation_cleanup = prepare_plan_execution_artifacts(
                         plan_number,
                         output_format=_execution_result_format,
                         ras_object=compute_ras,
+                    )
+                    _execution_details["artifact_preparation_cleanup"] = (
+                        preparation_cleanup.to_dict()
                     )
                     # The public max_runtime budget measures the engine launch
                     # and completion path. Executable hashing, exact-plan
@@ -3638,10 +3646,13 @@ class RasCmdr:
                     # Modern HEC-RAS 1D engines recreate .O## after writing the
                     # HDF. Final cleanup is therefore required in addition to
                     # the pre-run stale-artifact cleanup.
-                    finalize_plan_execution_artifacts(
+                    finalization_cleanup = finalize_plan_execution_artifacts(
                         plan_number,
                         output_format=_execution_result_format,
                         ras_object=compute_ras,
+                    )
+                    _execution_details["artifact_finalization_cleanup"] = (
+                        finalization_cleanup.to_dict()
                     )
                     _result_artifacts_finalized = True
                 except Exception as cleanup_error:

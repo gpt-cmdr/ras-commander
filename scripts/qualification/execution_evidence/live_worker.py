@@ -15,6 +15,7 @@ attempt without inspecting possibly active result files.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 import json
 import logging
 import math
@@ -57,7 +58,7 @@ from .receipts import (
 from .replay import overlay_replay_artifacts, replay_origin_overrides
 from .run_io import write_bytes_with_digest
 from .schemas import table_from_rows
-from .snapshots import diff_snapshots, snapshot_tree, stable_sha256
+from .snapshots import TreeSnapshot, diff_snapshots, snapshot_tree
 
 
 _WORKER_INVOCATIONS = 0
@@ -71,6 +72,8 @@ _ENGINE_DETAILS_COMMON = (
     "selected_result_format",
     "solver_quiescence_confirmed",
     "result_artifacts_finalized",
+    "artifact_preparation_cleanup",
+    "artifact_finalization_cleanup",
     "actual_engine_provenance_confirmed",
 )
 _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
@@ -105,6 +108,15 @@ _RASCMD_RUNTIME_DETAIL_FIELDS = frozenset(
 )
 _ARTIFACT_FINALIZATION_FAILURE_FIELDS = frozenset(
     {"failure_stage", "failure_type", "failure_detail"}
+)
+_ARTIFACT_CLEANUP_FIELDS = frozenset(
+    {
+        "plan_number",
+        "result_format",
+        "include_message_sidecars",
+        "removed_paths",
+        "missing_paths",
+    }
 )
 _FAILED_INSPECTION_EVIDENCE_KIND = "execution_evidence_inspection_failure"
 _CANCELLATION_DETAIL_FIELDS = frozenset(
@@ -202,6 +214,121 @@ def _strict_positive_seconds(value: Any, *, label: str) -> float:
     if not math.isfinite(normalized) or normalized <= 0:
         raise LiveCapabilityError(f"{label} must be a positive finite number")
     return normalized
+
+
+def _cleanup_removed_relative_paths(
+    request: Mapping[str, Any],
+    cleanup: Any,
+    *,
+    label: str,
+    expected_result_format: str | None = None,
+    expected_include_message_sidecars: bool | None = None,
+) -> list[str]:
+    if not isinstance(cleanup, Mapping) or set(cleanup) != _ARTIFACT_CLEANUP_FIELDS:
+        raise LiveCapabilityError(f"{label} is not a complete cleanup record")
+    plan_number = request["fixture"]["plan_number"]
+    if cleanup["plan_number"] != plan_number:
+        raise LiveCapabilityError(f"{label} plan number mismatch")
+    result_format = cleanup["result_format"]
+    if result_format not in {"hdf", "legacy", "both"}:
+        raise LiveCapabilityError(f"{label} result format is invalid")
+    if (
+        expected_result_format is not None
+        and result_format != expected_result_format
+    ):
+        raise LiveCapabilityError(f"{label} result format mismatch")
+    include_sidecars = cleanup["include_message_sidecars"]
+    if not isinstance(include_sidecars, bool):
+        raise LiveCapabilityError(f"{label} sidecar flag is not boolean")
+    if (
+        expected_include_message_sidecars is not None
+        and include_sidecars is not expected_include_message_sidecars
+    ):
+        raise LiveCapabilityError(f"{label} sidecar flag mismatch")
+
+    stage_root = Path(request["stage_root"]).resolve(strict=False)
+    stage_project = stage_root / Path(request["source_project"]).name
+    known_paths = known_result_paths(stage_project, plan_number)
+    allowed = {relative.casefold(): relative for relative in known_paths}
+    expected_targets = []
+    if result_format in {"hdf", "both"}:
+        expected_targets.append(known_paths[0])
+    if result_format in {"legacy", "both"}:
+        expected_targets.append(known_paths[1])
+    if include_sidecars:
+        expected_targets.extend(known_paths[2:])
+    normalized: dict[str, list[str]] = {}
+    for field in ("removed_paths", "missing_paths"):
+        raw_paths = cleanup[field]
+        if not isinstance(raw_paths, list) or any(
+            not isinstance(raw, str) or not raw for raw in raw_paths
+        ):
+            raise LiveCapabilityError(f"{label} {field} is not a path array")
+        relative_paths = []
+        for raw in raw_paths:
+            if not _path_is_within(stage_root, raw):
+                raise LiveCapabilityError(f"{label} path escaped the stage: {raw}")
+            relative = Path(
+                os.path.relpath(
+                    os.path.realpath(raw),
+                    os.path.realpath(stage_root),
+                )
+            ).as_posix()
+            canonical = allowed.get(relative.casefold())
+            if canonical is None:
+                raise LiveCapabilityError(
+                    f"{label} path is outside the exact cleanup allowlist: {relative}"
+                )
+            relative_paths.append(canonical)
+        keys = [relative.casefold() for relative in relative_paths]
+        if len(keys) != len(set(keys)):
+            raise LiveCapabilityError(f"{label} {field} contains duplicates")
+        normalized[field] = relative_paths
+    if {
+        path.casefold() for path in normalized["removed_paths"]
+    } & {
+        path.casefold() for path in normalized["missing_paths"]
+    }:
+        raise LiveCapabilityError(f"{label} reports a path as removed and missing")
+    observed_targets = {
+        path.casefold()
+        for field in ("removed_paths", "missing_paths")
+        for path in normalized[field]
+    }
+    if observed_targets != {path.casefold() for path in expected_targets}:
+        raise LiveCapabilityError(f"{label} target set mismatch")
+    return normalized["removed_paths"]
+
+
+def _execution_cleanup_removed_relative_paths(
+    request: Mapping[str, Any],
+    details: Mapping[str, Any],
+) -> list[str]:
+    expected = request["engine"]["expected_result_format"]
+    opposing = "legacy" if expected == "hdf" else "hdf"
+    removed = _cleanup_removed_relative_paths(
+        request,
+        details.get("artifact_preparation_cleanup"),
+        label="artifact preparation cleanup",
+        expected_result_format=opposing,
+        expected_include_message_sidecars=True,
+    )
+    finalization = details.get("artifact_finalization_cleanup")
+    if details.get("result_artifacts_finalized") is True:
+        removed.extend(
+            _cleanup_removed_relative_paths(
+                request,
+                finalization,
+                label="artifact finalization cleanup",
+                expected_result_format=opposing,
+                expected_include_message_sidecars=False,
+            )
+        )
+    elif finalization is not None:
+        raise LiveCapabilityError(
+            "unfinalized result artifacts contain a finalization cleanup record"
+        )
+    return removed
 
 
 def _validate_artifact_finalization_evidence(details: Mapping[str, Any]) -> bool:
@@ -1391,29 +1518,76 @@ def _validate_pre_execution_state(
 def _post_execution_origins(
     request: Mapping[str, Any],
     *,
-    stage_root: Path,
+    before: TreeSnapshot,
+    after: TreeSnapshot,
     known_paths: Sequence[str],
 ) -> dict[str, str]:
-    overrides = {".ras-commander/stage.json": "generated_harness_receipt"}
+    # ``snapshot_tree`` inventories the spelling preserved by the filesystem,
+    # while HEC-RAS may capitalize generated plan artifacts differently from
+    # the canonical known paths (for example ``EX1.P01.hdf`` versus
+    # ``EX1.p01.hdf``).  Store override keys in the same case-folded namespace
+    # used by the snapshot inventory so provenance follows path identity on
+    # Windows instead of the producer's incidental casing.
+    overrides = {".ras-commander/stage.json".casefold(): "generated_harness_receipt"}
     replay = request["fixture"].get("replay_artifacts")
     pinned = {
         item["relative_path"].casefold(): item
         for item in (replay or {}).get("files", [])
     }
-    for relative in known_paths:
-        path = stage_root / relative
-        pin = pinned.get(relative.casefold())
-        if pin is not None and path.is_file():
-            digest, info = stable_sha256(path)
-            if (
-                digest == pin["sha256"]
-                and info.st_size == pin["size_bytes"]
-                and info.st_mtime_ns == pin["mtime_ns"]
-            ):
-                overrides[relative] = replay["data_origin"]
-                continue
-        overrides[relative] = "staged_execution_output"
+    known = {Path(relative).as_posix().casefold() for relative in known_paths}
+    before_rows = {
+        row["relative_path"].casefold(): row
+        for row in before.rows
+    }
+    identity_fields = (
+        "exists",
+        "is_file",
+        "size_bytes",
+        "mtime_ns",
+        "volume_id",
+        "file_id",
+        "sha256",
+    )
+    for row in after.rows:
+        key = row["relative_path"].casefold()
+        if key == ".ras-commander/stage.json":
+            continue
+        pin = pinned.get(key)
+        prior = before_rows.get(key)
+        exact_replay = (
+            key in known
+            and pin is not None
+            and row["exists"] is True
+            and row["sha256"] == pin["sha256"]
+            and row["size_bytes"] == pin["size_bytes"]
+            and row["mtime_ns"] == pin["mtime_ns"]
+        )
+        unchanged = prior is not None and all(
+            prior[field] == row[field] for field in identity_fields
+        )
+        if exact_replay:
+            overrides[key] = replay["data_origin"]
+        elif unchanged:
+            overrides[key] = prior["data_origin"]
+        else:
+            overrides[key] = "staged_execution_output"
     return overrides
+
+
+def _with_origin_overrides(
+    snapshot: TreeSnapshot,
+    overrides: Mapping[str, str],
+) -> TreeSnapshot:
+    rows = []
+    for row in snapshot.rows:
+        updated = dict(row)
+        key = row["relative_path"].casefold()
+        updated["data_origin"] = overrides.get(
+            row["relative_path"],
+            overrides.get(key, row["data_origin"]),
+        )
+        rows.append(updated)
+    return replace(snapshot, rows=tuple(rows))
 
 
 def _write_messages(
@@ -1466,6 +1640,7 @@ def _validate_execution_result(
         raise LiveProcessGateError(
             "execution result did not prove safe finalization: " + ", ".join(failed)
         )
+    _execution_cleanup_removed_relative_paths(request, details)
     if details.get("actual_engine_provenance_confirmed") is not True:
         raise LiveCapabilityError("actual execution-engine provenance was not confirmed")
     engine = request["engine"]
@@ -2003,11 +2178,6 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         payload={"plan": post_plan, "global": post_global},
     )
 
-    post_origins = _post_execution_origins(
-        request,
-        stage_root=stage_result.destination_root,
-        known_paths=stage_known_paths,
-    )
     post_api = snapshot_tree(
         stage_result.destination_root,
         run_id=request["run_id"],
@@ -2017,7 +2187,15 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         root_kind="stage",
         data_origin=request["fixture"]["data_origin"],
         known_paths=stage_known_paths,
-        origin_overrides=post_origins,
+    )
+    post_api = _with_origin_overrides(
+        post_api,
+        _post_execution_origins(
+            request,
+            before=pre_execution,
+            after=post_api,
+            known_paths=stage_known_paths,
+        ),
     )
     inspection_started_at = datetime.now(timezone.utc)
     evidence = None
@@ -2071,7 +2249,15 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         root_kind="stage",
         data_origin=request["fixture"]["data_origin"],
         known_paths=stage_known_paths,
-        origin_overrides=post_origins,
+    )
+    post_evidence = _with_origin_overrides(
+        post_evidence,
+        _post_execution_origins(
+            request,
+            before=pre_execution,
+            after=post_evidence,
+            known_paths=stage_known_paths,
+        ),
     )
     if inspection_failure is None:
         events.append(
@@ -2132,6 +2318,22 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         or (selected_format == "legacy" and final_legacy and not final_hdf)
     )
     stage_diff = diff_snapshots(stage_published, post_api)
+    cleanup_deleted = []
+    for index, cleanup in enumerate(cleanup_records):
+        cleanup_deleted.extend(
+            _cleanup_removed_relative_paths(
+                request,
+                cleanup,
+                label=f"initial-state cleanup {index}",
+            )
+        )
+    cleanup_deleted.extend(
+        _execution_cleanup_removed_relative_paths(request, details)
+    )
+    deleted_paths = {
+        path.casefold(): path
+        for path in (*stage_diff.removed, *cleanup_deleted)
+    }
     snapshot_ids = [
         source_before.snapshot_id,
         stage_published.snapshot_id,
@@ -2155,7 +2357,9 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
         "authoritative_evidence_channels": (
             [] if inspection_failure is not None else _authoritative_channels(evidence)
         ),
-        "deleted_relative_paths": list(stage_diff.removed),
+        "deleted_relative_paths": [
+            deleted_paths[key] for key in sorted(deleted_paths)
+        ],
         "allowed_deleted_relative_paths": list(stage_known_paths),
         "finalization_attempted": (
             details["result_artifacts_finalized"] is True

@@ -209,6 +209,44 @@ def _context(tmp_path: Path, *, lane_ids: tuple[str, ...] = ("lane-live",)) -> R
     )
 
 
+def _cleanup_record(
+    request: dict,
+    *,
+    result_format: str,
+    include_message_sidecars: bool,
+    removed: tuple[str, ...] = (),
+) -> dict:
+    stage_root = Path(request["stage_root"])
+    stage_project = stage_root / Path(request["source_project"]).name
+    known = live.known_result_paths(
+        stage_project,
+        request["fixture"]["plan_number"],
+    )
+    targets = []
+    if result_format in {"hdf", "both"}:
+        targets.append(known[0])
+    if result_format in {"legacy", "both"}:
+        targets.append(known[1])
+    if include_message_sidecars:
+        targets.extend(known[2:])
+    removed_keys = {path.casefold() for path in removed}
+    return {
+        "plan_number": request["fixture"]["plan_number"],
+        "result_format": result_format,
+        "include_message_sidecars": include_message_sidecars,
+        "removed_paths": [
+            str(stage_root / path)
+            for path in targets
+            if path.casefold() in removed_keys
+        ],
+        "missing_paths": [
+            str(stage_root / path)
+            for path in targets
+            if path.casefold() not in removed_keys
+        ],
+    }
+
+
 def _publish_passing_worker_record(
     attempt_dir: Path,
     request: dict,
@@ -226,6 +264,15 @@ def _publish_passing_worker_record(
     for invariant_id, name in _LIVE_INVARIANT_NAMES.items():
         invariant = dict(invariant_template)
         invariant.update(invariant_id=invariant_id, name=name)
+        if invariant_id == "R04":
+            known = live.known_result_paths(
+                request["source_project"],
+                request["fixture"]["plan_number"],
+            )
+            invariant.update(
+                expected=json.dumps(sorted(known)),
+                observed=json.dumps([]),
+            )
         rows["invariants"].append(invariant)
     lane = rows["lanes"][0]
     lane.update(
@@ -300,6 +347,122 @@ def _publish_passing_worker_record(
         json.dumps(stage_metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    artifact_template = rows["artifacts"][0]
+    artifact_root = str(stage_root.resolve())
+
+    def artifact_row(
+        *,
+        phase: str,
+        snapshot_id: str,
+        relative_path: str,
+        data_origin: str,
+        exists: bool,
+        sha256: str | None,
+        size_bytes: int | None,
+        mtime_ns: int | None,
+        artifact_kind: str,
+        result_family: str | None = None,
+    ) -> dict:
+        row = dict(artifact_template)
+        row.update(
+            snapshot_id=snapshot_id,
+            phase=phase,
+            root_kind="stage",
+            root_path=artifact_root,
+            relative_path=relative_path,
+            artifact_kind=artifact_kind,
+            result_family=result_family,
+            data_origin=data_origin,
+            exists=exists,
+            is_file=exists,
+            is_dir=False,
+            size_bytes=size_bytes,
+            mtime_ns=mtime_ns,
+            volume_id="1" if exists else None,
+            file_id="2" if exists else None,
+            sha256=sha256,
+            stable_read=True if exists else None,
+            reason_code="stable_file_hashed" if exists else "known_path_absent",
+        )
+        return row
+
+    plan_name = f"Model.p{request['fixture']['plan_number']}"
+    hdf_name = f"{plan_name}.hdf"
+    known_result_names = live.known_result_paths(
+        request["source_project"],
+        request["fixture"]["plan_number"],
+    )
+    plan_digest = file_sha256(stage_root / plan_name)
+    metadata_digest = file_sha256(metadata_path)
+    artifact_rows = []
+    for phase, snapshot_id in (
+        ("stage_published", "stage-published"),
+        ("pre_execution", "pre-execution"),
+        ("post_process_hygiene", "post-process"),
+        ("post_evidence_inspection", "post-evidence"),
+    ):
+        post_execution = phase.startswith("post_")
+        artifact_rows.extend(
+            [
+                artifact_row(
+                    phase=phase,
+                    snapshot_id=snapshot_id,
+                    relative_path=plan_name,
+                    data_origin="captured_real",
+                    exists=True,
+                    sha256=plan_digest,
+                    size_bytes=10,
+                    mtime_ns=100,
+                    artifact_kind="plan",
+                ),
+                artifact_row(
+                    phase=phase,
+                    snapshot_id=snapshot_id,
+                    relative_path=hdf_name,
+                    data_origin=(
+                        "staged_execution_output"
+                        if post_execution
+                        else "captured_real"
+                    ),
+                    exists=post_execution,
+                    sha256=HASH_A if post_execution else None,
+                    size_bytes=10 if post_execution else None,
+                    mtime_ns=123 if post_execution else None,
+                    artifact_kind="plan_result",
+                    result_family="hdf",
+                ),
+                artifact_row(
+                    phase=phase,
+                    snapshot_id=snapshot_id,
+                    relative_path=".ras-commander/stage.json",
+                    data_origin="generated_harness_receipt",
+                    exists=True,
+                    sha256=metadata_digest,
+                    size_bytes=metadata_path.stat().st_size,
+                    mtime_ns=101,
+                    artifact_kind="project_file",
+                ),
+            ]
+        )
+        for relative_path in known_result_names[1:]:
+            legacy = relative_path.casefold().endswith(
+                f".o{request['fixture']['plan_number']}"
+            )
+            artifact_rows.append(
+                artifact_row(
+                    phase=phase,
+                    snapshot_id=snapshot_id,
+                    relative_path=relative_path,
+                    data_origin="captured_real",
+                    exists=False,
+                    sha256=None,
+                    size_bytes=None,
+                    mtime_ns=None,
+                    artifact_kind="plan_result" if legacy else "compute_message",
+                    result_family="legacy" if legacy else None,
+                )
+            )
+    rows["artifacts"] = artifact_rows
     stage_project = str(
         Path(request["stage_root"]) / Path(request["source_project"]).name
     )
@@ -430,6 +593,13 @@ def _publish_passing_worker_record(
             "copied_file_count": len(copied_artifacts),
             "copied_bytes": copied_bytes,
         },
+        "initial_state_cleanup": [
+            _cleanup_record(
+                request,
+                result_format="both",
+                include_message_sidecars=True,
+            )
+        ],
         "execution_result": {
             "result_type": "ComputeResult",
             "success": True,
@@ -444,6 +614,16 @@ def _publish_passing_worker_record(
                 "calculation_attempted": True,
                 "solver_quiescence_confirmed": True,
                 "result_artifacts_finalized": True,
+                "artifact_preparation_cleanup": _cleanup_record(
+                    request,
+                    result_format="legacy",
+                    include_message_sidecars=True,
+                ),
+                "artifact_finalization_cleanup": _cleanup_record(
+                    request,
+                    result_format="legacy",
+                    include_message_sidecars=False,
+                ),
                 "artifact_finalization_failure": None,
                 "actual_engine_provenance_confirmed": True,
                 "selected_executable_path": request["engine"]["executable"],
@@ -633,6 +813,7 @@ def _publish_safe_finalization_failed_worker_record(
         failure_type="OSError",
         failure_detail="result inventory refresh failed",
         result_artifacts_finalized=False,
+        artifact_finalization_cleanup=None,
         artifact_finalization_failure={
             "failure_stage": "result_artifact_finalization",
             "failure_type": "OSError",
@@ -664,6 +845,7 @@ def _publish_timeout_with_secondary_finalization_failure(
     details = worker["execution_result"]["execution_details"]
     details.update(
         result_artifacts_finalized=False,
+        artifact_finalization_cleanup=None,
         artifact_finalization_failure={
             "failure_stage": "result_artifact_finalization",
             "failure_type": "OSError",
@@ -2004,6 +2186,7 @@ def test_parent_controller_proof_requires_exact_binary_identity(
         "stage_root": str(stage_root),
         "source_project": str(source_project),
         "fixture": {"plan_number": "01"},
+        "engine": {"expected_result_format": "legacy"},
     }
     engine = {
         "execution_api": "ras_control",
@@ -2060,6 +2243,16 @@ def test_parent_controller_proof_requires_exact_binary_identity(
                 "calculation_attempted": True,
                 "solver_quiescence_confirmed": True,
                 "result_artifacts_finalized": True,
+                "artifact_preparation_cleanup": _cleanup_record(
+                    request,
+                    result_format="hdf",
+                    include_message_sidecars=True,
+                ),
+                "artifact_finalization_cleanup": _cleanup_record(
+                    request,
+                    result_format="hdf",
+                    include_message_sidecars=False,
+                ),
                 "actual_engine_provenance_confirmed": True,
                 "requested_controller_version": "4.1.0",
                 "resolved_controller_version": "4.1",
@@ -3167,6 +3360,138 @@ def test_resume_rejects_terminal_when_any_semantic_live_gate_is_omitted(
     assert live._lane_has_verified_terminal(context, "lane-live") is False
 
 
+def test_resume_rejects_old_format_terminal_without_cleanup_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(live, "_run_live_child", _publish_passing_worker_record)
+    completed = live.execute_live_action(context.run_root, acknowledge_real_ras=True)
+    attempt_dir = completed[0].attempt_dir
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    details = worker["execution_result"]["execution_details"]
+    details.pop("artifact_preparation_cleanup")
+    details.pop("artifact_finalization_cleanup")
+    _rewrite_worker_execution_result(attempt_dir, worker)
+    worker, worker_sha256 = read_json_with_digest(
+        attempt_dir / "worker_receipt.json"
+    )
+    receipt, _ = read_json_with_digest(attempt_dir / "receipt.json")
+    receipt["worker_receipt_sha256"] = worker_sha256
+    receipt["execution_result"] = worker["execution_result"]
+    for reference in receipt["referenced_artifacts"]:
+        if reference["relative_path"] == "execution_result.json":
+            reference["sha256"] = live.stable_sha256(
+                attempt_dir / "execution_result.json"
+            )[0]
+    write_json_with_digest(
+        attempt_dir / "receipt.json",
+        receipt,
+        replace=True,
+    )
+
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+def test_resume_rejects_misclassified_post_execution_artifact_origin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(live, "_run_live_child", _publish_passing_worker_record)
+    completed = live.execute_live_action(context.run_root, acknowledge_real_ras=True)
+    attempt_dir = completed[0].attempt_dir
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    for row in worker["tables"]["artifacts"]:
+        if (
+            row["phase"] in {"post_process_hygiene", "post_evidence_inspection"}
+            and row["relative_path"].casefold() == "model.p01.hdf"
+        ):
+            row["data_origin"] = "captured_real"
+    worker_sha256 = write_json_with_digest(
+        attempt_dir / "worker_receipt.json",
+        worker,
+        replace=True,
+    )
+    receipt, _ = read_json_with_digest(attempt_dir / "receipt.json")
+    receipt["worker_receipt_sha256"] = worker_sha256
+    receipt["tables"] = worker["tables"]
+    write_json_with_digest(
+        attempt_dir / "receipt.json",
+        receipt,
+        replace=True,
+    )
+
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+def test_resume_rejects_duplicate_r04_cleanup_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    host_lock = tmp_path / "locks" / "real-engine.lock"
+    _enable_test_orchestration(monkeypatch, context, host_lock)
+    monkeypatch.setattr(live, "_strict_process_inventory", _empty_inventory)
+    monkeypatch.setattr(live, "_run_live_child", _publish_passing_worker_record)
+    completed = live.execute_live_action(context.run_root, acknowledge_real_ras=True)
+    attempt_dir = completed[0].attempt_dir
+    worker, _ = read_json_with_digest(attempt_dir / "worker_receipt.json")
+    r04 = next(
+        row
+        for row in worker["tables"]["invariants"]
+        if row["invariant_id"] == "R04"
+    )
+    expected = json.loads(r04["expected"])
+    r04["expected"] = json.dumps([*expected, expected[0]])
+    worker_sha256 = write_json_with_digest(
+        attempt_dir / "worker_receipt.json",
+        worker,
+        replace=True,
+    )
+    receipt, _ = read_json_with_digest(attempt_dir / "receipt.json")
+    receipt["worker_receipt_sha256"] = worker_sha256
+    receipt["tables"] = worker["tables"]
+    write_json_with_digest(
+        attempt_dir / "receipt.json",
+        receipt,
+        replace=True,
+    )
+
+    assert live._lane_has_verified_terminal(context, "lane-live") is False
+
+
+def test_resume_noop_cannot_bypass_live_context_binding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    monkeypatch.setattr(live, "load_run", lambda _: context)
+    monkeypatch.setattr(
+        live,
+        "_bind_live_context",
+        lambda _: (_ for _ in ()).throw(live.ManifestError("dirty HEAD")),
+    )
+    monkeypatch.setattr(
+        live,
+        "_lane_has_verified_terminal",
+        lambda *_: pytest.fail("resume filtering must follow context binding"),
+    )
+
+    with pytest.raises(live.ManifestError, match="dirty HEAD"):
+        live.execute_live_action(
+            context.run_root,
+            acknowledge_real_ras=True,
+            resume=True,
+        )
+
+
 def test_resume_retries_verified_timeout_with_fresh_attempt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3244,7 +3569,78 @@ def test_status_is_read_only_and_does_not_probe_hec_ras(
     assert after == before
     assert status["attempts"] == []
     assert status["hec_ras_invoked"] is False
+    assert status["status_action_hec_ras_invoked"] is False
+    assert status["any_verified_attempt_hec_ras_invoked"] is None
     assert all(item["reason_code"] == "lock_missing" for item in status["locks"])
+
+
+def test_live_status_separates_action_scope_from_verified_attempt_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    attempt = context.run_root / "attempts" / "lane-live" / "attempt-1"
+    attempt.mkdir(parents=True)
+    monkeypatch.setattr(live, "load_run", lambda _: context)
+    monkeypatch.setattr(
+        live,
+        "_host_lock_path",
+        lambda: tmp_path / "locks" / "real-engine.lock",
+    )
+    monkeypatch.setattr(
+        live,
+        "verify_attempt_receipt",
+        lambda _: SimpleNamespace(
+            receipt={"terminal_category": "passed", "hec_ras_invoked": True}
+        ),
+    )
+
+    status = live.live_status(context.run_root)
+
+    assert status["hec_ras_invoked"] is False
+    assert status["status_action_hec_ras_invoked"] is False
+    assert status["any_verified_attempt_hec_ras_invoked"] is True
+    assert status["attempts"] == [
+        {
+            "lane_id": "lane-live",
+            "attempt_id": "attempt-1",
+            "state": "verified_terminal",
+            "terminal_category": "passed",
+            "hec_ras_invoked": True,
+        }
+    ]
+
+
+def test_live_status_preserves_unknown_invocation_in_tri_state_aggregate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _context(tmp_path)
+    attempt_root = context.run_root / "attempts" / "lane-live"
+    (attempt_root / "attempt-1").mkdir(parents=True)
+    (attempt_root / "attempt-2").mkdir()
+    monkeypatch.setattr(live, "load_run", lambda _: context)
+    monkeypatch.setattr(
+        live,
+        "_host_lock_path",
+        lambda: tmp_path / "locks" / "real-engine.lock",
+    )
+
+    def verify(attempt_dir):
+        claim = False if Path(attempt_dir).name == "attempt-1" else "not-a-bool"
+        return SimpleNamespace(
+            receipt={"terminal_category": "passed", "hec_ras_invoked": claim}
+        )
+
+    monkeypatch.setattr(live, "verify_attempt_receipt", verify)
+
+    status = live.live_status(context.run_root)
+
+    assert [item["hec_ras_invoked"] for item in status["attempts"]] == [
+        False,
+        None,
+    ]
+    assert status["any_verified_attempt_hec_ras_invoked"] is None
 
 
 def _retained_lock_fixture(

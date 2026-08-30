@@ -1673,8 +1673,10 @@ class RasControl:
                 watchdog, message-count, timing provenance, owned PID plus
                 creation time, verified ``Ras.exe`` path and SHA-256,
                 safe-close/owned-exit state, post-close plan/global process
-                quiescence, and result-family finalization. Calculated success
-                requires every terminal gate.
+                quiescence, result-family finalization, and exact preparation
+                and finalization cleanup records. In those records,
+                ``result_format`` names the family targeted for deletion.
+                Calculated success requires every terminal gate.
                 Existing code ``success, msgs = RasControl.run_plan("01")`` still works via __iter__.
 
         Example:
@@ -1799,6 +1801,16 @@ class RasControl:
                     if calculation_attempted else None
                 ),
                 'result_artifacts_finalized': result_artifacts_finalized,
+                'artifact_preparation_cleanup': (
+                    None
+                    if artifact_preparation_cleanup is None
+                    else artifact_preparation_cleanup.to_dict()
+                ),
+                'artifact_finalization_cleanup': (
+                    None
+                    if artifact_finalization_cleanup is None
+                    else artifact_finalization_cleanup.to_dict()
+                ),
                 'actual_engine_provenance_confirmed': (
                     actual_engine_provenance_confirmed
                 ),
@@ -1859,6 +1871,8 @@ class RasControl:
         calculation_attempted = False
         solver_quiescence_confirmed = False
         result_artifacts_finalized = False
+        artifact_preparation_cleanup = None
+        artifact_finalization_cleanup = None
         controller_pid = None
         controller_create_time = None
         controller_executable_path = None
@@ -2027,6 +2041,7 @@ class RasControl:
 
         def _run_operation(com_rc):
             nonlocal calculation_attempted, solver_quiescence_confirmed
+            nonlocal artifact_preparation_cleanup
             watchdog_pid = 0
             watchdog_identity = None
             current_session = None
@@ -2090,7 +2105,7 @@ class RasControl:
                 # Couple cleanup to the actual compute attempt so Controller
                 # activation, project-open, and watchdog setup failures leave
                 # existing final results untouched.
-                prepare_plan_execution_artifacts(
+                artifact_preparation_cleanup = prepare_plan_execution_artifacts(
                     info.plan_number,
                     output_format=execution_result_format,
                     ras_object=_ras_obj,
@@ -2289,7 +2304,7 @@ class RasControl:
                 and post_close_plan_processes_quiescent
                 and post_close_global_processes_quiescent
             ):
-                finalize_plan_execution_artifacts(
+                artifact_finalization_cleanup = finalize_plan_execution_artifacts(
                     info.plan_number,
                     output_format=execution_result_format,
                     ras_object=_ras_obj,
@@ -2320,6 +2335,16 @@ class RasControl:
                     if calculation_attempted else None
                 ),
                 'result_artifacts_finalized': result_artifacts_finalized,
+                'artifact_preparation_cleanup': (
+                    None
+                    if artifact_preparation_cleanup is None
+                    else artifact_preparation_cleanup.to_dict()
+                ),
+                'artifact_finalization_cleanup': (
+                    None
+                    if artifact_finalization_cleanup is None
+                    else artifact_finalization_cleanup.to_dict()
+                ),
                 'actual_engine_provenance_confirmed': (
                     actual_engine_provenance_confirmed
                 ),

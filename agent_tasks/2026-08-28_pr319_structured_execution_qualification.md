@@ -737,3 +737,58 @@ complete.
   noncandidate; every positive PID with an unavailable name remains a query
   error. The focused supervisor gate passed 135 tests and Ruff passed before
   the next recovery attempt.
+- 2026-08-30: recovery `13d80a11-e82a-4921-91be-da0f00559b0a` revalidated the
+  unchanged partial attempt, exact source fingerprints, absent Python worker,
+  and two complete-empty HEC-RAS inventories before atomically retiring the
+  retained host lock. Both recovery JSON/digest pairs matched. It did not
+  invoke or signal HEC-RAS and did not reconstruct the missing intent digest.
+  Independent audit returned GO with no P0/P1; target-only partial-intent
+  hashing remains P2 schema hardening.
+- 2026-08-30: short-root campaign
+  `4919a49b-adb2-41cf-8855-fc6ed0e6b1eb`, run
+  `0df2dd8c-2b30-4796-ba14-18ae99264f12`, lane `s66`, attempt
+  `b7205e2f-97a5-4d09-ada6-e9b78b319e48`, generated a new disposable EX1
+  plan-01 dataset through the exact pinned HEC-RAS 6.6 executable. It
+  terminalized `passed`, produced a complete 6.6 HDF with zero parsed errors
+  and warnings, left only the HDF result family, passed all eight recorded
+  invariants, proved complete-empty final inventories, and preserved source
+  content and metadata. All receipt/digest pairs matched. The unrelated UUID
+  in `run_name` was P3 label noise only.
+- 2026-08-30: independent review rejected that otherwise successful receipt
+  as final qualification evidence. Case-insensitive generated paths and all
+  modified non-result files were mislabeled `captured_real`; read-only status
+  did not separate its action-local no-invocation claim from historical
+  invocation; and R04 could not see the transient legacy output that HEC-RAS
+  created and post-run finalization removed. The receipt remains immutable,
+  diagnostic, and non-reusable. The correction now classifies every new or
+  modified staged file by full case-insensitive pre/post identity, preserves
+  exact replay origins, exposes typed action/history status fields, serializes
+  complete preparation/finalization cleanup partitions from both compute APIs,
+  and includes structured removals in R04. The focused affected gate passed
+  426 tests, and the complete qualification gate passed 371 tests; Ruff and
+  `git diff --check` passed. Final API review returned GO with no P0/P1.
+  Partial cleanup failures still expose their partial record only through
+  `PlanExecutionCleanupError.cleanup` rather than wrapper execution details;
+  this P2 limits a future cleanup-failure R04 lane but does not affect the
+  successful short-root pilot. A fresh commit-pinned short-root run remains
+  required before representative-depth execution.
+- 2026-08-30: the pre-pilot semantic gate was strengthened after an adversarial
+  resume test showed that a historical terminal receipt could predate the new
+  cleanup/provenance contract and that resume filtering happened before the
+  clean, pinned repository check. Live actions now bind repository context
+  before every resume/no-op decision. The supervisor independently verifies
+  exact preparation, finalization, and initial-state cleanup partitions;
+  reconstructs staged-file origins from case-insensitive pre/post identities;
+  and recomputes R04 from stage snapshots plus structured cleanup records.
+  Malformed, empty, duplicate, out-of-scope, or incomplete R04 path claims fail
+  closed. The superseded `b7205e2f` receipt now fails terminal verification and
+  cannot be reused. The complete affected gate passed 432 tests, the complete
+  qualification suite passed 377 tests in 151.18 seconds, and Ruff, compileall,
+  and `git diff --check` passed. API consistency and independent adversarial
+  audits both returned GO with no P0/P1 finding. The remaining P2 is audit
+  exactness only: a successful cleanup receipt's allowlisted removed-versus-
+  missing membership is not independently corroborated against an adjacent
+  snapshot, though exact scope, disjointness, and complete partitioning are
+  proved. No HEC-RAS, COM, or process-signalling action occurred during these
+  corrections or deterministic tests. A new clean-commit-pinned short-root
+  receipt is still required.

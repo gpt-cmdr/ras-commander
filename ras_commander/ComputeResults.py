@@ -579,8 +579,9 @@ class ComputeResult:
             requested.
         execution_details: JSON-safe execution-engine identity and terminal
             safety gates reported by ``RasCmdr.compute_plan()``. The field is
-            additive and defaults to an empty dictionary for callers that
-            construct ``ComputeResult`` directly.
+            additive, includes exact preparation/finalization cleanup records
+            when execution reaches those phases, and defaults to an empty
+            dictionary for callers that construct ``ComputeResult`` directly.
     Examples:
         # Old usage (still works):
         if RasCmdr.compute_plan("01"):
@@ -726,7 +727,8 @@ class RasControlResult:
         results_df_row: Single row from results_df for the executed plan,
             or None if unavailable.
         execution_details: JSON-safe Controller identity, compute mode,
-            watchdog status, message counts, and timing provenance reported by
+            watchdog status, message counts, timing provenance, and exact
+            preparation/finalization cleanup records reported by
             ``RasControl.run_plan()``. Mode-specific keys are additive.
 
     Examples:

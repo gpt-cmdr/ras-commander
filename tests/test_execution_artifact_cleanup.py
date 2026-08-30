@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import hashlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +19,7 @@ from ras_commander import (
     ResultArtifactAmbiguityError,
 )
 from ras_commander.ExecutionArtifacts import (
+    PlanExecutionCleanup,
     PlanExecutionCleanupError,
     infer_execution_result_format,
 )
@@ -73,6 +75,27 @@ def _write_project(root: Path, version: str) -> _ComputeRas:
     ras_obj.ras_exe_path.parent.mkdir(parents=True, exist_ok=True)
     ras_obj.ras_exe_path.write_bytes(b"synthetic ras executable")
     return ras_obj
+
+
+def test_plan_execution_cleanup_to_dict_is_json_safe(tmp_path):
+    record = PlanExecutionCleanup(
+        plan_number="01",
+        result_format="legacy",
+        include_message_sidecars=True,
+        removed_paths=(tmp_path / "Model.O01",),
+        missing_paths=(tmp_path / "Model.p01.comp_msgs.txt",),
+    )
+
+    payload = record.to_dict()
+
+    assert payload == {
+        "plan_number": "01",
+        "result_format": "legacy",
+        "include_message_sidecars": True,
+        "removed_paths": [str(tmp_path / "Model.O01")],
+        "missing_paths": [str(tmp_path / "Model.p01.comp_msgs.txt")],
+    }
+    assert json.loads(json.dumps(payload)) == payload
 
 
 def _patch_compute_scaffolding(monkeypatch, ras_obj: _ComputeRas) -> None:

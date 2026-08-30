@@ -4,14 +4,14 @@ Date: 2026-08-30
 
 Status: approved scope; modern runtime/launch correction passed its 740-test
 affected no-engine gate plus final API and adversarial review. The earlier
-preflight, path-boundary, launcher-identity, and overnight-stall campaigns are
-superseded. A later short-root attempt exposed a 261-character UNC archive
-record and retained the host lock before worker launch; the separate audited
-recovery must complete before any new dispatch. A replacement campaign must
-pin the recovery commit, use a lane/archive layout that passes the new
-259-character preflight, and obtain a strict complete-empty inventory under
-the host lock. The short-root pilot must pass before the representative-depth
-repeat.
+preflight, path-boundary, launcher-identity, overnight-stall, and partial-intent
+campaigns are superseded. Audited recovery of the partial-intent host lock is
+complete. A later short-root 6.6 run generated a valid disposable result and
+passed its eight recorded invariants, but review found three receipt-quality
+defects in provenance, status scope, and transient-cleanup reporting. Its
+immutable receipt is diagnostic rather than qualifying. The corrected
+replacement campaign must pin a new clean commit and pass before the
+representative-depth repeat.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -158,8 +158,56 @@ fully quoted Windows command launch with `shell=False`, an optional
 `on_exec_launched()` callback, a short-root versus representative-depth A/B,
 and exact-plan early cancellation if a retained attempt still required it.
 The retained attempt had already exited and was safely recovered, so no early
-cancellation signal was necessary. The short-root A/B is the next live step;
-it has not yet been run and has generated no new dataset.
+cancellation signal was necessary. The first short-root run and the evidence
+defects it exposed are recorded below; a corrected fresh short-root run must
+precede the representative-depth repeat.
+
+### Partial-intent recovery and first short-root result
+
+Recovery `13d80a11-e82a-4921-91be-da0f00559b0a` safely retired the host lock
+retained by run `92102bbc-e8c9-42ba-92ee-87a40dbc5488`, attempt
+`a2a05078-cd61-48a2-87f6-d0963f99df74`. Both recovery digest pairs matched;
+the exact archived source fingerprints were unchanged; both Python-worker and
+HEC-RAS inventories were complete and empty; and recovery neither invoked nor
+signalled HEC-RAS. The partial attempt remains immutable with only
+`request.json`, `request.sha256`, and the target-only
+`worker-launch-intent.json`. The missing intent digest was not reconstructed.
+An independent audit returned GO with no P0/P1. Hashing the target-only partial
+intent in a future recovery schema remains P2 hardening.
+
+Replacement campaign `4919a49b-adb2-41cf-8855-fc6ed0e6b1eb`, execution run
+`0df2dd8c-2b30-4796-ba14-18ae99264f12`, used short local execution root
+`C:/rcq/0df2dd8c-2b30-4796-ba14-18ae99264f12`. Lane `s66`, attempt
+`b7205e2f-97a5-4d09-ada6-e9b78b319e48`, ran EX1 plan 01 through the exact
+digest-pinned HEC-RAS 6.6 executable. This action generated a new dataset in a
+disposable copy. It terminalized `passed` in about 13 seconds, produced a
+complete HDF identifying `HEC-RAS 6.6 September 2024`, reported zero parsed
+errors and warnings, left only the HDF result family, proved complete-empty
+post-run inventories, and preserved both source fingerprints. All 12
+JSON/digest pairs and all eight recorded invariants matched. The manifest's
+unrelated UUID embedded in `run_name` is P3 audit-label noise; UUID run identity
+and all locks/receipts used the correct run ID.
+
+Review nevertheless found that the receipt was not suitable as final
+qualification evidence:
+
+- Windows case differences caused new or modified HEC-RAS files to retain the
+  default `captured_real` origin instead of `staged_execution_output`;
+- read-only `status` reported its action-local `hec_ras_invoked=false` without
+  a separate typed aggregate for verified historical attempts; and
+- HEC-RAS created a transient `EX1.O01` that finalization removed, but R04 saw
+  no deletion because both surrounding snapshots lacked the file.
+
+The receipt is immutable and must not be edited or resumed. The correction
+compares full case-insensitive pre/post file identity, preserves only unchanged
+captured files and exact pinned replay origins, and labels every new or changed
+file as staged execution output. Status now separates action scope from a
+strict Boolean/unknown historical tri-state. Both compute APIs publish exact
+preparation and finalization cleanup records, and R04 unions their removed
+paths with snapshot-visible initial-state removals. Each successful cleanup
+record must exactly partition its implied target set between disjoint
+`removed_paths` and `missing_paths`. A fresh commit-pinned short-root attempt is
+required before the representative-depth A/B.
 
 Omitting `max_runtime` preserves the existing unbounded launcher wait and the
 existing 7,200-second asynchronous-solver bound. Supplying a finite value gives
@@ -280,7 +328,9 @@ Every successful attempt must prove:
 
 1. the source tree was immutable;
 2. the exact pinned engine/Controller route was used;
-3. only allowlisted plan result/message artifacts were removed;
+3. only allowlisted plan result/message artifacts were removed across explicit
+   initial-state setup, pre-run preparation, and post-run finalization, with
+   complete removed/missing target partitions for both execution cleanups;
 4. execution returned and solver/Controller quiescence was confirmed;
 5. final inspection selected the engine-owned result family without mixing
    evidence channels;

@@ -106,6 +106,16 @@ class PlanExecutionCleanup:
     removed_paths: tuple[Path, ...]
     missing_paths: tuple[Path, ...]
 
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-safe representation for execution audit records."""
+        return {
+            "plan_number": self.plan_number,
+            "result_format": self.result_format,
+            "include_message_sidecars": self.include_message_sidecars,
+            "removed_paths": [str(path) for path in self.removed_paths],
+            "missing_paths": [str(path) for path in self.missing_paths],
+        }
+
 
 class PlanExecutionCleanupError(RuntimeError):
     """Raised when exact cleanup fails after reporting any partial removal."""

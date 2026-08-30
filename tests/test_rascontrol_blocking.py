@@ -147,6 +147,23 @@ def test_blocking_run_uses_exact_controller_and_returns_execution_details(
     assert result.execution_details["calculation_attempted"] is True
     assert result.execution_details["solver_quiescence_confirmed"] is True
     assert result.execution_details["result_artifacts_finalized"] is True
+    preparation = result.execution_details["artifact_preparation_cleanup"]
+    finalization = result.execution_details["artifact_finalization_cleanup"]
+    assert preparation["result_format"] == "legacy"
+    assert preparation["include_message_sidecars"] is True
+    assert preparation["removed_paths"] == []
+    assert {Path(path).name for path in preparation["missing_paths"]} == {
+        "Demo.O01",
+        "Demo.p01.comp_msgs.txt",
+        "Demo.p01.computeMsgs.txt",
+        "Demo.bco01",
+    }
+    assert finalization["result_format"] == "legacy"
+    assert finalization["include_message_sidecars"] is False
+    assert finalization["removed_paths"] == []
+    assert [Path(path).name for path in finalization["missing_paths"]] == [
+        "Demo.O01"
+    ]
     assert result.execution_details["actual_engine_provenance_confirmed"] is True
     assert result.execution_details["controller_pid"] == 4321
     assert result.execution_details["controller_create_time"] == 123.5
@@ -167,6 +184,56 @@ def test_blocking_run_uses_exact_controller_and_returns_execution_details(
     assert messages == result.messages
     assert ("open", info.project_path, "6.3.0.2", True) in calls
     assert ("compute", (None, None, True)) in calls
+
+
+def test_current_controller_result_reports_null_cleanup_records(
+    monkeypatch,
+    tmp_path,
+):
+    info = _project_info(tmp_path)
+    (tmp_path / "Demo.p01.hdf").write_bytes(b"current HDF")
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _plan_name):
+            return None
+
+        def PlanOutput_IsCurrent(self):
+            return True
+
+    def fake_open_close(
+        _project_path,
+        _version,
+        operation_func,
+        *,
+        close_outcome_callback=None,
+        **_kwargs,
+    ):
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, _owned_cleanup(), None)
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(lambda plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+
+    result = RasControl.run_plan(
+        "01",
+        force_recompute=False,
+        use_watchdog=False,
+        refresh_results=False,
+        controller_version="6.3.0.2",
+    )
+
+    assert result.success is True
+    assert result.execution_details["compute_mode"] == "skipped_current"
+    assert result.execution_details["calculation_attempted"] is False
+    assert result.execution_details["artifact_preparation_cleanup"] is None
+    assert result.execution_details["artifact_finalization_cleanup"] is None
 
 
 def test_default_run_retains_async_polling_contract(monkeypatch, tmp_path):

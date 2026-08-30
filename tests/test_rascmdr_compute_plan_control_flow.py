@@ -15,10 +15,45 @@ import pandas as pd
 import pytest
 
 from ras_commander.ComputeResults import ComputeResult
+from ras_commander.ExecutionArtifacts import (
+    PlanExecutionCleanup,
+    get_plan_result_artifact_paths,
+)
 from ras_commander.RasCmdr import RasCmdr
 
 
 rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
+
+
+def _missing_cleanup_record(
+    plan_number,
+    *,
+    output_format,
+    ras_object,
+    include_message_sidecars,
+    project_folder=None,
+    project_name=None,
+):
+    """Return the exact no-files-present cleanup result for a test project."""
+    paths = get_plan_result_artifact_paths(
+        plan_number,
+        ras_object=ras_object,
+        project_folder=project_folder,
+        project_name=project_name,
+    )
+    result_format = "legacy" if output_format == "hdf" else "hdf"
+    targets = [
+        paths.legacy_output if result_format == "legacy" else paths.hdf
+    ]
+    if include_message_sidecars:
+        targets.extend(paths.message_sidecars)
+    return PlanExecutionCleanup(
+        plan_number=paths.plan_number,
+        result_format=result_format,
+        include_message_sidecars=include_message_sidecars,
+        removed_paths=(),
+        missing_paths=tuple(targets),
+    )
 
 
 def _write_wsl_identity(
@@ -554,6 +589,8 @@ def test_compute_plan_smart_skip_fires_when_results_are_current(monkeypatch, tmp
         "failure_detail": None,
         "cancellation_details": None,
         "artifact_finalization_failure": None,
+        "artifact_preparation_cleanup": None,
+        "artifact_finalization_cleanup": None,
     }
 
 
@@ -664,6 +701,18 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
         "failure_detail": None,
         "cancellation_details": None,
         "artifact_finalization_failure": None,
+        "artifact_preparation_cleanup": _missing_cleanup_record(
+            "01",
+            output_format="hdf",
+            ras_object=ras_obj,
+            include_message_sidecars=True,
+        ).to_dict(),
+        "artifact_finalization_cleanup": _missing_cleanup_record(
+            "01",
+            output_format="hdf",
+            ras_object=ras_obj,
+            include_message_sidecars=False,
+        ).to_dict(),
     }
 
 
@@ -940,8 +989,13 @@ def test_compute_plan_starts_runtime_deadline_after_prelaunch_preparation(
         def poll(self):
             return self.returncode
 
-    def prepare(*_args, **_kwargs):
+    def prepare(plan_number, **kwargs):
         clock["now"] += 1_000.0
+        return _missing_cleanup_record(
+            plan_number,
+            include_message_sidecars=True,
+            **kwargs,
+        )
 
     monkeypatch.setattr(rascmdr_module.time, "monotonic", lambda: clock["now"])
     monkeypatch.setattr(
@@ -1045,10 +1099,18 @@ def test_compute_plan_timeout_uses_only_exact_cancellation_and_records_evidence(
             )
         ),
     )
+    def finalize(plan_number, **kwargs):
+        finalization_calls.append(((plan_number,), kwargs))
+        return _missing_cleanup_record(
+            plan_number,
+            include_message_sidecars=False,
+            **kwargs,
+        )
+
     monkeypatch.setattr(
         rascmdr_module,
         "finalize_plan_execution_artifacts",
-        lambda *args, **kwargs: finalization_calls.append((args, kwargs)),
+        finalize,
     )
 
     result = RasCmdr.compute_plan(
