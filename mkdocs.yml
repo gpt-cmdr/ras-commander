@@ -242,5 +242,6 @@ nav:
     - Release Notes: development/release-notes.md
   - About:
     - Cite and Support RAS Commander: cite.md
+    - Command Line is All You Need: about/command-line-is-all-you-need.md
     - Acknowledgments: about/acknowledgments.md
     - CLB Engineering: about/clb-engineering.md
