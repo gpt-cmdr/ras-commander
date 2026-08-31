@@ -41,6 +41,7 @@ List of Functions in RasUnsteady:
 - extract_tables()
 - write_table_to_file()
 - get_met_precipitation_config()
+- disable_meteorology()
 - set_precipitation_hyetograph()
 - set_constant_precipitation()
 - set_gridded_precipitation()
@@ -52,6 +53,7 @@ List of Functions in RasUnsteady:
 
 Precipitation Functions:
 - get_met_precipitation_config() - Read Meteorological Data tab precipitation settings
+- disable_meteorology() - Disable all inherited meteorological forcing in text/HDF state
 - set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
 - set_gridded_precipitation() - Configure GDAL raster precipitation
 - configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
@@ -3658,6 +3660,225 @@ class RasUnsteady:
             unsteady_path.name,
             mode_value,
         )
+
+    @staticmethod
+    @log_call
+    def disable_meteorology(
+        unsteady_file: Union[str, Path],
+        *,
+        compiled_plan_hdf: Optional[Union[str, Path]] = None,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Disable inherited meteorological forcing in an unsteady-flow clone.
+
+        HEC-RAS can retain meteorology state in the ``.u##.hdf`` sidecar even
+        when the corresponding ``.u##`` text contains no active precipitation,
+        wind, or evapotranspiration record.  A cloned breakout plan can then
+        fail in-band while reading an enabled HDF variable whose ``Values``
+        dataset is absent.  This method makes the disabled state explicit in
+        the text file and unsteady sidecar without deleting sidecar data.  For
+        an owned compiled ``*.tmp.hdf``, it removes the meteorology group to
+        match HEC-RAS's canonical no-meteorology execution state.
+
+        The optional ``compiled_plan_hdf`` is limited to a results-free
+        ``*.tmp.hdf`` execution artifact.  Supplying it is useful when Phase-1
+        Windows/Wine preprocessing has already assembled the plan and the
+        caller must align that owned task-local artifact before native Linux
+        execution.  Result ``*.hdf`` files are rejected.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Unsteady-flow number or owned ``.u##`` path.
+        compiled_plan_hdf : str or Path, optional
+            Owned ``*.tmp.hdf`` whose ``/Event Conditions/Meteorology`` groups
+            should also be disabled.  The file must already exist and contain
+            ``/Event Conditions``.
+        ras_object : optional
+            Project object used to resolve an unsteady-flow number.
+
+        Returns
+        -------
+        dict
+            Mutation evidence including the updated text keys, sidecar groups
+            whose ``Enabled`` attribute was set to zero, and any compiled-plan
+            meteorology groups removed.
+        """
+        import h5py
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_object,
+        )
+        sidecar_hdf = Path(str(unsteady_path) + ".hdf")
+        compiled_path: Optional[Path] = None
+        if compiled_plan_hdf is not None:
+            compiled_path = Path(compiled_plan_hdf)
+            if not compiled_path.name.casefold().endswith(".tmp.hdf"):
+                raise ValueError(
+                    "compiled_plan_hdf must be an owned results-free '*.tmp.hdf' file"
+                )
+            if not compiled_path.is_file():
+                raise FileNotFoundError(
+                    f"Compiled plan HDF not found: {compiled_path}"
+                )
+
+        hdf_targets = [
+            path
+            for path in (sidecar_hdf, compiled_path)
+            if path is not None and path.exists()
+        ]
+        for hdf_path in hdf_targets:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                if "Event Conditions" not in hdf_file:
+                    raise ValueError(
+                        f"Meteorology target lacks /Event Conditions: {hdf_path.name}"
+                    )
+
+        RasUnsteady._replace_met_precipitation_keys(
+            unsteady_path,
+            [
+                ("Precipitation Mode", "Disable"),
+                ("Met BC=Precipitation|Mode", "None"),
+            ],
+        )
+
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as file:
+            lines = file.readlines()
+        newline = RasUnsteady._detect_line_ending(lines)
+        had_terminal_newline = bool(
+            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
+        )
+        managed_prefixes = (
+            "Wind Mode=",
+            "Met BC=Evapotranspiration|Mode=",
+        )
+        insert_index = next(
+            (
+                index
+                for index, line in enumerate(lines)
+                if line.startswith(managed_prefixes)
+            ),
+            None,
+        )
+        if insert_index is None:
+            precip_indexes = [
+                index
+                for index, line in enumerate(lines)
+                if line.startswith(("Precipitation Mode=", "Met BC=Precipitation|"))
+            ]
+            insert_index = (
+                max(precip_indexes) + 1
+                if precip_indexes
+                else RasUnsteady._get_default_met_insert_index(lines)
+            )
+
+        filtered_lines: List[str] = []
+        removed_before_insert = 0
+        for index, line in enumerate(lines):
+            if line.startswith(managed_prefixes):
+                if index < insert_index:
+                    removed_before_insert += 1
+                continue
+            filtered_lines.append(line)
+        insert_index = max(0, insert_index - removed_before_insert)
+        desired_lines = [
+            f"Wind Mode=Disable{newline}",
+            f"Met BC=Evapotranspiration|Mode=Disable{newline}",
+        ]
+        if (
+            insert_index == len(filtered_lines)
+            and filtered_lines
+            and not filtered_lines[-1].endswith(("\n", "\r"))
+        ):
+            filtered_lines[-1] = f"{filtered_lines[-1]}{newline}"
+        if insert_index == len(filtered_lines) and not had_terminal_newline:
+            desired_lines[-1] = desired_lines[-1][:-len(newline)]
+        RasUnsteady._atomic_write_lines(
+            unsteady_path,
+            filtered_lines[:insert_index]
+            + desired_lines
+            + filtered_lines[insert_index:],
+        )
+
+        hdf_evidence = []
+        for hdf_path in hdf_targets:
+            if compiled_path is not None and hdf_path == compiled_path:
+                with h5py.File(hdf_path, "r+") as hdf_file:
+                    met_path = "Event Conditions/Meteorology"
+                    removed_groups = []
+                    if met_path in hdf_file:
+                        removed_groups = list(hdf_file[met_path].keys())
+                        del hdf_file[met_path]
+                    hdf_file.flush()
+                hdf_evidence.append(
+                    {
+                        "path": str(hdf_path),
+                        "representation": "compiled_plan",
+                        "meteorology_group_removed": bool(removed_groups),
+                        "removed_groups": removed_groups,
+                    }
+                )
+                continue
+
+            disabled_groups = []
+            with h5py.File(hdf_path, "r+") as hdf_file:
+                meteorology = hdf_file.require_group(
+                    "Event Conditions/Meteorology"
+                )
+                meteorology.require_group("Precipitation")
+                meteorology.require_group("Evapotranspiration")
+                for variable_name, item in meteorology.items():
+                    if not isinstance(item, h5py.Group):
+                        continue
+                    prior_value = item.attrs.get("Enabled")
+                    item.attrs["Enabled"] = np.uint8(0)
+                    disabled_groups.append(
+                        {
+                            "variable": variable_name,
+                            "enabled_before": (
+                                int(prior_value) if prior_value is not None else None
+                            ),
+                            "enabled_after": int(item.attrs["Enabled"]),
+                        }
+                    )
+                hdf_file.flush()
+            hdf_evidence.append(
+                {
+                    "path": str(hdf_path),
+                    "representation": "unsteady_sidecar",
+                    "disabled_groups": disabled_groups,
+                }
+            )
+
+        ras_obj = ras_object or ras
+        if ras_obj is not None and hasattr(ras_obj, "get_unsteady_entries"):
+            try:
+                ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+            except Exception as exc:
+                logger.debug("unsteady_df refresh skipped: %s", exc)
+
+        logger.info(
+            "Disabled meteorology in %s and %d HDF artifact(s)",
+            unsteady_path.name,
+            len(hdf_evidence),
+        )
+        return {
+            "unsteady_file": str(unsteady_path),
+            "text_state": {
+                "precipitation_mode": "Disable",
+                "precipitation_met_mode": "None",
+                "wind_mode": "Disable",
+                "evapotranspiration_mode": "Disable",
+            },
+            "hdf_targets": hdf_evidence,
+        }
 
     @staticmethod
     @log_call

@@ -1319,6 +1319,271 @@ Step 5: Configure (optional — auto-detection usually works)
             )
 
     @staticmethod
+    def _geometry_completion_semantics(geom_hdf_path: Path) -> Dict[str, Any]:
+        """Inspect 1D completion layers and 2D property-table readiness."""
+        evidence: Dict[str, Any] = {
+            "readable": False,
+            "has_1d_geometry": False,
+            "has_2d_geometry": False,
+            "edge_lines_written": False,
+            "interpolation_surface_written": False,
+            "two_d_flow_areas": {},
+            "success": False,
+            "error": None,
+        }
+        try:
+            import h5py
+
+            with h5py.File(geom_hdf_path, "r") as hdf:
+                evidence["readable"] = True
+                evidence["edge_lines_written"] = (
+                    "Geometry/River Edge Lines" in hdf
+                )
+                evidence["interpolation_surface_written"] = (
+                    "Geometry/Cross Section Interpolation Surfaces" in hdf
+                )
+                cross_sections = hdf.get("Geometry/Cross Sections/Attributes")
+                evidence["has_1d_geometry"] = bool(
+                    cross_sections is not None and cross_sections.shape[0] > 0
+                )
+
+                collection = hdf.get("Geometry/2D Flow Areas")
+                attributes = (
+                    collection.get("Attributes") if collection is not None else None
+                )
+                evidence["has_2d_geometry"] = bool(
+                    attributes is not None and attributes.shape[0] > 0
+                )
+                if collection is not None:
+                    for name, area in collection.items():
+                        if name == "Attributes" or not isinstance(area, h5py.Group):
+                            continue
+                        cells = area.get("Cells Center Coordinate")
+                        faces = area.get("Faces FacePoint Indexes")
+                        cell_info = area.get("Cells Volume Elevation Info")
+                        cell_values = area.get("Cells Volume Elevation Values")
+                        face_info = area.get("Faces Area Elevation Info")
+                        face_values = area.get("Faces Area Elevation Values")
+                        cell_rows = int(cells.shape[0]) if cells is not None else 0
+                        face_rows = int(faces.shape[0]) if faces is not None else 0
+                        area_ready = bool(
+                            cell_rows > 0
+                            and face_rows > 0
+                            and cell_info is not None
+                            and cell_info.shape[0] == cell_rows
+                            and cell_values is not None
+                            and cell_values.shape[0] > 0
+                            and face_info is not None
+                            and face_info.shape[0] == face_rows
+                            and face_values is not None
+                            and face_values.shape[0] > 0
+                        )
+                        evidence["two_d_flow_areas"][name] = {
+                            "cell_rows": cell_rows,
+                            "face_rows": face_rows,
+                            "cell_property_info_rows": (
+                                int(cell_info.shape[0])
+                                if cell_info is not None
+                                else 0
+                            ),
+                            "cell_property_value_rows": (
+                                int(cell_values.shape[0])
+                                if cell_values is not None
+                                else 0
+                            ),
+                            "face_property_info_rows": (
+                                int(face_info.shape[0])
+                                if face_info is not None
+                                else 0
+                            ),
+                            "face_property_value_rows": (
+                                int(face_values.shape[0])
+                                if face_values is not None
+                                else 0
+                            ),
+                            "ready": area_ready,
+                        }
+
+                one_d_ready = (
+                    not evidence["has_1d_geometry"]
+                    or evidence["edge_lines_written"]
+                )
+                two_d_ready = (
+                    not evidence["has_2d_geometry"]
+                    or (
+                        bool(evidence["two_d_flow_areas"])
+                        and all(
+                            item["ready"]
+                            for item in evidence["two_d_flow_areas"].values()
+                        )
+                    )
+                )
+                evidence["success"] = bool(
+                    (evidence["has_1d_geometry"] or evidence["has_2d_geometry"])
+                    and one_d_ready
+                    and two_d_ready
+                )
+        except Exception as exc:
+            evidence["error"] = f"{type(exc).__name__}: {exc}"
+        return evidence
+
+    @staticmethod
+    def _terminate_owned_process_tree(process: subprocess.Popen) -> Dict[str, Any]:
+        """Terminate only the process tree rooted at *process*."""
+        evidence = {
+            "root_pid": int(process.pid),
+            "observed_pids": [],
+            "terminated_pids": [],
+            "killed_pids": [],
+            "survivor_pids": [],
+        }
+        try:
+            import psutil
+
+            try:
+                root = psutil.Process(int(process.pid))
+                owned = [root, *root.children(recursive=True)]
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                owned = []
+            evidence["observed_pids"] = sorted(int(item.pid) for item in owned)
+            alive = []
+            for item in reversed(owned):
+                try:
+                    if item.is_running() and item.status() != psutil.STATUS_ZOMBIE:
+                        evidence["terminated_pids"].append(int(item.pid))
+                        item.terminate()
+                        alive.append(item)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            _gone, alive = psutil.wait_procs(alive, timeout=3)
+            for item in alive:
+                try:
+                    evidence["killed_pids"].append(int(item.pid))
+                    item.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            _gone, survivors = psutil.wait_procs(alive, timeout=3)
+            evidence["survivor_pids"] = sorted(
+                int(item.pid) for item in survivors
+            )
+        except Exception:
+            if process.poll() is None:
+                process.kill()
+        try:
+            process.wait(timeout=10)
+        except Exception:
+            pass
+        return evidence
+
+    @staticmethod
+    def _run_complete_geometry_supervised(
+        rasprocess_path: Path,
+        args: List[str],
+        geom_hdf_path: Path,
+        timeout: int,
+        working_dir: Path,
+        semantic_stable_seconds: float,
+    ) -> Tuple[subprocess.CompletedProcess, str, Dict[str, Any]]:
+        """Run CompleteGeometry until exit or stable semantic HDF completion."""
+        if IS_LINUX:
+            wine_config = RasProcess._get_wine_config()
+            if wine_config is None:
+                raise RuntimeError(
+                    "Wine not configured on Linux. Call RasProcess.configure_wine() "
+                    "or set WINEPREFIX."
+                )
+            command, env, cwd = RasProcess._build_wine_command(
+                rasprocess_path,
+                args,
+                wine_config,
+                working_dir=working_dir,
+            )
+        else:
+            command = [str(rasprocess_path), *args]
+            env = None
+            cwd = str(working_dir) if working_dir else None
+
+        if semantic_stable_seconds < 0:
+            raise ValueError("semantic_stable_seconds must be non-negative")
+
+        with tempfile.TemporaryFile(
+            mode="w+", encoding="utf-8", errors="replace"
+        ) as stdout_file, tempfile.TemporaryFile(
+            mode="w+", encoding="utf-8", errors="replace"
+        ) as stderr_file:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                env=env,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                text=True,
+            )
+            deadline = time.monotonic() + timeout
+            ready_since = None
+            ready_signature = None
+            completion_mode = "process_exit"
+            cleanup = {
+                "root_pid": int(process.pid),
+                "observed_pids": [int(process.pid)],
+                "terminated_pids": [],
+                "killed_pids": [],
+                "survivor_pids": [],
+            }
+            while process.poll() is None:
+                semantics = RasProcess._geometry_completion_semantics(
+                    geom_hdf_path
+                )
+                if semantics["success"]:
+                    try:
+                        stat = geom_hdf_path.stat()
+                        signature = (stat.st_size, stat.st_mtime_ns)
+                    except OSError:
+                        signature = None
+                    if signature is not None and signature == ready_signature:
+                        ready_since = ready_since or time.monotonic()
+                    else:
+                        ready_signature = signature
+                        ready_since = time.monotonic()
+                    if (
+                        ready_since is not None
+                        and time.monotonic() - ready_since
+                        >= semantic_stable_seconds
+                    ):
+                        completion_mode = "semantic_hdf_stable"
+                        cleanup = RasProcess._terminate_owned_process_tree(process)
+                        break
+                else:
+                    ready_since = None
+                    ready_signature = None
+
+                if time.monotonic() >= deadline:
+                    cleanup = RasProcess._terminate_owned_process_tree(process)
+                    raise subprocess.TimeoutExpired(command, timeout)
+                time.sleep(1)
+
+            if process.poll() is None:
+                process.wait(timeout=10)
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read()
+            stderr = stderr_file.read()
+            if IS_LINUX and stderr:
+                stderr = "\n".join(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(("0", "wine: "))
+                    and "err:" not in line[:20]
+                )
+            completed = subprocess.CompletedProcess(
+                command,
+                process.returncode,
+                stdout,
+                stderr,
+            )
+            return completed, completion_mode, cleanup
+
+    @staticmethod
     def _resolve_path_for_rasprocess(path: Path) -> str:
         """
         Convert a path to the format RasProcess.exe expects.
@@ -1459,6 +1724,7 @@ Step 5: Configure (optional — auto-detection usually works)
         ras_object=None,
         ras_version: str = None,
         timeout: int = 1800,
+        semantic_stable_seconds: float = 10.0,
     ) -> Dict[str, Any]:
         """
         Run HEC-RAS's headless geometry completion (RasProcess.exe CompleteGeometry).
@@ -1516,6 +1782,11 @@ Step 5: Configure (optional — auto-detection usually works)
             Specific HEC-RAS version for the RasProcess.exe lookup.
         timeout : int, optional
             Command timeout in seconds (default 1800).
+        semantic_stable_seconds : float, optional
+            Under Wine, terminate only the owned ``RasProcess.exe`` tree after
+            the completed HDF semantics and file size/mtime remain stable for
+            this many seconds (default 10). Native Windows continues to wait
+            for normal process exit.
 
         Returns
         -------
@@ -1573,36 +1844,51 @@ Step 5: Configure (optional — auto-detection usually works)
             )
 
         logger.info(f"Running RasProcess.exe CompleteGeometry on {geom_hdf_path.name}")
-        result = RasProcess._run_rasprocess(
-            rasprocess, args, timeout=timeout, working_dir=geom_hdf_path.parent
-        )
+        completion_mode = "process_exit"
+        owned_process_cleanup = None
+        if _is_wine_helper_runtime():
+            result, completion_mode, owned_process_cleanup = (
+                RasProcess._run_complete_geometry_supervised(
+                    rasprocess,
+                    args,
+                    geom_hdf_path,
+                    timeout=timeout,
+                    working_dir=geom_hdf_path.parent,
+                    semantic_stable_seconds=semantic_stable_seconds,
+                )
+            )
+        else:
+            result = RasProcess._run_rasprocess(
+                rasprocess,
+                args,
+                timeout=timeout,
+                working_dir=geom_hdf_path.parent,
+            )
         stdout = result.stdout or ""
         stderr = result.stderr or ""
 
-        # Confirm the artifacts landed in the geometry HDF.
-        edge_lines_written = False
-        interp_surface_written = False
-        try:
-            import h5py
+        semantic_validation = RasProcess._geometry_completion_semantics(
+            geom_hdf_path
+        )
+        edge_lines_written = semantic_validation["edge_lines_written"]
+        interp_surface_written = semantic_validation[
+            "interpolation_surface_written"
+        ]
 
-            with h5py.File(geom_hdf_path, "r") as hdf:
-                edge_lines_written = "Geometry/River Edge Lines" in hdf
-                interp_surface_written = (
-                    "Geometry/Cross Section Interpolation Surfaces" in hdf
-                )
-        except Exception as e:
-            logger.debug(f"Post-run HDF inspection failed: {e}")
-
+        process_completed = (
+            result.returncode == 0 or completion_mode == "semantic_hdf_stable"
+        )
         success = (
-            result.returncode == 0
+            process_completed
             and "Error:" not in stdout
             and not stderr.lstrip().startswith("Error:")
-            and edge_lines_written
+            and semantic_validation["success"]
         )
         if not success:
             logger.warning(
                 f"CompleteGeometry did not fully succeed (rc={result.returncode}, "
-                f"edge_lines={edge_lines_written}). stdout: {stdout.strip()[:400]}"
+                f"mode={completion_mode}, semantics="
+                f"{semantic_validation['success']}). stdout: {stdout.strip()[:400]}"
             )
 
         return {
@@ -1613,6 +1899,9 @@ Step 5: Configure (optional — auto-detection usually works)
             "stderr": stderr,
             "edge_lines_written": edge_lines_written,
             "interpolation_surface_written": interp_surface_written,
+            "completion_mode": completion_mode,
+            "semantic_validation": semantic_validation,
+            "owned_process_cleanup": owned_process_cleanup,
             "success": success,
         }
 
@@ -1624,6 +1913,7 @@ Step 5: Configure (optional — auto-detection usually works)
         ras_object=None,
         ras_version: str = None,
         timeout: int = 1800,
+        semantic_stable_seconds: float = 10.0,
     ) -> Dict[str, Any]:
         """Deprecated alias for :meth:`compute_geometry`. Use ``compute_geometry``."""
         warnings.warn(
@@ -1638,6 +1928,7 @@ Step 5: Configure (optional — auto-detection usually works)
             ras_object=ras_object,
             ras_version=ras_version,
             timeout=timeout,
+            semantic_stable_seconds=semantic_stable_seconds,
         )
 
     @staticmethod

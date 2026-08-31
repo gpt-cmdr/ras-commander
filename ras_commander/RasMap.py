@@ -69,6 +69,7 @@ List of Functions in RasMap:
 - add_wse_comparison_layers(): Batch add WSE comparison layers for existing/proposed plan pairs
 """
 
+import os
 import re
 import subprocess
 import warnings
@@ -4932,6 +4933,177 @@ class RasMap:
         action = "Replaced" if existing_layer is not None else "Added"
         logger.info("%s terrain layer '%s' in .rasmap", action, layer_name)
         logger.debug("Terrain layer '%s' filename: %s", layer_name, rel_path_str)
+
+    @staticmethod
+    @log_call
+    def prune_event_condition_layers(
+        keep_filenames: Sequence[Union[str, Path]],
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        backup: bool = True,
+    ) -> Dict[str, Any]:
+        """Remove stale event-condition layers from a cloned project.
+
+        HEC-RAS evaluates ``RASEventConditions`` layers during unsteady
+        preprocessing, including unchecked layers inherited from other plans
+        or source-project folders.  A cloned breakout project can therefore
+        fail with ``Error processing event conditions`` even when its current
+        plan and unsteady-flow file are valid.
+
+        This method retains only exact filename matches, removes unmatched
+        event-condition layers anywhere in the ``.rasmap`` tree, writes
+        atomically, and validates exact readback.  It never edits the referenced
+        HDF files.  Pass an empty sequence to remove every event-condition
+        layer.
+
+        Args:
+            keep_filenames: Exact layer ``Filename`` values to retain. Paths
+                inside the project folder may be supplied as absolute paths;
+                they are normalized to ``.\\`` relative Windows form.
+            rasmap_path: Explicit ``.rasmap`` path. When omitted, resolve it
+                from ``ras_object``.
+            ras_object: Optional initialized project object.
+            backup: Create a durable sibling backup before mutation.
+
+        Returns:
+            JSON-safe mutation evidence including removed/retained layers,
+            backup path, and exact readback counts.
+
+        Raises:
+            FileNotFoundError: If the ``.rasmap`` does not exist.
+            FileExistsError: If the backup or atomic staging path exists.
+            ValueError: If XML is invalid or a requested retained filename is
+                absent before mutation.
+            RuntimeError: If exact readback validation fails.
+        """
+        ras_obj = ras_object or ras
+        if rasmap_path is None:
+            resolved = RasMap.get_rasmap_path(ras_obj)
+            if resolved is None:
+                raise FileNotFoundError("Project .rasmap file was not found")
+            target = Path(resolved)
+        else:
+            target = Path(rasmap_path)
+        if not target.is_file():
+            raise FileNotFoundError(f"RASMapper file not found: {target}")
+
+        def normalize_filename(value: Union[str, Path]) -> str:
+            raw = str(value).strip()
+            candidate = Path(raw)
+            if candidate.is_absolute():
+                try:
+                    raw = ".\\" + str(
+                        RasUtils.safe_resolve(candidate).relative_to(
+                            RasUtils.safe_resolve(target.parent)
+                        )
+                    )
+                except ValueError:
+                    raw = str(candidate)
+            return raw.replace("/", "\\").casefold()
+
+        requested = {normalize_filename(value) for value in keep_filenames}
+        try:
+            tree = ET.parse(target)
+        except ET.ParseError as exc:
+            raise ValueError(f"Error parsing .rasmap XML: {exc}") from exc
+        root = tree.getroot()
+
+        layers = []
+        for parent in root.iter():
+            for layer in list(parent):
+                if (
+                    layer.tag == "Layer"
+                    and layer.get("Type") == "RASEventConditions"
+                ):
+                    layers.append((parent, layer))
+        available = {
+            normalize_filename(layer.get("Filename") or "")
+            for _parent, layer in layers
+        }
+        missing = sorted(requested - available)
+        if missing:
+            raise ValueError(
+                "Requested event-condition layer filename(s) are absent: "
+                + ", ".join(missing)
+            )
+
+        removed = []
+        retained = []
+        for parent, layer in layers:
+            record = {
+                "name": layer.get("Name") or "",
+                "filename": layer.get("Filename") or "",
+                "checked": layer.get("Checked"),
+            }
+            if normalize_filename(record["filename"]) in requested:
+                retained.append(record)
+            else:
+                parent.remove(layer)
+                removed.append(record)
+
+        backup_path = None
+        staging = target.with_name(f".{target.name}.event-conditions.tmp")
+        if removed:
+            if staging.exists():
+                raise FileExistsError(
+                    f"Atomic .rasmap staging path already exists: {staging}"
+                )
+            if backup:
+                backup_path = target.with_name(
+                    f"{target.stem}.event-conditions.bak{target.suffix}"
+                )
+                if backup_path.exists():
+                    raise FileExistsError(
+                        f"Event-condition backup already exists: {backup_path}"
+                    )
+                shutil.copy2(target, backup_path)
+            try:
+                tree.write(staging, encoding="utf-8", xml_declaration=False)
+                ET.parse(staging)
+                os.replace(staging, target)
+            finally:
+                if staging.exists():
+                    staging.unlink()
+
+        readback_root = ET.parse(target).getroot()
+        readback = []
+        for layer in readback_root.iter("Layer"):
+            if layer.get("Type") == "RASEventConditions":
+                readback.append(
+                    {
+                        "name": layer.get("Name") or "",
+                        "filename": layer.get("Filename") or "",
+                        "checked": layer.get("Checked"),
+                    }
+                )
+        readback_filenames = {
+            normalize_filename(layer["filename"]) for layer in readback
+        }
+        if readback_filenames != requested:
+            raise RuntimeError(
+                "Event-condition readback mismatch: expected "
+                f"{sorted(requested)}, observed {sorted(readback_filenames)}"
+            )
+
+        evidence = {
+            "rasmap_path": str(target),
+            "backup_path": str(backup_path) if backup_path is not None else None,
+            "requested_filenames": sorted(requested),
+            "before_count": len(layers),
+            "removed_count": len(removed),
+            "retained_count": len(retained),
+            "readback_count": len(readback),
+            "removed": removed,
+            "retained": retained,
+            "readback": readback,
+            "changed": bool(removed),
+        }
+        logger.info(
+            "Pruned %d stale event-condition layer(s); retained %d",
+            len(removed),
+            len(retained),
+        )
+        return evidence
 
     # ── Calculated Layers ───────────────────────────────────────────────
 

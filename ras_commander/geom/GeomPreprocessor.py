@@ -272,10 +272,13 @@ class GeomPreprocessor:
                     _watchdog.add_pid(process.pid)
 
                 geom_only_artifacts = None
+                geometry_hdf_path = (
+                    project_folder / f"{project_name}.g{geometry_number}.hdf"
+                )
                 if geometry_only:
                     geom_only_artifacts = [
                         project_folder / f"{project_name}.c{geometry_number}",
-                        project_folder / f"{project_name}.g{geometry_number}.hdf",
+                        geometry_hdf_path,
                         project_folder / f"{project_name}.x{geometry_number}",
                     ]
 
@@ -287,6 +290,8 @@ class GeomPreprocessor:
                     signals=flow_start_signals
                     or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
                     geometry_only_artifacts=geom_only_artifacts,
+                    geometry_hdf_path=geometry_hdf_path,
+                    flow_type=flow_type,
                 )
 
                 timed_out = monitor_result["timed_out"]
@@ -369,6 +374,17 @@ class GeomPreprocessor:
                 errors.append(
                     "No geometry preprocessor artifacts found "
                     f"(.c{geometry_number}, .g{geometry_number}.hdf, .x{geometry_number}, or .b{plan_num})"
+                )
+            geometry_hdf_ready, geometry_hdf_reason = (
+                GeomPreprocessor._geometry_hdf_readiness(
+                    geometry_hdf_path,
+                    flow_type=flow_type,
+                )
+            )
+            if geometry_only and not geometry_hdf_ready:
+                errors.append(
+                    "Geometry HDF is not semantically ready: "
+                    f"{geometry_hdf_reason}"
                 )
             if not existing_message_paths and not (geometry_only and artifact_paths):
                 errors.append("No compute messages were produced")
@@ -562,14 +578,18 @@ class GeomPreprocessor:
         max_wait: int,
         signals: List[str],
         geometry_only_artifacts: Optional[List[Path]] = None,
+        geometry_hdf_path: Optional[Path] = None,
+        flow_type: Optional[str] = None,
     ) -> dict:
         """Poll compute-message files until a flow-start signal, exit, or timeout.
 
         When *geometry_only_artifacts* is provided (geometry_only mode), the
         loop also checks whether preprocessing artifacts have been freshly
-        written and stabilized.  Because ``Run UNet=0`` prevents any
-        flow-start signal from appearing, artifact stability is the only
-        reliable completion indicator in geometry-only mode.
+        written, stabilized, and the compiled geometry HDF is semantically
+        populated.  Because ``Run UNet=0`` prevents any flow-start signal
+        from appearing, semantic artifact readiness is the reliable completion
+        indicator in geometry-only mode.  An empty HDF placeholder must never
+        terminate HEC-RAS early.
         """
         positions = {path: 0 for path in message_paths}
         signal_detected = None
@@ -595,6 +615,18 @@ class GeomPreprocessor:
                 lower_chunk = chunk.lower()
                 for signal, lower_signal in signal_patterns:
                     if lower_signal in lower_chunk:
+                        if geometry_hdf_path is not None:
+                            ready, reason = GeomPreprocessor._geometry_hdf_readiness(
+                                geometry_hdf_path,
+                                flow_type=flow_type,
+                            )
+                            if not ready:
+                                logger.debug(
+                                    "Ignoring flow-start signal until geometry "
+                                    "HDF is ready: %s",
+                                    reason,
+                                )
+                                continue
                         signal_detected = signal
                         return {
                             "signal_detected": signal_detected,
@@ -619,9 +651,21 @@ class GeomPreprocessor:
                 if fresh:
                     try:
                         latest_mtime = max(a.stat().st_mtime for a in fresh)
-                        if time.time() - latest_mtime >= _ARTIFACT_STABLE:
+                        hdf_ready = True
+                        if geometry_hdf_path is not None:
+                            hdf_ready, _reason = (
+                                GeomPreprocessor._geometry_hdf_readiness(
+                                    geometry_hdf_path,
+                                    flow_type=flow_type,
+                                )
+                            )
+                        if (
+                            hdf_ready
+                            and time.time() - latest_mtime >= _ARTIFACT_STABLE
+                        ):
                             signal_detected = (
-                                "Geometry preprocessing artifacts stable "
+                                "Geometry preprocessing artifacts semantically "
+                                "ready and stable "
                                 "(geometry_only mode)"
                             )
                             return {
@@ -637,6 +681,88 @@ class GeomPreprocessor:
             time.sleep(0.5)
 
         return {"signal_detected": signal_detected, "timed_out": True}
+
+    @staticmethod
+    def _geometry_hdf_readiness(
+        geometry_hdf_path: Path,
+        flow_type: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """Return whether a compiled geometry HDF contains usable geometry.
+
+        HEC-RAS creates a small HDF placeholder containing only an empty
+        ``/Geometry`` group before it imports the text geometry.  File
+        existence, non-zero size, and a quiet modification time therefore do
+        not prove preprocessing is complete.
+
+        For a classified 2D plan, require at least one flow area with non-empty
+        cell and face topology.  For other plan types, require a recognized,
+        non-empty geometry feature collection.  The check is read-only and
+        returns a diagnostic instead of raising while HEC-RAS still owns the
+        file.
+        """
+        path = Path(geometry_hdf_path)
+        if not path.is_file():
+            return False, f"missing file: {path}"
+        try:
+            if path.stat().st_size <= 0:
+                return False, f"empty file: {path}"
+        except OSError as exc:
+            return False, f"could not stat {path}: {exc}"
+
+        try:
+            import h5py
+
+            with h5py.File(path, "r") as hdf:
+                if not hdf.attrs.get("File Type"):
+                    return False, "root File Type attribute is absent"
+                if "Geometry" not in hdf:
+                    return False, "/Geometry group is absent"
+
+                normalized_flow_type = str(flow_type or "").casefold()
+                if "2d" in normalized_flow_type:
+                    collection_path = "Geometry/2D Flow Areas"
+                    if collection_path not in hdf:
+                        return False, "/Geometry/2D Flow Areas is absent"
+                    collection = hdf[collection_path]
+                    attributes = collection.get("Attributes")
+                    if attributes is None or attributes.shape[0] == 0:
+                        return False, "2D Flow Areas/Attributes is empty"
+
+                    ready_areas = []
+                    for name, item in collection.items():
+                        if name == "Attributes" or not isinstance(item, h5py.Group):
+                            continue
+                        cells = item.get("Cells Center Coordinate")
+                        faces = item.get("Faces FacePoint Indexes")
+                        if (
+                            cells is not None
+                            and faces is not None
+                            and cells.shape[0] > 0
+                            and faces.shape[0] > 0
+                        ):
+                            ready_areas.append(name)
+                    if not ready_areas:
+                        return False, "no 2D flow area has non-empty cell/face topology"
+                    return True, f"2D geometry ready: {', '.join(ready_areas)}"
+
+                collection_paths = (
+                    "Geometry/Cross Sections/Attributes",
+                    "Geometry/River Centerlines/Attributes",
+                    "Geometry/Storage Areas/Attributes",
+                    "Geometry/Structures/Attributes",
+                    "Geometry/SA 2D Area Conn/Attributes",
+                    "Geometry/2D Flow Areas/Attributes",
+                )
+                populated = []
+                for collection_path in collection_paths:
+                    dataset = hdf.get(collection_path)
+                    if dataset is not None and getattr(dataset, "shape", (0,))[0] > 0:
+                        populated.append(collection_path)
+                if not populated:
+                    return False, "no recognized geometry feature collection is populated"
+                return True, f"geometry ready: {', '.join(populated)}"
+        except Exception as exc:
+            return False, f"could not inspect geometry HDF: {type(exc).__name__}: {exc}"
 
     @staticmethod
     def _wait_for_preprocess_child(
