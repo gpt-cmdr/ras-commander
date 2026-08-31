@@ -329,7 +329,7 @@ def _run_watchdog(
     time_module: Any = time,
 ) -> int:
     """Monitor the exact parent identity and clean on orphan or timeout."""
-    started = time_module.time()
+    deadline = time_module.monotonic() + max_runtime
     while True:
         time_module.sleep(check_interval)
         if not lock_file.exists():
@@ -366,7 +366,7 @@ def _run_watchdog(
             )
             return 2
 
-        if time_module.time() - started > max_runtime:
+        if time_module.monotonic() > deadline:
             exit_code, result = _cleanup_after_trigger(
                 lock_file=lock_file,
                 ras_pid=ras_pid,

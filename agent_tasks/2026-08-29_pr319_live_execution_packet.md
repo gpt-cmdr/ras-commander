@@ -318,6 +318,18 @@ or opens the GUI; false or unknown acceptance fails closed.
 
 ## Exact representative engines
 
+### HEC-RAS 4.1 Controller defect found during qualification
+
+The stopped 4.1 lane (run `6b71b820-ae56-416c-92b9-833dac645530`, attempt
+`9a124f78-805b-46ea-816c-4a46216c43b4`) exposed a version-surface defect, not
+valid completion evidence: `RAS41.HECRASController` has neither
+`Compute_Complete` nor `QuitRas`. The resolution is capability-driven dispatch:
+4.0/4.1 use the two-argument `Compute_CurrentPlan`, poll the inverted
+`Compute_IsStillComputing` signal to a monotonic deadline, and retain watchdog
+coverage through exact owned-process cleanup. Identity-query uncertainty
+preserves the session lock and fails closed. The stopped receipt is not
+reusable; a fresh representative lane is required after offline validation.
+
 | Requested version | API | Identity | Expected result family |
 |---|---|---|---|
 | 4.0 | `RasControl.run_plan()` | `RAS400.HECRASController`; canonical Controller version `4.0`; actual `C:/Program Files (x86)/HEC/HEC-RAS/4.0/Ras.exe`; SHA-256 `29f22cd3330ca14e7b92a5e8ca0293cb46a582156ae2bd03bbb1b83f1701300b`; `strict_close=True`; watchdog and `max_runtime` enabled | legacy `.O##` |

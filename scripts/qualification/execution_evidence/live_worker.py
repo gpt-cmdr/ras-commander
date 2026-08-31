@@ -79,6 +79,11 @@ _ENGINE_DETAILS_COMMON = (
 _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
 _WORKER_AUTHORIZATION_POLL_SECONDS = 0.02
 _SUPERVISOR_RECEIPT_MARGIN_SECONDS = 5.0
+_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE: Mapping[str, Any] = {
+    "completion_method": "Compute_IsStillComputing",
+    "controller_quit_supported": False,
+    "controller_close_method": "owned_process_cleanup",
+}
 _RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
     {
         "plan_number",
@@ -93,6 +98,32 @@ _RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
         "max_runtime_seconds",
     }
 )
+
+
+def _expected_controller_capability_evidence(
+    engine: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Return the exact successful Controller capability receipt contract."""
+    resolved_version = engine.get("resolved_controller_version")
+    if resolved_version in {"4.0", "4.1"}:
+        return dict(_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE)
+    try:
+        major_version = int(str(resolved_version).split(".", maxsplit=1)[0])
+    except (TypeError, ValueError):
+        return None
+    if major_version < 5:
+        return None
+    return {
+        "completion_method": (
+            "Compute_CurrentPlan_blocking_return"
+            if engine.get("blocking") is True
+            else "Compute_Complete"
+        ),
+        "controller_quit_supported": True,
+        "controller_close_method": "quit_ras",
+    }
+
+
 _RASCMD_RUNTIME_DETAIL_FIELDS = frozenset(
     {
         "artifact_finalization_failure",
@@ -1758,6 +1789,30 @@ def _validate_execution_result(
             raise LiveCapabilityError("RasControl Controller ProgID mismatch")
         if details.get("resolved_controller_version") != engine["resolved_controller_version"]:
             raise LiveCapabilityError("RasControl resolved Controller version mismatch")
+        expected_capabilities = _expected_controller_capability_evidence(engine)
+        if expected_capabilities is None:
+            raise LiveCapabilityError(
+                "RasControl Controller capability contract is unsupported"
+            )
+        missing_capabilities = sorted(set(expected_capabilities).difference(details))
+        if missing_capabilities:
+            raise LiveCapabilityError(
+                "RasControl Controller capability evidence is missing: "
+                + ", ".join(missing_capabilities)
+            )
+        invalid_capabilities = sorted(
+            field
+            for field, expected in expected_capabilities.items()
+            if (
+                type(details[field]) is not type(expected)
+                or details[field] != expected
+            )
+        )
+        if invalid_capabilities:
+            raise LiveCapabilityError(
+                "RasControl Controller capability evidence is invalid: "
+                + ", ".join(invalid_capabilities)
+            )
         expected_controller_executable = Path(
             engine["controller_executable"]
         ).resolve(strict=True)

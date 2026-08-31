@@ -8,6 +8,33 @@ import importlib
 watchdog = importlib.import_module("ras_commander._orphan_watchdog")
 
 
+def test_watchdog_timeout_uses_monotonic_clock_despite_wall_clock_jumps(
+    monkeypatch, tmp_path
+):
+    lock_file = tmp_path / "session.lock"
+    lock_file.write_text("evidence", encoding="utf-8")
+    class Clock:
+        monotonic_values = iter((10.0, 11.0, 13.1))
+        @classmethod
+        def monotonic(cls): return next(cls.monotonic_values)
+        @staticmethod
+        def time(): raise AssertionError("watchdog timeout must not use wall clock")
+        @staticmethod
+        def sleep(_seconds): return None
+    exact = watchdog._IdentityInspection(state="exact")
+    monkeypatch.setattr(watchdog, "_inspect_process_identity", lambda **_kwargs: exact)
+    monkeypatch.setattr(
+        watchdog, "_cleanup_after_trigger",
+        lambda **_kwargs: (0, watchdog._OwnedProcessCleanupResult(state="absent")),
+    )
+    assert watchdog._run_watchdog(
+        parent_pid=1, parent_create_time=1.0, parent_name="python.exe",
+        ras_pid=2, ras_create_time=2.0, ras_name="Ras.exe",
+        max_runtime=2.0, lock_file=lock_file, check_interval=0.1,
+        time_module=Clock,
+    ) == 0
+
+
 def _run_trigger(tmp_path, process_factory):
     lock_file = tmp_path / "session.lock"
     lock_file.write_text("owned session evidence", encoding="utf-8")

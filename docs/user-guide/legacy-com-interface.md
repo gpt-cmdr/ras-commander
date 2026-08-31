@@ -13,17 +13,18 @@ For older HEC-RAS versions that don't support command-line execution or HDF outp
 
 ## Supported Versions
 
-| Version | Support |
-|---------|---------|
-| 3.1 | Full |
-| 4.1 | Full |
-| 5.0.x (501-507) | Full |
-| 6.0 | Full |
-| 6.3 family alias | Full; selects the release-matching `RAS630` Controller |
-| 6.3.0.2 exact | Full; selects `RAS630.HECRASController` |
-| 6.3.1 exact | Full; selects `RAS631.HECRASController` |
-| 6.6 | Full |
-| 7.0 | Full |
+| Version | Controller capability contract | Result family |
+|---------|--------------------------------|---------------|
+| 3.x alias | Resolves to the 4.1 Controller contract below | legacy `.O##` |
+| 4.0 | `RAS400`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 4.1 | `RAS41`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 5.0.x (501-507) | Modern three-argument compute, `Compute_Complete`, and `QuitRas` | plan HDF |
+| 6.0 | Modern Controller contract | plan HDF |
+| 6.3 family alias | Modern contract; selects `RAS630` | plan HDF |
+| 6.3.0.2 exact | Modern `RAS630.HECRASController` | plan HDF |
+| 6.3.1 exact | Modern `RAS631.HECRASController` | plan HDF |
+| 6.6 | Modern Controller contract | plan HDF |
+| 7.0 | Modern Controller contract | plan HDF |
 
 ## Initialization
 
@@ -98,15 +99,30 @@ values preserve existing interactive behavior.
 
 `execution_details` contains JSON-safe provenance. Its stable common keys are
 `requested_controller_version`, `resolved_controller_version`,
-`controller_progid`, `compute_mode`, `message_count`,
+`controller_progid`, `compute_mode`, `completion_method`,
+`controller_quit_supported`, `controller_close_method`, `message_count`,
 `controller_message_count`, `watchdog_requested`, `watchdog_started`, and
-`duration_seconds`. The common result-family fields include
+`duration_seconds`. Polled modern Controllers report `Compute_Complete`,
+`True`, and `quit_ras` for the three capability fields; blocking modern
+Controllers report `Compute_CurrentPlan_blocking_return`, `True`, and
+`quit_ras`. HEC-RAS 4.0/4.1 report `Compute_IsStillComputing`, `False`, and
+`owned_process_cleanup`. The common result-family fields include
 `selected_result_format`, `artifact_preparation_cleanup`,
 `artifact_finalization_cleanup`, and `result_artifacts_finalized`. A cleanup
 record's `result_format` names the opposing family targeted for deletion;
 `removed_paths` and `missing_paths` partition its complete exact target set.
-Both cleanup records are `None` for a current-result skip. Blocking results
+Both cleanup records are `None` for a current-result skip. A skip is explicitly
+non-calculation evidence: `calculation_attempted` is `False` and
+`solver_quiescence_confirmed` is `None`. `current_check_performed`,
+`current_check_close_safe`, and `current_check_close_method` describe the
+separate currency-check session. `completion_method` and
+`controller_close_method` remain unset because no calculation ran. Blocking results
 also include `blocking_result`; polled results include `poll_count`.
+
+HEC-RAS 4.0/4.1 expose neither `Compute_Complete` nor `QuitRas`. RasControl
+fails closed unless exact PID/create-time exit is positively proved. An
+access-denied or other identity-query error preserves the session lock as
+evidence; it is never interpreted as exit or PID reuse.
 
 ## Steady State Results
 

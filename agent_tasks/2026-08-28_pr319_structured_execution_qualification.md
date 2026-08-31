@@ -1,5 +1,15 @@
 # PR 319 Structured Execution Evidence Qualification
 
+## 2026-08-30 legacy Controller qualification correction
+
+The HEC-RAS 4.1 representative attempt
+`9a124f78-805b-46ea-816c-4a46216c43b4` stopped because the registered 4.1
+Controller exposes neither modern `Compute_Complete` nor `QuitRas`. RasControl
+now selects behavior from the resolved ProgID: 4.0/4.1 use the two-argument
+compute call, inverted still-computing polling, a monotonic timeout, and exact
+owned-process cleanup while watchdog coverage remains active. The old attempt
+is not completion evidence and must not be resumed or reused.
+
 ## Objective
 
 Build and execute an auditable qualification framework for draft PR #319,

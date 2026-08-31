@@ -312,6 +312,7 @@ class _SessionCleanupResult:
 
     session_id: str
     ras_pid: Optional[int]
+    identity_state: str
     process_detected: bool = False
     terminated: bool = False
     killed: bool = False
@@ -395,6 +396,17 @@ class ProjectInfo:
     version: str
     plan_number: Optional[str]
     plan_name: Optional[str]
+
+
+@dataclass(frozen=True)
+class _ControllerCapabilities:
+    """Version-specific HECRASController execution and close contract."""
+
+    compute_current_plan_argument_count: int
+    completion_method: str
+    completion_true_means_complete: bool
+    supports_blocking: bool
+    supports_quit_ras: bool
 
 
 # Module-level session tracking
@@ -635,22 +647,24 @@ def _find_our_ras_process(
     )
 
 
-def _process_matches_lock_identity(proc: Any, lock: SessionLock) -> bool:
-    """Return True only for the exact PID/create-time identity in ``lock``."""
+def _process_matches_lock_identity(proc: Any, lock: SessionLock) -> str:
+    """Classify a process as exact, absent, reused, or identity-unverified."""
     if lock.ras_pid is None or lock.ras_create_time is None:
-        return False
+        return 'identity_unverified'
     if int(getattr(proc, 'pid', -1)) != int(lock.ras_pid):
-        return False
+        return 'pid_reused'
     try:
         create_time = float(proc.create_time())
-    except (psutil.NoSuchProcess, psutil.AccessDenied, OSError, ValueError, TypeError):
-        return False
-    return math.isclose(
+    except psutil.NoSuchProcess:
+        return 'absent'
+    except (psutil.AccessDenied, OSError, ValueError, TypeError):
+        return 'identity_unverified'
+    return 'exact' if math.isclose(
         create_time,
         float(lock.ras_create_time),
         rel_tol=0.0,
         abs_tol=1e-6,
-    )
+    ) else 'pid_reused'
 
 
 def _classify_lock_file(lock: SessionLock) -> str:
@@ -695,7 +709,10 @@ def _classify_lock_file(lock: SessionLock) -> str:
             if ras_proc.is_running() and ras_proc.name().lower() == 'ras.exe':
                 if lock.ras_create_time is None:
                     return 'identity_unverified'
-                if not _process_matches_lock_identity(ras_proc, lock):
+                identity_state = _process_matches_lock_identity(ras_proc, lock)
+                if identity_state == 'identity_unverified':
+                    return 'identity_unverified'
+                if identity_state != 'exact':
                     # The tracked Controller identity exited and this PID was
                     # reused. It is not our process and must not be signaled.
                     return 'stale_clean'
@@ -742,7 +759,9 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
     """Clean one session and retain its lock if an owned process survives."""
     lock = _active_sessions.get(session_id)
     if lock is None:
-        return _SessionCleanupResult(session_id=session_id, ras_pid=None)
+        return _SessionCleanupResult(
+            session_id=session_id, ras_pid=None, identity_state='absent'
+        )
 
     if lock.identity_unverified:
         lock_retained = _get_lock_file_path(session_id).exists()
@@ -752,6 +771,7 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
             process_survived=True,
             lock_retained=lock_retained,
             error=lock.validation_error or "session identity is unverified",
+            identity_state='identity_unverified',
         )
 
     detected = False
@@ -759,15 +779,15 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
     killed = False
     survived = False
     error = None
+    identity_state = 'absent'
 
     if lock.ras_pid:
         try:
             proc = psutil.Process(lock.ras_pid)
-            if (
-                proc.is_running()
-                and proc.name().lower() == 'ras.exe'
-                and _process_matches_lock_identity(proc, lock)
-            ):
+            running = proc.is_running()
+            name = proc.name().lower()
+            identity_state = _process_matches_lock_identity(proc, lock)
+            if running and name == 'ras.exe' and identity_state == 'exact':
                 detected = True
                 logger.debug(f"Terminating tracked ras.exe PID {lock.ras_pid}")
                 proc.terminate()
@@ -781,28 +801,37 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
                     proc.kill()
                     killed = True
                     proc.wait(timeout=5)
-                survived = (
-                    proc.is_running()
-                    and _process_matches_lock_identity(proc, lock)
-                )
-            elif proc.is_running() and proc.name().lower() == 'ras.exe':
-                if lock.ras_create_time is None:
-                    survived = True
-                    error = (
-                        "Tracked ras.exe PID has no creation-time identity; "
-                        "refusing to signal it"
-                    )
-                    logger.warning(error)
+                post_state = _process_matches_lock_identity(proc, lock)
+                if post_state == 'exact':
+                    survived = bool(proc.is_running())
+                    identity_state = 'identity_unverified' if survived else 'absent'
+                elif post_state in {'absent', 'pid_reused'}:
+                    identity_state = 'killed' if killed else 'terminated'
                 else:
+                    survived = True
+                    error = "Tracked ras.exe exit identity could not be verified after signal"
+                    logger.warning(error)
+                    identity_state = 'identity_unverified'
+            elif running and name == 'ras.exe':
+                if identity_state == 'pid_reused':
                     logger.info(
                         "Tracked ras.exe PID %s was reused; refusing to signal "
                         "the replacement process",
                         lock.ras_pid,
                     )
+                elif identity_state != 'absent':
+                    survived = True
+                    identity_state = 'identity_unverified'
+                    error = (
+                        "Tracked ras.exe identity query was uncertain; refusing to signal it"
+                    )
+                    logger.warning(error)
         except psutil.NoSuchProcess:
             terminated = detected
-        except (psutil.TimeoutExpired, psutil.AccessDenied) as exc:
+            identity_state = 'terminated' if detected else 'absent'
+        except (psutil.TimeoutExpired, psutil.AccessDenied, OSError, ValueError) as exc:
             survived = True
+            identity_state = 'identity_unverified'
             error = f"{type(exc).__name__}: {exc}"
             logger.warning(f"Could not verify termination of PID {lock.ras_pid}: {exc}")
 
@@ -816,6 +845,7 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
         )
         if not watchdog_cleanup.safe:
             survived = True
+            identity_state = 'identity_unverified'
             error = (
                 "Watchdog identity/exit could not be proved: "
                 f"{watchdog_cleanup.identity_state}; "
@@ -839,6 +869,7 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
             process_survived=True,
             lock_retained=lock_retained,
             error=error,
+            identity_state=identity_state,
         )
 
     _active_sessions.pop(session_id, None)
@@ -849,6 +880,7 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
         process_detected=detected,
         terminated=terminated,
         killed=killed,
+        identity_state=identity_state,
     )
 
 
@@ -1265,6 +1297,47 @@ class RasControl:
         'RAS70.HECRASController': '7.0',
     }
 
+    # HEC-RAS 4.0 and 4.1 expose the older two-argument compute contract.
+    # Their registered type libraries provide Compute_IsStillComputing(), not
+    # Compute_Complete(), and do not provide QuitRas(). All currently supported
+    # 5.x+ Controllers share the modern contract. Keep this keyed by ProgID so
+    # 3.x aliases that resolve to RAS41 inherit the actual Controller surface.
+    _LEGACY_CONTROLLER_CAPABILITIES = _ControllerCapabilities(
+        compute_current_plan_argument_count=2,
+        completion_method='Compute_IsStillComputing',
+        completion_true_means_complete=False,
+        supports_blocking=False,
+        supports_quit_ras=False,
+    )
+    _MODERN_CONTROLLER_CAPABILITIES = _ControllerCapabilities(
+        compute_current_plan_argument_count=3,
+        completion_method='Compute_Complete',
+        completion_true_means_complete=True,
+        supports_blocking=True,
+        supports_quit_ras=True,
+    )
+    _CONTROLLER_CAPABILITIES = {
+        'RAS400.HECRASController': _LEGACY_CONTROLLER_CAPABILITIES,
+        'RAS41.HECRASController': _LEGACY_CONTROLLER_CAPABILITIES,
+        'RAS500.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS501.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS503.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS504.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS505.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS506.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS507.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS60.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS610.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS620.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS630.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS631.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS641.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS65.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS66.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS67.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+        'RAS70.HECRASController': _MODERN_CONTROLLER_CAPABILITIES,
+    }
+
     # Legacy reference (kept for backwards compatibility)
     SUPPORTED_VERSIONS = VERSION_MAP
 
@@ -1466,14 +1539,18 @@ class RasControl:
 
         This is the core COM interface handler. All public methods use this.
         Includes session tracking for robust cleanup on crashes/kernel restarts.
-        When ``strict_close`` is True, a failed ``QuitRas()`` or a verified
-        surviving owned process fails an otherwise successful operation.
+        When ``strict_close`` is True, a failed supported ``QuitRas()`` or a
+        verified surviving owned process fails an otherwise successful
+        operation. Legacy Controllers without ``QuitRas()`` require exact
+        owned-process cleanup and confirmed exit instead.
         ``require_safe_close`` is used by destructive execution workflows that
         must not proceed unless Controller close or owned-process cleanup
         positively establishes that no result writer survived.
         """
         # Normalize version (handles "7.0" → "7.0", "66" → "7.0", etc.)
         normalized_version = RasControl._normalize_version(version)
+        com_string = RasControl.get_controller_progid(normalized_version)
+        capabilities = RasControl._CONTROLLER_CAPABILITIES[com_string]
 
         if not project_path.exists():
             raise FileNotFoundError(f"Project file not found: {project_path}")
@@ -1496,7 +1573,6 @@ class RasControl:
 
         try:
             # Open HEC-RAS COM interface
-            com_string = RasControl.get_controller_progid(normalized_version)
             logger.debug(f"Opening HEC-RAS: {com_string} (version: {version})")
             com_rc = win32com.client.Dispatch(com_string)
 
@@ -1557,8 +1633,15 @@ class RasControl:
             close_error = None
             if com_rc is not None:
                 try:
-                    com_rc.QuitRas()
-                    logger.debug("HEC-RAS closed via QuitRas()")
+                    if capabilities.supports_quit_ras:
+                        com_rc.QuitRas()
+                        logger.debug("HEC-RAS closed via QuitRas()")
+                    else:
+                        logger.debug(
+                            "%s does not expose QuitRas(); requiring exact "
+                            "owned-process cleanup",
+                            com_string,
+                        )
                 except Exception as e:
                     close_error = e
                     logger.warning(f"QuitRas() failed: {e}")
@@ -1570,13 +1653,24 @@ class RasControl:
 
             # Clean up session tracking (terminates only our tracked PID)
             cleanup_result = _cleanup_session(session_id)
-            close_safe = (
-                not cleanup_result.process_survived
-                and (
-                    close_error is None
-                    or cleanup_result.ras_pid is not None
+            if capabilities.supports_quit_ras:
+                close_safe = (
+                    not cleanup_result.process_survived
+                    and (
+                        close_error is None
+                        or cleanup_result.ras_pid is not None
+                    )
                 )
-            )
+            else:
+                # Without a Controller close method, an empty process snapshot
+                # is not enough: prove which owned PID was cleaned and that its
+                # exact identity no longer survives.
+                close_safe = bool(
+                    cleanup_result.ras_pid is not None
+                    and cleanup_result.identity_state
+                    in {'absent', 'pid_reused', 'terminated', 'killed'}
+                    and not cleanup_result.process_survived
+                )
             if close_outcome_callback is not None:
                 close_outcome_callback(
                     close_safe,
@@ -1597,7 +1691,11 @@ class RasControl:
 
             if (strict_close or require_safe_close) and operation_error is None:
                 strict_errors = []
-                if strict_close and close_error is not None:
+                if (
+                    strict_close
+                    and capabilities.supports_quit_ras
+                    and close_error is not None
+                ):
                     strict_errors.append(f"QuitRas() failed: {close_error}")
                 if (
                     (strict_close or require_safe_close)
@@ -1606,7 +1704,7 @@ class RasControl:
                     strict_errors.append(
                         f"owned ras.exe PID {cleanup_result.ras_pid} survived cleanup"
                     )
-                elif require_safe_close and not close_safe:
+                elif (strict_close or require_safe_close) and not close_safe:
                     strict_errors.append(
                         "Controller close and owned-process exit could not be "
                         "confirmed"
@@ -1629,8 +1727,10 @@ class RasControl:
         This method checks if results are current before running. If results
         are up-to-date, it skips computation (unless force_recompute=True).
         When computation is needed, the default path starts it asynchronously
-        and polls ``Compute_Complete()``. The opt-in blocking path delegates the
-        wait to the Controller.
+        and polls the resolved Controller's completion method. HEC-RAS 4.0/4.1
+        use ``Compute_IsStillComputing()``; HEC-RAS 5+ uses
+        ``Compute_Complete()``. The opt-in blocking path delegates the wait to
+        a Controller that exposes the blocking argument.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
@@ -1658,23 +1758,27 @@ class RasControl:
                 Use ``"6.3.0.2"`` to select
                 ``RAS630.HECRASController`` while leaving the project's
                 executable family label unchanged.
-            strict_close: Raise if ``QuitRas()`` fails after an otherwise
-                successful operation. An owned ``ras.exe`` process surviving
-                cleanup always fails plan execution, including in the default
+            strict_close: Require the resolved Controller's safe-close
+                contract after an otherwise successful operation. For HEC-RAS
+                5+, a ``QuitRas()`` failure raises. HEC-RAS 4.0/4.1 do not
+                expose ``QuitRas()`` and instead require exact owned-process
+                cleanup and confirmed exit. A surviving owned ``ras.exe``
+                always fails plan execution, including in the default
                 non-strict mode. Defaults to False for compatibility with
-                recoverable ``QuitRas()`` failures.
+                recoverable modern ``QuitRas()`` failures.
 
         Returns:
             RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
                 ``success``: Whether execution succeeded.
                 ``messages``: List of computation messages.
                 ``results_df_row``: Single row from results_df (pd.Series or None).
-                ``execution_details``: JSON-safe Controller identity, mode,
-                watchdog, message-count, timing provenance, owned PID plus
-                creation time, verified ``Ras.exe`` path and SHA-256,
-                safe-close/owned-exit state, post-close plan/global process
-                quiescence, result-family finalization, and exact preparation
-                and finalization cleanup records. In those records,
+                ``execution_details``: JSON-safe Controller identity, compute
+                mode, completion method, close capability/method, watchdog,
+                message-count, timing provenance, owned PID plus creation time,
+                verified ``Ras.exe`` path and SHA-256, safe-close/owned-exit
+                state, post-close plan/global process quiescence, result-family
+                finalization, and exact preparation and finalization cleanup
+                records. In those records,
                 ``result_format`` names the family targeted for deletion.
                 Calculated success requires every terminal gate.
                 Existing code ``success, msgs = RasControl.run_plan("01")`` still works via __iter__.
@@ -1752,7 +1856,10 @@ class RasControl:
         resolved_controller_version = RasControl._CONTROLLER_CANONICAL_VERSIONS[
             controller_progid
         ]
-        if blocking and normalized_version.startswith(('3', '4')):
+        controller_capabilities = RasControl._CONTROLLER_CAPABILITIES[
+            controller_progid
+        ]
+        if blocking and not controller_capabilities.supports_blocking:
             raise ValueError(
                 "blocking=True is supported only by HEC-RAS 5.x and newer Controllers"
             )
@@ -1830,6 +1937,11 @@ class RasControl:
                     post_close_global_processes_quiescent
                 ),
                 'compute_mode': mode,
+                'completion_method': None,
+                'controller_quit_supported': (
+                    controller_capabilities.supports_quit_ras
+                ),
+                'controller_close_method': None,
                 'message_count': len(messages),
                 'controller_message_count': returned_count,
                 'watchdog_requested': use_watchdog,
@@ -1879,21 +1991,33 @@ class RasControl:
         controller_executable_sha256 = None
         controller_detection_confidence = 0
         controller_close_safe = False
+        controller_close_method = None
         owned_process_exit_confirmed = False
         actual_engine_provenance_confirmed = False
         post_close_plan_processes_quiescent = None
         post_close_global_processes_quiescent = None
+        current_check_performed = False
+        current_check_close_safe = None
+        current_check_close_method = None
 
         if not force_recompute:
+            current_check_performed = True
             current_check_close_safe = False
 
             def _record_current_check_close(
                 safe: bool,
                 _cleanup_result: _SessionCleanupResult,
-                _close_error: Optional[BaseException],
+                close_error: Optional[BaseException],
             ) -> None:
-                nonlocal current_check_close_safe
+                nonlocal current_check_close_safe, current_check_close_method
                 current_check_close_safe = bool(safe)
+                if controller_capabilities.supports_quit_ras:
+                    current_check_close_method = (
+                        'quit_ras' if close_error is None
+                        else 'owned_process_cleanup_after_quit_ras_failure'
+                    )
+                else:
+                    current_check_close_method = 'owned_process_cleanup'
 
             def _check_current(com_rc):
                 _set_current_plan(com_rc)
@@ -1927,7 +2051,10 @@ class RasControl:
                         messages=messages,
                         results_df_row=None,
                         execution_details=_execution_details(
-                            'skipped_current', messages
+                            'skipped_current', messages,
+                            current_check_performed=current_check_performed,
+                            current_check_close_safe=current_check_close_safe,
+                            current_check_close_method=current_check_close_method,
                         ),
                     )
                 if is_current:
@@ -2002,14 +2129,25 @@ class RasControl:
         def _record_close_outcome(
             safe: bool,
             cleanup_result: _SessionCleanupResult,
-            _close_error: Optional[BaseException],
+            close_error: Optional[BaseException],
         ) -> None:
+            nonlocal controller_close_method
             nonlocal controller_close_safe, owned_process_exit_confirmed
             controller_close_safe = bool(safe)
+            if controller_capabilities.supports_quit_ras:
+                controller_close_method = (
+                    'quit_ras'
+                    if close_error is None
+                    else 'owned_process_cleanup_after_quit_ras_failure'
+                )
+            else:
+                controller_close_method = 'owned_process_cleanup'
             owned_process_exit_confirmed = bool(
                 controller_pid is not None
                 and controller_create_time is not None
                 and cleanup_result.ras_pid == controller_pid
+                and getattr(cleanup_result, 'identity_state', 'identity_unverified')
+                in {'absent', 'pid_reused', 'terminated', 'killed'}
                 and not cleanup_result.process_survived
             )
 
@@ -2133,10 +2271,14 @@ class RasControl:
                         controller_message_count=controller_message_count,
                         watchdog_pid=watchdog_pid,
                         duration_seconds=time.monotonic() - compute_started,
+                        completion_method='Compute_CurrentPlan_blocking_return',
                         blocking_result=blocking_result,
                     )
 
-                if normalized_version.startswith(('3', '4')):
+                if (
+                    controller_capabilities.compute_current_plan_argument_count
+                    == 2
+                ):
                     status, controller_message_count, raw_messages = (
                         com_rc.Compute_CurrentPlan(None, None)
                     )
@@ -2146,11 +2288,15 @@ class RasControl:
                     )
                 messages = _normalize_messages(raw_messages)
 
-                # CRITICAL: Wait for computation to complete
-                # Compute_CurrentPlan is ASYNCHRONOUS - it returns before computation finishes
+                # CRITICAL: Wait for computation to complete. Legacy 4.0/4.1
+                # Controllers expose an inverted "still computing" signal;
+                # modern Controllers expose a positive completion signal.
                 logger.info("Waiting for computation to complete...")
                 poll_count = 0
                 completion_deadline = compute_started + max_runtime_seconds
+                completion_query = getattr(
+                    com_rc, controller_capabilities.completion_method
+                )
                 while True:
                     try:
                         remaining = completion_deadline - time.monotonic()
@@ -2162,8 +2308,12 @@ class RasControl:
                                 "artifacts were preserved"
                             )
 
-                        # Check if computation is complete
-                        is_complete = com_rc.Compute_Complete()
+                        completion_value = bool(completion_query())
+                        is_complete = (
+                            completion_value
+                            if controller_capabilities.completion_true_means_complete
+                            else not completion_value
+                        )
 
                         # A Controller call can itself block. Do not credit a
                         # late completion after the monotonic deadline.
@@ -2208,12 +2358,18 @@ class RasControl:
                     controller_message_count=controller_message_count,
                     watchdog_pid=watchdog_pid,
                     duration_seconds=time.monotonic() - compute_started,
+                    completion_method=(
+                        controller_capabilities.completion_method
+                    ),
                     poll_count=poll_count,
                 )
 
             finally:
                 # Always terminate watchdog on completion (even if error)
-                if watchdog_identity is not None:
+                if (
+                    watchdog_identity is not None
+                    and controller_capabilities.supports_quit_ras
+                ):
                     watchdog_cleanup = _terminate_watchdog(watchdog_identity)
                     if not watchdog_cleanup.safe:
                         if current_session is not None:
@@ -2312,6 +2468,13 @@ class RasControl:
                     project_name=info.project_path.stem,
                 )
                 result_artifacts_finalized = True
+                if not selected_result.is_file():
+                    result_artifacts_finalized = False
+                    raise RuntimeError(
+                        "HEC-RAS reported completion but the selected "
+                        f"{execution_result_format} result artifact was not created: "
+                        f"{selected_result}"
+                    )
             elif calculation_attempted:
                 logger.warning(
                     "Preserving opposing result artifacts for plan %s because "
@@ -2353,6 +2516,7 @@ class RasControl:
                 'controller_executable_path': controller_executable_path,
                 'controller_executable_sha256': controller_executable_sha256,
                 'controller_close_safe': controller_close_safe,
+                'controller_close_method': controller_close_method,
                 'owned_process_exit_confirmed': owned_process_exit_confirmed,
                 'post_close_plan_processes_quiescent': (
                     post_close_plan_processes_quiescent
@@ -2362,6 +2526,9 @@ class RasControl:
                 ),
                 'strict_close_requested': bool(strict_close),
                 'max_runtime_seconds': float(max_runtime_seconds),
+                'current_check_performed': current_check_performed,
+                'current_check_close_safe': current_check_close_safe,
+                'current_check_close_method': current_check_close_method,
             }
         )
         if _success and not all(

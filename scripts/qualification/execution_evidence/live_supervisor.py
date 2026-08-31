@@ -67,6 +67,43 @@ class LiveHostQuarantinedError(LiveSupervisorError):
     """Process hygiene is uncertain and the host lock was intentionally retained."""
 
 
+_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE: Mapping[str, Any] = {
+    "completion_method": "Compute_IsStillComputing",
+    "controller_quit_supported": False,
+    "controller_close_method": "owned_process_cleanup",
+}
+
+
+def _expected_controller_capability_evidence(
+    engine: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Return the exact successful Controller capability receipt contract."""
+    resolved_version = engine.get("resolved_controller_version")
+    if resolved_version in {"4.0", "4.1"}:
+        return dict(_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE)
+    try:
+        major_version = int(str(resolved_version).split(".", maxsplit=1)[0])
+    except (TypeError, ValueError):
+        return None
+    if major_version < 5:
+        return None
+    return {
+        "completion_method": (
+            "Compute_CurrentPlan_blocking_return"
+            if engine.get("blocking") is True
+            else "Compute_Complete"
+        ),
+        "controller_quit_supported": True,
+        "controller_close_method": "quit_ras",
+    }
+
+
+def _matches_exact_expected_value(observed: Any, expected: Any) -> bool:
+    if type(expected) is bool:
+        return type(observed) is bool and observed is expected
+    return observed == expected
+
+
 @dataclass(frozen=True)
 class ProcessInventorySnapshot:
     records: tuple[dict[str, Any], ...]
@@ -2951,7 +2988,10 @@ def _verify_worker_execution_proof(
         "solver_quiescence_confirmed": True,
         "actual_engine_provenance_confirmed": True,
     }
-    if any(details.get(field) != value for field, value in common.items()):
+    if any(
+        not _matches_exact_expected_value(details.get(field), value)
+        for field, value in common.items()
+    ):
         raise LiveSupervisorError(
             "live terminal execution details fail calculation/provenance/finalization gates"
         )
@@ -3033,8 +3073,32 @@ def _verify_worker_execution_proof(
             "controller_executable_sha256"
         ),
     }
-    if any(details.get(field) != value for field, value in controller_common.items()):
+    if any(
+        not _matches_exact_expected_value(details.get(field), value)
+        for field, value in controller_common.items()
+    ):
         raise LiveSupervisorError("live Controller identity/close/watchdog proof is invalid")
+    expected_capabilities = _expected_controller_capability_evidence(engine)
+    if expected_capabilities is None:
+        raise LiveSupervisorError(
+            "live Controller capability contract is unsupported"
+        )
+    missing_capabilities = sorted(set(expected_capabilities).difference(details))
+    if missing_capabilities:
+        raise LiveSupervisorError(
+            "live Controller capability evidence is missing: "
+            + ", ".join(missing_capabilities)
+        )
+    invalid_capabilities = sorted(
+        field
+        for field, expected in expected_capabilities.items()
+        if not _matches_exact_expected_value(details[field], expected)
+    )
+    if invalid_capabilities:
+        raise LiveSupervisorError(
+            "live Controller capability evidence is invalid: "
+            + ", ".join(invalid_capabilities)
+        )
     max_runtime = details.get("max_runtime_seconds")
     if (
         isinstance(max_runtime, bool)

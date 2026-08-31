@@ -17,6 +17,9 @@ def _project_info(tmp_path, version="6.3"):
     project_path = tmp_path / "Demo.prj"
     project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
     (tmp_path / "Demo.p01").write_text("Plan Title=Plan 01\n", encoding="utf-8")
+    major = int(version.split(".", 1)[0])
+    result_path = tmp_path / ("Demo.O01" if major < 5 else "Demo.p01.hdf")
+    result_path.write_bytes(b"deterministic fake result")
     return ProjectInfo(
         project_path=project_path,
         version=version,
@@ -64,6 +67,7 @@ def _owned_cleanup(pid=4321):
         session_id="test-session",
         ras_pid=pid,
         process_detected=True,
+        identity_state="absent",
     )
 
 
@@ -75,6 +79,21 @@ def test_exact_630_identity_preserves_release_specific_mapping():
     assert RasControl.get_controller_progid("630") == "RAS630.HECRASController"
     with pytest.raises(ValueError, match="not supported"):
         RasControl.get_controller_progid("9.9")
+
+
+def test_every_supported_controller_has_an_execution_capability_contract():
+    assert set(RasControl.VERSION_MAP.values()) == set(
+        RasControl._CONTROLLER_CAPABILITIES
+    )
+
+
+def test_3x_alias_inherits_resolved_41_controller_capabilities():
+    progid = RasControl.get_controller_progid("3.1")
+    capabilities = RasControl._CONTROLLER_CAPABILITIES[progid]
+    assert progid == "RAS41.HECRASController"
+    assert capabilities.compute_current_plan_argument_count == 2
+    assert capabilities.completion_method == "Compute_IsStillComputing"
+    assert capabilities.supports_quit_ras is False
 
 
 def test_blocking_run_uses_exact_controller_and_returns_execution_details(
@@ -186,9 +205,18 @@ def test_blocking_run_uses_exact_controller_and_returns_execution_details(
     assert ("compute", (None, None, True)) in calls
 
 
+@pytest.mark.parametrize(
+    ("close_error", "expected_close_method"),
+    [
+        (None, "quit_ras"),
+        (OSError("QuitRas failed"), "owned_process_cleanup_after_quit_ras_failure"),
+    ],
+)
 def test_current_controller_result_reports_null_cleanup_records(
     monkeypatch,
     tmp_path,
+    close_error,
+    expected_close_method,
 ):
     info = _project_info(tmp_path)
     (tmp_path / "Demo.p01.hdf").write_bytes(b"current HDF")
@@ -212,7 +240,7 @@ def test_current_controller_result_reports_null_cleanup_records(
             return operation_func(FakeCom())
         finally:
             if close_outcome_callback is not None:
-                close_outcome_callback(True, _owned_cleanup(), None)
+                close_outcome_callback(True, _owned_cleanup(), close_error)
 
     monkeypatch.setattr(
         RasControl,
@@ -234,6 +262,48 @@ def test_current_controller_result_reports_null_cleanup_records(
     assert result.execution_details["calculation_attempted"] is False
     assert result.execution_details["artifact_preparation_cleanup"] is None
     assert result.execution_details["artifact_finalization_cleanup"] is None
+    assert result.execution_details["current_check_performed"] is True
+    assert result.execution_details["current_check_close_safe"] is True
+    assert result.execution_details["current_check_close_method"] == expected_close_method
+    assert result.execution_details["completion_method"] is None
+
+
+def test_controller_success_without_selected_artifact_fails_closed(
+    monkeypatch, tmp_path
+):
+    info = _project_info(tmp_path)
+    selected = tmp_path / "Demo.p01.hdf"
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _plan_name):
+            return None
+        def Compute_CurrentPlan(self, *_args):
+            selected.unlink(missing_ok=True)
+            return True, 1, ("Computations Completed",), True
+
+    def fake_open_close(
+        project_path, _version, operation_func, *, close_outcome_callback=None,
+        **kwargs
+    ):
+        _emit_owned_session(kwargs, project_path=project_path)
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, _owned_cleanup(), None)
+
+    monkeypatch.setattr(
+        RasControl, "_get_project_info",
+        staticmethod(lambda _plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    _disable_detailed_logging(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="result artifact was not created"):
+        RasControl.run_plan(
+            "01", force_recompute=True, use_watchdog=False,
+            refresh_results=False, blocking=True, controller_version="6.3.0.2",
+        )
 
 
 def test_default_run_retains_async_polling_contract(monkeypatch, tmp_path):
@@ -294,6 +364,266 @@ def test_default_run_retains_async_polling_contract(monkeypatch, tmp_path):
     assert result.execution_details["poll_count"] == 0
     assert ("compute", (None, None)) in calls
     assert ("poll",) in calls
+
+
+@pytest.mark.parametrize(
+    ("version", "expected_progid", "expected_resolved"),
+    [
+        ("4.0", "RAS400.HECRASController", "4.0"),
+        ("4.1.0", "RAS41.HECRASController", "4.1"),
+    ],
+)
+def test_legacy_run_uses_inverted_still_computing_poll_contract(
+    monkeypatch,
+    tmp_path,
+    version,
+    expected_progid,
+    expected_resolved,
+):
+    info = _project_info(tmp_path, version=version)
+    calls = []
+    still_computing = iter([True, False])
+
+    class FakeCom:
+        def Plan_SetCurrent(self, plan_name):
+            calls.append(("plan", plan_name))
+
+        def Compute_CurrentPlan(self, *args):
+            calls.append(("compute", args))
+            return True, 2, ("Computing", "Computations Completed")
+
+        def Compute_IsStillComputing(self):
+            calls.append(("legacy_poll",))
+            return next(still_computing)
+
+        def __getattr__(self, name):
+            if name in {"Compute_Complete", "QuitRas"}:
+                raise AssertionError(f"legacy Controller must not access {name}")
+            raise AttributeError(name)
+
+    def fake_open_close(
+        project_path,
+        requested_version,
+        operation_func,
+        *,
+        strict_close=False,
+        close_outcome_callback=None,
+        **kwargs,
+    ):
+        calls.append(("open", project_path, requested_version, strict_close))
+        _emit_owned_session(kwargs, project_path=project_path)
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, _owned_cleanup(), None)
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(lambda plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    monkeypatch.setattr(rascontrol_module.time, "sleep", lambda _seconds: None)
+    _disable_detailed_logging(monkeypatch)
+
+    result = RasControl.run_plan(
+        "01",
+        force_recompute=True,
+        use_watchdog=False,
+        refresh_results=False,
+        controller_version=version,
+        strict_close=True,
+    )
+
+    assert result.success is True
+    assert result.execution_details["compute_mode"] == "poll"
+    assert result.execution_details["completion_method"] == (
+        "Compute_IsStillComputing"
+    )
+    assert result.execution_details["controller_quit_supported"] is False
+    assert result.execution_details["controller_close_method"] == (
+        "owned_process_cleanup"
+    )
+    assert result.execution_details["controller_progid"] == expected_progid
+    assert result.execution_details["resolved_controller_version"] == (
+        expected_resolved
+    )
+    assert result.execution_details["poll_count"] == 1
+    assert calls.count(("legacy_poll",)) == 2
+    assert ("compute", (None, None)) in calls
+
+
+def test_legacy_completion_query_failure_preserves_recreated_hdf(
+    monkeypatch,
+    tmp_path,
+):
+    info = _project_info(tmp_path, version="4.1.0")
+    legacy = tmp_path / "Demo.O01"
+    hdf = tmp_path / "Demo.p01.hdf"
+    hdf.write_bytes(b"stale opposing hdf")
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _plan_name):
+            return None
+
+        def Compute_CurrentPlan(self, *args):
+            assert args == (None, None)
+            assert not hdf.exists()
+            legacy.write_bytes(b"possibly incomplete legacy output")
+            hdf.write_bytes(b"possibly active opposing writer")
+            return True, 1, ("Computing",)
+
+        def Compute_IsStillComputing(self):
+            raise OSError("legacy completion status unavailable")
+
+        def __getattr__(self, name):
+            if name in {"Compute_Complete", "QuitRas"}:
+                raise AssertionError(f"legacy Controller must not access {name}")
+            raise AttributeError(name)
+
+    def fake_open_close(
+        project_path,
+        _version,
+        operation_func,
+        *,
+        close_outcome_callback=None,
+        **kwargs,
+    ):
+        _emit_owned_session(kwargs, project_path=project_path)
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, _owned_cleanup(), None)
+
+    monkeypatch.setattr(
+        RasControl,
+        "_get_project_info",
+        staticmethod(lambda plan, ras_object=None: info),
+    )
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    _disable_detailed_logging(monkeypatch)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Could not confirm HEC-RAS solver quiescence",
+    ):
+        RasControl.run_plan(
+            "01",
+            force_recompute=True,
+            use_watchdog=False,
+            refresh_results=False,
+            controller_version="4.1.0",
+            strict_close=True,
+        )
+
+    assert legacy.read_bytes() == b"possibly incomplete legacy output"
+    assert hdf.read_bytes() == b"possibly active opposing writer"
+
+
+@pytest.mark.parametrize(
+    ("still_computing", "clock_values"),
+    [
+        (True, (0.0, 0.25, 0.5, 1.1)),
+        (False, (0.0, 0.25, 1.1)),
+    ],
+)
+def test_legacy_completion_deadline_rejects_running_or_late_complete(
+    monkeypatch, tmp_path, still_computing, clock_values
+):
+    info = _project_info(tmp_path, version="4.1.0")
+    clock = iter(clock_values)
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _plan_name): return None
+        def Compute_CurrentPlan(self, *_args): return True, 1, ("Computing",)
+        def Compute_IsStillComputing(self): return still_computing
+
+    def fake_open_close(
+        project_path, _version, operation_func, *, close_outcome_callback=None,
+        **kwargs
+    ):
+        _emit_owned_session(kwargs, project_path=project_path)
+        try:
+            return operation_func(FakeCom())
+        finally:
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, _owned_cleanup(), None)
+
+    monkeypatch.setattr(RasControl, "_get_project_info", staticmethod(lambda *_a, **_k: info))
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    monkeypatch.setattr(rascontrol_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(rascontrol_module.time, "sleep", lambda _seconds: None)
+    _disable_detailed_logging(monkeypatch)
+
+    with pytest.raises(TimeoutError, match="exceeded max_runtime"):
+        RasControl.run_plan(
+            "01", force_recompute=True, use_watchdog=False,
+            refresh_results=False, controller_version="4.1.0", max_runtime=1.0,
+        )
+
+
+def test_legacy_watchdog_cleanup_is_deferred_until_controller_release(
+    monkeypatch, tmp_path
+):
+    info = _project_info(tmp_path, version="4.1.0")
+    events = []
+    session = _emit_owned_session({}, project_path=info.project_path)
+    session.watchdog_pid = None
+    session.watchdog_create_time = None
+    session.watchdog_name = None
+    session.identity_unverified = False
+    session.validation_error = None
+    watchdog_identity = rascontrol_module._WatchdogIdentity(
+        pid=99, create_time=456.0, name="python.exe"
+    )
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _plan_name): return None
+        def Compute_CurrentPlan(self, *_args):
+            events.append("compute")
+            return True, 1, ("Complete",)
+        def Compute_IsStillComputing(self): return False
+
+    monkeypatch.setattr(rascontrol_module, "_spawn_watchdog", lambda **_k: watchdog_identity)
+    def absent_process(pid):
+        raise rascontrol_module.psutil.NoSuchProcess(pid)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", absent_process)
+    def terminate_watchdog(identity):
+        assert events[-2:] == ["controller_proxy_released", "ras_cleanup"]
+        events.append("watchdog_stop")
+        return rascontrol_module._WatchdogCleanupResult(
+            pid=identity.pid, identity_state="terminated", terminated=True
+        )
+    monkeypatch.setattr(rascontrol_module, "_terminate_watchdog", terminate_watchdog)
+
+    def fake_open_close(
+        _project_path, _version, operation_func, *, close_outcome_callback=None,
+        session_open_callback=None, **_kwargs
+    ):
+        rascontrol_module._active_sessions[session.session_id] = session
+        if session_open_callback is not None:
+            session_open_callback(session)
+        try:
+            result = operation_func(FakeCom())
+        finally:
+            events.append("controller_proxy_released")
+            events.append("ras_cleanup")
+            cleanup = rascontrol_module._cleanup_session(session.session_id)
+            if close_outcome_callback is not None:
+                close_outcome_callback(True, cleanup, None)
+        return result
+
+    monkeypatch.setattr(RasControl, "_get_project_info", staticmethod(lambda *_a, **_k: info))
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    _disable_detailed_logging(monkeypatch)
+    result = RasControl.run_plan(
+        "01", force_recompute=True, use_watchdog=True, refresh_results=False,
+        controller_version="4.1.0", strict_close=True,
+    )
+    assert result.success is True
+    assert events == ["compute", "controller_proxy_released", "ras_cleanup", "watchdog_stop"]
 
 
 def test_blocking_rejects_legacy_controller_before_open(monkeypatch, tmp_path):
@@ -1074,11 +1404,123 @@ def _patch_com_session(monkeypatch, tmp_path, fake_com, dispatched):
         lambda session_id: (
             rascontrol_module._active_sessions.pop(session_id, None),
             rascontrol_module._SessionCleanupResult(
-                session_id=session_id, ras_pid=None
+                session_id=session_id, ras_pid=None, identity_state="absent"
             ),
         )[1],
     )
     rascontrol_module._active_sessions.clear()
+
+
+def test_legacy_strict_close_uses_exact_owned_process_cleanup(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"legacy Controller image")
+    executable_sha256 = hashlib.sha256(executable.read_bytes()).hexdigest()
+    fake_com = SimpleNamespace(Project_Open=lambda _path: None)
+    dispatched = []
+    _patch_com_session(monkeypatch, tmp_path, fake_com, dispatched)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_find_our_ras_process",
+        lambda _project_path, _before_snapshot: (
+            4321,
+            123.5,
+            100,
+            str(executable),
+            executable_sha256,
+        ),
+    )
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_cleanup_session",
+        lambda session_id: (
+            rascontrol_module._active_sessions.pop(session_id, None),
+            rascontrol_module._SessionCleanupResult(
+                session_id=session_id,
+                ras_pid=4321,
+                process_detected=True,
+                terminated=True,
+                identity_state="terminated",
+            ),
+        )[1],
+    )
+
+    result = RasControl._com_open_close(
+        project_path,
+        "4.1.0",
+        lambda _com_rc: "computed",
+        strict_close=True,
+    )
+
+    assert result == "computed"
+    assert dispatched == ["RAS41.HECRASController"]
+    assert not rascontrol_module._active_sessions
+
+
+def test_legacy_close_never_accesses_nonexistent_quit_ras(monkeypatch, tmp_path):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+
+    class FakeLegacyCom:
+        def Project_Open(self, _path):
+            return None
+
+        def PlanOutput_IsCurrent(self):
+            return True
+
+        def __getattr__(self, name):
+            if name == "QuitRas":
+                raise AssertionError("legacy Controller must not access QuitRas")
+            raise AttributeError(name)
+
+    dispatched = []
+    _patch_com_session(monkeypatch, tmp_path, FakeLegacyCom(), dispatched)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_find_our_ras_process",
+        lambda *_args: (4321, 123.5, 100, str(tmp_path / "Ras.exe"), "0" * 64),
+    )
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_cleanup_session",
+        lambda session_id: rascontrol_module._SessionCleanupResult(
+            session_id=session_id, ras_pid=4321, terminated=True,
+            identity_state="terminated",
+        ),
+    )
+    assert RasControl._com_open_close(
+        project_path, "4.1", lambda controller: controller.PlanOutput_IsCurrent(),
+        strict_close=True
+    ) is True
+
+
+def test_legacy_safe_close_rejects_unidentified_owned_process(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    fake_com = SimpleNamespace(Project_Open=lambda _path: None)
+    dispatched = []
+    _patch_com_session(monkeypatch, tmp_path, fake_com, dispatched)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Controller close and owned-process exit could not be confirmed",
+    ):
+        RasControl._com_open_close(
+            project_path,
+            "4.1.0",
+            lambda _com_rc: "computed",
+            strict_close=True,
+        )
+
+    assert dispatched == ["RAS41.HECRASController"]
+    assert not rascontrol_module._active_sessions
 
 
 def test_strict_close_reports_quit_failure(monkeypatch, tmp_path):
@@ -1164,6 +1606,7 @@ def test_strict_close_reports_surviving_owned_process(monkeypatch, tmp_path):
             process_detected=True,
             process_survived=True,
             lock_retained=True,
+            identity_state="identity_unverified",
         ),
     )
 
@@ -1192,6 +1635,7 @@ def test_required_safe_close_reports_survivor_in_non_strict_mode(
         process_detected=True,
         process_survived=True,
         lock_retained=True,
+        identity_state="identity_unverified",
     )
     outcomes = []
     monkeypatch.setattr(
@@ -1631,6 +2075,7 @@ def test_com_session_preserves_failed_identity_proof_as_absent(
             rascontrol_module._SessionCleanupResult(
                 session_id=session_id,
                 ras_pid=None,
+                identity_state="absent",
             ),
         )[1],
     )
@@ -1731,5 +2176,35 @@ def test_cleanup_retains_session_evidence_when_process_survives(monkeypatch, tmp
     assert result.success is False
     assert result.process_survived is True
     assert result.lock_retained is True
+
+
+@pytest.mark.parametrize(
+    "query_error",
+    [rascontrol_module.psutil.AccessDenied(4321), OSError("identity query failed")],
+)
+def test_cleanup_identity_query_uncertainty_retains_evidence_without_signal(
+    monkeypatch, tmp_path, query_error
+):
+    signals = []
+    class UncertainProcess:
+        def __init__(self, pid): self.pid = pid
+        @staticmethod
+        def is_running(): return True
+        @staticmethod
+        def name(): return "ras.exe"
+        @staticmethod
+        def create_time(): raise query_error
+        def terminate(self): signals.append("terminate")
+    lock = _tracked_lock(tmp_path)
+    lock_path = tmp_path / "uncertain.lock"
+    lock_path.write_text("evidence", encoding="utf-8")
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", UncertainProcess)
+    monkeypatch.setattr(rascontrol_module, "_get_lock_file_path", lambda _sid: lock_path)
+    result = rascontrol_module._cleanup_session(lock.session_id)
+    assert result.identity_state == "identity_unverified"
+    assert result.process_survived is True
+    assert result.lock_retained is True
+    assert signals == []
     assert lock.session_id in rascontrol_module._active_sessions
     assert lock_path.exists()

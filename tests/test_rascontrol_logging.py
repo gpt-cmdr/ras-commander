@@ -66,7 +66,11 @@ def test_com_open_close_logs_project_open_at_debug(
         "_cleanup_session",
         lambda session_id: (
             rascontrol_module._active_sessions.pop(session_id, None),
-            rascontrol_module._SessionCleanupResult(session_id=session_id, ras_pid=1234),
+            rascontrol_module._SessionCleanupResult(
+                session_id=session_id,
+                ras_pid=1234,
+                identity_state="absent",
+            ),
         )[1],
     )
     rascontrol_module._active_sessions.clear()

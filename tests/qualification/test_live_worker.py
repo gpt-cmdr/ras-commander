@@ -151,6 +151,73 @@ def _modern_execution_details(
     }
 
 
+def _controller_execution_details(
+    request: dict[str, Any],
+    *,
+    controller_executable_path: str | None = None,
+) -> dict[str, Any]:
+    preparation, finalization = _execution_cleanup_details(request)
+    engine = request["engine"]
+    legacy_controller = engine["resolved_controller_version"] in {"4.0", "4.1"}
+    return {
+        "execution_api": "ras_control",
+        "calculation_attempted": True,
+        "selected_result_format": engine["expected_result_format"],
+        "solver_quiescence_confirmed": True,
+        "result_artifacts_finalized": True,
+        "artifact_preparation_cleanup": preparation,
+        "artifact_finalization_cleanup": finalization,
+        "engine_kind": "controller",
+        "requested_controller_version": engine["controller_version"],
+        "controller_progid": engine["controller_progid"],
+        "resolved_controller_version": engine["resolved_controller_version"],
+        "controller_executable_path": (
+            controller_executable_path or engine["controller_executable"]
+        ),
+        "controller_executable_sha256": engine["controller_executable_sha256"],
+        "controller_pid": 2468,
+        "controller_create_time": 12345.0,
+        "compute_mode": "blocking" if engine["blocking"] else "poll",
+        "completion_method": (
+            "Compute_IsStillComputing"
+            if legacy_controller
+            else (
+                "Compute_CurrentPlan_blocking_return"
+                if engine["blocking"]
+                else "Compute_Complete"
+            )
+        ),
+        "controller_quit_supported": not legacy_controller,
+        "controller_close_method": (
+            "owned_process_cleanup" if legacy_controller else "quit_ras"
+        ),
+        "watchdog_requested": True,
+        "watchdog_started": True,
+        "strict_close_requested": True,
+        "max_runtime_seconds": request["timeout_seconds"],
+        "controller_close_safe": True,
+        "owned_process_exit_confirmed": True,
+        "post_close_plan_processes_quiescent": True,
+        "post_close_global_processes_quiescent": True,
+        "actual_engine_provenance_confirmed": True,
+    }
+
+
+def _configure_modern_controller_request(
+    request: dict[str, Any],
+    *,
+    blocking: bool,
+) -> None:
+    request["engine"].update(
+        version_requested="5.0.7",
+        expected_result_format="hdf",
+        controller_version="5.0.7",
+        resolved_controller_version="5.0.7",
+        controller_progid="RAS507.HECRASController",
+        blocking=blocking,
+    )
+
+
 def _safe_timeout_execution_details(
     request: dict[str, Any],
     launch_details: dict[str, Any],
@@ -911,43 +978,10 @@ def _install_public_api_fakes(
         calls["control"].append((plan_number, kwargs))
         project = kwargs["ras_object"].prj_file
         (project.parent / "Model.O01").write_bytes(b"fake legacy result")
-        preparation, finalization = _execution_cleanup_details(request)
         return SimpleNamespace(
             success=True,
             messages=["Complete Process", "No errors"],
-            execution_details={
-                "execution_api": "ras_control",
-                "calculation_attempted": True,
-                "selected_result_format": "legacy",
-                "solver_quiescence_confirmed": True,
-                "result_artifacts_finalized": True,
-                "artifact_preparation_cleanup": preparation,
-                "artifact_finalization_cleanup": finalization,
-                "engine_kind": "controller",
-                "requested_controller_version": request["engine"][
-                    "controller_version"
-                ],
-                "controller_progid": "RAS41.HECRASController",
-                "resolved_controller_version": "4.1",
-                "controller_executable_path": request["engine"][
-                    "controller_executable"
-                ],
-                "controller_executable_sha256": request["engine"][
-                    "controller_executable_sha256"
-                ],
-                "controller_pid": 2468,
-                "controller_create_time": 12345.0,
-                "watchdog_requested": True,
-                "watchdog_started": True,
-                "strict_close_requested": True,
-                "max_runtime_seconds": request["timeout_seconds"],
-                "controller_close_safe": True,
-                "owned_process_exit_confirmed": True,
-                "post_close_plan_processes_quiescent": True,
-                "post_close_global_processes_quiescent": True,
-                "actual_engine_provenance_confirmed": True,
-                "compute_mode": "poll",
-            },
+            execution_details=_controller_execution_details(request),
         )
 
     monkeypatch.setattr(ras_commander, "RasPrj", _FakeRasPrj)
@@ -1417,18 +1451,31 @@ def test_qualification_manifest_pin_mismatch_stops_before_staging(
     ("field", "invalid_value"),
     [
         ("execution_api", "ras_cmdr"),
+        ("calculation_attempted", 1),
+        ("solver_quiescence_confirmed", 1),
         ("actual_engine_provenance_confirmed", False),
         ("requested_controller_version", "4.0"),
         ("compute_mode", "blocking"),
         ("watchdog_requested", False),
+        ("watchdog_requested", 1),
         ("watchdog_started", False),
+        ("watchdog_started", 1),
         ("strict_close_requested", False),
+        ("strict_close_requested", 1),
         ("max_runtime_seconds", 31),
         ("controller_executable_sha256", "0" * 64),
         ("controller_pid", None),
         ("controller_create_time", 0),
+        ("completion_method", "Compute_Complete"),
+        ("controller_quit_supported", True),
+        ("controller_quit_supported", 0),
+        ("controller_close_method", "QuitRas"),
+        ("controller_close_safe", 1),
+        ("owned_process_exit_confirmed", 1),
         ("post_close_plan_processes_quiescent", False),
+        ("post_close_plan_processes_quiescent", 1),
         ("post_close_global_processes_quiescent", False),
+        ("post_close_global_processes_quiescent", 1),
     ],
 )
 def test_controller_live_result_requires_exact_execution_contract(
@@ -1437,42 +1484,109 @@ def test_controller_live_result_requires_exact_execution_contract(
     invalid_value: Any,
 ) -> None:
     request, _, lock = _request(tmp_path, execution_api="ras_control")
-    preparation, finalization = _execution_cleanup_details(request)
-    details = {
-        "execution_api": "ras_control",
-        "calculation_attempted": True,
-        "selected_result_format": "legacy",
-        "solver_quiescence_confirmed": True,
-        "result_artifacts_finalized": True,
-        "artifact_preparation_cleanup": preparation,
-        "artifact_finalization_cleanup": finalization,
-        "engine_kind": "controller",
-        "requested_controller_version": "4.1.0",
-        "controller_progid": "RAS41.HECRASController",
-        "resolved_controller_version": "4.1",
-        "controller_executable_path": request["engine"][
-            "controller_executable"
-        ],
-        "controller_executable_sha256": request["engine"][
-            "controller_executable_sha256"
-        ],
-        "controller_pid": 2468,
-        "controller_create_time": 12345.0,
-        "compute_mode": "poll",
-        "watchdog_requested": True,
-        "watchdog_started": True,
-        "strict_close_requested": True,
-        "max_runtime_seconds": 30,
-        "controller_close_safe": True,
-        "owned_process_exit_confirmed": True,
-        "post_close_plan_processes_quiescent": True,
-        "post_close_global_processes_quiescent": True,
-        "actual_engine_provenance_confirmed": True,
-    }
+    details = _controller_execution_details(request)
     details[field] = invalid_value
     result = SimpleNamespace(success=True, messages=[], execution_details=details)
     try:
         with pytest.raises(live_worker.LiveWorkerError):
+            live_worker._validate_execution_result(request, result)
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize("blocking", [False, True])
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("completion_method", "Compute_IsStillComputing"),
+        ("controller_quit_supported", False),
+        ("controller_quit_supported", 1),
+        ("controller_close_method", "owned_process_cleanup"),
+    ],
+)
+def test_modern_controller_live_result_requires_exact_capability_evidence(
+    tmp_path: Path,
+    blocking: bool,
+    field: str,
+    invalid_value: Any,
+) -> None:
+    request, _, lock = _request(tmp_path, execution_api="ras_control")
+    _configure_modern_controller_request(request, blocking=blocking)
+    details = _controller_execution_details(request)
+    valid_result = SimpleNamespace(
+        success=True,
+        messages=[],
+        execution_details=dict(details),
+    )
+    try:
+        live_worker._validate_execution_result(request, valid_result)
+        details[field] = invalid_value
+        result = SimpleNamespace(success=True, messages=[], execution_details=details)
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="Controller capability evidence is invalid",
+        ):
+            live_worker._validate_execution_result(request, result)
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize("blocking", [False, True])
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "completion_method",
+        "controller_quit_supported",
+        "controller_close_method",
+    ],
+)
+def test_modern_controller_live_result_requires_complete_capability_evidence(
+    tmp_path: Path,
+    blocking: bool,
+    missing_field: str,
+) -> None:
+    request, _, lock = _request(tmp_path, execution_api="ras_control")
+    _configure_modern_controller_request(request, blocking=blocking)
+    details = _controller_execution_details(request)
+    details.pop(missing_field)
+    result = SimpleNamespace(success=True, messages=[], execution_details=details)
+    try:
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="Controller capability evidence is missing",
+        ):
+            live_worker._validate_execution_result(request, result)
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize(
+    ("resolved_version", "missing_field"),
+    [
+        (resolved_version, missing_field)
+        for resolved_version in ("4.0", "4.1")
+        for missing_field in (
+            "completion_method",
+            "controller_quit_supported",
+            "controller_close_method",
+        )
+    ],
+)
+def test_controller_live_result_requires_legacy_capability_evidence(
+    tmp_path: Path,
+    resolved_version: str,
+    missing_field: str,
+) -> None:
+    request, _, lock = _request(tmp_path, execution_api="ras_control")
+    request["engine"]["resolved_controller_version"] = resolved_version
+    details = _controller_execution_details(request)
+    details.pop(missing_field)
+    result = SimpleNamespace(success=True, messages=[], execution_details=details)
+    try:
+        with pytest.raises(
+            live_worker.LiveCapabilityError,
+            match="Controller capability evidence is missing",
+        ):
             live_worker._validate_execution_result(request, result)
     finally:
         lock.release()
@@ -1485,36 +1599,10 @@ def test_controller_live_result_rejects_forged_executable_path(
     forged = tmp_path / "forged" / "Ras.exe"
     forged.parent.mkdir()
     forged.write_bytes(b"different Controller image")
-    preparation, finalization = _execution_cleanup_details(request)
-    details = {
-        "execution_api": "ras_control",
-        "calculation_attempted": True,
-        "selected_result_format": "legacy",
-        "solver_quiescence_confirmed": True,
-        "result_artifacts_finalized": True,
-        "artifact_preparation_cleanup": preparation,
-        "artifact_finalization_cleanup": finalization,
-        "engine_kind": "controller",
-        "requested_controller_version": "4.1.0",
-        "controller_progid": "RAS41.HECRASController",
-        "resolved_controller_version": "4.1",
-        "controller_executable_path": str(forged),
-        "controller_executable_sha256": request["engine"][
-            "controller_executable_sha256"
-        ],
-        "controller_pid": 2468,
-        "controller_create_time": 12345.0,
-        "compute_mode": "poll",
-        "watchdog_requested": True,
-        "watchdog_started": True,
-        "strict_close_requested": True,
-        "max_runtime_seconds": 30,
-        "controller_close_safe": True,
-        "owned_process_exit_confirmed": True,
-        "post_close_plan_processes_quiescent": True,
-        "post_close_global_processes_quiescent": True,
-        "actual_engine_provenance_confirmed": True,
-    }
+    details = _controller_execution_details(
+        request,
+        controller_executable_path=str(forged),
+    )
     result = SimpleNamespace(success=True, messages=[], execution_details=details)
     try:
         with pytest.raises(

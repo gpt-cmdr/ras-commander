@@ -222,6 +222,7 @@ def _fake_safe_com_open_close(controller):
                     SimpleNamespace(
                         ras_pid=4321,
                         process_survived=False,
+                        identity_state="absent",
                     ),
                     None,
                 )

@@ -2264,6 +2264,9 @@ def test_parent_controller_proof_requires_exact_binary_identity(
                 "post_close_plan_processes_quiescent": True,
                 "post_close_global_processes_quiescent": True,
                 "compute_mode": "poll",
+                "completion_method": "Compute_IsStillComputing",
+                "controller_quit_supported": False,
+                "controller_close_method": "owned_process_cleanup",
                 "watchdog_requested": True,
                 "watchdog_started": True,
                 "strict_close_requested": True,
@@ -2277,6 +2280,129 @@ def test_parent_controller_proof_requires_exact_binary_identity(
     }
 
     live._verify_worker_execution_proof(worker, request, engine)
+    details = worker["execution_result"]["execution_details"]
+    for field in (
+        "calculation_attempted",
+        "solver_quiescence_confirmed",
+        "actual_engine_provenance_confirmed",
+        "watchdog_requested",
+        "watchdog_started",
+        "strict_close_requested",
+        "controller_close_safe",
+        "owned_process_exit_confirmed",
+        "post_close_plan_processes_quiescent",
+        "post_close_global_processes_quiescent",
+    ):
+        details[field] = 1
+        with pytest.raises(live.LiveSupervisorError):
+            live._verify_worker_execution_proof(worker, request, engine)
+        details[field] = True
+    for field, invalid_value in (
+        ("completion_method", "Compute_Complete"),
+        ("controller_quit_supported", True),
+        ("controller_quit_supported", 0),
+        ("controller_close_method", "QuitRas"),
+    ):
+        expected_value = details[field]
+        details[field] = invalid_value
+        with pytest.raises(
+            live.LiveSupervisorError,
+            match="Controller capability evidence is invalid",
+        ):
+            live._verify_worker_execution_proof(worker, request, engine)
+        details[field] = expected_value
+    for field in (
+        "completion_method",
+        "controller_quit_supported",
+        "controller_close_method",
+    ):
+        expected_value = details.pop(field)
+        with pytest.raises(
+            live.LiveSupervisorError,
+            match="Controller capability evidence is missing",
+        ):
+            live._verify_worker_execution_proof(worker, request, engine)
+        details[field] = expected_value
+    engine.update(
+        version_requested="4.0.0",
+        controller_version="4.0.0",
+        resolved_controller_version="4.0",
+        controller_progid="RAS400.HECRASController",
+    )
+    worker["tcu_status"].update(
+        version="4.0.0",
+        ras_version_argument="4.0.0",
+    )
+    details.update(
+        requested_controller_version="4.0.0",
+        resolved_controller_version="4.0",
+        controller_progid="RAS400.HECRASController",
+    )
+    live._verify_worker_execution_proof(worker, request, engine)
+    request["engine"]["expected_result_format"] = "hdf"
+    engine.update(
+        version_requested="5.0.7",
+        expected_result_format="hdf",
+        controller_version="5.0.7",
+        resolved_controller_version="5.0.7",
+        controller_progid="RAS507.HECRASController",
+    )
+    worker["tcu_status"].update(
+        version="5.0.7",
+        ras_version_argument="5.0.7",
+    )
+    details.update(
+        selected_result_format="hdf",
+        requested_controller_version="5.0.7",
+        resolved_controller_version="5.0.7",
+        controller_progid="RAS507.HECRASController",
+        controller_quit_supported=True,
+        controller_close_method="quit_ras",
+        artifact_preparation_cleanup=_cleanup_record(
+            request,
+            result_format="legacy",
+            include_message_sidecars=True,
+        ),
+        artifact_finalization_cleanup=_cleanup_record(
+            request,
+            result_format="legacy",
+            include_message_sidecars=False,
+        ),
+    )
+    for blocking, completion_method in (
+        (False, "Compute_Complete"),
+        (True, "Compute_CurrentPlan_blocking_return"),
+    ):
+        engine["blocking"] = blocking
+        details["compute_mode"] = "blocking" if blocking else "poll"
+        details["completion_method"] = completion_method
+        live._verify_worker_execution_proof(worker, request, engine)
+        for field, invalid_value in (
+            ("completion_method", "Compute_IsStillComputing"),
+            ("controller_quit_supported", False),
+            ("controller_quit_supported", 1),
+            ("controller_close_method", "owned_process_cleanup"),
+        ):
+            expected_value = details[field]
+            details[field] = invalid_value
+            with pytest.raises(
+                live.LiveSupervisorError,
+                match="Controller capability evidence is invalid",
+            ):
+                live._verify_worker_execution_proof(worker, request, engine)
+            details[field] = expected_value
+        for field in (
+            "completion_method",
+            "controller_quit_supported",
+            "controller_close_method",
+        ):
+            expected_value = details.pop(field)
+            with pytest.raises(
+                live.LiveSupervisorError,
+                match="Controller capability evidence is missing",
+            ):
+                live._verify_worker_execution_proof(worker, request, engine)
+            details[field] = expected_value
     worker["execution_result"]["execution_details"][
         "controller_executable_sha256"
     ] = "0" * 64
