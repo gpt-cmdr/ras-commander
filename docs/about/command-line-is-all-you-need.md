@@ -17,11 +17,16 @@ What is the significance of the `num_cores` setting? Well, that is still officia
   <figcaption>Machine performance by core count from the original benchmark. HEC-Commander is the original project containing Jupyter notebooks; the latest Commander projects are full libraries with APIs and agents.</figcaption>
 </figure>
 
-### HEC has now recognized the signal
+<figure markdown="span">
+  ![HEC-RAS simulation time and efficiency across hardware configurations](../assets/sabeti-et-al-2024-figure-4.jpg)
+  <figcaption>Figure 4 from Sabeti et al. (2024): CPU speed and core count versus simulation time (a), and time-cost efficiency for 1,000 simulations (b).</figcaption>
+</figure>
+
+### RAS Now Lets You Test It Yourself
 
 HEC-RAS 7.0 added an official [Run Multiple Plans core-exploration workflow](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/7.0/working-with-hec-ras/parallelization-cpu-affinity#ParallelizationCPUAffinity-RunMultiplePlans). It can take the same base plan, create trials at varying core counts, execute them sequentially, and plot the resulting runtime curve. That is a meaningful signal: HEC has now explicitly recognized that `num_cores` is significant, model-specific, and worth benchmarking instead of blindly accepting "All Available."
 
-Recognition is not parallelization. The new 7.0 feature runs the trials serially, and the published material for RAS 7.0 and RAS "2025" still does not put concurrent multi-simulation orchestration on the roadmap. The [RAS "2025" quick-start material](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/latest/quick-start-guide) discusses the possibility of dynamically adding and removing cores *within* a simulation in the future, but not running independent plans concurrently.
+But that doesn’t mean RAS can parallelize yet. The new 7.0 feature runs the trials serially, and the published material for RAS 7.0 and RAS "2025" still does not put concurrent multi-simulation orchestration on the roadmap. The [RAS "2025" quick-start material](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/latest/quick-start-guide) discusses the possibility of dynamically adding and removing cores *within* a simulation in the future, but not running independent plans concurrently.
 
 For engineers who need to protect the public today -- not at some nebulous point in the future -- RAS Commander's command-line approach will continue to be the best tool for parallel analysis. Other software packages have yet to adopt this approach, despite the benchmarks and open-source code having been published for almost three years.
 
