@@ -163,6 +163,7 @@ reference-line output.
 
 - `add_reference_lines(geom_file, lines, storage_area)` - Insert manually
   supplied reference lines into a `.g##` file
+- `replace_reference_lines(geom_file, lines, storage_area, expected_existing_names=...)` - Atomically replace or remove one 2D area's complete reference-line collection while preserving other areas, with an optional ordered concurrency guard
 - `generate_reference_lines_from_longitudinal_line(...)` - Generate
   transverse reference-line dictionaries at regular station intervals along a
   named longitudinal line
@@ -199,10 +200,17 @@ back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
 Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
 utilities.
 
+### Domain and Mesh Methods
+
+- `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
+- `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
+- `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations.
+
 ### Refinement Region Methods
 
 - `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
 - `add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)` - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through `add_refinement_region()`, and return FID/name/spacing mappings.
+- `replace_refinement_regions(geom_number, regions, expected_existing_names=..., ...)` - Atomically replace or remove the complete HDF refinement-region collection, with an optional optimistic-concurrency guard.
 - `get_refinement_regions(geom_number)` - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.
 - `set_refinement_region_spacing(geom_number, spacing_dx, ...)` - Update spacing for one or more existing refinement regions.
 - `set_refinement_region_name(geom_number, new_name, ...)` - Rename an existing refinement region.
@@ -359,6 +367,17 @@ Storage area and 2D flow area geometry parsing and writing.
 - `get_2d_flow_area_settings(geom_file)` - Read 2D flow area computation settings
 - `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
 - `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
+- `replace_breaklines(geom_file, flow_area_name, breaklines, expected_existing_names=..., ...)` - Atomically replace the geometry-global breakline collection while preserving supplied near/far spacing, near-repeat, and protection-radius values.
+
+## MeshRegenerationWorkflow
+
+Exact RAS Mapper geometry import and legacy mesh-regeneration GUI workflows.
+
+### Methods
+
+- `refresh_geometry_hdf_from_text(geom_number=..., geometry_name=..., flow_area_name=..., ras_object=..., ...)` - Transactionally displace one exact geometry HDF, let the explicitly initialized HEC-RAS version rebuild it from task-local `.g##` text, validate the exact 2D perimeter and sibling-HDF isolation, and roll back on failure. This imports geometry features but does not create computation cells.
+- `regenerate_mesh(geom_number=..., geometry_name=..., flow_area_name=..., ras_object=..., ...)` - Open/save and validate an already-current exact geometry and compiled mesh.
+- `regenerate_mesh_iterative(...)` - Legacy retry workflow; exact geometry selectors are supported and no first-registration fallback is used.
 
 ## GeomLevee
 

@@ -76,6 +76,48 @@ def _write_reference_lines_without_type_hdf(path: Path) -> None:
         )
 
 
+def _write_valid_breakline_attributes_hdf(path: Path) -> None:
+    attributes_dtype = np.dtype(
+        [
+            ("Name", "S32"),
+            ("Cell Spacing Near", "<f4"),
+            ("Cell Spacing Far", "<f4"),
+            ("Near Repeats", "u1"),
+            ("Protection Radius", "u1"),
+        ]
+    )
+    attributes = np.array(
+        [(b"Channel", 20.0, 40.0, 2, 1)],
+        dtype=attributes_dtype,
+    )
+    with h5py.File(path, "w") as hdf_file:
+        group = hdf_file.create_group("Geometry/2D Flow Area Break Lines")
+        group.create_dataset("Attributes", data=attributes)
+        group.create_dataset(
+            "Polyline Info", data=np.array([(0, 2, 0, 1)], dtype=np.int32)
+        )
+        group.create_dataset(
+            "Polyline Parts", data=np.array([(0, 2)], dtype=np.int32)
+        )
+        group.create_dataset(
+            "Polyline Points",
+            data=np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float64),
+        )
+
+
+def test_breakline_reader_exposes_mesh_generation_attributes(tmp_path: Path):
+    geom_hdf = tmp_path / "model.g01.hdf"
+    _write_valid_breakline_attributes_hdf(geom_hdf)
+
+    result = HdfBndry.get_breaklines(geom_hdf)
+
+    assert result["Name"].tolist() == ["Channel"]
+    assert result["cell_spacing_near"].tolist() == [20.0]
+    assert result["cell_spacing_far"].tolist() == [40.0]
+    assert result["near_repeats"].tolist() == [2]
+    assert result["protection_radius"].tolist() == [1]
+
+
 def test_optional_missing_boundary_groups_are_quiet_by_default(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,

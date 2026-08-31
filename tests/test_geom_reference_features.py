@@ -205,3 +205,94 @@ def test_generated_reference_lines_match_hdf_reference_line_schema(tmp_path):
         LineString(generated[1]["coordinates"]),
         tolerance=1.0e-9,
     )
+
+
+def _reference_line_fixture(tmp_path):
+    geom_file = tmp_path / "Model.g01"
+    geom_file.write_text(
+        "Geom Title=Test\r\n"
+        "Reference Line Name=Keep A                                  \r\n"
+        "Reference Line Storage Area=Mesh 1          \r\n"
+        "Reference Line Start Position= 0 , 0 \r\n"
+        "Reference Line Middle Position= 5 , 0 \r\n"
+        "Reference Line End Position= 10 , 0 \r\n"
+        "Reference Line Arc= 2 \r\n"
+        "               0               0              10               0\r\n"
+        "Reference Line Text Position= 1 , 1 \r\n"
+        "Reference Line Name=Outside                                 \r\n"
+        "Reference Line Storage Area=Mesh 1          \r\n"
+        "Reference Line Start Position= 20 , 0 \r\n"
+        "Reference Line Middle Position= 25 , 0 \r\n"
+        "Reference Line End Position= 30 , 0 \r\n"
+        "Reference Line Arc= 2 \r\n"
+        "              20               0              30               0\r\n"
+        "Reference Line Text Position= 1 , 1 \r\n"
+        "Reference Line Name=Other Area                              \r\n"
+        "Reference Line Storage Area=Mesh 2          \r\n"
+        "Reference Line Start Position= 0 , 1 \r\n"
+        "Reference Line Middle Position= 5 , 1 \r\n"
+        "Reference Line End Position= 10 , 1 \r\n"
+        "Reference Line Arc= 2 \r\n"
+        "               0               1              10               1\r\n"
+        "Reference Line Text Position= 1 , 1 \r\n"
+        "LCMann TimeDateStamp=01JAN2026 0000\r\n",
+        encoding="utf-8",
+        newline="",
+    )
+    return geom_file
+
+
+def test_replace_reference_lines_is_area_scoped_and_preserves_crlf(tmp_path):
+    geom_file = _reference_line_fixture(tmp_path)
+
+    result = GeomReferenceFeatures.replace_reference_lines(
+        geom_file,
+        lines=[{"name": "Keep A", "coordinates": [(1.0, 0.0), (9.0, 0.0)]}],
+        storage_area="Mesh 1",
+        expected_existing_names=["Keep A", "Outside"],
+    )
+
+    assert result["removed"] == ["Keep A", "Outside"]
+    assert result["inserted"] == ["Keep A"]
+    parsed = GeomReferenceFeatures.get_reference_lines(geom_file)
+    assert [item["name"] for item in parsed] == ["Keep A", "Other Area"]
+    assert np.allclose(parsed[0]["coordinates"], [(1.0, 0.0), (9.0, 0.0)])
+    assert b"\r\n" in geom_file.read_bytes()
+    assert b"\n" not in geom_file.read_bytes().replace(b"\r\n", b"")
+
+
+def test_replace_reference_lines_preserves_existing_backup(tmp_path):
+    geom_file = _reference_line_fixture(tmp_path)
+    original = geom_file.read_bytes()
+    first_backup = geom_file.with_suffix(".g01.bak")
+    first_backup.write_bytes(b"pre-existing evidence")
+
+    result = GeomReferenceFeatures.replace_reference_lines(
+        geom_file,
+        lines=[],
+        storage_area="Mesh 1",
+        expected_existing_names=["Keep A", "Outside"],
+    )
+
+    backup = Path(result["backup_path"])
+    assert first_backup.read_bytes() == b"pre-existing evidence"
+    assert backup.name == "Model.g01.bak1"
+    assert backup.read_bytes() == original
+    assert [
+        item["name"] for item in GeomReferenceFeatures.get_reference_lines(geom_file)
+    ] == ["Other Area"]
+
+
+def test_replace_reference_lines_expected_names_fail_closed(tmp_path):
+    geom_file = _reference_line_fixture(tmp_path)
+    before = geom_file.read_bytes()
+
+    with pytest.raises(ValueError, match="population changed"):
+        GeomReferenceFeatures.replace_reference_lines(
+            geom_file,
+            lines=[],
+            storage_area="Mesh 1",
+            expected_existing_names=["Keep A"],
+        )
+
+    assert geom_file.read_bytes() == before

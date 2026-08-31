@@ -16,14 +16,80 @@ All methods are static. Do not instantiate.
 import math
 import shutil
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from .GeomParser import GeomParser
 
 logger = get_logger(__name__)
+
+
+def _reference_line_blocks(file_lines: List[str]) -> List[dict]:
+    """Return exact reference-line block extents from geometry text lines."""
+    blocks: List[dict] = []
+    idx = 0
+    while idx < len(file_lines):
+        stripped = file_lines[idx].rstrip("\r\n")
+        if not stripped.startswith("Reference Line Name="):
+            idx += 1
+            continue
+
+        start = idx
+        name = stripped.split("=", 1)[1].strip()
+        storage_area = ""
+        idx += 1
+        while idx < len(file_lines):
+            current = file_lines[idx].rstrip("\r\n")
+            if current.startswith("Reference Line Name="):
+                break
+            if current.startswith("Reference Line Storage Area="):
+                storage_area = current.split("=", 1)[1].strip()
+            idx += 1
+            if current.startswith("Reference Line Text Position="):
+                break
+        blocks.append(
+            {
+                "name": name,
+                "storage_area": storage_area,
+                "start": start,
+                "end": idx,
+            }
+        )
+    return blocks
+
+
+def _reference_line_insert_index(file_lines: List[str]) -> int:
+    """Choose the canonical reference-line insertion point."""
+    last_bc_line_idx = -1
+    first_existing_refline_idx = -1
+    first_ic_point_idx = -1
+    first_lcmann_idx = -1
+    for idx, line in enumerate(file_lines):
+        stripped = line.rstrip("\r\n")
+        if stripped.startswith("BC Line Text Position="):
+            last_bc_line_idx = idx
+        if (
+            stripped.startswith("Reference Line Name=")
+            and first_existing_refline_idx == -1
+        ):
+            first_existing_refline_idx = idx
+        if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
+            first_ic_point_idx = idx
+        if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
+            first_lcmann_idx = idx
+
+    if first_existing_refline_idx >= 0:
+        return first_existing_refline_idx
+    if last_bc_line_idx >= 0:
+        return last_bc_line_idx + 1
+    if first_ic_point_idx >= 0:
+        return first_ic_point_idx
+    if first_lcmann_idx >= 0:
+        return first_lcmann_idx
+    return len(file_lines)
 
 
 def _format_coord_line(values: List[float], width: int = 16) -> str:
@@ -800,11 +866,6 @@ class GeomReferenceFeatures:
         if not lines:
             raise ValueError("lines must contain at least one reference line")
 
-        # Create backup
-        backup_path = Path(str(geom_file) + ".bak")
-        shutil.copy2(geom_file, backup_path)
-        logger.debug(f"Created backup: {backup_path}")
-
         # Read file with CRLF preservation
         with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
@@ -858,15 +919,127 @@ class GeomReferenceFeatures:
         insert_lines = [block_line + line_ending for block_line in new_blocks]
         file_lines[insert_idx:insert_idx] = insert_lines
 
-        # Write back
-        with open(geom_file, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        GeomParser.safe_write_geometry(
+            geom_file,
+            file_lines,
+            create_backup=True,
+        )
 
         logger.debug(
             f"Inserted {len(lines)} reference line(s) into {geom_file.name} "
             f"(storage area: {storage_area}) at line {insert_idx + 1}"
         )
         return len(lines)
+
+    @staticmethod
+    @log_call
+    def replace_reference_lines(
+        geom_file: Union[str, Path],
+        lines: Sequence[Mapping[str, Any]],
+        storage_area: str,
+        expected_existing_names: Optional[Sequence[str]] = None,
+    ) -> dict:
+        """Atomically replace one 2D area's complete reference-line collection.
+
+        This is the safe mutation for reduced 2D domains: callers can remove
+        parent reference lines that no longer intersect the retained mesh and
+        optionally clip the survivors before replacing them. Reference lines
+        belonging to other 2D areas are preserved byte-for-byte.
+
+        ``expected_existing_names`` is an optional ordered optimistic-
+        concurrency guard. An empty ``lines`` list removes all reference lines
+        associated with ``storage_area``.
+        """
+        geom_path = Path(geom_file)
+        if not geom_path.is_file():
+            raise FileNotFoundError(f"Geometry file not found: {geom_path}")
+        area = str(storage_area).strip()
+        if not area:
+            raise ValueError("storage_area must be non-empty")
+
+        prepared: List[tuple[str, List[str]]] = []
+        seen: set[str] = set()
+        for item in lines:
+            if not isinstance(item, Mapping):
+                raise ValueError("each entry in lines must be a mapping")
+            name = str(item.get("name", "")).strip()
+            if not name:
+                raise ValueError("each reference line must have a non-empty name")
+            if name in seen:
+                raise ValueError(f"duplicate reference line name: {name!r}")
+            seen.add(name)
+            if "coordinates" not in item:
+                raise ValueError(
+                    f"Reference line {name!r} is missing coordinates"
+                )
+            coords = np.asarray(item["coordinates"], dtype=np.float64)
+            if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2:
+                raise ValueError(
+                    f"Reference line {name!r} needs at least 2 points as "
+                    "an (N, 2) array"
+                )
+            if not np.isfinite(coords).all():
+                raise ValueError(
+                    f"Reference line {name!r} coordinates must be finite"
+                )
+            prepared.append((name, _build_reference_line_block(name, area, coords)))
+
+        with open(
+            geom_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as handle:
+            file_lines = handle.readlines()
+        blocks = _reference_line_blocks(file_lines)
+        target_blocks = [block for block in blocks if block["storage_area"] == area]
+        existing_names = [str(block["name"]) for block in target_blocks]
+        if (
+            expected_existing_names is not None
+            and existing_names != [str(name) for name in expected_existing_names]
+        ):
+            raise ValueError(
+                f"Reference-line population changed for {area!r}: expected "
+                f"{list(expected_existing_names)!r}, observed {existing_names!r}"
+            )
+
+        for block in sorted(target_blocks, key=lambda value: value["start"], reverse=True):
+            del file_lines[int(block["start"]):int(block["end"])]
+
+        insert_idx = _reference_line_insert_index(file_lines)
+        line_ending = "\r\n" if any(
+            line.endswith("\r\n") for line in file_lines
+        ) else "\n"
+        replacement_lines = [
+            block_line + line_ending
+            for _, block in prepared
+            for block_line in block
+        ]
+        file_lines[insert_idx:insert_idx] = replacement_lines
+        backup_path = GeomParser.safe_write_geometry(
+            geom_path,
+            file_lines,
+            create_backup=True,
+        )
+        inserted_names = [name for name, _ in prepared]
+        logger.info(
+            "Replaced %d reference line(s) with %d for %s in %s",
+            len(existing_names),
+            len(inserted_names),
+            area,
+            geom_path.name,
+        )
+        return {
+            "geom_file": str(geom_path),
+            "storage_area": area,
+            "removed": existing_names,
+            "inserted": inserted_names,
+            "removed_count": len(existing_names),
+            "inserted_count": len(inserted_names),
+            "insert_index": insert_idx,
+            "backup_path": str(backup_path),
+        }
 
     @staticmethod
     @log_call

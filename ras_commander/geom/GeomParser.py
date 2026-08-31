@@ -36,7 +36,7 @@ Example Usage:
 
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any, Union
+from typing import List, Optional, Tuple, Union
 from datetime import datetime
 
 from ..LoggingConfig import get_logger
@@ -567,7 +567,7 @@ class GeomParser:
                 logger.debug(f"Created backup: {backup_path}")
 
             # Step 2: Write to temp file
-            with open(temp_path, 'w', encoding='utf-8') as f:
+            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
                 f.writelines(modified_lines)
 
             # Step 3: Basic validation - check temp file has content
@@ -576,14 +576,7 @@ class GeomParser:
 
             # Step 4: Atomic rename temp -> original
             import os
-            if os.name == 'nt':  # Windows
-                # Windows doesn't support atomic rename over existing file
-                # Remove original first, then rename
-                geom_file.unlink()
-                temp_path.rename(geom_file)
-            else:  # Unix-like
-                # Atomic rename
-                temp_path.rename(geom_file)
+            os.replace(temp_path, geom_file)
 
             logger.debug(f"Successfully wrote geometry file: {geom_file}")
             return backup_path

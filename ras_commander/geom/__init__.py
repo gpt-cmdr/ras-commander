@@ -55,7 +55,6 @@ from .GeomCrossSection import (
     GeomCrossSection,
 )
 from .ManningsFromLandCover import ManningsFromLandCover
-from .GeomCrossSection import GeomCrossSection
 from .GeomStorage import GeomStorage
 from .GeomProjection import GeomProjection
 from .GeomLateral import GeomLateral
@@ -70,7 +69,13 @@ from .GeomReferenceFeatures import GeomReferenceFeatures
 from .GeomBcLines import GeomBcLines
 from .GeomMesh import GeomMesh
 from .GeomPipeNetwork import GeomPipeNetwork
-from .GeomMeshDataclasses import MeshResult, BCConflict, BCFixResult
+from .GeomMeshDataclasses import (
+    BCConflict,
+    BCFixResult,
+    DomainContainmentResult,
+    DomainContainmentViolation,
+    MeshResult,
+)
 
 __all__ = [
     'GeomParser',
@@ -100,4 +105,6 @@ __all__ = [
     'MeshResult',
     'BCConflict',
     'BCFixResult',
+    'DomainContainmentResult',
+    'DomainContainmentViolation',
 ]
