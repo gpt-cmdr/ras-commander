@@ -28,6 +28,12 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
 - [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
 
+## Hydrofabric Conflation
+
+- [`RasHydrofabric`](hydrofabric.md) - Multi-criteria HEC-RAS geometry/reach/cross-section conflation
+- [`HydrofabricConflationResult`](hydrofabric.md#basic-use) - Resolved matches, ranked candidates, and HUC intersections
+- [`HydrofabricAdapter`](hydrofabric.md#hydrofabric-adapters) - NHDPlus, NWM, NextGen, and custom flowpath schema normalization
+
 ## HDF Modules
 
 Classes for reading HDF result files:
