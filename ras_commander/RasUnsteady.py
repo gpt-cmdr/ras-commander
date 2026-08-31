@@ -7974,6 +7974,8 @@ class RasUnsteady:
             raise ValueError("DataFrame must have at least 2 rows")
         if not np.isfinite(hours).all() or not np.isfinite(values).all():
             raise ValueError("Hydrograph hours and values must be finite")
+        if not math.isclose(float(hours[0]), 0.0, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("Hydrograph hours must start at zero")
 
         # Calculate interval from hour column
         intervals = np.diff(hours)

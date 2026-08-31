@@ -314,6 +314,7 @@ def test_ensure_location_rejects_existing_name_on_other_area(tmp_path):
 @pytest.mark.parametrize(
     "hours",
     [
+        [1.0, 1.5, 2.0],
         [0.0, 1.0, 0.5],
         [0.0, 0.5, 1.25],
         [0.0, 0.001, 0.002],
