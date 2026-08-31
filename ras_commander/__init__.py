@@ -127,6 +127,7 @@ _LAZY_EXPORTS = {
     **{
         name: ('.RasHydrofabric', name)
         for name in (
+            'RasNetworkConflation', 'NetworkConflationResult',
             'RasHydrofabric', 'HydrofabricConflationResult',
             'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
             'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
@@ -371,6 +372,7 @@ __all__ = [
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasSubmodel', 'SubmodelResult', 'SubmodelSelection',
     'SubmodelValidationReport',
+    'RasNetworkConflation', 'NetworkConflationResult',
     'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
     'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
     'NextGenFlowpathAdapter',

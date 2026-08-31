@@ -3,20 +3,27 @@ from __future__ import annotations
 import geopandas as gpd
 import pytest
 from pyproj import CRS as PyprojCRS
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 import ras_commander
 from ras_commander import (
     ConflationStatus,
     HydrofabricConflationResult,
+    NetworkConflationResult,
     NextGenFlowpathAdapter,
     NHDPlusAdapter,
     NWMHydrofabricAdapter,
     RasHydrofabric,
+    RasNetworkConflation,
 )
 from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
 
 CRS = "EPSG:3857"
+
+
+def test_generic_network_public_names_alias_the_hydrofabric_contract():
+    assert issubclass(RasNetworkConflation, RasHydrofabric)
+    assert NetworkConflationResult is HydrofabricConflationResult
 
 
 def _model_inputs():
@@ -71,6 +78,14 @@ def _nhdplus_flowpaths():
 
 def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
     footprints, reaches, cross_sections = _model_inputs()
+    thalwegs = gpd.GeoDataFrame(
+        {
+            "reach_id": ["river-a", "river-a", "river-a"],
+            "xs_id": ["80", "50", "20"],
+        },
+        geometry=[Point(20, 3), Point(50, 3), Point(80, 3)],
+        crs=CRS,
+    )
     hucs = gpd.GeoDataFrame(
         {"HUC12": ["010101010101", "010101010102"]},
         geometry=[
@@ -85,6 +100,7 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
         reaches,
         cross_sections,
         _nhdplus_flowpaths(),
+        thalweg_points=thalwegs,
         adapter="auto",
         hucs=hucs,
         min_confidence=0.5,
@@ -130,6 +146,20 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
         "010101010102",
     }
     assert result.huc_intersections["geometry_area_fraction"].sum() == pytest.approx(1.0)
+    metrics = result.reach_metrics.iloc[0]
+    assert metrics["feature_id"] == "101"
+    assert metrics["upstream_xs_id"] == "80"
+    assert metrics["downstream_xs_id"] == "20"
+    assert metrics["xs_intersection_count"] == 3
+    assert metrics["coverage_start"] == pytest.approx(0.2)
+    assert metrics["coverage_end"] == pytest.approx(0.8)
+    assert metrics["coverage_ratio"] == pytest.approx(0.6)
+    assert metrics["ras_length"] == pytest.approx(60.0)
+    assert metrics["network_length"] == pytest.approx(60.0)
+    assert metrics["network_to_ras_ratio"] == pytest.approx(1.0)
+    assert metrics["centerline_offset_mean"] == pytest.approx(1.0)
+    assert metrics["thalweg_offset_mean"] == pytest.approx(2.0)
+    assert not metrics["flagged"]
     assert list(result.matches.columns) == [
         column["name"]
         for column in DATAFRAME_SCHEMAS["hydrofabric_matches"]["columns"]
@@ -137,6 +167,10 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
     assert list(result.candidates.columns) == [
         column["name"]
         for column in DATAFRAME_SCHEMAS["hydrofabric_candidates"]["columns"]
+    ]
+    assert list(result.reach_metrics.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["hydrofabric_reach_metrics"]["columns"]
     ]
     assert list(result.huc_intersections.columns) == [
         column["name"]
@@ -178,6 +212,9 @@ def test_ambiguous_results_do_not_encode_a_candidate_as_a_match():
         for codes in result.matches["reason_codes"]
     )
     assert set(result.candidates["feature_id"]) == {"101", "102"}
+    assert result.reach_metrics.iloc[0]["ambiguous"]
+    assert result.reach_metrics.iloc[0]["flagged"]
+    assert result.reach_metrics.iloc[0]["feature_id"] is None
 
 
 def test_unmatched_results_use_null_ids_not_numeric_failure_sentinels():
@@ -201,6 +238,66 @@ def test_unmatched_results_use_null_ids_not_numeric_failure_sentinels():
     assert result.matches["best_candidate_feature_id"].isna().all()
     assert set(result.matches["match_method"]) == {"no_spatial_candidate"}
     assert result.candidates.empty
+    assert result.reach_metrics.iloc[0]["flagged"]
+    assert "UNMATCHED_ASSOCIATION" in result.reach_metrics.iloc[0]["reason_codes"]
+
+
+def test_reach_metrics_flag_eclipsed_and_insufficient_xs_coverage():
+    footprints, reaches, cross_sections = _model_inputs()
+    result = RasHydrofabric.conflate(
+        footprints,
+        reaches,
+        cross_sections.iloc[[0]].copy(),
+        _nhdplus_flowpaths(),
+        search_distance=25.0,
+        min_confidence=0.5,
+        ambiguity_margin=0.02,
+    )
+
+    metrics = result.reach_metrics.iloc[0]
+    assert metrics["upstream_xs_id"] == "80"
+    assert metrics["downstream_xs_id"] == "80"
+    assert metrics["eclipsed"]
+    assert metrics["insufficient_coverage"]
+    assert metrics["flagged"]
+    assert "ECLIPSED_NO_DISTINCT_XS_LIMITS" in metrics["reason_codes"]
+    assert "INSUFFICIENT_COVERAGE" in metrics["reason_codes"]
+
+
+def test_reach_metrics_detect_network_divergence_from_generic_node_fields():
+    footprints, reaches, cross_sections = _model_inputs()
+    flowpaths = gpd.GeoDataFrame(
+        {
+            "COMID": [101, 111, 112],
+            "FromNode": ["a", "b", "b"],
+            "ToNode": ["b", "c", "d"],
+            "StreamOrde": [4, 3, 3],
+            "TotDASqKm": [50.0, 25.0, 25.0],
+        },
+        geometry=[
+            LineString([(0, 1), (100, 1)]),
+            LineString([(100, 1), (180, 1)]),
+            LineString([(100, 1), (180, 30)]),
+        ],
+        crs=CRS,
+    )
+
+    result = RasHydrofabric.conflate(
+        footprints,
+        reaches,
+        cross_sections,
+        flowpaths,
+        search_distance=25.0,
+        min_confidence=0.5,
+        ambiguity_margin=0.02,
+    )
+
+    metrics = result.reach_metrics.iloc[0]
+    assert metrics["feature_id"] == "101"
+    assert metrics["connectivity_evaluable"]
+    assert metrics["divergent"]
+    assert metrics["flagged"]
+    assert "DIVERGENT_NETWORK" in metrics["reason_codes"]
 
 
 def test_topological_continuity_uses_adjacent_reaches_and_flowpath_nodes():

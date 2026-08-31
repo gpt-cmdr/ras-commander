@@ -30,7 +30,8 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 
 ## Hydrofabric Conflation
 
-- [`RasHydrofabric`](hydrofabric.md) - Multi-criteria HEC-RAS geometry/reach/cross-section conflation
+- [`RasNetworkConflation`](hydrofabric.md) - Generic multi-criteria HEC-RAS geometry/reach/cross-section conflation
+- [`RasHydrofabric`](hydrofabric.md) - Equivalent hydrofabric-oriented public name
 - [`HydrofabricConflationResult`](hydrofabric.md#basic-use) - Resolved matches, ranked candidates, and HUC intersections
 - [`HydrofabricAdapter`](hydrofabric.md#hydrofabric-adapters) - NHDPlus, NWM, NextGen, and custom flowpath schema normalization
 

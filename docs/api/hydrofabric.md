@@ -1,15 +1,17 @@
 # Hydrofabric Conflation
 
-`RasHydrofabric.conflate()` crosswalks HEC-RAS model footprints, reach
+`RasNetworkConflation.conflate()` crosswalks HEC-RAS model footprints, reach
 centerlines, and cross sections to hydrofabric flowpaths. It retains the full
 candidate evidence instead of reducing a failed lookup to a numeric COMID.
+`RasHydrofabric` remains an equivalent domain-specific name; NHDPlus, NWM, and
+NextGen are adapters to the same generic directed-network core.
 
 ## Basic use
 
 ```python
-from ras_commander import RasHydrofabric
+from ras_commander import RasNetworkConflation
 
-result = RasHydrofabric.conflate(
+result = RasNetworkConflation.conflate(
     model_footprints=footprints_gdf,
     centerlines=reach_centerlines_gdf,
     cross_sections=xs_cut_lines_gdf,
@@ -29,6 +31,7 @@ The method returns a `HydrofabricConflationResult` with three GeoDataFrames:
 | --- | --- | --- |
 | `matches` | One explicit geometry, reach, and cross-section resolution row | HEC-RAS model element |
 | `candidates` | Every retained candidate, rank, score component, and reason code | Hydrofabric flowpath |
+| `reach_metrics` | Edge/reach association, XS limits, offsets, lengths, coverage, and flags | HEC-RAS reach centerline |
 | `huc_intersections` | Optional model-footprint/HUC overlap records | Intersection polygon |
 
 ## Match states
@@ -102,6 +105,46 @@ Accepted cross-section rows include:
 
 The units are those of `result.analysis_crs`.
 
+## Reach limits, offsets, lengths, and flags
+
+`result.reach_metrics` is the extraction-oriented network-edge ↔ RAS-reach
+table. For the best edge candidate it reports:
+
+- `upstream_xs_id` and `downstream_xs_id`, ordered from the directed network
+  geometry start to its end;
+- `coverage_start`, `coverage_end`, and the intervening `coverage_ratio`;
+- RAS-centerline and network lengths between those sections, plus their ratio;
+- centerline-offset distribution statistics at intersecting sections;
+- thalweg-offset statistics when thalweg point geometry is supplied;
+- explicit ambiguous, eclipsed, divergent, and insufficient-coverage flags.
+
+Supply thalweg points as a keyed GeoDataFrame:
+
+```python
+result = RasNetworkConflation.conflate(
+    footprints_gdf,
+    reach_centerlines_gdf,
+    xs_cut_lines_gdf,
+    network_edges_gdf,
+    thalweg_points=xs_thalweg_points_gdf,
+    adapter=custom,
+    min_coverage=0.50,
+)
+```
+
+The thalweg layer must contain unique `reach_id`/`xs_id` Point rows. As a
+convenience, a point-valued `thalweg_point` column on the cross-section frame is
+also accepted. `centerline_offset` compares the RAS-centerline/XS crossing to
+the network/XS crossing; `thalweg_offset` compares the supplied thalweg point
+to the network/XS crossing.
+
+An edge is marked `eclipsed` when it has no two distinct intersecting sections,
+which is the network-neutral condition needed before a topology-specific
+adapter walks neighboring edges. Divergence is evaluated from normalized
+`from_node`/`to_node` fields; `connectivity_evaluable=False` keeps missing
+connectivity from being silently treated as a non-divergence. Coverage below
+`min_coverage` receives an `INSUFFICIENT_COVERAGE` reason code.
+
 ## Hydrofabric adapters
 
 Pass `adapter="auto"` or select a built-in schema explicitly:
@@ -115,7 +158,7 @@ Pass `adapter="auto"` or select a built-in schema explicitly:
 For another schema, supply a custom adapter:
 
 ```python
-from ras_commander import HydrofabricAdapter, RasHydrofabric
+from ras_commander import HydrofabricAdapter, RasNetworkConflation
 
 custom = HydrofabricAdapter(
     name="agency_flowpaths",
@@ -125,7 +168,7 @@ custom = HydrofabricAdapter(
     drainage_area_fields=("drainage_sq_km",),
 )
 
-result = RasHydrofabric.conflate(
+result = RasNetworkConflation.conflate(
     footprints_gdf,
     reach_centerlines_gdf,
     xs_cut_lines_gdf,
@@ -134,7 +177,7 @@ result = RasHydrofabric.conflate(
 )
 ```
 
-::: ras_commander.RasHydrofabric.RasHydrofabric
+::: ras_commander.RasHydrofabric.RasNetworkConflation
     options:
       show_source: false
       members:

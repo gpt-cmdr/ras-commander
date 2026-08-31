@@ -1,4 +1,4 @@
-"""Hydrofabric conflation for HEC-RAS model geometry.
+"""Generic directed-network conflation for HEC-RAS model geometry.
 
 The conflation surface in this module deliberately separates candidate evidence
 from accepted matches.  A failed or uncertain match therefore has a null
@@ -48,6 +48,9 @@ class HydrofabricConflationResult:
             ``feature_id`` is populated only when ``status == 'matched'``.
         candidates: Ranked candidate rows, including every score component and
             the candidate flowpath geometry.
+        reach_metrics: One row per RAS reach with accepted network edge,
+            upstream/downstream cross-section limits, offset and length metrics,
+            coverage, and review flags.
         huc_intersections: Geometry-footprint/HUC intersections.  Empty when no
             HUC layer was supplied.
         adapter: Name of the hydrofabric schema adapter used for normalization.
@@ -57,6 +60,7 @@ class HydrofabricConflationResult:
 
     matches: gpd.GeoDataFrame
     candidates: gpd.GeoDataFrame
+    reach_metrics: gpd.GeoDataFrame
     huc_intersections: gpd.GeoDataFrame
     adapter: str
     analysis_crs: str
@@ -245,9 +249,22 @@ _CANDIDATE_COLUMNS = [
     "flowpath_measure_from_end", "measure_method", "offset_distance", "geometry",
 ]
 
+_REACH_METRIC_COLUMNS = [
+    "geometry_id", "reach_id", "feature_id", "best_candidate_feature_id",
+    "status", "confidence_score", "upstream_xs_id", "downstream_xs_id",
+    "xs_intersection_count", "coverage_start", "coverage_end",
+    "coverage_ratio", "ras_length", "network_length",
+    "network_to_ras_ratio", "centerline_offset_count",
+    "centerline_offset_mean", "centerline_offset_std", "centerline_offset_min",
+    "centerline_offset_max", "thalweg_offset_count", "thalweg_offset_mean",
+    "thalweg_offset_std", "thalweg_offset_min", "thalweg_offset_max",
+    "ambiguous", "eclipsed", "connectivity_evaluable", "divergent",
+    "insufficient_coverage", "flagged", "reason_codes", "geometry",
+]
+
 
 class RasHydrofabric:
-    """Conflate HEC-RAS geometry with national hydrofabric flowpaths.
+    """Conflate HEC-RAS geometry with generic directed network flowpaths.
 
     This is a static namespace; do not instantiate it.
     """
@@ -298,6 +315,7 @@ class RasHydrofabric:
         cross_sections: Optional[GeoInput],
         flowpaths: GeoInput,
         *,
+        thalweg_points: Optional[GeoInput] = None,
         adapter: Union[str, HydrofabricAdapter] = "auto",
         hucs: Optional[GeoInput] = None,
         analysis_crs: Optional[Any] = None,
@@ -306,6 +324,9 @@ class RasHydrofabric:
         reach_id_col: Optional[str] = "reach_id",
         xs_id_col: Optional[str] = "xs_id",
         xs_reach_id_col: Optional[str] = "reach_id",
+        thalweg_xs_id_col: Optional[str] = "xs_id",
+        thalweg_reach_id_col: Optional[str] = "reach_id",
+        xs_thalweg_col: Optional[str] = "thalweg_point",
         huc_id_col: Optional[str] = None,
         flowpaths_layer: Optional[str] = None,
         hucs_layer: Optional[str] = None,
@@ -314,6 +335,7 @@ class RasHydrofabric:
         max_candidates: int = 8,
         min_confidence: float = 0.55,
         ambiguity_margin: float = 0.05,
+        min_coverage: float = 0.50,
         weights: Optional[Mapping[str, float]] = None,
         sample_count: int = 9,
     ) -> HydrofabricConflationResult:
@@ -332,6 +354,9 @@ class RasHydrofabric:
             cross_sections: Cross-section cut lines, or ``None``.  When a reach
                 identifier is absent, each cross section is assigned spatially.
             flowpaths: Hydrofabric flowpaths GeoDataFrame or vector path.
+            thalweg_points: Optional point GeoDataFrame keyed by cross-section
+                and reach ID.  If omitted, ``xs_thalweg_col`` is used when that
+                point-valued column exists on ``cross_sections``.
             adapter: ``'auto'``, ``'nhdplus'``, ``'nwm'``, ``'nextgen'``, or a
                 custom :class:`HydrofabricAdapter`.
             hucs: Optional HUC polygon layer.  Intersections are returned without
@@ -345,6 +370,8 @@ class RasHydrofabric:
                 preselection.
             min_confidence: Minimum accepted score in ``[0, 1]``.
             ambiguity_margin: Minimum first/second score separation.
+            min_coverage: Minimum accepted span between upstream/downstream
+                cross sections as a fraction of network-edge length.
             weights: Optional overrides for :data:`DEFAULT_CONFLATION_WEIGHTS`.
 
         Returns:
@@ -356,6 +383,7 @@ class RasHydrofabric:
             max_candidates=max_candidates,
             min_confidence=min_confidence,
             ambiguity_margin=ambiguity_margin,
+            min_coverage=min_coverage,
             sample_count=sample_count,
         )
         score_weights = _prepare_weights(weights)
@@ -367,6 +395,9 @@ class RasHydrofabric:
             flowpaths, "flowpaths", layer=flowpaths_layer
         )
         huc_frame = _read_optional_geodata(hucs, "hucs", layer=hucs_layer)
+        thalweg_frame = _read_optional_geodata(
+            thalweg_points, "thalweg_points"
+        )
 
         _require_crs(footprints, "model_footprints")
         _require_crs(reaches, "centerlines")
@@ -375,6 +406,8 @@ class RasHydrofabric:
             _require_crs(xs, "cross_sections")
         if not huc_frame.empty:
             _require_crs(huc_frame, "hucs")
+        if not thalweg_frame.empty:
+            _require_crs(thalweg_frame, "thalweg_points")
 
         selected_adapter = RasHydrofabric.get_adapter(adapter, raw_flowpaths)
         normalized_flowpaths = selected_adapter.normalize(raw_flowpaths)
@@ -389,11 +422,23 @@ class RasHydrofabric:
             xs_id_col=xs_id_col,
             xs_reach_id_col=xs_reach_id_col,
         )
+        thalweg_frame = _prepare_thalweg_points(
+            thalweg_frame,
+            xs,
+            xs_id_col=thalweg_xs_id_col,
+            reach_id_col=thalweg_reach_id_col,
+            xs_thalweg_col=xs_thalweg_col,
+        )
 
         target_crs = _choose_analysis_crs(reaches, footprints, analysis_crs)
         footprints = footprints.to_crs(target_crs)
         reaches = reaches.to_crs(target_crs)
         xs = xs.to_crs(target_crs) if not xs.empty else _empty_xs(target_crs)
+        thalweg_frame = (
+            thalweg_frame.to_crs(target_crs)
+            if not thalweg_frame.empty
+            else _empty_thalwegs(target_crs)
+        )
         normalized_flowpaths = normalized_flowpaths.to_crs(target_crs)
         if not huc_frame.empty:
             huc_frame = huc_frame.to_crs(target_crs)
@@ -508,6 +553,17 @@ class RasHydrofabric:
             ).reset_index(drop=True)
             candidates["element_type"] = candidates["element_type"].astype(str)
 
+        reach_metrics = _build_reach_metrics(
+            matches=matches,
+            candidates=candidates,
+            reaches=reaches,
+            cross_sections=xs,
+            thalweg_points=thalweg_frame,
+            flowpaths=normalized_flowpaths,
+            min_coverage=float(min_coverage),
+            crs=target_crs,
+        )
+
         parameters = {
             "weights": dict(score_weights),
             "search_distance": float(search_distance),
@@ -515,11 +571,13 @@ class RasHydrofabric:
             "max_candidates": int(max_candidates),
             "min_confidence": float(min_confidence),
             "ambiguity_margin": float(ambiguity_margin),
+            "min_coverage": float(min_coverage),
             "sample_count": int(sample_count),
         }
         return HydrofabricConflationResult(
             matches=matches,
             candidates=candidates,
+            reach_metrics=reach_metrics,
             huc_intersections=huc_intersections,
             adapter=selected_adapter.name,
             analysis_crs=target_crs.to_string(),
@@ -527,11 +585,23 @@ class RasHydrofabric:
         )
 
 
+class RasNetworkConflation(RasHydrofabric):
+    """Generic public name for :class:`RasHydrofabric` conflation.
+
+    NHDPlus, NWM, and NextGen are schema adapters to this network-neutral core;
+    custom directed networks use :class:`HydrofabricAdapter` directly.
+    """
+
+
+NetworkConflationResult = HydrofabricConflationResult
+
+
 def _validate_thresholds(
     *,
     max_candidates: int,
     min_confidence: float,
     ambiguity_margin: float,
+    min_coverage: float,
     sample_count: int,
 ) -> None:
     if max_candidates < 1:
@@ -540,6 +610,8 @@ def _validate_thresholds(
         raise ValueError("min_confidence must be between 0 and 1")
     if not 0 <= ambiguity_margin <= 1:
         raise ValueError("ambiguity_margin must be between 0 and 1")
+    if not 0 <= min_coverage <= 1:
+        raise ValueError("min_coverage must be between 0 and 1")
     if sample_count < 3:
         raise ValueError("sample_count must be at least 3")
 
@@ -776,6 +848,99 @@ def _empty_xs(crs: Any) -> gpd.GeoDataFrame:
         geometry=[],
         crs=crs,
     )
+
+
+def _empty_thalwegs(crs: Any) -> gpd.GeoDataFrame:
+    return gpd.GeoDataFrame(
+        {"xs_id": [], "reach_id": []}, geometry=[], crs=crs
+    )
+
+
+def _prepare_thalweg_points(
+    thalweg_points: gpd.GeoDataFrame,
+    cross_sections: gpd.GeoDataFrame,
+    *,
+    xs_id_col: Optional[str],
+    reach_id_col: Optional[str],
+    xs_thalweg_col: Optional[str],
+) -> gpd.GeoDataFrame:
+    """Normalize optional thalweg points to stable reach/XS keys."""
+    if thalweg_points.empty:
+        if (
+            not cross_sections.empty
+            and xs_thalweg_col
+            and xs_thalweg_col in cross_sections.columns
+        ):
+            thalweg_points = gpd.GeoDataFrame(
+                cross_sections[["xs_id", "reach_id"]].copy(),
+                geometry=cross_sections[xs_thalweg_col],
+                crs=cross_sections.crs,
+            )
+        else:
+            return _empty_thalwegs(cross_sections.crs)
+    else:
+        thalweg_points = thalweg_points.copy()
+        xs_source = _find_column(
+            thalweg_points,
+            xs_id_col,
+            ("xs_id", "river_station", "riverstation", "rs", "station", "id"),
+        )
+        if xs_source is None:
+            raise ValueError(
+                "thalweg_points require a cross-section identifier column"
+            )
+        thalweg_points["xs_id"] = thalweg_points[xs_source].map(
+            _normalise_identifier
+        )
+        reach_source = _find_column(
+            thalweg_points,
+            reach_id_col,
+            ("reach_id", "reach", "reach_name", "river_reach"),
+        )
+        if reach_source is not None:
+            thalweg_points["reach_id"] = thalweg_points[reach_source].map(
+                _normalise_identifier
+            )
+        else:
+            if cross_sections["xs_id"].duplicated().any():
+                raise ValueError(
+                    "thalweg_points need reach IDs when cross-section IDs repeat"
+                )
+            reach_lookup = cross_sections.set_index("xs_id")["reach_id"].to_dict()
+            thalweg_points["reach_id"] = thalweg_points["xs_id"].map(
+                reach_lookup
+            )
+
+    thalweg_points = thalweg_points.loc[
+        thalweg_points.geometry.notna() & ~thalweg_points.geometry.is_empty
+    ].copy()
+    if thalweg_points.empty:
+        return _empty_thalwegs(cross_sections.crs)
+    if thalweg_points[["xs_id", "reach_id"]].isna().any().any():
+        raise ValueError("thalweg_points contain null/blank reach or XS IDs")
+    if not thalweg_points.geometry.geom_type.eq("Point").all():
+        raise ValueError("thalweg_points geometries must all be Points")
+    if thalweg_points.duplicated(["reach_id", "xs_id"]).any():
+        raise ValueError("thalweg_points must be unique by reach_id and xs_id")
+
+    valid_keys = set(
+        cross_sections[["reach_id", "xs_id"]].astype(str).itertuples(
+            index=False, name=None
+        )
+    )
+    thalweg_keys = set(
+        thalweg_points[["reach_id", "xs_id"]].astype(str).itertuples(
+            index=False, name=None
+        )
+    )
+    unknown = sorted(thalweg_keys - valid_keys)
+    if unknown:
+        raise ValueError(
+            f"thalweg_points reference unknown reach/cross-section keys: {unknown}"
+        )
+    thalweg_points["reach_id"] = thalweg_points["reach_id"].astype(str)
+    thalweg_points["xs_id"] = thalweg_points["xs_id"].astype(str)
+    return thalweg_points[["reach_id", "xs_id", "geometry"]]
 
 
 def _spatial_parent_id(
@@ -1566,6 +1731,240 @@ def _make_candidates_gdf(
         if column not in frame:
             frame[column] = None
     return frame[_CANDIDATE_COLUMNS]
+
+
+def _build_reach_metrics(
+    *,
+    matches: gpd.GeoDataFrame,
+    candidates: gpd.GeoDataFrame,
+    reaches: gpd.GeoDataFrame,
+    cross_sections: gpd.GeoDataFrame,
+    thalweg_points: gpd.GeoDataFrame,
+    flowpaths: gpd.GeoDataFrame,
+    min_coverage: float,
+    crs: CRS,
+) -> gpd.GeoDataFrame:
+    """Build the edge-to-reach QA table used by extraction workflows."""
+    reach_matches = matches.loc[matches["element_type"] == "reach"].copy()
+    if reach_matches.empty:
+        return gpd.GeoDataFrame(
+            columns=_REACH_METRIC_COLUMNS, geometry="geometry", crs=crs
+        )
+
+    reach_lookup = reaches.set_index("reach_id")
+    flowpath_lookup = flowpaths.set_index("feature_id")
+    thalweg_lookup = {
+        (str(row.reach_id), str(row.xs_id)): row.geometry
+        for row in thalweg_points.itertuples(index=False)
+    }
+    rows: list[Dict[str, Any]] = []
+    for match in reach_matches.itertuples(index=False):
+        reach_id = str(match.reach_id)
+        reach_geometry = reach_lookup.loc[reach_id].geometry
+        best_id = _normalise_identifier(match.best_candidate_feature_id)
+        flowpath = (
+            flowpath_lookup.loc[best_id].geometry
+            if best_id is not None and best_id in flowpath_lookup.index
+            else None
+        )
+        status = str(match.status)
+        ambiguous = status == ConflationStatus.AMBIGUOUS.value
+        unmatched = status == ConflationStatus.UNMATCHED.value
+        reach_xs = cross_sections.loc[
+            cross_sections["reach_id"].astype(str) == reach_id
+        ]
+        if flowpath is None:
+            intersecting = reach_xs.iloc[0:0]
+        else:
+            intersecting = reach_xs.loc[
+                reach_xs.geometry.intersects(flowpath)
+            ].copy()
+
+        xs_evidence: list[Dict[str, Any]] = []
+        centerline_offsets: list[float] = []
+        thalweg_offsets: list[float] = []
+        if flowpath is not None:
+            for xs in intersecting.itertuples(index=False):
+                network_point, _ = nearest_points(flowpath, xs.geometry)
+                centerline_point, _ = nearest_points(reach_geometry, xs.geometry)
+                network_measure = float(flowpath.project(network_point))
+                ras_measure = float(reach_geometry.project(centerline_point))
+                centerline_offset = float(
+                    centerline_point.distance(network_point)
+                )
+                centerline_offsets.append(centerline_offset)
+                thalweg_point = thalweg_lookup.get(
+                    (reach_id, str(xs.xs_id))
+                )
+                thalweg_offset = None
+                if thalweg_point is not None:
+                    thalweg_offset = float(thalweg_point.distance(network_point))
+                    thalweg_offsets.append(thalweg_offset)
+                xs_evidence.append(
+                    {
+                        "xs_id": str(xs.xs_id),
+                        "network_measure": network_measure,
+                        "ras_measure": ras_measure,
+                        "centerline_offset": centerline_offset,
+                        "thalweg_offset": thalweg_offset,
+                    }
+                )
+
+        xs_evidence.sort(key=lambda item: item["network_measure"])
+        upstream = xs_evidence[0] if xs_evidence else None
+        downstream = xs_evidence[-1] if xs_evidence else None
+        distinct_limits = (
+            upstream is not None
+            and downstream is not None
+            and upstream["xs_id"] != downstream["xs_id"]
+        )
+        network_edge_length = (
+            float(flowpath.length) if flowpath is not None else 0.0
+        )
+        coverage_start = (
+            upstream["network_measure"] / network_edge_length
+            if upstream is not None and network_edge_length > 0
+            else None
+        )
+        coverage_end = (
+            downstream["network_measure"] / network_edge_length
+            if downstream is not None and network_edge_length > 0
+            else None
+        )
+        coverage_ratio = (
+            coverage_end - coverage_start
+            if coverage_start is not None and coverage_end is not None
+            else None
+        )
+        ras_length = (
+            abs(downstream["ras_measure"] - upstream["ras_measure"])
+            if distinct_limits
+            else None
+        )
+        network_length = (
+            abs(
+                downstream["network_measure"]
+                - upstream["network_measure"]
+            )
+            if distinct_limits
+            else None
+        )
+        network_to_ras_ratio = (
+            network_length / ras_length
+            if network_length is not None and ras_length not in {None, 0.0}
+            else None
+        )
+
+        connectivity_evaluable, divergent = _network_divergence(
+            flowpaths, best_id
+        )
+        eclipsed = bool(not unmatched and not distinct_limits)
+        insufficient = bool(
+            not unmatched
+            and (
+                coverage_ratio is None
+                or coverage_ratio < min_coverage
+            )
+        )
+        reasons: list[str] = []
+        if ambiguous:
+            reasons.append("AMBIGUOUS_ASSOCIATION")
+        if unmatched:
+            reasons.append("UNMATCHED_ASSOCIATION")
+        if eclipsed:
+            reasons.append("ECLIPSED_NO_DISTINCT_XS_LIMITS")
+        if not connectivity_evaluable:
+            reasons.append("CONNECTIVITY_UNAVAILABLE")
+        elif divergent:
+            reasons.append("DIVERGENT_NETWORK")
+        if insufficient:
+            reasons.append("INSUFFICIENT_COVERAGE")
+        if not thalweg_offsets:
+            reasons.append("THALWEG_POINTS_UNAVAILABLE")
+
+        centerline_stats = _metric_distribution(
+            centerline_offsets, "centerline_offset"
+        )
+        thalweg_stats = _metric_distribution(
+            thalweg_offsets, "thalweg_offset"
+        )
+        row = {
+            "geometry_id": str(match.geometry_id),
+            "reach_id": reach_id,
+            "feature_id": _normalise_identifier(match.feature_id),
+            "best_candidate_feature_id": best_id,
+            "status": status,
+            "confidence_score": float(match.confidence_score),
+            "upstream_xs_id": upstream["xs_id"] if upstream else None,
+            "downstream_xs_id": downstream["xs_id"] if downstream else None,
+            "xs_intersection_count": int(len(xs_evidence)),
+            "coverage_start": coverage_start,
+            "coverage_end": coverage_end,
+            "coverage_ratio": coverage_ratio,
+            "ras_length": ras_length,
+            "network_length": network_length,
+            "network_to_ras_ratio": network_to_ras_ratio,
+            "ambiguous": ambiguous,
+            "eclipsed": eclipsed,
+            "connectivity_evaluable": connectivity_evaluable,
+            "divergent": divergent,
+            "insufficient_coverage": insufficient,
+            "flagged": bool(
+                ambiguous or unmatched or eclipsed or divergent or insufficient
+            ),
+            "reason_codes": tuple(reasons),
+            "geometry": reach_geometry,
+        }
+        row.update(centerline_stats)
+        row.update(thalweg_stats)
+        rows.append(row)
+
+    result = gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
+    return result[_REACH_METRIC_COLUMNS].sort_values(
+        ["geometry_id", "reach_id"]
+    ).reset_index(drop=True)
+
+
+def _network_divergence(
+    flowpaths: gpd.GeoDataFrame, feature_id: Optional[str]
+) -> tuple[bool, bool]:
+    if feature_id is None or feature_id not in flowpaths["feature_id"].values:
+        return False, False
+    selected = flowpaths.loc[flowpaths["feature_id"] == feature_id].iloc[0]
+    from_node = _normalise_identifier(selected.get("from_node"))
+    to_node = _normalise_identifier(selected.get("to_node"))
+    if from_node is None and to_node is None:
+        return False, False
+    normalized_from = flowpaths["from_node"].map(_normalise_identifier)
+    branch_member = (
+        from_node is not None and int((normalized_from == from_node).sum()) > 1
+    )
+    downstream_split = (
+        to_node is not None and int((normalized_from == to_node).sum()) > 1
+    )
+    return True, bool(branch_member or downstream_split)
+
+
+def _metric_distribution(
+    values: Sequence[float], prefix: str
+) -> Dict[str, Any]:
+    array = np.asarray(values, dtype=float)
+    array = array[np.isfinite(array)]
+    if not len(array):
+        return {
+            f"{prefix}_count": 0,
+            f"{prefix}_mean": None,
+            f"{prefix}_std": None,
+            f"{prefix}_min": None,
+            f"{prefix}_max": None,
+        }
+    return {
+        f"{prefix}_count": int(len(array)),
+        f"{prefix}_mean": float(np.mean(array)),
+        f"{prefix}_std": float(np.std(array)),
+        f"{prefix}_min": float(np.min(array)),
+        f"{prefix}_max": float(np.max(array)),
+    }
 
 
 def _build_huc_intersections(
