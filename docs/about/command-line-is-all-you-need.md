@@ -43,7 +43,11 @@ RAS Commander is built on this approach. It comes with some radical concepts: th
 
 Nothing worth doing ever waited for consensus -- consensus is a lagging indicator, not a leading one. The leading indicator is the one we were staring at: 70% throughput improvements on single machines, and running up to 40 parallel simulations at a time without clouds or containers (and beating their performance by 250% or more by keeping simulations local). The performance advantage was frankly absurd.
 
-We applied this approach in Region 4 of the Louisiana Watershed Initiative with great success. This is exactly the type of statewide effort that can't scale effectively due to the massive costs and effort associated with doing even the current base-level engineering and regulatory work -- much less going above and beyond. The friction associated with modeling is a real constraint for development, and any efforts to improve stormwater management also can't double or triple the cost of modeling those developments. Technology is a barrier to progress, and continues to be. Anyone asking "how could we use that" should lose their next contract. That's what CLB is out to prove.
+We applied this approach in Region 4 of the Louisiana Watershed Initiative with great success. This is exactly the type of statewide effort that can't scale effectively due to the massive costs and effort associated with doing even the current base-level engineering and regulatory work -- much less going above and beyond. The friction associated with modeling is a real constraint for development, and any efforts to improve stormwater management also can't double or triple the cost of modeling those developments.
+
+***Technology is a barrier to progress, and continues to be.***
+
+Our tools don’t fit the scope of the work that doesn’t just “need” to be done -- it MUST be done if we want to more effectively protect communities from flood hazard.
 
 ## Then came LLMs
 
@@ -53,4 +57,4 @@ Of course, we still support the [COM interface for older versions](../user-guide
 
 And the best part about it is that Command Line really is all you need these days. Software development generally has been totally disrupted by command-line coding agents. It's not just HEC-RAS being disrupted by an LLM on a command line.
 
-Anyone asking "how could we use that" in 2026 should lose their next contract. That's what CLB is out to prove. The data speaks for itself, and the results do too. Don't argue with mules -- go [LLM Forward](https://clbengineering.com/llm-forward) with CLB!
+We think there is a better way and we hope you copy it.
