@@ -1,6 +1,6 @@
 # Command Line is All You Need
 
-*Why it is called RAS "Commander," and why the command line changed HEC-RAS automation.*
+*Why We Stopped Controlling HEC-RAS and Started Commanding It.*
 
 <figure markdown="span">
   ![HEC-Commander -- Command Line is All You Need](../assets/HEC-Commander-Command-Line-Logo.png){ width="640" }
