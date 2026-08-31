@@ -10,11 +10,555 @@ Classes:
     RasControlResult: Result of RasControl.run_plan() - backward compatible with Tuple[bool, List[str]]
 """
 
+import json
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import pandas as pd
+
+
+def _strict_json_object_copy(
+    value: Mapping[str, Any],
+    *,
+    field_name: str,
+) -> Dict[str, Any]:
+    """Return a detached strict-JSON copy of a result metadata mapping."""
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{field_name} must be a mapping")
+    try:
+        encoded = json.dumps(
+            dict(value),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        decoded = json.loads(encoded)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{field_name} must contain only finite JSON-safe values"
+        ) from exc
+    if not isinstance(decoded, dict):
+        raise ValueError(f"{field_name} must serialize to a JSON object")
+    return decoded
+
+
+def _positive_int(value: Any, field_name: str) -> int:
+    """Return one exact positive integer without accepting bool coercion."""
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"{field_name} must be a positive integer")
+    return value
+
+
+def _positive_finite_number(value: Any, field_name: str) -> float:
+    """Return one finite positive float without accepting bool coercion."""
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or float(value) <= 0
+    ):
+        raise ValueError(f"{field_name} must be finite and positive")
+    return float(value)
+
+
+def _strict_bool(value: Any, field_name: str) -> bool:
+    """Require an actual bool for a safety decision field."""
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a boolean")
+    return value
+
+
+def _nonempty_text(value: Any, field_name: str) -> str:
+    """Return normalized nonempty text without stringifying arbitrary values."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a nonempty string")
+    return value.strip()
+
+
+def _optional_nonempty_text(value: Any, field_name: str) -> Optional[str]:
+    """Validate optional JSON-safe text fields."""
+    if value is None:
+        return None
+    return _nonempty_text(value, field_name)
+
+
+def _record_tuple(value: Any, field_name: str) -> Tuple['RasProcessRecord', ...]:
+    """Freeze and type-check a public process-record collection."""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"{field_name} must be a list or tuple")
+    records = tuple(value)
+    if any(not isinstance(item, RasProcessRecord) for item in records):
+        raise ValueError(f"{field_name} must contain only RasProcessRecord values")
+    identities = [item.identity for item in records]
+    if len(identities) != len(set(identities)):
+        raise ValueError(f"{field_name} contains duplicate process identities")
+    return records
+
+
+def _query_error_tuple(
+    value: Any,
+    field_name: str,
+) -> Tuple['RasProcessQueryError', ...]:
+    """Freeze and type-check a public query-error collection."""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"{field_name} must be a list or tuple")
+    errors = tuple(value)
+    if any(not isinstance(item, RasProcessQueryError) for item in errors):
+        raise ValueError(
+            f"{field_name} must contain only RasProcessQueryError values"
+        )
+    return errors
+
+
+@dataclass(frozen=True)
+class RasProcessRecord:
+    """Immutable identity and command metadata for one HEC-RAS process.
+
+    ``pid`` alone is not a stable process identity because operating systems
+    reuse process identifiers.  Callers that retain a record must use the
+    ``(pid, create_time)`` pair exposed by :attr:`identity`. ``create_time`` is
+    a Unix epoch timestamp in seconds, matching ``psutil``.
+    """
+
+    pid: int
+    create_time: float
+    name: str
+    executable_path: Optional[str] = None
+    command_line: Tuple[str, ...] = ()
+    working_directory: Optional[str] = None
+    tracked: bool = False
+    session_id: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Normalize public constructor inputs to immutable JSON-safe values."""
+        object.__setattr__(self, "pid", _positive_int(self.pid, "pid"))
+        object.__setattr__(
+            self,
+            "create_time",
+            _positive_finite_number(self.create_time, "create_time"),
+        )
+        object.__setattr__(self, "name", _nonempty_text(self.name, "name"))
+        object.__setattr__(
+            self,
+            "executable_path",
+            _optional_nonempty_text(self.executable_path, "executable_path"),
+        )
+        if not isinstance(self.command_line, (list, tuple)) or any(
+            not isinstance(token, str) for token in self.command_line
+        ):
+            raise ValueError("command_line must be a list or tuple of strings")
+        object.__setattr__(
+            self,
+            "command_line",
+            tuple(self.command_line),
+        )
+        object.__setattr__(
+            self,
+            "working_directory",
+            _optional_nonempty_text(
+                self.working_directory,
+                "working_directory",
+            ),
+        )
+        object.__setattr__(self, "tracked", _strict_bool(self.tracked, "tracked"))
+        object.__setattr__(
+            self,
+            "session_id",
+            _optional_nonempty_text(self.session_id, "session_id"),
+        )
+
+    @property
+    def identity(self) -> Tuple[int, float]:
+        """Return the non-reusable identity captured for this process."""
+        return (self.pid, self.create_time)
+
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "RasProcessRecord has no truth-value contract; inspect its fields"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a detached JSON-safe representation."""
+        return {
+            "pid": self.pid,
+            "create_time": self.create_time,
+            "name": self.name,
+            "executable_path": self.executable_path,
+            "command_line": list(self.command_line),
+            "working_directory": self.working_directory,
+            "tracked": self.tracked,
+            "session_id": self.session_id,
+        }
+
+
+@dataclass(frozen=True)
+class RasProcessQueryError:
+    """A process field that could not be queried during strict inspection."""
+
+    pid: Optional[int]
+    operation: str
+    reason_code: str
+    exception_type: str
+    detail: str
+
+    def __post_init__(self) -> None:
+        """Normalize public constructor inputs to JSON-safe values."""
+        object.__setattr__(
+            self,
+            "pid",
+            None if self.pid is None else _positive_int(self.pid, "pid"),
+        )
+        object.__setattr__(
+            self,
+            "operation",
+            _nonempty_text(self.operation, "operation"),
+        )
+        object.__setattr__(
+            self,
+            "reason_code",
+            _nonempty_text(self.reason_code, "reason_code"),
+        )
+        object.__setattr__(
+            self,
+            "exception_type",
+            _nonempty_text(self.exception_type, "exception_type"),
+        )
+        if not isinstance(self.detail, str):
+            raise ValueError("detail must be a string")
+
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "RasProcessQueryError has no truth-value contract; inspect its fields"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a detached JSON-safe representation."""
+        return {
+            "pid": self.pid,
+            "operation": self.operation,
+            "reason_code": self.reason_code,
+            "exception_type": self.exception_type,
+            "detail": self.detail,
+        }
+
+
+@dataclass(frozen=True)
+class RasProcessInventory:
+    """Strict host inventory of HEC-RAS compute processes.
+
+    ``complete`` is false whenever a process could not be classified or any
+    required field of a matching launcher, solver, sediment/water-quality
+    engine, or geometry preprocessor could not be read. Consumers that make
+    safety decisions must fail closed when it is false. ``observed_at`` is a
+    Unix epoch timestamp in seconds.
+    """
+
+    observed_at: float
+    complete: bool = True
+    processes: Tuple[RasProcessRecord, ...] = ()
+    query_errors: Tuple[RasProcessQueryError, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Freeze collections supplied through the public constructor."""
+        object.__setattr__(
+            self,
+            "observed_at",
+            _positive_finite_number(self.observed_at, "observed_at"),
+        )
+        object.__setattr__(
+            self,
+            "complete",
+            _strict_bool(self.complete, "complete"),
+        )
+        object.__setattr__(
+            self,
+            "processes",
+            _record_tuple(self.processes, "processes"),
+        )
+        object.__setattr__(
+            self,
+            "query_errors",
+            _query_error_tuple(self.query_errors, "query_errors"),
+        )
+        if self.complete and self.query_errors:
+            raise ValueError("complete inventory cannot contain query_errors")
+        if not self.complete and not self.query_errors:
+            raise ValueError("incomplete inventory requires query_errors")
+
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "RasProcessInventory has explicit completeness; inspect '.complete'"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a detached JSON-safe representation."""
+        return {
+            "observed_at": self.observed_at,
+            "complete": self.complete,
+            "processes": [item.to_dict() for item in self.processes],
+            "query_errors": [item.to_dict() for item in self.query_errors],
+        }
+
+
+@dataclass(frozen=True)
+class PlanProcessInventory:
+    """Strict process inventory narrowed to one project and plan.
+
+    ``observed_at`` is a Unix epoch timestamp in seconds.
+    """
+
+    observed_at: float
+    plan_number: str
+    project_path: str
+    plan_path: str
+    tmp_hdf_path: Optional[str]
+    complete: bool
+    matched: Tuple[RasProcessRecord, ...] = ()
+    query_errors: Tuple[RasProcessQueryError, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Normalize paths and freeze collections supplied by callers."""
+        object.__setattr__(
+            self,
+            "observed_at",
+            _positive_finite_number(self.observed_at, "observed_at"),
+        )
+        object.__setattr__(
+            self,
+            "plan_number",
+            _nonempty_text(self.plan_number, "plan_number"),
+        )
+        object.__setattr__(
+            self,
+            "project_path",
+            _nonempty_text(self.project_path, "project_path"),
+        )
+        object.__setattr__(
+            self,
+            "plan_path",
+            _nonempty_text(self.plan_path, "plan_path"),
+        )
+        object.__setattr__(
+            self,
+            "tmp_hdf_path",
+            _optional_nonempty_text(self.tmp_hdf_path, "tmp_hdf_path"),
+        )
+        object.__setattr__(
+            self,
+            "complete",
+            _strict_bool(self.complete, "complete"),
+        )
+        object.__setattr__(
+            self,
+            "matched",
+            _record_tuple(self.matched, "matched"),
+        )
+        object.__setattr__(
+            self,
+            "query_errors",
+            _query_error_tuple(self.query_errors, "query_errors"),
+        )
+        if self.complete and self.query_errors:
+            raise ValueError("complete plan inventory cannot contain query_errors")
+        if not self.complete and not self.query_errors:
+            raise ValueError("incomplete plan inventory requires query_errors")
+
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "PlanProcessInventory has explicit completeness; inspect '.complete'"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a detached JSON-safe representation."""
+        return {
+            "observed_at": self.observed_at,
+            "plan_number": self.plan_number,
+            "project_path": self.project_path,
+            "plan_path": self.plan_path,
+            "tmp_hdf_path": self.tmp_hdf_path,
+            "complete": self.complete,
+            "matched": [item.to_dict() for item in self.matched],
+            "query_errors": [item.to_dict() for item in self.query_errors],
+        }
+
+
+@dataclass(frozen=True)
+class PlanCancellationResult:
+    """Structured outcome from exact plan process-tree cancellation.
+
+    This type deliberately rejects truth-value testing.  Callers must inspect
+    :attr:`quiescence_confirmed` because ``False`` (known survivor) and
+    ``None`` (query uncertainty) require different recovery decisions.
+    ``cancellation_attempted`` becomes true only when a terminate or kill call
+    was actually attempted; :attr:`matched_count` separately reports the
+    number of processes selected by the initial exact-plan scan. Optional
+    ``started_at`` and ``finished_at`` values are Unix epoch timestamps in
+    seconds.
+    """
+
+    plan_number: str
+    project_path: str
+    plan_path: str
+    tmp_hdf_path: Optional[str]
+    cancellation_attempted: bool
+    pre_scan_complete: bool
+    post_scan_complete: bool
+    matched: Tuple[RasProcessRecord, ...] = ()
+    stopped: Tuple[RasProcessRecord, ...] = ()
+    survivors: Tuple[RasProcessRecord, ...] = ()
+    query_errors: Tuple[RasProcessQueryError, ...] = ()
+    quiescence_confirmed: Optional[bool] = None
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        """Normalize paths and freeze collections supplied by callers."""
+        object.__setattr__(
+            self,
+            "plan_number",
+            _nonempty_text(self.plan_number, "plan_number"),
+        )
+        object.__setattr__(
+            self,
+            "project_path",
+            _nonempty_text(self.project_path, "project_path"),
+        )
+        object.__setattr__(
+            self,
+            "plan_path",
+            _nonempty_text(self.plan_path, "plan_path"),
+        )
+        object.__setattr__(
+            self,
+            "tmp_hdf_path",
+            _optional_nonempty_text(self.tmp_hdf_path, "tmp_hdf_path"),
+        )
+        object.__setattr__(
+            self,
+            "cancellation_attempted",
+            _strict_bool(self.cancellation_attempted, "cancellation_attempted"),
+        )
+        object.__setattr__(
+            self,
+            "pre_scan_complete",
+            _strict_bool(self.pre_scan_complete, "pre_scan_complete"),
+        )
+        object.__setattr__(
+            self,
+            "post_scan_complete",
+            _strict_bool(self.post_scan_complete, "post_scan_complete"),
+        )
+        object.__setattr__(
+            self,
+            "matched",
+            _record_tuple(self.matched, "matched"),
+        )
+        object.__setattr__(
+            self,
+            "stopped",
+            _record_tuple(self.stopped, "stopped"),
+        )
+        object.__setattr__(
+            self,
+            "survivors",
+            _record_tuple(self.survivors, "survivors"),
+        )
+        object.__setattr__(
+            self,
+            "query_errors",
+            _query_error_tuple(self.query_errors, "query_errors"),
+        )
+        if self.quiescence_confirmed is not None and not isinstance(
+            self.quiescence_confirmed,
+            bool,
+        ):
+            raise ValueError("quiescence_confirmed must be a boolean or null")
+        if (
+            not self.pre_scan_complete or not self.post_scan_complete
+        ) and not self.query_errors:
+            raise ValueError(
+                "incomplete cancellation scans require query_errors"
+            )
+        if (self.started_at is None) != (self.finished_at is None):
+            raise ValueError("started_at and finished_at must both be set or null")
+        if self.started_at is not None and self.finished_at is not None:
+            object.__setattr__(
+                self,
+                "started_at",
+                _positive_finite_number(self.started_at, "started_at"),
+            )
+            object.__setattr__(
+                self,
+                "finished_at",
+                _positive_finite_number(self.finished_at, "finished_at"),
+            )
+            if self.finished_at < self.started_at:
+                raise ValueError("finished_at cannot precede started_at")
+
+        matched_identities = {item.identity for item in self.matched}
+        stopped_identities = {item.identity for item in self.stopped}
+        survivor_identities = {item.identity for item in self.survivors}
+        if self.cancellation_attempted and not self.matched:
+            raise ValueError(
+                "cancellation_attempted requires at least one initial match"
+            )
+        if stopped_identities & survivor_identities:
+            raise ValueError("stopped and survivors cannot share a process identity")
+        if self.quiescence_confirmed is True:
+            if (
+                not self.pre_scan_complete
+                or not self.post_scan_complete
+                or self.query_errors
+                or self.survivors
+                or not matched_identities.issubset(stopped_identities)
+            ):
+                raise ValueError(
+                    "confirmed quiescence requires complete scans, no query "
+                    "uncertainty or survivors, and every initial match stopped"
+                )
+        elif self.quiescence_confirmed is False:
+            if not self.survivors:
+                raise ValueError("known non-quiescence requires at least one survivor")
+        elif self.survivors or (
+            self.pre_scan_complete
+            and self.post_scan_complete
+            and not self.query_errors
+        ):
+            raise ValueError(
+                "indeterminate quiescence requires uncertainty and no known survivor"
+            )
+
+    @property
+    def matched_count(self) -> int:
+        """Return the number of exact launcher/solver matches found initially."""
+        return len(self.matched)
+
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "PlanCancellationResult has tri-state semantics; inspect "
+            "'.quiescence_confirmed' explicitly"
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return a detached JSON-safe representation."""
+        return {
+            "plan_number": self.plan_number,
+            "project_path": self.project_path,
+            "plan_path": self.plan_path,
+            "tmp_hdf_path": self.tmp_hdf_path,
+            "cancellation_attempted": self.cancellation_attempted,
+            "pre_scan_complete": self.pre_scan_complete,
+            "post_scan_complete": self.post_scan_complete,
+            "matched": [item.to_dict() for item in self.matched],
+            "stopped": [item.to_dict() for item in self.stopped],
+            "survivors": [item.to_dict() for item in self.survivors],
+            "query_errors": [item.to_dict() for item in self.query_errors],
+            "quiescence_confirmed": self.quiescence_confirmed,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+        }
 
 
 @dataclass
@@ -33,6 +577,11 @@ class ComputeResult:
         completion_verified: ``True`` or ``False`` when ``verify=True`` checked
             HEC-RAS completion; ``None`` when completion verification was not
             requested.
+        execution_details: JSON-safe execution-engine identity and terminal
+            safety gates reported by ``RasCmdr.compute_plan()``. The field is
+            additive, includes exact preparation/finalization cleanup records
+            when execution reaches those phases, and defaults to an empty
+            dictionary for callers that construct ``ComputeResult`` directly.
     Examples:
         # Old usage (still works):
         if RasCmdr.compute_plan("01"):
@@ -46,6 +595,14 @@ class ComputeResult:
     success: bool
     results_df_row: Optional[pd.Series] = None
     completion_verified: Optional[bool] = None
+    execution_details: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Detach and validate execution metadata as strict JSON data."""
+        self.execution_details = _strict_json_object_copy(
+            self.execution_details,
+            field_name="ComputeResult.execution_details",
+        )
 
     def __bool__(self) -> bool:
         return self.success
@@ -76,6 +633,9 @@ class ComputeParallelResult:
         execution_results: Dict mapping plan numbers to success booleans.
         results_df: DataFrame containing results_df rows for executed plans only.
             May be empty if no results could be extracted.
+        execution_details_by_plan: JSON-safe execution details keyed by plan
+            number. A plan maps to an empty dictionary when no structured
+            details were available for that outcome.
 
     Examples:
         # Old usage (still works):
@@ -93,6 +653,32 @@ class ComputeParallelResult:
     """
     execution_results: Dict[str, bool] = field(default_factory=dict)
     results_df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
+    execution_details_by_plan: Dict[str, Dict[str, Any]] = field(
+        default_factory=dict
+    )
+
+    def __post_init__(self) -> None:
+        """Detach and validate per-plan evidence as strict JSON objects."""
+        if not isinstance(self.execution_details_by_plan, Mapping):
+            raise TypeError(
+                "ComputeParallelResult.execution_details_by_plan must be a "
+                "mapping"
+            )
+        normalized: Dict[str, Dict[str, Any]] = {}
+        for plan_number, details in self.execution_details_by_plan.items():
+            if not isinstance(plan_number, str):
+                raise ValueError(
+                    "ComputeParallelResult.execution_details_by_plan keys "
+                    "must be strings"
+                )
+            normalized[plan_number] = _strict_json_object_copy(
+                details,
+                field_name=(
+                    "ComputeParallelResult.execution_details_by_plan"
+                    f"[{plan_number!r}]"
+                ),
+            )
+        self.execution_details_by_plan = normalized
 
     def __getitem__(self, key: str) -> bool:
         return self.execution_results[key]
@@ -141,7 +727,8 @@ class RasControlResult:
         results_df_row: Single row from results_df for the executed plan,
             or None if unavailable.
         execution_details: JSON-safe Controller identity, compute mode,
-            watchdog status, message counts, and timing provenance reported by
+            watchdog status, message counts, timing provenance, and exact
+            preparation/finalization cleanup records reported by
             ``RasControl.run_plan()``. Mode-specific keys are additive.
 
     Examples:
@@ -162,6 +749,13 @@ class RasControlResult:
     messages: List[str] = field(default_factory=list)
     results_df_row: Optional[pd.Series] = None
     execution_details: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Detach and validate execution metadata as strict JSON data."""
+        self.execution_details = _strict_json_object_copy(
+            self.execution_details,
+            field_name="RasControlResult.execution_details",
+        )
 
     def __bool__(self) -> bool:
         return self.success

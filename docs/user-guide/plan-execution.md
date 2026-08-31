@@ -52,6 +52,7 @@ success = RasCmdr.compute_plan("01")
 | `clear_geompre` | bool | Clear geometry preprocessor files first |
 | `num_cores` | int | Number of CPU cores to use |
 | `overwrite_dest` | bool | Overwrite destination if exists |
+| `max_runtime` | float/None | Optional positive finite execution limit in seconds |
 
 ### Examples
 
@@ -69,6 +70,82 @@ success = RasCmdr.compute_plan(
 # Force geometry preprocessing
 success = RasCmdr.compute_plan("01", clear_geompre=True)
 ```
+
+### Bounded Execution and Launch Evidence
+
+`max_runtime` is an additive execution-safety option for direct
+`RasCmdr.compute_plan()` runs. Supply a positive finite number of seconds when
+the caller needs a hard plan-specific engine deadline:
+
+```python
+result = RasCmdr.compute_plan(
+    "01",
+    force_rerun=True,
+    verify=True,
+    max_runtime=900,
+)
+
+details = result.execution_details
+if details["runtime_timed_out"]:
+    print(details["failure_stage"], details["cancellation_details"])
+```
+
+Boolean values, strings, zero, negative values, NaN, infinity, and values above
+4,294,967.294 seconds are rejected before project access or execution begins.
+The upper limit keeps the value representable by the Windows subprocess wait
+API. An explicit value establishes one monotonic engine deadline immediately
+before `Ras.exe` launch, after executable proof, process preflight, and
+result-artifact preparation. The remaining budget is shared by compute-message
+callback monitoring, the direct launcher wait, asynchronous solver completion,
+and exact-plan quiescence confirmation; each phase does not receive a fresh
+timeout.
+
+`max_runtime=None` is the compatibility default. It does not add a deadline to
+the direct `Ras.exe` launcher wait. The existing 7,200-second bound for an
+asynchronous `RasUnsteady.exe` solver that outlives its launcher remains in
+place.
+
+When an explicit deadline expires, ras-commander records the timeout and calls
+only `RasCmdr.cancel_plan_exact()` for that initialized project and plan. It
+does not fall back to a process-name kill. Opposing result-family artifacts are
+finalized only when the structured cancellation or final process inspection
+positively confirms exact-plan quiescence. An uncertain cancellation therefore
+returns a failed `ComputeResult` and leaves potentially active artifacts
+untouched. Exact-plan cancellation and terminal evidence collection can extend
+the method's wall-clock return time beyond `max_runtime`; the deadline limits
+the engine attempt, not the safety work needed to prove what remains running.
+
+`ComputeResult.execution_details` provides JSON-safe audit evidence, including:
+
+- `max_runtime_seconds` and `runtime_timed_out`;
+- `launch_details`, with the exact command, working directory, executable path
+  and SHA-256, project and plan paths, and launcher PID/create-time identity;
+- `launcher_returncode`, which can remain nonzero when a delegated modern solver
+  nevertheless produces a verified final HDF;
+- `failure_stage`, `failure_type`, and `failure_detail`;
+- structured `cancellation_details`, including tri-state quiescence evidence;
+  and
+- `artifact_preparation_cleanup` and `artifact_finalization_cleanup`, which
+  report the exact removed and already-missing target paths before and after
+  execution; and
+- `result_artifacts_finalized` plus `artifact_finalization_failure`, which keep
+  a cleanup defect separate from an earlier timeout or execution failure.
+
+Within either cleanup record, `result_format` is the result family targeted for
+deletion—the opposing family—not the run's selected output format. On a
+successful cleanup, `removed_paths` and `missing_paths` are disjoint and their
+union is the complete plan-scoped target set. Both cleanup fields are `None`
+when calculation is skipped before cleanup.
+
+`completion_verified` is independent of overall `ComputeResult.success`. For
+example, a complete HDF may verify and then result-family finalization may fail;
+that outcome is `success=False`, `completion_verified=True`, and remains safe to
+inspect as a failed execution receipt when exact-plan quiescence is proven.
+
+Advanced supervisors can implement the optional duck-typed
+`on_exec_launched(plan_number, launch_details)` callback to persist the launch
+identity immediately after it is captured. This additive hook does not change
+the exported `ExecutionCallback` protocol.
 
 ## Sequential Execution
 
@@ -225,6 +302,153 @@ Use `RasFlowOptimization.get_settings()` to audit an existing plan and `RasFlowO
 ## Checking Results
 
 After execution, verify results were generated and the run completed without errors. This is critical for determining if the simulation succeeded.
+
+### Structured Mechanical Evidence
+
+Use `inspect_execution_evidence()` when automation must distinguish an
+inspected false value from an unavailable, uninspected, or unreadable channel.
+The method is read-only: it does not run HEC-RAS, preprocess the plan, or open
+the legacy COM controller.
+
+```python
+from ras_commander import RasCmdr
+
+evidence = RasCmdr.inspect_execution_evidence(
+    "01",
+    ras_object=ras,
+    hash_files=True,
+)
+
+completion = evidence.mechanical_completion
+print(completion.state, completion.value, completion.reason_code)
+
+errors = evidence.observations["message_error_count"]
+print(errors.state, errors.value, errors.source_locator)
+```
+
+The four observation states have distinct meanings:
+
+- `available` means inspection produced a value, including `False` or zero.
+- `not_available_in_version` is used only for a positively established
+  producer-version limitation.
+- `not_inspected` means no trustworthy observation was possible or requested.
+- `failed` means inspection was attempted but the source was unreadable,
+  malformed, unstable, or contradictory.
+
+If `result_modified_after` is supplied, pass a timezone-aware `datetime` so
+the freshness comparison is reproducible across machines. Message-health
+counts prefer embedded HDF messages and fall back to stored messages; the two
+completion-message observations remain separate.
+
+Result-family selection reads `Program Version=` from the current `.p##` bytes,
+not from cached `plan_df` metadata. When only one result family exists, that
+artifact is selected even if its family differs from the declaration; the
+evidence records `unexpected_result_format`. This supports a copied legacy plan
+that was cleanly rerun by a newer engine without rewriting its declaration.
+
+When both `.p##.hdf` and `.O##` exist, the inspector applies stricter rules:
+
+| Plan declaration | Selection |
+|---|---|
+| HEC-RAS 5 or newer, `.O##` timestamp after HDF | Raise `ResultArtifactAmbiguityError`. |
+| HEC-RAS 5 or newer, `.O##` timestamp equal to or before HDF | Select HDF, warn, and record `multiple_result_formats_present`. Legacy output does not contribute to the selected evidence. |
+| HEC-RAS 4 or older, HDF timestamp after `.O##` | Raise `ResultArtifactAmbiguityError`. The timestamp is only a conservative ambiguity trigger, not proof of run chronology. |
+| HEC-RAS 4 or older, HDF timestamp equal to or before `.O##` | Select `.O##`, warn, and record `multiple_result_formats_present`. HDF completion and runtime do not contribute to the selected evidence. |
+| Missing or unreadable declaration | Raise `ResultArtifactAmbiguityError`. |
+
+```mermaid
+flowchart TD
+    A["Inspect existing project"] --> B{"Both HDF and .O##?"}
+    B -- "No" --> C["Read sole existing format<br/>record a conflict if unexpected"]
+    B -- "Yes" --> D{"Declared plan family"}
+    D -- "HEC-RAS 5+" --> E{"HDF mtime >= .O## mtime?"}
+    E -- "Yes" --> F["Select HDF<br/>warn about ignored .O##"]
+    E -- "No" --> G["Raise ResultArtifactAmbiguityError"]
+    D -- "HEC-RAS 4 or older" --> H{".O## mtime >= HDF mtime?"}
+    H -- "Yes" --> I["Select .O##<br/>warn about ignored HDF"]
+    H -- "No" --> G
+    D -- "Unresolved" --> G
+```
+
+Copied-folder timestamps can be misleading. The error therefore asks the user
+to resolve the formats rather than claiming which computation is newest.
+
+An actual ras-commander computation does not use those timestamps to decide
+what to remove. It normalizes artifacts using the selected HEC-RAS executable
+or controller, not the plan declaration: HEC-RAS 5+ runs preserve HDF and
+remove `.O##`; legacy runs preserve `.O##` and remove the plan HDF. Cleanup is
+coupled to the real launch after skip decisions, plan preparation, callbacks,
+watchdog startup, and log creation have succeeded. It runs again after every
+launched attempt once solver completion or termination is confirmed, because
+modern HEC-RAS 1D engines recreate `.O##` during computation. If solver
+quiescence cannot be confirmed, the run fails and leaves the opposing artifact
+visible rather than racing an active writer. Remote PsExec staging is also
+retained when completion is unconfirmed. Skipped runs do not change plan bytes
+or delete result artifacts.
+
+```mermaid
+flowchart TD
+    A["Resolve selected executable or controller"] --> B{"Engine family reliable?"}
+    B -- "No or conflicting" --> C["Fail without deleting results"]
+    B -- "Yes" --> D{"Skip calculation?"}
+    D -- "Yes" --> E["Return without changing<br/>plan bytes or results"]
+    D -- "No" --> F["Finish plan preparation,<br/>callbacks, watchdog, and log setup"]
+    F --> G{"Selected engine family"}
+    G -- "HEC-RAS 5+" --> H["Remove exact .O##<br/>and stale messages"]
+    G -- "HEC-RAS 3-4" --> I["Remove exact plan HDF<br/>and stale messages"]
+    H --> J["Launch calculation"]
+    I --> J
+    J --> K["Wait for launcher, solver children,<br/>and temporary HDF state"]
+    K --> L{"Solver quiescence confirmed?"}
+    L -- "No" --> M["Fail and preserve visible conflict<br/>and remote staging"]
+    L -- "Yes" --> N["Remove any opposing result<br/>recreated during execution"]
+    N --> O["Return normalized result set"]
+```
+
+For command-line execution, a versioned `ras_exe_path` is authoritative and
+`ras_version` is the fallback for an unversioned executable name. If both are
+resolvable but imply different result families, automatic cleanup fails closed
+without deleting either family. `RasControl.run_plan()` instead follows the
+version of the selected COM controller. An unversioned `Ras.exe` path with no
+resolvable version is not assumed to be modern, because that guess could
+permanently remove a valid legacy result.
+
+This automatic normalization belongs to full plan-calculation APIs.
+`RasPreprocess.preprocess_plan()` and
+`GeomPreprocessor.run_geometry_preprocessor()` are preflight/preprocessing
+operations that attempt to stop before hydraulic computation; they do not
+delete either family of final results and must not be used to normalize an
+ambiguous project.
+
+To resolve an existing project manually, explicitly select the family to
+remove:
+
+```python
+from ras_commander import RasCmdr
+
+# Permanent, exact plan-scoped removal. Geometry HDF, DSS, terrain, and
+# .p##.tmp.hdf preprocessing files are never included.
+cleanup = RasCmdr.remove_plan_execution_artifacts(
+    "01",
+    result_format="legacy",  # or "hdf" / "both"
+    include_message_sidecars=False,
+    ras_object=ras,
+)
+print(cleanup.removed_paths)
+```
+
+The helper validates its complete, project-contained target list before the
+first deletion. If an operating-system error occurs during deletion,
+`PlanExecutionCleanupError.cleanup` records any paths already removed and
+`failed_path` identifies the file that could not be removed.
+
+Alternatively, rerun with the intended HEC-RAS version through
+`RasCmdr.compute_plan()` or `RasControl.run_plan()`; the execution path removes
+the opposing result family and stale compute-message sidecars.
+
+Mechanical completion is deliberately independent from message errors,
+warnings, result freshness, volume accounting, convergence quality, and
+hydraulic acceptance. Review those observations separately.
 
 ### Quick Verification
 

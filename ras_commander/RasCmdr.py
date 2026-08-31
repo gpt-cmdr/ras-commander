@@ -36,34 +36,64 @@ List of Functions in RasCmdr:
         
         
 """
-import logging
+import hashlib
+import math
+import ntpath
 import os
 import shlex
 import shutil
 import subprocess
 import time
+import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from itertools import cycle
 from numbers import Number
 from pathlib import Path
-from threading import Lock, Thread
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
-from .ComputeResults import ComputeParallelResult, ComputeResult
+from .ComputeResults import (
+    ComputeParallelResult,
+    ComputeResult,
+    PlanCancellationResult,
+    PlanProcessInventory,
+    RasProcessQueryError,
+    RasProcessRecord,
+)
 from .Decorators import log_call
+from .ExecutionEvidence import (
+    ExecutionEvidence,
+    inspect_execution_evidence as _inspect_execution_evidence,
+)
+from .ExecutionArtifacts import (
+    PlanExecutionCleanup,
+    RemovalFormat,
+    ResultFormat,
+    finalize_plan_execution_artifacts,
+    get_plan_result_artifact_paths,
+    infer_execution_result_format,
+    prepare_plan_execution_artifacts,
+    remove_plan_execution_artifacts as _remove_plan_execution_artifacts,
+)
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
-from .RasGeo import RasGeo
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj, init_ras_project, ras
 from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
 
+_WINDOWS_PROCESS_CONTROL = os.name == "nt"
+_MAX_SUBPROCESS_WAIT_SECONDS = (2**32 - 2) / 1000.0
+
 # Module code starts here
+
+
+class _RuntimeDeadlineExceeded(TimeoutError):
+    """Internal marker for the public ``max_runtime`` deadline."""
 
 
 
@@ -80,6 +110,122 @@ class RasCmdr:
     """
 
     @staticmethod
+    def _resolve_executable_provenance(
+        executable: Union[str, Path],
+    ) -> tuple[Path, str]:
+        """Resolve and stably hash the exact executable selected for a plan run."""
+        candidate = Path(executable).expanduser()
+        if not candidate.is_absolute():
+            resolved_command = shutil.which(str(candidate))
+            if resolved_command is None:
+                raise FileNotFoundError(
+                    f"HEC-RAS executable could not be resolved: {executable}"
+                )
+            candidate = Path(resolved_command)
+        resolved = candidate.resolve(strict=True)
+        if not resolved.is_file():
+            raise FileNotFoundError(f"HEC-RAS executable is not a file: {resolved}")
+        digest = hashlib.sha256()
+        with resolved.open("rb") as stream:
+            before = RasCmdr._file_identity(os.fstat(stream.fileno()))
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+            after = RasCmdr._file_identity(os.fstat(stream.fileno()))
+        path_after = RasCmdr._file_identity(resolved.stat())
+        # Windows can report a slightly different ctime for the open handle
+        # and a fresh path lookup. The replacement-sensitive device, inode,
+        # size, and mtime fields must still identify the same path target.
+        if before != after or after[:4] != path_after[:4]:
+            raise RuntimeError(
+                f"HEC-RAS executable changed while hashing: {resolved}"
+            )
+        return resolved, digest.hexdigest()
+
+    @staticmethod
+    def _file_identity(stat_result: os.stat_result) -> tuple[int, ...]:
+        """Return fields that must remain stable while hashing an executable."""
+        return (
+            int(stat_result.st_dev),
+            int(stat_result.st_ino),
+            int(stat_result.st_size),
+            int(stat_result.st_mtime_ns),
+            int(stat_result.st_ctime_ns),
+        )
+
+    @staticmethod
+    def _launcher_create_time(pid: int) -> float:
+        """Capture PID-reuse-resistant launcher identity immediately after launch."""
+        import psutil
+
+        return float(psutil.Process(pid).create_time())
+
+    @staticmethod
+    def _normalize_max_runtime(max_runtime: Optional[float]) -> Optional[float]:
+        """Validate an optional public execution deadline in seconds."""
+        if max_runtime is None:
+            return None
+        if isinstance(max_runtime, bool) or not isinstance(max_runtime, (int, float)):
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds or None"
+            )
+        try:
+            normalized = float(max_runtime)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds or None"
+            ) from exc
+        if (
+            not math.isfinite(normalized)
+            or normalized <= 0
+            or normalized > _MAX_SUBPROCESS_WAIT_SECONDS
+        ):
+            raise ValueError(
+                "max_runtime must be a positive finite number of seconds no "
+                f"greater than {_MAX_SUBPROCESS_WAIT_SECONDS}, or None"
+            )
+        return normalized
+
+    @staticmethod
+    def _remaining_runtime(
+        deadline_monotonic: Optional[float],
+        *,
+        plan_number: Union[str, Number, Path],
+        max_runtime_seconds: Optional[float],
+    ) -> Optional[float]:
+        """Return the remaining bounded runtime or raise at the one deadline."""
+        if deadline_monotonic is None:
+            return None
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise _RuntimeDeadlineExceeded(
+                f"Plan {plan_number} exceeded max_runtime="
+                f"{max_runtime_seconds} seconds"
+            )
+        return remaining
+
+    @staticmethod
+    def _direct_windows_compute_command(
+        executable: Union[str, Path],
+        project_path: Union[str, Path],
+        plan_path: Union[str, Path],
+    ) -> str:
+        """Build the direct raw Windows command line expected by ``Ras.exe``.
+
+        The three filesystem arguments are quoted unconditionally.  Windows
+        paths cannot contain a literal double quote, so accepting one here
+        would make the command ambiguous and is rejected before launch.
+        """
+        arguments = tuple(
+            str(value) for value in (executable, project_path, plan_path)
+        )
+        if any('"' in value for value in arguments):
+            raise ValueError("HEC-RAS execution paths cannot contain a double quote")
+        executable_text, project_text, plan_text = arguments
+        return (
+            f'"{executable_text}" -c "{project_text}" "{plan_text}"'
+        )
+
+    @staticmethod
     def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
         """
         Get the expected HDF results path for a plan.
@@ -94,6 +240,81 @@ class RasCmdr:
         plan_num_str = RasUtils.normalize_ras_number(plan_number)
 
         return Path(ras_object.project_folder) / f"{ras_object.project_name}.p{plan_num_str}.hdf"
+
+    @staticmethod
+    @log_call
+    def inspect_execution_evidence(
+        plan_number: Union[str, Number, Path],
+        *,
+        ras_object=None,
+        result_modified_after: Optional[datetime] = None,
+        hash_files: bool = False,
+    ) -> ExecutionEvidence:
+        """Inspect existing execution evidence without running HEC-RAS or COM.
+
+        The returned record keeps filesystem, HDF, stored-message, process,
+        and COM observations distinct.  It derives mechanical completion only;
+        parsed errors and warnings remain independent health observations and
+        hydraulic acceptance is deliberately outside this contract.
+
+        Args:
+            plan_number: Plan number or an existing ``.p##`` plan path.
+            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+                global project only when omitted.
+            result_modified_after: Optional timezone-aware filesystem
+                timestamp threshold. This is not a full RAS input-currency
+                check.
+            hash_files: Stream-hash inspected source artifacts for provenance.
+
+        Returns:
+            Immutable :class:`ExecutionEvidence` with a fixed observation
+            registry and JSON-serializable ``to_dict()`` representation.
+
+        Notes:
+            This method is read-only. It does not execute or preprocess a plan,
+            launch a COM controller, or evaluate hydraulic acceptability.
+        """
+        return _inspect_execution_evidence(
+            plan_number,
+            ras_object=ras_object,
+            result_modified_after=result_modified_after,
+            hash_files=hash_files,
+        )
+
+    @staticmethod
+    @log_call
+    def remove_plan_execution_artifacts(
+        plan_number: Union[str, Number, Path],
+        *,
+        result_format: RemovalFormat,
+        include_message_sidecars: bool = False,
+        ras_object=None,
+    ) -> PlanExecutionCleanup:
+        """Permanently remove exact result artifacts owned by one plan.
+
+        Args:
+            plan_number: Plan number or existing ``.p##`` plan path.
+            result_format: Required selection: ``"hdf"``, ``"legacy"``, or
+                ``"both"``. This names the result family to remove.
+            include_message_sidecars: Also remove the plan's exact
+                ``.comp_msgs.txt``, ``.computeMsgs.txt``, and ``.bco##`` files.
+            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+                global project only when omitted.
+
+        Returns:
+            Immutable :class:`PlanExecutionCleanup` listing removed and
+            already-missing paths.
+
+        Warning:
+            Removal is permanent. Geometry HDF, DSS, terrain, and Linux
+            ``.tmp.hdf`` preprocessing files are never included.
+        """
+        return _remove_plan_execution_artifacts(
+            plan_number,
+            result_format=result_format,
+            include_message_sidecars=include_message_sidecars,
+            ras_object=ras_object,
+        )
 
     @staticmethod
     def _plan_entries_with_expected_hdf_paths(
@@ -347,38 +568,1023 @@ class RasCmdr:
     @staticmethod
     def _copy_worker_artifact(source_path: Path, dest_path: Path) -> bool:
         """
-        Copy a worker artifact unless the destination is already newer.
+        Atomically replace a destination with a validated worker artifact.
+
+        Copied-folder timestamps are not execution provenance. Once the caller
+        has established that a worker plan succeeded, its artifact must win
+        regardless of the destination mtime.
         """
         if not source_path.exists() or not source_path.is_file():
             return False
-
-        if dest_path.exists():
-            source_stat = source_path.stat()
-            dest_stat = dest_path.stat()
-
-            if dest_stat.st_mtime > source_stat.st_mtime:
-                logger.debug(
-                    "Skipping older worker artifact %s because destination %s is newer",
-                    source_path,
-                    dest_path,
-                )
-                return False
-
-            if (
-                dest_stat.st_mtime == source_stat.st_mtime
-                and dest_stat.st_size == source_stat.st_size
-            ):
-                logger.debug(
-                    "Skipping unchanged worker artifact %s",
-                    source_path,
-                )
-                return False
-
-            dest_path.unlink()
-
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, dest_path)
+        temp_path = dest_path.with_name(
+            f".{dest_path.name}.{uuid.uuid4().hex}.ras-commander.tmp"
+        )
+        try:
+            shutil.copy2(source_path, temp_path)
+            os.replace(temp_path, dest_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
         return True
+
+    @staticmethod
+    def _artifact_sha256(path: Path) -> str:
+        """Hash one staged/published artifact for transaction verification."""
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _publish_plan_artifacts_transaction(
+        plan_number: str,
+        *,
+        source_primary: Path,
+        source_sidecars: List[Path],
+        geometry_source: Optional[Path],
+        output_format: ResultFormat,
+        ras_object: 'RasPrj',
+        destination_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[bool, Dict[str, Any]]:
+        """Publish one plan's same-run evidence as a recoverable transaction."""
+        destination = Path(destination_folder).resolve(strict=False)
+        normalized_plan = RasUtils.normalize_ras_number(plan_number)
+        # Keep the hidden transaction path short enough for non-long-path
+        # Windows installations. The destination promotion lock serializes
+        # callers, and 64 random bits still make stale-name collision remote.
+        token = uuid.uuid4().hex[:16]
+        transaction_path = destination / (
+            f".rcp-{normalized_plan}-{token}"
+        )
+        stage_folder = transaction_path / "s"
+        backup_folder = transaction_path / "b"
+        failed_new_folder = transaction_path / "f"
+        transaction_created = False
+        failure_stage = "destination_promotion_staging"
+        committed_paths: List[Path] = []
+        mutated_paths: set[Path] = set()
+        rollback_errors: List[Dict[str, Any]] = []
+        current_source_path: Optional[Path] = None
+        current_destination_path: Optional[Path] = None
+
+        destination_paths = get_plan_result_artifact_paths(
+            normalized_plan,
+            project_folder=destination,
+            project_name=project_name,
+        )
+        primary_destination = (
+            destination_paths.hdf
+            if output_format == "hdf"
+            else destination_paths.legacy_output
+        )
+        opposing_destination = (
+            destination_paths.legacy_output
+            if output_format == "hdf"
+            else destination_paths.hdf
+        )
+        known_sidecars = {
+            path.name: path for path in destination_paths.message_sidecars
+        }
+
+        source_primary = Path(source_primary)
+        if not source_primary.is_file():
+            failure_detail = (
+                f"Expected {output_format} primary result is missing: "
+                f"{source_primary}"
+            )
+            return False, {
+                "failure_stage": "destination_promotion_missing_result",
+                "failure_detail": failure_detail,
+                "exception_type": "FileNotFoundError",
+                "source_path": str(source_primary),
+                "destination_path": str(primary_destination),
+                "transaction_path": None,
+                "retained_transaction_path": None,
+                "copied_destination_paths": [],
+                "rollback_attempted": False,
+                "rollback_confirmed": True,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+
+        publication_entries: List[Dict[str, Any]] = []
+        for source in source_sidecars:
+            destination_sidecar = known_sidecars.get(source.name)
+            if destination_sidecar is None:
+                return False, {
+                    "failure_stage": "destination_promotion_selection",
+                    "failure_detail": (
+                        "Worker message sidecar is not in the exact plan "
+                        f"allowlist: {source}"
+                    ),
+                    "exception_type": "ValueError",
+                    "source_path": str(source),
+                    "destination_path": None,
+                    "transaction_path": None,
+                    "retained_transaction_path": None,
+                    "copied_destination_paths": [],
+                    "rollback_attempted": False,
+                    "rollback_confirmed": True,
+                    "rollback_errors": [],
+                    "partial_promotion_possible": False,
+                }
+            publication_entries.append(
+                {
+                    "role": "message_sidecar",
+                    "source": Path(source),
+                    "destination": destination_sidecar,
+                }
+            )
+        if geometry_source is not None:
+            geometry_source = Path(geometry_source)
+            publication_entries.append(
+                {
+                    "role": "geometry",
+                    "source": geometry_source,
+                    "destination": destination / geometry_source.name,
+                }
+            )
+        publication_entries.append(
+            {
+                "role": "primary",
+                "source": source_primary,
+                "destination": primary_destination,
+            }
+        )
+
+        destination_names = [
+            entry["destination"].name for entry in publication_entries
+        ]
+        if len(destination_names) != len(set(destination_names)):
+            return False, {
+                "failure_stage": "destination_promotion_selection",
+                "failure_detail": "Duplicate publication destination selected",
+                "exception_type": "ValueError",
+                "source_path": None,
+                "destination_path": None,
+                "transaction_path": None,
+                "retained_transaction_path": None,
+                "copied_destination_paths": [],
+                "rollback_attempted": False,
+                "rollback_confirmed": True,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+
+        quarantine_targets = [
+            destination_paths.hdf,
+            destination_paths.legacy_output,
+            *destination_paths.message_sidecars,
+        ]
+        if geometry_source is not None:
+            quarantine_targets.append(destination / geometry_source.name)
+        quarantine_targets = list(dict.fromkeys(quarantine_targets))
+        prior_state: Dict[Path, Dict[str, Any]] = {}
+        backup_paths: Dict[Path, Path] = {}
+        staged_paths: Dict[Path, Path] = {}
+
+        def rollback_destination() -> bool:
+            if not mutated_paths:
+                return True
+            try:
+                failed_new_folder.mkdir(parents=True, exist_ok=True)
+            except Exception as exc:
+                rollback_errors.append(
+                    {
+                        "path": str(failed_new_folder),
+                        "exception_type": type(exc).__name__,
+                        "detail": str(exc),
+                    }
+                )
+                return False
+
+            # First remove every newly published artifact from recognized
+            # destination names. Never restore an old primary while any fresh
+            # sidecar might remain visible.
+            for index, target in enumerate(quarantine_targets):
+                if target not in mutated_paths or not target.exists():
+                    continue
+                try:
+                    failed_path = (
+                        failed_new_folder / f"{index:02d}-{target.name}"
+                    )
+                    os.replace(target, failed_path)
+                    if target.exists() or not failed_path.is_file():
+                        raise RuntimeError(
+                            f"Could not quarantine failed publication: {target}"
+                        )
+                except Exception as exc:
+                    rollback_errors.append(
+                        {
+                            "path": str(target),
+                            "exception_type": type(exc).__name__,
+                            "detail": str(exc),
+                        }
+                    )
+            if rollback_errors:
+                return False
+
+            # Restore both primary families first, then supporting evidence.
+            # If either group cannot be restored completely, re-quarantine
+            # everything restored so far. This prevents one primary from
+            # becoming readable with ambiguous or partial sidecars.
+            primary_targets = {
+                destination_paths.hdf,
+                destination_paths.legacy_output,
+            }
+            restoration_groups = (
+                [
+                    target
+                    for target in quarantine_targets
+                    if (
+                        target in mutated_paths
+                        and target in primary_targets
+                    )
+                ],
+                [
+                    target
+                    for target in quarantine_targets
+                    if (
+                        target in mutated_paths
+                        and target not in primary_targets
+                    )
+                ],
+            )
+            restored_targets: List[Path] = []
+
+            def requarantine_restored_targets() -> None:
+                for target in reversed(restored_targets):
+                    backup_path = backup_paths.get(target)
+                    try:
+                        if backup_path is None:
+                            raise FileNotFoundError(
+                                f"Backup path unavailable for {target}"
+                            )
+                        if not target.is_file():
+                            raise FileNotFoundError(
+                                "Restored artifact disappeared before "
+                                f"re-quarantine: {target}"
+                            )
+                        os.replace(target, backup_path)
+                        if target.exists() or not backup_path.is_file():
+                            raise RuntimeError(
+                                "Could not re-quarantine restored artifact: "
+                                f"{target}"
+                            )
+                    except Exception as exc:
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": type(exc).__name__,
+                                "detail": str(exc),
+                            }
+                        )
+
+            for targets in restoration_groups:
+                for target in targets:
+                    original = prior_state[target]
+                    backup_path = backup_paths.get(target)
+                    try:
+                        if original["existed"]:
+                            if (
+                                backup_path is None
+                                or not backup_path.is_file()
+                            ):
+                                raise FileNotFoundError(
+                                    "Original backup unavailable for "
+                                    f"{target}"
+                                )
+                            os.replace(backup_path, target)
+                            restored_targets.append(target)
+                            if (
+                                not target.is_file()
+                                or RasCmdr._artifact_sha256(target)
+                                != original["sha256"]
+                            ):
+                                raise RuntimeError(
+                                    "Restored artifact verification failed: "
+                                    f"{target}"
+                                )
+                        elif target.exists():
+                            raise RuntimeError(
+                                "Originally absent artifact is visible: "
+                                f"{target}"
+                            )
+                    except Exception as exc:
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": type(exc).__name__,
+                                "detail": str(exc),
+                            }
+                        )
+                if rollback_errors:
+                    requarantine_restored_targets()
+                    return False
+
+            for target, original in prior_state.items():
+                if original["existed"]:
+                    if (
+                        not target.is_file()
+                        or RasCmdr._artifact_sha256(target)
+                        != original["sha256"]
+                    ):
+                        rollback_errors.append(
+                            {
+                                "path": str(target),
+                                "exception_type": "RuntimeError",
+                                "detail": (
+                                    "Final restored-state verification failed"
+                                ),
+                            }
+                        )
+                elif target.exists():
+                    rollback_errors.append(
+                        {
+                            "path": str(target),
+                            "exception_type": "RuntimeError",
+                            "detail": (
+                                "Originally absent artifact is visible after "
+                                "rollback"
+                            ),
+                        }
+                    )
+            return not rollback_errors
+
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+            for target in quarantine_targets:
+                if target.parent.resolve(strict=False) != destination:
+                    raise ValueError(
+                        f"Promotion artifact escapes destination: {target}"
+                    )
+                if target.exists() and not target.is_file():
+                    raise IsADirectoryError(
+                        f"Promotion artifact is not a file: {target}"
+                    )
+                prior_state[target] = {
+                    "existed": target.is_file(),
+                    "sha256": (
+                        RasCmdr._artifact_sha256(target)
+                        if target.is_file()
+                        else None
+                    ),
+                }
+
+            transaction_path.mkdir(parents=False, exist_ok=False)
+            transaction_created = True
+            stage_folder.mkdir()
+            backup_folder.mkdir()
+
+            for index, entry in enumerate(publication_entries):
+                source = entry["source"]
+                current_source_path = source
+                current_destination_path = entry["destination"]
+                if not source.is_file():
+                    raise FileNotFoundError(
+                        f"Selected publication source is missing: {source}"
+                    )
+                before = source.stat()
+                before_hash = RasCmdr._artifact_sha256(source)
+                stage_path = stage_folder / f"{index:02d}"
+                copied = RasCmdr._copy_worker_artifact(source, stage_path)
+                if not copied:
+                    raise RuntimeError(
+                        "Artifact staging copy returned False for "
+                        f"{source} -> {stage_path}"
+                    )
+                after = source.stat()
+                after_hash = RasCmdr._artifact_sha256(source)
+                if (
+                    before.st_dev,
+                    before.st_ino,
+                    before.st_size,
+                    before.st_mtime_ns,
+                    before_hash,
+                ) != (
+                    after.st_dev,
+                    after.st_ino,
+                    after.st_size,
+                    after.st_mtime_ns,
+                    after_hash,
+                ):
+                    raise RuntimeError(
+                        f"Publication source changed while staging: {source}"
+                    )
+                if RasCmdr._artifact_sha256(stage_path) != before_hash:
+                    raise RuntimeError(
+                        f"Staged artifact hash mismatch: {source}"
+                    )
+                entry["sha256"] = before_hash
+                entry["stage_path"] = stage_path
+                staged_paths[entry["destination"]] = stage_path
+
+            failure_stage = "destination_promotion_quarantine"
+            current_source_path = None
+            for index, target in enumerate(quarantine_targets):
+                current_destination_path = target
+                if not prior_state[target]["existed"]:
+                    continue
+                backup_path = backup_folder / f"{index:02d}-{target.name}"
+                backup_paths[target] = backup_path
+                os.replace(target, backup_path)
+                mutated_paths.add(target)
+                if target.exists() or not backup_path.is_file():
+                    raise RuntimeError(
+                        f"Could not prove artifact quarantine: {target}"
+                    )
+                if (
+                    RasCmdr._artifact_sha256(backup_path)
+                    != prior_state[target]["sha256"]
+                ):
+                    raise RuntimeError(
+                        f"Quarantined artifact hash mismatch: {target}"
+                    )
+
+            failure_stage = "destination_promotion_commit"
+            for entry in publication_entries:
+                target = entry["destination"]
+                stage_path = entry["stage_path"]
+                current_source_path = entry["source"]
+                current_destination_path = target
+                mutated_paths.add(target)
+                os.replace(stage_path, target)
+                committed_paths.append(target)
+                if not target.is_file():
+                    raise FileNotFoundError(
+                        f"Committed artifact is missing: {target}"
+                    )
+                if RasCmdr._artifact_sha256(target) != entry["sha256"]:
+                    raise RuntimeError(
+                        f"Committed artifact hash mismatch: {target}"
+                    )
+
+            failure_stage = "destination_promotion_finalization"
+            current_source_path = None
+            current_destination_path = opposing_destination
+            mutated_paths.add(opposing_destination)
+            finalize_plan_execution_artifacts(
+                normalized_plan,
+                output_format=output_format,
+                ras_object=ras_object,
+                project_folder=destination,
+                project_name=project_name,
+            )
+
+            failure_stage = "destination_promotion_verification"
+            for entry in publication_entries:
+                target = entry["destination"]
+                if (
+                    not target.is_file()
+                    or RasCmdr._artifact_sha256(target) != entry["sha256"]
+                ):
+                    raise RuntimeError(
+                        f"Published artifact verification failed: {target}"
+                    )
+            source_sidecar_names = {
+                source.name for source in source_sidecars
+            }
+            for sidecar in destination_paths.message_sidecars:
+                if sidecar.name not in source_sidecar_names and sidecar.exists():
+                    raise RuntimeError(
+                        f"Stale message sidecar remains visible: {sidecar}"
+                    )
+            if opposing_destination.exists():
+                raise RuntimeError(
+                    "Opposing result remains visible after finalization: "
+                    f"{opposing_destination}"
+                )
+
+            try:
+                shutil.rmtree(transaction_path)
+            except OSError as exc:
+                logger.warning(
+                    "Plan %s promotion committed, but transaction cleanup "
+                    "failed at %s: %s",
+                    normalized_plan,
+                    transaction_path,
+                    exc,
+                )
+            return True, {
+                "failure_stage": None,
+                "failure_detail": None,
+                "exception_type": None,
+                "source_path": None,
+                "destination_path": None,
+                "transaction_path": str(transaction_path),
+                "retained_transaction_path": (
+                    str(transaction_path)
+                    if transaction_path.exists()
+                    else None
+                ),
+                "copied_destination_paths": [
+                    str(path) for path in committed_paths
+                ],
+                "rollback_attempted": False,
+                "rollback_confirmed": None,
+                "rollback_errors": [],
+                "partial_promotion_possible": False,
+            }
+        except Exception as exc:
+            rollback_attempted = bool(mutated_paths)
+            rollback_confirmed = rollback_destination()
+            if rollback_confirmed and transaction_created:
+                try:
+                    shutil.rmtree(transaction_path)
+                except OSError as cleanup_exc:
+                    rollback_errors.append(
+                        {
+                            "path": str(transaction_path),
+                            "exception_type": type(cleanup_exc).__name__,
+                            "detail": str(cleanup_exc),
+                        }
+                    )
+            retained_transaction_path = (
+                str(transaction_path)
+                if transaction_path.exists()
+                else None
+            )
+            artifact_manifest = [
+                {
+                    "role": entry["role"],
+                    "source_path": str(entry["source"]),
+                    "destination_path": str(entry["destination"]),
+                    "staged_path": (
+                        str(entry["stage_path"])
+                        if "stage_path" in entry
+                        else None
+                    ),
+                }
+                for entry in publication_entries
+            ]
+            quarantine_manifest = [
+                {
+                    "destination_path": str(target),
+                    "prior_existed": prior_state.get(target, {}).get(
+                        "existed"
+                    ),
+                    "prior_sha256": prior_state.get(target, {}).get(
+                        "sha256"
+                    ),
+                    "backup_path": (
+                        str(backup_paths[target])
+                        if target in backup_paths
+                        else None
+                    ),
+                }
+                for target in quarantine_targets
+            ]
+            return False, {
+                "failure_stage": failure_stage,
+                "failure_detail": f"{type(exc).__name__}: {exc}",
+                "exception_type": type(exc).__name__,
+                "source_path": (
+                    str(current_source_path)
+                    if current_source_path is not None
+                    else None
+                ),
+                "destination_path": (
+                    str(current_destination_path)
+                    if current_destination_path is not None
+                    else None
+                ),
+                "transaction_path": (
+                    str(transaction_path) if transaction_created else None
+                ),
+                "retained_transaction_path": retained_transaction_path,
+                "copied_destination_paths": [
+                    str(path) for path in committed_paths
+                ],
+                "staged_paths_remaining": [
+                    str(path)
+                    for path in staged_paths.values()
+                    if path.exists()
+                ],
+                "backup_paths_remaining": [
+                    str(path)
+                    for path in backup_paths.values()
+                    if path.exists()
+                ],
+                "failed_new_paths_remaining": [
+                    str(path)
+                    for path in failed_new_folder.glob("*")
+                    if path.is_file()
+                ] if failed_new_folder.is_dir() else [],
+                "artifact_manifest": artifact_manifest,
+                "quarantine_manifest": quarantine_manifest,
+                "rollback_attempted": rollback_attempted,
+                "rollback_confirmed": rollback_confirmed,
+                "rollback_errors": rollback_errors,
+                "partial_promotion_possible": not rollback_confirmed,
+            }
+
+    @staticmethod
+    def _destination_promotion_process_gate(
+        plan_numbers: List[str],
+        *,
+        project_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[bool, Dict[str, Any]]:
+        """Prove exact-plan destination quiescence before batch promotion.
+
+        A single strict host snapshot is matched against every plan that would
+        be promoted.  Reusing one snapshot makes this a batch gate: no plan is
+        copied when any destination plan is occupied or when process inventory
+        is incomplete.  The returned evidence is detached and JSON-safe so a
+        refused promotion can be retained in ``execution_details_by_plan``.
+        """
+        from ._process_inspection import match_plan_processes, scan_ras_processes
+
+        normalized_plans = sorted(
+            {
+                RasUtils.normalize_ras_number(plan_number)
+                for plan_number in plan_numbers
+            }
+        )
+        destination = Path(project_folder).resolve(strict=False)
+        project_path = (
+            destination / f"{project_name}.prj"
+        ).resolve(strict=False)
+        resolution_errors = []
+        if not project_path.is_file():
+            resolution_errors.append(
+                {
+                    "plan_number": None,
+                    "path": str(project_path),
+                    "reason": "destination project file is missing",
+                }
+            )
+
+        try:
+            import psutil
+
+            inventory = scan_ras_processes(psutil_module=psutil)
+        except Exception as exc:
+            evidence = {
+                "complete": False,
+                "quiescence_confirmed": None,
+                "destination_folder": str(destination),
+                "project_path": str(project_path),
+                "plan_inventories": {},
+                "blocked_plan_numbers": [],
+                "global_processes": [],
+                "query_errors": [
+                    {
+                        "pid": None,
+                        "operation": "scan_destination_processes",
+                        "reason_code": "process_query_failed",
+                        "exception_type": type(exc).__name__,
+                        "detail": str(exc),
+                    }
+                ],
+                "resolution_errors": resolution_errors,
+            }
+            return False, evidence
+
+        plan_inventories = {}
+        blocked_plan_numbers = []
+        plan_inventories_complete = True
+        aggregated_query_errors = [
+            error.to_dict() for error in inventory.query_errors
+        ]
+        for plan_number in normalized_plans:
+            plan_path = (
+                destination / f"{project_name}.p{plan_number}"
+            ).resolve(strict=False)
+            tmp_hdf_path = (
+                destination / f"{project_name}.p{plan_number}.tmp.hdf"
+            ).resolve(strict=False)
+            if not plan_path.is_file():
+                resolution_errors.append(
+                    {
+                        "plan_number": plan_number,
+                        "path": str(plan_path),
+                        "reason": "destination plan file is missing",
+                    }
+                )
+            try:
+                plan_inventory = match_plan_processes(
+                    inventory,
+                    plan_number=plan_number,
+                    project_path=project_path,
+                    plan_path=plan_path,
+                    tmp_hdf_path=tmp_hdf_path,
+                )
+            except Exception as exc:
+                match_error = RasProcessQueryError(
+                    pid=None,
+                    operation="match_destination_plan_processes",
+                    reason_code="process_query_failed",
+                    exception_type=type(exc).__name__,
+                    detail=str(exc),
+                )
+                plan_inventory = PlanProcessInventory(
+                    observed_at=inventory.observed_at,
+                    plan_number=plan_number,
+                    project_path=str(project_path),
+                    plan_path=str(plan_path),
+                    tmp_hdf_path=str(tmp_hdf_path),
+                    complete=False,
+                    query_errors=(match_error,),
+                )
+            plan_inventories[plan_number] = plan_inventory.to_dict()
+            plan_inventories_complete = bool(
+                plan_inventories_complete and plan_inventory.complete
+            )
+            for error in plan_inventory.query_errors:
+                serialized_error = error.to_dict()
+                if serialized_error not in aggregated_query_errors:
+                    aggregated_query_errors.append(serialized_error)
+            if plan_inventory.matched:
+                blocked_plan_numbers.append(plan_number)
+
+        complete = bool(
+            inventory.complete
+            and plan_inventories_complete
+            and not resolution_errors
+        )
+        global_processes = [
+            process.to_dict() for process in inventory.processes
+        ]
+        if global_processes:
+            quiescence_confirmed: Optional[bool] = False
+        elif complete:
+            quiescence_confirmed = True
+        else:
+            quiescence_confirmed = None
+        evidence = {
+            "complete": complete,
+            "quiescence_confirmed": quiescence_confirmed,
+            "destination_folder": str(destination),
+            "project_path": str(project_path),
+            "plan_inventories": plan_inventories,
+            "blocked_plan_numbers": blocked_plan_numbers,
+            "global_processes": global_processes,
+            "query_errors": aggregated_query_errors,
+            "resolution_errors": resolution_errors,
+        }
+        return quiescence_confirmed is True, evidence
+
+    @staticmethod
+    def _acquire_destination_promotion_lock(
+        *,
+        project_folder: Union[str, Path],
+        project_name: str,
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+        """Acquire one cooperative exact-create lock for shared promotion."""
+        destination = Path(project_folder).resolve(strict=False)
+        lock_path = destination / (
+            f".{project_name}.ras-commander-promotion.lock"
+        )
+        token = uuid.uuid4().hex
+        owner_pid = os.getpid()
+        created_at = time.time()
+        payload = (
+            "ras_commander_destination_promotion_lock_v1\n"
+            f"token={token}\n"
+            f"pid={owner_pid}\n"
+            f"created_at={created_at:.9f}\n"
+        ).encode("ascii")
+        flags = (
+            os.O_CREAT
+            | os.O_EXCL
+            | os.O_RDWR
+            | getattr(os, "O_BINARY", 0)
+        )
+        try:
+            descriptor = os.open(lock_path, flags, 0o600)
+        except FileExistsError:
+            try:
+                existing_owner = lock_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )[:4096]
+            except OSError as exc:
+                existing_owner = f"<unreadable: {type(exc).__name__}: {exc}>"
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lock_exists",
+                "reason": "destination promotion lock already exists",
+                "existing_owner": existing_owner,
+            }
+        except OSError as exc:
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lock_creation_failed",
+                "reason": f"lock creation failed: {type(exc).__name__}: {exc}",
+                "existing_owner": None,
+            }
+        try:
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        except Exception as exc:
+            os.close(descriptor)
+            removed = False
+            try:
+                if lock_path.read_bytes() == payload:
+                    lock_path.unlink()
+                    removed = True
+            except OSError:
+                pass
+            return None, {
+                "acquired": False,
+                "lock_path": str(lock_path),
+                "owner_token": token,
+                "owner_pid": owner_pid,
+                "created_at": created_at,
+                "reason_code": "lock_initialization_failed",
+                "reason": (
+                    "lock initialization failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "existing_owner": None,
+                "partial_lock_removed": removed,
+            }
+        lease = {
+            "descriptor": descriptor,
+            "path": lock_path,
+            "token": token,
+            "payload": payload,
+        }
+        return lease, {
+            "acquired": True,
+            "lock_path": str(lock_path),
+            "owner_token": token,
+            "owner_pid": owner_pid,
+            "created_at": created_at,
+            "reason_code": None,
+            "reason": None,
+            "existing_owner": None,
+        }
+
+    @staticmethod
+    def _release_destination_promotion_lock(
+        lease: Dict[str, Any],
+    ) -> bool:
+        """Remove only the still-identical lock owned by ``lease``."""
+        descriptor = lease["descriptor"]
+        lock_path = Path(lease["path"])
+        expected_payload = lease["payload"]
+        owned = False
+        descriptor_identity = None
+        try:
+            descriptor_stat = os.fstat(descriptor)
+            path_stat = lock_path.stat()
+            same_identity = (
+                descriptor_stat.st_dev == path_stat.st_dev
+                and descriptor_stat.st_ino == path_stat.st_ino
+            )
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            observed_payload = os.read(
+                descriptor,
+                len(expected_payload) + 1,
+            )
+            owned = bool(
+                same_identity and observed_payload == expected_payload
+            )
+            descriptor_identity = (
+                descriptor_stat.st_dev,
+                descriptor_stat.st_ino,
+            )
+        except OSError:
+            owned = False
+        finally:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            lease["descriptor"] = -1
+        if not owned or descriptor_identity is None:
+            return False
+        try:
+            current_stat = lock_path.stat()
+            current_identity = (
+                current_stat.st_dev,
+                current_stat.st_ino,
+            )
+            if current_identity != descriptor_identity:
+                return False
+            if lock_path.read_bytes() != expected_payload:
+                return False
+            lock_path.unlink()
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
+    def _verify_legacy_result(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+        *,
+        check_errors: bool = True,
+        modified_after: Optional[float] = None,
+        project_folder: Optional[Union[str, Path]] = None,
+        project_name: Optional[str] = None,
+    ) -> bool:
+        """Verify a legacy run from a fresh ``.O##`` and exact completion record."""
+        paths = get_plan_result_artifact_paths(
+            plan_number,
+            ras_object=ras_object,
+            project_folder=project_folder,
+            project_name=project_name,
+        )
+        output_path = paths.legacy_output
+        if not output_path.is_file():
+            logger.debug("Legacy result file does not exist: %s", output_path)
+            return False
+        if (
+            modified_after is not None
+            and output_path.stat().st_mtime < float(modified_after) - 2.0
+        ):
+            logger.debug(
+                "Verification rejected stale legacy result %s",
+                output_path.name,
+            )
+            return False
+        from .results.ResultsParser import ResultsParser
+
+        selected_message: Optional[str] = None
+        selected_path: Optional[Path] = None
+        for message_path in paths.message_sidecars:
+            if not message_path.is_file():
+                continue
+            try:
+                before = message_path.stat()
+                raw = message_path.read_bytes()
+                after = message_path.stat()
+                if (before.st_size, before.st_mtime_ns) != (
+                    after.st_size,
+                    after.st_mtime_ns,
+                ):
+                    logger.warning(
+                        "Legacy messages changed while reading: %s",
+                        message_path,
+                    )
+                    return False
+                if raw.startswith(b"\xef\xbb\xbf"):
+                    selected_message = raw.decode("utf-8-sig", errors="replace")
+                else:
+                    try:
+                        selected_message = raw.decode("utf-8")
+                    except UnicodeDecodeError:
+                        selected_message = raw.decode("cp1252")
+                selected_path = message_path
+                break
+            except OSError as exc:
+                logger.warning(
+                    "Could not inspect legacy messages %s: %s",
+                    message_path,
+                    exc,
+                )
+                return False
+        if selected_message is None or not ResultsParser._has_complete_process_record(
+            selected_message
+        ):
+            logger.warning(
+                "Legacy verification requires an exact Complete Process "
+                "record in a stored message sidecar for plan %s",
+                paths.plan_number,
+            )
+            return False
+        parsed = ResultsParser.parse_compute_messages(selected_message)
+        if check_errors and parsed["has_errors"]:
+            logger.warning("Verification found errors in %s", selected_path.name)
+            return False
+        return True
+
+    @staticmethod
+    def _verify_result(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+        *,
+        output_format: ResultFormat,
+        check_errors: bool = True,
+        modified_after: Optional[float] = None,
+    ) -> bool:
+        """Verify the result family produced by the selected execution engine."""
+        if output_format == "legacy":
+            return RasCmdr._verify_legacy_result(
+                plan_number,
+                ras_object,
+                check_errors=check_errors,
+                modified_after=modified_after,
+            )
+        return RasCmdr._verify_completion(
+            RasCmdr._get_hdf_path(plan_number, ras_object),
+            check_errors=check_errors,
+            modified_after=modified_after,
+        )
 
     @staticmethod
     def _verify_completion(
@@ -426,7 +1632,11 @@ class RasCmdr:
 
             compute_msgs = HdfResultsPlan.get_compute_messages_hdf_only(hdf_path)
 
-            if not compute_msgs or 'Complete Process' not in compute_msgs:
+            from .results.ResultsParser import ResultsParser
+
+            if not compute_msgs or not ResultsParser._has_complete_process_record(
+                compute_msgs
+            ):
                 logger.debug(f"Verification failed: 'Complete Process' not found in {hdf_path.name}")
                 return False
 
@@ -437,7 +1647,6 @@ class RasCmdr:
                     return False
 
             if check_errors:
-                from .results.ResultsParser import ResultsParser
                 parsed = ResultsParser.parse_compute_messages(compute_msgs)
                 if parsed['has_errors']:
                     logger.warning(f"Verification failed: {parsed['error_count']} errors found in {hdf_path.name}")
@@ -450,35 +1659,233 @@ class RasCmdr:
             return False
 
     @staticmethod
-    def _rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path: Path) -> bool:
-        """Return True when a Windows RasUnsteady process still owns this plan tmp HDF."""
+    def _rasunsteady_process_running_for_tmp_hdf(
+        tmp_hdf_path: Path,
+    ) -> Optional[bool]:
+        """Return solver state: running, stopped, or unknown on query failure."""
         if os.name != "nt":
             return False
 
         try:
-            needle = str(tmp_hdf_path).replace("'", "''")
-            ps_command = (
-                f"$needle = '{needle}'; "
-                "$proc = Get-CimInstance Win32_Process "
-                "-Filter \"Name='RasUnsteady.exe'\" | "
-                "Where-Object { $_.CommandLine -like \"*$needle*\" } | "
-                "Select-Object -First 1 -ExpandProperty ProcessId; "
-                "if ($proc) { Write-Output $proc }"
+            import psutil
+
+            processes = psutil.process_iter(
+                ["pid", "name", "cmdline", "cwd"]
             )
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps_command],
-                capture_output=True,
-                text=True,
-                timeout=5,
+            return RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+                tmp_hdf_path,
+                processes,
             )
-            return result.returncode == 0 and bool(result.stdout.strip())
         except Exception as exc:
             logger.debug(
                 "Could not query RasUnsteady process state for %s: %s",
                 tmp_hdf_path.name,
                 exc,
             )
-            return False
+            return None
+
+    @staticmethod
+    def _rasunsteady_processes_reference_tmp_hdf(
+        tmp_hdf_path: Path,
+        processes,
+    ) -> Optional[bool]:
+        """Match a solver to one tmp HDF without wildcard path comparison.
+
+        ``psutil`` supplies already-tokenized command lines and process working
+        directories. File-identity comparison therefore handles mapped/UNC,
+        short/long, and symlink spellings when both paths are accessible. Any
+        relevant access, parsing, or identity uncertainty returns ``None`` so
+        callers cannot mistake an unproven nonmatch for solver quiescence.
+        """
+        import psutil
+
+        from ._process_inspection import (
+            _same_windows_path,
+            normalize_windows_path_token,
+        )
+
+        target_path = Path(tmp_hdf_path)
+        target_text = os.path.normcase(os.path.abspath(str(target_path)))
+        target_cwd = normalize_windows_path_token(
+            str(target_path.parent),
+            cwd=None,
+        )
+        target_name = target_path.name.casefold()
+        plan_marker = None
+        marker_index = target_name.rfind(".p")
+        marker_suffix = ".tmp.hdf"
+        if marker_index >= 0 and target_name.endswith(marker_suffix):
+            plan_token = target_name[
+                marker_index + 2 : -len(marker_suffix)
+            ]
+            if plan_token.isdigit():
+                plan_marker = f"b{plan_token.zfill(2)}"
+        uncertain = False
+
+        try:
+            for process in processes:
+                try:
+                    info = process.info
+                    raw_name = info.get("name")
+                    name = str(raw_name or "").casefold()
+                    cmdline = info.get("cmdline")
+                    if name != "rasunsteady.exe" and not raw_name:
+                        if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                            uncertain = True
+                            continue
+                        raw_executable = cmdline[0]
+                        if not isinstance(raw_executable, (str, os.PathLike)):
+                            uncertain = True
+                            continue
+                        executable = os.fspath(raw_executable).strip()
+                        if (
+                            len(executable) >= 2
+                            and executable[0] == '"'
+                            and executable[-1] == '"'
+                        ):
+                            executable = executable[1:-1]
+                        if not executable:
+                            uncertain = True
+                            continue
+                        # RasUnsteady is Windows-only. Use Windows basename
+                        # rules even when this helper is exercised by tests on
+                        # another host OS.
+                        name = ntpath.basename(executable).casefold()
+                    if name != "rasunsteady.exe":
+                        continue
+
+                    if not isinstance(cmdline, (list, tuple)) or not cmdline:
+                        uncertain = True
+                        continue
+
+                    cwd = info.get("cwd")
+                    found_tmp_argument = False
+                    process_uncertain = False
+                    normalized_arguments = []
+
+                    for raw_argument in cmdline:
+                        if not isinstance(raw_argument, (str, os.PathLike)):
+                            process_uncertain = True
+                            continue
+                        argument = os.fspath(raw_argument).strip()
+                        if (
+                            len(argument) >= 2
+                            and argument[0] == '"'
+                            and argument[-1] == '"'
+                        ):
+                            argument = argument[1:-1]
+                        normalized_arguments.append(argument.casefold())
+                        if not argument.casefold().endswith(".tmp.hdf"):
+                            continue
+
+                        found_tmp_argument = True
+                        candidate = Path(argument)
+                        if not candidate.is_absolute():
+                            if not cwd:
+                                process_uncertain = True
+                                continue
+                            candidate = Path(cwd) / candidate
+
+                        candidate_text = os.path.normcase(
+                            os.path.abspath(str(candidate))
+                        )
+                        if candidate_text == target_text:
+                            return True
+
+                        try:
+                            if os.path.samefile(candidate, target_path):
+                                return True
+                        except (OSError, ValueError, TypeError):
+                            # A path alias may be equivalent even when one
+                            # spelling cannot currently be opened. That is not
+                            # evidence that the solver is unrelated.
+                            process_uncertain = True
+
+                    process_cwd = (
+                        normalize_windows_path_token(str(cwd), cwd=None)
+                        if cwd
+                        else ""
+                    )
+                    has_batch_marker = any(
+                        value.startswith("b") and value[1:].isdigit()
+                        for value in normalized_arguments
+                    )
+                    if (
+                        plan_marker is not None
+                        and _same_windows_path(process_cwd, target_cwd)
+                        and plan_marker in normalized_arguments
+                    ):
+                        return True
+
+                    # A complete cwd+bNN signature for another plan/project is
+                    # a proven nonmatch. Missing identity fields remain
+                    # uncertain and therefore cannot establish quiescence.
+                    if (
+                        process_uncertain
+                        or (
+                            not found_tmp_argument
+                            and not (process_cwd and has_batch_marker)
+                        )
+                    ):
+                        uncertain = True
+                except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                    # A process that vanished during enumeration is stopped.
+                    continue
+                except (psutil.AccessDenied, OSError, ValueError, TypeError):
+                    uncertain = True
+        except Exception as exc:
+            logger.debug(
+                "RasUnsteady process enumeration became uncertain for %s: %s",
+                target_path.name,
+                exc,
+            )
+            return None
+
+        return None if uncertain else False
+
+    @staticmethod
+    def _terminate_launched_process_tree(process: subprocess.Popen) -> None:
+        """Stop a launched command and its descendants before final cleanup."""
+        try:
+            import psutil
+
+            parent = psutil.Process(process.pid)
+            children = parent.children(recursive=True)
+            for child in children:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            _gone, alive = psutil.wait_procs(children, timeout=10)
+            if alive:
+                raise RuntimeError(
+                    "HEC-RAS child processes did not terminate: "
+                    f"{[child.pid for child in alive]}"
+                )
+            try:
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass
+            process.wait(timeout=10)
+            if process.poll() is None:
+                raise RuntimeError("HEC-RAS launcher did not terminate")
+        except Exception as exc:
+            logger.warning(
+                "Could not terminate the complete HEC-RAS process tree (%s); "
+                "falling back to the launcher process",
+                exc,
+            )
+            try:
+                process.kill()
+                process.wait(timeout=10)
+            except Exception as fallback_exc:
+                raise RuntimeError(
+                    "Could not confirm HEC-RAS process termination"
+                ) from fallback_exc
+            raise RuntimeError(
+                "HEC-RAS launcher stopped, but descendant termination could "
+                "not be confirmed"
+            ) from exc
 
     @staticmethod
     def _wait_for_async_plan_completion(
@@ -488,6 +1895,9 @@ class RasCmdr:
         poll_interval: float = 5.0,
         timeout_seconds: float = 7200.0,
         modified_after: Optional[float] = None,
+        deadline_monotonic: Optional[float] = None,
+        max_runtime_seconds: Optional[float] = None,
+        stage_callback: Optional[Callable[[str], None]] = None,
     ) -> Optional[bool]:
         """
         Wait for a solver child process that outlives ``Ras.exe -c``.
@@ -509,65 +1919,671 @@ class RasCmdr:
             normal success/failure behavior.
         """
         plan_num = RasUtils.normalize_ras_number(plan_number)
+        caller_deadline = deadline_monotonic is not None
+        deadline = (
+            float(deadline_monotonic)
+            if caller_deadline
+            else time.monotonic() + timeout_seconds
+        )
+        if caller_deadline:
+            RasCmdr._remaining_runtime(
+                deadline,
+                plan_number=plan_num,
+                max_runtime_seconds=max_runtime_seconds,
+            )
         hdf_path = RasCmdr._get_hdf_path(plan_num, ras_object)
         tmp_hdf_path = (
             Path(ras_object.project_folder)
             / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
         )
 
-        if RasCmdr._verify_completion(
-            hdf_path,
-            check_errors=check_errors,
-            modified_after=modified_after,
-        ):
-            return True
+        def verify_completion() -> bool:
+            if stage_callback is not None:
+                stage_callback("result_verification")
+            verified_result = RasCmdr._verify_completion(
+                hdf_path,
+                check_errors=check_errors,
+                modified_after=modified_after,
+            )
+            if stage_callback is not None:
+                stage_callback("async_solver_completion")
+            return verified_result
 
+        verified = verify_completion()
         active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
         partial_exists = tmp_hdf_path.exists()
-        if not active and not partial_exists:
+        if verified and active is False and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
+            return True
+        if active is False and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
             return None
+        if active is None and not partial_exists:
+            if caller_deadline:
+                RasCmdr._remaining_runtime(
+                    deadline,
+                    plan_number=plan_num,
+                    max_runtime_seconds=max_runtime_seconds,
+                )
+            return False
 
         logger.debug(
             "Waiting for RasUnsteady to finish plan %s after Ras.exe returned",
             plan_num,
         )
-        deadline = time.time() + timeout_seconds
         observed_async = True
 
-        while time.time() < deadline:
-            if RasCmdr._verify_completion(
-                hdf_path,
-                check_errors=check_errors,
-                modified_after=modified_after,
-            ):
-                return True
-
+        while time.monotonic() < deadline:
+            verified = verify_completion()
             active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path)
             partial_exists = tmp_hdf_path.exists()
-            if not active and not partial_exists:
+            if verified and active is False and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
+                return True
+            if active is False and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
+                return False
+            if active is None and not partial_exists:
+                if caller_deadline:
+                    RasCmdr._remaining_runtime(
+                        deadline,
+                        plan_number=plan_num,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
                 return False
 
-            if not active and partial_exists:
+            if active is False and partial_exists:
                 # Give HEC-RAS a short grace window to rename/close files after
                 # the solver process exits, then verify one final time.
-                time.sleep(min(poll_interval, 2.0))
-                if RasCmdr._verify_completion(
-                    hdf_path,
-                    check_errors=check_errors,
-                    modified_after=modified_after,
-                ):
+                remaining = max(0.0, deadline - time.monotonic())
+                time.sleep(min(poll_interval, 2.0, remaining))
+                verified = verify_completion()
+                active = RasCmdr._rasunsteady_process_running_for_tmp_hdf(
+                    tmp_hdf_path
+                )
+                partial_exists = tmp_hdf_path.exists()
+                if verified and active is False and not partial_exists:
+                    if caller_deadline:
+                        RasCmdr._remaining_runtime(
+                            deadline,
+                            plan_number=plan_num,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
                     return True
-                if not RasCmdr._rasunsteady_process_running_for_tmp_hdf(tmp_hdf_path):
+                if active is False:
+                    if caller_deadline:
+                        RasCmdr._remaining_runtime(
+                            deadline,
+                            plan_number=plan_num,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
                     return False
 
-            time.sleep(poll_interval)
+            remaining = max(0.0, deadline - time.monotonic())
+            time.sleep(min(poll_interval, remaining))
 
         logger.warning(
             "Timed out waiting for RasUnsteady to finish plan %s after %.0f seconds",
             plan_num,
-            timeout_seconds,
+            (
+                max_runtime_seconds
+                if caller_deadline and max_runtime_seconds is not None
+                else timeout_seconds
+            ),
         )
+        if caller_deadline:
+            raise _RuntimeDeadlineExceeded(
+                f"Plan {plan_num} exceeded max_runtime="
+                f"{max_runtime_seconds} seconds while waiting for asynchronous "
+                "solver completion"
+            )
         return False if observed_async else None
+
+    @staticmethod
+    def _confirm_plan_solver_quiescence(
+        plan_number: Union[str, Number],
+        ras_object: 'RasPrj',
+    ) -> bool:
+        """Prove exact-plan launcher/solver absence with strict inventory."""
+        try:
+            inventory = RasCmdr.inspect_plan_processes(
+                plan_number,
+                ras_object=ras_object,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect exact-plan processes for plan %s: %s",
+                plan_number,
+                exc,
+            )
+            return False
+        if not inventory.complete:
+            logger.warning(
+                "Exact-plan process inventory is incomplete for plan %s",
+                plan_number,
+            )
+            return False
+        if inventory.matched:
+            logger.warning(
+                "Exact-plan HEC-RAS process still active for plan %s: %s",
+                plan_number,
+                [process.pid for process in inventory.matched],
+            )
+            return False
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        tmp_hdf_path = (
+            Path(ras_object.project_folder)
+            / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
+        )
+        if tmp_hdf_path.exists():
+            logger.warning(
+                "Temporary result HDF remains for plan %s after launcher exit",
+                plan_number,
+            )
+            return False
+        return True
+
+    @staticmethod
+    @log_call
+    def inspect_plan_processes(
+        plan_number: Union[str, Number],
+        ras_object=None,
+    ) -> PlanProcessInventory:
+        """Return strict process evidence narrowed to one project plan.
+
+        Matching uses complete command-line tokens after Windows path
+        normalization. A launcher must contain the exact project and plan
+        paths. A steady solver must contain the exact project ``.rNN`` run
+        file. An unsteady solver must contain either the exact plan
+        ``.tmp.hdf`` path or the exact project working directory plus complete
+        ``bNN`` plan token used by native unsteady launches. When the plan's
+        geometry reference is readable, that form must also contain the exact
+        project ``.cNN`` computation-file path. Basenames and substrings are
+        never sufficient. The host-wide inventory also covers
+        exact legacy and modern compute/preprocess names whose plan-specific
+        command signature is not established.
+        """
+        import psutil
+
+        from ._process_inspection import (
+            match_plan_processes,
+            scan_ras_processes,
+        )
+
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+        plan_num, project_path, plan_path, tmp_hdf_path = (
+            RasCmdr._resolve_plan_process_paths(plan_number, ras_obj)
+        )
+        inventory = scan_ras_processes(psutil_module=psutil)
+        return match_plan_processes(
+            inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+
+    @staticmethod
+    def _resolve_plan_process_paths(
+        plan_number: Union[str, Number],
+        ras_object,
+    ):
+        """Resolve canonical process-matching paths for one plan."""
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+        project_path = Path(ras_object.prj_file).resolve(strict=False)
+        resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_object)
+        if resolved_plan_path is None:
+            raise FileNotFoundError(f"Plan file not found: {plan_num}")
+        plan_path = Path(resolved_plan_path).resolve(strict=False)
+        tmp_hdf_path = (
+            Path(ras_object.project_folder)
+            / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
+        ).resolve(strict=False)
+        return plan_num, project_path, plan_path, tmp_hdf_path
+
+    @staticmethod
+    def _process_error(
+        process: Any,
+        operation: str,
+        error: BaseException,
+    ) -> RasProcessQueryError:
+        """Create JSON-safe cancellation query evidence."""
+        pid = getattr(process, "pid", None)
+        try:
+            normalized_pid = None if pid is None else int(pid)
+        except (TypeError, ValueError):
+            normalized_pid = None
+        exception_type = type(error).__name__
+        normalized_type = exception_type.casefold()
+        if "accessdenied" in normalized_type:
+            reason_code = "access_denied"
+        elif "nosuchprocess" in normalized_type:
+            reason_code = "process_exited_during_operation"
+        else:
+            reason_code = "process_operation_failed"
+        return RasProcessQueryError(
+            pid=normalized_pid,
+            operation=operation,
+            reason_code=reason_code,
+            exception_type=exception_type,
+            detail=str(error),
+        )
+
+    @staticmethod
+    def _record_process_for_cancellation(
+        process: Any,
+        *,
+        tracked: bool = False,
+    ) -> RasProcessRecord:
+        """Capture a child process using the same strong identity contract."""
+        info = getattr(process, "info", {})
+
+        def read(field: str):
+            if isinstance(info, dict) and info.get(field) is not None:
+                return info[field]
+            if field == "pid":
+                return process.pid
+            return getattr(process, field)()
+
+        pid = int(read("pid"))
+        create_time = float(read("create_time"))
+        name = str(read("name")).strip()
+        raw_command_line = read("cmdline")
+        if pid <= 0:
+            raise ValueError("process pid must be positive")
+        if not 0 < create_time < float("inf"):
+            raise ValueError("process create_time must be finite and positive")
+        if not name:
+            raise ValueError("process name is empty")
+        if not isinstance(raw_command_line, (list, tuple)) or not raw_command_line:
+            raise ValueError("process command line is missing or malformed")
+        exe = read("exe")
+        cwd = read("cwd")
+        return RasProcessRecord(
+            pid=pid,
+            create_time=create_time,
+            name=name,
+            executable_path=None if exe is None else str(exe),
+            command_line=tuple(str(token) for token in raw_command_line),
+            working_directory=None if cwd is None else str(cwd),
+            tracked=tracked,
+            session_id=None,
+        )
+
+    @staticmethod
+    def _same_process_identity(process: Any, record: RasProcessRecord) -> bool:
+        """Return false when the captured process exited or its PID was reused."""
+        # Do not reuse ``process.info`` here: it is the cached snapshot that
+        # created ``record`` and therefore cannot detect later PID reuse.
+        current = process.create_time()
+        return float(current) == record.create_time
+
+    @staticmethod
+    @log_call
+    def cancel_plan_exact(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        timeout_seconds: float = 10.0,
+    ) -> PlanCancellationResult:
+        """Stop only one exact plan process tree and prove final quiescence.
+
+        The result is deliberately tri-state: ``quiescence_confirmed=True``
+        proves all matched identities stopped and a complete final scan found
+        no exact plan process; ``False`` reports a known survivor; ``None``
+        reports query uncertainty. The structured result cannot be coerced to
+        bool. ``cancellation_attempted`` records whether a terminate or kill
+        method was invoked; ``matched_count`` records initial exact matches.
+        """
+        if not _WINDOWS_PROCESS_CONTROL:
+            raise NotImplementedError(
+                "RasCmdr.cancel_plan_exact() currently supports Windows "
+                "HEC-RAS process trees only."
+            )
+
+        if isinstance(timeout_seconds, bool) or not isinstance(
+            timeout_seconds, (int, float)
+        ):
+            raise ValueError("timeout_seconds must be a positive number of seconds")
+        timeout_value = float(timeout_seconds)
+        if not math.isfinite(timeout_value) or timeout_value <= 0:
+            raise ValueError(
+                "timeout_seconds must be a positive finite number of seconds"
+            )
+        cancellation_started_at = time.time()
+
+        import psutil
+
+        from ._process_inspection import (
+            _scan_ras_process_handles,
+            match_plan_processes,
+        )
+
+        ras_obj = ras_object if ras_object is not None else ras
+        ras_obj.check_initialized()
+        plan_num, project_path, plan_path, tmp_hdf_path = (
+            RasCmdr._resolve_plan_process_paths(plan_number, ras_obj)
+        )
+        initial_scan = _scan_ras_process_handles(psutil_module=psutil)
+        initial_plan = match_plan_processes(
+            initial_scan.inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+        matched = initial_plan.matched
+        errors = list(initial_plan.query_errors)
+        if not initial_plan.complete:
+            if not errors:
+                errors.append(
+                    RasProcessQueryError(
+                        pid=None,
+                        operation="match_initial_plan_processes",
+                        reason_code="incomplete_plan_inventory",
+                        exception_type="IncompletePlanProcessInventory",
+                        detail=(
+                            "The initial exact-plan process inventory was "
+                            "incomplete"
+                        ),
+                    )
+                )
+            logger.warning(
+                "Refusing to signal plan %s because its initial exact-plan "
+                "process inventory is incomplete",
+                plan_num,
+            )
+            return PlanCancellationResult(
+                plan_number=plan_num,
+                project_path=str(project_path),
+                plan_path=str(plan_path),
+                tmp_hdf_path=str(tmp_hdf_path),
+                cancellation_attempted=False,
+                pre_scan_complete=False,
+                post_scan_complete=False,
+                matched=matched,
+                query_errors=tuple(errors),
+                quiescence_confirmed=None,
+                started_at=cancellation_started_at,
+                finished_at=time.time(),
+            )
+
+        target_records = {record.identity: record for record in matched}
+        target_handles = {
+            identity: initial_scan.handles[identity]
+            for identity in target_records
+            if identity in initial_scan.handles
+        }
+        child_query_uncertain = False
+        for root in matched:
+            process = target_handles.get(root.identity)
+            if process is None:
+                child_query_uncertain = True
+                errors.append(
+                    RasProcessQueryError(
+                        pid=root.pid,
+                        operation="resolve_process_handle",
+                        reason_code="process_handle_missing",
+                        exception_type="ProcessHandleMissing",
+                        detail="No process handle was retained for captured identity",
+                    )
+                )
+                continue
+            try:
+                children = process.children(recursive=True)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "query_process_children",
+                        error,
+                    )
+                )
+                continue
+            for child in children:
+                try:
+                    record = RasCmdr._record_process_for_cancellation(child)
+                except Exception as error:
+                    child_query_uncertain = True
+                    errors.append(
+                        RasCmdr._process_error(
+                            child,
+                            "query_child_identity",
+                            error,
+                        )
+                    )
+                    continue
+                target_records[record.identity] = record
+                target_handles[record.identity] = child
+
+        termination_requested = []
+        kill_requested = []
+        stopped = []
+        known_survivors = []
+        signalled = []
+        cancellation_attempted = False
+
+        # Children are returned before their root after reversal, minimizing
+        # the chance that a launcher loses track of a still-running solver.
+        ordered_targets = list(target_records.values())
+        for record in reversed(ordered_targets):
+            process = target_handles.get(record.identity)
+            if process is None:
+                continue
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    continue
+                cancellation_attempted = True
+                process.terminate()
+                termination_requested.append(record)
+                signalled.append(process)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+            except Exception as error:
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "terminate_process",
+                        error,
+                    )
+                )
+
+        alive = []
+        if signalled:
+            try:
+                _, alive = psutil.wait_procs(
+                    signalled,
+                    timeout=timeout_value,
+                )
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        signalled[0],
+                        "wait_after_terminate",
+                        error,
+                    )
+                )
+                alive = list(signalled)
+
+        record_by_identity = target_records
+        for process in alive:
+            candidates = [
+                record
+                for identity, record in record_by_identity.items()
+                if identity[0] == getattr(process, "pid", None)
+            ]
+            if not candidates:
+                continue
+            record = candidates[0]
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    continue
+                cancellation_attempted = True
+                process.kill()
+                kill_requested.append(record)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+            except Exception as error:
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "kill_process",
+                        error,
+                    )
+                )
+
+        if kill_requested:
+            killed_handles = [
+                target_handles[item.identity] for item in kill_requested
+            ]
+            try:
+                psutil.wait_procs(killed_handles, timeout=3.0)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        killed_handles[0],
+                        "wait_after_kill",
+                        error,
+                    )
+                )
+
+        survivor_identities = {item.identity for item in known_survivors}
+        stopped_identities = {item.identity for item in stopped}
+        for identity, record in target_records.items():
+            if identity in survivor_identities or identity in stopped_identities:
+                continue
+            process = target_handles.get(identity)
+            if process is None:
+                continue
+            try:
+                if not RasCmdr._same_process_identity(process, record):
+                    stopped.append(record)
+                    stopped_identities.add(identity)
+                    continue
+                is_running = getattr(process, "is_running", None)
+                if is_running is None:
+                    child_query_uncertain = True
+                    errors.append(
+                        RasProcessQueryError(
+                            pid=record.pid,
+                            operation="verify_process_stopped",
+                            reason_code="process_status_unavailable",
+                            exception_type="ProcessStatusUnavailable",
+                            detail="Process handle has no is_running() method",
+                        )
+                    )
+                elif bool(is_running()):
+                    known_survivors.append(record)
+                    survivor_identities.add(identity)
+                else:
+                    stopped.append(record)
+                    stopped_identities.add(identity)
+            except psutil.NoSuchProcess:
+                stopped.append(record)
+                stopped_identities.add(identity)
+            except Exception as error:
+                child_query_uncertain = True
+                errors.append(
+                    RasCmdr._process_error(
+                        process,
+                        "verify_process_stopped",
+                        error,
+                    )
+                )
+
+        final_scan = _scan_ras_process_handles(psutil_module=psutil)
+        final_plan = match_plan_processes(
+            final_scan.inventory,
+            plan_number=plan_num,
+            project_path=project_path,
+            plan_path=plan_path,
+            tmp_hdf_path=tmp_hdf_path,
+        )
+        errors.extend(final_plan.query_errors)
+
+        final_matches = final_plan.matched
+        all_survivors = {
+            item.identity: item for item in (*known_survivors, *final_matches)
+        }
+        if all_survivors:
+            quiescence_confirmed: Optional[bool] = False
+        elif (
+            not initial_plan.complete
+            or not final_plan.complete
+            or child_query_uncertain
+            or errors
+        ):
+            quiescence_confirmed = None
+        else:
+            quiescence_confirmed = True
+
+        result = PlanCancellationResult(
+            plan_number=plan_num,
+            project_path=str(project_path),
+            plan_path=str(plan_path),
+            tmp_hdf_path=str(tmp_hdf_path),
+            cancellation_attempted=cancellation_attempted,
+            pre_scan_complete=initial_plan.complete,
+            post_scan_complete=final_plan.complete,
+            matched=matched,
+            stopped=tuple(
+                sorted(
+                    {item.identity: item for item in stopped}.values(),
+                    key=lambda item: item.identity,
+                )
+            ),
+            survivors=tuple(
+                sorted(all_survivors.values(), key=lambda item: item.identity)
+            ),
+            query_errors=tuple(errors),
+            quiescence_confirmed=quiescence_confirmed,
+            started_at=cancellation_started_at,
+            finished_at=time.time(),
+        )
+        if result.quiescence_confirmed is True:
+            logger.info(
+                "Confirmed HEC-RAS process quiescence for plan %s "
+                "(%s exact match(es))",
+                plan_num,
+                result.matched_count,
+            )
+        elif result.quiescence_confirmed is False:
+            logger.warning(
+                "HEC-RAS process survivor(s) remain for plan %s: %s",
+                plan_num,
+                [item.pid for item in result.survivors],
+            )
+        else:
+            logger.warning(
+                "Could not prove HEC-RAS process quiescence for plan %s",
+                plan_num,
+            )
+        return result
 
     @staticmethod
     @log_call
@@ -579,8 +2595,11 @@ class RasCmdr:
         """Stop only the active Windows process tree for one project plan.
 
         Process matching is deliberately strict: a ``Ras.exe`` launcher must
-        contain both the initialized project path and resolved plan path, while
-        a solver must contain the exact plan ``.tmp.hdf`` path. Unrelated RAS
+        contain both the initialized project path and resolved plan path. A
+        steady solver must contain the exact project ``.rNN`` file. An
+        unsteady solver must contain either the exact plan ``.tmp.hdf`` path or
+        the jointly exact project directory, ``.cNN`` computation file, and
+        complete ``bNN`` plan marker used by native launches. Unrelated RAS
         sessions are never selected by executable name alone.
 
         Args:
@@ -594,93 +2613,19 @@ class RasCmdr:
             ``True`` when a matching process tree was found and stopped;
             ``False`` when no matching active process existed.
         """
-        if os.name != "nt":
-            raise NotImplementedError(
-                "RasCmdr.cancel_plan() currently supports Windows HEC-RAS "
-                "process trees only."
-            )
+        try:
+            legacy_timeout = max(0.1, float(timeout_seconds))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("timeout_seconds must be numeric") from exc
+        if not math.isfinite(legacy_timeout):
+            raise ValueError("timeout_seconds must be finite")
 
-        import psutil
-
-        ras_obj = ras_object if ras_object is not None else ras
-        ras_obj.check_initialized()
-        plan_num = RasUtils.normalize_ras_number(plan_number)
-        project_path = Path(ras_obj.prj_file).resolve(strict=False)
-        resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
-        if resolved_plan_path is None:
-            raise FileNotFoundError(f"Plan file not found: {plan_num}")
-        plan_path = Path(resolved_plan_path).resolve(strict=False)
-        tmp_hdf_path = (
-            Path(ras_obj.project_folder)
-            / f"{ras_obj.project_name}.p{plan_num}.tmp.hdf"
-        ).resolve(strict=False)
-
-        def command_needle(path: Path) -> str:
-            return str(path).replace("/", "\\").lower()
-
-        project_needle = command_needle(project_path)
-        plan_needle = command_needle(plan_path)
-        tmp_hdf_needle = command_needle(tmp_hdf_path)
-        roots = []
-
-        for process in psutil.process_iter(["pid", "name", "cmdline"]):
-            try:
-                name = str(process.info.get("name") or "").lower()
-                command_line = " ".join(
-                    str(part) for part in (process.info.get("cmdline") or [])
-                ).replace("/", "\\").lower()
-                is_launcher = (
-                    name == "ras.exe"
-                    and project_needle in command_line
-                    and plan_needle in command_line
-                )
-                is_solver = (
-                    name == "rasunsteady.exe"
-                    and tmp_hdf_needle in command_line
-                )
-                if is_launcher or is_solver:
-                    roots.append(process)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-
-        if not roots:
-            logger.info("No active HEC-RAS process found for plan %s", plan_num)
-            return False
-
-        targets = {}
-        for root in roots:
-            try:
-                for child in root.children(recursive=True):
-                    targets[child.pid] = child
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
-            targets[root.pid] = root
-
-        ordered_targets = list(targets.values())
-        for process in reversed(ordered_targets):
-            try:
-                process.terminate()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-
-        _, alive = psutil.wait_procs(
-            ordered_targets,
-            timeout=max(0.1, float(timeout_seconds)),
+        result = RasCmdr.cancel_plan_exact(
+            plan_number,
+            ras_object=ras_object,
+            timeout_seconds=legacy_timeout,
         )
-        for process in alive:
-            try:
-                process.kill()
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-        if alive:
-            psutil.wait_procs(alive, timeout=3.0)
-
-        logger.info(
-            "Stopped HEC-RAS process tree for plan %s (%s matched process(es))",
-            plan_num,
-            len(targets),
-        )
-        return True
+        return result.matched_count > 0 and result.quiescence_confirmed is True
     
     @staticmethod
     @log_call
@@ -703,6 +2648,7 @@ class RasCmdr:
         hdf_output_options: Optional[Dict[str, Any]] = None,
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
+        max_runtime: Optional[float] = None,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -738,17 +2684,24 @@ class RasCmdr:
                 Generally, 2-4 cores provides good performance for most models.
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists. Defaults to False.
                 Set to True to replace an existing destination folder with the same name.
-            skip_existing (bool, optional): If True, skip computation if HDF results file already exists
-                and contains 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool, optional): If True, skip computation when the
+                selected engine's sole result family already verifies. Modern
+                HDF uses ``Complete Process``; legacy execution requires its
+                ``.O##`` output and checks available messages for errors.
+                Defaults to False.
                 Useful for resuming interrupted batch runs or incremental workflows.
-            verify (bool, optional): If True, verify computation completed successfully by checking
-                for 'Complete Process' in compute messages after execution. Defaults to False.
+            verify (bool, optional): If True, verify the selected result family
+                after execution. Defaults to False.
                 Returns False if verification fails even if subprocess returned success.
             stream_callback (Callable, optional): Callback object for real-time execution progress monitoring.
                 Must implement ExecutionCallback protocol methods (all methods optional):
                 - on_prep_start(plan_number): Called before geometry preprocessing
                 - on_prep_complete(plan_number): Called after preprocessing
                 - on_exec_start(plan_number, command): Called when HEC-RAS subprocess starts
+                - on_exec_launched(plan_number, launch_details): Optional
+                  duck-typed hook called after exact launcher identity and
+                  executable provenance are captured. This additive hook is
+                  intentionally not part of the exported callback protocol.
                 - on_exec_message(plan_number, message): Called for each .bco file message (real-time)
                 - on_exec_complete(plan_number, success, duration): Called when execution finishes
                 - on_verify_result(plan_number, verified): Called after verification (if verify=True)
@@ -768,6 +2721,15 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            max_runtime (float, optional): Maximum elapsed execution time in
+                seconds, measured against one monotonic deadline spanning the
+                direct launcher wait, callback monitoring, and asynchronous
+                solver completion. Values above 4,294,967.294 seconds are
+                rejected because the Windows subprocess wait cannot represent
+                them. ``None`` adds no caller-wide deadline and preserves the
+                historical launcher/callback behavior plus the existing
+                7,200-second asynchronous-solver bound. A timeout uses
+                exact-plan structured cancellation.
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
@@ -775,12 +2737,21 @@ class RasCmdr:
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
                 ``completion_verified`` is None unless ``verify=True``.
+                ``execution_details`` is always JSON-safe and distinguishes
+                selected executable identity, calculation attempts, launcher
+                PID/create-time identity, solver quiescence, and result-family
+                finalization, including exact preparation and finalization
+                cleanup records. In those records, ``result_format`` names the
+                family targeted for deletion. Calculated success requires
+                every terminal gate.
 
         Raises:
-            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
-            FileNotFoundError: If the plan file or project file cannot be found.
-            PermissionError: If there are issues accessing or writing to the destination folder.
-            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+            ValueError: If ``max_runtime`` is not a positive finite number
+                within the Windows subprocess-wait range, or ``None``.
+
+        Setup, launch, verification, and filesystem failures that occur after
+        runtime validation are represented by ``ComputeResult(success=False)``
+        and its structured ``execution_details`` rather than propagated.
 
         Examples:
             # Run a plan in the original project folder
@@ -827,13 +2798,63 @@ class RasCmdr:
               * >8 cores: May have diminishing returns due to overhead
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
             - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
-            - The verify parameter checks for 'Complete Process' in HDF compute messages.
+            - Verification is version-aware: modern plans inspect HDF completion;
+              legacy plans require a fresh ``.O##`` and inspect available stored
+              messages for errors.
+            - Execution failures are returned as
+              ``ComputeResult(success=False)`` with structured failure evidence.
+            - Actual runs permanently remove the opposing result family and
+              stale compute-message sidecars before launch, then remove any
+              opposing result recreated by HEC-RAS after completion. Skipped
+              runs do not mutate execution artifacts.
+            - Exact-plan cancellation and final evidence collection happen
+              after the engine deadline when necessary, so wall-clock return
+              time can exceed ``max_runtime`` while ras-commander proves a
+              safe terminal state.
         """
+        max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
         _results_df_row = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
+        _execution_quiesced = False
+        _execution_result_format = None
+        _result_artifacts_finalized = False
+        _completion_verified: Optional[bool] = None
         _watchdog = None
+        _launch_observed = False
+        _post_launch_failure_handled = False
+        _active_failure_stage = None
+        _deadline_monotonic = None
+
+        def _record_async_stage(stage: str) -> None:
+            nonlocal _active_failure_stage
+            _active_failure_stage = stage
+
+        _execution_details: Dict[str, Any] = {
+            "execution_api": "ras_cmdr",
+            "engine_kind": "executable",
+            "selected_result_format": None,
+            "calculation_attempted": False,
+            "solver_quiescence_confirmed": None,
+            "result_artifacts_finalized": False,
+            "actual_engine_provenance_confirmed": False,
+            "selected_executable_path": None,
+            "selected_executable_sha256": None,
+            "launcher_pid": None,
+            "launcher_create_time": None,
+            "launcher_returncode": None,
+            "max_runtime_seconds": max_runtime_seconds,
+            "launch_details": None,
+            "runtime_timed_out": False,
+            "failure_stage": None,
+            "failure_type": None,
+            "failure_detail": None,
+            "cancellation_details": None,
+            "artifact_preparation_cleanup": None,
+            "artifact_finalization_cleanup": None,
+            "artifact_finalization_failure": None,
+        }
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
@@ -878,8 +2899,84 @@ class RasCmdr:
             if not compute_prj_path or not compute_plan_path:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 _success = False
-                return ComputeResult(success=False, results_df_row=None)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=dict(_execution_details),
+                )
 
+            # Resolve the actual selected engine before making any skip or
+            # cleanup decision. An unresolved version fails closed and leaves
+            # both result families untouched.
+            _execution_result_format = infer_execution_result_format(compute_ras)
+            _execution_details["selected_result_format"] = (
+                _execution_result_format
+            )
+
+            # Skip existing check - runs regardless of force_rerun (for resume capability)
+            if skip_existing:
+                artifact_paths = get_plan_result_artifact_paths(
+                    plan_number, ras_object=compute_ras
+                )
+                mixed_results = (
+                    artifact_paths.hdf.is_file()
+                    and artifact_paths.legacy_output.is_file()
+                )
+                if mixed_results:
+                    logger.warning(
+                        "Plan %s has both HDF and legacy results; "
+                        "skip_existing will rerun it with the selected HEC-RAS "
+                        "version and normalize its result artifacts.",
+                        plan_number,
+                    )
+                elif RasCmdr._verify_result(
+                    plan_number,
+                    compute_ras,
+                    output_format=_execution_result_format,
+                    check_errors=False,
+                ):
+                    logger.info(
+                        "Skipping plan %s: verified %s results already exist",
+                        plan_number,
+                        _execution_result_format,
+                    )
+                    _success = True
+                    return ComputeResult(
+                        success=True,
+                        results_df_row=None,
+                        completion_verified=True if verify else None,
+                        execution_details=dict(_execution_details),
+                    )
+
+            # Smart skip: check file modification times (unless force_rerun or skip_existing)
+            # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
+            # force_geompre also bypasses the skip: currency only
+            # compares .p##/.g##/.u## mtimes against the results HDF, so it cannot
+            # see sidecar-only changes. Skipping would silently drop the native
+            # reprocessing request and return success.
+            if not force_rerun and not skip_existing and not force_geompre:
+                from .RasCurrency import RasCurrency
+                is_current, reason = (
+                    RasCurrency._are_plan_results_current_for_execution(
+                        plan_number,
+                        compute_ras,
+                        output_format=_execution_result_format,
+                    )
+                )
+                if is_current:
+                    logger.info(f"Skipping plan {plan_number}: {reason}")
+                    _success = True
+                    return ComputeResult(
+                        success=True,
+                        results_df_row=None,
+                        completion_verified=True if verify else None,
+                        execution_details=dict(_execution_details),
+                    )
+                else:
+                    logger.debug(f"Plan {plan_number} needs execution: {reason}")
+
+            # Plan-file execution settings are mutations. Apply them only
+            # after every skip path has committed to an actual run.
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
                 variables_to_apply = hdf_additional_variables or hdf_output_variables
@@ -916,38 +3013,6 @@ class RasCmdr:
                     enabled=True,
                     ras_object=compute_ras
                 )
-
-            # Skip existing check - runs regardless of force_rerun (for resume capability)
-            if skip_existing:
-                hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
-                if RasCmdr._verify_completion(hdf_path, check_errors=False):
-                    logger.info(f"Skipping plan {plan_number}: HDF results already exist with 'Complete Process'")
-                    _success = True
-                    return ComputeResult(
-                        success=True,
-                        results_df_row=None,
-                        completion_verified=True if verify else None,
-                    )
-
-            # Smart skip: check file modification times (unless force_rerun or skip_existing)
-            # Note: Smart skip is bypassed when skip_existing=True since that provides explicit skip logic
-            # force_geompre also bypasses the skip: are_plan_results_current() only
-            # compares .p##/.g##/.u## mtimes against the results HDF, so it cannot
-            # see sidecar-only changes. Skipping would silently drop the native
-            # reprocessing request and return success.
-            if not force_rerun and not skip_existing and not force_geompre:
-                from .RasCurrency import RasCurrency
-                is_current, reason = RasCurrency.are_plan_results_current(plan_number, compute_ras)
-                if is_current:
-                    logger.info(f"Skipping plan {plan_number}: {reason}")
-                    _success = True
-                    return ComputeResult(
-                        success=True,
-                        results_df_row=None,
-                        completion_verified=True if verify else None,
-                    )
-                else:
-                    logger.debug(f"Plan {plan_number} needs execution: {reason}")
 
             # Always enable Write Detailed= 1 to ensure .computeMsgs.txt is written
             # This is critical for results_df fallback on pre-6.4 HEC-RAS versions
@@ -1021,8 +3086,18 @@ class RasCmdr:
             if stream_callback and hasattr(stream_callback, 'on_prep_complete'):
                 stream_callback.on_prep_complete(str(plan_number))
 
-            # Prepare the command for HEC-RAS execution
-            cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+            # Prepare a display-only command for callbacks. The executable is
+            # resolved and hashed again immediately before result cleanup and
+            # launch, and execution always uses the fully quoted raw Windows
+            # command line with the exact executable and no shell.
+            _callback_executable, _ = RasCmdr._resolve_executable_provenance(
+                compute_ras.ras_exe_path
+            )
+            cmd = RasCmdr._direct_windows_compute_command(
+                _callback_executable,
+                Path(compute_prj_path).resolve(),
+                Path(compute_plan_path).resolve(),
+            )
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 
@@ -1046,59 +3121,211 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
-            _did_execute = True
-            start_time = time.time()
+            start_time = None
             try:
                 if dialog_watchdog:
                     from .RasDialogWatchdog import DialogWatchdog
                     _watchdog = DialogWatchdog()
                     _watchdog.start()
 
-                # Choose execution method based on whether callback is provided
-                if stream_callback and bco_monitor:
-                    # Use Popen for real-time monitoring. Redirect stdio to the
-                    # per-plan log file (not PIPE) to avoid the inherited-pipe
-                    # deadlock (CLB-880). monitor_until_signal() polls the .bco
-                    # file and process.poll(); it never reads process.stdout, so
-                    # nothing here depends on a pipe.
-                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
-                        process = subprocess.Popen(
-                            cmd,
-                            stdout=_run_log_fh,
-                            stderr=subprocess.STDOUT,
-                            cwd=str(compute_ras.project_folder),
-                            shell=True
+                # Both callback and non-callback runs use one exact launch
+                # path. This avoids cmd.exe identity ambiguity and keeps the
+                # recorded launcher PID tied to the selected Ras.exe bytes.
+                with open(
+                    _run_log_path,
+                    "w",
+                    encoding="utf-8",
+                    errors="ignore",
+                ) as _run_log_fh:
+                    # The plan's previous launcher/solver tree must be proved
+                    # absent before result-family cleanup. A stale exact-plan
+                    # process could otherwise keep writing the files this run
+                    # is about to remove or replace.
+                    pre_run_inventory = RasCmdr.inspect_plan_processes(
+                        plan_number,
+                        ras_object=compute_ras,
+                    )
+                    if not pre_run_inventory.complete:
+                        raise RuntimeError(
+                            "Exact-plan process inventory was incomplete before "
+                            "execution; result artifacts were preserved"
                         )
-                        if _watchdog:
-                            _watchdog.add_pid(process.pid)
+                    if pre_run_inventory.matched:
+                        raise RuntimeError(
+                            "An exact-plan HEC-RAS process was already active "
+                            "before execution; result artifacts were preserved"
+                        )
 
-                        # Monitor .bco file until process completes
-                        # (BcoMonitor will call on_exec_message callback as messages appear)
+                    # Re-prove the selected executable after process preflight
+                    # so the digest-to-launch interval contains only the
+                    # targeted result cleanup and immediate Popen call.
+                    selected_executable, executable_sha256 = (
+                        RasCmdr._resolve_executable_provenance(
+                            compute_ras.ras_exe_path
+                        )
+                    )
+                    resolved_project_path = Path(compute_prj_path).resolve()
+                    resolved_plan_path = Path(compute_plan_path).resolve()
+                    command_line = RasCmdr._direct_windows_compute_command(
+                        selected_executable,
+                        resolved_project_path,
+                        resolved_plan_path,
+                    )
+                    launch_working_directory = str(compute_ras.project_folder)
+                    _execution_details.update(
+                        {
+                            "selected_executable_path": str(selected_executable),
+                            "selected_executable_sha256": executable_sha256,
+                        }
+                    )
+
+                    # Destructive result-family cleanup is coupled to this
+                    # exact, freshly proven launch attempt.
+                    preparation_cleanup = prepare_plan_execution_artifacts(
+                        plan_number,
+                        output_format=_execution_result_format,
+                        ras_object=compute_ras,
+                    )
+                    _execution_details["artifact_preparation_cleanup"] = (
+                        preparation_cleanup.to_dict()
+                    )
+                    # The public max_runtime budget measures the engine launch
+                    # and completion path. Executable hashing, exact-plan
+                    # preflight, and artifact preparation above must finish
+                    # before this clock starts, so a small remaining budget
+                    # can never launch Ras.exe and immediately expire.
+                    start_time = time.time()
+                    execution_started_monotonic = time.monotonic()
+                    _deadline_monotonic = (
+                        execution_started_monotonic + max_runtime_seconds
+                        if max_runtime_seconds is not None
+                        else None
+                    )
+                    _did_execute = True
+                    _execution_details["calculation_attempted"] = True
+                    _active_failure_stage = "launcher_start"
+                    process = subprocess.Popen(
+                        command_line,
+                        executable=str(selected_executable),
+                        stdout=_run_log_fh,
+                        stderr=subprocess.STDOUT,
+                        cwd=launch_working_directory,
+                        shell=False,
+                    )
+                    _launch_observed = True
+                    _active_failure_stage = "launcher_identity"
+                    launcher_pid = process.pid
+                    if (
+                        not isinstance(launcher_pid, int)
+                        or isinstance(launcher_pid, bool)
+                        or launcher_pid <= 0
+                    ):
+                        raise ValueError(
+                            "launcher PID must be a positive integer"
+                        )
+                    launcher_create_time = RasCmdr._launcher_create_time(
+                        launcher_pid
+                    )
+                    if (
+                        isinstance(launcher_create_time, bool)
+                        or not isinstance(launcher_create_time, (int, float))
+                        or not math.isfinite(float(launcher_create_time))
+                        or float(launcher_create_time) <= 0
+                    ):
+                        raise ValueError(
+                            "launcher create_time must be finite and positive"
+                        )
+                    launch_details = {
+                        "plan_number": RasUtils.normalize_ras_number(
+                            plan_number
+                        ),
+                        "command": command_line,
+                        "executable_path": str(selected_executable),
+                        "executable_sha256": executable_sha256,
+                        "project_path": str(resolved_project_path),
+                        "plan_path": str(resolved_plan_path),
+                        "working_directory": launch_working_directory,
+                        "launcher_pid": launcher_pid,
+                        "launcher_create_time": float(launcher_create_time),
+                        "max_runtime_seconds": max_runtime_seconds,
+                    }
+                    _execution_details["launcher_pid"] = launcher_pid
+                    _execution_details["launcher_create_time"] = float(
+                        launcher_create_time
+                    )
+                    _execution_details[
+                        "actual_engine_provenance_confirmed"
+                    ] = True
+                    _execution_details["launch_details"] = dict(
+                        launch_details
+                    )
+
+                    if _watchdog:
+                        _watchdog.add_pid(process.pid)
+
+                    _active_failure_stage = "on_exec_launched_callback"
+                    if stream_callback and hasattr(
+                        stream_callback, "on_exec_launched"
+                    ):
+                        stream_callback.on_exec_launched(
+                            str(plan_number),
+                            dict(launch_details),
+                        )
+                    RasCmdr._remaining_runtime(
+                        _deadline_monotonic,
+                        plan_number=plan_number,
+                        max_runtime_seconds=max_runtime_seconds,
+                    )
+
+                    if stream_callback and bco_monitor:
+                        # Bound the existing synchronous message-monitor loop
+                        # by the same monotonic deadline used for the launcher
+                        # and asynchronous solver completion.
+                        _active_failure_stage = "callback_monitoring"
+                        remaining = RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
+                        if remaining is not None:
+                            bco_monitor.max_wait_seconds = min(
+                                float(bco_monitor.max_wait_seconds),
+                                remaining,
+                            )
                         bco_monitor.monitor_until_signal(process)
-
-                        # Wait for process to complete
-                        return_code = process.wait()
-
-                    # Check if subprocess succeeded
-                    if return_code != 0:
-                        raise subprocess.CalledProcessError(return_code, cmd)
-
-                else:
-                    # Original behavior when no callback. Redirect stdio to the
-                    # per-plan log file instead of capture_output/PIPE: with
-                    # shell=True the PIPE write handle is inherited by the
-                    # cmd.exe -> Ras.exe -> RasUnsteady.exe tree, and
-                    # subprocess.run() blocks on pipe EOF until every grandchild
-                    # exits -- the intermittent CLB-880 hang. A file handle has no
-                    # EOF wait, so run() returns as soon as the process exits.
-                    with open(_run_log_path, "w", encoding="utf-8", errors="ignore") as _run_log_fh:
-                        subprocess.run(
-                            cmd,
-                            check=True,
-                            shell=True,
-                            stdout=_run_log_fh,
-                            stderr=subprocess.STDOUT,
+                        RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
                         )
+
+                    _active_failure_stage = "launcher_wait"
+                    try:
+                        return_code = process.wait(
+                            timeout=RasCmdr._remaining_runtime(
+                                _deadline_monotonic,
+                                plan_number=plan_number,
+                                max_runtime_seconds=max_runtime_seconds,
+                            )
+                        )
+                        RasCmdr._remaining_runtime(
+                            _deadline_monotonic,
+                            plan_number=plan_number,
+                            max_runtime_seconds=max_runtime_seconds,
+                        )
+                        _execution_details["launcher_returncode"] = return_code
+                    except subprocess.TimeoutExpired as timeout_error:
+                        raise _RuntimeDeadlineExceeded(
+                            f"Plan {plan_number} exceeded max_runtime="
+                            f"{max_runtime_seconds} seconds while waiting for "
+                            "the HEC-RAS launcher"
+                        ) from timeout_error
+
+                if return_code != 0:
+                    raise subprocess.CalledProcessError(
+                        return_code,
+                        command_line,
+                    )
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -1107,23 +3334,58 @@ class RasCmdr:
                     f"in {run_time:.2f} seconds"
                 )
 
-                async_verified = RasCmdr._wait_for_async_plan_completion(
-                    plan_number,
-                    compute_ras,
-                    check_errors=verify,
-                    modified_after=start_time,
+                _active_failure_stage = "async_solver_completion"
+                async_verified = (
+                    RasCmdr._wait_for_async_plan_completion(
+                        plan_number,
+                        compute_ras,
+                        check_errors=verify,
+                        modified_after=start_time,
+                        # Preserve the existing 7,200-second asynchronous-
+                        # solver bound when max_runtime is omitted.  An
+                        # explicit max_runtime supplies the caller deadline;
+                        # the helper then consumes only its remaining budget.
+                        timeout_seconds=7200.0,
+                        deadline_monotonic=_deadline_monotonic,
+                        max_runtime_seconds=max_runtime_seconds,
+                        stage_callback=_record_async_stage,
+                    )
+                    if _execution_result_format == "hdf"
+                    else None
+                )
+                _active_failure_stage = "solver_quiescence"
+                _execution_quiesced = (
+                    RasCmdr._confirm_plan_solver_quiescence(
+                        plan_number,
+                        compute_ras,
+                    )
+                )
+                if not _execution_quiesced:
+                    raise RuntimeError(
+                        "Could not confirm exact-plan solver quiescence after "
+                        f"plan {plan_number} launcher completion"
+                    )
+                RasCmdr._remaining_runtime(
+                    _deadline_monotonic,
+                    plan_number=plan_number,
+                    max_runtime_seconds=max_runtime_seconds,
                 )
                 if async_verified is True:
+                    if verify:
+                        _completion_verified = True
                     logger.debug(
                         "Verified final HDF for plan %s after Ras.exe returned",
                         plan_number,
                     )
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), True, run_time)
                     if verify and stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        _active_failure_stage = "on_verify_result_callback"
                         stream_callback.on_verify_result(str(plan_number), True)
                     _success = True
                 elif async_verified is False and verify:
+                    _completion_verified = False
                     logger.error(
                         "Verification failed for plan %s after Ras.exe returned. "
                         "See: https://rascommander.info/ras/user-guide/plan-execution/",
@@ -1131,25 +3393,36 @@ class RasCmdr:
                     )
                     _success = False
                     if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                        _active_failure_stage = "on_verify_result_callback"
                         stream_callback.on_verify_result(str(plan_number), False)
+                    _active_failure_stage = "result_verification"
+                    raise RuntimeError(
+                        "Plan result verification failed after exact-plan "
+                        f"quiescence for plan {plan_number}"
+                    )
                 else:
                     # Callback: execution complete
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), True, run_time)
 
                     # Verify completion if requested
                     if verify:
-                        hdf_path = RasCmdr._get_hdf_path(plan_number, compute_ras)
+                        _active_failure_stage = "result_verification"
                         verified = (
                             async_verified is True
-                            or RasCmdr._verify_completion(
-                                hdf_path,
+                            or RasCmdr._verify_result(
+                                plan_number,
+                                compute_ras,
+                                output_format=_execution_result_format,
                                 modified_after=start_time,
                             )
                         )
+                        _completion_verified = bool(verified)
 
                         # Callback: verification result
                         if stream_callback and hasattr(stream_callback, 'on_verify_result'):
+                            _active_failure_stage = "on_verify_result_callback"
                             stream_callback.on_verify_result(str(plan_number), verified)
 
                         if verified:
@@ -1157,30 +3430,100 @@ class RasCmdr:
                             _success = True
                         else:
                             logger.error(
-                                f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
+                                f"Verification failed for plan {plan_number}: no complete, current {_execution_result_format} result was found. "
                                 f"See: https://rascommander.info/ras/user-guide/plan-execution/"
                             )
-                            _success = False
+                            _active_failure_stage = "result_verification"
+                            raise RuntimeError(
+                                "Plan result verification failed after "
+                                "exact-plan quiescence for plan "
+                                f"{plan_number}"
+                            )
                     else:
                         _success = True
 
             except subprocess.CalledProcessError as e:
+                _execution_details.update(
+                    {
+                        "launcher_returncode": e.returncode,
+                        "failure_stage": "launcher_exit",
+                        "failure_type": type(e).__name__,
+                        "failure_detail": str(e),
+                    }
+                )
                 end_time = time.time()
                 run_time = end_time - start_time
-                async_verified = RasCmdr._wait_for_async_plan_completion(
-                    plan_number,
-                    compute_ras,
-                    check_errors=True,
-                    modified_after=start_time,
+                _active_failure_stage = "async_solver_completion"
+                async_verified = (
+                    RasCmdr._wait_for_async_plan_completion(
+                        plan_number,
+                        compute_ras,
+                        check_errors=True,
+                        modified_after=start_time,
+                        # Preserve the existing 7,200-second asynchronous-
+                        # solver bound when max_runtime is omitted.  An
+                        # explicit max_runtime supplies the caller deadline;
+                        # the helper then consumes only its remaining budget.
+                        timeout_seconds=7200.0,
+                        deadline_monotonic=_deadline_monotonic,
+                        max_runtime_seconds=max_runtime_seconds,
+                        stage_callback=_record_async_stage,
+                    )
+                    if _execution_result_format == "hdf"
+                    else None
+                )
+                _active_failure_stage = "solver_quiescence"
+                _execution_quiesced = (
+                    RasCmdr._confirm_plan_solver_quiescence(
+                        plan_number,
+                        compute_ras,
+                    )
+                )
+                if not _execution_quiesced:
+                    raise RuntimeError(
+                        "Could not confirm exact-plan solver quiescence after "
+                        f"plan {plan_number} launcher completion"
+                    )
+                RasCmdr._remaining_runtime(
+                    _deadline_monotonic,
+                    plan_number=plan_number,
+                    max_runtime_seconds=max_runtime_seconds,
                 )
                 if async_verified is True:
+                    if verify:
+                        _completion_verified = True
+                    # A modern Ras.exe launcher may exit nonzero even though
+                    # its delegated solver completes and produces a verified
+                    # final HDF. Preserve the launcher code as evidence, but
+                    # do not mislabel this established success path as a
+                    # terminal execution failure.
+                    _execution_details.update(
+                        {
+                            "failure_stage": None,
+                            "failure_type": None,
+                            "failure_detail": None,
+                        }
+                    )
                     logger.info(
                         "Ras.exe returned exit code %s for plan %s, but the final HDF verified after solver completion",
                         e.returncode,
                         plan_number,
                     )
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
-                        stream_callback.on_exec_complete(str(plan_number), True, run_time)
+                        _active_failure_stage = "on_exec_complete_callback"
+                        # ExecutionCallback defines this flag as the direct
+                        # subprocess exit outcome. The overall ComputeResult
+                        # can still succeed because the delegated solver's HDF
+                        # verified after a nonzero launcher exit.
+                        stream_callback.on_exec_complete(str(plan_number), False, run_time)
+                    if verify and stream_callback and hasattr(
+                        stream_callback, "on_verify_result"
+                    ):
+                        _active_failure_stage = "on_verify_result_callback"
+                        stream_callback.on_verify_result(
+                            str(plan_number),
+                            True,
+                        )
                     _success = True
                 else:
                     logger.error(f"Error running plan: {plan_number} (exit code {e.returncode})")
@@ -1223,25 +3566,192 @@ class RasCmdr:
 
                     # Callback: execution complete (failure case)
                     if stream_callback and hasattr(stream_callback, 'on_exec_complete'):
+                        _active_failure_stage = "on_exec_complete_callback"
                         stream_callback.on_exec_complete(str(plan_number), False, run_time)
 
-                    _success = False
-        except Exception as e:
-            logger.critical(f"Error in compute_plan: {str(e)}")
-            _success = False
+                    _active_failure_stage = "launcher_exit"
+                    raise e
+        except BaseException as e:
+            runtime_timed_out = isinstance(e, _RuntimeDeadlineExceeded)
+            failure_type = (
+                "TimeoutError" if runtime_timed_out else type(e).__name__
+            )
+            if _did_execute and not _launch_observed:
+                _execution_details.update(
+                    {
+                        "runtime_timed_out": runtime_timed_out,
+                        "failure_stage": (
+                            _active_failure_stage or "launcher_start"
+                        ),
+                        "failure_type": failure_type,
+                        "failure_detail": str(e),
+                    }
+                )
+            if _launch_observed and not _post_launch_failure_handled:
+                _execution_details.update(
+                    {
+                        "runtime_timed_out": runtime_timed_out,
+                        "failure_stage": (
+                            _active_failure_stage or "post_launch_execution"
+                        ),
+                        "failure_type": failure_type,
+                        "failure_detail": str(e),
+                    }
+                )
+                try:
+                    cancellation = RasCmdr.cancel_plan_exact(
+                        plan_number,
+                        ras_object=compute_ras,
+                    )
+                    cancellation_details = cancellation.to_dict()
+                    cancellation_quiesced = (
+                        cancellation.quiescence_confirmed is True
+                    )
+                except Exception as cancellation_error:
+                    _execution_details["cancellation_details"] = {
+                        "error_type": type(cancellation_error).__name__,
+                        "error_detail": str(cancellation_error),
+                        "quiescence_confirmed": None,
+                    }
+                    _execution_quiesced = False
+                    logger.critical(
+                        "Exact-plan cancellation failed for plan %s after %s: %s",
+                        plan_number,
+                        _execution_details["failure_stage"],
+                        cancellation_error,
+                    )
+                else:
+                    _execution_details[
+                        "cancellation_details"
+                    ] = cancellation_details
+                    _execution_quiesced = cancellation_quiesced
+                _post_launch_failure_handled = True
+
+            if isinstance(e, Exception):
+                logger.critical(f"Error in compute_plan: {str(e)}")
+                _success = False
+            else:
+                raise
         finally:
             if _watchdog:
                 _watchdog.stop()
 
+            if (
+                _did_execute
+                and _execution_quiesced
+                and _execution_result_format is not None
+                and 'compute_ras' in locals()
+            ):
+                try:
+                    # Modern HEC-RAS 1D engines recreate .O## after writing the
+                    # HDF. Final cleanup is therefore required in addition to
+                    # the pre-run stale-artifact cleanup.
+                    finalization_cleanup = finalize_plan_execution_artifacts(
+                        plan_number,
+                        output_format=_execution_result_format,
+                        ras_object=compute_ras,
+                    )
+                    _execution_details["artifact_finalization_cleanup"] = (
+                        finalization_cleanup.to_dict()
+                    )
+                    _result_artifacts_finalized = True
+                except Exception as cleanup_error:
+                    logger.error(
+                        "Could not normalize result artifacts after plan %s: %s",
+                        plan_number,
+                        cleanup_error,
+                    )
+                    finalization_failure = {
+                        "failure_stage": "result_artifact_finalization",
+                        "failure_type": type(cleanup_error).__name__,
+                        "failure_detail": str(cleanup_error),
+                    }
+                    _execution_details[
+                        "artifact_finalization_failure"
+                    ] = finalization_failure
+                    if _execution_details["failure_stage"] is None:
+                        _execution_details.update(finalization_failure)
+                    if _launch_observed and not _post_launch_failure_handled:
+                        try:
+                            cancellation = RasCmdr.cancel_plan_exact(
+                                plan_number,
+                                ras_object=compute_ras,
+                            )
+                            cancellation_details = cancellation.to_dict()
+                            _execution_quiesced = (
+                                _execution_quiesced
+                                and cancellation.quiescence_confirmed is True
+                            )
+                        except Exception as cancellation_error:
+                            _execution_details["cancellation_details"] = {
+                                "error_type": type(cancellation_error).__name__,
+                                "error_detail": str(cancellation_error),
+                                "quiescence_confirmed": None,
+                            }
+                            _execution_quiesced = False
+                        else:
+                            _execution_details[
+                                "cancellation_details"
+                            ] = cancellation_details
+                        _post_launch_failure_handled = True
+                    _success = False
+            elif _did_execute and not _execution_quiesced:
+                logger.critical(
+                    "Skipped final result normalization for plan %s because "
+                    "solver termination could not be confirmed; opposing "
+                    "artifacts were left visible rather than racing an active run.",
+                    plan_number,
+                )
+                _success = False
+
+            _execution_details.update(
+                {
+                    "selected_result_format": _execution_result_format,
+                    "calculation_attempted": _did_execute,
+                    "solver_quiescence_confirmed": (
+                        bool(_execution_quiesced) if _did_execute else None
+                    ),
+                    "result_artifacts_finalized": (
+                        _result_artifacts_finalized
+                    ),
+                }
+            )
+            if _did_execute and not all(
+                (
+                    _execution_details[
+                        "actual_engine_provenance_confirmed"
+                    ] is True,
+                    _execution_quiesced,
+                    _result_artifacts_finalized,
+                )
+            ):
+                logger.error(
+                    "Plan %s did not prove all execution provenance and "
+                    "terminal-safety gates",
+                    plan_number,
+                )
+                _success = False
+
+            if verify and _did_execute and _completion_verified is None:
+                _completion_verified = False
+
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
-            if _ras_obj and dest_folder is None:
+            if (
+                _ras_obj
+                and dest_folder is None
+                and (
+                    not _did_execute
+                    or not _launch_observed
+                    or _execution_quiesced
+                )
+            ):
                 try:
                     _ras_obj.plan_df = _ras_obj.get_plan_entries()
                     _ras_obj.geom_df = _ras_obj.get_geom_entries()
                     _ras_obj.flow_df = _ras_obj.get_flow_entries()
                     _ras_obj.unsteady_df = _ras_obj.get_unsteady_entries()
-                    if _did_execute:
+                    if _did_execute and _result_artifacts_finalized:
                         normalized_plan_number = RasUtils.normalize_ras_number(
                             plan_number
                         )
@@ -1258,7 +3768,7 @@ class RasCmdr:
                             logger.debug(f"Could not extract results_df_row: {e}")
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
-                    if _did_execute:
+                    if _did_execute and _result_artifacts_finalized:
                         try:
                             normalized_plan_number = RasUtils.normalize_ras_number(
                                 plan_number
@@ -1282,11 +3792,26 @@ class RasCmdr:
                                 plan_number,
                                 e_results,
                             )
+            elif (
+                _ras_obj
+                and dest_folder is None
+                and _did_execute
+                and _launch_observed
+                and not _execution_quiesced
+            ):
+                logger.critical(
+                    "Skipped DataFrame/result refresh for plan %s because "
+                    "post-launch solver quiescence was not confirmed",
+                    plan_number,
+                )
 
         return ComputeResult(
             success=_success,
             results_df_row=_results_df_row,
-            completion_verified=bool(_success) if verify else None,
+            completion_verified=(
+                _completion_verified if verify else None
+            ),
+            execution_details=dict(_execution_details),
         )
 
 
@@ -1312,6 +3837,18 @@ class RasCmdr:
         This method creates separate worker folders for each parallel process, runs plans
         in those folders, and then consolidates results to a final destination folder.
         It's ideal for running independent plans simultaneously to make better use of system resources.
+
+        Destination publication is fail closed. A cooperative destination
+        lock and complete, globally empty HEC-RAS process inventory are
+        required for the whole promotion batch. Each successful plan is then
+        published as a recoverable transaction: every source is first copied
+        and verified under a hidden destination stage, existing recognized
+        result/message/geometry artifacts are quarantined, and the same-run
+        set is committed before finalization. A provable failure restores the
+        exact prior destination state; otherwise the transaction backups and
+        worker folder are retained and later publication is refused. The
+        corresponding paths and failure evidence are available in
+        ``execution_details_by_plan``.
 
         Args:
             plan_number (Union[str, List[str], None]): Plan number(s) to compute.
@@ -1345,17 +3882,19 @@ class RasCmdr:
                 If Path, uses the exact path provided.
             overwrite_dest (bool): Whether to overwrite existing destination folder.
                 Set to True to replace an existing destination folder with the same name.
-            skip_existing (bool): If True, skip computation for plans that already have HDF results
-                with 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool): If True, skip computation for plans whose
+                selected engine result family already verifies. Defaults to False.
                 Skipped plans are marked as successful (True) in results. Checked on source folder.
-            verify (bool): If True, verify each plan completed successfully by checking
-                for 'Complete Process' in compute messages. Defaults to False.
+            verify (bool): If True, verify each selected result family after
+                execution. Defaults to False.
                 Plans that fail verification are marked False in results.
 
         Returns:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``execution_details_by_plan``: JSON-safe execution details
+                keyed by plan number, or an empty object when unavailable.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1408,6 +3947,25 @@ class RasCmdr:
             - The function creates worker folders during execution and consolidates results
               to the destination folder upon completion.
 
+            - Promotion is an all-or-none safety gate for the successful
+              candidate plans. Before copying any plan or shared geometry
+              artifact, ras-commander holds a cooperative destination lock and
+              requires a complete, globally empty strict HEC-RAS process
+              inventory. A refusal marks every candidate unsuccessful and
+              retains each computed worker folder; its exact recovery path and
+              gate evidence are recorded in ``execution_details_by_plan``.
+              The lock coordinates ras-commander promotions, but an external
+              GUI or process can still start after the inventory snapshot. Do
+              not run HEC-RAS manually against the destination during
+              promotion.
+
+            - Missing worker results, rejected/failed artifact copies, and
+              finalization errors also retain the affected worker folder and
+              mark unpromoted plans unsuccessful with exact failure evidence.
+              Supporting artifacts are copied before the primary result. If a
+              later step fails, ``promotion_failure`` records whether partial
+              promotion is possible and lists every copied destination path.
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the SOURCE folder before creating workers. Plans with existing
@@ -1416,11 +3974,14 @@ class RasCmdr:
             - verify is passed through to compute_plan() for each worker execution.
         """
         execution_results: Dict[str, bool] = {}
+        execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
         filtered_plan_numbers: List[str] = []
+        promotion_lock_lease: Optional[Dict[str, Any]] = None
 
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
+            execution_result_format = infer_execution_result_format(ras_obj)
 
             project_folder = Path(ras_obj.project_folder)
 
@@ -1454,11 +4015,43 @@ class RasCmdr:
                 plans_to_skip = []
                 plans_to_compute = []
                 for plan_num in filtered_plan_numbers:
-                    hdf_path = RasCmdr._get_hdf_path(plan_num, ras_obj)
-                    if RasCmdr._verify_completion(hdf_path, check_errors=False):
+                    artifact_paths = get_plan_result_artifact_paths(
+                        plan_num,
+                        ras_object=ras_obj,
+                    )
+                    mixed_results = (
+                        artifact_paths.hdf.is_file()
+                        and artifact_paths.legacy_output.is_file()
+                    )
+                    if not mixed_results and RasCmdr._verify_result(
+                        plan_num,
+                        ras_obj,
+                        output_format=execution_result_format,
+                        check_errors=False,
+                    ):
                         plans_to_skip.append(plan_num)
                         execution_results[plan_num] = True  # Mark as successful (results exist)
+                        execution_details_by_plan[plan_num] = {
+                            "execution_api": "ras_cmdr",
+                            "engine_kind": "executable",
+                            "selected_result_format": execution_result_format,
+                            "calculation_attempted": False,
+                            "solver_quiescence_confirmed": None,
+                            "result_artifacts_finalized": False,
+                            "actual_engine_provenance_confirmed": False,
+                            "selected_executable_path": None,
+                            "selected_executable_sha256": None,
+                            "launcher_pid": None,
+                            "launcher_create_time": None,
+                        }
                     else:
+                        if mixed_results:
+                            logger.warning(
+                                "Plan %s has both HDF and legacy results; "
+                                "parallel skip_existing will rerun it to "
+                                "normalize artifacts.",
+                                plan_num,
+                            )
                         plans_to_compute.append(plan_num)
                 if plans_to_skip:
                     logger.info(f"Skipping {len(plans_to_skip)} plans with existing results: {plans_to_skip}")
@@ -1481,7 +4074,11 @@ class RasCmdr:
                             _results_df = ras_obj.results_df[mask].copy()
                 except Exception:
                     pass
-                return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+                return ComputeParallelResult(
+                    execution_results=execution_results,
+                    results_df=_results_df,
+                    execution_details_by_plan=execution_details_by_plan,
+                )
 
             max_workers = min(max_workers, num_plans)
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
@@ -1517,6 +4114,21 @@ class RasCmdr:
             for worker_id, plan_num in plan_assignments:
                 worker_plan_numbers[worker_id].append(plan_num)
 
+            # These plans are now known to execute. Remove both copied final
+            # result families and stale messages inside the disposable worker
+            # folders so a zero-exit/no-output run cannot promote source data
+            # as a fresh worker result. Preserve .tmp.hdf preprocessing input.
+            for worker_id, plan_num in plan_assignments:
+                worker_ras = worker_ras_objects[worker_id]
+                if worker_ras is None:
+                    continue
+                _remove_plan_execution_artifacts(
+                    plan_num,
+                    result_format="both",
+                    include_message_sidecars=True,
+                    ras_object=worker_ras,
+                )
+
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit futures and track which plan each future represents
                 future_to_plan = {}
@@ -1540,12 +4152,17 @@ class RasCmdr:
                         compute_result = future.result()
                         # Extract bool from ComputeResult for execution_results dict
                         execution_results[plan_num] = bool(compute_result)
+                        details = getattr(compute_result, "execution_details", None)
+                        execution_details_by_plan[plan_num] = (
+                            dict(details) if isinstance(details, dict) else {}
+                        )
                         if compute_result:
                             logger.debug(f"Plan {plan_num} executed in worker {worker_id}: Successful")
                         else:
                             logger.warning(f"Plan {plan_num} executed in worker {worker_id}: Failed")
                     except Exception as e:
                         execution_results[plan_num] = False
+                        execution_details_by_plan[plan_num] = {}
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
 
             # Consolidate results: use dest_folder if provided, otherwise back to original folder
@@ -1567,45 +4184,319 @@ class RasCmdr:
                 logger.debug(f"Consolidating worker artifacts back to original project path: {final_dest_folder}")
 
             consolidated_artifact_count = 0
+            promoted_geometry_numbers: set[str] = set()
+            promoted_plan_numbers: set[str] = set()
+            promotion_candidates = sorted(
+                {
+                    plan_num
+                    for _, plan_num in plan_assignments
+                    if execution_results.get(plan_num, False)
+                }
+            )
+            promotion_allowed = True
+            promotion_gate_evidence: Dict[str, Any] = {}
+            promotion_lock_evidence: Dict[str, Any] = {}
+            if promotion_candidates:
+                (
+                    promotion_lock_lease,
+                    promotion_lock_evidence,
+                ) = RasCmdr._acquire_destination_promotion_lock(
+                    project_folder=final_dest_folder,
+                    project_name=ras_obj.project_name,
+                )
+                if promotion_lock_lease is None:
+                    promotion_allowed = False
+                    promotion_gate_evidence = {
+                        "complete": False,
+                        "quiescence_confirmed": None,
+                        "destination_folder": str(final_dest_folder),
+                        "project_path": str(
+                            final_dest_folder / f"{ras_obj.project_name}.prj"
+                        ),
+                        "plan_inventories": {},
+                        "blocked_plan_numbers": [],
+                        "global_processes": [],
+                        "query_errors": [],
+                        "resolution_errors": [],
+                        "promotion_lock": promotion_lock_evidence,
+                    }
+                else:
+                    (
+                        promotion_allowed,
+                        promotion_gate_evidence,
+                    ) = RasCmdr._destination_promotion_process_gate(
+                        promotion_candidates,
+                        project_folder=final_dest_folder,
+                        project_name=ras_obj.project_name,
+                    )
+                    promotion_gate_evidence["promotion_lock"] = (
+                        promotion_lock_evidence
+                    )
+            if not promotion_allowed:
+                retained_worker_folders = {
+                    plan_num: str(
+                        Path(worker_ras_objects[worker_id].project_folder)
+                    )
+                    for worker_id, plan_num in plan_assignments
+                    if worker_ras_objects.get(worker_id) is not None
+                }
+                promotion_candidate_set = set(promotion_candidates)
+                for plan_num, retained_folder in (
+                    retained_worker_folders.items()
+                ):
+                    details = dict(
+                        execution_details_by_plan.get(plan_num, {})
+                    )
+                    details["retained_worker_folder"] = retained_folder
+                    if plan_num in promotion_candidate_set:
+                        execution_results[plan_num] = False
+                        details["failure_stage"] = (
+                            "destination_promotion_process_gate"
+                        )
+                        details["destination_promotion_process_gate"] = (
+                            promotion_gate_evidence
+                        )
+                    execution_details_by_plan[plan_num] = details
+                logger.error(
+                    "Refused the entire worker-result promotion because "
+                    "destination exact-plan quiescence was not proved: %s",
+                    promotion_gate_evidence,
+                )
+            promotion_integrity_lost = False
+            promotion_integrity_failure: Dict[str, Any] = {}
             for worker_id, worker_ras in worker_ras_objects.items():
                 if worker_ras is None:
                     continue
                 worker_folder = Path(worker_ras.project_folder)
                 assigned_plan_numbers = worker_plan_numbers.get(worker_id, [])
+                retained_worker_folder = str(
+                    worker_folder.resolve(strict=False)
+                )
+                worker_must_be_retained = not promotion_allowed
+                current_plan_number: Optional[str] = None
+                current_failure_stage = "destination_promotion_preparation"
+                current_source_path: Optional[Path] = None
+                current_destination_path: Optional[Path] = None
+                copied_destinations_by_plan: Dict[str, List[str]] = {
+                    plan_num: [] for plan_num in assigned_plan_numbers
+                }
                 try:
                     # First, close any open resources in the worker RAS object
                     worker_ras.close() if hasattr(worker_ras, 'close') else None
                     
                     # Add a small delay to ensure file handles are released
                     time.sleep(1)
-                    
+
+                    if not promotion_allowed:
+                        logger.warning(
+                            "Retained computed worker folder after promotion "
+                            "refusal: %s",
+                            worker_folder,
+                        )
+                        continue
+                    if promotion_integrity_lost:
+                        worker_must_be_retained = True
+                        failure_detail = (
+                            "A prior plan promotion could not prove exact "
+                            "destination rollback; refusing later publication"
+                        )
+                        for plan_num in assigned_plan_numbers:
+                            if (
+                                execution_results.get(plan_num, False)
+                                and plan_num not in promoted_plan_numbers
+                            ):
+                                execution_results[plan_num] = False
+                                details = dict(
+                                    execution_details_by_plan.get(
+                                        plan_num,
+                                        {},
+                                    )
+                                )
+                                details.update(
+                                    {
+                                        "failure_stage": (
+                                            "destination_promotion_aborted_unrestored"
+                                        ),
+                                        "failure_detail": failure_detail,
+                                        "promotion_failure": (
+                                            promotion_integrity_failure
+                                        ),
+                                    }
+                                )
+                                execution_details_by_plan[plan_num] = details
+                        continue
+
                     # Move files with retry mechanism
                     max_retries = 3
                     for retry in range(max_retries):
                         try:
                             for plan_num in assigned_plan_numbers:
+                                if (
+                                    not execution_results.get(plan_num, False)
+                                    or plan_num in promoted_plan_numbers
+                                ):
+                                    continue
+                                current_plan_number = plan_num
+                                current_failure_stage = (
+                                    "destination_promotion_inventory"
+                                )
+                                current_source_path = None
+                                current_destination_path = None
+                                artifact_paths = get_plan_result_artifact_paths(
+                                    plan_num,
+                                    ras_object=worker_ras,
+                                )
+                                primary_result = (
+                                    artifact_paths.hdf
+                                    if execution_result_format == "hdf"
+                                    else artifact_paths.legacy_output
+                                )
+                                source_sidecars = [
+                                    path
+                                    for path in artifact_paths.message_sidecars
+                                    if path.is_file()
+                                ]
                                 geometry_number = RasCmdr._get_plan_geometry_number(
                                     filtered_plan_entries,
                                     plan_num
                                 )
-                                plan_artifacts = RasCmdr._get_worker_plan_artifacts(
-                                    worker_folder=worker_folder,
-                                    project_name=worker_ras.project_name,
-                                    plan_number=plan_num,
-                                    geometry_number=geometry_number
+                                promote_geometry = bool(
+                                    geometry_number
+                                    and geometry_number
+                                    not in promoted_geometry_numbers
                                 )
-                                for artifact_path in plan_artifacts:
-                                    dest_path = final_dest_folder / artifact_path.name
-                                    if RasCmdr._copy_worker_artifact(
-                                        artifact_path,
-                                        dest_path
+                                geometry_source = None
+                                if promote_geometry:
+                                    geometry_hdf = (
+                                        worker_folder
+                                        / f"{worker_ras.project_name}.g"
+                                        f"{geometry_number}.hdf"
+                                    )
+                                    if geometry_hdf.is_file():
+                                        geometry_source = geometry_hdf
+                                (
+                                    promotion_succeeded,
+                                    promotion_evidence,
+                                ) = RasCmdr._publish_plan_artifacts_transaction(
+                                    plan_num,
+                                    source_primary=primary_result,
+                                    source_sidecars=source_sidecars,
+                                    geometry_source=geometry_source,
+                                    output_format=execution_result_format,
+                                    ras_object=ras_obj,
+                                    destination_folder=final_dest_folder,
+                                    project_name=worker_ras.project_name,
+                                )
+                                if not promotion_succeeded:
+                                    execution_results[plan_num] = False
+                                    worker_must_be_retained = True
+                                    details = dict(
+                                        execution_details_by_plan.get(
+                                            plan_num,
+                                            {},
+                                        )
+                                    )
+                                    details.update(
+                                        {
+                                            "failure_stage": (
+                                                promotion_evidence[
+                                                    "failure_stage"
+                                                ]
+                                            ),
+                                            "failure_detail": (
+                                                promotion_evidence[
+                                                    "failure_detail"
+                                                ]
+                                            ),
+                                            "retained_worker_folder": (
+                                                retained_worker_folder
+                                            ),
+                                            "promotion_failure": (
+                                                promotion_evidence
+                                            ),
+                                        }
+                                    )
+                                    execution_details_by_plan[plan_num] = (
+                                        details
+                                    )
+                                    if not promotion_evidence.get(
+                                        "rollback_confirmed",
+                                        False,
                                     ):
-                                        consolidated_artifact_count += 1
+                                        promotion_integrity_lost = True
+                                        promotion_integrity_failure = (
+                                            promotion_evidence
+                                        )
+                                        break
+                                    continue
+                                copied_destinations_by_plan[plan_num] = list(
+                                    promotion_evidence[
+                                        "copied_destination_paths"
+                                    ]
+                                )
+                                consolidated_artifact_count += len(
+                                    copied_destinations_by_plan[plan_num]
+                                )
+                                if geometry_source is not None:
+                                    promoted_geometry_numbers.add(
+                                        geometry_number
+                                    )
+                                promoted_plan_numbers.add(plan_num)
+
+                            if promotion_integrity_lost:
+                                worker_must_be_retained = True
+                                failure_detail = (
+                                    "A plan promotion could not prove exact "
+                                    "destination rollback; refusing later "
+                                    "publication"
+                                )
+                                for plan_num in assigned_plan_numbers:
+                                    if (
+                                        execution_results.get(plan_num, False)
+                                        and plan_num
+                                        not in promoted_plan_numbers
+                                    ):
+                                        execution_results[plan_num] = False
+                                        details = dict(
+                                            execution_details_by_plan.get(
+                                                plan_num,
+                                                {},
+                                            )
+                                        )
+                                        details.update(
+                                            {
+                                                "failure_stage": (
+                                                    "destination_promotion_aborted_unrestored"
+                                                ),
+                                                "failure_detail": (
+                                                    failure_detail
+                                                ),
+                                                "retained_worker_folder": (
+                                                    retained_worker_folder
+                                                ),
+                                                "promotion_failure": (
+                                                    promotion_integrity_failure
+                                                ),
+                                            }
+                                        )
+                                        execution_details_by_plan[
+                                            plan_num
+                                        ] = details
                              
                             # Add another small delay before removal
                             time.sleep(1)
-                            
+
+                            if worker_must_be_retained:
+                                logger.warning(
+                                    "Retained worker folder after a plan "
+                                    "promotion failure: %s",
+                                    worker_folder,
+                                )
+                                break
+
                             # Try to remove the worker folder
+                            current_failure_stage = "worker_folder_cleanup"
+                            current_plan_number = None
                             if worker_folder.exists():
                                 if not RasUtils.remove_with_retry(worker_folder, ras_object=None):
                                     raise PermissionError(f"Unable to remove worker folder: {worker_folder}")
@@ -1619,7 +4510,90 @@ class RasCmdr:
                             continue
                             
                 except Exception as e:
+                    worker_must_be_retained = True
+                    failure_detail = f"{type(e).__name__}: {e}"
+                    for plan_num in assigned_plan_numbers:
+                        details = dict(
+                            execution_details_by_plan.get(plan_num, {})
+                        )
+                        details["retained_worker_folder"] = (
+                            retained_worker_folder
+                        )
+                        if (
+                            execution_results.get(plan_num, False)
+                            and plan_num not in promoted_plan_numbers
+                        ):
+                            execution_results[plan_num] = False
+                            plan_failure_stage = (
+                                current_failure_stage
+                                if plan_num == current_plan_number
+                                else "destination_promotion_aborted"
+                            )
+                            details.update(
+                                {
+                                    "failure_stage": plan_failure_stage,
+                                    "failure_detail": failure_detail,
+                                    "promotion_failure": {
+                                        "exception_type": type(e).__name__,
+                                        "detail": failure_detail,
+                                        "source_path": (
+                                            str(current_source_path)
+                                            if plan_num
+                                            == current_plan_number
+                                            and current_source_path is not None
+                                            else None
+                                        ),
+                                        "destination_path": (
+                                            str(current_destination_path)
+                                            if plan_num
+                                            == current_plan_number
+                                            and current_destination_path
+                                            is not None
+                                            else None
+                                        ),
+                                        "copied_destination_paths": list(
+                                            copied_destinations_by_plan.get(
+                                                plan_num,
+                                                [],
+                                            )
+                                        ),
+                                        "partial_promotion_possible": bool(
+                                            copied_destinations_by_plan.get(
+                                                plan_num,
+                                                [],
+                                            )
+                                        ),
+                                    },
+                                }
+                            )
+                        elif current_failure_stage == "worker_folder_cleanup":
+                            details["worker_cleanup_failure"] = {
+                                "exception_type": type(e).__name__,
+                                "detail": failure_detail,
+                            }
+                        execution_details_by_plan[plan_num] = details
                     logger.error(f"Error moving results from {worker_folder} to {final_dest_folder}: {str(e)}")
+                finally:
+                    if worker_must_be_retained:
+                        for plan_num in assigned_plan_numbers:
+                            details = dict(
+                                execution_details_by_plan.get(plan_num, {})
+                            )
+                            details["retained_worker_folder"] = (
+                                retained_worker_folder
+                            )
+                            execution_details_by_plan[plan_num] = details
+
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Did not remove destination promotion lock because "
+                        "ownership could not be reverified: %s",
+                        promotion_lock_evidence.get("lock_path"),
+                    )
+                promotion_lock_lease = None
 
             logger.info(
                 "Consolidated %s worker artifact(s) to %s",
@@ -1679,13 +4653,33 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for parallel plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            for plan_num in execution_results:
+                execution_details_by_plan.setdefault(plan_num, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                execution_details_by_plan=execution_details_by_plan,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
             for plan_num in filtered_plan_numbers:
                 execution_results.setdefault(plan_num, False)
-            return ComputeParallelResult(execution_results=execution_results)
+                execution_details_by_plan.setdefault(plan_num, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                execution_details_by_plan=execution_details_by_plan,
+            )
+        finally:
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Preserved destination promotion lock after ownership "
+                        "verification failed: %s",
+                        promotion_lock_lease.get("path"),
+                    )
 
     @staticmethod
     @log_call
@@ -1707,6 +4701,14 @@ class RasCmdr:
         This function creates a separate test folder, copies the project there, and executes
         the specified plans in sequential order. It's useful for batch processing plans that
         need to be run in a specific order or when you want to ensure consistent resource usage.
+
+        Result publication uses the same fail-closed global process gate,
+        cooperative destination lock, and per-plan staged transaction as
+        ``compute_parallel``. On refusal or failure, the fresh test folder is
+        retained and its exact recovery path is recorded in
+        ``execution_details_by_plan``. If exact destination rollback cannot be
+        proved, later plan publication is refused and the hidden transaction
+        backups remain available for recovery.
 
         Args:
             plan_number (Union[str, Number, List[Union[str, Number]], None], optional): Plan number or list of plan numbers to execute (e.g., "01", 1, 1.0, or ["01", 2]).
@@ -1735,17 +4737,19 @@ class RasCmdr:
             overwrite_dest (bool, optional): If True, overwrite the destination folder if it exists.
                 Defaults to False.
                 Set to True to replace an existing test folder with the same name.
-            skip_existing (bool, optional): If True, skip computation for plans that already have HDF results
-                with 'Complete Process' in compute messages. Defaults to False.
+            skip_existing (bool, optional): If True, skip plans whose selected
+                engine result family already verifies. Defaults to False.
                 Skipped plans are marked as successful (True) in results. Check happens in test folder.
-            verify (bool, optional): If True, verify each plan completed successfully by checking
-                for 'Complete Process' in compute messages. Defaults to False.
+            verify (bool, optional): If True, verify each selected result family
+                after execution. Defaults to False.
                 Plans that fail verification are marked False in results.
 
         Returns:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``execution_details_by_plan``: JSON-safe execution details
+                keyed by plan number, or an empty object when unavailable.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1807,12 +4811,29 @@ class RasCmdr:
               * Each plan gets consistent resource usage
               * Execution time scales linearly with the number of plans
 
+            - Promotion is all-or-none for the successful candidate plans.
+              Before copying any plan or shared geometry artifact,
+              ras-commander holds a cooperative destination lock and requires
+              a complete, globally empty strict HEC-RAS process inventory. A
+              refusal marks every candidate unsuccessful and retains the test
+              folder; its exact recovery path and gate evidence are recorded
+              in ``execution_details_by_plan``. The lock coordinates
+              ras-commander promotions, but cannot close the race with a
+              manually launched HEC-RAS GUI/process after the process scan.
+
+            - Missing results, rejected/failed copies, and finalization errors
+              retain the test folder and record its exact path plus structured
+              failure evidence. Supporting artifacts are copied before the
+              primary result; any already copied paths are reported when a
+              later failure makes partial promotion possible.
+
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the TEST folder after copying. This allows resuming interrupted test runs.
 
             - verify is passed through to compute_plan() for each plan execution.
         """
+        promotion_lock_lease: Optional[Dict[str, Any]] = None
         try:
             ras_obj = ras_object or ras
             ras_obj.check_initialized()
@@ -1854,6 +4875,9 @@ class RasCmdr:
                 compute_ras = RasPrj()
                 compute_ras.initialize(compute_folder, ras_obj.ras_exe_path)
                 compute_prj_path = compute_ras.prj_file
+                execution_result_format = infer_execution_result_format(
+                    compute_ras
+                )
                 logger.info("Initialized RAS project in compute folder: %s", compute_folder.name)
                 logger.debug(f"Initialized RAS project file in compute folder: {compute_prj_path}")
             except Exception as e:
@@ -1878,9 +4902,35 @@ class RasCmdr:
             )
 
             execution_results = {}
+            execution_details_by_plan: Dict[str, Dict[str, Any]] = {}
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
                 current_plan_number = plan["plan_number"]
+                artifact_paths = get_plan_result_artifact_paths(
+                    current_plan_number,
+                    ras_object=compute_ras,
+                )
+                mixed_results = (
+                    artifact_paths.hdf.is_file()
+                    and artifact_paths.legacy_output.is_file()
+                )
+                verified_skip = (
+                    skip_existing
+                    and not mixed_results
+                    and RasCmdr._verify_result(
+                        current_plan_number,
+                        compute_ras,
+                        output_format=execution_result_format,
+                        check_errors=False,
+                    )
+                )
+                if not verified_skip:
+                    _remove_plan_execution_artifacts(
+                        current_plan_number,
+                        result_format="both",
+                        include_message_sidecars=True,
+                        ras_object=compute_ras,
+                    )
                 start_time = time.time()
                 try:
                     compute_result = RasCmdr.compute_plan(
@@ -1895,12 +4945,17 @@ class RasCmdr:
                     )
                     # Extract bool from ComputeResult for execution_results dict
                     execution_results[current_plan_number] = bool(compute_result)
+                    details = getattr(compute_result, "execution_details", None)
+                    execution_details_by_plan[current_plan_number] = (
+                        dict(details) if isinstance(details, dict) else {}
+                    )
                     if compute_result:
                         logger.debug(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
                     execution_results[current_plan_number] = False
+                    execution_details_by_plan[current_plan_number] = {}
                     logger.error(f"Error computing plan {current_plan_number}: {str(e)}")
                 finally:
                     end_time = time.time()
@@ -1909,31 +4964,262 @@ class RasCmdr:
 
             logger.info("All selected plans have been executed.")
 
-            # Consolidate HDF results back to original project folder
-            # This eliminates the [Test] folder anti-pattern - results go to original project
-            logger.info("Consolidating HDF results from test folder back to original project folder")
-            logger.debug(f"Consolidating HDF results from {compute_folder} back to {project_folder}")
-            hdf_files_copied = 0
-            for hdf_file in compute_folder.glob("*.hdf"):
-                dest_path = project_folder / hdf_file.name
+            # Promote only artifacts owned by plans that actually succeeded.
+            # The previous broad *.hdf copy could publish unrelated or stale
+            # results from the copied test project.
+            logger.info(
+                "Consolidating successful plan artifacts from test folder "
+                "back to original project folder"
+            )
+            logger.debug(
+                "Consolidating plan artifacts from %s back to %s",
+                compute_folder,
+                project_folder,
+            )
+            artifact_files_copied = 0
+            promotion_candidates = sorted(
+                plan_number
+                for plan_number, succeeded in execution_results.items()
+                if succeeded
+            )
+            promotion_allowed = True
+            promotion_gate_evidence: Dict[str, Any] = {}
+            promotion_lock_evidence: Dict[str, Any] = {}
+            if promotion_candidates:
+                (
+                    promotion_lock_lease,
+                    promotion_lock_evidence,
+                ) = RasCmdr._acquire_destination_promotion_lock(
+                    project_folder=project_folder,
+                    project_name=ras_obj.project_name,
+                )
+                if promotion_lock_lease is None:
+                    promotion_allowed = False
+                    promotion_gate_evidence = {
+                        "complete": False,
+                        "quiescence_confirmed": None,
+                        "destination_folder": str(project_folder),
+                        "project_path": str(
+                            project_folder / f"{ras_obj.project_name}.prj"
+                        ),
+                        "plan_inventories": {},
+                        "blocked_plan_numbers": [],
+                        "global_processes": [],
+                        "query_errors": [],
+                        "resolution_errors": [],
+                        "promotion_lock": promotion_lock_evidence,
+                    }
+                else:
+                    (
+                        promotion_allowed,
+                        promotion_gate_evidence,
+                    ) = RasCmdr._destination_promotion_process_gate(
+                        promotion_candidates,
+                        project_folder=project_folder,
+                        project_name=ras_obj.project_name,
+                    )
+                    promotion_gate_evidence["promotion_lock"] = (
+                        promotion_lock_evidence
+                    )
+            retained_test_folder = str(
+                compute_folder.resolve(strict=False)
+            )
+            retain_test_folder = not promotion_allowed
+            if not promotion_allowed:
+                promotion_candidate_set = set(promotion_candidates)
+                for current_plan_number in execution_results:
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details["retained_test_folder"] = retained_test_folder
+                    if current_plan_number in promotion_candidate_set:
+                        execution_results[current_plan_number] = False
+                        details["failure_stage"] = (
+                            "destination_promotion_process_gate"
+                        )
+                        details["destination_promotion_process_gate"] = (
+                            promotion_gate_evidence
+                        )
+                    execution_details_by_plan[current_plan_number] = details
+                logger.error(
+                    "Refused the entire test-mode result promotion because "
+                    "destination exact-plan quiescence was not proved: %s",
+                    promotion_gate_evidence,
+                )
+            promotion_integrity_lost = False
+            promotion_integrity_failure: Dict[str, Any] = {}
+            promoted_geometry_numbers: set[str] = set()
+            for current_plan_number, succeeded in execution_results.items():
+                if not succeeded:
+                    continue
+                if promotion_integrity_lost:
+                    execution_results[current_plan_number] = False
+                    retain_test_folder = True
+                    failure_detail = (
+                        "A prior plan promotion could not prove exact "
+                        "destination rollback; refusing later publication"
+                    )
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details.update(
+                        {
+                            "failure_stage": (
+                                "destination_promotion_aborted_unrestored"
+                            ),
+                            "failure_detail": failure_detail,
+                            "retained_test_folder": retained_test_folder,
+                            "promotion_failure": (
+                                promotion_integrity_failure
+                            ),
+                        }
+                    )
+                    execution_details_by_plan[
+                        current_plan_number
+                    ] = details
+                    continue
+
                 try:
-                    if dest_path.exists():
-                        dest_path.unlink()
-                    shutil.copy2(hdf_file, dest_path)
-                    hdf_files_copied += 1
-                    logger.debug(f"Copied {hdf_file.name} to original project folder")
+                    artifact_paths = get_plan_result_artifact_paths(
+                        current_plan_number,
+                        ras_object=compute_ras,
+                    )
+                    primary_result = (
+                        artifact_paths.hdf
+                        if execution_result_format == "hdf"
+                        else artifact_paths.legacy_output
+                    )
+                    source_sidecars = [
+                        path
+                        for path in artifact_paths.message_sidecars
+                        if path.is_file()
+                    ]
+                    geometry_number = RasCmdr._get_plan_geometry_number(
+                        ras_compute_plan_entries,
+                        current_plan_number,
+                    )
+                    geometry_source = None
+                    if (
+                        geometry_number
+                        and geometry_number not in promoted_geometry_numbers
+                    ):
+                        geometry_hdf = (
+                            compute_folder
+                            / f"{compute_ras.project_name}.g"
+                            f"{geometry_number}.hdf"
+                        )
+                        if geometry_hdf.is_file():
+                            geometry_source = geometry_hdf
+                    (
+                        promotion_succeeded,
+                        promotion_evidence,
+                    ) = RasCmdr._publish_plan_artifacts_transaction(
+                        current_plan_number,
+                        source_primary=primary_result,
+                        source_sidecars=source_sidecars,
+                        geometry_source=geometry_source,
+                        output_format=execution_result_format,
+                        ras_object=ras_obj,
+                        destination_folder=project_folder,
+                        project_name=compute_ras.project_name,
+                    )
+                except Exception as exc:
+                    promotion_succeeded = False
+                    promotion_evidence = {
+                        "failure_stage": (
+                            "destination_promotion_inventory"
+                        ),
+                        "failure_detail": f"{type(exc).__name__}: {exc}",
+                        "exception_type": type(exc).__name__,
+                        "source_path": None,
+                        "destination_path": None,
+                        "transaction_path": None,
+                        "retained_transaction_path": None,
+                        "copied_destination_paths": [],
+                        "rollback_attempted": False,
+                        "rollback_confirmed": True,
+                        "rollback_errors": [],
+                        "partial_promotion_possible": False,
+                    }
+                if not promotion_succeeded:
+                    execution_results[current_plan_number] = False
+                    retain_test_folder = True
+                    details = dict(
+                        execution_details_by_plan.get(
+                            current_plan_number,
+                            {},
+                        )
+                    )
+                    details.update(
+                        {
+                            "failure_stage": promotion_evidence[
+                                "failure_stage"
+                            ],
+                            "failure_detail": promotion_evidence[
+                                "failure_detail"
+                            ],
+                            "retained_test_folder": retained_test_folder,
+                            "promotion_failure": promotion_evidence,
+                        }
+                    )
+                    execution_details_by_plan[
+                        current_plan_number
+                    ] = details
+                    if not promotion_evidence.get(
+                        "rollback_confirmed",
+                        False,
+                    ):
+                        promotion_integrity_lost = True
+                        promotion_integrity_failure = promotion_evidence
+                    logger.error(
+                        "Failed to promote plan %s artifacts: %s",
+                        current_plan_number,
+                        promotion_evidence["failure_detail"],
+                    )
+                    continue
+                artifact_files_copied += len(
+                    promotion_evidence["copied_destination_paths"]
+                )
+                if geometry_source is not None:
+                    promoted_geometry_numbers.add(geometry_number)
+
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Did not remove destination promotion lock because "
+                        "ownership could not be reverified: %s",
+                        promotion_lock_evidence.get("lock_path"),
+                    )
+                promotion_lock_lease = None
+
+            logger.info(
+                "Consolidated %s plan artifact file(s) to the original project",
+                artifact_files_copied,
+            )
+
+            # A refused promotion retains the only freshly computed copy for
+            # explicit user recovery/review.
+            if not retain_test_folder:
+                try:
+                    shutil.rmtree(compute_folder)
+                    logger.info("Removed test folder: %s", compute_folder.name)
+                    logger.debug(f"Removed test folder path: {compute_folder}")
                 except Exception as e:
-                    logger.error(f"Failed to copy {hdf_file.name}: {str(e)}")
-
-            logger.info(f"Consolidated {hdf_files_copied} HDF file(s) to original project folder")
-
-            # Clean up test folder
-            try:
-                shutil.rmtree(compute_folder)
-                logger.info("Removed test folder: %s", compute_folder.name)
-                logger.debug(f"Removed test folder path: {compute_folder}")
-            except Exception as e:
-                logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
+                    logger.warning(f"Failed to remove test folder {compute_folder}: {str(e)}")
+            else:
+                logger.warning(
+                    "Retained computed test folder after promotion refusal "
+                    "or failure: %s",
+                    compute_folder,
+                )
 
             logger.info("compute_test_mode completed.")
 
@@ -1944,7 +5230,10 @@ class RasCmdr:
             ras_obj.geom_df = ras_obj.get_geom_entries()
             ras_obj.flow_df = ras_obj.get_flow_entries()
             ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-            ras_obj.update_results_df(plan_numbers=list(execution_results.keys()))
+            if execution_result_format == "hdf":
+                ras_obj.update_results_df(
+                    plan_numbers=list(execution_results.keys())
+                )
 
             # Extract results_df rows for executed plans
             _results_df = pd.DataFrame()
@@ -1957,11 +5246,27 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for test mode plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            for current_plan_number in execution_results:
+                execution_details_by_plan.setdefault(current_plan_number, {})
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                execution_details_by_plan=execution_details_by_plan,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
             return ComputeParallelResult()
+        finally:
+            if promotion_lock_lease is not None:
+                if not RasCmdr._release_destination_promotion_lock(
+                    promotion_lock_lease
+                ):
+                    logger.warning(
+                        "Preserved destination promotion lock after ownership "
+                        "verification failed: %s",
+                        promotion_lock_lease.get("path"),
+                    )
 
     @staticmethod
     @log_call
@@ -2017,6 +5322,19 @@ class RasCmdr:
         The Linux RasUnsteady binary uses Fortran I/O conventions that require
         files to be accessible with a base name of "io" (e.g., io.b, io.X).
         This method creates temporary symlinks to satisfy this requirement.
+
+        On a Windows host, the WSL adapter fails before solver launch unless
+        Bash, ``setsid --wait``, ``/proc`` identity, durable sync, and process-
+        group signalling are available. It atomically acquires a per-plan
+        lease, launches the solver as a session/process-group leader, and
+        publishes the lease token, its Linux PID, ``/proc`` start time, and
+        process-group ID before ``exec``. Timeout or Python interruption starts
+        a separate WSL recovery command that revalidates that exact identity
+        before TERM/KILL and then proves the group empty. Opposing result
+        families are deliberately not precleaned or finalized until
+        quiescence is positive.
+        Uncertain recovery preserves all outputs and the lease so a duplicate
+        execution fails closed.
 
         Args:
             plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
@@ -2228,6 +5546,8 @@ class RasCmdr:
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"
             success = False
             err_msg = ""
+            attempt_launched = False
+            proc = None
 
             try:
                 start_time = time.time()
@@ -2239,6 +5559,13 @@ class RasCmdr:
                 else:
                     ras_args = [str(tmp_hdf), f"x{geom_num}"]
                 with open(log_path, "w") as log_fh:
+                    # Reassert modern result ownership immediately before
+                    # every solver attempt, after log creation succeeds.
+                    prepare_plan_execution_artifacts(
+                        plan_num_str,
+                        output_format="hdf",
+                        ras_object=ras_obj,
+                    )
                     proc = subprocess.Popen(
                         [str(ras_exe), *ras_args],
                         stdout=log_fh,
@@ -2246,6 +5573,7 @@ class RasCmdr:
                         env=env,
                         cwd=str(project_dir),
                     )
+                    attempt_launched = True
                 try:
                     rc = proc.wait(timeout=timeout_sec)
                     end_time = time.time()
@@ -2287,6 +5615,16 @@ class RasCmdr:
                 raise RuntimeError(
                     f"RasUnsteady binary not found at {ras_exe}."
                 )
+            finally:
+                if attempt_launched:
+                    if proc is not None and proc.poll() is None:
+                        proc.kill()
+                        proc.wait()
+                    finalize_plan_execution_artifacts(
+                        plan_num_str,
+                        output_format="hdf",
+                        ras_object=ras_obj,
+                    )
 
             if success:
                 # Move results from .tmp.hdf → .hdf
@@ -2673,6 +6011,487 @@ class RasCmdr:
         return proc.stdout.strip()
 
     @staticmethod
+    def _parse_wsl_solver_exit_proof(stdout: str) -> Dict[str, Any]:
+        """Parse the shell's exact Linux solver process-group exit receipt."""
+        marker = "__RAS_COMMANDER_WSL_EXIT_PROOF__"
+        proof_line = None
+        for line in str(stdout).splitlines():
+            if line.startswith(f"{marker} "):
+                proof_line = line
+        if proof_line is None:
+            return {
+                "quiescence_confirmed": None,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "reported_returncode": None,
+            }
+
+        try:
+            fields = dict(
+                token.split("=", 1)
+                for token in proof_line[len(marker) + 1 :].split()
+            )
+            solver_pid = int(fields["pid"])
+            start_time_ticks = int(fields["start"])
+            process_group_id = int(fields["pgid"])
+            reported_returncode = int(fields["rc"])
+            quiescent_value = fields["quiescent"]
+            if (
+                solver_pid <= 0
+                or start_time_ticks <= 0
+                or process_group_id != solver_pid
+            ):
+                raise ValueError("invalid solver process-group identity")
+            if not 0 <= reported_returncode <= 255:
+                raise ValueError("invalid shell return code")
+            if quiescent_value not in {"0", "1"}:
+                raise ValueError("invalid quiescence value")
+        except (KeyError, TypeError, ValueError):
+            return {
+                "quiescence_confirmed": None,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "reported_returncode": None,
+            }
+        return {
+            "quiescence_confirmed": quiescent_value == "1",
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+            "reported_returncode": reported_returncode,
+        }
+
+    @staticmethod
+    def _read_wsl_supervision_identity(
+        state_path: Union[str, Path],
+        *,
+        expected_owner_token: Optional[str] = None,
+    ) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Read one atomically published Linux ``/proc`` identity receipt."""
+        path = Path(state_path)
+        try:
+            before = path.stat()
+            text = path.read_text(encoding="ascii")
+            after = path.stat()
+        except OSError as exc:
+            return None, f"{type(exc).__name__}: {exc}"
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            return None, "supervision identity changed while reading"
+        try:
+            (
+                schema,
+                token_field,
+                pid_field,
+                start_field,
+                pgid_field,
+            ) = text.strip().split()
+            if schema != "ras_commander_wsl_identity_v2":
+                raise ValueError("unsupported supervision identity schema")
+            if not token_field.startswith("token="):
+                raise ValueError("missing owner token field")
+            owner_token = token_field.removeprefix("token=")
+            if uuid.UUID(owner_token).hex != owner_token:
+                raise ValueError("invalid owner token")
+            if (
+                expected_owner_token is not None
+                and owner_token != expected_owner_token
+            ):
+                raise ValueError("supervision identity owner token mismatch")
+            solver_pid = int(pid_field.removeprefix("pid="))
+            start_time_ticks = int(start_field.removeprefix("start="))
+            process_group_id = int(pgid_field.removeprefix("pgid="))
+            if not pid_field.startswith("pid="):
+                raise ValueError("missing pid field")
+            if not start_field.startswith("start="):
+                raise ValueError("missing start field")
+            if not pgid_field.startswith("pgid="):
+                raise ValueError("missing pgid field")
+            if (
+                solver_pid <= 0
+                or start_time_ticks <= 0
+                or process_group_id != solver_pid
+            ):
+                raise ValueError("invalid exact Linux process identity")
+        except (TypeError, ValueError) as exc:
+            return None, str(exc)
+        return {
+            "owner_token": owner_token,
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+        }, None
+
+    @staticmethod
+    def _wsl_supervision_preflight() -> tuple[bool, Dict[str, Any]]:
+        """Prove WSL exposes every primitive required for exact supervision."""
+        script = (
+            "command -v bash >/dev/null 2>&1 && "
+            "command -v setsid >/dev/null 2>&1 && "
+            "setsid --help 2>&1 | grep -q -- '--wait' && "
+            "command -v cat >/dev/null 2>&1 && "
+            "command -v sync >/dev/null 2>&1 && "
+            "type kill >/dev/null 2>&1 && "
+            "[ -r /proc/self/stat ]"
+        )
+        try:
+            result = subprocess.run(
+                ["wsl", "bash", "-lc", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+        except Exception as exc:
+            return False, {
+                "complete": False,
+                "available": False,
+                "returncode": None,
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        available = result.returncode == 0
+        detail = (result.stderr or result.stdout or "").strip()
+        return available, {
+            "complete": True,
+            "available": available,
+            "returncode": result.returncode,
+            "detail": detail[:1000] or None,
+        }
+
+    @staticmethod
+    def _recover_wsl_solver_identity(
+        identity: Dict[str, int],
+    ) -> Dict[str, Any]:
+        """Revalidate and quiesce only one exact Linux solver process group."""
+        solver_pid = int(identity["solver_pid"])
+        start_time_ticks = int(identity["start_time_ticks"])
+        process_group_id = int(identity["process_group_id"])
+        script = fr"""
+set +e
+expected_pid={solver_pid}
+expected_start={start_time_ticks}
+expected_pgid={process_group_id}
+term_sent=0
+kill_sent=0
+read_exact_identity() {{
+    [ -r "/proc/$expected_pid/stat" ] || return 1
+    stat_text=$(cat "/proc/$expected_pid/stat") || return 2
+    stat_tail="${{stat_text##*) }}"
+    set -- $stat_tail
+    actual_pgid=$3
+    actual_start=${{20}}
+    case "$actual_pgid:$actual_start" in
+        *[!0-9:]*) return 2 ;;
+    esac
+    [ "$actual_pgid" = "$expected_pgid" ] && [ "$actual_start" = "$expected_start" ] || return 3
+    return 0
+}}
+group_exists() {{
+    kill -0 -- "-$expected_pgid" 2>/dev/null
+}}
+read_exact_identity
+identity_rc=$?
+if [ "$identity_rc" -eq 0 ]; then
+    if kill -TERM -- "-$expected_pgid" 2>/dev/null; then
+        term_sent=1
+    elif group_exists; then
+        status=uncertain
+    else
+        status=quiescent
+    fi
+    if [ -z "$status" ]; then
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            group_exists || {{ status=quiescent; break; }}
+            sleep 0.1
+        done
+    fi
+    if [ -z "$status" ]; then
+        if kill -KILL -- "-$expected_pgid" 2>/dev/null; then
+            kill_sent=1
+        elif group_exists; then
+            status=uncertain
+        else
+            status=quiescent
+        fi
+    fi
+    if [ -z "$status" ]; then
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            group_exists || {{ status=quiescent; break; }}
+            sleep 0.1
+        done
+    fi
+    [ -n "$status" ] || status=survivor
+elif [ "$identity_rc" -eq 1 ]; then
+    if group_exists; then
+        status=identity_unavailable
+    else
+        status=quiescent
+    fi
+elif [ "$identity_rc" -eq 3 ]; then
+    status=identity_mismatch
+else
+    status=uncertain
+fi
+printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s pgid=%s\n' "$status" "$term_sent" "$kill_sent" "$expected_pid" "$expected_start" "$expected_pgid"
+"""
+        try:
+            result = subprocess.run(
+                ["wsl", "bash", "-lc", script],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=15,
+            )
+        except Exception as exc:
+            return {
+                "attempted": True,
+                "status": "uncertain",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": solver_pid,
+                "start_time_ticks": start_time_ticks,
+                "process_group_id": process_group_id,
+                "returncode": None,
+                "detail": f"{type(exc).__name__}: {exc}",
+            }
+        marker = "__RAS_COMMANDER_WSL_RECOVERY__"
+        receipt_line = next(
+            (
+                line
+                for line in reversed(result.stdout.splitlines())
+                if line.startswith(f"{marker} ")
+            ),
+            None,
+        )
+        try:
+            if result.returncode != 0 or receipt_line is None:
+                raise ValueError("recovery receipt missing or command failed")
+            fields = dict(
+                token.split("=", 1)
+                for token in receipt_line[len(marker) + 1 :].split()
+            )
+            status = fields["status"]
+            term_sent = fields["term"] == "1"
+            kill_sent = fields["kill"] == "1"
+            if fields["term"] not in {"0", "1"}:
+                raise ValueError("invalid TERM receipt")
+            if fields["kill"] not in {"0", "1"}:
+                raise ValueError("invalid KILL receipt")
+            if int(fields["pid"]) != solver_pid:
+                raise ValueError("recovery pid mismatch")
+            if int(fields["start"]) != start_time_ticks:
+                raise ValueError("recovery start-time mismatch")
+            if int(fields["pgid"]) != process_group_id:
+                raise ValueError("recovery process-group mismatch")
+            if status not in {
+                "quiescent",
+                "survivor",
+                "identity_mismatch",
+                "identity_unavailable",
+                "uncertain",
+            }:
+                raise ValueError("invalid recovery status")
+        except (KeyError, TypeError, ValueError) as exc:
+            return {
+                "attempted": True,
+                "status": "uncertain",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": solver_pid,
+                "start_time_ticks": start_time_ticks,
+                "process_group_id": process_group_id,
+                "returncode": result.returncode,
+                "detail": str(exc),
+            }
+        quiescence_confirmed = (
+            True
+            if status == "quiescent"
+            else False
+            if status == "survivor"
+            else None
+        )
+        return {
+            "attempted": True,
+            "status": status,
+            "quiescence_confirmed": quiescence_confirmed,
+            "term_sent": term_sent,
+            "kill_sent": kill_sent,
+            "solver_pid": solver_pid,
+            "start_time_ticks": start_time_ticks,
+            "process_group_id": process_group_id,
+            "returncode": result.returncode,
+            "detail": None,
+        }
+
+    @staticmethod
+    def _clear_wsl_supervision_state(
+        state_path: Union[str, Path],
+        identity: Dict[str, Any],
+    ) -> bool:
+        """Remove only a supervision record that still names ``identity``."""
+        observed, _ = RasCmdr._read_wsl_supervision_identity(state_path)
+        if observed != identity:
+            return False
+        try:
+            Path(state_path).unlink()
+        except OSError:
+            return False
+        return True
+
+    @staticmethod
+    def _acquire_wsl_plan_lease(
+        state_path: Union[str, Path],
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+        """Atomically reserve one plan's stable WSL supervision identity."""
+        lease_path = Path(f"{state_path}.lease")
+        token = uuid.uuid4().hex
+        owner_pid = os.getpid()
+        created_at = time.time()
+        payload = (
+            "ras_commander_wsl_plan_lease_v1\n"
+            f"token={token}\n"
+            f"pid={owner_pid}\n"
+            f"created_at={created_at:.9f}\n"
+        ).encode("ascii")
+        try:
+            descriptor = os.open(
+                lease_path,
+                os.O_CREAT
+                | os.O_EXCL
+                | os.O_RDWR
+                | getattr(os, "O_BINARY", 0),
+                0o600,
+            )
+        except FileExistsError:
+            try:
+                existing_owner = lease_path.read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )[:4096]
+            except OSError as exc:
+                existing_owner = f"<unreadable: {type(exc).__name__}: {exc}>"
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lease_exists",
+                "reason": "WSL plan supervision lease already exists",
+                "existing_owner": existing_owner,
+            }
+        except OSError as exc:
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": None,
+                "owner_pid": None,
+                "created_at": None,
+                "reason_code": "lease_creation_failed",
+                "reason": f"lease creation failed: {type(exc).__name__}: {exc}",
+                "existing_owner": None,
+            }
+        try:
+            os.write(descriptor, payload)
+            os.fsync(descriptor)
+        except Exception as exc:
+            os.close(descriptor)
+            removed = False
+            try:
+                if lease_path.read_bytes() == payload:
+                    lease_path.unlink()
+                    removed = True
+            except OSError:
+                pass
+            return None, {
+                "acquired": False,
+                "lease_path": str(lease_path),
+                "owner_token": token,
+                "owner_pid": owner_pid,
+                "created_at": created_at,
+                "reason_code": "lease_initialization_failed",
+                "reason": (
+                    "lease initialization failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "existing_owner": None,
+                "partial_lease_removed": removed,
+            }
+        lease = {
+            "descriptor": descriptor,
+            "path": lease_path,
+            "token": token,
+            "payload": payload,
+        }
+        return lease, {
+            "acquired": True,
+            "lease_path": str(lease_path),
+            "owner_token": token,
+            "owner_pid": owner_pid,
+            "created_at": created_at,
+            "reason_code": None,
+            "reason": None,
+            "existing_owner": None,
+        }
+
+    @staticmethod
+    def _retain_wsl_plan_lease(lease: Dict[str, Any]) -> None:
+        """Close our handle while deliberately retaining a fail-closed lease."""
+        descriptor = lease.get("descriptor")
+        if isinstance(descriptor, int) and descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        lease["descriptor"] = -1
+
+    @staticmethod
+    def _recover_wsl_from_state(
+        state_path: Union[str, Path],
+        *,
+        expected_owner_token: str,
+    ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any], bool]:
+        """Recover an interrupted WSL run from its durable exact identity."""
+        identity, identity_error = RasCmdr._read_wsl_supervision_identity(
+            state_path,
+            expected_owner_token=expected_owner_token,
+        )
+        if identity is None:
+            return None, {
+                "attempted": False,
+                "status": "identity_unavailable",
+                "quiescence_confirmed": None,
+                "term_sent": False,
+                "kill_sent": False,
+                "solver_pid": None,
+                "start_time_ticks": None,
+                "process_group_id": None,
+                "returncode": None,
+                "detail": identity_error,
+            }, False
+        recovery = RasCmdr._recover_wsl_solver_identity(identity)
+        state_cleared = False
+        if recovery["quiescence_confirmed"] is True:
+            state_cleared = RasCmdr._clear_wsl_supervision_state(
+                state_path,
+                identity,
+            )
+        return identity, recovery, state_cleared
+
+    @staticmethod
     def _compute_plan_linux_via_wsl(
         ras_exe: str,
         ras_exe_dir: str,
@@ -2688,10 +6507,108 @@ class RasCmdr:
         ras_obj,
     ) -> 'ComputeResult':
         """Run native Linux RasUnsteady from a Windows Python session via WSL."""
-        project_dir_wsl = RasCmdr._windows_path_to_wsl(project_dir)
-        tmp_hdf_wsl = RasCmdr._windows_path_to_wsl(tmp_hdf)
-        log_path = project_dir / f"compute_linux_{plan_number}.log"
-        log_path_wsl = RasCmdr._windows_path_to_wsl(log_path)
+        state_path = project_dir / (
+            f".{project_name}.p{plan_number}.ras-commander-wsl.identity"
+        )
+        initial_execution_details: Dict[str, Any] = {
+            "execution_api": "ras_cmdr",
+            "engine_kind": "native_linux_wsl",
+            "selected_result_format": "hdf",
+            "calculation_attempted": False,
+            "solver_quiescence_confirmed": None,
+            "result_artifacts_finalized": False,
+            "selected_executable_path": ras_exe,
+            "wsl_launcher_pid": None,
+            "linux_solver_pid": None,
+            "linux_solver_start_time_ticks": None,
+            "linux_process_group_id": None,
+            "linux_reported_returncode": None,
+            "wsl_supervision_state_path": str(state_path),
+            "wsl_supervision_lease": None,
+            "wsl_supervision_lease_released": False,
+            "wsl_supervision_preflight": None,
+            "wsl_supervision_recovery": None,
+        }
+        wsl_plan_lease, lease_evidence = RasCmdr._acquire_wsl_plan_lease(
+            state_path
+        )
+        initial_execution_details["wsl_supervision_lease"] = lease_evidence
+        if wsl_plan_lease is None:
+            initial_execution_details["failure_stage"] = (
+                "wsl_supervision_lease"
+            )
+            initial_execution_details["duplicate_execution_blocked"] = bool(
+                lease_evidence.get("reason_code") == "lease_exists"
+            )
+            if initial_execution_details["duplicate_execution_blocked"]:
+                logger.error(
+                    "Plan %s: refusing duplicate WSL execution because its "
+                    "supervision lease is held: %s",
+                    plan_number,
+                    lease_evidence["lease_path"],
+                )
+            else:
+                logger.error(
+                    "Plan %s: refusing WSL execution because its supervision "
+                    "lease could not be acquired: %s",
+                    plan_number,
+                    lease_evidence.get("reason"),
+                )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+        if state_path.exists():
+            RasCmdr._retain_wsl_plan_lease(wsl_plan_lease)
+            initial_execution_details["failure_stage"] = (
+                "existing_wsl_supervision_state"
+            )
+            initial_execution_details["duplicate_execution_blocked"] = True
+            logger.error(
+                "Plan %s: refusing duplicate WSL execution because durable "
+                "supervision state still exists: %s",
+                plan_number,
+                state_path,
+            )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+
+        preflight_ok, preflight_evidence = (
+            RasCmdr._wsl_supervision_preflight()
+        )
+        initial_execution_details["wsl_supervision_preflight"] = (
+            preflight_evidence
+        )
+        if not preflight_ok:
+            initial_execution_details[
+                "wsl_supervision_lease_released"
+            ] = RasCmdr._release_destination_promotion_lock(wsl_plan_lease)
+            initial_execution_details["failure_stage"] = (
+                "wsl_supervision_preflight"
+            )
+            logger.error(
+                "Plan %s: exact WSL supervision capabilities are unavailable; "
+                "the solver was not launched",
+                plan_number,
+            )
+            return ComputeResult(
+                success=False,
+                results_df_row=None,
+                execution_details=initial_execution_details,
+            )
+
+        try:
+            project_dir_wsl = RasCmdr._windows_path_to_wsl(project_dir)
+            tmp_hdf_wsl = RasCmdr._windows_path_to_wsl(tmp_hdf)
+            log_path = project_dir / f"compute_linux_{plan_number}.log"
+            log_path_wsl = RasCmdr._windows_path_to_wsl(log_path)
+        except BaseException:
+            RasCmdr._release_destination_promotion_lock(wsl_plan_lease)
+            raise
 
         if dos2unix:
             try:
@@ -2707,6 +6624,8 @@ class RasCmdr:
         tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
         log_path_q = shlex.quote(log_path_wsl)
         geom_arg_q = shlex.quote(f"x{geom_num}")
+        state_file_q = shlex.quote(state_path.name)
+        lease_token_q = shlex.quote(str(wsl_plan_lease["token"]))
 
         cleanup_script = (
             f"cd {project_q} && "
@@ -2718,37 +6637,77 @@ set -e
 cd {project_q}
 find . -maxdepth 1 -type l -name 'io.*' -delete
 link_or_copy() {{
-    ln -sfn "\$1" "\$2" 2>/dev/null || cp -f "\$1" "\$2"
+    ln -sfn "$1" "$2" 2>/dev/null || cp -f "$1" "$2"
 }}
 prefix={project_name_q}.
 link_or_copy {shlex.quote(f'{project_name}.b{plan_number}')} io.b
 link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.X
 link_or_copy {shlex.quote(f'{project_name}.x{geom_num}')} io.x
 for f in {project_name_q}.*; do
-    [ -e "\$f" ] || continue
-    suffix="\${{f#\$prefix}}"
-    [ -e "io.\$suffix" ] || link_or_copy "\$f" "io.\$suffix"
+    [ -e "$f" ] || continue
+    suffix="${{f#$prefix}}"
+    [ -e "io.$suffix" ] || link_or_copy "$f" "io.$suffix"
 done
 lib_base=""
 if [ -d {ras_exe_dir_q}/libs ]; then
     lib_base={ras_exe_dir_q}/libs
-elif [ -d "\$(dirname {ras_exe_dir_q})/libs" ]; then
-    lib_base="\$(dirname {ras_exe_dir_q})/libs"
+elif [ -d "$(dirname {ras_exe_dir_q})/libs" ]; then
+    lib_base="$(dirname {ras_exe_dir_q})/libs"
 fi
-if [ -n "\$lib_base" ]; then
-    ld_path="\$lib_base"
-    for d in "\$lib_base"/*; do
-        if [ -d "\$d" ]; then
-            ld_path="\$ld_path:\$d"
+if [ -n "$lib_base" ]; then
+    ld_path="$lib_base"
+    for d in "$lib_base"/*; do
+        if [ -d "$d" ]; then
+            ld_path="$ld_path:$d"
         fi
     done
 else
     ld_path={ras_exe_dir_q}
 fi
-LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 2>&1
+set +e
+state_file={state_file_q}
+owner_token={lease_token_q}
+setsid --wait bash -c 'state_file=$1; owner_token=$2; shift 2; command_args=("$@"); stat_text=$(cat /proc/$$/stat) || exit 125; stat_tail="${{stat_text##*) }}"; set -- $stat_tail; solver_pgid=$3; solver_start=${{20}}; [ "$solver_pgid" = "$$" ] || exit 125; set -o noclobber; printf "ras_commander_wsl_identity_v2 token=%s pid=%s start=%s pgid=%s\n" "$owner_token" "$$" "$solver_start" "$solver_pgid" > "$state_file" || exit 125; sync "$state_file" || exit 125; exec env "${{command_args[@]}}"' ras-commander-wsl "$state_file" "$owner_token" "LD_LIBRARY_PATH=$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 2>&1 &
+wrapper_pid=$!
+wait "$wrapper_pid"
+solver_rc=$?
+solver_pid=""
+solver_start=""
+solver_pgid=""
+state_owner_token=""
+if IFS=' ' read -r schema token_field pid_field start_field pgid_field < "$state_file"; then
+    state_owner_token="${{token_field#token=}}"
+    solver_pid="${{pid_field#pid=}}"
+    solver_start="${{start_field#start=}}"
+    solver_pgid="${{pgid_field#pgid=}}"
+fi
+case "$solver_pid:$solver_start:$solver_pgid" in
+    *[!0-9:]*) solver_pid="" ;;
+esac
+if [ "$state_owner_token" = "$owner_token" ] && [ -n "$solver_pid" ] && [ "$solver_pid" = "$solver_pgid" ]; then
+    if kill -0 -- "-$solver_pgid" 2>/dev/null; then
+        group_quiescent=0
+    else
+        group_quiescent=1
+    fi
+    printf '__RAS_COMMANDER_WSL_EXIT_PROOF__ pid=%s start=%s pgid=%s rc=%s quiescent=%s\n' "$solver_pid" "$solver_start" "$solver_pgid" "$solver_rc" "$group_quiescent"
+else
+    printf '__RAS_COMMANDER_WSL_EXIT_PROOF__ invalid_identity=1 rc=%s\n' "$solver_rc"
+fi
+exit "$solver_rc"
 """
 
         max_attempts = 2 if retry else 1
+        last_execution_details: Dict[str, Any] = {}
+
+        def settle_plan_lease(*, release: bool) -> bool:
+            if release:
+                return RasCmdr._release_destination_promotion_lock(
+                    wsl_plan_lease
+                )
+            RasCmdr._retain_wsl_plan_lease(wsl_plan_lease)
+            return False
+
         for attempt in range(1, max_attempts + 1):
             logger.info(
                 f"WSL Linux execution attempt {attempt}/{max_attempts} for plan {plan_number}"
@@ -2759,23 +6718,266 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             if io_tmp_hdf.exists():
                 io_tmp_hdf.unlink()
 
-            proc = subprocess.Popen(
-                ["wsl", "bash", "-lc", script],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-            )
+            proc = None
+            launcher_pid = None
             try:
+                proc = subprocess.Popen(
+                    ["wsl", "bash", "-lc", script],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                )
+                launcher_pid = getattr(proc, "pid", None)
+                if (
+                    isinstance(launcher_pid, bool)
+                    or not isinstance(launcher_pid, int)
+                    or launcher_pid <= 0
+                ):
+                    launcher_pid = None
                 stdout, stderr = proc.communicate(timeout=timeout_sec)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.communicate()
-                logger.error(f"Plan {plan_number}: WSL RasUnsteady timeout after {timeout_sec}s")
-                stdout, stderr = "", f"Timeout after {timeout_sec}s"
-                rc = -1
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    proc.communicate(timeout=5)
+                except BaseException:
+                    pass
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                last_execution_details = dict(initial_execution_details)
+                last_execution_details.update(
+                    {
+                        "calculation_attempted": proc is not None,
+                        "solver_quiescence_confirmed": recovery[
+                            "quiescence_confirmed"
+                        ],
+                        "wsl_launcher_pid": launcher_pid,
+                        "linux_solver_pid": (
+                            None
+                            if identity is None
+                            else identity["solver_pid"]
+                        ),
+                        "linux_solver_start_time_ticks": (
+                            None
+                            if identity is None
+                            else identity["start_time_ticks"]
+                        ),
+                        "linux_process_group_id": (
+                            None
+                            if identity is None
+                            else identity["process_group_id"]
+                        ),
+                        "wsl_supervision_recovery": recovery,
+                        "wsl_supervision_state_cleared": state_cleared,
+                        "failure_stage": "solver_timeout",
+                    }
+                )
+                last_execution_details["wsl_supervision_lease_released"] = (
+                    settle_plan_lease(
+                        release=bool(
+                            recovery["quiescence_confirmed"] is True
+                            and state_cleared
+                        )
+                    )
+                )
+                logger.error(
+                    "Plan %s: WSL RasUnsteady timed out after %ss; exact "
+                    "recovery status=%s",
+                    plan_number,
+                    timeout_sec,
+                    recovery["status"],
+                )
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+            except BaseException as exc:
+                if proc is not None:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    try:
+                        proc.communicate(timeout=5)
+                    except BaseException:
+                        pass
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                interrupted_details = dict(initial_execution_details)
+                interrupted_details.update(
+                    {
+                        "calculation_attempted": proc is not None,
+                        "solver_quiescence_confirmed": recovery[
+                            "quiescence_confirmed"
+                        ],
+                        "wsl_launcher_pid": launcher_pid,
+                        "linux_solver_pid": (
+                            None
+                            if identity is None
+                            else identity["solver_pid"]
+                        ),
+                        "linux_solver_start_time_ticks": (
+                            None
+                            if identity is None
+                            else identity["start_time_ticks"]
+                        ),
+                        "linux_process_group_id": (
+                            None
+                            if identity is None
+                            else identity["process_group_id"]
+                        ),
+                        "wsl_supervision_recovery": recovery,
+                        "wsl_supervision_state_cleared": state_cleared,
+                        "failure_stage": "solver_interrupted",
+                    }
+                )
+                interrupted_details["wsl_supervision_lease_released"] = (
+                    settle_plan_lease(
+                        release=bool(
+                            recovery["quiescence_confirmed"] is True
+                            and state_cleared
+                        )
+                    )
+                )
+                try:
+                    setattr(exc, "execution_details", interrupted_details)
+                except Exception:
+                    pass
+                raise
             else:
                 rc = proc.returncode
+            proof = RasCmdr._parse_wsl_solver_exit_proof(stdout)
+            identity, identity_error = (
+                RasCmdr._read_wsl_supervision_identity(
+                    state_path,
+                    expected_owner_token=wsl_plan_lease["token"],
+                )
+            )
+            proof_matches_identity = bool(
+                identity is not None
+                and proof["solver_pid"] == identity["solver_pid"]
+                and proof["start_time_ticks"]
+                == identity["start_time_ticks"]
+                and proof["process_group_id"]
+                == identity["process_group_id"]
+                and proof["reported_returncode"] == rc
+                and proof["quiescence_confirmed"] is True
+            )
+            recovery: Optional[Dict[str, Any]] = None
+            state_cleared = False
+            if proof_matches_identity:
+                state_cleared = RasCmdr._clear_wsl_supervision_state(
+                    state_path,
+                    identity,
+                )
+                quiescence_confirmed: Optional[bool] = True
+            else:
+                identity, recovery, state_cleared = (
+                    RasCmdr._recover_wsl_from_state(
+                        state_path,
+                        expected_owner_token=wsl_plan_lease["token"],
+                    )
+                )
+                quiescence_confirmed = recovery[
+                    "quiescence_confirmed"
+                ]
+            last_execution_details = dict(initial_execution_details)
+            last_execution_details.update(
+                {
+                    "calculation_attempted": True,
+                    "solver_quiescence_confirmed": quiescence_confirmed,
+                    "wsl_launcher_pid": launcher_pid,
+                    "linux_solver_pid": (
+                        proof["solver_pid"]
+                        if identity is None
+                        else identity["solver_pid"]
+                    ),
+                    "linux_solver_start_time_ticks": (
+                        proof["start_time_ticks"]
+                        if identity is None
+                        else identity["start_time_ticks"]
+                    ),
+                    "linux_process_group_id": (
+                        proof["process_group_id"]
+                        if identity is None
+                        else identity["process_group_id"]
+                    ),
+                    "linux_reported_returncode": proof[
+                        "reported_returncode"
+                    ],
+                    "wsl_exit_proof": proof,
+                    "wsl_supervision_identity_error": identity_error,
+                    "wsl_supervision_recovery": recovery,
+                    "wsl_supervision_state_cleared": state_cleared,
+                }
+            )
+            if quiescence_confirmed is not True:
+                last_execution_details["failure_stage"] = (
+                    "solver_quiescence"
+                )
+                logger.error(
+                    "Plan %s: WSL solver process-group exit was not proved; "
+                    "preserving all visible result families and refusing "
+                    "validation, promotion, finalization, and retry",
+                    plan_number,
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=False)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+            if not state_cleared:
+                last_execution_details["failure_stage"] = (
+                    "wsl_supervision_state_release"
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=False)
+                logger.error(
+                    "Plan %s: solver quiescence was proved but its owned "
+                    "supervision state could not be cleared; refusing "
+                    "finalization and retaining the duplicate-run lease",
+                    plan_number,
+                )
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    execution_details=last_execution_details,
+                )
+
+            # The Linux shell waited for the exact solver process and proved
+            # its process group empty. Only this positive receipt authorizes
+            # removal of an opposing result recreated by HEC-RAS.
+            try:
+                finalize_plan_execution_artifacts(
+                    plan_number,
+                    output_format="hdf",
+                    ras_object=ras_obj,
+                )
+            except Exception:
+                last_execution_details["failure_stage"] = (
+                    "result_artifact_finalization"
+                )
+                last_execution_details[
+                    "wsl_supervision_lease_released"
+                ] = settle_plan_lease(release=True)
+                raise
+            last_execution_details["result_artifacts_finalized"] = True
 
             if rc == 0:
                 ok, reason = RasCmdr._validate_linux_solve(
@@ -2814,6 +7016,12 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
                     return ComputeResult(
                         success=True,
                         results_df_row=results_row,
+                        execution_details={
+                            **last_execution_details,
+                            "wsl_supervision_lease_released": (
+                                settle_plan_lease(release=True)
+                            ),
+                        },
                     )
 
                 logger.error(
@@ -2845,4 +7053,13 @@ LD_LIBRARY_PATH="\$ld_path" {ras_exe_q} {tmp_hdf_q} {geom_arg_q} > {log_path_q} 
             text=True,
             encoding="utf-8",
         )
-        return ComputeResult(success=False, results_df_row=None)
+        return ComputeResult(
+            success=False,
+            results_df_row=None,
+            execution_details={
+                **last_execution_details,
+                "wsl_supervision_lease_released": settle_plan_lease(
+                    release=True
+                ),
+            },
+        )

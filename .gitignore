@@ -77,6 +77,8 @@ research/**/__pycache__/
 !/feature_dev_notes/README.md
 !/feature_dev_notes/multicore_raster_processing/
 !/feature_dev_notes/multicore_raster_processing/*.md
+!/feature_dev_notes/structured_execution_evidence/
+!/feature_dev_notes/structured_execution_evidence/*.md
 /research
 !/research/
 !/research/fixtures/
@@ -181,6 +183,8 @@ run_*.py
 !scripts/benchmarks/run_raster_profile_matrix.py
 test_*.py
 !tests/test_*.py
+!tests/qualification/
+!tests/qualification/test_*.py
 monitor_*.py
 cayce_*.py
 ai_tools/generate_*.py  # Only ignore AI tool generators, not scripts/

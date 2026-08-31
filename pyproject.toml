@@ -6,4 +6,12 @@ build-backend = "setuptools.build_meta:__legacy__"
 markers = [
     "integration: opt-in real-project or external dependency smoke tests",
     "qualification_critical: real-project classification qualification gates",
+    "qualification_harness: deterministic qualification infrastructure tests that do not execute HEC-RAS",
+    "offline_evidence: existing-artifact inspection without HEC-RAS execution or COM",
+    "real_ras: opt-in real HEC-RAS execution through an isolated qualification worker",
+    "destructive_copy: mutation is limited to a disposable staged project copy",
+    "cross_version: plan declaration and selected HEC-RAS engine intentionally differ",
+    "transport: remote, container, WSL, Wine, or worker transport qualification",
+    "failure_injection: controlled qualification failure or interruption boundary",
+    "slow: long-duration qualification test",
 ]

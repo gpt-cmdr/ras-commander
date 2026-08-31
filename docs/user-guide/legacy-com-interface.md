@@ -13,17 +13,18 @@ For older HEC-RAS versions that don't support command-line execution or HDF outp
 
 ## Supported Versions
 
-| Version | Support |
-|---------|---------|
-| 3.1 | Full |
-| 4.1 | Full |
-| 5.0.x (501-507) | Full |
-| 6.0 | Full |
-| 6.3 family alias | Full; retains the historical 6.3.1 Controller fallback |
-| 6.3.0.2 exact | Full; selects `RAS630.HECRASController` |
-| 6.3.1 exact | Full; selects `RAS631.HECRASController` |
-| 6.6 | Full |
-| 7.0 | Full |
+| Version | Controller capability contract | Result family |
+|---------|--------------------------------|---------------|
+| 3.x alias | Resolves to the 4.1 Controller contract below | legacy `.O##` |
+| 4.0 | `RAS400`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 4.1 | `RAS41`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 5.0.x (501-507) | Modern three-argument compute, `Compute_Complete`, and `QuitRas` | plan HDF |
+| 6.0 | Modern Controller contract | plan HDF |
+| 6.3 family alias | Modern contract; selects `RAS630` | plan HDF |
+| 6.3.0.2 exact | Modern `RAS630.HECRASController` | plan HDF |
+| 6.3.1 exact | Modern `RAS631.HECRASController` | plan HDF |
+| 6.6 | Modern Controller contract | plan HDF |
+| 7.0 | Modern Controller contract | plan HDF |
 
 ## Initialization
 
@@ -58,9 +59,9 @@ The COM interface:
 
 ### Exact HEC-RAS 6.3.0.2 batch execution
 
-HEC-RAS 6.3.0.2 and 6.3.1 register different Controller ProgIDs. Select the
-exact 6.3.0.2 identity explicitly when a reproducible batch must not fall
-forward to 6.3.1:
+HEC-RAS 6.3.0.2 and 6.3.1 register different Controller ProgIDs. The `6.3`
+family alias selects `RAS630`; use the exact 6.3.0.2 identity when a batch
+receipt must retain the complete product version:
 
 ```python
 from ras_commander import RasControl, RasPrj, init_ras_project
@@ -89,17 +90,39 @@ assert result.execution_details["watchdog_started"] is False
 `Compute_Complete()`. `use_watchdog=False` is intended only when an outer batch
 supervisor already owns the process tree and hard timeout. `strict_close=True`
 makes a `QuitRas()` failure or a verified surviving owned `ras.exe` process
-fail the operation instead of logging only a warning. If the internal watchdog
-is requested but PID detection fails, `watchdog_started` is `False` and
-`max_runtime` is not enforced; batch callers must inspect that field or provide
-an outer supervisor. The default values preserve existing interactive behavior.
+fail the operation instead of logging only a warning. For blocking execution,
+if the internal watchdog is requested but PID detection fails,
+`watchdog_started` is `False` and `max_runtime` is not enforced; batch callers
+must inspect that field or provide an outer supervisor. The nonblocking poll
+loop enforces `max_runtime` independently of watchdog startup. The default
+values preserve existing interactive behavior.
 
 `execution_details` contains JSON-safe provenance. Its stable common keys are
 `requested_controller_version`, `resolved_controller_version`,
-`controller_progid`, `compute_mode`, `message_count`,
+`controller_progid`, `compute_mode`, `completion_method`,
+`controller_quit_supported`, `controller_close_method`, `message_count`,
 `controller_message_count`, `watchdog_requested`, `watchdog_started`, and
-`duration_seconds`. Blocking results also include `blocking_result`; polled
-results include `poll_count`.
+`duration_seconds`. Polled modern Controllers report `Compute_Complete`,
+`True`, and `quit_ras` for the three capability fields; blocking modern
+Controllers report `Compute_CurrentPlan_blocking_return`, `True`, and
+`quit_ras`. HEC-RAS 4.0/4.1 report `Compute_IsStillComputing`, `False`, and
+`owned_process_cleanup`. The common result-family fields include
+`selected_result_format`, `artifact_preparation_cleanup`,
+`artifact_finalization_cleanup`, and `result_artifacts_finalized`. A cleanup
+record's `result_format` names the opposing family targeted for deletion;
+`removed_paths` and `missing_paths` partition its complete exact target set.
+Both cleanup records are `None` for a current-result skip. A skip is explicitly
+non-calculation evidence: `calculation_attempted` is `False` and
+`solver_quiescence_confirmed` is `None`. `current_check_performed`,
+`current_check_close_safe`, and `current_check_close_method` describe the
+separate currency-check session. `completion_method` and
+`controller_close_method` remain unset because no calculation ran. Blocking results
+also include `blocking_result`; polled results include `poll_count`.
+
+HEC-RAS 4.0/4.1 expose neither `Compute_Complete` nor `QuitRas`. RasControl
+fails closed unless exact PID/create-time exit is positively proved. An
+access-denied or other identity-query error preserves the session lock as
+evidence; it is never interpreted as exit or PID reuse.
 
 ## Steady State Results
 

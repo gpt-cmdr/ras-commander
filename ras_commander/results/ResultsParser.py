@@ -73,6 +73,24 @@ class ResultsParser:
         'convergence'
     ]
 
+    # A completion signal is authoritative only when it occupies the whole
+    # record.  Substrings such as "Did not Complete Process" or
+    # "Complete Process failed" are not completion evidence.
+    _COMPLETE_PROCESS_LINE = re.compile(
+        r"^Complete Process(?:\s+(?:(?:\d+\s*:\s*)+\d+|"
+        r"\d+(?:\.\d+)?(?:[xX]|(?i:\s*sec(?:ond)?s?))?))?\s*$"
+    )
+
+    @staticmethod
+    def _has_complete_process_record(messages: str) -> bool:
+        """Return whether messages contain an exact completion record."""
+        if not messages:
+            return False
+        return any(
+            ResultsParser._COMPLETE_PROCESS_LINE.fullmatch(line) is not None
+            for line in messages.splitlines()
+        )
+
     @staticmethod
     def parse_compute_messages(messages: str) -> Dict:
         """
@@ -110,8 +128,8 @@ class ResultsParser:
                 'first_error_line': None
             }
 
-        # Check for completion
-        completed = 'Complete Process' in messages
+        # Check for an exact completion record, not a misleading substring.
+        completed = ResultsParser._has_complete_process_record(messages)
 
         # Split into lines for analysis
         lines = messages.split('\n')
@@ -291,7 +309,11 @@ class ResultsParser:
         # Task/time line: "Completing Geometry	      27" or "Unsteady Flow Computations	<1"
         # Format is: task_name + tab + optional_spaces + time_value
         # Note: Some time values like "<1" have no extra spaces, others like "27" have padding
-        task_time_pattern = re.compile(r'^([A-Za-z,\s]+?)\t\s*(<?[\d:]+)\s*$')
+        task_time_pattern = re.compile(
+            r'^([A-Za-z,\s]+?)\t\s*(<?[\d:.]+)'
+            r'(?:\s*sec(?:ond)?s?)?\s*$',
+            re.IGNORECASE,
+        )
 
         # Speed line: "Unsteady Flow Computations	673x" or "Complete Process	646x"
         # Format is: task_name + tab + optional_spaces + speed_value + optional 'x'
@@ -315,7 +337,10 @@ class ResultsParser:
                     pass
 
             # Detect table sections
-            if 'Computation Task' in line and 'Time' in line:
+            if (
+                ('Computation Task' in line and 'Time' in line)
+                or re.fullmatch(r'Task\s+Time', line_stripped, re.IGNORECASE)
+            ):
                 in_task_table = True
                 in_speed_table = False
                 continue

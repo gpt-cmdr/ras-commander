@@ -8,3 +8,4 @@ release blockers without committing large generated artifacts.
 ## Active feature notes
 
 - [Multicore raster processing](multicore_raster_processing/README.md)
+- [Structured execution evidence](structured_execution_evidence/README.md)

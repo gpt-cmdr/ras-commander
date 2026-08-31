@@ -34,11 +34,11 @@ def test_force_geompre_bypasses_skip_and_preserves_source(monkeypatch, tmp_path)
         worker_folder=r"C:\\RasRemote",
         credentials={},
         psexec_path="PsExec.exe",
-        ras_exe_path=r"C:\\HEC-RAS\\Ras.exe",
+        ras_exe_path=r"C:\\HEC-RAS\\6.6\\Ras.exe",
         system_account=False,
         session_id=2,
         process_priority="normal",
-        max_runtime_minutes=1,
+        max_runtime_minutes=2,
     )
 
     currency_calls = {"count": 0}
@@ -75,8 +75,32 @@ def test_force_geompre_bypasses_skip_and_preserves_source(monkeypatch, tmp_path)
     monkeypatch.setattr(
         RasCurrency, "are_plan_results_current", staticmethod(fake_currency)
     )
+    clock = {"seconds": 0.0}
+
+    def complete_after_recreating_legacy(path):
+        if clock["seconds"] < 65:
+            return False
+        Path(path).with_name("TestProject.O01").write_bytes(
+            b"recreated by asynchronous solver"
+        )
+        return True
+
     monkeypatch.setattr(
-        RasCurrency, "check_plan_hdf_complete", staticmethod(lambda path: True)
+        RasCurrency,
+        "check_plan_hdf_complete",
+        staticmethod(complete_after_recreating_legacy),
+    )
+    monkeypatch.setattr(
+        psexec_module.time,
+        "monotonic",
+        lambda: clock["seconds"],
+    )
+    monkeypatch.setattr(
+        psexec_module.time,
+        "sleep",
+        lambda seconds: clock.__setitem__(
+            "seconds", clock["seconds"] + seconds
+        ),
     )
     monkeypatch.setattr(
         GeomPreprocessor, "clear_geompre_files", staticmethod(fake_clear)
@@ -117,5 +141,6 @@ def test_force_geompre_bypasses_skip_and_preserves_source(monkeypatch, tmp_path)
     assert success is True
     assert currency_calls["count"] == 0
     assert "plan" in cleared
+    assert not cleared["plan"].with_name("TestProject.O01").exists()
     assert source_geom.read_text(encoding="utf-8") == "source geometry association"
     assert source_geompre.read_text(encoding="utf-8") == "source preprocessor"

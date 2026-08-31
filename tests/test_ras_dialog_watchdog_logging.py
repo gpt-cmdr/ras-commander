@@ -95,6 +95,44 @@ def test_dismiss_with_button_stays_info(monkeypatch, caplog):
     assert sent_messages == [(30, 0x00F5, 0, 0)]
 
 
+def test_optional_example_install_is_declined(monkeypatch, caplog):
+    sent_messages = []
+
+    def enum_child_windows(_hwnd, callback, data):
+        callback(20, data)
+        callback(30, data)
+        callback(40, data)
+
+    fake_win32gui = SimpleNamespace(
+        GetWindowText=lambda hwnd: {
+            10: "RAS",
+            20: "Do you want to install the example projects for HEC-RAS?",
+            30: "&Yes",
+            40: "&No",
+        }.get(hwnd, ""),
+        EnumChildWindows=enum_child_windows,
+        GetClassName=lambda hwnd: {
+            20: "Static",
+            30: "Button",
+            40: "Button",
+        }.get(hwnd, ""),
+        SendMessage=lambda hwnd, msg, wparam, lparam: sent_messages.append(
+            (hwnd, msg, wparam, lparam)
+        ),
+    )
+    monkeypatch.setattr(watchdog_module, "win32gui", fake_win32gui)
+
+    caplog.set_level(logging.INFO, logger=LOGGER_NAME)
+
+    watchdog = DialogWatchdog()
+    monkeypatch.setattr(watchdog, "_process_name", lambda _pid: "Ras.exe")
+    watchdog._dismiss(10, 1234)
+
+    info_text = "\n".join(_messages(caplog, logging.INFO))
+    assert "clicking [&No]" in info_text
+    assert sent_messages == [(40, 0x00F5, 0, 0)]
+
+
 def test_dismiss_without_button_warns(monkeypatch, caplog):
     closed_windows = []
 
