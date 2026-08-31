@@ -67,6 +67,7 @@ DSS Boundary Condition Functions:
 - get_inline_hydrograph_boundaries() - Extract inline table BCs with time series data
 - inspect_boundary_blocks() - Inventory exact Boundary Location blocks in an owned stage
 - delete_boundary() - Preview/remove one exact block from an owned staged project
+- ensure_2d_boundary_location() - Create an empty 2D boundary block after validating geometry
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
@@ -107,8 +108,9 @@ Non-Newtonian Method Selection:
 - set_non_newtonian_method() - Set the Non-Newtonian method by integer or name
 
 """
-import os
+import math
 import numbers
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -7314,6 +7316,262 @@ class RasUnsteady:
 
     @staticmethod
     @log_call
+    def ensure_2d_boundary_location(
+        unsteady_file: Union[str, Path],
+        geometry_file: Union[str, Path],
+        *,
+        area_2d: str,
+        bc_line: str,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Ensure one geometry-backed 2D ``Boundary Location=`` block exists.
+
+        This method creates only the empty location block. Follow it with a
+        boundary-type writer such as :meth:`set_boundary_inline_hydrograph`
+        or :meth:`set_normal_depth_boundary`. The geometry text file is
+        validated first so an unsteady-flow file cannot reference a missing
+        BC line or attach an existing line to the wrong 2D Flow Area.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Unsteady-flow file path or number resolvable through
+            ``ras_object``.
+        geometry_file : str or Path
+            Exact plain-text geometry file containing the authored BC line.
+        area_2d : str
+            Exact ``BC Line Storage Area=`` value.
+        bc_line : str
+            Exact ``BC Line Name=`` value.
+        ras_object : optional
+            Project object used for short-number resolution and DataFrame
+            refresh.
+
+        Returns
+        -------
+        dict
+            Includes ``created``, the canonical location text, insertion
+            index, geometry validation evidence, and before/after boundary
+            counts.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the explicit geometry file does not exist.
+        ValueError
+            If names are empty or exceed HEC-RAS fixed-field limits, the
+            geometry does not contain exactly one matching BC line, an
+            existing unsteady location conflicts, or the file header cannot
+            be identified safely.
+
+        Notes
+        -----
+        The emitted eight-field layout matches HEC-RAS 6.x 2D projects:
+        field 5 contains the 2D Flow Area and field 7 contains the BC line.
+        The operation is idempotent and uses atomic same-volume replacement.
+        """
+        area_name = str(area_2d).strip()
+        line_name = str(bc_line).strip()
+        for value, label, maximum in (
+            (area_name, "area_2d", 16),
+            (line_name, "bc_line", 32),
+        ):
+            if not value:
+                raise ValueError(f"{label} must be non-empty")
+            if any(character in value for character in (",", "\r", "\n")):
+                raise ValueError(f"{label} cannot contain commas or newlines")
+            if len(value) > maximum:
+                raise ValueError(
+                    f"{label} exceeds the HEC-RAS fixed-field limit of {maximum} characters"
+                )
+
+        geometry_path = Path(geometry_file)
+        if not geometry_path.is_file():
+            raise FileNotFoundError(f"Geometry file not found: {geometry_path}")
+        with open(
+            geometry_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as geometry_stream:
+            geometry_lines = geometry_stream.readlines()
+
+        geometry_records: List[Tuple[str, str]] = []
+        pending_name: Optional[str] = None
+        for line in geometry_lines:
+            stripped = line.rstrip("\r\n")
+            if stripped.startswith("BC Line Name="):
+                pending_name = stripped[len("BC Line Name="):].strip()
+            elif stripped.startswith("BC Line Storage Area=") and pending_name is not None:
+                geometry_records.append(
+                    (
+                        pending_name,
+                        stripped[len("BC Line Storage Area="):].strip(),
+                    )
+                )
+                pending_name = None
+
+        exact_geometry_records = [
+            record
+            for record in geometry_records
+            if record == (line_name, area_name)
+        ]
+        same_name_records = [
+            record for record in geometry_records if record[0] == line_name
+        ]
+        if len(exact_geometry_records) != 1:
+            if same_name_records:
+                attached = sorted({record[1] for record in same_name_records})
+                raise ValueError(
+                    f"Geometry BC line {line_name!r} is attached to {attached}, "
+                    f"not exactly once to {area_name!r}"
+                )
+            raise ValueError(
+                f"Geometry file {geometry_path.name} does not contain BC line "
+                f"{line_name!r} on 2D Flow Area {area_name!r}"
+            )
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_object,
+        )
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as unsteady_stream:
+            lines = unsteady_stream.readlines()
+        newline = RasUnsteady._detect_line_ending(lines)
+
+        boundary_locations: List[Tuple[int, str, List[str]]] = []
+        for index, line in enumerate(lines):
+            if not line.startswith("Boundary Location="):
+                continue
+            location = line[len("Boundary Location="):].rstrip("\r\n")
+            boundary_locations.append(
+                (index, location, [part.strip() for part in location.split(",")])
+            )
+
+        same_line_locations = [
+            item
+            for item in boundary_locations
+            if len(item[2]) >= 8 and item[2][7] == line_name
+        ]
+        exact_locations = [
+            item
+            for item in same_line_locations
+            if item[2][5] == area_name
+        ]
+        if len(exact_locations) > 1:
+            raise ValueError(
+                f"Unsteady file {unsteady_path.name} contains duplicate locations "
+                f"for {area_name!r}/{line_name!r}"
+            )
+        if same_line_locations and not exact_locations:
+            attached = sorted(
+                {
+                    item[2][5]
+                    for item in same_line_locations
+                    if len(item[2]) >= 6
+                }
+            )
+            raise ValueError(
+                f"Unsteady BC line {line_name!r} is already attached to {attached}, "
+                f"not {area_name!r}"
+            )
+
+        canonical_fields = (
+            ("", 16),
+            ("", 16),
+            ("", 8),
+            ("", 8),
+            ("", 16),
+            (area_name, 16),
+            ("", 16),
+            (line_name, 32),
+        )
+        canonical_location = ",".join(
+            f"{value:<{width}}" for value, width in canonical_fields
+        )
+        boundary_count_before = len(boundary_locations)
+
+        if exact_locations:
+            result = {
+                "unsteady_file": str(unsteady_path.resolve()),
+                "geometry_file": str(geometry_path.resolve()),
+                "area_2d": area_name,
+                "bc_line": line_name,
+                "created": False,
+                "insert_index": exact_locations[0][0],
+                "location": exact_locations[0][1],
+                "geometry_match_count": 1,
+                "boundary_count_before": boundary_count_before,
+                "boundary_count_after": boundary_count_before,
+                "boundaries_df_refreshed": False,
+            }
+            logger.info(
+                "2D boundary location already exists in %s: %s/%s",
+                unsteady_path.name,
+                area_name,
+                line_name,
+            )
+            return result
+
+        if boundary_locations:
+            insert_index = boundary_locations[0][0]
+        else:
+            header_prefixes = ("Flow Title=", "Program Version=", "Use Restart=")
+            header_indexes = [
+                index
+                for index, line in enumerate(lines)
+                if line.startswith(header_prefixes)
+            ]
+            if not header_indexes:
+                raise ValueError(
+                    f"Could not identify a safe boundary insertion point in {unsteady_path.name}"
+                )
+            insert_index = max(header_indexes) + 1
+
+        if insert_index > 0 and not lines[insert_index - 1].endswith(("\r\n", "\n", "\r")):
+            lines[insert_index - 1] += newline
+        location_line = f"Boundary Location={canonical_location}{newline}"
+        lines.insert(insert_index, location_line)
+        RasUnsteady._atomic_write_lines(unsteady_path, lines)
+
+        boundaries_df_refreshed = False
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug("boundaries_df refresh skipped: %s", exc)
+
+        logger.info(
+            "Created 2D boundary location in %s: %s/%s",
+            unsteady_path.name,
+            area_name,
+            line_name,
+        )
+        return {
+            "unsteady_file": str(unsteady_path.resolve()),
+            "geometry_file": str(geometry_path.resolve()),
+            "area_2d": area_name,
+            "bc_line": line_name,
+            "created": True,
+            "insert_index": insert_index,
+            "location": canonical_location,
+            "geometry_match_count": 1,
+            "boundary_count_before": boundary_count_before,
+            "boundary_count_after": boundary_count_before + 1,
+            "boundaries_df_refreshed": boundaries_df_refreshed,
+        }
+
+    @staticmethod
+    @log_call
     def set_boundary_inline_hydrograph(
         unsteady_file: Union[str, Path],
         hydrograph_df: pd.DataFrame,
@@ -7321,7 +7579,9 @@ class RasUnsteady:
         river: Optional[str] = None,
         reach: Optional[str] = None,
         station: Optional[str] = None,
-        ras_object: Optional[Any] = None
+        ras_object: Optional[Any] = None,
+        area_2d: Optional[str] = None,
+        bc_line: Optional[str] = None,
     ) -> bool:
         """
         Write an inline hydrograph table to a boundary condition, converting from DSS if needed.
@@ -7359,6 +7619,12 @@ class RasUnsteady:
             River station to locate the boundary.
         ras_object : optional
             Custom RAS object to use instead of the global one
+        area_2d : str, optional
+            Exact 2D Flow Area name (field 5 of ``Boundary Location=``).
+            Supply together with ``bc_line`` instead of the 1D selector.
+        bc_line : str, optional
+            Exact 2D BC line name (field 7 of ``Boundary Location=``).
+            Supply together with ``area_2d``.
 
         Returns
         -------
@@ -7408,6 +7674,8 @@ class RasUnsteady:
 
         See Also
         --------
+        ensure_2d_boundary_location : Create a geometry-validated empty 2D
+            boundary block before assigning its first boundary type.
         set_boundary_dss_link : Convert inline boundary to DSS mode
         set_precipitation_hyetograph : Write an incremental-depth precipitation hyetograph
         """
@@ -7427,11 +7695,22 @@ class RasUnsteady:
 
         table_keyword = SUPPORTED_TYPES[bc_type]
 
+        has_1d_selector = any(value is not None for value in (river, reach, station))
+        has_2d_selector = any(value is not None for value in (area_2d, bc_line))
+        if has_1d_selector and has_2d_selector:
+            raise ValueError(
+                "Provide either (river, reach, station) or (area_2d, bc_line), not both"
+            )
+        if has_1d_selector and not (river and reach and station):
+            raise ValueError("1D selector requires river, reach, and station")
+        if has_2d_selector and not (area_2d and bc_line):
+            raise ValueError("2D selector requires area_2d and bc_line")
+
         ras_obj = ras_object or ras
         if ras_obj is not None:
             try:
                 ras_obj.check_initialized()
-            except:
+            except Exception:
                 pass
 
         # Resolve unsteady file path
@@ -7456,52 +7735,83 @@ class RasUnsteady:
             )
 
         # Extract values
-        hours = hydrograph_df['hour'].values
-        values = hydrograph_df['value'].values
+        try:
+            hours = np.asarray(hydrograph_df['hour'].values, dtype=float)
+            values = np.asarray(hydrograph_df['value'].values, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Hydrograph hour and value columns must be numeric") from exc
         num_values = len(values)
 
         if num_values < 2:
             raise ValueError("DataFrame must have at least 2 rows")
+        if not np.isfinite(hours).all() or not np.isfinite(values).all():
+            raise ValueError("Hydrograph hours and values must be finite")
 
         # Calculate interval from hour column
-        interval_hours = float(hours[1] - hours[0])
-        if interval_hours >= 1.0:
-            if interval_hours == int(interval_hours):
-                interval_str = f"{int(interval_hours)}HOUR"
-            else:
-                interval_min = int(interval_hours * 60)
-                interval_str = f"{interval_min}MIN"
+        intervals = np.diff(hours)
+        interval_hours = float(intervals[0])
+        if interval_hours <= 0 or not np.allclose(
+            intervals,
+            interval_hours,
+            rtol=0.0,
+            atol=1e-10,
+        ):
+            raise ValueError("Hydrograph hours must be strictly increasing and evenly spaced")
+        interval_minutes = interval_hours * 60.0
+        rounded_minutes = round(interval_minutes)
+        if rounded_minutes < 1 or not math.isclose(
+            interval_minutes,
+            rounded_minutes,
+            rel_tol=0.0,
+            abs_tol=1e-8,
+        ):
+            raise ValueError("Hydrograph interval must be a positive whole number of minutes")
+        if rounded_minutes % 60 == 0:
+            interval_str = f"{rounded_minutes // 60}HOUR"
         else:
-            interval_min = int(interval_hours * 60)
-            interval_str = f"{interval_min}MIN"
+            interval_str = f"{rounded_minutes}MIN"
 
         # Format values as fixed-width (8 chars each, 10 values per line)
         # Flow/Stage hydrographs use values only (not time-value pairs)
-        formatted_lines = []
+        formatted_rows = []
         for i in range(0, num_values, 10):
             row_values = values[i:i+10]
             formatted_row = ''.join(f'{v:8.2f}' if abs(v) < 1e7 else f'{v:8.1f}'
                                     for v in row_values)
-            formatted_lines.append(formatted_row + '\n')
+            formatted_rows.append(formatted_row)
 
         # Read the file
-        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(
+            unsteady_path,
+            'r',
+            encoding='utf-8',
+            errors='ignore',
+            newline='',
+        ) as f:
             lines = f.readlines()
+        newline = RasUnsteady._detect_line_ending(lines)
+        formatted_lines = [row + newline for row in formatted_rows]
 
         # Find the target boundary
         target_boundary_idx = None
         for idx, line in enumerate(lines):
             if line.startswith('Boundary Location='):
-                if river is not None or reach is not None or station is not None:
-                    loc_line = line.replace('Boundary Location=', '')
+                if has_1d_selector or has_2d_selector:
+                    loc_line = line[len('Boundary Location='):]
                     parts = [p.strip() for p in loc_line.split(',')]
-                    match = True
-                    if river is not None and (len(parts) < 1 or parts[0] != river):
-                        match = False
-                    if reach is not None and (len(parts) < 2 or parts[1] != reach):
-                        match = False
-                    if station is not None and (len(parts) < 3 or parts[2] != station):
-                        match = False
+                    if has_1d_selector:
+                        match = (
+                            len(parts) >= 3
+                            and parts[0] == river
+                            and parts[1] == reach
+                            and parts[2] == station
+                        )
+                    else:
+                        match = (
+                            len(parts) >= 8
+                            and parts[5] == area_2d
+                            and parts[7] == bc_line
+                        )
                     if match:
                         target_boundary_idx = idx
                         break
@@ -7518,7 +7828,12 @@ class RasUnsteady:
                         break
 
         if target_boundary_idx is None:
-            loc_str = f"{river}/{reach}/{station}" if river else "first matching"
+            if has_1d_selector:
+                loc_str = f"{river}/{reach}/{station}"
+            elif has_2d_selector:
+                loc_str = f"{area_2d}/{bc_line}"
+            else:
+                loc_str = "first matching"
             logger.warning(f"Boundary not found for {bc_type}: {loc_str}")
             return False
 
@@ -7590,11 +7905,11 @@ class RasUnsteady:
 
         # Step 2: Update table header with new count
         if table_header_idx is not None:
-            lines[table_header_idx] = f'{table_keyword} {num_values} \n'
+            lines[table_header_idx] = f'{table_keyword} {num_values} {newline}'
         else:
             # Insert table header after Interval line (or after boundary location)
             insert_pos = interval_idx + 1 if interval_idx is not None else target_boundary_idx + 1
-            lines.insert(insert_pos, f'{table_keyword} {num_values} \n')
+            lines.insert(insert_pos, f'{table_keyword} {num_values} {newline}')
             table_header_idx = insert_pos
             # Adjust indices after insertion
             if interval_idx is not None and interval_idx >= insert_pos:
@@ -7624,10 +7939,10 @@ class RasUnsteady:
 
         # Step 4: Update Interval line
         if interval_idx is not None:
-            lines[interval_idx] = f'Interval={interval_str}\n'
+            lines[interval_idx] = f'Interval={interval_str}{newline}'
         else:
             # Insert interval before table header
-            lines.insert(table_header_idx, f'Interval={interval_str}\n')
+            lines.insert(table_header_idx, f'Interval={interval_str}{newline}')
             # Adjust all indices after this insertion
             if dss_file_idx is not None and dss_file_idx >= table_header_idx:
                 dss_file_idx += 1
@@ -7638,15 +7953,30 @@ class RasUnsteady:
 
         # Step 5: Set Use DSS=False and clear DSS File/Path
         if use_dss_idx is not None:
-            lines[use_dss_idx] = 'Use DSS=False\n'
+            lines[use_dss_idx] = f'Use DSS=False{newline}'
+        else:
+            block_end = next(
+                (
+                    index
+                    for index in range(target_boundary_idx + 1, len(lines))
+                    if lines[index].startswith('Boundary Location=')
+                ),
+                len(lines),
+            )
+            lines.insert(block_end, f'Use DSS=False{newline}')
         if dss_file_idx is not None:
-            lines[dss_file_idx] = 'DSS File=\n'
+            lines[dss_file_idx] = f'DSS File={newline}'
         if dss_path_idx is not None:
-            lines[dss_path_idx] = 'DSS Path=\n'
+            lines[dss_path_idx] = f'DSS Path={newline}'
 
         # Write updated content back to file
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        RasUnsteady._atomic_write_lines(unsteady_path, lines)
+
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+            except Exception as exc:
+                logger.debug("boundaries_df refresh skipped: %s", exc)
 
         peak_value = float(np.max(values))
         logger.info(
