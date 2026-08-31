@@ -21,7 +21,7 @@ What is the significance of the `num_cores` setting? Well, that is still officia
 
 HEC-RAS 7.0 added an official [Run Multiple Plans core-exploration workflow](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/7.0/working-with-hec-ras/parallelization-cpu-affinity#ParallelizationCPUAffinity-RunMultiplePlans). It can take the same base plan, create trials at varying core counts, execute them sequentially, and plot the resulting runtime curve. That is a meaningful signal: HEC has now explicitly recognized that `num_cores` is significant, model-specific, and worth benchmarking instead of blindly accepting "All Available."
 
-Recognition is not parallelization. The new 7.0 feature runs the trials serially, and the published material for RAS 7.0 and RAS "2025" still does not put concurrent multi-simulation orchestration on the roadmap. The [RAS "2025" quick-start material](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/latest/quick-start-guide) discusses the possibility of dynamically adding and removing cores *within* a simulation in the future, but not running independent plans concurrently. And it is Q3 2026: I put "2025" in quotes because all we can do in the new version today is mesh.
+Recognition is not parallelization. The new 7.0 feature runs the trials serially, and the published material for RAS 7.0 and RAS "2025" still does not put concurrent multi-simulation orchestration on the roadmap. The [RAS "2025" quick-start material](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/latest/quick-start-guide) discusses the possibility of dynamically adding and removing cores *within* a simulation in the future, but not running independent plans concurrently.
 
 For engineers who need to protect the public today -- not at some nebulous point in the future -- RAS Commander's command-line approach will continue to be the best tool for parallel analysis. Other software packages have yet to adopt this approach, despite the benchmarks and open-source code having been published for almost three years.
 
@@ -31,7 +31,7 @@ The default software behavior still hasn't changed where it matters for throughp
 -c
 ```
 
-This is the single most useful thing in the `HECRASController`: headless execution without opening the main RAS window. It has been sitting in plain sight since at least the 5.x series. And no one I talked to was using it.
+This is the single most useful thing for HEC-RAS’s automation: headless execution without opening the main RAS window, and without instantiating the COM interface that overrides `num_cores`. It has been sitting in plain sight since at least the 5.x series. And no one I talked to was using it.
 
 ## Command Line is All You Need
 
