@@ -124,6 +124,14 @@ _LAZY_EXPORTS = {
     'RasBreach': ('.RasBreach', 'RasBreach'),
     'RasFloodway': ('.RasFloodway', 'RasFloodway'),
     'RasHydroCompare': ('.RasHydroCompare', 'RasHydroCompare'),
+    **{
+        name: ('.RasHydrofabric', name)
+        for name in (
+            'RasHydrofabric', 'HydrofabricConflationResult',
+            'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
+            'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
+        )
+    },
     'RasModPuls': ('.RasModPuls', 'RasModPuls'),
     'RasMonteCarlo': ('.RasMonteCarlo', 'RasMonteCarlo'),
     'RasFlowOptimization': ('.RasFlowOptimization', 'RasFlowOptimization'),
@@ -354,6 +362,9 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
+    'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
+    'NextGenFlowpathAdapter',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
