@@ -5,6 +5,56 @@ Classes for terrain creation, terrain modification writing, and terrain modifica
 !!! note "Platform Requirements"
     `RasTerrainMod` requires Windows with pythonnet and a HEC-RAS installation (uses RasMapperLib.dll via .NET interop). `RasTerrain.export_rasmapper_terrain()` runs natively on Windows and through a configured Wine runtime on Linux. Other `RasTerrain` and `RasTerrainModWriter` methods retain their documented platform requirements.
 
+## RasTerrainAgreement
+
+`RasTerrainAgreement` compares authored cross-section station/elevation profiles
+with either pre-sampled profiles, an arbitrary raster, or an unambiguous terrain
+registered in RAS Mapper. It has no NWM or hydrofabric dependency.
+
+```python
+from ras_commander import RasTerrainAgreement
+
+result = RasTerrainAgreement.analyze(
+    "Model.g01.hdf",
+    terrain_raster="Terrain.tif",
+    profile_crs="EPSG:26915",  # needed when the geometry source has no CRS
+    sample_interval=5.0,
+    make_figures=True,
+)
+
+print(result.xs_metrics_df)
+print(result.stage_metrics_df)
+print(result.model_summary)
+print(result.flagged_xs)
+```
+
+The result contains one cross-section metrics frame, one stage metrics frame, a
+JSON-compatible model summary, a flagged-section subset, and optional Matplotlib
+figures. Metrics include authored-minus-terrain thalweg differences, elevation
+residual distributions, RMSE/NRMSE, Pearson and bounded shifted correlation,
+wet-width overlap, top-width agreement, flow-area agreement/overlap, and
+hydraulic-radius agreement.
+
+Stage hydraulics use exact piecewise-linear clipping at the water surface,
+including partial crossings and disconnected wetted components. NRMSE is RMSE
+divided by the authored profile elevation range. Positive `shift_distance`
+means the terrain profile would move toward increasing HEC stations to maximize
+correlation.
+
+Raster sampling requires known geometry and raster CRS values, explicitly masks
+out-of-bounds samples, and invalidates a section rather than interpolating across
+an internal nodata gap. Native registered-terrain profile sampling is accepted
+only when one terrain is registered. When a project has multiple terrains,
+export the intended named terrain with
+`RasTerrain.export_rasmapper_terrain()` and pass that GeoTIFF as
+`terrain_raster`.
+
+!!! warning "Geometric screening metrics"
+    Default flags are QA screening thresholds, not regulatory acceptance
+    criteria. The stage calculations describe the two geometric profiles; they
+    do not reproduce HEC-RAS effective-flow reductions from ineffective areas,
+    blocked obstructions, levees, or other conveyance controls.
+
 ## RasTerrain
 
 Terrain HDF creation from rasters using `RasProcess.exe CreateTerrain`.

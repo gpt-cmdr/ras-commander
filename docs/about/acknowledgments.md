@@ -76,6 +76,16 @@ Dr. Liu's YouTube tutorials on HEC-RAS terrain modifications and pilot channel c
 - Pilot channel design principles for LIDAR channels
 - Cell size and Courant number relationships
 
+### Ripple1D Terrain-Agreement Workflow
+
+**Dewberry — [Ripple1D](https://github.com/Dewberry/ripple1d)**
+
+Ripple1D's open-source cross-section/terrain agreement workflow inspired the
+generic `RasTerrainAgreement` API. RAS Commander independently reimplements the
+metric mathematics and terrain-source handling, including exact piecewise
+water-surface clipping, explicit CRS/nodata validation, and bounded shift
+reporting.
+
 ---
 
 ### HEC-RAS Example Projects

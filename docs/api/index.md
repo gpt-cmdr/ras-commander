@@ -70,6 +70,7 @@ Classes for terrain creation, modification writing, and terrain-modification
 analysis:
 
 - [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation and native registered-terrain GeoTIFF export
+- [`RasTerrainAgreement`](terrain.md#rasterrainagreement) - Cross-section geometry versus terrain QA metrics and flags
 - [`RasTerrainModWriter`](terrain.md#rasterrainmodwriter) / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
 - [`RasTerrainMod`](terrain.md#rasterrainmod) - Terrain profile and volume comparison with modifications applied
 
