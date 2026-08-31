@@ -29,6 +29,22 @@ def _write_geometry(
     return path
 
 
+def _write_geometry_locations(path: Path, locations: list[tuple[str, str]]) -> Path:
+    blocks = []
+    for area_name, line_name in locations:
+        blocks.append(
+            f"BC Line Name={line_name:<40}\r\n"
+            f"BC Line Storage Area={area_name:<16}\r\n"
+            "BC Line Start Position= 0 , 0 \r\n"
+            "BC Line End Position= 0 , 10 \r\n"
+            "BC Line Arc= 2 \r\n"
+            "               0               0               0              10\r\n"
+            "BC Line Text Position= 1.79769313486232E+308 , 1.79769313486232E+308 \r\n"
+        )
+    path.write_bytes(("Geom Title=breakout\r\n" + "".join(blocks)).encode())
+    return path
+
+
 def _existing_boundary(area_name: str, line_name: str) -> str:
     fields = (
         ("", 16),
@@ -170,6 +186,67 @@ def test_ensure_location_then_author_normal_depth_outflow(tmp_path):
         "Breakout Outflow",
     )
     assert "Friction Slope=0.0004\n" in block
+
+
+def test_replace_2d_locations_removes_complete_2d_blocks_and_preserves_non_2d(tmp_path):
+    geometry = _write_geometry_locations(
+        tmp_path / "breakout.g02",
+        [
+            ("Breakout Area", "Breakout Inflow"),
+            ("Breakout Area", "Breakout Outflow"),
+        ],
+    )
+    unsteady = tmp_path / "breakout.u02"
+    area_wide_fields = ["", "", "", "", "", "Parent Area", "", ""]
+    one_d_fields = ["River", "Reach", "100", "", "", "", "", ""]
+    gate_fields = ["", "", "", "", "Storage Area", "", "", ""]
+    unsteady.write_bytes(
+        (
+            "Flow Title=breakout\r\n"
+            "Program Version=6.60\r\n"
+            "Use Restart= 0 \r\n"
+            f"{_existing_boundary('Parent Area', 'Parent Inflow')}\r\n"
+            "Interval=1HOUR\r\n"
+            "Flow Hydrograph= 2 \r\n"
+            "    1.00    2.00\r\n"
+            "Use DSS=False\r\n"
+            f"Boundary Location={','.join(area_wide_fields)}\r\n"
+            "Precipitation Hydrograph= 2 \r\n"
+            "    0.10    0.20\r\n"
+            f"Boundary Location={','.join(one_d_fields)}\r\n"
+            "Friction Slope=0.0003,0\r\n"
+            f"Boundary Location={','.join(gate_fields)}\r\n"
+            "Gate Name=Gate 1\r\n"
+            "Precipitation Mode=Enable\r\n"
+        ).encode()
+    )
+
+    result = RasUnsteady.replace_2d_boundary_locations(
+        unsteady,
+        geometry,
+        [
+            {"area_2d": "Breakout Area", "bc_line": "Breakout Inflow"},
+            {"area_2d": "Breakout Area", "bc_line": "Breakout Outflow"},
+        ],
+    )
+
+    assert result["removed_locations"] == [
+        {"area_2d": "Parent Area", "bc_line": "Parent Inflow"},
+        {"area_2d": "Parent Area", "bc_line": ""},
+    ]
+    assert result["preserved_non_2d_block_count"] == 2
+    assert result["inserted_locations"] == [
+        {"area_2d": "Breakout Area", "bc_line": "Breakout Inflow"},
+        {"area_2d": "Breakout Area", "bc_line": "Breakout Outflow"},
+    ]
+    text = unsteady.read_text(encoding="utf-8")
+    assert "Parent Inflow" not in text
+    assert "Precipitation Hydrograph=" not in text
+    assert "    1.00    2.00" not in text
+    assert "River,Reach,100" in text
+    assert "Gate Name=Gate 1" in text
+    assert text.count("Breakout Inflow") == 1
+    assert text.count("Breakout Outflow") == 1
 
 
 @pytest.mark.parametrize(

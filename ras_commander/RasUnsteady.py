@@ -68,6 +68,7 @@ DSS Boundary Condition Functions:
 - inspect_boundary_blocks() - Inventory exact Boundary Location blocks in an owned stage
 - delete_boundary() - Preview/remove one exact block from an owned staged project
 - ensure_2d_boundary_location() - Create an empty 2D boundary block after validating geometry
+- replace_2d_boundary_locations() - Reset 2D boundary blocks from geometry-backed specs
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
@@ -7567,6 +7568,233 @@ class RasUnsteady:
             "geometry_match_count": 1,
             "boundary_count_before": boundary_count_before,
             "boundary_count_after": boundary_count_before + 1,
+            "boundaries_df_refreshed": boundaries_df_refreshed,
+        }
+
+    @staticmethod
+    @log_call
+    def replace_2d_boundary_locations(
+        unsteady_file: Union[str, Path],
+        geometry_file: Union[str, Path],
+        locations: List[Dict[str, str]],
+        *,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Replace every 2D boundary block with validated empty locations.
+
+        Existing 2D Flow Area boundary blocks—including area-wide blocks with
+        no BC-line name—are removed with their complete type/data payloads.
+        River/reach and storage-area/structure boundary blocks are preserved.
+        Every replacement must identify exactly one BC line in the supplied
+        plain-text geometry. This is intentionally a reset operation: callers
+        assign new Flow Hydrograph, Normal Depth, or other types afterward.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Unsteady-flow file path or number resolvable through
+            ``ras_object``.
+        geometry_file : str or Path
+            Exact plain-text geometry file containing all replacement lines.
+        locations : list of dict
+            Non-empty list with exact ``area_2d`` and ``bc_line`` strings.
+            BC-line names must be unique.
+        ras_object : optional
+            Project object used for short-number resolution and DataFrame
+            refresh.
+
+        Returns
+        -------
+        dict
+            Removed 2D locations, inserted locations, preserved non-2D block
+            count, insertion index, and DataFrame-refresh evidence.
+        """
+        if not isinstance(locations, list) or not locations:
+            raise ValueError("locations must be a non-empty list of dicts")
+
+        desired: List[Tuple[str, str]] = []
+        for index, spec in enumerate(locations):
+            if not isinstance(spec, dict):
+                raise ValueError(f"locations[{index}] must be a dict")
+            area_name = str(spec.get("area_2d", "")).strip()
+            line_name = str(spec.get("bc_line", "")).strip()
+            for value, label, maximum in (
+                (area_name, f"locations[{index}].area_2d", 16),
+                (line_name, f"locations[{index}].bc_line", 32),
+            ):
+                if not value:
+                    raise ValueError(f"{label} must be non-empty")
+                if any(character in value for character in (",", "\r", "\n")):
+                    raise ValueError(f"{label} cannot contain commas or newlines")
+                if len(value) > maximum:
+                    raise ValueError(
+                        f"{label} exceeds the HEC-RAS fixed-field limit of "
+                        f"{maximum} characters"
+                    )
+            desired.append((area_name, line_name))
+        if len({line_name for _, line_name in desired}) != len(desired):
+            raise ValueError("Replacement 2D BC-line names must be unique")
+
+        geometry_path = Path(geometry_file)
+        if not geometry_path.is_file():
+            raise FileNotFoundError(f"Geometry file not found: {geometry_path}")
+        with open(
+            geometry_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as geometry_stream:
+            geometry_lines = geometry_stream.readlines()
+        geometry_records: List[Tuple[str, str]] = []
+        pending_name: Optional[str] = None
+        for line in geometry_lines:
+            stripped = line.rstrip("\r\n")
+            if stripped.startswith("BC Line Name="):
+                pending_name = stripped[len("BC Line Name="):].strip()
+            elif stripped.startswith("BC Line Storage Area=") and pending_name is not None:
+                geometry_records.append(
+                    (
+                        stripped[len("BC Line Storage Area="):].strip(),
+                        pending_name,
+                    )
+                )
+                pending_name = None
+        for area_name, line_name in desired:
+            match_count = geometry_records.count((area_name, line_name))
+            if match_count != 1:
+                raise ValueError(
+                    f"Geometry must contain exactly one BC line {line_name!r} "
+                    f"on 2D Flow Area {area_name!r}; found {match_count}"
+                )
+
+        unsteady_path = RasUnsteady._resolve_unsteady_file_path(
+            unsteady_file,
+            ras_object=ras_object,
+        )
+        with open(
+            unsteady_path,
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+            newline="",
+        ) as unsteady_stream:
+            lines = unsteady_stream.readlines()
+        newline = RasUnsteady._detect_line_ending(lines)
+
+        starts = [
+            index
+            for index, line in enumerate(lines)
+            if line.startswith("Boundary Location=")
+        ]
+        removed_locations: List[Dict[str, str]] = []
+        removed_ranges: List[Tuple[int, int]] = []
+        preserved_block_count = 0
+        for position, start in enumerate(starts):
+            end = starts[position + 1] if position + 1 < len(starts) else len(lines)
+            location = lines[start][len("Boundary Location="):].rstrip("\r\n")
+            fields = [part.strip() for part in location.split(",")]
+            is_2d = len(fields) >= 6 and bool(fields[5])
+            malformed_2d = len(fields) >= 8 and bool(fields[7]) and not is_2d
+            if malformed_2d:
+                raise ValueError(
+                    f"Malformed 2D boundary location in {unsteady_path.name}: {location!r}"
+                )
+            if is_2d:
+                removed_ranges.append((start, end))
+                removed_locations.append(
+                    {
+                        "area_2d": fields[5],
+                        "bc_line": fields[7] if len(fields) >= 8 else "",
+                    }
+                )
+            else:
+                preserved_block_count += 1
+
+        removed_indexes = {
+            index
+            for start, end in removed_ranges
+            for index in range(start, end)
+        }
+        filtered_lines = [
+            line for index, line in enumerate(lines) if index not in removed_indexes
+        ]
+
+        remaining_boundary_index = next(
+            (
+                index
+                for index, line in enumerate(filtered_lines)
+                if line.startswith("Boundary Location=")
+            ),
+            None,
+        )
+        if remaining_boundary_index is not None:
+            insert_index = remaining_boundary_index
+        else:
+            header_prefixes = ("Flow Title=", "Program Version=", "Use Restart=")
+            header_indexes = [
+                index
+                for index, line in enumerate(filtered_lines)
+                if line.startswith(header_prefixes)
+            ]
+            if not header_indexes:
+                raise ValueError(
+                    f"Could not identify a safe boundary insertion point in {unsteady_path.name}"
+                )
+            insert_index = max(header_indexes) + 1
+
+        if (
+            insert_index > 0
+            and not filtered_lines[insert_index - 1].endswith(("\r\n", "\n", "\r"))
+        ):
+            filtered_lines[insert_index - 1] += newline
+        replacement_lines = []
+        for area_name, line_name in desired:
+            fields = (
+                ("", 16),
+                ("", 16),
+                ("", 8),
+                ("", 8),
+                ("", 16),
+                (area_name, 16),
+                ("", 16),
+                (line_name, 32),
+            )
+            location = ",".join(f"{value:<{width}}" for value, width in fields)
+            replacement_lines.append(f"Boundary Location={location}{newline}")
+        updated_lines = (
+            filtered_lines[:insert_index]
+            + replacement_lines
+            + filtered_lines[insert_index:]
+        )
+        RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
+
+        boundaries_df_refreshed = False
+        ras_obj = ras_object or ras
+        if ras_obj is not None:
+            try:
+                ras_obj.boundaries_df = ras_obj.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:
+                logger.debug("boundaries_df refresh skipped: %s", exc)
+
+        inserted_locations = [
+            {"area_2d": area_name, "bc_line": line_name}
+            for area_name, line_name in desired
+        ]
+        logger.info(
+            "Replaced %d 2D boundary block(s) with %d geometry-backed location(s) in %s",
+            len(removed_locations),
+            len(inserted_locations),
+            unsteady_path.name,
+        )
+        return {
+            "unsteady_file": str(unsteady_path.resolve()),
+            "geometry_file": str(geometry_path.resolve()),
+            "removed_locations": removed_locations,
+            "inserted_locations": inserted_locations,
+            "preserved_non_2d_block_count": preserved_block_count,
+            "insert_index": insert_index,
             "boundaries_df_refreshed": boundaries_df_refreshed,
         }
 
