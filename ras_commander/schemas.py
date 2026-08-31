@@ -28,9 +28,60 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.5"
+SCHEMA_VERSION = "1.6"
 
 DATAFRAME_SCHEMAS = {
+    "ras_submodel_validation": {
+        "description": (
+            "One row per structural validation check for a RasSubmodel "
+            "extraction."
+        ),
+        "accessor": "SubmodelResult.validation.checks_df",
+        "source": "RasSubmodel.validate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "check", "dtype": "str", "description": "Stable structural check identifier."},
+            {"name": "severity", "dtype": "str", "description": "ERROR or WARNING."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "detail", "dtype": "str", "description": "Human-readable evidence for the check."},
+        ],
+    },
+    "ras_submodel_geometry_comparison": {
+        "description": (
+            "One row per retained cross section comparing complete source and "
+            "destination geometry payloads."
+        ),
+        "accessor": "RasSubmodel.compare_geometry(...)",
+        "source": "RasSubmodel.compare_geometry()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact retained river station."},
+            {"name": "content_equal", "dtype": "bool", "description": "Whether the full node payload after the reach-length header matches."},
+            {"name": "source_block_sha256", "dtype": "str", "description": "Source node-payload SHA-256."},
+            {"name": "destination_block_sha256", "dtype": "str", "description": "Destination node-payload SHA-256."},
+        ],
+    },
+    "ras_submodel_results_comparison": {
+        "description": (
+            "Retained-section steady results joined by river, reach, station, "
+            "and profile with source/destination values and numeric deltas."
+        ),
+        "accessor": "RasSubmodel.compare_results(...)",
+        "source": "RasSubmodel.compare_results()",
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [
+            {"name": "river", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "node_id", "dtype": "str", "description": "Retained cross-section station."},
+            {"name": "profile", "dtype": "str", "description": "Steady profile name."},
+            {"name": "_merge", "dtype": "category", "description": "Source/destination join presence."},
+        ],
+    },
     "project_asset_inventory": {
         "description": (
             "One row per HEC-RAS project asset reference or linked dataset, "

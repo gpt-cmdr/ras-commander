@@ -127,6 +127,13 @@ _LAZY_EXPORTS = {
     'RasModPuls': ('.RasModPuls', 'RasModPuls'),
     'RasMonteCarlo': ('.RasMonteCarlo', 'RasMonteCarlo'),
     'RasFlowOptimization': ('.RasFlowOptimization', 'RasFlowOptimization'),
+    **{
+        name: ('.RasSubmodel', name)
+        for name in (
+            'RasSubmodel', 'SubmodelResult', 'SubmodelSelection',
+            'SubmodelValidationReport',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
@@ -354,6 +361,8 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasSubmodel', 'SubmodelResult', 'SubmodelSelection',
+    'SubmodelValidationReport',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
