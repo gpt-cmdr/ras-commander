@@ -163,7 +163,7 @@ reference-line output.
 
 - `add_reference_lines(geom_file, lines, storage_area)` - Insert manually
   supplied reference lines into a `.g##` file
-- `replace_reference_lines(geom_file, lines, storage_area, expected_existing_names=...)` - Atomically replace or remove one 2D area's complete reference-line collection while preserving other areas, with an optional ordered concurrency guard
+- `replace_reference_lines(geom_file, storage_area, reference_lines, *, expected_existing_names=..., create_backup=True)` - Atomically replace or remove one existing 2D area's complete reference-line collection while preserving other areas; returns the backup path, or `None` when backups are disabled
 - `generate_reference_lines_from_longitudinal_line(...)` - Generate
   transverse reference-line dictionaries at regular station intervals along a
   named longitudinal line

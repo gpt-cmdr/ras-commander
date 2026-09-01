@@ -236,8 +236,8 @@ GeomStorage.replace_breaklines(
 # retained collection in one guarded text mutation.
 GeomReferenceFeatures.replace_reference_lines(
     ras.project_folder / "Model.g03",
+    "Breakout Area",
     retained_reference_lines,
-    storage_area="Breakout Area",
     expected_existing_names=source_reference_line_names,
 )
 
