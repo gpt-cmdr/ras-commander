@@ -3917,18 +3917,18 @@ notebooks:
   executed_cells: 9
 - id: 956_hydrofabric_conflation_visual_qa
   filename: 956_hydrofabric_conflation_visual_qa.ipynb
-  title: Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
+  title: NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
   series: 950
   series_name: eBFE Delivery Validation
-  summary: Visually audits multi-criteria HEC-RAS-to-NHDPlus HR conflation on the Texas Lower Colorado-Cummins
-    SHILOH BRANCH model, including candidate ranks, score components, explicit resolution states, HUC
-    intersections, and along-flowpath cross-section measures.
+  summary: Visually audits multi-criteria HEC-RAS-to-NextGen v2.2 conflation on the Texas Lower Colorado-Cummins
+    SHILOH BRANCH model, including native flowpath and catchment IDs, candidate ranks, score components,
+    explicit resolution states, HUC intersections, and multi-feature cross-section measures.
   tags:
   - 1d
   - ebfe
   - geometry
   - hydrofabric
-  - nhdplus
+  - nextgen
   - qa
   difficulty: advanced
   est_runtime: 1 min
