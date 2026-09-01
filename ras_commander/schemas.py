@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.7"
+SCHEMA_VERSION = "1.8"
 
 DATAFRAME_SCHEMAS = {
     "cross_section_points": {
@@ -67,7 +67,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "left_bank_station", "dtype": "float", "description": "Stored left-bank station for the cross section."},
             {"name": "right_bank_station", "dtype": "float", "description": "Stored right-bank station for the cross section."},
             {"name": "horizontal_crs", "dtype": "str | None", "description": "Horizontal or compound CRS definition/code associated with XYZ."},
-            {"name": "horizontal_units", "dtype": "str | None", "description": "Horizontal CRS axis units, falling back to declared model units when CRS is unavailable."},
+            {"name": "horizontal_units", "dtype": "str | None", "description": "Horizontal CRS axis units or project text units for text extraction when CRS is unavailable."},
             {"name": "vertical_units", "dtype": "str | None", "description": "Native or target vertical units."},
             {"name": "vertical_units_source", "dtype": "str", "description": "Unit provenance: explicit, project_text, geometry_hdf_explicit, or unknown."},
             {"name": "vertical_datum", "dtype": "str | None", "description": "Explicit native or target vertical datum; never inferred from horizontal location."},
@@ -75,6 +75,27 @@ DATAFRAME_SCHEMAS = {
             {"name": "extraction_method", "dtype": "str", "description": "text_geometry or geometry_hdf."},
             {"name": "vertical_transform_applied", "dtype": "bool", "description": "Whether an explicit per-point XYZ transform changed coordinates."},
             {"name": "vertical_transform_provenance", "dtype": "str", "description": "Deterministic JSON operation provenance, including explicit no-transform state."},
+        ],
+    },
+    "steady_profile_stored_maps": {
+        "description": (
+            "One row per logical steady-profile stored-map product generated "
+            "by one aggregate StoreAllMaps launch."
+        ),
+        "accessor": "RasProcess.store_maps_at_steady_profiles(plan_number, ...)",
+        "source": "RasProcess.store_maps_at_steady_profiles()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "plan_number", "dtype": "str", "description": "Normalized two-digit plan number."},
+            {"name": "result_hdf_path", "dtype": "str", "description": "Absolute source plan-result HDF path."},
+            {"name": "profile_index", "dtype": "int64", "description": "Zero-based profile index in the steady result HDF."},
+            {"name": "profile_name", "dtype": "str", "description": "Exact steady profile name stored in the result HDF."},
+            {"name": "map_type", "dtype": "str", "description": "Canonical ras-commander product key."},
+            {"name": "output_mode", "dtype": "str", "description": "Logical raster or polygon output mode."},
+            {"name": "primary_path", "dtype": "str", "description": "VRT for rasters or SHP for polygons."},
+            {"name": "files", "dtype": "list[str]", "description": "All physical product files, including tiles or sidecars."},
+            {"name": "file_count", "dtype": "int64", "description": "Number of physical files in files."},
         ],
     },
     "project_asset_inventory": {
