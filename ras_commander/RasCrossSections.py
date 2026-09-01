@@ -523,7 +523,7 @@ class RasCrossSections:
                 reach=reach,
                 rs=river_station,
                 horizontal_crs=resolved_horizontal_crs,
-                vertical_units=vertical_units,
+                vertical_units=resolved_vertical_units,
                 vertical_datum=vertical_datum,
                 ras_object=project_context.ras_object,
             )

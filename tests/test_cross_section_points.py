@@ -199,6 +199,15 @@ def test_common_api_has_identical_schema_for_hdf_and_text(tmp_path):
     assert text_points["mannings_n"].to_numpy() == pytest.approx([0.08, 0.04, 0.04, 0.09, 0.09])
 
 
+def test_project_units_override_embedded_hdf_units(tmp_path):
+    project = _write_project(tmp_path, unit_marker="SI Units")
+    _write_geometry_hdf(tmp_path)
+
+    points = RasCrossSections.get_points(project, "01")
+
+    assert points["vertical_units"].unique().tolist() == ["m"]
+
+
 @pytest.mark.parametrize(
     ("template_version", "expected_units"),
     [("RAS_7.0", "ft"), ("RAS_6.6", "m")],
