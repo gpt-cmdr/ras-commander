@@ -1618,6 +1618,35 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 8
+- id: 235_1d_breakout_model
+  filename: 235_1d_breakout_model.ipynb
+  title: 1D Breakout Model Extraction and Comparison
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Extract, validate, execute, and compare an independent one-reach steady 1D breakout against
+    the official Bald Eagle Creek source model.
+  tags:
+  - 1d
+  - steady
+  - geometry
+  - execution
+  - validation
+  difficulty: intermediate
+  est_runtime: 1 min
+  data_project: Balde Eagle Creek
+  functions_used:
+  - RasBreakout1D.compare_geometry
+  - RasBreakout1D.compare_results
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.run
+  - RasBreakout1D.select_by_stations
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
