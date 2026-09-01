@@ -55,10 +55,11 @@ def _write_project(root: Path) -> RasPrj:
     (root / f"{base}.prj").write_text(
         "Proj Title=Source\n"
         "Current Plan=p01\n"
-        "Plan File=p01\n"
+        "Default Exp/Contr=0.3,0.1\n"
+        "English Units\n"
         "Geom File=g01\n"
         "Flow File=f01\n"
-        "Default Exp/Contr=0.3,0.1\n",
+        "Plan File=p01\n",
         encoding="utf-8",
     )
     (root / f"{base}.p01").write_text(
@@ -205,6 +206,13 @@ def test_extract_reach_preserves_blocks_relationships_and_flow_changes(tmp_path:
         == result.geometry_file
     )
     assert Path(result.destination_ras.plan_df.iloc[0]["Flow Path"]) == result.flow_file
+
+    project_lines = result.project_file.read_text(encoding="utf-8").splitlines()
+    assert project_lines.index("English Units") < project_lines.index("Geom File=g01")
+    assert project_lines.index("Geom File=g01") < project_lines.index("Plan File=p01")
+    assert b"\r\n" in result.project_file.read_bytes()
+    assert b"\r\n" in result.plan_file.read_bytes()
+    assert b"\r\n" in result.geometry_file.read_bytes()
 
     geometry_text = result.geometry_file.read_text(encoding="utf-8")
     assert "River Reach=Other River,Other Reach" not in geometry_text

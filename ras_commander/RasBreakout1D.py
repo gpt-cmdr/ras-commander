@@ -356,19 +356,19 @@ class RasBreakout1D:
         geometry_file = destination / f"{project_name}.g01"
         flow_file = destination / f"{project_name}.f01"
 
-        geometry_file.write_text(geometry_text, encoding="utf-8", newline="")
+        geometry_file.write_text(geometry_text, encoding="utf-8", newline="\r\n")
         from .RasSteady import RasSteady
 
         RasSteady.write_flow_file(flow_file, flow_data)
         plan_file.write_text(
             RasBreakout1D._rewrite_plan(source_plan, project_name),
             encoding="utf-8",
-            newline="",
+            newline="\r\n",
         )
         project_file.write_text(
             RasBreakout1D._rewrite_project(source_ras.prj_file, project_name),
             encoding="utf-8",
-            newline="",
+            newline="\r\n",
         )
 
         if RasBreakout1D._sha256(source_geom) != source_geom_hash:
@@ -1158,28 +1158,35 @@ class RasBreakout1D:
         lines = source_project.read_text(encoding="utf-8", errors="replace").splitlines(
             keepends=True
         )
-        excluded = (
-            "Current Plan=",
-            "Plan File=",
-            "Geom File=",
-            "Flow File=",
-            "Unsteady File=",
-            "QuasiSteady File=",
-            "Sediment File=",
-        )
-        remainder = [
-            line
-            for line in lines
-            if not line.startswith(excluded) and not line.startswith("Proj Title=")
-        ]
-        header = [
-            f"Proj Title={project_name}\n",
-            "Current Plan=p01\n",
-            "Plan File=p01\n",
-            "Geom File=g01\n",
-            "Flow File=f01\n",
-        ]
-        return "".join(header + remainder)
+        replacements = {
+            "Proj Title=": f"Proj Title={project_name}\n",
+            "Current Plan=": "Current Plan=p01\n",
+            "Plan File=": "Plan File=p01\n",
+            "Geom File=": "Geom File=g01\n",
+            "Flow File=": "Flow File=f01\n",
+        }
+        excluded = ("Unsteady File=", "QuasiSteady File=", "Sediment File=")
+        seen = {prefix: False for prefix in replacements}
+        output: list[str] = []
+        for line in lines:
+            prefix = next(
+                (candidate for candidate in replacements if line.startswith(candidate)),
+                None,
+            )
+            if prefix is not None:
+                if not seen[prefix]:
+                    output.append(replacements[prefix])
+                    seen[prefix] = True
+                continue
+            if line.startswith(excluded):
+                continue
+            output.append(line)
+
+        missing = [replacements[prefix] for prefix, found in seen.items() if not found]
+        if missing:
+            insertion = 1 if output and output[0].startswith("Proj Title=") else 0
+            output[insertion:insertion] = missing
+        return "".join(output)
 
     @staticmethod
     def _prepare_empty_destination(destination: Path) -> None:
