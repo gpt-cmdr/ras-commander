@@ -1635,6 +1635,11 @@ notebooks:
   est_runtime: 1 min
   data_project: Balde Eagle Creek
   functions_used:
+  - GeomBridge.get_bridges
+  - GeomParser.get_river_centerlines
+  - GeomParser.get_xs_cut_lines
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_xs_interpolation_surface
   - RasBreakout1D.compare_geometry
   - RasBreakout1D.compare_results
   - RasBreakout1D.extract_selection
@@ -1645,7 +1650,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
+  code_cells: 13
   executed_cells: 0
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
