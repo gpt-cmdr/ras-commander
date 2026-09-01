@@ -56,22 +56,13 @@ class HdfResultsSediment:
 
     @staticmethod
     def _length_unit(f: h5py.File) -> str:
-        """Return 'm' (SI) or 'ft' (US Customary) for the model, from HDF attrs.
-
-        Mirrors the unit detection in HdfResultsQuery: SI when the geometry
-        'SI Units' attr is truthy OR the root 'Units System' starts with 'si'.
-        """
-        def _dec(v):
-            return v.decode("utf-8", "ignore") if isinstance(v, (bytes, np.bytes_)) else v
-        raw_unit_system = _dec(f.attrs.get("Units System"))
-        raw_si = None
-        g = f.get("Geometry")
-        if g is not None:
-            raw_si = _dec(g.attrs.get("SI Units"))
-        unit_text = str(raw_unit_system or "").strip().lower()
-        si = (str(raw_si).strip().lower() in {"true", "1", "yes", "si"}
-              or unit_text.startswith("si"))
-        return "m" if si else "ft"
+        """Return the strictly resolved result-HDF model length unit."""
+        metadata = HdfBase._result_unit_metadata_from_file(
+            f,
+            source_file=Path(f.filename),
+            strict=True,
+        )
+        return str(metadata["length_units"])
 
     # ------------------------------------------------------------------ #
     # Discovery

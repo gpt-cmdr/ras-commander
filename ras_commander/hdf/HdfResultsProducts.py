@@ -1150,56 +1150,19 @@ class HdfResultsProducts:
 
     @staticmethod
     def _unit_metadata(hdf_file: h5py.File) -> dict[str, str]:
-        candidates: list[tuple[str, bool]] = []
-        geometry = hdf_file.get("Geometry")
-        if geometry is not None and "SI Units" in geometry.attrs:
-            candidates.append(
-                (
-                    "Geometry/SI Units",
-                    HdfResultsProducts._required_bool(
-                        geometry.attrs["SI Units"],
-                        label="Geometry/SI Units",
-                    ),
-                )
-            )
-
-        if "Units System" in hdf_file.attrs:
-            units_text = HdfResultsProducts._decode(
-                hdf_file.attrs["Units System"]
-            ).strip().casefold()
-            if units_text.startswith("si") or units_text in {"metric"}:
-                candidates.append(("Units System", True))
-            elif units_text.startswith("us") or units_text in {
-                "english",
-                "imperial",
-            }:
-                candidates.append(("Units System", False))
-            else:
-                raise ValueError(
-                    "Result HDF has an unrecognized Units System attribute: "
-                    f"{units_text!r}"
-                )
-
-        if not candidates:
-            raise ValueError(
-                "Result HDF contains no recognized embedded unit-system metadata"
-            )
-        states = {state for _, state in candidates}
-        if len(states) != 1:
-            evidence = ", ".join(
-                f"{label}={'SI' if state else 'US Customary'}"
-                for label, state in candidates
-            )
-            raise ValueError(
-                f"Result HDF unit-system metadata is contradictory: {evidence}"
-            )
-        si_units = states.pop()
-        length = "m" if si_units else "ft"
+        metadata = HdfBase._result_unit_metadata_from_file(
+            hdf_file,
+            source_file=Path(hdf_file.filename),
+            strict=True,
+        )
         return {
-            "unit_system": "SI" if si_units else "US Customary",
-            "length_units": length,
-            "depth_units": length,
-            "velocity_units": "m/s" if si_units else "ft/s",
+            key: metadata[key]
+            for key in (
+                "unit_system",
+                "length_units",
+                "depth_units",
+                "velocity_units",
+            )
         }
 
     @staticmethod

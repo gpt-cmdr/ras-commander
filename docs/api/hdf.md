@@ -11,8 +11,17 @@ Base functionality for HDF file operations.
 - `get_dataset_info(hdf_path, group_path=None)` - Print HDF structure
 - `get_attrs(hdf_path, path)` - Get attributes at path
 - `get_projection(hdf_path)` - Get coordinate system
+- `get_result_unit_metadata(hdf_path, strict=True)` - Read normalized unit
+  metadata and source evidence from a standalone plan-result HDF
 - `parse_ras_datetime(datetime_str)` - Parse HEC-RAS datetime string
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
+
+`get_result_unit_metadata()` is deliberately a result-HDF fallback. When the
+full project is available, use `RasPrj.get_project_units()` and treat the text
+`.prj` marker as authoritative. The HDF reader never defaults missing metadata
+to English units. It raises on missing, unrecognized, geometry-only, or
+contradictory metadata unless `strict=False`, which returns the raw evidence
+and an unresolved status for audit workflows.
 
 ### HdfPlan
 
