@@ -104,3 +104,26 @@ Required behavior:
 - Real HEC-RAS qualification on Windows and Wine when a suitable steady model
   and installed runtime are available; do not substitute direct executable
   calls for ras-commander APIs.
+
+## Implementation status
+
+- PR #327 (unified cross-section points) was corrected per the API audit,
+  passed its focused suite and CI, and merged to `main` as `4a0cef6a1`.
+- `HdfBase.get_result_unit_metadata()` is implemented as a strict,
+  standalone plan-result-HDF fallback. Documentation and docstrings state that
+  `RasPrj.get_project_units()` is authoritative when the project is available.
+- `RasProcess.store_maps_at_steady_profiles()` and
+  `RasMap.store_all_maps(mode="steady_profiles")` are implemented with one
+  bulk stored-layer XML transaction and one aggregate helper launch per plan.
+- Public DataFrame schema version 1.8 includes both `cross_section_points` and
+  `steady_profile_stored_maps`.
+- Integrated focused verification: 155 passed, 16 skipped.
+- Broad repository verification reached 2,455 passed and 121 skipped; its 41
+  failures and two setup errors were in environment/package-artifact cases
+  outside the changed paths (notably missing `netCDF4`/`pythonnet`, installed
+  package-metadata expectations, and local native validation fixtures).
+- Python compilation and `git diff --check`: passed.
+- Documentation CI-equivalent generation and MkDocs build: passed; only the
+  repository's pre-existing non-strict notebook link/date warnings remain.
+- Real HEC-RAS and Windows/Wine performance qualification remains a downstream
+  qualification task requiring a suitable computed steady project/runtime.

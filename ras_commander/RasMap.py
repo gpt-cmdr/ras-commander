@@ -3648,6 +3648,11 @@ class RasMap:
                 )
 
         supported_map_types = tuple(requested_flags)
+        if resolved_mode == "steady_profiles":
+            # Flow is a profile-dependent RASMapper product supported by the
+            # steady batch engine, but it has no legacy individual boolean
+            # flag on this facade. It is therefore selected through map_types.
+            supported_map_types += ("flow",)
         supported_map_type_set = set(supported_map_types)
         explicit_map_selection = map_types is not None or any(
             value is not None for value in requested_flags.values()

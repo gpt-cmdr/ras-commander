@@ -189,6 +189,7 @@ def test_steady_profile_engine_bulk_configures_and_launches_once(
     assert frame.attrs["helper_launch_count"] == 1
     assert frame.attrs["profile_count"] == 2
     assert frame.attrs["configured_map_count"] == 5
+    assert frame.attrs["generated_file_count"] == 11
     assert frame.attrs["runtime_provenance"] == {"helper": "test-double"}
     schema_columns = [
         column["name"]
@@ -369,3 +370,44 @@ def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path)
     assert summary["plans"]["01"]["profiles"][0]["profile_name"] == "P1"
     assert len(summary["plans"]["01"]["stored_maps"]) == 2
     json.dumps(summary)
+
+
+def test_rasmap_steady_profiles_mode_dispatches_flow_product(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _, _ = _write_steady_project(tmp_path)
+    calls = []
+
+    def fake_engine(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame(
+            columns=[
+                "plan_number",
+                "result_hdf_path",
+                "profile_index",
+                "profile_name",
+                "map_type",
+                "output_mode",
+                "primary_path",
+                "files",
+                "file_count",
+            ]
+        )
+
+    monkeypatch.setattr(
+        RasProcess,
+        "store_maps_at_steady_profiles",
+        staticmethod(fake_engine),
+    )
+
+    summary = RasMap.store_all_maps(
+        "01",
+        mode="steady_profiles",
+        profiles=[0],
+        map_types=("flow",),
+        ras_object=ras_obj,
+    )
+
+    assert calls[0]["map_types"] == ["flow"]
+    assert summary["success"] is True

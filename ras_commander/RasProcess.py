@@ -4404,6 +4404,8 @@ Step 5: Configure (optional — auto-detection usually works)
                 are invalid or ambiguous.
             RuntimeError: If StoreAllMaps fails or a requested product is
                 missing from the fresh outputs.
+            subprocess.TimeoutExpired: If the aggregate StoreAllMaps helper
+                exceeds ``timeout``.
         """
         from .hdf.HdfResultsPlan import HdfResultsPlan
 
@@ -4744,6 +4746,7 @@ Step 5: Configure (optional — auto-detection usually works)
             frame.attrs["helper_elapsed_seconds"] = helper_elapsed
             frame.attrs["profile_count"] = len(selected_profiles)
             frame.attrs["configured_map_count"] = len(configured_specs)
+            frame.attrs["generated_file_count"] = len(produced_paths)
             frame.attrs["runtime_provenance"] = runtime_provenance
             logger.info(
                 "Steady-profile StoreAllMaps complete: plan=%s; profiles=%d; "

@@ -700,7 +700,8 @@ results = RasProcess.store_maps(plan_number="01", profile=timestamps[10])
 For a steady plan, use the canonical `steady_profiles` mode. It resolves names
 and zero-based indexes from the result HDF, writes every selected layer to the
 temporary `.rasmap` in one transaction, and launches aggregate `StoreAllMaps`
-once for the plan.
+once for the plan. `map_types` accepts `wse`, `depth`, `velocity`, `froude`,
+`shear_stress`, `depth_x_velocity`, `depth_x_velocity_sq`, and `flow`.
 
 ```python
 from ras_commander import RasMap
@@ -724,8 +725,8 @@ The lower-level
 `RasProcess.store_maps_at_steady_profiles()` returns one DataFrame row per
 logical profile/product. It records the VRT or SHP primary path, all TIFF tiles
 or shapefile sidecars, and performance metadata including configuration time,
-helper time, and helper launch count. The original `.rasmap` is restored after
-success or failure.
+helper time, helper launch count, and generated file count. The original
+`.rasmap` is restored after success or failure.
 
 #### Batch Processing All Plans
 

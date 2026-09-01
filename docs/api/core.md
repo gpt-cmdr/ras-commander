@@ -855,7 +855,9 @@ results = RasProcess.store_maps(
 products in one `.rasmap` update and invokes aggregate `StoreAllMaps` exactly
 once. `profiles=None` selects all HDF profiles; exact names and zero-based
 indexes can be mixed. One inundation boundary for the final selected profile is
-included by default.
+included by default. Supported profile rasters are `wse`, `depth`, `velocity`,
+`froude`, `shear_stress`, `depth_x_velocity`, `depth_x_velocity_sq`, and
+`flow`.
 
 ```python
 frame = RasProcess.store_maps_at_steady_profiles(
