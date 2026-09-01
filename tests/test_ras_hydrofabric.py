@@ -129,10 +129,11 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
         "010101010101",
         "010101010102",
     }
-    assert result.huc_intersections["geometry_area_fraction"].sum() == pytest.approx(1.0)
+    assert result.huc_intersections["geometry_area_fraction"].sum() == pytest.approx(
+        1.0
+    )
     assert list(result.matches.columns) == [
-        column["name"]
-        for column in DATAFRAME_SCHEMAS["hydrofabric_matches"]["columns"]
+        column["name"] for column in DATAFRAME_SCHEMAS["hydrofabric_matches"]["columns"]
     ]
     assert list(result.candidates.columns) == [
         column["name"]
@@ -140,9 +141,7 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
     ]
     assert list(result.huc_intersections.columns) == [
         column["name"]
-        for column in DATAFRAME_SCHEMAS[
-            "hydrofabric_huc_intersections"
-        ]["columns"]
+        for column in DATAFRAME_SCHEMAS["hydrofabric_huc_intersections"]["columns"]
     ]
 
 
@@ -174,8 +173,7 @@ def test_ambiguous_results_do_not_encode_a_candidate_as_a_match():
     assert result.matches["feature_id"].isna().all()
     assert set(result.matches["best_candidate_feature_id"]) == {"101"}
     assert all(
-        "CLOSE_CANDIDATE_SCORES" in codes
-        for codes in result.matches["reason_codes"]
+        "CLOSE_CANDIDATE_SCORES" in codes for codes in result.matches["reason_codes"]
     )
     assert set(result.candidates["feature_id"]) == {"101", "102"}
 
@@ -250,8 +248,123 @@ def test_topological_continuity_uses_adjacent_reaches_and_flowpath_nodes():
     assert set(reach_candidates["feature_id"]) == {"11", "12"}
     assert set(reach_candidates["topological_continuity_score"]) == {1.0}
     assert all(
-        "TOPOLOGY_CONTINUOUS" in codes
-        for codes in reach_candidates["reason_codes"]
+        "TOPOLOGY_CONTINUOUS" in codes for codes in reach_candidates["reason_codes"]
+    )
+
+
+@pytest.mark.parametrize("adapter", [NWMHydrofabricAdapter(), NextGenFlowpathAdapter()])
+def test_wb_nexus_adapters_normalize_total_area_and_native_topology(adapter):
+    flowpaths = gpd.GeoDataFrame(
+        {
+            "id": ["wb-10", "wb-20", "wb-30", "wb-40"],
+            "toid": ["nex-20", "nex-30", "tnx-1", "cnx-1"],
+            "order": [2, 3, 3, 3],
+            "areasqkm": [1.0, 2.0, 3.0, 4.0],
+            "tot_drainage_areasqkm": [11.0, 22.0, 33.0, 44.0],
+        },
+        geometry=[
+            LineString([(0, 0), (10, 0)]),
+            LineString([(10, 0), (20, 0)]),
+            LineString([(20, 0), (30, 0)]),
+            LineString([(30, 0), (40, 0)]),
+        ],
+        crs=CRS,
+    )
+
+    normalized = adapter.normalize(flowpaths)
+
+    assert normalized["drainage_area"].tolist() == [11.0, 22.0, 33.0, 44.0]
+    assert normalized["from_node"].tolist() == [
+        "nex-10",
+        "nex-20",
+        "nex-30",
+        "nex-40",
+    ]
+    assert normalized["to_node"].tolist() == [
+        "nex-20",
+        "nex-30",
+        "tnx-1",
+        "cnx-1",
+    ]
+    assert normalized["to_feature_id"].iloc[:2].tolist() == [
+        "wb-20",
+        "wb-30",
+    ]
+    assert normalized["to_feature_id"].iloc[2:].isna().all()
+
+
+def test_nextgen_native_ids_drive_topology_beyond_endpoint_tolerance():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["g01"]},
+        geometry=[Polygon([(-10, -20), (210, -20), (210, 20), (-10, 20)])],
+        crs=CRS,
+    )
+    reaches = gpd.GeoDataFrame(
+        {"geometry_id": ["g01", "g01"], "reach_id": ["r1", "r2"]},
+        geometry=[
+            LineString([(0, 0), (100, 0)]),
+            LineString([(100, 0), (200, 0)]),
+        ],
+        crs=CRS,
+    )
+    flowpaths = gpd.GeoDataFrame(
+        {
+            "id": ["wb-11", "wb-12"],
+            "toid": ["nex-12", "nex-out"],
+            "order": [3, 3],
+            "areasqkm": [2.0, 3.0],
+            "tot_drainage_areasqkm": [20.0, 25.0],
+        },
+        geometry=[
+            LineString([(0, 1), (90, 1)]),
+            LineString([(110, 1), (200, 1)]),
+        ],
+        crs=CRS,
+    )
+
+    result = RasHydrofabric.conflate(
+        footprints,
+        reaches,
+        None,
+        flowpaths,
+        adapter="nextgen",
+        search_distance=8.0,
+        topology_tolerance=5.0,
+        max_candidates=2,
+        ambiguity_margin=0.01,
+    )
+
+    reach_candidates = result.candidates.loc[
+        (result.candidates["element_type"] == "reach")
+        & (result.candidates["candidate_rank"] == 1)
+    ]
+    assert set(reach_candidates["feature_id"]) == {"wb-11", "wb-12"}
+    assert set(reach_candidates["topological_continuity_score"]) == {1.0}
+    assert all(
+        "TOPOLOGY_CONTINUOUS" in codes for codes in reach_candidates["reason_codes"]
+    )
+
+    disconnected_flowpaths = flowpaths.copy()
+    disconnected_flowpaths.loc[0, "toid"] = "nex-99"
+    disconnected = RasHydrofabric.conflate(
+        footprints,
+        reaches,
+        None,
+        disconnected_flowpaths,
+        adapter="nextgen",
+        search_distance=8.0,
+        topology_tolerance=5.0,
+        max_candidates=2,
+        ambiguity_margin=0.01,
+    )
+    disconnected_rank_one = disconnected.candidates.loc[
+        (disconnected.candidates["element_type"] == "reach")
+        & (disconnected.candidates["candidate_rank"] == 1)
+    ]
+    assert set(disconnected_rank_one["topological_continuity_score"]) == {0.0}
+    assert all(
+        "TOPOLOGY_CONTINUOUS" not in codes
+        for codes in disconnected_rank_one["reason_codes"]
     )
 
 

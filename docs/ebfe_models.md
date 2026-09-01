@@ -675,7 +675,7 @@ Complete working examples demonstrating each model:
 **Demonstrates**:
 - Conflating the Texas Lower Colorado-Cummins SHILOH BRANCH footprint, reach, and 40 cross sections to NextGen v2.2 VPU 12 flowpaths.
 - Mapping native NextGen `wb-*` flowpaths, `cat-*` catchments, WBD HUC12 boundaries, ranked candidates, and direct cross-section intersections for visual QA.
-- Auditing all candidate score components and the confidence margin while preserving native NextGen identifiers.
+- Auditing all candidate score components and the confidence margin while preserving native NextGen identifiers, resolving `nex-*` network links, and using total upstream drainage area when available.
 - Comparing default and deliberately strict thresholds to expose matched, ambiguous, and unmatched states without fake accepted identifiers.
 - Verifying native along-flowpath cross-section measures and a two-feature NextGen reach sequence.
 

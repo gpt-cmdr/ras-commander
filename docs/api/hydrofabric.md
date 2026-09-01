@@ -109,8 +109,14 @@ Pass `adapter="auto"` or select a built-in schema explicitly:
 | Adapter | Typical identifier | Common normalized fields |
 | --- | --- | --- |
 | `nhdplus` | `COMID` | `StreamOrde`, `TotDASqKm`, node IDs, Hydroseq |
-| `nwm` | `id` / `feature_id` | `toid`, `order`, `areasqkm`, hydroseq |
-| `nextgen` | `feature_id` / `flowpath_id` | downstream/nexus IDs, order, drainage area, sequence |
+| `nwm` | `id` / `feature_id` | `toid`, order, total drainage area, hydroseq |
+| `nextgen` | `feature_id` / `flowpath_id` | downstream/nexus IDs, order, total drainage area, sequence |
+
+The NWM and NextGen adapters preserve native nexus IDs in `to_node` while
+resolving a loaded `nex-N` link to downstream flowpath `wb-N`. Terminal,
+coastal, internal, and clipped nexuses remain nodes and do not become invented
+`to_feature_id` values. When both incremental `areasqkm` and a total upstream
+drainage-area field are present, the total field is used for hydrologic scoring.
 
 For another schema, supply a custom adapter:
 

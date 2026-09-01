@@ -3931,7 +3931,7 @@ notebooks:
   - nextgen
   - qa
   difficulty: advanced
-  est_runtime: 1 min
+  est_runtime: 5 min
   data_project: null
   functions_used:
   - HdfProject.get_project_extent

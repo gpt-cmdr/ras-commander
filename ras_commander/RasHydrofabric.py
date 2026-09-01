@@ -137,10 +137,40 @@ class HydrofabricAdapter:
                 "Dissolving duplicate %s flowpath feature identifiers",
                 self.name,
             )
-            frame = frame.dissolve(
-                by="feature_id", as_index=False, aggfunc="first"
-            )
+            frame = frame.dissolve(by="feature_id", as_index=False, aggfunc="first")
         return frame
+
+
+def _normalise_wb_nexus_topology(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Resolve native ``wb-*`` / nexus links within a loaded flowpath set."""
+    feature_ids = set(frame["feature_id"].dropna().astype(str))
+    nexus_prefixes = ("nex-", "tnx-", "cnx-", "inx-")
+
+    def _flowpath_from_nexus(value: Any) -> Optional[str]:
+        value = _normalise_identifier(value)
+        if value is None:
+            return None
+        if value.startswith("nex-"):
+            candidate = f"wb-{value[4:]}"
+            return candidate if candidate in feature_ids else None
+        if value.startswith(nexus_prefixes):
+            return None
+        return value
+
+    frame["to_feature_id"] = frame["to_feature_id"].map(_flowpath_from_nexus)
+
+    missing_from_node = frame["from_node"].isna()
+    inferred_from_node = frame["feature_id"].map(
+        lambda value: (
+            f"nex-{value[3:]}"
+            if isinstance(value, str) and value.startswith("wb-")
+            else None
+        )
+    )
+    frame.loc[missing_from_node, "from_node"] = inferred_from_node.loc[
+        missing_from_node
+    ]
+    return frame
 
 
 class NHDPlusAdapter(HydrofabricAdapter):
@@ -150,19 +180,30 @@ class NHDPlusAdapter(HydrofabricAdapter):
         super().__init__(
             name="nhdplus",
             feature_id_fields=(
-                "COMID", "comid", "NHDPlusID", "nhdplusid", "featureid",
+                "COMID",
+                "comid",
+                "NHDPlusID",
+                "nhdplusid",
+                "featureid",
                 "feature_id",
             ),
             to_feature_id_fields=("ToCOMID", "tocomid", "to_feature_id"),
             from_node_fields=("FromNode", "fromnode", "from_node"),
             to_node_fields=("ToNode", "tonode", "to_node"),
             stream_order_fields=(
-                "StreamOrde", "streamorde", "StreamOrder", "stream_order",
+                "StreamOrde",
+                "streamorde",
+                "StreamOrder",
+                "stream_order",
                 "order",
             ),
             drainage_area_fields=(
-                "TotDASqKm", "totdasqkm", "TotDASqKM", "areasqkm",
-                "drainage_area", "AreaSqKm",
+                "TotDASqKm",
+                "totdasqkm",
+                "TotDASqKM",
+                "areasqkm",
+                "drainage_area",
+                "AreaSqKm",
             ),
             hydrosequence_fields=("Hydroseq", "hydroseq", "hydrosequence"),
         )
@@ -176,16 +217,28 @@ class NWMHydrofabricAdapter(HydrofabricAdapter):
             name="nwm",
             feature_id_fields=("id", "feature_id", "hf_id", "comid"),
             to_feature_id_fields=(
-                "to_feature_id", "toid", "to_id", "downstream_id",
+                "to_feature_id",
+                "toid",
+                "to_id",
+                "downstream_id",
             ),
             from_node_fields=("fromid", "from_id", "from_node", "nexus_from"),
             to_node_fields=("toid", "to_id", "to_node", "nexus_to"),
             stream_order_fields=("order", "stream_order", "streamorde"),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "totdasqkm", "drainage_area",
+                "tot_drainage_areasqkm",
+                "tot_drainage_area_sqkm",
+                "totdasqkm",
+                "drainage_area",
+                "area_sqkm",
+                "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "hf_hydroseq"),
         )
+
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize NWM ``wb-*`` flowpaths and nexus-linked topology."""
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
 class NextGenFlowpathAdapter(HydrofabricAdapter):
@@ -195,23 +248,53 @@ class NextGenFlowpathAdapter(HydrofabricAdapter):
         super().__init__(
             name="nextgen",
             feature_id_fields=(
-                "feature_id", "id", "flowpath_id", "realized_flowpath",
+                "feature_id",
+                "id",
+                "flowpath_id",
+                "realized_flowpath",
             ),
             to_feature_id_fields=(
-                "to_feature_id", "downstream_id", "toid", "to_id",
+                "to_feature_id",
+                "downstream_id",
+                "toid",
+                "to_id",
             ),
             from_node_fields=(
-                "fromid", "from_id", "from_node", "nexus_from", "from_nexus",
+                "fromid",
+                "from_id",
+                "from_node",
+                "nexus_from",
+                "from_nexus",
             ),
             to_node_fields=(
-                "toid", "to_id", "to_node", "nexus_to", "to_nexus",
+                "toid",
+                "to_id",
+                "to_node",
+                "nexus_to",
+                "to_nexus",
             ),
             stream_order_fields=("order", "stream_order", "streamorde"),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "drainage_area", "totdasqkm",
+                "tot_drainage_areasqkm",
+                "tot_drainage_area_sqkm",
+                "totdasqkm",
+                "drainage_area",
+                "area_sqkm",
+                "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "sequence"),
         )
+
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize native ``wb-*`` flowpaths and ``nex-*`` topology.
+
+        NextGen's native ``toid`` identifies the downstream nexus, not the
+        downstream flowpath.  Within a loaded flowpath set, ``nex-123`` is the
+        upstream node of ``wb-123``.  Preserve the nexus in ``to_node`` and
+        resolve ``to_feature_id`` only when the corresponding flowpath is
+        present, so terminal or clipped nexuses do not become invented IDs.
+        """
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
 DEFAULT_CONFLATION_WEIGHTS: Mapping[str, float] = {
@@ -225,24 +308,59 @@ DEFAULT_CONFLATION_WEIGHTS: Mapping[str, float] = {
 }
 
 _MATCH_COLUMNS = [
-    "element_type", "geometry_id", "reach_id", "xs_id", "feature_id",
-    "best_candidate_feature_id", "status", "confidence_score", "score_margin",
-    "candidate_count", "match_method", "reason_codes", "adapter",
-    "flowpath_measure", "flowpath_measure_fraction",
-    "flowpath_measure_from_end", "measure_method", "offset_distance", "geometry",
+    "element_type",
+    "geometry_id",
+    "reach_id",
+    "xs_id",
+    "feature_id",
+    "best_candidate_feature_id",
+    "status",
+    "confidence_score",
+    "score_margin",
+    "candidate_count",
+    "match_method",
+    "reason_codes",
+    "adapter",
+    "flowpath_measure",
+    "flowpath_measure_fraction",
+    "flowpath_measure_from_end",
+    "measure_method",
+    "offset_distance",
+    "geometry",
 ]
 
 _CANDIDATE_COLUMNS = [
-    "element_type", "geometry_id", "reach_id", "xs_id", "feature_id",
-    "candidate_rank", "confidence_score", "reason_codes", "adapter",
-    "footprint_overlap_score", "footprint_overlap_ratio",
-    "centerline_distance_score", "centerline_mean_distance",
-    "direction_agreement_score", "angular_difference_deg",
-    "xs_intersection_score", "xs_intersection_count", "xs_total_count",
-    "topological_continuity_score", "hydrologic_score", "stream_order",
-    "drainage_area", "sequence_consistency_score", "to_feature_id",
-    "hydrosequence", "flowpath_measure", "flowpath_measure_fraction",
-    "flowpath_measure_from_end", "measure_method", "offset_distance", "geometry",
+    "element_type",
+    "geometry_id",
+    "reach_id",
+    "xs_id",
+    "feature_id",
+    "candidate_rank",
+    "confidence_score",
+    "reason_codes",
+    "adapter",
+    "footprint_overlap_score",
+    "footprint_overlap_ratio",
+    "centerline_distance_score",
+    "centerline_mean_distance",
+    "direction_agreement_score",
+    "angular_difference_deg",
+    "xs_intersection_score",
+    "xs_intersection_count",
+    "xs_total_count",
+    "topological_continuity_score",
+    "hydrologic_score",
+    "stream_order",
+    "drainage_area",
+    "sequence_consistency_score",
+    "to_feature_id",
+    "hydrosequence",
+    "flowpath_measure",
+    "flowpath_measure_fraction",
+    "flowpath_measure_from_end",
+    "measure_method",
+    "offset_distance",
+    "geometry",
 ]
 
 
@@ -363,9 +481,7 @@ class RasHydrofabric:
         footprints = _read_geodata(model_footprints, "model_footprints")
         reaches = _read_geodata(centerlines, "centerlines")
         xs = _read_optional_geodata(cross_sections, "cross_sections")
-        raw_flowpaths = _read_geodata(
-            flowpaths, "flowpaths", layer=flowpaths_layer
-        )
+        raw_flowpaths = _read_geodata(flowpaths, "flowpaths", layer=flowpaths_layer)
         huc_frame = _read_optional_geodata(hucs, "hucs", layer=hucs_layer)
 
         _require_crs(footprints, "model_footprints")
@@ -405,9 +521,7 @@ class RasHydrofabric:
         if not np.isfinite(median_reach_length):
             median_reach_length = unit_200m
         if search_distance is None:
-            search_distance = max(
-                unit_200m, min(median_reach_length * 0.25, unit_5km)
-            )
+            search_distance = max(unit_200m, min(median_reach_length * 0.25, unit_5km))
         if search_distance <= 0:
             raise ValueError("search_distance must be greater than zero")
         if topology_tolerance is None:
@@ -437,9 +551,7 @@ class RasHydrofabric:
         for reach in reaches.itertuples(index=False):
             rows = reach_groups.get(str(reach.reach_id), [])
             ranked = _rank_records(rows)
-            candidate_rows.extend(
-                _candidate_output_rows(ranked, element_type="reach")
-            )
+            candidate_rows.extend(_candidate_output_rows(ranked, element_type="reach"))
             match_rows.append(
                 _resolve_match(
                     ranked,
@@ -501,7 +613,10 @@ class RasHydrofabric:
             )
             candidates = candidates.sort_values(
                 [
-                    "element_type", "geometry_id", "reach_id", "xs_id",
+                    "element_type",
+                    "geometry_id",
+                    "reach_id",
+                    "xs_id",
                     "candidate_rank",
                 ],
                 na_position="first",
@@ -601,9 +716,7 @@ def _find_column(
     aliases: Sequence[str],
 ) -> Optional[str]:
     lookup = {str(column).lower(): str(column) for column in frame.columns}
-    candidates: Iterable[str] = (
-        ((explicit,) if explicit else ()) + tuple(aliases)
-    )
+    candidates: Iterable[str] = ((explicit,) if explicit else ()) + tuple(aliases)
     for candidate in candidates:
         actual = lookup.get(str(candidate).lower())
         if actual is not None:
@@ -651,9 +764,7 @@ def _prepare_model_frames(
             lambda value: f"geometry-{value}"
         )
     else:
-        footprints["geometry_id"] = footprints[footprint_id].map(
-            _normalise_identifier
-        )
+        footprints["geometry_id"] = footprints[footprint_id].map(_normalise_identifier)
     if footprints["geometry_id"].isna().any():
         raise ValueError("model_footprints contain null/blank geometry IDs")
     if footprints["geometry_id"].duplicated().any():
@@ -679,9 +790,7 @@ def _prepare_model_frames(
         ("geometry_id", "geom_id", "model_id", "final_name_key"),
     )
     if reach_geometry_id is not None:
-        reaches["geometry_id"] = reaches[reach_geometry_id].map(
-            _normalise_identifier
-        )
+        reaches["geometry_id"] = reaches[reach_geometry_id].map(_normalise_identifier)
     elif len(footprints) == 1:
         reaches["geometry_id"] = str(footprints.iloc[0]["geometry_id"])
     else:
@@ -701,23 +810,24 @@ def _prepare_model_frames(
     if reaches["geometry_id"].isna().any():
         raise ValueError("Some centerlines could not be assigned to a model footprint")
 
-    order_col = _find_column(
-        reaches, None, ("stream_order", "streamorde", "order")
-    )
+    order_col = _find_column(reaches, None, ("stream_order", "streamorde", "order"))
     area_col = _find_column(
         reaches,
         None,
-        ("drainage_area", "areasqkm", "totdasqkm", "area_sqkm"),
+        (
+            "drainage_area",
+            "tot_drainage_areasqkm",
+            "tot_drainage_area_sqkm",
+            "totdasqkm",
+            "area_sqkm",
+            "areasqkm",
+        ),
     )
     reaches["model_stream_order"] = (
-        pd.to_numeric(reaches[order_col], errors="coerce")
-        if order_col
-        else np.nan
+        pd.to_numeric(reaches[order_col], errors="coerce") if order_col else np.nan
     )
     reaches["model_drainage_area"] = (
-        pd.to_numeric(reaches[area_col], errors="coerce")
-        if area_col
-        else np.nan
+        pd.to_numeric(reaches[area_col], errors="coerce") if area_col else np.nan
     )
 
     if cross_sections.empty:
@@ -729,9 +839,7 @@ def _prepare_model_frames(
         ("xs_id", "river_station", "riverstation", "rs", "station", "id"),
     )
     if xs_id_source is None:
-        cross_sections["xs_id"] = cross_sections.index.map(
-            lambda value: f"xs-{value}"
-        )
+        cross_sections["xs_id"] = cross_sections.index.map(lambda value: f"xs-{value}")
     else:
         cross_sections["xs_id"] = cross_sections[xs_id_source].map(
             _normalise_identifier
@@ -764,9 +872,7 @@ def _prepare_model_frames(
             f"{sorted(map(str, unknown_reaches))}"
         )
     reach_to_geometry = reaches.set_index("reach_id")["geometry_id"].to_dict()
-    cross_sections["geometry_id"] = cross_sections["reach_id"].map(
-        reach_to_geometry
-    )
+    cross_sections["geometry_id"] = cross_sections["reach_id"].map(reach_to_geometry)
     return footprints, reaches, cross_sections
 
 
@@ -859,19 +965,14 @@ def _score_reach_candidates(
         if reach_geometry is None or reach_geometry.is_empty:
             continue
         footprint = footprint_lookup[str(reach.geometry_id)]
-        search_geometry = unary_union(
-            [reach_geometry.buffer(search_distance), footprint]
-        )
+        local_search_geometry = reach_geometry.buffer(search_distance)
+        search_geometry = unary_union([local_search_geometry, footprint])
         if spatial_index is not None:
-            indices = list(
-                spatial_index.query(search_geometry, predicate="intersects")
-            )
+            indices = list(spatial_index.query(search_geometry, predicate="intersects"))
             possible = flowpaths.iloc[indices]
         else:
             possible = flowpaths.loc[flowpaths.geometry.intersects(search_geometry)]
-        possible = possible.loc[
-            possible.geometry.notna() & ~possible.geometry.is_empty
-        ]
+        possible = possible.loc[possible.geometry.notna() & ~possible.geometry.is_empty]
         if possible.empty:
             continue
 
@@ -892,6 +993,9 @@ def _score_reach_candidates(
                     "mean_distance": mean_distance,
                     "overlap_ratio": overlap_ratio,
                     "xs_count": xs_count,
+                    "is_local_candidate": flow_geometry.intersects(
+                        local_search_geometry
+                    ),
                 }
             )
         preliminary.sort(
@@ -911,9 +1015,7 @@ def _score_reach_candidates(
             angle_difference, direction_score = _direction_agreement(
                 reach_geometry, flow_geometry
             )
-            xs_score = (
-                xs_count / len(reach_xs) if len(reach_xs) else None
-            )
+            xs_score = xs_count / len(reach_xs) if len(reach_xs) else None
             sequence_score = _sequence_consistency(
                 reach_geometry, flow_geometry, reach_xs
             )
@@ -945,9 +1047,8 @@ def _score_reach_candidates(
                 "to_node": _normalise_identifier(flowpath.to_node),
                 "hydrosequence": _finite_or_none(flowpath.hydrosequence),
                 "model_stream_order": _finite_or_none(reach.model_stream_order),
-                "model_drainage_area": _finite_or_none(
-                    reach.model_drainage_area
-                ),
+                "model_drainage_area": _finite_or_none(reach.model_drainage_area),
+                "is_local_candidate": bool(item["is_local_candidate"]),
                 "geometry": flow_geometry,
                 "flowpath_measure": None,
                 "flowpath_measure_fraction": None,
@@ -967,17 +1068,22 @@ def _score_reach_candidates(
         if not neighbours:
             record["topological_continuity_score"] = None
             continue
+        if not record["is_local_candidate"]:
+            record["topological_continuity_score"] = 0.0
+            continue
         supported = 0
         considered = 0
         for neighbour in neighbours:
-            neighbour_candidates = grouped.get(neighbour, [])
+            neighbour_candidates = [
+                candidate
+                for candidate in grouped.get(neighbour, [])
+                if candidate["is_local_candidate"]
+            ]
             if not neighbour_candidates:
                 continue
             considered += 1
             if any(
-                _flowpaths_connected(
-                    record, candidate, topology_tolerance
-                )
+                _flowpaths_connected(record, candidate, topology_tolerance)
                 for candidate in neighbour_candidates
             ):
                 supported += 1
@@ -1029,12 +1135,9 @@ def _assign_hydrologic_scores(group: list[Dict[str, Any]]) -> None:
                     components.append(1.0)
                 else:
                     components.append(
-                        (log(value) - min_log_area) /
-                        (max_log_area - min_log_area)
+                        (log(value) - min_log_area) / (max_log_area - min_log_area)
                     )
-        record["hydrologic_score"] = (
-            float(np.mean(components)) if components else None
-        )
+        record["hydrologic_score"] = float(np.mean(components)) if components else None
 
 
 def _model_adjacency(
@@ -1046,15 +1149,18 @@ def _model_adjacency(
         left_endpoints = _line_endpoints(left.geometry)
         if left_endpoints is None:
             continue
-        for right in rows[index + 1:]:
+        for right in rows[index + 1 :]:
             right_endpoints = _line_endpoints(right.geometry)
             if right_endpoints is None:
                 continue
-            if min(
-                point_a.distance(point_b)
-                for point_a in left_endpoints
-                for point_b in right_endpoints
-            ) <= tolerance:
+            if (
+                min(
+                    point_a.distance(point_b)
+                    for point_a in left_endpoints
+                    for point_b in right_endpoints
+                )
+                <= tolerance
+            ):
                 left_id = str(left.reach_id)
                 right_id = str(right.reach_id)
                 result[left_id].add(right_id)
@@ -1067,40 +1173,46 @@ def _flowpaths_connected(
     right: Mapping[str, Any],
     tolerance: float,
 ) -> bool:
-    if left["feature_id"] == right["feature_id"]:
+    if _identifiers_equal(left["feature_id"], right["feature_id"]):
         return True
-    if left.get("to_feature_id") == right["feature_id"]:
+    if _identifiers_equal(left.get("to_feature_id"), right["feature_id"]):
         return True
-    if right.get("to_feature_id") == left["feature_id"]:
+    if _identifiers_equal(right.get("to_feature_id"), left["feature_id"]):
         return True
     node_pairs = (
         (left.get("to_node"), right.get("from_node")),
         (right.get("to_node"), left.get("from_node")),
     )
-    if any(a is not None and a == b for a, b in node_pairs):
+    if any(_identifiers_equal(a, b) for a, b in node_pairs):
         return True
     left_endpoints = _line_endpoints(left["geometry"])
     right_endpoints = _line_endpoints(right["geometry"])
     if left_endpoints is None or right_endpoints is None:
         return False
-    return min(
-        point_a.distance(point_b)
-        for point_a in left_endpoints
-        for point_b in right_endpoints
-    ) <= tolerance
+    return (
+        min(
+            point_a.distance(point_b)
+            for point_a in left_endpoints
+            for point_b in right_endpoints
+        )
+        <= tolerance
+    )
 
 
-def _weighted_score(
-    record: Mapping[str, Any], weights: Mapping[str, float]
-) -> float:
+def _identifiers_equal(left: Any, right: Any) -> bool:
+    """Compare optional scalar identifiers without treating nulls as IDs."""
+    if left is None or right is None or pd.isna(left) or pd.isna(right):
+        return False
+    return str(left) == str(right)
+
+
+def _weighted_score(record: Mapping[str, Any], weights: Mapping[str, float]) -> float:
     metrics = {
         "footprint_overlap": record.get("footprint_overlap_score"),
         "centerline_distance": record.get("centerline_distance_score"),
         "direction_agreement": record.get("direction_agreement_score"),
         "xs_intersections": record.get("xs_intersection_score"),
-        "topological_continuity": record.get(
-            "topological_continuity_score"
-        ),
+        "topological_continuity": record.get("topological_continuity_score"),
         "stream_order_drainage_area": record.get("hydrologic_score"),
         "sequence_consistency": record.get("sequence_consistency_score"),
     }
@@ -1201,9 +1313,7 @@ def _resolve_match(
         }
 
     top = ranked[0]
-    second_score = (
-        float(ranked[1]["confidence_score"]) if len(ranked) > 1 else None
-    )
+    second_score = float(ranked[1]["confidence_score"]) if len(ranked) > 1 else None
     margin = (
         float(top["confidence_score"]) - second_score
         if second_score is not None
@@ -1239,9 +1349,7 @@ def _resolve_match(
         "reason_codes": tuple(dict.fromkeys(reasons)),
         "adapter": adapter_name,
         "flowpath_measure": (
-            top.get("flowpath_measure")
-            if status is ConflationStatus.MATCHED
-            else None
+            top.get("flowpath_measure") if status is ConflationStatus.MATCHED else None
         ),
         "flowpath_measure_fraction": (
             top.get("flowpath_measure_fraction")
@@ -1254,14 +1362,10 @@ def _resolve_match(
             else None
         ),
         "measure_method": (
-            top.get("measure_method")
-            if status is ConflationStatus.MATCHED
-            else None
+            top.get("measure_method") if status is ConflationStatus.MATCHED else None
         ),
         "offset_distance": (
-            top.get("offset_distance")
-            if status is ConflationStatus.MATCHED
-            else None
+            top.get("offset_distance") if status is ConflationStatus.MATCHED else None
         ),
         "geometry": element_geometry,
     }
@@ -1336,9 +1440,11 @@ def _resolve_geometries(
     match_rows: list[Dict[str, Any]] = []
     for footprint in footprints.itertuples(index=False):
         geometry_id = str(footprint.geometry_id)
-        geometry_reach_ids = reaches.loc[
-            reaches["geometry_id"].astype(str) == geometry_id, "reach_id"
-        ].astype(str).tolist()
+        geometry_reach_ids = (
+            reaches.loc[reaches["geometry_id"].astype(str) == geometry_id, "reach_id"]
+            .astype(str)
+            .tolist()
+        )
         aggregate: Dict[str, list[Dict[str, Any]]] = {}
         for reach_id in geometry_reach_ids:
             for candidate in reach_groups.get(reach_id, []):
@@ -1366,9 +1472,7 @@ def _resolve_geometries(
             geometry_candidates.append(representative)
 
         ranked = _rank_records(geometry_candidates)
-        candidate_rows.extend(
-            _candidate_output_rows(ranked, element_type="geometry")
-        )
+        candidate_rows.extend(_candidate_output_rows(ranked, element_type="geometry"))
         match_rows.append(
             _resolve_match(
                 ranked,
@@ -1408,9 +1512,7 @@ def _along_flowpath_measure(
     }
 
 
-def _footprint_overlap_ratio(
-    flowpath: BaseGeometry, footprint: BaseGeometry
-) -> float:
+def _footprint_overlap_ratio(flowpath: BaseGeometry, footprint: BaseGeometry) -> float:
     length = float(flowpath.length)
     if length <= 0:
         return 0.0
@@ -1452,7 +1554,8 @@ def _representative_line(geometry: BaseGeometry) -> Optional[LineString]:
             return max(merged.geoms, key=lambda item: item.length)
     if hasattr(geometry, "geoms"):
         lines = [
-            part for part in geometry.geoms
+            part
+            for part in geometry.geoms
             if isinstance(part, (LineString, MultiLineString))
         ]
         if lines:
@@ -1542,9 +1645,7 @@ def _finite_or_none(value: Any) -> Optional[float]:
     return numeric if np.isfinite(numeric) else None
 
 
-def _make_matches_gdf(
-    rows: Sequence[Mapping[str, Any]], crs: CRS
-) -> gpd.GeoDataFrame:
+def _make_matches_gdf(rows: Sequence[Mapping[str, Any]], crs: CRS) -> gpd.GeoDataFrame:
     if not rows:
         return gpd.GeoDataFrame(columns=_MATCH_COLUMNS, geometry="geometry", crs=crs)
     frame = gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
@@ -1576,8 +1677,12 @@ def _build_huc_intersections(
     crs: CRS,
 ) -> gpd.GeoDataFrame:
     columns = [
-        "geometry_id", "huc_id", "intersection_area",
-        "geometry_area_fraction", "huc_area_fraction", "geometry",
+        "geometry_id",
+        "huc_id",
+        "intersection_area",
+        "geometry_area_fraction",
+        "huc_area_fraction",
+        "geometry",
     ]
     if hucs.empty:
         return gpd.GeoDataFrame(columns=columns, geometry="geometry", crs=crs)
@@ -1585,8 +1690,15 @@ def _build_huc_intersections(
         hucs,
         huc_id_col,
         (
-            "huc12", "HUC12", "huc10", "HUC10", "huc8", "HUC8",
-            "huc_id", "huc", "id",
+            "huc12",
+            "HUC12",
+            "huc10",
+            "HUC10",
+            "huc8",
+            "HUC8",
+            "huc_id",
+            "huc",
+            "id",
         ),
     )
     if id_source is None:
