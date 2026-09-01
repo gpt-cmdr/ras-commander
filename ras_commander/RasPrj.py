@@ -130,6 +130,34 @@ class RasPrj:
         self.project_crs_source = None
         self._plan_flow_prefixes = {}
 
+    @staticmethod
+    def get_project_units(project_file: Union[str, Path]) -> Optional[str]:
+        """Return the HEC-RAS project length units as ``"ft"`` or ``"m"``.
+
+        HEC-RAS project files normally use a bare ``English Units`` or
+        ``SI Units`` marker. Some generated projects instead use the legacy
+        boolean form ``SI Units=<bool>``. Both representations are parsed
+        case-insensitively; unreadable files or unknown values return ``None``.
+        """
+        path = Path(project_file)
+        try:
+            with open(path, encoding='utf-8', errors='replace') as stream:
+                for raw_line in stream:
+                    line = raw_line.strip().casefold()
+                    if line == 'english units':
+                        return 'ft'
+                    if line == 'si units':
+                        return 'm'
+                    if line.startswith('si units='):
+                        value = line.split('=', 1)[1].strip()
+                        if value in {'1', 'true', 'yes', 'on'}:
+                            return 'm'
+                        if value in {'0', 'false', 'no', 'off'}:
+                            return 'ft'
+        except OSError as exc:
+            logger.debug("Could not read project units from %s: %s", path, exc)
+        return None
+
     @log_call
     def initialize(
         self,

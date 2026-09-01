@@ -187,18 +187,9 @@ class RasCrossSections:
 
     @staticmethod
     def _decode_project_units(project_file: Path) -> str | None:
-        try:
-            with open(project_file, encoding="utf-8", errors="replace") as stream:
-                for line in stream:
-                    if line.strip().lower().startswith("si units="):
-                        value = line.split("=", 1)[1].strip().lower()
-                        if value in {"1", "true", "yes"}:
-                            return "m"
-                        if value in {"0", "false", "no"}:
-                            return "ft"
-        except OSError as exc:
-            logger.debug("Could not read project units from %s: %s", project_file, exc)
-        return None
+        from .RasPrj import RasPrj
+
+        return RasPrj.get_project_units(project_file)
 
     @staticmethod
     def _project_context(project: Any) -> _ProjectContext:

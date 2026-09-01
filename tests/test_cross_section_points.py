@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import ras_commander
-from ras_commander import RasCrossSections, VerticalTransform
+from ras_commander import RasCrossSections, RasPrj, VerticalTransform
 from ras_commander.geom.GeomCrossSection import (
     CrossSectionBankStations,
     CrossSectionManningsN,
@@ -19,11 +19,17 @@ from ras_commander.hdf import HdfXsec
 from ras_commander.schemas import DATAFRAME_SCHEMAS
 
 
-def _write_project(tmp_path: Path, *, si_units: int = 0) -> Path:
+def _write_project(
+    tmp_path: Path,
+    *,
+    si_units: int = 0,
+    unit_marker: str | None = None,
+) -> Path:
     project = tmp_path / "Model.prj"
+    units_line = unit_marker if unit_marker is not None else f"SI Units={si_units}"
     project.write_text(
         "Proj Title=Cross Section Point Test\n"
-        f"SI Units={si_units}\n"
+        f"{units_line}\n"
         "Geom File=g01\n",
         encoding="utf-8",
     )
@@ -191,6 +197,53 @@ def test_common_api_has_identical_schema_for_hdf_and_text(tmp_path):
     assert text_points["geometry_title"].unique().tolist() == ["Unified Point Test"]
     assert text_points["z"].tolist() == [10.0, 9.0, 8.0, 9.5, 11.0]
     assert text_points["mannings_n"].to_numpy() == pytest.approx([0.08, 0.04, 0.04, 0.09, 0.09])
+
+
+@pytest.mark.parametrize(
+    ("template_version", "expected_units"),
+    [("RAS_7.0", "ft"), ("RAS_6.6", "m")],
+)
+def test_project_units_parse_real_hec_ras_template_markers(
+    template_version,
+    expected_units,
+):
+    template = (
+        Path(ras_commander.__file__).parent
+        / "resources"
+        / "templates"
+        / template_version
+        / "TEMPLATE.prj"
+    )
+
+    assert RasPrj.get_project_units(template) == expected_units
+
+
+@pytest.mark.parametrize(
+    ("si_units", "expected_units"),
+    [(0, "ft"), (1, "m")],
+)
+def test_project_units_preserve_boolean_form(tmp_path, si_units, expected_units):
+    project = _write_project(tmp_path, si_units=si_units)
+
+    assert RasPrj.get_project_units(project) == expected_units
+
+
+@pytest.mark.parametrize(
+    ("unit_marker", "expected_units"),
+    [("English Units", "ft"), ("SI Units", "m")],
+)
+def test_text_source_uses_canonical_project_unit_markers(
+    tmp_path,
+    unit_marker,
+    expected_units,
+):
+    project = _write_project(tmp_path, unit_marker=unit_marker)
+    _write_text_geometry(tmp_path)
+
+    points = RasCrossSections.get_points(project, "01", source="text")
+
+    assert points["horizontal_units"].unique().tolist() == [expected_units]
+    assert points["vertical_units"].unique().tolist() == [expected_units]
 
 
 def test_explicit_vertical_transform_is_per_point_and_audited(tmp_path):
