@@ -62,4 +62,4 @@ Of course, we still support the [COM interface for older versions](../user-guide
 
 And the best part about it is that Command Line really is all you need these days. Software development generally has been totally disrupted by command-line coding agents. It's not just HEC-RAS being disrupted by an LLM on a command line.
 
-We think there is a better way and we hope you copy it.
+RAS Commander is our proof that HEC-RAS can be faster, simpler, and more scalable today—and that many of our technical limitations are not immutable. We can get a lot further by working openly together to protect the public.
