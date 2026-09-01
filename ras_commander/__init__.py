@@ -166,6 +166,10 @@ _LAZY_EXPORTS = {
             'BenefitCategory', 'RasBenefits',
         )
     },
+    **{
+        name: ('.RasCrossSections', name)
+        for name in ('RasCrossSections', 'VerticalTransform')
+    },
     'BenefitAreaConfig': ('._execution_types', 'BenefitAreaConfig'),
     **{
         name: ('.RasterPerformance', name)
@@ -354,6 +358,7 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',

@@ -1,10 +1,11 @@
 """
 schemas.py -- canonical, declarative column contracts for ras-commander's public DataFrames.
 
-This module is the **single source of truth** for the *stable* column surface of the project
-DataFrames that ras-commander attaches to a :class:`RasPrj` instance
-(``plan_df`` / ``geom_df`` / ``boundaries_df`` / ``rasmap_df``), plus a documented note for the
-HDF result frames whose columns are only known at runtime.
+This module is the **single source of truth** for stable public DataFrame columns,
+including project frames attached to a :class:`RasPrj` instance
+(``plan_df`` / ``geom_df`` / ``boundaries_df`` / ``rasmap_df``), fixed-schema
+exports such as cross-section points, and a documented note for HDF result
+frames whose columns are only known at runtime.
 
 It is consumed by ``.claude/scripts/generate_api_surface.py`` to emit the machine-readable
 agent surface published at ``/ras/llms/api/dataframes.json`` (so LLMs and ras-commander-mcp can
@@ -20,7 +21,7 @@ contract against the live construction and flags drift.
 
 Each entry of :data:`DATAFRAME_SCHEMAS`:
     description   -- one-line summary of the frame
-    accessor      -- how a caller obtains the frame from a RasPrj instance
+    accessor      -- how a caller obtains the frame
     source        -- the construction site (for maintainers)
     columns       -- list of {name, dtype, description} for the STABLE core columns
     extra_columns -- True if additional project-parsed columns may appear at runtime
@@ -28,9 +29,53 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.5"
+SCHEMA_VERSION = "1.6"
 
 DATAFRAME_SCHEMAS = {
+    "cross_section_points": {
+        "description": (
+            "One row per native cross-section station/elevation point from a "
+            "text geometry or geometry HDF, with spatial and vertical provenance."
+        ),
+        "accessor": "RasCrossSections.get_points(project, geometry, ...)",
+        "source": (
+            "RasCrossSections.get_points() using GeomCrossSection.get_xs_coords() "
+            "or HdfXsec.get_xs_coords()"
+        ),
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "model_id", "dtype": "str", "description": "HEC-RAS project/model identifier."},
+            {"name": "geometry_id", "dtype": "str", "description": "Geometry number or explicit geometry identifier."},
+            {"name": "geometry_title", "dtype": "str | None", "description": "Geometry title from the text geometry when available."},
+            {"name": "reach_id", "dtype": "str", "description": "Stable River|Reach identifier."},
+            {"name": "xs_id", "dtype": "str", "description": "Stable River|Reach|river-station identifier."},
+            {"name": "river", "dtype": "str", "description": "Exact HEC-RAS river name."},
+            {"name": "reach", "dtype": "str", "description": "Exact HEC-RAS reach name."},
+            {"name": "river_station", "dtype": "str", "description": "Exact HEC-RAS river-station string."},
+            {"name": "point_order", "dtype": "int", "description": "Zero-based point order in the native station/elevation block."},
+            {"name": "station_order", "dtype": "int", "description": "Zero-based stable rank after ordering by station."},
+            {"name": "station", "dtype": "float", "description": "Native cross-section station value."},
+            {"name": "relative_distance", "dtype": "float", "description": "Distance from the GIS cut-line start in horizontal coordinate units."},
+            {"name": "x", "dtype": "float", "description": "Point X coordinate."},
+            {"name": "y", "dtype": "float", "description": "Point Y coordinate."},
+            {"name": "z", "dtype": "float", "description": "Native or explicitly transformed elevation."},
+            {"name": "mannings_n", "dtype": "float", "description": "Manning's n active at this station."},
+            {"name": "bank_region", "dtype": "str", "description": "left_overbank, channel, right_overbank, or unknown."},
+            {"name": "is_bank_station", "dtype": "bool", "description": "Whether the point coincides with a stored bank station."},
+            {"name": "bank_side", "dtype": "str | None", "description": "left or right when the point is a bank station."},
+            {"name": "left_bank_station", "dtype": "float", "description": "Stored left-bank station for the cross section."},
+            {"name": "right_bank_station", "dtype": "float", "description": "Stored right-bank station for the cross section."},
+            {"name": "horizontal_crs", "dtype": "str | None", "description": "Horizontal or compound CRS definition/code associated with XYZ."},
+            {"name": "horizontal_units", "dtype": "str | None", "description": "Horizontal CRS axis units, falling back to declared model units when CRS is unavailable."},
+            {"name": "vertical_units", "dtype": "str | None", "description": "Native or target vertical units."},
+            {"name": "vertical_datum", "dtype": "str | None", "description": "Explicit native or target vertical datum; never inferred from horizontal location."},
+            {"name": "source_file", "dtype": "str", "description": "Absolute source geometry or geometry-HDF path."},
+            {"name": "extraction_method", "dtype": "str", "description": "text_geometry or geometry_hdf."},
+            {"name": "vertical_transform_applied", "dtype": "bool", "description": "Whether an explicit per-point XYZ transform changed coordinates."},
+            {"name": "vertical_transform_provenance", "dtype": "str", "description": "Deterministic JSON operation provenance, including explicit no-transform state."},
+        ],
+    },
     "project_asset_inventory": {
         "description": (
             "One row per HEC-RAS project asset reference or linked dataset, "

@@ -2,6 +2,60 @@
 
 Classes for parsing and modifying HEC-RAS geometry files.
 
+## Unified Cross-Section Points
+
+`RasCrossSections.get_points(project, geometry)` exports the same stable point
+schema from a plain-text `.g##` geometry or compiled `.g##.hdf`. Pass a
+`RasPrj`, project folder, or `.prj` file for `project`; pass a geometry number,
+title, text path, or HDF path for `geometry`. `source="auto"` prefers an
+available HDF for project geometry selectors, while an explicit source path
+keeps its source type.
+
+```python
+from ras_commander import RasCrossSections
+
+points = RasCrossSections.get_points("Muncie.prj", "01")
+points.to_csv("muncie-xs-points.csv", index=False)
+```
+
+The frame includes model/geometry/reach/XS identifiers; exact river, reach, and
+river-station strings; native and station order; cut-line relative distance;
+XYZ; Manning's n and bank fields; horizontal CRS/units; vertical units/datum;
+and source/extraction provenance. Native elevations are preserved by default.
+A vertical datum is never inferred from a horizontal CRS or a model centroid.
+When the source does not store a datum, pass `vertical_datum=` explicitly;
+native vertical units come from the declared HEC-RAS unit system unless
+`vertical_units=` is supplied.
+
+Vertical conversion is opt-in through `VerticalTransform`. Use either an exact
+PROJ pipeline or explicit source and target 3D/compound CRSs. The operation is
+run against every point's own X/Y/Z coordinate, and the requested operation,
+resolved PROJ definition, datum/unit labels, and PROJ/pyproj versions are
+stored in `vertical_transform_provenance` and `DataFrame.attrs`.
+
+```python
+from ras_commander import RasCrossSections, VerticalTransform
+
+transform = VerticalTransform(
+    source_vertical_datum="NAVD88",
+    target_vertical_datum="Local project datum",
+    source_vertical_units="ft",
+    target_vertical_units="ft",
+    pipeline="+proj=pipeline +step +proj=affine +zoff=1.25",
+)
+
+adjusted = RasCrossSections.get_points(
+    "Muncie.prj",
+    "01",
+    vertical_datum="NAVD88",
+    vertical_transform=transform,
+)
+```
+
+An affine offset is shown only to make the explicit operation easy to inspect.
+For geodetic vertical transformations, use the project-approved PROJ pipeline
+or full compound CRS definitions and confirm required grid files are installed.
+
 ## GeomProjection
 
 Model geometry reprojection helpers for copied HEC-RAS projects and plain-text
