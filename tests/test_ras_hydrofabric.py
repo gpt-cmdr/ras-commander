@@ -10,6 +10,7 @@ from ras_commander import (
     ConflationStatus,
     HydrofabricConflationResult,
     NetworkConflationResult,
+    NetworkEdgeCoverageResult,
     NextGenFlowpathAdapter,
     NHDPlusAdapter,
     NWMHydrofabricAdapter,
@@ -74,6 +75,54 @@ def _nhdplus_flowpaths():
         ],
         crs=CRS,
     )
+
+
+def test_classify_edges_preserves_one_model_to_many_edge_cardinality():
+    footprint = gpd.GeoDataFrame(
+        {"geometry_id": ["g01"]},
+        geometry=[Polygon([(0, -10), (100, -10), (100, 10), (0, 10)])],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {
+            "feature_id": ["inside-a", "inside-b", "partial", "outside"],
+            "toid": ["inside-b", "partial", "outside", None],
+        },
+        geometry=[
+            LineString([(10, 0), (40, 0)]),
+            LineString([(40, 0), (80, 0)]),
+            LineString([(80, 0), (120, 0)]),
+            LineString([(120, 0), (140, 0)]),
+        ],
+        crs=CRS,
+    )
+
+    result = RasNetworkConflation.classify_edges(
+        footprint, edges, adapter="nwm"
+    )
+
+    assert isinstance(result, NetworkEdgeCoverageResult)
+    assert result.adapter == "nwm"
+    assert set(result.coverage_df["edge_id"]) == {
+        "inside-a", "inside-b", "partial"
+    }
+    assert result.summary == {
+        "inside": 2, "partial": 1, "outside": 0, "total": 3
+    }
+    partial = result.coverage_df.set_index("edge_id").loc["partial"]
+    assert partial["inside_length"] == pytest.approx(20.0)
+    assert partial["edge_length"] == pytest.approx(40.0)
+    assert partial["inside_fraction"] == pytest.approx(0.5)
+    assert partial["extent_status"] == "partial"
+    assert list(result.coverage_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_coverage"]["columns"]
+    ]
+
+    with_outside = RasNetworkConflation.classify_edges(
+        footprint, edges, adapter="nwm", include_outside=True
+    )
+    assert with_outside.summary["outside"] == 1
 
 
 def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
@@ -459,8 +508,9 @@ def test_public_exports_and_dataframe_schemas_are_registered():
         "NextGenFlowpathAdapter",
     }
     assert expected_exports <= set(ras_commander.__all__)
-    assert SCHEMA_VERSION == "1.6"
+    assert SCHEMA_VERSION == "1.7"
     assert {
+        "network_edge_coverage",
         "hydrofabric_matches",
         "hydrofabric_candidates",
         "hydrofabric_huc_intersections",

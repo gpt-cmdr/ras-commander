@@ -225,22 +225,37 @@ class RasBreakout1D:
 
     @staticmethod
     @log_call
-    def select_by_network_segment(
+    def select_by_network_edge(
         geom_file: Union[str, Path],
         segment: Any,
         *,
         river: Optional[str] = None,
         reach: Optional[str] = None,
         tolerance: float = 0.0,
+        downstream_overlap_xs: int = 1,
     ) -> Breakout1DSelection:
-        """Select the continuous XS span intersected by a supplied network edge.
+        """Select the continuous XS span associated with a network edge.
 
         ``segment`` must be a Shapely-like line in the geometry coordinate
         system.  A positive ``tolerance`` buffers it by that coordinate-system
-        distance before testing intersections.
+        distance before testing intersections.  By default, the selection also
+        includes the next cross section downstream of the directly intersected
+        span.  That shared boundary section preserves the Ripple1D breakout
+        convention and gives an internal reach a usable downstream boundary.
+
+        Set ``downstream_overlap_xs=0`` to retain only directly intersected cross
+        sections.  Values greater than one are supported for workflows that
+        need a wider shared transition zone; the selection stops at the source
+        reach boundary when fewer downstream sections are available.
         """
         if tolerance < 0:
             raise ValueError("tolerance must be non-negative")
+        if isinstance(downstream_overlap_xs, bool) or not isinstance(
+            downstream_overlap_xs, int
+        ):
+            raise TypeError("downstream_overlap_xs must be an integer")
+        if downstream_overlap_xs < 0:
+            raise ValueError("downstream_overlap_xs must be non-negative")
         search_geometry = segment.buffer(tolerance) if tolerance else segment
         selection = RasBreakout1D.select_by_polygon(
             geom_file,
@@ -248,13 +263,73 @@ class RasBreakout1D:
             river=river,
             reach=reach,
         )
+        if downstream_overlap_xs:
+            reach_xs = RasBreakout1D._reach_cross_sections(
+                geom_file, selection.river, selection.reach
+            ).copy()
+            reach_xs = reach_xs.assign(
+                _station_value=reach_xs["RS"].map(RasBreakout1D._station_value)
+            ).sort_values("_station_value", ascending=False)
+            downstream_value = RasBreakout1D._station_value(
+                selection.downstream_station
+            )
+            matches = [
+                index
+                for index, value in enumerate(reach_xs["_station_value"])
+                if abs(float(value) - downstream_value) <= 1e-9
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    "Network-segment downstream cross section could not be "
+                    "resolved uniquely on the source reach"
+                )
+            end = min(
+                int(matches[0]) + downstream_overlap_xs,
+                len(reach_xs) - 1,
+            )
+            upstream_value = RasBreakout1D._station_value(
+                selection.upstream_station
+            )
+            expanded = reach_xs.iloc[: end + 1]
+            stations = tuple(
+                expanded.loc[
+                    expanded["_station_value"] <= upstream_value, "RS"
+                ].astype(str)
+            )
+            selection = RasBreakout1D.select_by_cross_sections(
+                geom_file,
+                selection.river,
+                selection.reach,
+                stations,
+            )
         return Breakout1DSelection(
             river=selection.river,
             reach=selection.reach,
             stations=selection.stations,
             upstream_station=selection.upstream_station,
             downstream_station=selection.downstream_station,
-            selector="network_segment",
+            selector="network_edge",
+        )
+
+    @staticmethod
+    @log_call
+    def select_by_network_segment(
+        geom_file: Union[str, Path],
+        segment: Any,
+        *,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        tolerance: float = 0.0,
+        downstream_overlap_xs: int = 1,
+    ) -> Breakout1DSelection:
+        """Alias for :meth:`select_by_network_edge`."""
+        return RasBreakout1D.select_by_network_edge(
+            geom_file,
+            segment,
+            river=river,
+            reach=reach,
+            tolerance=tolerance,
+            downstream_overlap_xs=downstream_overlap_xs,
         )
 
     @staticmethod

@@ -271,14 +271,44 @@ def test_polygon_selector_resolves_one_reach_and_fills_intervening_xs(tmp_path: 
     assert selection.selector == "polygon"
     assert selection.stations == ("400", "300", "200")
 
-    network_selection = RasBreakout1D.select_by_network_segment(
+    network_selection = RasBreakout1D.select_by_network_edge(
         geom,
         shapely.LineString([(50, 55), (50, 85)]),
         river="Main River",
         reach="Main Reach",
     )
-    assert network_selection.selector == "network_segment"
-    assert network_selection.stations == selection.stations
+    assert network_selection.selector == "network_edge"
+    assert network_selection.stations == ("400", "300", "200", "100")
+
+    direct_only = RasBreakout1D.select_by_network_edge(
+        geom,
+        shapely.LineString([(50, 55), (50, 85)]),
+        river="Main River",
+        reach="Main Reach",
+        downstream_overlap_xs=0,
+    )
+    assert direct_only.stations == selection.stations
+
+
+def test_network_selector_validates_downstream_overlap(tmp_path: Path):
+    shapely = pytest.importorskip("shapely.geometry")
+    source = _write_project(tmp_path / "source")
+    geom = Path(source.geom_df.iloc[0]["full_path"])
+    segment = shapely.LineString([(50, 55), (50, 85)])
+
+    with pytest.raises(TypeError, match="must be an integer"):
+        RasBreakout1D.select_by_network_edge(
+            geom, segment, downstream_overlap_xs=1.5
+        )
+    with pytest.raises(ValueError, match="must be non-negative"):
+        RasBreakout1D.select_by_network_edge(
+            geom, segment, downstream_overlap_xs=-1
+        )
+
+    alias = RasBreakout1D.select_by_network_segment(
+        geom, segment, downstream_overlap_xs=0
+    )
+    assert alias.selector == "network_edge"
 
 
 def test_run_is_explicit_and_delegates_to_rascmdr(tmp_path: Path, monkeypatch):

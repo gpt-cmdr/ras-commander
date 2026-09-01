@@ -1,29 +1,59 @@
 # Hydrofabric Conflation
 
-`RasNetworkConflation.conflate()` crosswalks HEC-RAS model footprints, reach
-centerlines, and cross sections to hydrofabric flowpaths. It retains the full
-candidate evidence instead of reducing a failed lookup to a numeric COMID.
-`RasHydrofabric` remains an equivalent domain-specific name; NHDPlus, NWM, and
-NextGen are adapters to the same generic directed-network core.
+`RasNetworkConflation` starts with model-extent coverage, preserving the natural
+one-model-to-many-edge relationship. NHDPlus, NWM, and NextGen are schema
+adapters to the same generic directed-network core.
 
-## Basic use
+## Extent-first edge classification
 
 ```python
 from ras_commander import RasNetworkConflation
 
+coverage = RasNetworkConflation.classify_edges(
+    model_footprints=footprints_gdf,
+    network_edges=nwm_flowlines_gdf,
+    adapter="nwm",
+)
+
+edge_coverage_df = coverage.coverage_df
+```
+
+`coverage_df` has one row per `(geometry_id, edge_id)` with positive spatial
+overlap by default. It reports `inside_length`, full `edge_length`,
+`inside_fraction`, and `extent_status` (`inside` or `partial`) while preserving
+the full edge geometry and normalized topology fields. Pass
+`include_outside=True` when an audit also needs nearby non-intersecting edges.
+
+All spatial inputs must have a CRS. Measurements prefer the model footprint's
+projected CRS, an explicitly supplied `analysis_crs`, or an automatically
+estimated local UTM CRS. No weighted score is used: the model extent is the
+authoritative spatial filter, and every in-domain edge is retained.
+
+This table is the starting point for NWM-sized `RasBreakout1D` models. Select an
+`edge_id`, pass its geometry to `select_by_network_edge()`, and retain the
+default one-cross-section downstream overlap.
+
+## Advanced reach-edge candidate audit
+
+`conflate()` retains the earlier multi-signal candidate analysis for ambiguous
+or poorly aligned networks. It is an advanced QA surface, not the default gate
+for extent-based breakout generation. It crosswalks HEC-RAS model footprints,
+reach centerlines, and cross sections to candidate flowpaths while retaining
+the evidence instead of reducing a failed lookup to a numeric COMID.
+
+```python
 result = RasNetworkConflation.conflate(
     model_footprints=footprints_gdf,
     centerlines=reach_centerlines_gdf,
     cross_sections=xs_cut_lines_gdf,
-    flowpaths=nhdplus_flowlines_gdf,
-    adapter="nhdplus",
-    hucs=huc12_gdf,
+    flowpaths=network_edges_gdf,
+    adapter="nwm",
 )
 ```
 
-All spatial inputs must have a CRS. Measurements use the centerline's projected
-CRS, an explicitly supplied `analysis_crs`, or an automatically estimated local
-UTM CRS when the centerlines are geographic.
+Measurements use the centerline's projected CRS, an explicitly supplied
+`analysis_crs`, or an automatically estimated local UTM CRS when the
+centerlines are geographic.
 
 The method returns a `HydrofabricConflationResult` with three GeoDataFrames:
 
@@ -182,4 +212,5 @@ result = RasNetworkConflation.conflate(
       show_source: false
       members:
         - get_adapter
+        - classify_edges
         - conflate

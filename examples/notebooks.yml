@@ -1620,37 +1620,40 @@ notebooks:
   executed_cells: 8
 - id: 235_1d_breakout_model
   filename: 235_1d_breakout_model.ipynb
-  title: 1D Breakout Model Extraction and Comparison
+  title: Clip a Texas FEMA eBFE Model to One NWM Reach
   series: 200
   series_name: Geometry & Calibration
-  summary: Extract, validate, execute, and compare an independent one-reach steady 1D breakout against
-    the official Bald Eagle Creek source model.
+  summary: Classify real NOAA NWM v3 reaches by their coverage of the Shiloh Branch eBFE footprint, extract
+    feature 5790868 with a downstream overlap cross section, and compare the independent breakout to the
+    source model.
   tags:
   - 1d
   - steady
-  - geometry
-  - execution
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
   - validation
-  difficulty: intermediate
+  difficulty: advanced
   est_runtime: 1 min
-  data_project: Balde Eagle Creek
+  data_project: null
   functions_used:
-  - GeomBridge.get_bridges
   - GeomParser.get_river_centerlines
   - GeomParser.get_xs_cut_lines
+  - HdfProject.get_project_extent
   - HdfXsec.get_cross_sections
   - HdfXsec.get_xs_interpolation_surface
   - RasBreakout1D.compare_geometry
   - RasBreakout1D.compare_results
   - RasBreakout1D.extract_selection
   - RasBreakout1D.run
-  - RasBreakout1D.select_by_stations
+  - RasBreakout1D.select_by_network_edge
   - RasCmdr.compute_plan
-  - RasExamples.extract_project
+  - RasNetworkConflation.classify_edges
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 13
+  code_cells: 8
   executed_cells: 0
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb

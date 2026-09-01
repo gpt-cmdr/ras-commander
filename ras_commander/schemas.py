@@ -28,7 +28,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.6"
+SCHEMA_VERSION = "1.7"
 
 DATAFRAME_SCHEMAS = {
     "ras_breakout_1d_validation": {
@@ -282,6 +282,32 @@ DATAFRAME_SCHEMAS = {
             {"name": "basemap_layer_names", "dtype": "list", "description": "Names of basemap layers."},
             {"name": "basemap_layer_path", "dtype": "list", "description": "Paths of basemap layers."},
             {"name": "current_settings", "dtype": "dict", "description": "RASMapper current-settings map (rendering/units/etc.)."},
+        ],
+    },
+    "network_edge_coverage": {
+        "description": (
+            "One extent-first row per retained HEC-RAS model footprint and "
+            "network edge."
+        ),
+        "accessor": "RasNetworkConflation.classify_edges(...).coverage_df",
+        "source": "RasHydrofabric.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "inside_length", "dtype": "float64", "description": "Edge length inside the model footprint in analysis-CRS units."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full edge length in analysis-CRS units."},
+            {"name": "inside_fraction", "dtype": "float64", "description": "inside_length divided by edge_length."},
+            {"name": "extent_status", "dtype": "str", "description": "inside, partial, or optionally outside."},
+            {"name": "to_edge_id", "dtype": "str | None", "description": "Adapter-normalized downstream edge identifier."},
+            {"name": "from_node", "dtype": "str | None", "description": "Adapter-normalized upstream node or nexus identifier."},
+            {"name": "to_node", "dtype": "str | None", "description": "Adapter-normalized downstream node or nexus identifier."},
+            {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized stream order."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized drainage area."},
+            {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence."},
+            {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
+            {"name": "geometry", "dtype": "geometry", "description": "Full network edge geometry."},
         ],
     },
     "hydrofabric_matches": {

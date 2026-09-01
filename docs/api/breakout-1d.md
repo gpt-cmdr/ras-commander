@@ -25,11 +25,17 @@ Other selectors accept:
 - a Shapely polygon intersecting the desired cut lines with
   `select_by_polygon()`;
 - a Shapely network edge and optional search tolerance with
-  `select_by_network_segment()`.
+  `select_by_network_edge()` (`select_by_network_segment()` is an alias).
 
 Polygon and network geometries must use the geometry file's coordinate system.
 An omitted river/reach is accepted only when the selection resolves to exactly
 one reach.
+
+Network-segment selection includes one additional downstream cross section by
+default. This matches Ripple1D's shared-boundary convention for reach-sized
+submodels and provides an internal target reach with a downstream boundary
+section. Pass `downstream_overlap_xs=0` for the directly intersected span only,
+or a larger integer for a wider transition zone.
 
 ## Extract and validate
 
@@ -115,6 +121,7 @@ of `Reach XY` data is reserved for a later multi-reach workflow.
         - select_by_stations
         - select_by_cross_sections
         - select_by_polygon
+        - select_by_network_edge
         - select_by_network_segment
         - extract_reach
         - extract_selection

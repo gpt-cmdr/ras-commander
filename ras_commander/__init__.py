@@ -128,6 +128,7 @@ _LAZY_EXPORTS = {
         name: ('.RasHydrofabric', name)
         for name in (
             'RasNetworkConflation', 'NetworkConflationResult',
+            'NetworkEdgeCoverageResult',
             'RasHydrofabric', 'HydrofabricConflationResult',
             'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
             'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
@@ -373,6 +374,7 @@ __all__ = [
     'RasBreakout1D', 'Breakout1DResult', 'Breakout1DSelection',
     'Breakout1DValidationReport',
     'RasNetworkConflation', 'NetworkConflationResult',
+    'NetworkEdgeCoverageResult',
     'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
     'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
     'NextGenFlowpathAdapter',

@@ -79,6 +79,33 @@ class HydrofabricConflationResult:
 
 
 @dataclass(frozen=True)
+class NetworkEdgeCoverageResult:
+    """Extent-first classification of network edges within model footprints.
+
+    ``coverage_df`` contains one row per ``(geometry_id, edge_id)`` retained by
+    the requested overlap threshold.  It deliberately does not choose one best
+    edge for a RAS reach: a single model footprint commonly contains many NWM
+    or NextGen edges.
+    """
+
+    coverage_df: gpd.GeoDataFrame
+    adapter: str
+    analysis_crs: str
+    parameters: Mapping[str, Any]
+
+    @property
+    def summary(self) -> Dict[str, int]:
+        """Return counts of inside, partial, and outside edge relationships."""
+        counts = self.coverage_df["extent_status"].value_counts().to_dict()
+        return {
+            "inside": int(counts.get("inside", 0)),
+            "partial": int(counts.get("partial", 0)),
+            "outside": int(counts.get("outside", 0)),
+            "total": int(len(self.coverage_df)),
+        }
+
+
+@dataclass(frozen=True)
 class HydrofabricAdapter:
     """Column aliases used to normalize a flowpath product.
 
@@ -184,7 +211,9 @@ class NWMHydrofabricAdapter(HydrofabricAdapter):
             ),
             from_node_fields=("fromid", "from_id", "from_node", "nexus_from"),
             to_node_fields=("toid", "to_id", "to_node", "nexus_to"),
-            stream_order_fields=("order", "stream_order", "streamorde"),
+            stream_order_fields=(
+                "order", "stream_order", "strm_order", "streamorde",
+            ),
             drainage_area_fields=(
                 "areasqkm", "area_sqkm", "totdasqkm", "drainage_area",
             ),
@@ -270,6 +299,140 @@ class RasHydrofabric:
     """
 
     DEFAULT_WEIGHTS = DEFAULT_CONFLATION_WEIGHTS
+
+    @staticmethod
+    @log_call
+    def classify_edges(
+        model_footprints: GeoInput,
+        network_edges: GeoInput,
+        *,
+        adapter: Union[str, HydrofabricAdapter] = "auto",
+        geometry_id_col: Optional[str] = None,
+        network_edges_layer: Optional[str] = None,
+        analysis_crs: Optional[Any] = None,
+        include_outside: bool = False,
+        min_inside_fraction: float = 0.0,
+        inside_tolerance: float = 1e-9,
+    ) -> NetworkEdgeCoverageResult:
+        """Classify every model-footprint/network-edge spatial relationship.
+
+        The model extent is authoritative.  For each edge, ``inside_fraction``
+        is the length inside the model footprint divided by the edge's full
+        length.  Intersecting edges are returned as ``inside`` or ``partial``;
+        outside edges are omitted unless ``include_outside=True``.
+
+        This extent-first operation preserves the natural one-model-to-many-edge
+        cardinality needed to create one breakout per NWM/NextGen reach.  It
+        performs no weighted candidate scoring.
+        """
+        if not 0.0 <= min_inside_fraction <= 1.0:
+            raise ValueError("min_inside_fraction must be between 0 and 1")
+        if not 0.0 <= inside_tolerance < 1.0:
+            raise ValueError("inside_tolerance must be between 0 and 1")
+
+        footprints = _read_geodata(model_footprints, "model_footprints")
+        raw_edges = _read_geodata(
+            network_edges, "network_edges", layer=network_edges_layer
+        )
+        _require_crs(footprints, "model_footprints")
+        _require_crs(raw_edges, "network_edges")
+
+        footprint_id = _find_column(
+            footprints,
+            geometry_id_col,
+            ("geometry_id", "geom_id", "model_id", "final_name_key", "id"),
+        )
+        footprints = footprints.copy()
+        if footprint_id is None:
+            footprints["geometry_id"] = footprints.index.map(
+                lambda value: f"geometry-{value}"
+            )
+        else:
+            footprints["geometry_id"] = footprints[footprint_id].map(
+                _normalise_identifier
+            )
+        if footprints["geometry_id"].isna().any():
+            raise ValueError("model_footprints contain null/blank geometry IDs")
+        if footprints["geometry_id"].duplicated().any():
+            raise ValueError("model_footprints geometry IDs must be unique")
+
+        selected_adapter = RasHydrofabric.get_adapter(adapter, raw_edges)
+        edges = selected_adapter.normalize(raw_edges)
+        target_crs = _choose_extent_analysis_crs(
+            footprints, edges, analysis_crs
+        )
+        footprints = footprints.to_crs(target_crs)
+        edges = edges.to_crs(target_crs)
+
+        rows: list[Dict[str, Any]] = []
+        for footprint in footprints.itertuples(index=False):
+            footprint_geometry = footprint.geometry
+            for edge in edges.itertuples(index=False):
+                edge_geometry = edge.geometry
+                if edge_geometry is None or edge_geometry.is_empty:
+                    continue
+                edge_length = float(edge_geometry.length)
+                if not np.isfinite(edge_length) or edge_length <= 0:
+                    continue
+                inside_length = (
+                    float(edge_geometry.intersection(footprint_geometry).length)
+                    if edge_geometry.intersects(footprint_geometry)
+                    else 0.0
+                )
+                inside_fraction = min(max(inside_length / edge_length, 0.0), 1.0)
+                if inside_fraction <= 0.0:
+                    extent_status = "outside"
+                elif inside_fraction >= 1.0 - inside_tolerance:
+                    extent_status = "inside"
+                else:
+                    extent_status = "partial"
+                if extent_status == "outside" and not include_outside:
+                    continue
+                if inside_fraction < min_inside_fraction:
+                    continue
+                rows.append(
+                    {
+                        "geometry_id": str(footprint.geometry_id),
+                        "edge_id": str(edge.feature_id),
+                        "inside_length": inside_length,
+                        "edge_length": edge_length,
+                        "inside_fraction": inside_fraction,
+                        "extent_status": extent_status,
+                        "to_edge_id": _normalise_identifier(edge.to_feature_id),
+                        "from_node": _normalise_identifier(edge.from_node),
+                        "to_node": _normalise_identifier(edge.to_node),
+                        "stream_order": _finite_or_none(edge.stream_order),
+                        "drainage_area": _finite_or_none(edge.drainage_area),
+                        "hydrosequence": _finite_or_none(edge.hydrosequence),
+                        "adapter": str(edge.adapter),
+                        "geometry": edge_geometry,
+                    }
+                )
+
+        columns = [
+            "geometry_id", "edge_id", "inside_length", "edge_length",
+            "inside_fraction", "extent_status", "to_edge_id", "from_node",
+            "to_node", "stream_order", "drainage_area", "hydrosequence",
+            "adapter", "geometry",
+        ]
+        coverage = gpd.GeoDataFrame(
+            rows, columns=columns, geometry="geometry", crs=target_crs
+        )
+        if not coverage.empty:
+            coverage = coverage.sort_values(
+                ["geometry_id", "inside_fraction", "edge_id"],
+                ascending=[True, False, True],
+            ).reset_index(drop=True)
+        return NetworkEdgeCoverageResult(
+            coverage_df=coverage,
+            adapter=selected_adapter.name,
+            analysis_crs=target_crs.to_string(),
+            parameters={
+                "include_outside": bool(include_outside),
+                "min_inside_fraction": float(min_inside_fraction),
+                "inside_tolerance": float(inside_tolerance),
+            },
+        )
 
     @staticmethod
     def get_adapter(
@@ -984,6 +1147,31 @@ def _choose_analysis_crs(
         crs=reaches.crs,
     )
     estimated = combined.estimate_utm_crs()
+    if estimated is None:
+        raise ValueError(
+            "Could not estimate a projected CRS; pass analysis_crs explicitly"
+        )
+    return CRS.from_user_input(estimated)
+
+
+def _choose_extent_analysis_crs(
+    footprints: gpd.GeoDataFrame,
+    edges: gpd.GeoDataFrame,
+    requested: Optional[Any],
+) -> CRS:
+    """Choose a projected CRS, preferring the model footprint's own CRS."""
+    if requested is not None:
+        target = CRS.from_user_input(requested)
+        if not target.is_projected:
+            raise ValueError("analysis_crs must be projected")
+        return target
+    footprint_crs = CRS.from_user_input(footprints.crs)
+    if footprint_crs.is_projected:
+        return footprint_crs
+    edge_crs = CRS.from_user_input(edges.crs)
+    if edge_crs.is_projected:
+        return edge_crs
+    estimated = footprints.estimate_utm_crs()
     if estimated is None:
         raise ValueError(
             "Could not estimate a projected CRS; pass analysis_crs explicitly"
