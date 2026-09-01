@@ -1,15 +1,16 @@
 """Extract independent, single-reach HEC-RAS 1D steady breakouts.
 
 The MVP intentionally fails closed outside one continuous 1D reach and one
-steady-flow plan.  Geometry node blocks are copied verbatim; the only geometry
-record changed is the downstream retained cross section's reach-length triplet,
-which is reset to zero because there is no downstream cross section in the
-destination model.
+steady-flow plan. Geometry node blocks are copied verbatim. The river centerline
+is clipped to the retained boundary cross sections and the downstream retained
+cross section's reach-length triplet is reset to zero because there is no
+downstream cross section in the destination model.
 """
 
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,31 @@ class Breakout1DSelection:
     upstream_station: str
     downstream_station: str
     selector: str = "stations"
+
+
+@dataclass(frozen=True)
+class Breakout1DDomainSelection:
+    """Nested selections for computation and inundation-raster export.
+
+    ``direct_selection`` is the cross-section span intersected by the network
+    edge. ``inundation_selection`` adds the requested shared downstream cross
+    section. ``computation_selection`` adds hydraulic buffer distance while
+    always containing the inundation selection.
+    """
+
+    direct_selection: Breakout1DSelection
+    inundation_selection: Breakout1DSelection
+    computation_selection: Breakout1DSelection
+    inside_fraction: Optional[float]
+    main_channel_length: float
+    upstream_buffer_distance: float
+    downstream_buffer_distance: float
+    upstream_buffer_applied: float
+    downstream_buffer_applied: float
+    automatic_upstream_buffer: bool
+    automatic_downstream_buffer: bool
+    inundation_overlap_xs: int
+    inundation_overlap_xs_applied: int
 
 
 @dataclass
@@ -188,127 +214,264 @@ class RasBreakout1D:
         If ``river`` and ``reach`` are omitted, the intersections must resolve to
         exactly one reach.
         """
-        from .geom import GeomParser
-
-        cut_lines = GeomParser.get_xs_cut_lines(geom_file)
-        intersecting = cut_lines[cut_lines.geometry.intersects(polygon)].copy()
-        if river is not None:
-            intersecting = intersecting[intersecting["river"] == river]
-        if reach is not None:
-            intersecting = intersecting[intersecting["reach"] == reach]
-        if intersecting.empty:
-            raise ValueError("Polygon does not intersect any cross-section cut lines")
-
-        reaches = intersecting[["river", "reach"]].drop_duplicates()
-        if len(reaches) != 1:
-            choices = list(reaches.itertuples(index=False, name=None))
-            raise ValueError(
-                f"Polygon selection must resolve to exactly one reach; found {choices}"
-            )
-        resolved_river, resolved_reach = reaches.iloc[0].tolist()
-        station_values = intersecting["station"].map(RasBreakout1D._station_value)
-        selection = RasBreakout1D.select_by_stations(
+        reach_xs, start, end = RasBreakout1D._intersecting_xs_span(
             geom_file,
-            str(resolved_river),
-            str(resolved_reach),
-            upstream_station=float(station_values.max()),
-            downstream_station=float(station_values.min()),
+            polygon,
+            river=river,
+            reach=reach,
+            geometry_label="Polygon",
         )
-        return Breakout1DSelection(
-            river=selection.river,
-            reach=selection.reach,
-            stations=selection.stations,
-            upstream_station=selection.upstream_station,
-            downstream_station=selection.downstream_station,
+        return RasBreakout1D._selection_from_reach_positions(
+            reach_xs,
+            start,
+            end,
             selector="polygon",
+            minimum_cross_sections=2,
         )
 
     @staticmethod
     @log_call
     def select_by_network_edge(
         geom_file: Union[str, Path],
-        segment: Any,
+        network_edge: Any,
         *,
         river: Optional[str] = None,
         reach: Optional[str] = None,
         tolerance: float = 0.0,
         downstream_overlap_xs: int = 1,
+        upstream_buffer_distance: float = 0.0,
+        downstream_buffer_distance: float = 0.0,
     ) -> Breakout1DSelection:
         """Select the continuous XS span associated with a network edge.
 
-        ``segment`` must be a Shapely-like line in the geometry coordinate
-        system.  A positive ``tolerance`` buffers it by that coordinate-system
-        distance before testing intersections.  By default, the selection also
-        includes the next cross section downstream of the directly intersected
-        span.  That shared boundary section preserves the Ripple1D breakout
-        convention and gives an internal reach a usable downstream boundary.
+        ``network_edge`` must be a Shapely-like line in the geometry coordinate
+        system. A positive ``tolerance`` buffers it in spatial coordinate-system
+        units before testing intersections. Optional upstream and downstream
+        buffer distances use HEC-RAS main-channel reach-length/model units. The
+        first cross section at or beyond each requested distance is retained, or
+        selection stops at the reach terminus.
+
+        By default, the selection also includes the next cross section
+        downstream of the distance-buffered span. That shared boundary section
+        preserves the Ripple1D breakout convention and gives an internal reach
+        a usable downstream boundary.
 
         Set ``downstream_overlap_xs=0`` to retain only directly intersected cross
         sections.  Values greater than one are supported for workflows that
         need a wider shared transition zone; the selection stops at the source
         reach boundary when fewer downstream sections are available.
         """
-        if tolerance < 0:
-            raise ValueError("tolerance must be non-negative")
         if isinstance(downstream_overlap_xs, bool) or not isinstance(
             downstream_overlap_xs, int
         ):
             raise TypeError("downstream_overlap_xs must be an integer")
         if downstream_overlap_xs < 0:
             raise ValueError("downstream_overlap_xs must be non-negative")
-        search_geometry = segment.buffer(tolerance) if tolerance else segment
-        selection = RasBreakout1D.select_by_polygon(
+        upstream_buffer_distance = RasBreakout1D._nonnegative_distance(
+            upstream_buffer_distance, "upstream_buffer_distance"
+        )
+        downstream_buffer_distance = RasBreakout1D._nonnegative_distance(
+            downstream_buffer_distance, "downstream_buffer_distance"
+        )
+        selection = RasBreakout1D._direct_network_edge_selection(
             geom_file,
-            search_geometry,
+            network_edge,
             river=river,
             reach=reach,
+            tolerance=tolerance,
+        )
+        selection, _, _ = RasBreakout1D._expand_selection_by_channel_distance(
+            geom_file,
+            selection,
+            upstream_buffer_distance=upstream_buffer_distance,
+            downstream_buffer_distance=downstream_buffer_distance,
         )
         if downstream_overlap_xs:
-            reach_xs = RasBreakout1D._reach_cross_sections(
-                geom_file, selection.river, selection.reach
-            ).copy()
-            reach_xs = reach_xs.assign(
-                _station_value=reach_xs["RS"].map(RasBreakout1D._station_value)
-            ).sort_values("_station_value", ascending=False)
-            downstream_value = RasBreakout1D._station_value(
-                selection.downstream_station
-            )
-            matches = [
-                index
-                for index, value in enumerate(reach_xs["_station_value"])
-                if abs(float(value) - downstream_value) <= 1e-9
-            ]
-            if len(matches) != 1:
-                raise ValueError(
-                    "Network-segment downstream cross section could not be "
-                    "resolved uniquely on the source reach"
-                )
-            end = min(
-                int(matches[0]) + downstream_overlap_xs,
-                len(reach_xs) - 1,
-            )
-            upstream_value = RasBreakout1D._station_value(
-                selection.upstream_station
-            )
-            expanded = reach_xs.iloc[: end + 1]
-            stations = tuple(
-                expanded.loc[
-                    expanded["_station_value"] <= upstream_value, "RS"
-                ].astype(str)
-            )
-            selection = RasBreakout1D.select_by_cross_sections(
+            selection = RasBreakout1D._expand_downstream_cross_sections(
                 geom_file,
-                selection.river,
-                selection.reach,
-                stations,
+                selection,
+                downstream_overlap_xs,
             )
-        return Breakout1DSelection(
-            river=selection.river,
-            reach=selection.reach,
-            stations=selection.stations,
-            upstream_station=selection.upstream_station,
-            downstream_station=selection.downstream_station,
-            selector="network_edge",
+        if len(selection.stations) < 2:
+            raise ValueError(
+                "Network-edge selection must retain at least two cross sections "
+                "after buffers and downstream overlap"
+            )
+        return RasBreakout1D._retag_selection(selection, "network_edge")
+
+    @staticmethod
+    @log_call
+    def select_domains_by_network_edge(
+        geom_file: Union[str, Path],
+        network_edge: Any,
+        *,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        tolerance: float = 0.0,
+        inside_fraction: Optional[float] = None,
+        upstream_buffer_distance: Optional[float] = None,
+        downstream_buffer_distance: Optional[float] = None,
+        upstream_buffer_fraction: float = 0.10,
+        downstream_buffer_fraction: float = 0.25,
+        inundation_overlap_xs: int = 1,
+        fully_inside_tolerance: float = 1e-9,
+    ) -> Breakout1DDomainSelection:
+        """Resolve nested hydraulic-computation and raster-export domains.
+
+        Explicit buffer distances override percentage defaults independently.
+        When ``inside_fraction`` indicates that the network edge is fully inside
+        the model, omitted distances default to 10% upstream and 25% downstream
+        of the source reach's main-channel length. For partial edges, omitted
+        distances resolve to zero. Expansion stops at the available reach
+        termini.
+
+        The inundation selection requests ``inundation_overlap_xs`` shared
+        downstream cross sections and reports how many were available. The
+        computation selection always contains that strict export selection,
+        even when no hydraulic distance buffer is requested.
+        """
+        normalized_inside_fraction = RasBreakout1D._optional_fraction(
+            inside_fraction, "inside_fraction"
+        )
+        upstream_buffer_fraction = RasBreakout1D._fraction(
+            upstream_buffer_fraction, "upstream_buffer_fraction"
+        )
+        downstream_buffer_fraction = RasBreakout1D._fraction(
+            downstream_buffer_fraction, "downstream_buffer_fraction"
+        )
+        fully_inside_tolerance = RasBreakout1D._nonnegative_distance(
+            fully_inside_tolerance, "fully_inside_tolerance"
+        )
+        if fully_inside_tolerance >= 1.0:
+            raise ValueError("fully_inside_tolerance must be less than 1")
+        if isinstance(inundation_overlap_xs, bool) or not isinstance(
+            inundation_overlap_xs, int
+        ):
+            raise TypeError("inundation_overlap_xs must be an integer")
+        if inundation_overlap_xs < 0:
+            raise ValueError("inundation_overlap_xs must be non-negative")
+
+        direct = RasBreakout1D._direct_network_edge_selection(
+            geom_file,
+            network_edge,
+            river=river,
+            reach=reach,
+            tolerance=tolerance,
+        )
+        direct = RasBreakout1D._retag_selection(direct, "network_edge_direct")
+        main_channel_length = RasBreakout1D._main_channel_length(
+            geom_file, direct.river, direct.reach
+        )
+        fully_inside = (
+            normalized_inside_fraction is not None
+            and normalized_inside_fraction >= 1.0 - fully_inside_tolerance
+        )
+        automatic_upstream = upstream_buffer_distance is None and fully_inside
+        automatic_downstream = (
+            downstream_buffer_distance is None and fully_inside
+        )
+        if upstream_buffer_distance is None:
+            resolved_upstream = (
+                upstream_buffer_fraction * main_channel_length
+                if automatic_upstream
+                else 0.0
+            )
+        else:
+            resolved_upstream = RasBreakout1D._nonnegative_distance(
+                upstream_buffer_distance, "upstream_buffer_distance"
+            )
+        if downstream_buffer_distance is None:
+            resolved_downstream = (
+                downstream_buffer_fraction * main_channel_length
+                if automatic_downstream
+                else 0.0
+            )
+        else:
+            resolved_downstream = RasBreakout1D._nonnegative_distance(
+                downstream_buffer_distance, "downstream_buffer_distance"
+            )
+
+        inundation = RasBreakout1D._expand_downstream_cross_sections(
+            geom_file, direct, inundation_overlap_xs
+        )
+        inundation = RasBreakout1D._retag_selection(
+            inundation, "network_edge_inundation"
+        )
+        computation, applied_upstream, applied_downstream = (
+            RasBreakout1D._expand_selection_by_channel_distance(
+                geom_file,
+                direct,
+                upstream_buffer_distance=resolved_upstream,
+                downstream_buffer_distance=resolved_downstream,
+            )
+        )
+        computation = RasBreakout1D._union_selections(
+            geom_file, computation, inundation
+        )
+        if len(computation.stations) < 2:
+            raise ValueError(
+                "Network-edge domains must retain at least two cross sections; "
+                "the selected edge reaches a model terminus without an available "
+                "overlap section"
+            )
+        computation = RasBreakout1D._retag_selection(
+            computation, "network_edge_computation"
+        )
+        reach_xs = RasBreakout1D._reach_cross_sections(
+            geom_file, direct.river, direct.reach
+        )
+        _, direct_end = RasBreakout1D._selection_positions(reach_xs, direct)
+        _, inundation_end = RasBreakout1D._selection_positions(
+            reach_xs, inundation
+        )
+        applied_overlap = inundation_end - direct_end
+        return Breakout1DDomainSelection(
+            direct_selection=direct,
+            inundation_selection=inundation,
+            computation_selection=computation,
+            inside_fraction=normalized_inside_fraction,
+            main_channel_length=main_channel_length,
+            upstream_buffer_distance=resolved_upstream,
+            downstream_buffer_distance=resolved_downstream,
+            upstream_buffer_applied=applied_upstream,
+            downstream_buffer_applied=applied_downstream,
+            automatic_upstream_buffer=automatic_upstream,
+            automatic_downstream_buffer=automatic_downstream,
+            inundation_overlap_xs=inundation_overlap_xs,
+            inundation_overlap_xs_applied=applied_overlap,
+        )
+
+    @staticmethod
+    @log_call
+    def select_network_edge_domains(
+        geom_file: Union[str, Path],
+        network_edge: Any,
+        *,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        tolerance: float = 0.0,
+        inside_fraction: Optional[float] = None,
+        upstream_buffer_distance: Optional[float] = None,
+        downstream_buffer_distance: Optional[float] = None,
+        upstream_buffer_fraction: float = 0.10,
+        downstream_buffer_fraction: float = 0.25,
+        inundation_overlap_xs: int = 1,
+        fully_inside_tolerance: float = 1e-9,
+    ) -> Breakout1DDomainSelection:
+        """Compatibility alias for :meth:`select_domains_by_network_edge`."""
+        return RasBreakout1D.select_domains_by_network_edge(
+            geom_file,
+            network_edge,
+            river=river,
+            reach=reach,
+            tolerance=tolerance,
+            inside_fraction=inside_fraction,
+            upstream_buffer_distance=upstream_buffer_distance,
+            downstream_buffer_distance=downstream_buffer_distance,
+            upstream_buffer_fraction=upstream_buffer_fraction,
+            downstream_buffer_fraction=downstream_buffer_fraction,
+            inundation_overlap_xs=inundation_overlap_xs,
+            fully_inside_tolerance=fully_inside_tolerance,
         )
 
     @staticmethod
@@ -321,6 +484,8 @@ class RasBreakout1D:
         reach: Optional[str] = None,
         tolerance: float = 0.0,
         downstream_overlap_xs: int = 1,
+        upstream_buffer_distance: float = 0.0,
+        downstream_buffer_distance: float = 0.0,
     ) -> Breakout1DSelection:
         """Alias for :meth:`select_by_network_edge`."""
         return RasBreakout1D.select_by_network_edge(
@@ -330,6 +495,8 @@ class RasBreakout1D:
             reach=reach,
             tolerance=tolerance,
             downstream_overlap_xs=downstream_overlap_xs,
+            upstream_buffer_distance=upstream_buffer_distance,
+            downstream_buffer_distance=downstream_buffer_distance,
         )
 
     @staticmethod
@@ -860,7 +1027,11 @@ class RasBreakout1D:
             raise ValueError("Selection is not a continuous source-reach slice")
 
         domain_start = RasBreakout1D._first_geometry_domain_line(lines)
-        reach_header = lines[reach_start : nodes[0].start]
+        reach_header = RasBreakout1D._clip_reach_header(
+            geom_file,
+            lines[reach_start : nodes[0].start],
+            selection,
+        )
         output = list(lines[:domain_start]) + list(reach_header)
         downstream_value = RasBreakout1D._station_value(selection.downstream_station)
         for node in retained_nodes:
@@ -874,6 +1045,113 @@ class RasBreakout1D:
         if output and not output[-1].endswith(("\n", "\r")):
             output[-1] += "\n"
         return "".join(output)
+
+    @staticmethod
+    def _clip_reach_header(
+        geom_file: Union[str, Path],
+        reach_header: Sequence[str],
+        selection: Breakout1DSelection,
+    ) -> list[str]:
+        """Clip ``Reach XY`` to the retained upstream/downstream XS crossings.
+
+        A breakout must not retain the removed portions of its source river
+        centerline. HEC-RAS uses that line while regenerating the interpolation
+        surface, and a full-source line paired with a shorter XS slice can
+        produce self-intersecting edge lines. If legacy geometry lacks usable
+        GIS cut lines, the original header is retained and node extraction still
+        succeeds.
+        """
+        from shapely.ops import nearest_points, substring
+
+        from .geom import GeomParser
+
+        header = list(reach_header)
+        reach_xy_index = next(
+            (
+                index
+                for index, line in enumerate(header)
+                if line.lstrip().startswith("Reach XY=")
+            ),
+            None,
+        )
+        if reach_xy_index is None:
+            return header
+
+        count_match = _NUMBER_RE.search(header[reach_xy_index].split("=", 1)[-1])
+        if count_match is None:
+            return header
+        source_point_count = int(float(count_match.group(0)))
+        coordinate_line_count = math.ceil(source_point_count / 2)
+        coordinate_end = reach_xy_index + 1 + coordinate_line_count
+        if coordinate_end > len(header):
+            return header
+
+        centerlines = GeomParser.get_river_centerlines(geom_file)
+        centerlines = centerlines[
+            (centerlines["river"] == selection.river)
+            & (centerlines["reach"] == selection.reach)
+        ]
+        cut_lines = GeomParser.get_xs_cut_lines(geom_file)
+        cut_lines = cut_lines[
+            (cut_lines["river"] == selection.river)
+            & (cut_lines["reach"] == selection.reach)
+        ]
+        if len(centerlines) != 1 or cut_lines.empty:
+            return header
+
+        centerline = centerlines.iloc[0].geometry
+
+        def boundary_measure(station: str) -> Optional[float]:
+            matches = cut_lines[
+                cut_lines["station"].map(RasBreakout1D._station_value)
+                == RasBreakout1D._station_value(station)
+            ]
+            if len(matches) != 1:
+                return None
+            center_point, _ = nearest_points(centerline, matches.iloc[0].geometry)
+            if center_point.distance(matches.iloc[0].geometry) > 1e-6:
+                return None
+            return float(centerline.project(center_point))
+
+        upstream_measure = boundary_measure(selection.upstream_station)
+        downstream_measure = boundary_measure(selection.downstream_station)
+        if upstream_measure is None or downstream_measure is None:
+            return header
+        lower_measure, upper_measure = sorted((upstream_measure, downstream_measure))
+        if math.isclose(lower_measure, upper_measure, abs_tol=1e-9):
+            return header
+
+        clipped = substring(centerline, lower_measure, upper_measure)
+        if clipped.geom_type != "LineString" or len(clipped.coords) < 2:
+            return header
+        coordinates = list(clipped.coords)
+        values = [value for coordinate in coordinates for value in coordinate[:2]]
+        coordinate_lines = [
+            "".join(
+                RasBreakout1D._format_coordinate(value)
+                for value in values[index : index + 4]
+            )
+            + "\n"
+            for index in range(0, len(values), 4)
+        ]
+        return (
+            header[:reach_xy_index]
+            + [f"Reach XY= {len(coordinates)}\n"]
+            + coordinate_lines
+            + header[coordinate_end:]
+        )
+
+    @staticmethod
+    def _format_coordinate(value: float) -> str:
+        """Return one HEC-RAS 16-character GIS coordinate field."""
+        for precision in (3, 2, 1, 0):
+            formatted = f"{float(value):.{precision}f}"
+            if len(formatted) <= 16:
+                return formatted.rjust(16)
+        scientific = f"{float(value):.8E}"
+        if len(scientific) > 16:
+            raise ValueError(f"Coordinate cannot fit a 16-character field: {value}")
+        return scientific.rjust(16)
 
     @staticmethod
     def _extract_flow_data(
@@ -1070,6 +1348,293 @@ class RasBreakout1D:
         if natural["RS"].map(RasBreakout1D._station_value).duplicated().any():
             raise ValueError("Duplicate numeric river stations are unsupported")
         return natural.reset_index(drop=True)
+
+    @staticmethod
+    def _direct_network_edge_selection(
+        geom_file: Union[str, Path],
+        network_edge: Any,
+        *,
+        river: Optional[str],
+        reach: Optional[str],
+        tolerance: float,
+    ) -> Breakout1DSelection:
+        tolerance = RasBreakout1D._nonnegative_distance(tolerance, "tolerance")
+        search_geometry = (
+            network_edge.buffer(tolerance) if tolerance else network_edge
+        )
+        reach_xs, start, end = RasBreakout1D._intersecting_xs_span(
+            geom_file,
+            search_geometry,
+            river=river,
+            reach=reach,
+            geometry_label="Network edge",
+        )
+        return RasBreakout1D._selection_from_reach_positions(
+            reach_xs,
+            start,
+            end,
+            selector="network_edge_direct",
+            minimum_cross_sections=1,
+        )
+
+    @staticmethod
+    def _intersecting_xs_span(
+        geom_file: Union[str, Path],
+        search_geometry: Any,
+        *,
+        river: Optional[str],
+        reach: Optional[str],
+        geometry_label: str,
+    ) -> tuple[pd.DataFrame, int, int]:
+        from .geom import GeomParser
+
+        cut_lines = GeomParser.get_xs_cut_lines(geom_file)
+        intersecting = cut_lines[
+            cut_lines.geometry.intersects(search_geometry)
+        ].copy()
+        if river is not None:
+            intersecting = intersecting[intersecting["river"] == river]
+        if reach is not None:
+            intersecting = intersecting[intersecting["reach"] == reach]
+        if intersecting.empty:
+            raise ValueError(
+                f"{geometry_label} does not intersect any cross-section cut lines"
+            )
+
+        reaches = intersecting[["river", "reach"]].drop_duplicates()
+        if len(reaches) != 1:
+            choices = list(reaches.itertuples(index=False, name=None))
+            raise ValueError(
+                f"{geometry_label} selection must resolve to exactly one reach; "
+                f"found {choices}"
+            )
+        resolved_river, resolved_reach = reaches.iloc[0].tolist()
+        reach_xs = RasBreakout1D._reach_cross_sections(
+            geom_file, str(resolved_river), str(resolved_reach)
+        )
+        intersected_values = {
+            RasBreakout1D._station_value(value)
+            for value in intersecting["station"]
+        }
+        positions = [
+            position
+            for position, value in enumerate(reach_xs["RS"])
+            if RasBreakout1D._station_value(value) in intersected_values
+        ]
+        if not positions:
+            raise ValueError(
+                f"{geometry_label} intersections could not be resolved in the reach"
+            )
+        return reach_xs, min(positions), max(positions)
+
+    @staticmethod
+    def _selection_from_reach_positions(
+        reach_xs: pd.DataFrame,
+        start: int,
+        end: int,
+        *,
+        selector: str,
+        minimum_cross_sections: int,
+    ) -> Breakout1DSelection:
+        if start < 0 or end < start or end >= len(reach_xs):
+            raise ValueError("Cross-section position bounds are invalid")
+        selected = reach_xs.iloc[start : end + 1]
+        if len(selected) < minimum_cross_sections:
+            raise ValueError(
+                f"Selection must retain at least {minimum_cross_sections} cross "
+                f"sections; found {len(selected)}"
+            )
+        stations = tuple(selected["RS"].astype(str))
+        return Breakout1DSelection(
+            river=str(selected.iloc[0]["River"]),
+            reach=str(selected.iloc[0]["Reach"]),
+            stations=stations,
+            upstream_station=stations[0],
+            downstream_station=stations[-1],
+            selector=selector,
+        )
+
+    @staticmethod
+    def _main_channel_length(
+        geom_file: Union[str, Path], river: str, reach: str
+    ) -> float:
+        reach_xs = RasBreakout1D._reach_cross_sections(geom_file, river, reach)
+        lengths = pd.to_numeric(reach_xs["Length_Channel"], errors="coerce")
+        if lengths.isna().any() or (~lengths.map(math.isfinite)).any():
+            raise ValueError("Main-channel reach lengths must be finite numbers")
+        if (lengths < 0).any():
+            raise ValueError("Main-channel reach lengths must be non-negative")
+        return float(lengths.sum())
+
+    @staticmethod
+    def _expand_selection_by_channel_distance(
+        geom_file: Union[str, Path],
+        selection: Breakout1DSelection,
+        *,
+        upstream_buffer_distance: float,
+        downstream_buffer_distance: float,
+    ) -> tuple[Breakout1DSelection, float, float]:
+        upstream_buffer_distance = RasBreakout1D._nonnegative_distance(
+            upstream_buffer_distance, "upstream_buffer_distance"
+        )
+        downstream_buffer_distance = RasBreakout1D._nonnegative_distance(
+            downstream_buffer_distance, "downstream_buffer_distance"
+        )
+        reach_xs = RasBreakout1D._reach_cross_sections(
+            geom_file, selection.river, selection.reach
+        )
+        upstream_position, downstream_position = RasBreakout1D._selection_positions(
+            reach_xs, selection
+        )
+
+        start = upstream_position
+        applied_upstream = 0.0
+        while start > 0 and applied_upstream < upstream_buffer_distance:
+            start -= 1
+            applied_upstream += RasBreakout1D._channel_length_at(reach_xs, start)
+
+        end = downstream_position
+        applied_downstream = 0.0
+        while (
+            end < len(reach_xs) - 1
+            and applied_downstream < downstream_buffer_distance
+        ):
+            applied_downstream += RasBreakout1D._channel_length_at(reach_xs, end)
+            end += 1
+
+        expanded = RasBreakout1D._selection_from_reach_positions(
+            reach_xs,
+            start,
+            end,
+            selector=selection.selector,
+            minimum_cross_sections=1,
+        )
+        return expanded, applied_upstream, applied_downstream
+
+    @staticmethod
+    def _expand_downstream_cross_sections(
+        geom_file: Union[str, Path],
+        selection: Breakout1DSelection,
+        count: int,
+    ) -> Breakout1DSelection:
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise TypeError("downstream cross-section overlap must be an integer")
+        if count < 0:
+            raise ValueError("downstream cross-section overlap must be non-negative")
+        reach_xs = RasBreakout1D._reach_cross_sections(
+            geom_file, selection.river, selection.reach
+        )
+        upstream_position, downstream_position = RasBreakout1D._selection_positions(
+            reach_xs, selection
+        )
+        end = min(downstream_position + count, len(reach_xs) - 1)
+        return RasBreakout1D._selection_from_reach_positions(
+            reach_xs,
+            upstream_position,
+            end,
+            selector=selection.selector,
+            minimum_cross_sections=1,
+        )
+
+    @staticmethod
+    def _union_selections(
+        geom_file: Union[str, Path],
+        first: Breakout1DSelection,
+        second: Breakout1DSelection,
+    ) -> Breakout1DSelection:
+        if (first.river, first.reach) != (second.river, second.reach):
+            raise ValueError("Selections must belong to the same river/reach")
+        reach_xs = RasBreakout1D._reach_cross_sections(
+            geom_file, first.river, first.reach
+        )
+        first_start, first_end = RasBreakout1D._selection_positions(reach_xs, first)
+        second_start, second_end = RasBreakout1D._selection_positions(
+            reach_xs, second
+        )
+        start = min(first_start, second_start)
+        end = max(first_end, second_end)
+        return RasBreakout1D._selection_from_reach_positions(
+            reach_xs,
+            start,
+            end,
+            selector=first.selector,
+            minimum_cross_sections=1,
+        )
+
+    @staticmethod
+    def _selection_positions(
+        reach_xs: pd.DataFrame, selection: Breakout1DSelection
+    ) -> tuple[int, int]:
+        values = [RasBreakout1D._station_value(value) for value in reach_xs["RS"]]
+
+        def resolve(station: str) -> int:
+            target = RasBreakout1D._station_value(station)
+            matches = [
+                index
+                for index, value in enumerate(values)
+                if abs(float(value) - target) <= 1e-9
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Selection station {station!r} could not be resolved uniquely"
+                )
+            return int(matches[0])
+
+        upstream = resolve(selection.upstream_station)
+        downstream = resolve(selection.downstream_station)
+        if upstream > downstream:
+            raise ValueError("Selection order does not follow the source reach")
+        return upstream, downstream
+
+    @staticmethod
+    def _channel_length_at(reach_xs: pd.DataFrame, position: int) -> float:
+        value = float(reach_xs.iloc[position]["Length_Channel"])
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Main-channel reach lengths must be finite and non-negative")
+        return value
+
+    @staticmethod
+    def _nonnegative_distance(value: Any, name: str) -> float:
+        if isinstance(value, bool):
+            raise TypeError(f"{name} must be a finite number")
+        try:
+            normalized = float(value)
+        except (TypeError, ValueError) as exc:
+            raise TypeError(f"{name} must be a finite number") from exc
+        if not math.isfinite(normalized):
+            raise ValueError(f"{name} must be finite")
+        if normalized < 0:
+            raise ValueError(f"{name} must be non-negative")
+        return normalized
+
+    @staticmethod
+    def _optional_fraction(value: Any, name: str) -> Optional[float]:
+        if value is None:
+            return None
+        normalized = RasBreakout1D._nonnegative_distance(value, name)
+        if normalized > 1:
+            raise ValueError(f"{name} must be between 0 and 1")
+        return normalized
+
+    @staticmethod
+    def _fraction(value: Any, name: str) -> float:
+        normalized = RasBreakout1D._optional_fraction(value, name)
+        if normalized is None:
+            raise TypeError(f"{name} must be a finite number")
+        return normalized
+
+    @staticmethod
+    def _retag_selection(
+        selection: Breakout1DSelection, selector: str
+    ) -> Breakout1DSelection:
+        return Breakout1DSelection(
+            river=selection.river,
+            reach=selection.reach,
+            stations=selection.stations,
+            upstream_station=selection.upstream_station,
+            downstream_station=selection.downstream_station,
+            selector=selector,
+        )
 
     @staticmethod
     def _all_natural_cross_sections(geom_file: Union[str, Path]) -> pd.DataFrame:
@@ -1335,6 +1900,7 @@ class RasBreakout1D:
 
 __all__ = [
     "RasBreakout1D",
+    "Breakout1DDomainSelection",
     "Breakout1DResult",
     "Breakout1DSelection",
     "Breakout1DValidationReport",

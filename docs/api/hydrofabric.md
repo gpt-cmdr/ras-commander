@@ -30,8 +30,11 @@ estimated local UTM CRS. No weighted score is used: the model extent is the
 authoritative spatial filter, and every in-domain edge is retained.
 
 This table is the starting point for NWM-sized `RasBreakout1D` models. Select an
-`edge_id`, pass its geometry to `select_by_network_edge()`, and retain the
-default one-cross-section downstream overlap.
+`edge_id` and pass its geometry plus `inside_fraction` to
+`select_domains_by_network_edge()`. A fully contained edge receives the default
+10% upstream and 25% downstream hydraulic buffers, while its stricter
+inundation-export selection retains the default one-cross-section downstream
+overlap.
 
 ## Advanced reach-edge candidate audit
 

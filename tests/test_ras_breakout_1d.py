@@ -10,7 +10,12 @@ import h5py
 import numpy as np
 import pytest
 
-from ras_commander import RasPrj, RasBreakout1D
+from ras_commander import (
+    Breakout1DDomainSelection,
+    GeomParser,
+    RasBreakout1D,
+    RasPrj,
+)
 
 
 def _xs_block(station: int, downstream_length: int, y: int) -> str:
@@ -82,7 +87,7 @@ def _write_project(root: Path) -> RasPrj:
         + _xs_block(50, 0, -10)
         + "River Reach=Main River,Main Reach\n"
         "Reach XY= 2\n"
-        "               0              50             100              50\n"
+        "              50             100              50               0\n"
         + _xs_block(500, 100, 90)
         + _xs_block(400, 100, 80)
         + _structure_block(4, 350, "Inline structure")
@@ -226,6 +231,8 @@ def test_extract_reach_preserves_blocks_relationships_and_flow_changes(tmp_path:
     assert "#XS Ineff= 2" in geometry_text
     assert "XS HTab Starting El and Incr=" in geometry_text
     assert "Type RM Length L Ch R = 1 ,200,0,0,0" in geometry_text
+    centerline = GeomParser.get_river_centerlines(result.geometry_file).iloc[0].geometry
+    assert list(centerline.coords) == [(50.0, 80.0), (50.0, 60.0)]
 
     from ras_commander import RasSteady
 
@@ -309,6 +316,170 @@ def test_network_selector_validates_downstream_overlap(tmp_path: Path):
         geom, segment, downstream_overlap_xs=0
     )
     assert alias.selector == "network_edge"
+
+
+def test_network_selector_adds_overlap_after_one_xs_intersection(tmp_path: Path):
+    shapely = pytest.importorskip("shapely.geometry")
+    source = _write_project(tmp_path / "source")
+    geom = Path(source.geom_df.iloc[0]["full_path"])
+    one_xs_edge = shapely.LineString([(50, 79), (50, 81)])
+
+    selection = RasBreakout1D.select_by_network_edge(
+        geom,
+        one_xs_edge,
+        river="Main River",
+        reach="Main Reach",
+    )
+
+    assert selection.stations == ("400", "300")
+
+
+def test_network_selector_applies_explicit_channel_distance_buffers(tmp_path: Path):
+    shapely = pytest.importorskip("shapely.geometry")
+    source = _write_project(tmp_path / "source")
+    geom = Path(source.geom_df.iloc[0]["full_path"])
+    segment = shapely.LineString([(50, 55), (50, 85)])
+
+    selection = RasBreakout1D.select_by_network_edge(
+        geom,
+        segment,
+        river="Main River",
+        reach="Main Reach",
+        downstream_overlap_xs=0,
+        upstream_buffer_distance=50,
+        downstream_buffer_distance=50,
+    )
+
+    assert selection.stations == ("500", "400", "300", "200", "100")
+
+    with pytest.raises(ValueError, match="upstream_buffer_distance"):
+        RasBreakout1D.select_by_network_edge(
+            geom, segment, upstream_buffer_distance=-1
+        )
+    with pytest.raises(ValueError, match="downstream_buffer_distance"):
+        RasBreakout1D.select_by_network_edge(
+            geom, segment, downstream_buffer_distance=float("nan")
+        )
+
+
+def test_network_edge_domains_use_full_inside_defaults_and_strict_overlap(
+    tmp_path: Path,
+):
+    shapely = pytest.importorskip("shapely.geometry")
+    source = _write_project(tmp_path / "source")
+    geom = Path(source.geom_df.iloc[0]["full_path"])
+    segment = shapely.LineString([(50, 65), (50, 85)])
+
+    domains = RasBreakout1D.select_domains_by_network_edge(
+        geom,
+        segment,
+        river="Main River",
+        reach="Main Reach",
+        inside_fraction=1.0,
+    )
+
+    assert isinstance(domains, Breakout1DDomainSelection)
+    assert domains.direct_selection.stations == ("400", "300")
+    assert domains.inundation_selection.stations == ("400", "300", "200")
+    assert domains.computation_selection.stations == (
+        "500", "400", "300", "200"
+    )
+    assert domains.main_channel_length == pytest.approx(400.0)
+    assert domains.upstream_buffer_distance == pytest.approx(40.0)
+    assert domains.downstream_buffer_distance == pytest.approx(100.0)
+    assert domains.upstream_buffer_applied == pytest.approx(100.0)
+    assert domains.downstream_buffer_applied == pytest.approx(100.0)
+    assert domains.automatic_upstream_buffer is True
+    assert domains.automatic_downstream_buffer is True
+    assert domains.inundation_overlap_xs == 1
+    assert domains.inundation_overlap_xs_applied == 1
+
+    partial = RasBreakout1D.select_domains_by_network_edge(
+        geom,
+        segment,
+        inside_fraction=0.75,
+    )
+    assert (
+        partial.computation_selection.stations
+        == partial.inundation_selection.stations
+    )
+    assert partial.upstream_buffer_distance == 0.0
+    assert partial.downstream_buffer_distance == 0.0
+    assert partial.downstream_buffer_applied == 0.0
+    assert partial.automatic_upstream_buffer is False
+    assert partial.automatic_downstream_buffer is False
+
+
+def test_network_edge_domains_accept_independent_explicit_overrides(tmp_path: Path):
+    shapely = pytest.importorskip("shapely.geometry")
+    source = _write_project(tmp_path / "source")
+    geom = Path(source.geom_df.iloc[0]["full_path"])
+    segment = shapely.LineString([(50, 65), (50, 85)])
+
+    domains = RasBreakout1D.select_domains_by_network_edge(
+        geom,
+        segment,
+        inside_fraction=1.0,
+        upstream_buffer_distance=0,
+        downstream_buffer_distance=150,
+    )
+    assert domains.computation_selection.stations == (
+        "400", "300", "200", "100"
+    )
+    assert domains.automatic_upstream_buffer is False
+    assert domains.automatic_downstream_buffer is False
+    assert domains.upstream_buffer_applied == 0.0
+    assert domains.downstream_buffer_applied == pytest.approx(200.0)
+
+    terminated = RasBreakout1D.select_domains_by_network_edge(
+        geom,
+        segment,
+        inside_fraction=1.0,
+        upstream_buffer_distance=0,
+        downstream_buffer_distance=10_000,
+    )
+    assert terminated.computation_selection.stations == (
+        "400", "300", "200", "100"
+    )
+    assert terminated.downstream_buffer_distance == pytest.approx(10_000.0)
+    assert terminated.downstream_buffer_applied == pytest.approx(200.0)
+
+    terminus_edge = shapely.LineString([(50, 49), (50, 51)])
+    terminus = RasBreakout1D.select_domains_by_network_edge(
+        geom,
+        terminus_edge,
+        inside_fraction=1.0,
+        upstream_buffer_distance=50,
+        downstream_buffer_distance=0,
+    )
+    assert terminus.direct_selection.stations == ("100",)
+    assert terminus.inundation_selection.stations == ("100",)
+    assert terminus.computation_selection.stations == ("200", "100")
+    assert terminus.inundation_overlap_xs == 1
+    assert terminus.inundation_overlap_xs_applied == 0
+
+    alias = RasBreakout1D.select_network_edge_domains(
+        geom,
+        segment,
+        inside_fraction=0.75,
+    )
+    assert (
+        alias.computation_selection.stations
+        == alias.inundation_selection.stations
+    )
+
+    with pytest.raises(ValueError, match="inside_fraction"):
+        RasBreakout1D.select_domains_by_network_edge(
+            geom, segment, inside_fraction=1.01
+        )
+    with pytest.raises(TypeError, match="inundation_overlap_xs"):
+        RasBreakout1D.select_domains_by_network_edge(
+            geom, segment, inundation_overlap_xs=True
+        )
+    with pytest.raises(ValueError, match="upstream_buffer_fraction"):
+        RasBreakout1D.select_domains_by_network_edge(
+            geom, segment, upstream_buffer_fraction=1.01
+        )
 
 
 def test_run_is_explicit_and_delegates_to_rascmdr(tmp_path: Path, monkeypatch):
