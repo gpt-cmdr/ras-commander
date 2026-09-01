@@ -1,4 +1,4 @@
-"""Extract independent, single-reach HEC-RAS 1D steady submodels.
+"""Extract independent, single-reach HEC-RAS 1D steady breakouts.
 
 The MVP intentionally fails closed outside one continuous 1D reach and one
 steady-flow plan.  Geometry node blocks are copied verbatim; the only geometry
@@ -30,7 +30,7 @@ _NUMBER_RE = re.compile(r"[-+]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+))(?:[Ee][-+]?\d+
 
 
 @dataclass(frozen=True)
-class SubmodelSelection:
+class Breakout1DSelection:
     """A resolved continuous cross-section slice on one river/reach."""
 
     river: str
@@ -42,8 +42,8 @@ class SubmodelSelection:
 
 
 @dataclass
-class SubmodelValidationReport:
-    """Structural checks for an extracted submodel."""
+class Breakout1DValidationReport:
+    """Structural checks for an extracted breakout."""
 
     checks_df: pd.DataFrame
 
@@ -59,21 +59,21 @@ class SubmodelValidationReport:
         ]
         if not failures.empty:
             detail = "; ".join(failures["detail"].astype(str).tolist())
-            raise ValueError(f"Submodel structural validation failed: {detail}")
+            raise ValueError(f"Breakout structural validation failed: {detail}")
 
 
 @dataclass
-class SubmodelResult:
+class Breakout1DResult:
     """Artifacts and initialized project objects produced by extraction."""
 
     source_ras: RasPrj
     destination_ras: RasPrj
-    selection: SubmodelSelection
+    selection: Breakout1DSelection
     project_file: Path
     plan_file: Path
     geometry_file: Path
     flow_file: Path
-    validation: SubmodelValidationReport
+    validation: Breakout1DValidationReport
     boundary_provenance: str
     source_geometry_sha256: str
     compute_result: Any = None
@@ -87,8 +87,8 @@ class _NodeBlock:
     station: str
 
 
-class RasSubmodel:
-    """Static workflow for extracting an independent 1D steady submodel."""
+class RasBreakout1D:
+    """Static workflow for extracting an independent 1D steady breakout."""
 
     @staticmethod
     @log_call
@@ -98,18 +98,18 @@ class RasSubmodel:
         reach: str,
         upstream_station: Union[str, float, int],
         downstream_station: Union[str, float, int],
-    ) -> SubmodelSelection:
+    ) -> Breakout1DSelection:
         """Select every cross section between inclusive station bounds."""
-        xs_df = RasSubmodel._reach_cross_sections(geom_file, river, reach)
-        upstream = RasSubmodel._station_value(upstream_station)
-        downstream = RasSubmodel._station_value(downstream_station)
+        xs_df = RasBreakout1D._reach_cross_sections(geom_file, river, reach)
+        upstream = RasBreakout1D._station_value(upstream_station)
+        downstream = RasBreakout1D._station_value(downstream_station)
         if upstream <= downstream:
             raise ValueError(
                 "upstream_station must be greater than downstream_station for "
                 "the one-reach MVP"
             )
 
-        station_values = xs_df["RS"].map(RasSubmodel._station_value)
+        station_values = xs_df["RS"].map(RasBreakout1D._station_value)
         selected = xs_df[(station_values <= upstream) & (station_values >= downstream)]
         if len(selected) < 2:
             raise ValueError(
@@ -117,10 +117,10 @@ class RasSubmodel:
                 f"found {len(selected)}"
             )
         selected = selected.assign(
-            _station_value=selected["RS"].map(RasSubmodel._station_value)
+            _station_value=selected["RS"].map(RasBreakout1D._station_value)
         )
         selected = selected.sort_values("_station_value", ascending=False)
-        return SubmodelSelection(
+        return Breakout1DSelection(
             river=river,
             reach=reach,
             stations=tuple(selected["RS"].astype(str)),
@@ -136,18 +136,18 @@ class RasSubmodel:
         river: str,
         reach: str,
         stations: Sequence[Union[str, float, int]],
-    ) -> SubmodelSelection:
+    ) -> Breakout1DSelection:
         """Resolve a supplied, contiguous cross-section set on one reach.
 
         Non-contiguous sets fail closed.  A later multi-segment workflow can
         define how gaps should be reconnected without weakening this contract.
         """
-        xs_df = RasSubmodel._reach_cross_sections(geom_file, river, reach)
+        xs_df = RasBreakout1D._reach_cross_sections(geom_file, river, reach)
         if len(stations) < 2:
             raise ValueError("At least two cross sections are required")
 
-        requested = {RasSubmodel._station_value(value) for value in stations}
-        source_values = [RasSubmodel._station_value(value) for value in xs_df["RS"]]
+        requested = {RasBreakout1D._station_value(value) for value in stations}
+        source_values = [RasBreakout1D._station_value(value) for value in xs_df["RS"]]
         missing = sorted(requested.difference(source_values), reverse=True)
         if missing:
             raise ValueError(f"Cross sections are absent from the reach: {missing}")
@@ -161,10 +161,10 @@ class RasSubmodel:
 
         selected = xs_df.iloc[positions[0] : positions[-1] + 1].copy()
         selected = selected.assign(
-            _station_value=selected["RS"].map(RasSubmodel._station_value)
+            _station_value=selected["RS"].map(RasBreakout1D._station_value)
         )
         selected = selected.sort_values("_station_value", ascending=False)
-        return SubmodelSelection(
+        return Breakout1DSelection(
             river=river,
             reach=reach,
             stations=tuple(selected["RS"].astype(str)),
@@ -181,7 +181,7 @@ class RasSubmodel:
         *,
         river: Optional[str] = None,
         reach: Optional[str] = None,
-    ) -> SubmodelSelection:
+    ) -> Breakout1DSelection:
         """Select the continuous reach span whose XS cut lines intersect a polygon.
 
         The polygon and geometry cut lines must use the same coordinate system.
@@ -206,15 +206,15 @@ class RasSubmodel:
                 f"Polygon selection must resolve to exactly one reach; found {choices}"
             )
         resolved_river, resolved_reach = reaches.iloc[0].tolist()
-        station_values = intersecting["station"].map(RasSubmodel._station_value)
-        selection = RasSubmodel.select_by_stations(
+        station_values = intersecting["station"].map(RasBreakout1D._station_value)
+        selection = RasBreakout1D.select_by_stations(
             geom_file,
             str(resolved_river),
             str(resolved_reach),
             upstream_station=float(station_values.max()),
             downstream_station=float(station_values.min()),
         )
-        return SubmodelSelection(
+        return Breakout1DSelection(
             river=selection.river,
             reach=selection.reach,
             stations=selection.stations,
@@ -232,7 +232,7 @@ class RasSubmodel:
         river: Optional[str] = None,
         reach: Optional[str] = None,
         tolerance: float = 0.0,
-    ) -> SubmodelSelection:
+    ) -> Breakout1DSelection:
         """Select the continuous XS span intersected by a supplied network edge.
 
         ``segment`` must be a Shapely-like line in the geometry coordinate
@@ -242,13 +242,13 @@ class RasSubmodel:
         if tolerance < 0:
             raise ValueError("tolerance must be non-negative")
         search_geometry = segment.buffer(tolerance) if tolerance else segment
-        selection = RasSubmodel.select_by_polygon(
+        selection = RasBreakout1D.select_by_polygon(
             geom_file,
             search_geometry,
             river=river,
             reach=reach,
         )
-        return SubmodelSelection(
+        return Breakout1DSelection(
             river=selection.river,
             reach=selection.reach,
             stations=selection.stations,
@@ -275,17 +275,17 @@ class RasSubmodel:
         run: bool = False,
         verify_run: bool = True,
         compute_kwargs: Optional[Mapping[str, Any]] = None,
-    ) -> SubmodelResult:
+    ) -> Breakout1DResult:
         """Extract one station-bounded reach into a new steady project."""
-        plan = RasSubmodel._resolve_source_plan(source_ras, plan_number)
-        selection = RasSubmodel.select_by_stations(
+        plan = RasBreakout1D._resolve_source_plan(source_ras, plan_number)
+        selection = RasBreakout1D.select_by_stations(
             plan["geometry_path"],
             river,
             reach,
             upstream_station,
             downstream_station,
         )
-        return RasSubmodel.extract_selection(
+        return RasBreakout1D.extract_selection(
             source_ras,
             destination,
             selection,
@@ -304,7 +304,7 @@ class RasSubmodel:
     def extract_selection(
         source_ras: RasPrj,
         destination: Union[str, Path],
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
         *,
         plan_number: Optional[Union[str, int]] = None,
         destination_name: Optional[str] = None,
@@ -314,7 +314,7 @@ class RasSubmodel:
         run: bool = False,
         verify_run: bool = True,
         compute_kwargs: Optional[Mapping[str, Any]] = None,
-    ) -> SubmodelResult:
+    ) -> Breakout1DResult:
         """Extract a previously resolved one-reach selection.
 
         ``boundary_mode='auto'`` uses source-plan WSE at an internal downstream
@@ -325,27 +325,27 @@ class RasSubmodel:
         """
         if not isinstance(source_ras, RasPrj) or not source_ras.is_initialized:
             raise TypeError("source_ras must be an initialized RasPrj instance")
-        plan = RasSubmodel._resolve_source_plan(source_ras, plan_number)
+        plan = RasBreakout1D._resolve_source_plan(source_ras, plan_number)
         destination = Path(destination)
-        RasSubmodel._prepare_empty_destination(destination)
-        project_name = RasSubmodel._safe_project_name(
+        RasBreakout1D._prepare_empty_destination(destination)
+        project_name = RasBreakout1D._safe_project_name(
             destination_name or destination.name
         )
 
         source_geom = plan["geometry_path"]
         source_flow = plan["flow_path"]
         source_plan = plan["plan_path"]
-        source_geom_hash = RasSubmodel._sha256(source_geom)
+        source_geom_hash = RasBreakout1D._sha256(source_geom)
 
-        geometry_text = RasSubmodel._extract_geometry_text(source_geom, selection)
-        flow_data, boundary_provenance = RasSubmodel._extract_flow_data(
+        geometry_text = RasBreakout1D._extract_geometry_text(source_geom, selection)
+        flow_data, boundary_provenance = RasBreakout1D._extract_flow_data(
             source_flow,
             selection,
             source_geometry=source_geom,
             source_plan_hdf=(
                 Path(source_plan_hdf)
                 if source_plan_hdf is not None
-                else RasSubmodel._expected_plan_hdf(source_plan)
+                else RasBreakout1D._expected_plan_hdf(source_plan)
             ),
             boundary_mode=boundary_mode,
             downstream_boundary=downstream_boundary,
@@ -361,18 +361,18 @@ class RasSubmodel:
 
         RasSteady.write_flow_file(flow_file, flow_data)
         plan_file.write_text(
-            RasSubmodel._rewrite_plan(source_plan, project_name),
+            RasBreakout1D._rewrite_plan(source_plan, project_name),
             encoding="utf-8",
             newline="",
         )
         project_file.write_text(
-            RasSubmodel._rewrite_project(source_ras.prj_file, project_name),
+            RasBreakout1D._rewrite_project(source_ras.prj_file, project_name),
             encoding="utf-8",
             newline="",
         )
 
-        if RasSubmodel._sha256(source_geom) != source_geom_hash:
-            raise RuntimeError("Source geometry changed during submodel extraction")
+        if RasBreakout1D._sha256(source_geom) != source_geom_hash:
+            raise RuntimeError("Source geometry changed during breakout extraction")
 
         destination_ras = RasPrj()
         destination_ras.initialize(
@@ -384,7 +384,7 @@ class RasSubmodel:
             load_hdf_metadata=False,
         )
 
-        validation = RasSubmodel.validate(
+        validation = RasBreakout1D.validate(
             source_ras,
             destination_ras,
             selection,
@@ -393,7 +393,7 @@ class RasSubmodel:
             boundary_provenance=boundary_provenance,
         )
         validation.raise_for_errors()
-        result = SubmodelResult(
+        result = Breakout1DResult(
             source_ras=source_ras,
             destination_ras=destination_ras,
             selection=selection,
@@ -406,13 +406,13 @@ class RasSubmodel:
             source_geometry_sha256=source_geom_hash,
         )
         if run:
-            result.compute_result = RasSubmodel.run(
+            result.compute_result = RasBreakout1D.run(
                 result,
                 verify=verify_run,
                 **dict(compute_kwargs or {}),
             )
         logger.info(
-            "Created one-reach submodel %s with %d retained cross sections",
+            "Created one-reach breakout %s with %d retained cross sections",
             project_file,
             len(selection.stations),
         )
@@ -421,22 +421,22 @@ class RasSubmodel:
     @staticmethod
     @log_call
     def run(
-        submodel: Union[SubmodelResult, RasPrj],
+        breakout: Union[Breakout1DResult, RasPrj],
         *,
         plan_number: Union[str, int] = "01",
         verify: bool = True,
         **compute_kwargs: Any,
     ) -> Any:
-        """Explicitly run a destination submodel through ``RasCmdr``."""
+        """Explicitly run a destination breakout through ``RasCmdr``."""
         from .RasCmdr import RasCmdr
 
         ras_object = (
-            submodel.destination_ras
-            if isinstance(submodel, SubmodelResult)
-            else submodel
+            breakout.destination_ras
+            if isinstance(breakout, Breakout1DResult)
+            else breakout
         )
         if not isinstance(ras_object, RasPrj) or not ras_object.is_initialized:
-            raise TypeError("submodel must contain an initialized RasPrj instance")
+            raise TypeError("breakout must contain an initialized RasPrj instance")
         compute_kwargs.setdefault("clear_geompre", True)
         return RasCmdr.compute_plan(
             plan_number,
@@ -450,16 +450,16 @@ class RasSubmodel:
     def validate(
         source_ras: RasPrj,
         destination_ras: RasPrj,
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
         *,
         source_plan_number: Optional[Union[str, int]] = None,
         source_geometry_sha256: Optional[str] = None,
         boundary_provenance: str = "unknown",
-    ) -> SubmodelValidationReport:
+    ) -> Breakout1DValidationReport:
         """Validate project links, retained blocks, reach lengths, and flow data."""
-        source = RasSubmodel._resolve_source_plan(source_ras, source_plan_number)
-        destination = RasSubmodel._resolve_source_plan(destination_ras, "01")
-        geometry_comparison = RasSubmodel.compare_geometry(
+        source = RasBreakout1D._resolve_source_plan(source_ras, source_plan_number)
+        destination = RasBreakout1D._resolve_source_plan(destination_ras, "01")
+        geometry_comparison = RasBreakout1D.compare_geometry(
             source["geometry_path"],
             destination["geometry_path"],
             selection,
@@ -467,13 +467,13 @@ class RasSubmodel:
         from .RasSteady import RasSteady
 
         destination_flow = RasSteady.read_flow_file(destination["flow_path"])
-        destination_xs = RasSubmodel._reach_cross_sections(
+        destination_xs = RasBreakout1D._reach_cross_sections(
             destination["geometry_path"], selection.river, selection.reach
         )
-        source_xs = RasSubmodel._reach_cross_sections(
+        source_xs = RasBreakout1D._reach_cross_sections(
             source["geometry_path"], selection.river, selection.reach
         )
-        all_destination_xs = RasSubmodel._all_natural_cross_sections(
+        all_destination_xs = RasBreakout1D._all_natural_cross_sections(
             destination["geometry_path"]
         )
 
@@ -516,8 +516,8 @@ class RasSubmodel:
             "all intervening structure blocks match the source",
         )
         downstream_row = destination_xs[
-            destination_xs["RS"].map(RasSubmodel._station_value)
-            == RasSubmodel._station_value(selection.downstream_station)
+            destination_xs["RS"].map(RasBreakout1D._station_value)
+            == RasBreakout1D._station_value(selection.downstream_station)
         ]
         lengths_zero = False
         if len(downstream_row) == 1:
@@ -530,12 +530,12 @@ class RasSubmodel:
             lengths_zero,
             "new downstream cross-section L/Ch/R reach lengths are zero",
         )
-        upstream_value = RasSubmodel._station_value(selection.upstream_station)
+        upstream_value = RasBreakout1D._station_value(selection.upstream_station)
         source_upstream = source_xs[
-            source_xs["RS"].map(RasSubmodel._station_value) == upstream_value
+            source_xs["RS"].map(RasBreakout1D._station_value) == upstream_value
         ]
         destination_upstream = destination_xs[
-            destination_xs["RS"].map(RasSubmodel._station_value) == upstream_value
+            destination_xs["RS"].map(RasBreakout1D._station_value) == upstream_value
         ]
         upstream_lengths_equal = False
         if len(source_upstream) == 1 and len(destination_upstream) == 1:
@@ -559,7 +559,7 @@ class RasSubmodel:
             f"flow-change reaches={sorted(flow_change_reaches)}",
         )
         has_upstream_flow = any(
-            RasSubmodel._stations_equal(item["station"], selection.upstream_station)
+            RasBreakout1D._stations_equal(item["station"], selection.upstream_station)
             for item in flow_changes
         )
         add(
@@ -582,7 +582,7 @@ class RasSubmodel:
         if source_geometry_sha256 is not None:
             add(
                 "source_immutable",
-                RasSubmodel._sha256(source["geometry_path"]) == source_geometry_sha256,
+                RasBreakout1D._sha256(source["geometry_path"]) == source_geometry_sha256,
                 "source geometry SHA-256 is unchanged",
             )
         add(
@@ -591,20 +591,20 @@ class RasSubmodel:
             f"boundary provenance={boundary_provenance}",
             severity="WARNING",
         )
-        return SubmodelValidationReport(pd.DataFrame(checks))
+        return Breakout1DValidationReport(pd.DataFrame(checks))
 
     @staticmethod
     @log_call
     def compare_geometry(
         source_geometry: Union[str, Path],
         destination_geometry: Union[str, Path],
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
     ) -> pd.DataFrame:
         """Compare complete retained source/destination geometry node blocks."""
-        source_lines, _, source_nodes = RasSubmodel._target_reach_parts(
+        source_lines, _, source_nodes = RasBreakout1D._target_reach_parts(
             source_geometry, selection.river, selection.reach
         )
-        destination_lines, _, destination_nodes = RasSubmodel._target_reach_parts(
+        destination_lines, _, destination_nodes = RasBreakout1D._target_reach_parts(
             destination_geometry, selection.river, selection.reach
         )
         source_xs = {node.station: node for node in source_nodes if node.type_code == 1}
@@ -613,8 +613,8 @@ class RasSubmodel:
         }
         rows = []
         for station in selection.stations:
-            source_key = RasSubmodel._matching_station_key(source_xs, station)
-            destination_key = RasSubmodel._matching_station_key(destination_xs, station)
+            source_key = RasBreakout1D._matching_station_key(source_xs, station)
+            destination_key = RasBreakout1D._matching_station_key(destination_xs, station)
             source_node = source_xs[source_key]
             destination_node = destination_xs[destination_key]
             source_block = source_lines[source_node.start : source_node.end]
@@ -627,22 +627,22 @@ class RasSubmodel:
                     "Reach": selection.reach,
                     "RS": station,
                     "content_equal": source_block[1:] == destination_block[1:],
-                    "source_block_sha256": RasSubmodel._text_sha256(
+                    "source_block_sha256": RasBreakout1D._text_sha256(
                         "".join(source_block[1:])
                     ),
-                    "destination_block_sha256": RasSubmodel._text_sha256(
+                    "destination_block_sha256": RasBreakout1D._text_sha256(
                         "".join(destination_block[1:])
                     ),
                 }
             )
 
-        lower = RasSubmodel._station_value(selection.downstream_station)
-        upper = RasSubmodel._station_value(selection.upstream_station)
+        lower = RasBreakout1D._station_value(selection.downstream_station)
+        upper = RasBreakout1D._station_value(selection.upstream_station)
         source_structures = [
             node
             for node in source_nodes
             if node.type_code != 1
-            and lower <= RasSubmodel._station_value(node.station) <= upper
+            and lower <= RasBreakout1D._station_value(node.station) <= upper
         ]
         destination_structures = [
             node for node in destination_nodes if node.type_code != 1
@@ -667,7 +667,7 @@ class RasSubmodel:
     def compare_results(
         source_plan_hdf: Union[str, Path],
         destination_plan_hdf: Union[str, Path],
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
     ) -> pd.DataFrame:
         """Compare steady results at retained sections and return numeric deltas."""
         from .hdf import HdfResultsPlan
@@ -681,8 +681,8 @@ class RasSubmodel:
                 (frame["river"] == selection.river)
                 & (frame["reach"] == selection.reach)
             ].copy()
-            wanted = {RasSubmodel._station_value(value) for value in selection.stations}
-            return frame[frame["node_id"].map(RasSubmodel._station_value).isin(wanted)]
+            wanted = {RasBreakout1D._station_value(value) for value in selection.stations}
+            return frame[frame["node_id"].map(RasBreakout1D._station_value).isin(wanted)]
 
         merged = retained(source).merge(
             retained(destination),
@@ -714,7 +714,7 @@ class RasSubmodel:
         if not isinstance(ras_object, RasPrj) or not ras_object.is_initialized:
             raise TypeError("ras_object must be an initialized RasPrj instance")
         if plan_number is None:
-            current = RasSubmodel._current_plan_number(ras_object.prj_file)
+            current = RasBreakout1D._current_plan_number(ras_object.prj_file)
             if current is not None:
                 plan_number = current
             elif len(ras_object.plan_df) == 1:
@@ -729,16 +729,16 @@ class RasSubmodel:
             raise ValueError(f"Plan {normalized} was not found exactly once")
         row = rows.iloc[0]
         if str(row.get("flow_type", "")).lower() != "steady":
-            raise ValueError("RasSubmodel MVP supports steady-flow plans only")
+            raise ValueError("RasBreakout1D MVP supports steady-flow plans only")
         sediment_number = row.get("sediment_number")
         if pd.notna(sediment_number) and str(sediment_number).strip():
-            raise ValueError("Sediment plans are outside the RasSubmodel MVP")
+            raise ValueError("Sediment plans are outside the RasBreakout1D MVP")
         geometry_type = str(row.get("geometry_type", ""))
         has_2d = row.get("has_2d_mesh", False)
         has_2d = False if pd.isna(has_2d) else bool(has_2d)
         if has_2d or geometry_type not in {"1D", "Unknown", "nan", ""}:
             raise ValueError(
-                "RasSubmodel MVP supports pure 1D geometry only; "
+                "RasBreakout1D MVP supports pure 1D geometry only; "
                 f"plan geometry is {geometry_type}"
             )
         geometry_path = Path(str(row["Geom Path"]))
@@ -757,21 +757,21 @@ class RasSubmodel:
 
     @staticmethod
     def _extract_geometry_text(
-        geom_file: Union[str, Path], selection: SubmodelSelection
+        geom_file: Union[str, Path], selection: Breakout1DSelection
     ) -> str:
-        lines, reach_start, nodes = RasSubmodel._target_reach_parts(
+        lines, reach_start, nodes = RasBreakout1D._target_reach_parts(
             geom_file, selection.river, selection.reach
         )
-        if RasSubmodel._selection_has_lateral_structure(geom_file, selection):
+        if RasBreakout1D._selection_has_lateral_structure(geom_file, selection):
             raise NotImplementedError(
-                "Lateral structures are outside the one-reach RasSubmodel MVP"
+                "Lateral structures are outside the one-reach RasBreakout1D MVP"
             )
         natural_nodes = [node for node in nodes if node.type_code == 1]
         selected_nodes = [
             node
             for node in natural_nodes
             if any(
-                RasSubmodel._stations_equal(node.station, station)
+                RasBreakout1D._stations_equal(node.station, station)
                 for station in selection.stations
             )
         ]
@@ -784,17 +784,17 @@ class RasSubmodel:
         if len(retained_natural) != len(selection.stations):
             raise ValueError("Selection is not a continuous source-reach slice")
 
-        domain_start = RasSubmodel._first_geometry_domain_line(lines)
+        domain_start = RasBreakout1D._first_geometry_domain_line(lines)
         reach_header = lines[reach_start : nodes[0].start]
         output = list(lines[:domain_start]) + list(reach_header)
-        downstream_value = RasSubmodel._station_value(selection.downstream_station)
+        downstream_value = RasBreakout1D._station_value(selection.downstream_station)
         for node in retained_nodes:
             block = list(lines[node.start : node.end])
             if (
                 node.type_code == 1
-                and RasSubmodel._station_value(node.station) == downstream_value
+                and RasBreakout1D._station_value(node.station) == downstream_value
             ):
-                block[0] = RasSubmodel._zero_reach_lengths(block[0])
+                block[0] = RasBreakout1D._zero_reach_lengths(block[0])
             output.extend(block)
         if output and not output[-1].endswith(("\n", "\r")):
             output[-1] += "\n"
@@ -803,7 +803,7 @@ class RasSubmodel:
     @staticmethod
     def _extract_flow_data(
         flow_file: Union[str, Path],
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
         *,
         source_geometry: Path,
         source_plan_hdf: Path,
@@ -820,11 +820,11 @@ class RasSubmodel:
         ]
         if not target_changes:
             raise ValueError("Source steady flow has no changes on the selected reach")
-        upper = RasSubmodel._station_value(selection.upstream_station)
-        lower = RasSubmodel._station_value(selection.downstream_station)
+        upper = RasBreakout1D._station_value(selection.upstream_station)
+        lower = RasBreakout1D._station_value(selection.downstream_station)
         changes_with_values = sorted(
             (
-                (RasSubmodel._station_value(item["station"]), item)
+                (RasBreakout1D._station_value(item["station"]), item)
                 for item in target_changes
             ),
             reverse=True,
@@ -842,7 +842,7 @@ class RasSubmodel:
             dict(item) for value, item in changes_with_values if lower <= value <= upper
         ]
         if not any(
-            RasSubmodel._stations_equal(item["station"], selection.upstream_station)
+            RasBreakout1D._stations_equal(item["station"], selection.upstream_station)
             for item in retained_changes
         ):
             propagated = dict(active_upstream)
@@ -850,11 +850,11 @@ class RasSubmodel:
             propagated["river_station"] = selection.upstream_station
             retained_changes.append(propagated)
         retained_changes.sort(
-            key=lambda item: RasSubmodel._station_value(item["station"]),
+            key=lambda item: RasBreakout1D._station_value(item["station"]),
             reverse=True,
         )
 
-        source_xs = RasSubmodel._reach_cross_sections(
+        source_xs = RasBreakout1D._reach_cross_sections(
             source_geometry,
             selection.river,
             selection.reach,
@@ -864,10 +864,10 @@ class RasSubmodel:
         if not source_xs.empty:
             original_downstream = str(
                 source_xs.loc[
-                    source_xs["RS"].map(RasSubmodel._station_value).idxmin(), "RS"
+                    source_xs["RS"].map(RasBreakout1D._station_value).idxmin(), "RS"
                 ]
             )
-        internal_cut = original_downstream is None or not RasSubmodel._stations_equal(
+        internal_cut = original_downstream is None or not RasBreakout1D._stations_equal(
             original_downstream, selection.downstream_station
         )
         source_boundaries = [
@@ -895,7 +895,7 @@ class RasSubmodel:
             and mode in {"auto", "source_results"}
             and source_plan_hdf.is_file()
         ):
-            boundaries = RasSubmodel._known_wse_boundaries(
+            boundaries = RasBreakout1D._known_wse_boundaries(
                 source_plan_hdf, data, selection, source_boundaries
             )
             provenance = "source_results"
@@ -911,7 +911,7 @@ class RasSubmodel:
             provenance = "source_reach_fallback" if internal_cut else "source_reach"
         data["flow_changes"] = retained_changes
         data["boundaries"] = boundaries
-        data["flow_title"] = f"Submodel - {data.get('flow_title', '')}".strip()
+        data["flow_title"] = f"Breakout - {data.get('flow_title', '')}".strip()
         data.pop("unparsed_lines", None)
         return data, provenance
 
@@ -919,7 +919,7 @@ class RasSubmodel:
     def _known_wse_boundaries(
         source_hdf: Path,
         flow_data: Mapping[str, Any],
-        selection: SubmodelSelection,
+        selection: Breakout1DSelection,
         source_boundaries: Sequence[Mapping[str, Any]],
     ) -> list[dict[str, Any]]:
         from .RasSteady import RasSteady
@@ -928,11 +928,11 @@ class RasSubmodel:
         wse = HdfResultsPlan.get_steady_wse(source_hdf)
         if "Profile" not in wse.columns:
             wse["Profile"] = flow_data["profile_names"][0]
-        wanted_value = RasSubmodel._station_value(selection.downstream_station)
+        wanted_value = RasBreakout1D._station_value(selection.downstream_station)
         wse = wse[
             (wse["River"] == selection.river)
             & (wse["Reach"] == selection.reach)
-            & (wse["Station"].map(RasSubmodel._station_value) == wanted_value)
+            & (wse["Station"].map(RasBreakout1D._station_value) == wanted_value)
         ]
         if len(wse) != len(flow_data["profile_names"]):
             raise ValueError(
@@ -992,7 +992,7 @@ class RasSubmodel:
         natural = result[result["Type"] == 1].copy()
         if natural.empty:
             raise ValueError(f"No natural cross sections found for {river}/{reach}")
-        if natural["RS"].map(RasSubmodel._station_value).duplicated().any():
+        if natural["RS"].map(RasBreakout1D._station_value).duplicated().any():
             raise ValueError("Duplicate numeric river stations are unsupported")
         return natural.reset_index(drop=True)
 
@@ -1013,7 +1013,7 @@ class RasSubmodel:
         )
         reach_starts: list[tuple[int, str, str]] = []
         for index, line in enumerate(lines):
-            parsed = RasSubmodel._parse_reach_header(line)
+            parsed = RasBreakout1D._parse_reach_header(line)
             if parsed is not None:
                 reach_starts.append((index, parsed[0], parsed[1]))
         matches = [
@@ -1027,7 +1027,7 @@ class RasSubmodel:
         later_domain_starts = [
             index
             for index in range(reach_start + 1, len(lines))
-            if RasSubmodel._is_geometry_domain_header(lines[index])
+            if RasBreakout1D._is_geometry_domain_header(lines[index])
         ]
         reach_end = min(later_domain_starts) if later_domain_starts else len(lines)
         node_starts = [
@@ -1044,13 +1044,13 @@ class RasSubmodel:
                 if position + 1 < len(node_starts)
                 else reach_end
             )
-            type_code, station = RasSubmodel._parse_type_rm(lines[start])
+            type_code, station = RasBreakout1D._parse_type_rm(lines[start])
             nodes.append(_NodeBlock(start, end, type_code, station))
         return lines, reach_start, nodes
 
     @staticmethod
     def _selection_has_lateral_structure(
-        geom_file: Union[str, Path], selection: SubmodelSelection
+        geom_file: Union[str, Path], selection: Breakout1DSelection
     ) -> bool:
         from .geom import GeomLateral
 
@@ -1058,13 +1058,13 @@ class RasSubmodel:
         if laterals.empty:
             return False
         laterals = laterals[laterals["Reach"] == selection.reach]
-        upper = RasSubmodel._station_value(selection.upstream_station)
-        lower = RasSubmodel._station_value(selection.downstream_station)
+        upper = RasBreakout1D._station_value(selection.upstream_station)
+        lower = RasBreakout1D._station_value(selection.downstream_station)
         for row in laterals.itertuples(index=False):
             if row.StartRS is None or row.EndRS is None:
                 return True
-            start = RasSubmodel._station_value(row.StartRS)
-            end = RasSubmodel._station_value(row.EndRS)
+            start = RasBreakout1D._station_value(row.StartRS)
+            end = RasBreakout1D._station_value(row.EndRS)
             lateral_upper = max(start, end)
             lateral_lower = min(start, end)
             if lateral_lower <= upper and lateral_upper >= lower:
@@ -1097,7 +1097,7 @@ class RasSubmodel:
     def _is_geometry_domain_header(line: str) -> bool:
         stripped = line.strip()
         return (
-            RasSubmodel._parse_reach_header(line) is not None
+            RasBreakout1D._parse_reach_header(line) is not None
             or stripped.startswith("Junct Name=")
             or stripped.startswith("Storage Area=")
             or stripped.startswith("2D Flow Area=")
@@ -1108,7 +1108,7 @@ class RasSubmodel:
     @staticmethod
     def _first_geometry_domain_line(lines: Sequence[str]) -> int:
         for index, line in enumerate(lines):
-            if RasSubmodel._is_geometry_domain_header(line):
+            if RasBreakout1D._is_geometry_domain_header(line):
                 return index
         raise ValueError("Geometry file has no river/reach domain records")
 
@@ -1225,13 +1225,13 @@ class RasSubmodel:
     @staticmethod
     def _stations_equal(left: Any, right: Any) -> bool:
         return (
-            abs(RasSubmodel._station_value(left) - RasSubmodel._station_value(right))
+            abs(RasBreakout1D._station_value(left) - RasBreakout1D._station_value(right))
             <= 1e-9
         )
 
     @staticmethod
     def _matching_station_key(nodes: Mapping[str, _NodeBlock], station: str) -> str:
-        matches = [key for key in nodes if RasSubmodel._stations_equal(key, station)]
+        matches = [key for key in nodes if RasBreakout1D._stations_equal(key, station)]
         if len(matches) != 1:
             raise ValueError(
                 f"Station {station!r} resolved {len(matches)} times in geometry"
@@ -1252,8 +1252,8 @@ class RasSubmodel:
 
 
 __all__ = [
-    "RasSubmodel",
-    "SubmodelResult",
-    "SubmodelSelection",
-    "SubmodelValidationReport",
+    "RasBreakout1D",
+    "Breakout1DResult",
+    "Breakout1DSelection",
+    "Breakout1DValidationReport",
 ]

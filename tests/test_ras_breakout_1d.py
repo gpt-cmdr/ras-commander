@@ -1,4 +1,4 @@
-"""Focused real-format contracts for the one-reach RasSubmodel MVP."""
+"""Focused real-format contracts for the one-reach RasBreakout1D MVP."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 import pytest
 
-from ras_commander import RasPrj, RasSubmodel
+from ras_commander import RasPrj, RasBreakout1D
 
 
 def _xs_block(station: int, downstream_length: int, y: int) -> str:
@@ -186,9 +186,9 @@ def test_extract_reach_preserves_blocks_relationships_and_flow_changes(tmp_path:
     source_geom = Path(source.geom_df.iloc[0]["full_path"])
     before = _digest(source_geom)
 
-    result = RasSubmodel.extract_reach(
+    result = RasBreakout1D.extract_reach(
         source,
-        tmp_path / "submodel",
+        tmp_path / "breakout",
         "Main River",
         "Main Reach",
         upstream_station=425,
@@ -226,7 +226,7 @@ def test_extract_reach_preserves_blocks_relationships_and_flow_changes(tmp_path:
         ("400", [100.0, 200.0]),
         ("300", [120.0, 220.0]),
     ]
-    comparison = RasSubmodel.compare_geometry(
+    comparison = RasBreakout1D.compare_geometry(
         source_geom, result.geometry_file, result.selection
     )
     assert comparison["content_equal"].all()
@@ -238,14 +238,14 @@ def test_supplied_xs_selector_requires_a_continuous_source_slice(tmp_path: Path)
     source = _write_project(tmp_path / "source")
     geom = Path(source.geom_df.iloc[0]["full_path"])
 
-    selection = RasSubmodel.select_by_cross_sections(
+    selection = RasBreakout1D.select_by_cross_sections(
         geom, "Main River", "Main Reach", [400, 300, 200]
     )
     assert selection.stations == ("400", "300", "200")
     assert selection.selector == "cross_sections"
 
     with pytest.raises(ValueError, match="contiguous"):
-        RasSubmodel.select_by_cross_sections(
+        RasBreakout1D.select_by_cross_sections(
             geom, "Main River", "Main Reach", [400, 200]
         )
 
@@ -256,14 +256,14 @@ def test_polygon_selector_resolves_one_reach_and_fills_intervening_xs(tmp_path: 
     geom = Path(source.geom_df.iloc[0]["full_path"])
     polygon = shapely.box(-1, 55, 101, 85)
 
-    selection = RasSubmodel.select_by_polygon(
+    selection = RasBreakout1D.select_by_polygon(
         geom, polygon, river="Main River", reach="Main Reach"
     )
 
     assert selection.selector == "polygon"
     assert selection.stations == ("400", "300", "200")
 
-    network_selection = RasSubmodel.select_by_network_segment(
+    network_selection = RasBreakout1D.select_by_network_segment(
         geom,
         shapely.LineString([(50, 55), (50, 85)]),
         river="Main River",
@@ -275,9 +275,9 @@ def test_polygon_selector_resolves_one_reach_and_fills_intervening_xs(tmp_path: 
 
 def test_run_is_explicit_and_delegates_to_rascmdr(tmp_path: Path, monkeypatch):
     source = _write_project(tmp_path / "source")
-    result = RasSubmodel.extract_reach(
+    result = RasBreakout1D.extract_reach(
         source,
-        tmp_path / "submodel",
+        tmp_path / "breakout",
         "Main River",
         "Main Reach",
         400,
@@ -296,7 +296,7 @@ def test_run_is_explicit_and_delegates_to_rascmdr(tmp_path: Path, monkeypatch):
         rascmdr_module.RasCmdr, "compute_plan", staticmethod(fake_compute)
     )
 
-    assert RasSubmodel.run(result, verify=False, num_cores=2) == "computed"
+    assert RasBreakout1D.run(result, verify=False, num_cores=2) == "computed"
     assert observed["plan_number"] == "01"
     assert observed["ras_object"] is result.destination_ras
     assert observed["verify"] is False
@@ -311,9 +311,9 @@ def test_internal_cut_uses_source_result_wse_and_compares_retained_results(
     source_hdf = tmp_path / "source" / "Source.p01.hdf"
     _write_steady_hdf(source_hdf, [500, 400, 300, 200, 100])
 
-    result = RasSubmodel.extract_reach(
+    result = RasBreakout1D.extract_reach(
         source,
-        tmp_path / "submodel",
+        tmp_path / "breakout",
         "Main River",
         "Main Reach",
         400,
@@ -331,9 +331,9 @@ def test_internal_cut_uses_source_result_wse_and_compares_retained_results(
         pytest.approx(105.0),
     ]
 
-    destination_hdf = tmp_path / "submodel" / "submodel.p01.hdf"
+    destination_hdf = tmp_path / "breakout" / "breakout.p01.hdf"
     _write_steady_hdf(destination_hdf, [400, 300, 200], wse_offset=0.25)
-    comparison = RasSubmodel.compare_results(
+    comparison = RasBreakout1D.compare_results(
         source_hdf, destination_hdf, result.selection
     )
     assert set(comparison["_merge"].astype(str)) == {"both"}
@@ -355,9 +355,9 @@ def test_selected_lateral_structure_fails_closed(tmp_path: Path):
     geom.write_text(text, encoding="utf-8")
 
     with pytest.raises(NotImplementedError, match="Lateral structures"):
-        RasSubmodel.extract_reach(
+        RasBreakout1D.extract_reach(
             source,
-            tmp_path / "submodel",
+            tmp_path / "breakout",
             "Main River",
             "Main Reach",
             400,

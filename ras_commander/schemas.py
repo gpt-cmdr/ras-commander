@@ -31,13 +31,13 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 SCHEMA_VERSION = "1.6"
 
 DATAFRAME_SCHEMAS = {
-    "ras_submodel_validation": {
+    "ras_breakout_1d_validation": {
         "description": (
-            "One row per structural validation check for a RasSubmodel "
+            "One row per structural validation check for a RasBreakout1D "
             "extraction."
         ),
-        "accessor": "SubmodelResult.validation.checks_df",
-        "source": "RasSubmodel.validate()",
+        "accessor": "Breakout1DResult.validation.checks_df",
+        "source": "RasBreakout1D.validate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -47,13 +47,13 @@ DATAFRAME_SCHEMAS = {
             {"name": "detail", "dtype": "str", "description": "Human-readable evidence for the check."},
         ],
     },
-    "ras_submodel_geometry_comparison": {
+    "ras_breakout_1d_geometry_comparison": {
         "description": (
             "One row per retained cross section comparing complete source and "
             "destination geometry payloads."
         ),
-        "accessor": "RasSubmodel.compare_geometry(...)",
-        "source": "RasSubmodel.compare_geometry()",
+        "accessor": "RasBreakout1D.compare_geometry(...)",
+        "source": "RasBreakout1D.compare_geometry()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -65,13 +65,13 @@ DATAFRAME_SCHEMAS = {
             {"name": "destination_block_sha256", "dtype": "str", "description": "Destination node-payload SHA-256."},
         ],
     },
-    "ras_submodel_results_comparison": {
+    "ras_breakout_1d_results_comparison": {
         "description": (
             "Retained-section steady results joined by river, reach, station, "
             "and profile with source/destination values and numeric deltas."
         ),
-        "accessor": "RasSubmodel.compare_results(...)",
-        "source": "RasSubmodel.compare_results()",
+        "accessor": "RasBreakout1D.compare_results(...)",
+        "source": "RasBreakout1D.compare_results()",
         "extra_columns": True,
         "dynamic": True,
         "columns": [

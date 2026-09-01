@@ -137,10 +137,10 @@ _LAZY_EXPORTS = {
     'RasMonteCarlo': ('.RasMonteCarlo', 'RasMonteCarlo'),
     'RasFlowOptimization': ('.RasFlowOptimization', 'RasFlowOptimization'),
     **{
-        name: ('.RasSubmodel', name)
+        name: ('.RasBreakout1D', name)
         for name in (
-            'RasSubmodel', 'SubmodelResult', 'SubmodelSelection',
-            'SubmodelValidationReport',
+            'RasBreakout1D', 'Breakout1DResult', 'Breakout1DSelection',
+            'Breakout1DValidationReport',
         )
     },
     'RasProcess': ('.RasProcess', 'RasProcess'),
@@ -370,8 +370,8 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
-    'RasSubmodel', 'SubmodelResult', 'SubmodelSelection',
-    'SubmodelValidationReport',
+    'RasBreakout1D', 'Breakout1DResult', 'Breakout1DSelection',
+    'Breakout1DValidationReport',
     'RasNetworkConflation', 'NetworkConflationResult',
     'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
     'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',

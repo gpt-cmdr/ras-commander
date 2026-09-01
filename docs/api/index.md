@@ -35,11 +35,11 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`HydrofabricConflationResult`](hydrofabric.md#basic-use) - Resolved matches, ranked candidates, and HUC intersections
 - [`HydrofabricAdapter`](hydrofabric.md#hydrofabric-adapters) - NHDPlus, NWM, NextGen, and custom flowpath schema normalization
 
-## 1D Submodel Extraction
+## 1D Breakout Extraction
 
-- [`RasSubmodel`](submodel.md) - One-reach steady submodel selection, extraction, validation, execution, and comparison
-- [`SubmodelSelection`](submodel.md#select-a-reach-slice) - Resolved contiguous cross-section selection
-- [`SubmodelResult`](submodel.md#extract-and-validate) - Independent project artifacts, validation, and boundary provenance
+- [`RasBreakout1D`](breakout-1d.md) - One-reach steady breakout selection, extraction, validation, execution, and comparison
+- [`Breakout1DSelection`](breakout-1d.md#select-a-reach-slice) - Resolved contiguous cross-section selection
+- [`Breakout1DResult`](breakout-1d.md#extract-and-validate) - Independent project artifacts, validation, and boundary provenance
 
 ## HDF Modules
 

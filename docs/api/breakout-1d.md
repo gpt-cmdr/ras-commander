@@ -1,6 +1,6 @@
-# 1D Submodel Extraction
+# 1D Breakout Extraction
 
-`RasSubmodel` creates an independent, steady-flow HEC-RAS project from a
+`RasBreakout1D` creates an independent, steady-flow HEC-RAS project from a
 continuous slice of one 1D river reach. Selection and extraction are separate,
 so a station range, polygon, network segment, or explicit cross-section set can
 feed the same fail-closed writer and validation workflow.
@@ -8,9 +8,9 @@ feed the same fail-closed writer and validation workflow.
 ## Select a reach slice
 
 ```python
-from ras_commander import RasSubmodel
+from ras_commander import RasBreakout1D
 
-selection = RasSubmodel.select_by_stations(
+selection = RasBreakout1D.select_by_stations(
     source_geometry_file,
     river="White River",
     reach="Main Stem",
@@ -34,12 +34,12 @@ one reach.
 ## Extract and validate
 
 ```python
-result = RasSubmodel.extract_selection(
+result = RasBreakout1D.extract_selection(
     source_ras,
-    r"D:\models\white_river_submodel",
+    r"D:\models\white_river_breakout",
     selection,
     plan_number="01",
-    destination_name="white_river_submodel",
+    destination_name="white_river_breakout",
     boundary_mode="auto",
 )
 
@@ -80,15 +80,15 @@ boundary definition accepted by `RasSteady.write_flow_file()`.
 Execution is always routed through `RasCmdr`:
 
 ```python
-compute_result = RasSubmodel.run(result, verify=True)
+compute_result = RasBreakout1D.run(result, verify=True)
 
-geometry_delta = RasSubmodel.compare_geometry(
+geometry_delta = RasBreakout1D.compare_geometry(
     source_geometry_file,
     result.geometry_file,
     result.selection,
 )
 
-results_delta = RasSubmodel.compare_results(
+results_delta = RasBreakout1D.compare_results(
     source_plan_hdf,
     destination_plan_hdf,
     result.selection,
@@ -108,7 +108,7 @@ structures, and selections with fewer than two cross sections. It preserves the
 source reach-centerline header/coordinates; spatial clipping and reconnection
 of `Reach XY` data is reserved for a later multi-reach workflow.
 
-::: ras_commander.RasSubmodel.RasSubmodel
+::: ras_commander.RasBreakout1D.RasBreakout1D
     options:
       show_source: false
       members:
