@@ -157,6 +157,9 @@ def test_hdf_get_xs_coords_extracts_native_points_and_attributes(tmp_path):
     assert points.loc[3, "bank_side"] == "right"
     assert points.loc[[0, 2, 4], "bank_side"].isna().all()
     assert points["vertical_units"].unique().tolist() == ["ft"]
+    assert points["vertical_units_source"].unique().tolist() == [
+        "geometry_hdf_explicit"
+    ]
     assert points["vertical_datum"].unique().tolist() == ["NAVD88"]
     assert points["extraction_method"].unique().tolist() == ["geometry_hdf"]
     assert points.attrs["native_elevations"] is True
@@ -180,6 +183,9 @@ def test_common_api_has_identical_schema_for_hdf_and_text(tmp_path):
     assert hdf_points["reach_id"].unique().tolist() == ["Test River|Test Reach"]
     assert hdf_points["xs_id"].unique().tolist() == ["Test River|Test Reach|1000"]
     assert hdf_points["vertical_transform_applied"].eq(False).all()
+    assert hdf_points["vertical_units_source"].unique().tolist() == [
+        "project_text"
+    ]
     native_provenance = json.loads(hdf_points["vertical_transform_provenance"].iloc[0])
     assert native_provenance["coordinate_strategy"] == "native_z_preserved"
     assert hdf_points.attrs["provenance"]["native_elevations"] is True
@@ -206,6 +212,20 @@ def test_project_units_override_embedded_hdf_units(tmp_path):
     points = RasCrossSections.get_points(project, "01")
 
     assert points["vertical_units"].unique().tolist() == ["m"]
+    assert points["vertical_units_source"].unique().tolist() == [
+        "project_text"
+    ]
+
+
+def test_direct_hdf_does_not_infer_vertical_units_from_unit_system(tmp_path):
+    hdf_path = _write_geometry_hdf(tmp_path)
+    with h5py.File(hdf_path, "a") as hdf_file:
+        del hdf_file.attrs["Vertical Units"]
+
+    points = HdfXsec.get_xs_coords(hdf_path)
+
+    assert points["vertical_units"].isna().all()
+    assert points["vertical_units_source"].unique().tolist() == ["unknown"]
 
 
 @pytest.mark.parametrize(
@@ -253,6 +273,22 @@ def test_text_source_uses_canonical_project_unit_markers(
 
     assert points["horizontal_units"].unique().tolist() == [expected_units]
     assert points["vertical_units"].unique().tolist() == [expected_units]
+    assert points["vertical_units_source"].unique().tolist() == [
+        "project_text"
+    ]
+
+
+def test_text_source_empty_filter_raises_clear_error(tmp_path):
+    project = _write_project(tmp_path)
+    _write_text_geometry(tmp_path)
+
+    with pytest.raises(ValueError, match="No cross-section points found"):
+        RasCrossSections.get_points(
+            project,
+            "01",
+            source="text",
+            river="Missing River",
+        )
 
 
 def test_explicit_vertical_transform_is_per_point_and_audited(tmp_path):

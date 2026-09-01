@@ -131,6 +131,7 @@ class RasPrj:
         self._plan_flow_prefixes = {}
 
     @staticmethod
+    @log_call
     def get_project_units(project_file: Union[str, Path]) -> Optional[str]:
         """Return the HEC-RAS project length units as ``"ft"`` or ``"m"``.
 

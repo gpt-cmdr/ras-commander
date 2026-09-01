@@ -178,6 +178,7 @@ class RasCrossSections:
         "horizontal_crs",
         "horizontal_units",
         "vertical_units",
+        "vertical_units_source",
         "vertical_datum",
         "source_file",
         "extraction_method",
@@ -345,6 +346,35 @@ class RasCrossSections:
     def _crs_units(crs: Any) -> str | None:
         if crs is None:
             return None
+
+    @staticmethod
+    def _project_mapper_crs(context: _ProjectContext) -> str | None:
+        """Resolve project CRS through the project RASMapper configuration."""
+        from .RasMap import RasMap
+        from .hdf.HdfBase import HdfBase
+
+        preferred = context.folder / f"{context.model_id}.rasmap"
+        if preferred.is_file():
+            rasmap_path = preferred
+        else:
+            candidates = sorted(context.folder.glob("*.rasmap"))
+            if len(candidates) != 1:
+                return None
+            rasmap_path = candidates[0]
+
+        rasmap = RasMap.parse_rasmap(
+            rasmap_path,
+            ras_object=context.ras_object,
+        )
+        if rasmap.empty or "projection_path" not in rasmap:
+            return None
+        raw_path = rasmap.iloc[0]["projection_path"]
+        if pd.isna(raw_path) or not str(raw_path).strip():
+            return None
+        projection_path = Path(str(raw_path))
+        if not projection_path.is_file():
+            return None
+        return HdfBase._get_projection_from_prj_file(projection_path)
         try:
             from pyproj import CRS
 
@@ -382,9 +412,26 @@ class RasCrossSections:
         from .geom.GeomCrossSection import GeomCrossSection
         from .geom.GeomParser import GeomParser
 
-        points = GeomCrossSection.get_xs_coords(
-            path, river=river, reach=reach, rs=river_station, ras_object=ras_object
-        ).rename(columns={"RS": "river_station"})
+        filters = {"river": river, "reach": reach, "rs": river_station}
+        active = {key: value for key, value in filters.items() if value is not None}
+        try:
+            points = GeomCrossSection.get_xs_coords(
+                path,
+                river=river,
+                reach=reach,
+                rs=river_station,
+                ras_object=ras_object,
+            ).rename(columns={"RS": "river_station"})
+        except ValueError as exc:
+            if "No cross sections found" not in str(exc):
+                raise
+            raise ValueError(
+                f"No cross-section points found in {path} matching {active}."
+            ) from exc
+        if points.empty:
+            raise ValueError(
+                f"No cross-section points found in {path} matching {active}."
+            )
         cut_lines = GeomParser.get_xs_cut_lines(path, ras_object=ras_object)
         cut_line_lookup = {
             (str(row["river"]), str(row["reach"]), str(row["station"])): row["geometry"]
@@ -512,6 +559,13 @@ class RasCrossSections:
 
         resolved_horizontal_crs = horizontal_crs or project_context.horizontal_crs
         resolved_vertical_units = vertical_units or project_context.model_units
+        vertical_units_source = (
+            "explicit"
+            if vertical_units is not None
+            else "project_text"
+            if project_context.model_units is not None
+            else "unknown"
+        )
         if selected == "hdf":
             if geometry_context.hdf_path is None:
                 raise FileNotFoundError(f"Geometry HDF is unavailable for {geometry!r}.")
@@ -527,15 +581,14 @@ class RasCrossSections:
                 vertical_datum=vertical_datum,
                 ras_object=project_context.ras_object,
             )
-            if frame["vertical_units"].isna().all() and project_context.model_units:
-                frame["vertical_units"] = project_context.model_units
+            frame["vertical_units_source"] = vertical_units_source
         else:
             if geometry_context.text_path is None:
                 raise FileNotFoundError(f"Text geometry is unavailable for {geometry!r}.")
             if resolved_horizontal_crs is None:
-                from .hdf.HdfBase import HdfBase
-
-                resolved_horizontal_crs = HdfBase.get_projection(geometry_context.text_path)
+                resolved_horizontal_crs = RasCrossSections._project_mapper_crs(
+                    project_context
+                )
             frame = RasCrossSections._text_points(
                 geometry_context.text_path,
                 river=river,
@@ -547,6 +600,7 @@ class RasCrossSections:
                 vertical_datum=vertical_datum,
                 ras_object=project_context.ras_object,
             )
+            frame["vertical_units_source"] = vertical_units_source
 
         frame.insert(0, "model_id", project_context.model_id)
         frame.insert(1, "geometry_id", geometry_context.geometry_id)

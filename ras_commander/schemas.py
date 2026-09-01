@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.6"
+SCHEMA_VERSION = "1.7"
 
 DATAFRAME_SCHEMAS = {
     "cross_section_points": {
@@ -69,6 +69,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "horizontal_crs", "dtype": "str | None", "description": "Horizontal or compound CRS definition/code associated with XYZ."},
             {"name": "horizontal_units", "dtype": "str | None", "description": "Horizontal CRS axis units, falling back to declared model units when CRS is unavailable."},
             {"name": "vertical_units", "dtype": "str | None", "description": "Native or target vertical units."},
+            {"name": "vertical_units_source", "dtype": "str", "description": "Unit provenance: explicit, project_text, geometry_hdf_explicit, or unknown."},
             {"name": "vertical_datum", "dtype": "str | None", "description": "Explicit native or target vertical datum; never inferred from horizontal location."},
             {"name": "source_file", "dtype": "str", "description": "Absolute source geometry or geometry-HDF path."},
             {"name": "extraction_method", "dtype": "str", "description": "text_geometry or geometry_hdf."},

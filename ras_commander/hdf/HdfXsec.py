@@ -134,30 +134,6 @@ class HdfXsec:
         return text or None
 
     @staticmethod
-    def _model_length_units(hdf_file: h5py.File) -> Optional[str]:
-        """Read the HEC-RAS model length unit without guessing from coordinates."""
-        units_system = HdfXsec._hdf_text(hdf_file.attrs.get("Units System"))
-        if units_system:
-            normalized = units_system.lower()
-            if normalized.startswith("si") or normalized == "metric":
-                return "m"
-            if normalized.startswith("us") or normalized in {
-                "english", "imperial", "customary", "us customary"
-            }:
-                return "ft"
-
-        geometry = hdf_file.get("Geometry")
-        raw_si_units = geometry.attrs.get("SI Units") if geometry is not None else None
-        si_units = HdfXsec._hdf_text(raw_si_units)
-        if si_units:
-            normalized = si_units.lower()
-            if normalized in {"true", "1", "yes"}:
-                return "m"
-            if normalized in {"false", "0", "no"}:
-                return "ft"
-        return None
-
-    @staticmethod
     def _explicit_vertical_metadata(hdf_file: h5py.File) -> tuple[Optional[str], Optional[str]]:
         """Read only explicitly stored vertical metadata from an HDF file."""
         unit_names = {
@@ -265,10 +241,11 @@ class HdfXsec:
             Explicit CRS override. Otherwise the embedded or adjacent RASMapper
             projection is used when available.
         vertical_units, vertical_datum:
-            Explicit metadata overrides. Unit-system metadata supplies native
-            vertical units when present. A vertical datum is reported only when
-            explicitly provided or stored in the HDF; it is never inferred from
-            the horizontal CRS.
+            Explicit metadata overrides. Direct HDF extraction uses only
+            genuinely explicit vertical-unit metadata; generic unit-system
+            flags are not treated as authoritative. A vertical datum is
+            reported only when explicitly provided or stored in the HDF; it is
+            never inferred from the horizontal CRS.
 
         Returns
         -------
@@ -315,9 +292,15 @@ class HdfXsec:
                     f"{mismatched}."
                 )
 
-            model_units = HdfXsec._model_length_units(hdf_file)
             stored_vertical_units, stored_vertical_datum = HdfXsec._explicit_vertical_metadata(hdf_file)
-            resolved_vertical_units = vertical_units or stored_vertical_units or model_units
+            resolved_vertical_units = vertical_units or stored_vertical_units
+            vertical_units_source = (
+                "explicit"
+                if vertical_units is not None
+                else "geometry_hdf_explicit"
+                if stored_vertical_units is not None
+                else "unknown"
+            )
             resolved_vertical_datum = vertical_datum or stored_vertical_datum
 
             rows = []
@@ -415,8 +398,9 @@ class HdfXsec:
 
         result = pd.DataFrame(rows)
         result["horizontal_crs"] = str(resolved_crs) if resolved_crs is not None else None
-        result["horizontal_units"] = HdfXsec._crs_units(resolved_crs) or model_units
+        result["horizontal_units"] = HdfXsec._crs_units(resolved_crs)
         result["vertical_units"] = resolved_vertical_units
+        result["vertical_units_source"] = vertical_units_source
         result["vertical_datum"] = resolved_vertical_datum
         result["source_file"] = str(hdf_path.resolve())
         result["extraction_method"] = "geometry_hdf"
