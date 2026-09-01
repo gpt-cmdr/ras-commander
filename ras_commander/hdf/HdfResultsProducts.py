@@ -176,7 +176,10 @@ class HdfResultsProducts:
                 timestamp_count=len(timestamp_index),
             )
 
-        intervals = np.diff(timestamp_index.asi8).astype(float) / 1e9
+        timestamp_ns = timestamp_index.to_numpy(
+            dtype="datetime64[ns]"
+        ).astype("int64")
+        intervals = np.diff(timestamp_ns).astype(float) / 1e9
         regular = bool(
             intervals.size > 0
             and np.allclose(intervals, intervals[0], rtol=0.0, atol=1e-6)
@@ -1109,9 +1112,17 @@ class HdfResultsProducts:
         primary = axes[paths[0]]
         for path in paths[1:]:
             candidate = axes[path]
+            candidate_seconds = (
+                candidate.to_numpy(dtype="datetime64[ns]").astype("int64")
+                // 1_000_000_000
+            )
+            primary_seconds = (
+                primary.to_numpy(dtype="datetime64[ns]").astype("int64")
+                // 1_000_000_000
+            )
             if len(candidate) != len(primary) or not np.array_equal(
-                candidate.asi8 // 1_000_000_000,
-                primary.asi8 // 1_000_000_000,
+                candidate_seconds,
+                primary_seconds,
             ):
                 raise ValueError(
                     "Result HDF timestamp datasets disagree: "
