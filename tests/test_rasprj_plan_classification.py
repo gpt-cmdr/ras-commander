@@ -111,7 +111,7 @@ def test_classification_and_provenance_columns_are_canonical_schema() -> None:
         "geometry_metadata_error": "str | None",
     }
 
-    assert SCHEMA_VERSION == "1.5"
+    assert SCHEMA_VERSION == "1.7"
     for dataframe, expected in (
         ("plan_df", expected_plan_columns),
         ("geom_df", expected_geom_columns),

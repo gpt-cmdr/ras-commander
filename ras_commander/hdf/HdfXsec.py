@@ -13,6 +13,7 @@ All of the methods in this class are static and are designed to be used without 
 
 Available Functions:
 - get_cross_sections(): Extract cross sections from HDF geometry file
+- get_xs_coords(): Extract point-level XYZ cross-section geometry
 - get_river_centerlines(): Extract river centerlines from HDF geometry file
 - get_river_stationing(): Calculate river stationing along centerlines
 - get_river_reaches(): Return the model 1D river reach lines
@@ -27,24 +28,25 @@ Available Functions:
 All functions follow the get_ prefix convention for methods that return data.
 Private helper methods use the underscore prefix convention.
 
-Each function returns a GeoDataFrame containing geometries and associated attributes
-specific to the requested feature type. All functions include proper error handling
-and logging.
+Functions return pandas or GeoPandas frames containing geometry and associated
+attributes for the requested feature type. All functions include proper error
+handling and logging.
 """
 
 from pathlib import Path
+from typing import Any, List, Optional
+
 import h5py
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
 import geopandas as gpd
-from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
-from typing import List, Optional  # Import List to avoid NameError
+from shapely.geometry import LineString, MultiLineString, Polygon
+
 from ..Decorators import standardize_input, log_call
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
-import logging
 
 
 
@@ -121,6 +123,291 @@ class HdfXsec:
     @staticmethod
     def _alternating_bank_sides(count: int) -> List[str]:
         return ["Left" if idx % 2 == 0 else "Right" for idx in range(count)]
+
+    @staticmethod
+    def _hdf_text(value: Any) -> Optional[str]:
+        """Return a stripped string for an HDF scalar, or ``None``."""
+        if value is None:
+            return None
+        converted = HdfXsec._convert_hdf_value(value)
+        text = str(converted).strip()
+        return text or None
+
+    @staticmethod
+    def _explicit_vertical_metadata(hdf_file: h5py.File) -> tuple[Optional[str], Optional[str]]:
+        """Read only explicitly stored vertical metadata from an HDF file."""
+        unit_names = {
+            "vertical units", "vertical unit", "elevation units", "elevation unit"
+        }
+        datum_names = {
+            "vertical datum", "verticaldatum", "elevation datum", "vertical crs"
+        }
+        vertical_units = None
+        vertical_datum = None
+        objects = [hdf_file]
+        geometry = hdf_file.get("Geometry")
+        if geometry is not None:
+            objects.append(geometry)
+
+        for obj in objects:
+            for name, value in obj.attrs.items():
+                normalized = str(name).strip().lower().replace("_", " ")
+                if vertical_units is None and normalized in unit_names:
+                    vertical_units = HdfXsec._hdf_text(value)
+                if vertical_datum is None and normalized in datum_names:
+                    vertical_datum = HdfXsec._hdf_text(value)
+        return vertical_units, vertical_datum
+
+    @staticmethod
+    def _crs_units(crs: Any) -> Optional[str]:
+        """Return the first axis unit declared by a CRS."""
+        if crs is None:
+            return None
+        try:
+            from pyproj import CRS
+
+            parsed = CRS.from_user_input(crs)
+            if parsed.axis_info:
+                return parsed.axis_info[0].unit_name or None
+        except Exception as exc:
+            logger.debug("Could not determine CRS units from %r: %s", crs, exc)
+        return None
+
+    @staticmethod
+    def _pair_columns(values: np.ndarray, first_names: tuple[str, ...], second_names: tuple[str, ...]) -> tuple[np.ndarray, np.ndarray]:
+        """Read the two logical columns from numeric or structured HDF arrays."""
+        names = getattr(values.dtype, "names", None)
+        if names:
+            normalized = {name.lower(): name for name in names}
+            first = next((normalized[name.lower()] for name in first_names if name.lower() in normalized), None)
+            second = next((normalized[name.lower()] for name in second_names if name.lower() in normalized), None)
+            if first is None or second is None:
+                raise ValueError(
+                    f"Could not identify pair fields in HDF dtype {names}; "
+                    f"expected {first_names} and {second_names}."
+                )
+            return np.asarray(values[first], dtype=float), np.asarray(values[second], dtype=float)
+
+        array = np.asarray(values)
+        if array.ndim != 2 or array.shape[1] < 2:
+            raise ValueError(f"Expected an Nx2 HDF array, got shape {array.shape}.")
+        return np.asarray(array[:, 0], dtype=float), np.asarray(array[:, 1], dtype=float)
+
+    @staticmethod
+    def _mannings_at_stations(stations: np.ndarray, mannings: np.ndarray) -> np.ndarray:
+        """Map native Manning breakpoints to station/elevation points."""
+        if len(mannings) == 0:
+            return np.full(len(stations), np.nan, dtype=float)
+        starts, n_values = HdfXsec._pair_columns(
+            mannings,
+            ("Station", "Start Station"),
+            ("Mann n", "n_value", "Manning's n"),
+        )
+        order = np.argsort(starts, kind="stable")
+        starts = starts[order]
+        n_values = n_values[order]
+        indices = np.searchsorted(starts, stations, side="right") - 1
+        indices = np.clip(indices, 0, len(starts) - 1)
+        return n_values[indices]
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def get_xs_coords(
+        hdf_path: Path,
+        river: Optional[str] = None,
+        reach: Optional[str] = None,
+        rs: Optional[str] = None,
+        horizontal_crs: Any = None,
+        vertical_units: Optional[str] = None,
+        vertical_datum: Optional[str] = None,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Extract point-level XYZ cross-section geometry from a geometry HDF.
+
+        This is the HDF equivalent of
+        :meth:`GeomCrossSection.get_xs_coords`. Station/elevation rows are
+        projected onto each stored GIS cut line, in native order, and enriched
+        with Manning's n and bank metadata. Elevations are returned exactly as
+        stored; this method never performs a vertical transformation.
+
+        Parameters
+        ----------
+        hdf_path:
+            Geometry ``.g##.hdf`` path (or a supported geometry-HDF selector).
+        river, reach, rs:
+            Optional exact, case-sensitive filters.
+        horizontal_crs:
+            Explicit CRS override. Otherwise the embedded or adjacent RASMapper
+            projection is used when available.
+        vertical_units, vertical_datum:
+            Explicit metadata overrides. Direct HDF extraction uses only
+            genuinely explicit vertical-unit metadata; generic unit-system
+            flags are not treated as authoritative. A vertical datum is
+            reported only when explicitly provided or stored in the HDF; it is
+            never inferred from the horizontal CRS.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per native station/elevation point. Stable columns include
+            identifiers, native/station order, cut-line relative distance, XYZ,
+            Manning's n, bank classification, CRS/units, and source provenance.
+        """
+        hdf_path = Path(hdf_path)
+        resolved_crs = horizontal_crs or HdfBase.get_projection(hdf_path)
+
+        with h5py.File(hdf_path, "r") as hdf_file:
+            group_path = f"/{HdfXsec.CROSS_SECTION_GROUP}"
+            if group_path not in hdf_file:
+                raise ValueError(f"No {HdfXsec.CROSS_SECTION_GROUP} group in {hdf_path}.")
+
+            required = HdfXsec.CROSS_SECTION_REQUIRED_DATASETS
+            missing = [path for path in required if path not in hdf_file]
+            if missing:
+                raise ValueError(
+                    f"Cross-section point extraction requires dataset(s) missing from "
+                    f"{hdf_path}: {', '.join(missing)}"
+                )
+
+            xs_attrs = hdf_file[f"{group_path}/Attributes"][:]
+            poly_info = hdf_file[f"{group_path}/Polyline Info"][:]
+            poly_parts = hdf_file[f"{group_path}/Polyline Parts"][:]
+            poly_points = hdf_file[f"{group_path}/Polyline Points"][:]
+            station_info = hdf_file[f"{group_path}/Station Elevation Info"][:]
+            station_values = hdf_file[f"{group_path}/Station Elevation Values"][:]
+            mann_info = hdf_file[f"{group_path}/Manning's n Info"][:]
+            mann_values = hdf_file[f"{group_path}/Manning's n Values"][:]
+
+            count = len(xs_attrs)
+            aligned = {
+                "Polyline Info": len(poly_info),
+                "Station Elevation Info": len(station_info),
+                "Manning's n Info": len(mann_info),
+            }
+            mismatched = {name: size for name, size in aligned.items() if size != count}
+            if mismatched:
+                raise ValueError(
+                    f"Cross-section HDF arrays are not aligned with {count} Attributes rows: "
+                    f"{mismatched}."
+                )
+
+            stored_vertical_units, stored_vertical_datum = HdfXsec._explicit_vertical_metadata(hdf_file)
+            resolved_vertical_units = vertical_units or stored_vertical_units
+            vertical_units_source = (
+                "explicit"
+                if vertical_units is not None
+                else "geometry_hdf_explicit"
+                if stored_vertical_units is not None
+                else "unknown"
+            )
+            resolved_vertical_datum = vertical_datum or stored_vertical_datum
+
+            rows = []
+            for xs_index in range(count):
+                attr = xs_attrs[xs_index]
+                river_name = HdfXsec._hdf_text(attr["River"]) or ""
+                reach_name = HdfXsec._hdf_text(attr["Reach"]) or ""
+                river_station = HdfXsec._hdf_text(attr["RS"]) or ""
+                if river is not None and river_name != river:
+                    continue
+                if reach is not None and reach_name != reach:
+                    continue
+                if rs is not None and river_station != str(rs):
+                    continue
+
+                point_start, _, part_start, part_count = map(int, poly_info[xs_index][:4])
+                cut_line_points = []
+                for part in poly_parts[part_start:part_start + part_count]:
+                    relative_start, part_point_count = map(int, part[:2])
+                    start = point_start + relative_start
+                    cut_line_points.extend(poly_points[start:start + part_point_count, :2])
+                if len(cut_line_points) < 2:
+                    logger.warning(
+                        "Skipping %s/%s/%s in %s: cut line has fewer than two points.",
+                        river_name, reach_name, river_station, hdf_path.name,
+                    )
+                    continue
+                cut_line = LineString(cut_line_points)
+
+                station_start, station_count = map(int, station_info[xs_index][:2])
+                profile = station_values[station_start:station_start + station_count]
+                stations, elevations = HdfXsec._pair_columns(
+                    profile, ("Station",), ("Elevation",)
+                )
+                if len(stations) == 0:
+                    continue
+
+                mann_start, mann_count = map(int, mann_info[xs_index][:2])
+                xs_mannings = mann_values[mann_start:mann_start + mann_count]
+                point_mannings = HdfXsec._mannings_at_stations(stations, xs_mannings)
+
+                left_bank = float(attr["Left Bank"]) if "Left Bank" in xs_attrs.dtype.names else np.nan
+                right_bank = float(attr["Right Bank"]) if "Right Bank" in xs_attrs.dtype.names else np.nan
+                minimum = float(np.nanmin(stations))
+                maximum = float(np.nanmax(stations))
+                span = maximum - minimum
+                if np.isclose(span, 0.0):
+                    fractions = np.full(len(stations), 0.5, dtype=float)
+                else:
+                    fractions = (stations - minimum) / span
+                distances = fractions * float(cut_line.length)
+                station_order = np.argsort(
+                    np.argsort(stations, kind="stable"), kind="stable"
+                )
+                tolerance = max(abs(span) * 1e-9, 1e-9)
+
+                for point_order, (station, elevation, fraction, distance, n_value) in enumerate(
+                    zip(stations, elevations, fractions, distances, point_mannings)
+                ):
+                    point = cut_line.interpolate(float(np.clip(fraction, 0.0, 1.0)), normalized=True)
+                    at_left = bool(np.isfinite(left_bank) and np.isclose(station, left_bank, rtol=0.0, atol=tolerance))
+                    at_right = bool(np.isfinite(right_bank) and np.isclose(station, right_bank, rtol=0.0, atol=tolerance))
+                    if np.isfinite(left_bank) and station < left_bank:
+                        bank_region = "left_overbank"
+                    elif np.isfinite(right_bank) and station > right_bank:
+                        bank_region = "right_overbank"
+                    elif np.isfinite(left_bank) and np.isfinite(right_bank):
+                        bank_region = "channel"
+                    else:
+                        bank_region = "unknown"
+
+                    rows.append({
+                        "river": river_name,
+                        "reach": reach_name,
+                        "river_station": river_station,
+                        "point_order": point_order,
+                        "station_order": int(station_order[point_order]),
+                        "station": float(station),
+                        "relative_distance": float(distance),
+                        "x": float(point.x),
+                        "y": float(point.y),
+                        "z": float(elevation),
+                        "mannings_n": float(n_value) if np.isfinite(n_value) else np.nan,
+                        "bank_region": bank_region,
+                        "is_bank_station": at_left or at_right,
+                        "bank_side": "left" if at_left else ("right" if at_right else None),
+                        "left_bank_station": left_bank if np.isfinite(left_bank) else np.nan,
+                        "right_bank_station": right_bank if np.isfinite(right_bank) else np.nan,
+                    })
+
+        if not rows:
+            filters = {"river": river, "reach": reach, "rs": rs}
+            active = {key: value for key, value in filters.items() if value is not None}
+            raise ValueError(f"No cross-section points found in {hdf_path} matching {active}.")
+
+        result = pd.DataFrame(rows)
+        result["horizontal_crs"] = str(resolved_crs) if resolved_crs is not None else None
+        result["horizontal_units"] = HdfXsec._crs_units(resolved_crs)
+        result["vertical_units"] = resolved_vertical_units
+        result["vertical_units_source"] = vertical_units_source
+        result["vertical_datum"] = resolved_vertical_datum
+        result["source_file"] = str(hdf_path.resolve())
+        result["extraction_method"] = "geometry_hdf"
+        result.attrs["native_elevations"] = True
+        result.attrs["source_file"] = str(hdf_path.resolve())
+        result.attrs["extraction_method"] = "geometry_hdf"
+        return result
 
     @staticmethod
     @log_call
@@ -249,7 +536,6 @@ class HdfXsec:
                 for i in range(len(poly_info)):
                     # Extract polyline info
                     point_start_idx = poly_info[i][0]
-                    point_count = poly_info[i][1]
                     part_start_idx = poly_info[i][2]
                     part_count = poly_info[i][3]
                     
