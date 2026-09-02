@@ -125,12 +125,11 @@ _LAZY_EXPORTS = {
     'RasFloodway': ('.RasFloodway', 'RasFloodway'),
     'RasHydroCompare': ('.RasHydroCompare', 'RasHydroCompare'),
     **{
-        name: ('.RasHydrofabric', name)
+        name: ('.RasNetworkConflation', name)
         for name in (
             'RasNetworkConflation', 'NetworkConflationResult',
             'NetworkEdgeCoverageResult',
-            'RasHydrofabric', 'HydrofabricConflationResult',
-            'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
+            'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
             'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
         )
     },
@@ -381,8 +380,8 @@ __all__ = [
     'Breakout1DValidationReport',
     'RasNetworkConflation', 'NetworkConflationResult',
     'NetworkEdgeCoverageResult',
-    'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
-    'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
+    'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
+    'NWMHydrofabricAdapter',
     'NextGenFlowpathAdapter',
     'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
