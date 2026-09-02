@@ -40,8 +40,8 @@ class ConflationStatus(str, Enum):
 
 
 @dataclass(frozen=True)
-class HydrofabricConflationResult:
-    """Long-form model-to-hydrofabric conflation output.
+class NetworkConflationResult:
+    """Long-form model-to-network conflation output.
 
     Attributes:
         matches: One resolved row per geometry, reach, and cross section.
@@ -106,7 +106,7 @@ class NetworkEdgeCoverageResult:
 
 
 @dataclass(frozen=True)
-class HydrofabricAdapter:
+class NetworkAdapter:
     """Column aliases used to normalize a flowpath product.
 
     Custom products can use this class directly.  The three built-in subclasses
@@ -206,7 +206,7 @@ def _normalise_wb_nexus_topology(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return frame
 
 
-class NHDPlusAdapter(HydrofabricAdapter):
+class NHDPlusAdapter(NetworkAdapter):
     """Adapter for NHDPlus V2 and NHDPlus HR flowlines."""
 
     def __init__(self) -> None:
@@ -231,7 +231,7 @@ class NHDPlusAdapter(HydrofabricAdapter):
         )
 
 
-class NWMHydrofabricAdapter(HydrofabricAdapter):
+class NWMHydrofabricAdapter(NetworkAdapter):
     """Adapter for the current NOAA/NWM hydrofabric flowpaths layer."""
 
     def __init__(self) -> None:
@@ -258,7 +258,7 @@ class NWMHydrofabricAdapter(HydrofabricAdapter):
         return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
-class NextGenFlowpathAdapter(HydrofabricAdapter):
+class NextGenFlowpathAdapter(NetworkAdapter):
     """Adapter for NextGen-style flowpaths and nexus-linked networks."""
 
     def __init__(self) -> None:
@@ -341,7 +341,7 @@ _REACH_METRIC_COLUMNS = [
 ]
 
 
-class RasHydrofabric:
+class RasNetworkConflation:
     """Conflate HEC-RAS geometry with generic directed network flowpaths.
 
     This is a static namespace; do not instantiate it.
@@ -355,7 +355,7 @@ class RasHydrofabric:
         model_footprints: GeoInput,
         network_edges: GeoInput,
         *,
-        adapter: Union[str, HydrofabricAdapter] = "auto",
+        adapter: Union[str, NetworkAdapter] = "auto",
         geometry_id_col: Optional[str] = None,
         network_edges_layer: Optional[str] = None,
         analysis_crs: Optional[Any] = None,
@@ -405,7 +405,7 @@ class RasHydrofabric:
         if footprints["geometry_id"].duplicated().any():
             raise ValueError("model_footprints geometry IDs must be unique")
 
-        selected_adapter = RasHydrofabric.get_adapter(adapter, raw_edges)
+        selected_adapter = RasNetworkConflation.get_adapter(adapter, raw_edges)
         edges = selected_adapter.normalize(raw_edges)
         target_crs = _choose_extent_analysis_crs(
             footprints, edges, analysis_crs
@@ -485,11 +485,11 @@ class RasHydrofabric:
 
     @staticmethod
     def get_adapter(
-        adapter: Union[str, HydrofabricAdapter],
+        adapter: Union[str, NetworkAdapter],
         flowpaths: Optional[gpd.GeoDataFrame] = None,
-    ) -> HydrofabricAdapter:
+    ) -> NetworkAdapter:
         """Resolve a built-in, custom, or auto-detected adapter."""
-        if isinstance(adapter, HydrofabricAdapter):
+        if isinstance(adapter, NetworkAdapter):
             return adapter
         key = str(adapter).strip().lower().replace("-", "_")
         if key in {"nhd", "nhdplus", "nhdplus_v2", "nhdplus_hr"}:
@@ -501,7 +501,7 @@ class RasHydrofabric:
         if key != "auto":
             raise ValueError(
                 "adapter must be 'auto', 'nhdplus', 'nwm', 'nextgen', or a "
-                "HydrofabricAdapter instance"
+                "NetworkAdapter instance"
             )
         if flowpaths is None:
             raise ValueError("flowpaths are required for adapter='auto'")
@@ -516,7 +516,7 @@ class RasHydrofabric:
             return NWMHydrofabricAdapter()
         raise ValueError(
             "Could not auto-detect the hydrofabric schema; pass an explicit "
-            "adapter or HydrofabricAdapter"
+            "adapter or NetworkAdapter"
         )
 
     @staticmethod
@@ -528,7 +528,7 @@ class RasHydrofabric:
         flowpaths: GeoInput,
         *,
         thalweg_points: Optional[GeoInput] = None,
-        adapter: Union[str, HydrofabricAdapter] = "auto",
+        adapter: Union[str, NetworkAdapter] = "auto",
         hucs: Optional[GeoInput] = None,
         analysis_crs: Optional[Any] = None,
         geometry_id_col: Optional[str] = "geometry_id",
@@ -550,7 +550,7 @@ class RasHydrofabric:
         min_coverage: float = 0.50,
         weights: Optional[Mapping[str, float]] = None,
         sample_count: int = 9,
-    ) -> HydrofabricConflationResult:
+    ) -> NetworkConflationResult:
         """Conflate model footprints, reaches, and cross sections to flowpaths.
 
         Candidate flowpaths are scored using model-footprint overlap, symmetric
@@ -570,7 +570,7 @@ class RasHydrofabric:
                 and reach ID.  If omitted, ``xs_thalweg_col`` is used when that
                 point-valued column exists on ``cross_sections``.
             adapter: ``'auto'``, ``'nhdplus'``, ``'nwm'``, ``'nextgen'``, or a
-                custom :class:`HydrofabricAdapter`.
+                custom :class:`NetworkAdapter`.
             hucs: Optional HUC polygon layer.  Intersections are returned without
                 influencing the candidate score.
             analysis_crs: Optional projected CRS for measurements.  A local UTM
@@ -587,7 +587,7 @@ class RasHydrofabric:
             weights: Optional overrides for :data:`DEFAULT_CONFLATION_WEIGHTS`.
 
         Returns:
-            :class:`HydrofabricConflationResult`.  Ambiguous and unmatched rows
+            :class:`NetworkConflationResult`.  Ambiguous and unmatched rows
             have ``feature_id=None``; their best evidence remains in
             ``best_candidate_feature_id`` and ``candidates``.
         """
@@ -621,7 +621,7 @@ class RasHydrofabric:
         if not thalweg_frame.empty:
             _require_crs(thalweg_frame, "thalweg_points")
 
-        selected_adapter = RasHydrofabric.get_adapter(adapter, raw_flowpaths)
+        selected_adapter = RasNetworkConflation.get_adapter(adapter, raw_flowpaths)
         normalized_flowpaths = selected_adapter.normalize(raw_flowpaths)
 
         footprints, reaches, xs = _prepare_model_frames(
@@ -786,7 +786,7 @@ class RasHydrofabric:
             "min_coverage": float(min_coverage),
             "sample_count": int(sample_count),
         }
-        return HydrofabricConflationResult(
+        return NetworkConflationResult(
             matches=matches,
             candidates=candidates,
             reach_metrics=reach_metrics,
@@ -795,17 +795,6 @@ class RasHydrofabric:
             analysis_crs=target_crs.to_string(),
             parameters=parameters,
         )
-
-
-class RasNetworkConflation(RasHydrofabric):
-    """Generic public name for :class:`RasHydrofabric` conflation.
-
-    NHDPlus, NWM, and NextGen are schema adapters to this network-neutral core;
-    custom directed networks use :class:`HydrofabricAdapter` directly.
-    """
-
-
-NetworkConflationResult = HydrofabricConflationResult
 
 
 def _validate_thresholds(
