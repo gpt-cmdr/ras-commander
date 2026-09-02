@@ -107,7 +107,7 @@ sections—the method removes that group and renormalizes the remaining weights.
 Override only the weights that need adjustment:
 
 ```python
-result = RasHydrofabric.conflate(
+result = RasNetworkConflation.conflate(
     footprints_gdf,
     reach_centerlines_gdf,
     xs_cut_lines_gdf,
@@ -187,6 +187,17 @@ Pass `adapter="auto"` or select a built-in schema explicitly:
 | `nhdplus` | `COMID` | `StreamOrde`, `TotDASqKm`, node IDs, Hydroseq |
 | `nwm` | `id` / `feature_id` | `toid`, `order`, `areasqkm`, hydroseq |
 | `nextgen` | `feature_id` / `flowpath_id` | downstream/nexus IDs, order, drainage area, sequence |
+
+The NWM and NextGen adapters recognize native `wb-*` flowpaths and `nex-*`
+connectivity. A downstream `nex-123` is resolved to `wb-123` only when that
+flowpath is present in the supplied network; terminal, coastal, internal, or
+clipped nexuses remain nodes rather than becoming invented edge IDs. When both
+incremental and total drainage-area attributes are available, the adapters use
+the total upstream area for scale agreement.
+
+Topology contributes to candidate scoring only for flowpaths inside the local
+reach search buffer. This prevents a connected flowpath elsewhere in a broad
+model footprint from supplying false continuity evidence.
 
 For another schema, supply a custom adapter:
 
