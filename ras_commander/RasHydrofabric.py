@@ -174,6 +174,38 @@ class HydrofabricAdapter:
         return frame
 
 
+def _normalise_wb_nexus_topology(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Resolve native ``wb-*`` / nexus links within a loaded flowpath set."""
+    feature_ids = set(frame["feature_id"].dropna().astype(str))
+    nexus_prefixes = ("nex-", "tnx-", "cnx-", "inx-")
+
+    def _flowpath_from_nexus(value: Any) -> Optional[str]:
+        value = _normalise_identifier(value)
+        if value is None:
+            return None
+        if value.startswith("nex-"):
+            candidate = f"wb-{value[4:]}"
+            return candidate if candidate in feature_ids else None
+        if value.startswith(nexus_prefixes):
+            return None
+        return value
+
+    frame["to_feature_id"] = frame["to_feature_id"].map(_flowpath_from_nexus)
+
+    missing_from_node = frame["from_node"].isna()
+    inferred_from_node = frame["feature_id"].map(
+        lambda value: (
+            f"nex-{value[3:]}"
+            if isinstance(value, str) and value.startswith("wb-")
+            else None
+        )
+    )
+    frame.loc[missing_from_node, "from_node"] = inferred_from_node.loc[
+        missing_from_node
+    ]
+    return frame
+
+
 class NHDPlusAdapter(HydrofabricAdapter):
     """Adapter for NHDPlus V2 and NHDPlus HR flowlines."""
 
@@ -215,10 +247,15 @@ class NWMHydrofabricAdapter(HydrofabricAdapter):
                 "order", "stream_order", "strm_order", "streamorde",
             ),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "totdasqkm", "drainage_area",
+                "tot_drainage_areasqkm", "tot_drainage_area_sqkm", "totdasqkm",
+                "drainage_area", "area_sqkm", "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "hf_hydroseq"),
         )
+
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize NWM ``wb-*`` flowpaths and nexus-linked topology."""
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
 class NextGenFlowpathAdapter(HydrofabricAdapter):
@@ -241,10 +278,22 @@ class NextGenFlowpathAdapter(HydrofabricAdapter):
             ),
             stream_order_fields=("order", "stream_order", "streamorde"),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "drainage_area", "totdasqkm",
+                "tot_drainage_areasqkm", "tot_drainage_area_sqkm", "totdasqkm",
+                "drainage_area", "area_sqkm", "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "sequence"),
         )
+
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize native ``wb-*`` flowpaths and ``nex-*`` topology.
+
+        NextGen's native ``toid`` identifies the downstream nexus, not the
+        downstream flowpath. Within a loaded flowpath set, ``nex-123`` is the
+        upstream node of ``wb-123``. Preserve the nexus in ``to_node`` and
+        resolve ``to_feature_id`` only when the corresponding flowpath is
+        present, so terminal or clipped nexuses do not become invented IDs.
+        """
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
 DEFAULT_CONFLATION_WEIGHTS: Mapping[str, float] = {
@@ -942,7 +991,14 @@ def _prepare_model_frames(
     area_col = _find_column(
         reaches,
         None,
-        ("drainage_area", "areasqkm", "totdasqkm", "area_sqkm"),
+        (
+            "drainage_area",
+            "tot_drainage_areasqkm",
+            "tot_drainage_area_sqkm",
+            "totdasqkm",
+            "area_sqkm",
+            "areasqkm",
+        ),
     )
     reaches["model_stream_order"] = (
         pd.to_numeric(reaches[order_col], errors="coerce")
@@ -1212,8 +1268,9 @@ def _score_reach_candidates(
         if reach_geometry is None or reach_geometry.is_empty:
             continue
         footprint = footprint_lookup[str(reach.geometry_id)]
+        local_search_geometry = reach_geometry.buffer(search_distance)
         search_geometry = unary_union(
-            [reach_geometry.buffer(search_distance), footprint]
+            [local_search_geometry, footprint]
         )
         if spatial_index is not None:
             indices = list(
@@ -1245,6 +1302,9 @@ def _score_reach_candidates(
                     "mean_distance": mean_distance,
                     "overlap_ratio": overlap_ratio,
                     "xs_count": xs_count,
+                    "is_local_candidate": flow_geometry.intersects(
+                        local_search_geometry
+                    ),
                 }
             )
         preliminary.sort(
@@ -1301,6 +1361,7 @@ def _score_reach_candidates(
                 "model_drainage_area": _finite_or_none(
                     reach.model_drainage_area
                 ),
+                "is_local_candidate": bool(item["is_local_candidate"]),
                 "geometry": flow_geometry,
                 "flowpath_measure": None,
                 "flowpath_measure_fraction": None,
@@ -1320,10 +1381,17 @@ def _score_reach_candidates(
         if not neighbours:
             record["topological_continuity_score"] = None
             continue
+        if not record["is_local_candidate"]:
+            record["topological_continuity_score"] = 0.0
+            continue
         supported = 0
         considered = 0
         for neighbour in neighbours:
-            neighbour_candidates = grouped.get(neighbour, [])
+            neighbour_candidates = [
+                candidate
+                for candidate in grouped.get(neighbour, [])
+                if candidate["is_local_candidate"]
+            ]
             if not neighbour_candidates:
                 continue
             considered += 1
@@ -1420,17 +1488,17 @@ def _flowpaths_connected(
     right: Mapping[str, Any],
     tolerance: float,
 ) -> bool:
-    if left["feature_id"] == right["feature_id"]:
+    if _identifiers_equal(left["feature_id"], right["feature_id"]):
         return True
-    if left.get("to_feature_id") == right["feature_id"]:
+    if _identifiers_equal(left.get("to_feature_id"), right["feature_id"]):
         return True
-    if right.get("to_feature_id") == left["feature_id"]:
+    if _identifiers_equal(right.get("to_feature_id"), left["feature_id"]):
         return True
     node_pairs = (
         (left.get("to_node"), right.get("from_node")),
         (right.get("to_node"), left.get("from_node")),
     )
-    if any(a is not None and a == b for a, b in node_pairs):
+    if any(_identifiers_equal(a, b) for a, b in node_pairs):
         return True
     left_endpoints = _line_endpoints(left["geometry"])
     right_endpoints = _line_endpoints(right["geometry"])
@@ -1441,6 +1509,13 @@ def _flowpaths_connected(
         for point_a in left_endpoints
         for point_b in right_endpoints
     ) <= tolerance
+
+
+def _identifiers_equal(left: Any, right: Any) -> bool:
+    """Compare optional scalar identifiers without treating nulls as IDs."""
+    if left is None or right is None or pd.isna(left) or pd.isna(right):
+        return False
+    return str(left) == str(right)
 
 
 def _weighted_score(

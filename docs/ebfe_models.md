@@ -670,6 +670,15 @@ Complete working examples demonstrating each model:
 - Reusing saved ras-commander geometry-preprocessor evidence for plan 13.
 - Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.
 
+### 956_hydrofabric_conflation_visual_qa.ipynb
+
+**Demonstrates**:
+- Conflating the Texas Lower Colorado-Cummins SHILOH BRANCH footprint, reach, and 40 cross sections to NextGen v2.2 VPU 12 flowpaths.
+- Mapping native NextGen `wb-*` flowpaths, `cat-*` catchments, WBD HUC12 boundaries, ranked candidates, and direct cross-section intersections for visual QA.
+- Auditing candidate score components and the confidence margin while resolving native `nex-*` links and preferring total upstream drainage area.
+- Comparing default and deliberately strict thresholds to expose matched, ambiguous, and unmatched states without fake accepted identifiers.
+- Verifying along-flowpath cross-section measures and a two-feature NextGen reach sequence.
+
 ### 957_ebfe_spring_river_validation.ipynb
 
 **Demonstrates**:

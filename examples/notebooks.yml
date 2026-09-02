@@ -3955,6 +3955,38 @@ notebooks:
   excluded: false
   code_cells: 11
   executed_cells: 9
+- id: 956_hydrofabric_conflation_visual_qa
+  filename: 956_hydrofabric_conflation_visual_qa.ipynb
+  title: NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
+  series: 950
+  series_name: eBFE Delivery Validation
+  summary: Visually audits generic HEC-RAS-to-network conflation with the NextGen v2.2 adapter on the
+    Texas Lower Colorado-Cummins SHILOH BRANCH model, including native flowpath and catchment IDs, candidate
+    ranks, score components, explicit resolution states, HUC intersections, and cross-section measures.
+  tags:
+  - 1d
+  - ebfe
+  - geometry
+  - hydrofabric
+  - nextgen
+  - qa
+  difficulty: advanced
+  est_runtime: 5 min
+  data_project: null
+  functions_used:
+  - HdfProject.get_project_extent
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_centerlines
+  - RasCmdr.compute_plan
+  - RasEbfeModels.organize_model
+  - RasNetworkConflation.conflate
+  - RasPlan.update_run_flags
+  - ras.project_name
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 13
+  executed_cells: 13
 - id: 957_ebfe_spring_river_validation
   filename: 957_ebfe_spring_river_validation.ipynb
   title: 'Using eBFE Models: Spring River Validation'
