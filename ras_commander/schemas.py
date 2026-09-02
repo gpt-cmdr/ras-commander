@@ -29,9 +29,60 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.8"
+SCHEMA_VERSION = "1.9"
 
 DATAFRAME_SCHEMAS = {
+    "ras_breakout_1d_validation": {
+        "description": (
+            "One row per structural validation check for a RasBreakout1D "
+            "extraction."
+        ),
+        "accessor": "Breakout1DResult.validation.checks_df",
+        "source": "RasBreakout1D.validate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "check", "dtype": "str", "description": "Stable structural check identifier."},
+            {"name": "severity", "dtype": "str", "description": "ERROR or WARNING."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "detail", "dtype": "str", "description": "Human-readable evidence for the check."},
+        ],
+    },
+    "ras_breakout_1d_geometry_comparison": {
+        "description": (
+            "One row per retained cross section comparing complete source and "
+            "destination geometry payloads."
+        ),
+        "accessor": "RasBreakout1D.compare_geometry(...)",
+        "source": "RasBreakout1D.compare_geometry()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact retained river station."},
+            {"name": "content_equal", "dtype": "bool", "description": "Whether the full node payload after the reach-length header matches."},
+            {"name": "source_block_sha256", "dtype": "str", "description": "Source node-payload SHA-256."},
+            {"name": "destination_block_sha256", "dtype": "str", "description": "Destination node-payload SHA-256."},
+        ],
+    },
+    "ras_breakout_1d_results_comparison": {
+        "description": (
+            "Retained-section steady results joined by river, reach, station, "
+            "and profile with source/destination values and numeric deltas."
+        ),
+        "accessor": "RasBreakout1D.compare_results(...)",
+        "source": "RasBreakout1D.compare_results()",
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [
+            {"name": "river", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "node_id", "dtype": "str", "description": "Retained cross-section station."},
+            {"name": "profile", "dtype": "str", "description": "Steady profile name."},
+            {"name": "_merge", "dtype": "category", "description": "Source/destination join presence."},
+        ],
+    },
     "cross_section_points": {
         "description": (
             "One row per native cross-section station/elevation point from a "
@@ -298,6 +349,166 @@ DATAFRAME_SCHEMAS = {
             {"name": "basemap_layer_names", "dtype": "list", "description": "Names of basemap layers."},
             {"name": "basemap_layer_path", "dtype": "list", "description": "Paths of basemap layers."},
             {"name": "current_settings", "dtype": "dict", "description": "RASMapper current-settings map (rendering/units/etc.)."},
+        ],
+    },
+    "network_edge_coverage": {
+        "description": (
+            "One extent-first row per retained HEC-RAS model footprint and "
+            "network edge."
+        ),
+        "accessor": "RasNetworkConflation.classify_edges(...).coverage_df",
+        "source": "RasHydrofabric.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "inside_length", "dtype": "float64", "description": "Edge length inside the model footprint in analysis-CRS units."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full edge length in analysis-CRS units."},
+            {"name": "inside_fraction", "dtype": "float64", "description": "inside_length divided by edge_length."},
+            {"name": "extent_status", "dtype": "str", "description": "inside, partial, or optionally outside."},
+            {"name": "to_edge_id", "dtype": "str | None", "description": "Adapter-normalized downstream edge identifier."},
+            {"name": "from_node", "dtype": "str | None", "description": "Adapter-normalized upstream node or nexus identifier."},
+            {"name": "to_node", "dtype": "str | None", "description": "Adapter-normalized downstream node or nexus identifier."},
+            {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized stream order."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized drainage area."},
+            {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence."},
+            {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
+            {"name": "geometry", "dtype": "geometry", "description": "Full network edge geometry."},
+        ],
+    },
+    "hydrofabric_matches": {
+        "description": (
+            "One explicit matched, ambiguous, or unmatched row per HEC-RAS "
+            "geometry, reach, and cross section."
+        ),
+        "accessor": "RasHydrofabric.conflate(...).matches",
+        "source": "RasHydrofabric.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "element_type", "dtype": "str", "description": "Model element granularity: geometry, reach, or cross_section."},
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str | None", "description": "Reach identifier for reach and cross-section rows."},
+            {"name": "xs_id", "dtype": "str | None", "description": "Cross-section identifier for cross-section rows."},
+            {"name": "feature_id", "dtype": "str | None", "description": "Accepted hydrofabric identifier; null for ambiguous and unmatched rows."},
+            {"name": "best_candidate_feature_id", "dtype": "str | None", "description": "Highest-scoring candidate retained for audit even when no match is accepted."},
+            {"name": "status", "dtype": "str", "description": "Explicit matched, ambiguous, or unmatched status."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Top normalized multi-criteria score in [0, 1]."},
+            {"name": "score_margin", "dtype": "float64 | None", "description": "Top score minus runner-up score."},
+            {"name": "candidate_count", "dtype": "int64", "description": "Number of candidates evaluated for the element."},
+            {"name": "match_method", "dtype": "str", "description": "Multi-criteria resolution or explicit no-candidate method."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable supporting and status reason codes."},
+            {"name": "adapter", "dtype": "str", "description": "Hydrofabric adapter used for schema normalization."},
+            {"name": "flowpath_measure", "dtype": "float64 | None", "description": "Cross-section measure from the flowpath geometry start in analysis-CRS units."},
+            {"name": "flowpath_measure_fraction", "dtype": "float64 | None", "description": "Normalized cross-section measure from 0 at flowpath start to 1 at its end."},
+            {"name": "flowpath_measure_from_end", "dtype": "float64 | None", "description": "Cross-section measure from the flowpath geometry end in analysis-CRS units."},
+            {"name": "measure_method", "dtype": "str | None", "description": "intersection or nearest method used for an accepted cross-section measure."},
+            {"name": "offset_distance", "dtype": "float64 | None", "description": "Cross-section-to-flowpath offset in analysis-CRS units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source HEC-RAS model-element geometry."},
+        ],
+    },
+    "hydrofabric_candidates": {
+        "description": (
+            "Ranked hydrofabric candidates with all spatial, topological, and "
+            "hydrologic score evidence."
+        ),
+        "accessor": "RasHydrofabric.conflate(...).candidates",
+        "source": "RasHydrofabric.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "element_type", "dtype": "str", "description": "Model element granularity: geometry, reach, or cross_section."},
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str | None", "description": "Reach identifier when applicable."},
+            {"name": "xs_id", "dtype": "str | None", "description": "Cross-section identifier when applicable."},
+            {"name": "feature_id", "dtype": "str", "description": "Candidate hydrofabric feature identifier normalized as text."},
+            {"name": "candidate_rank", "dtype": "int64", "description": "One-based score rank within the model element."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Normalized multi-criteria score in [0, 1]."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable evidence reason codes."},
+            {"name": "adapter", "dtype": "str", "description": "Hydrofabric adapter used for schema normalization."},
+            {"name": "footprint_overlap_score", "dtype": "float64", "description": "Flowpath length fraction inside the model footprint."},
+            {"name": "footprint_overlap_ratio", "dtype": "float64", "description": "Raw flowpath/model-footprint overlap ratio."},
+            {"name": "centerline_distance_score", "dtype": "float64", "description": "Normalized symmetric centerline-proximity score."},
+            {"name": "centerline_mean_distance", "dtype": "float64", "description": "Sampled symmetric mean distance in analysis-CRS units."},
+            {"name": "direction_agreement_score", "dtype": "float64 | None", "description": "Directed angular agreement score."},
+            {"name": "angular_difference_deg", "dtype": "float64 | None", "description": "Directed angular difference in degrees."},
+            {"name": "xs_intersection_score", "dtype": "float64 | None", "description": "Fraction of reach cross sections intersected by the candidate."},
+            {"name": "xs_intersection_count", "dtype": "int64", "description": "Reach cross sections intersected by the candidate."},
+            {"name": "xs_total_count", "dtype": "int64", "description": "Cross sections associated with the reach."},
+            {"name": "topological_continuity_score", "dtype": "float64 | None", "description": "Connectivity support across adjacent model reaches."},
+            {"name": "hydrologic_score", "dtype": "float64 | None", "description": "Stream-order and drainage-area support score."},
+            {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized candidate stream order."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized candidate drainage area."},
+            {"name": "sequence_consistency_score", "dtype": "float64 | None", "description": "Reach/cross-section ordering agreement along the flowpath."},
+            {"name": "to_feature_id", "dtype": "str | None", "description": "Adapter-normalized downstream feature or nexus identifier."},
+            {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence value."},
+            {"name": "flowpath_measure", "dtype": "float64 | None", "description": "Candidate cross-section measure from flowpath start."},
+            {"name": "flowpath_measure_fraction", "dtype": "float64 | None", "description": "Candidate normalized flowpath measure."},
+            {"name": "flowpath_measure_from_end", "dtype": "float64 | None", "description": "Candidate cross-section measure from flowpath end."},
+            {"name": "measure_method", "dtype": "str | None", "description": "intersection or nearest measure method."},
+            {"name": "offset_distance", "dtype": "float64 | None", "description": "Cross-section-to-candidate offset in analysis-CRS units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Candidate hydrofabric flowpath geometry."},
+        ],
+    },
+    "hydrofabric_reach_metrics": {
+        "description": (
+            "One row per HEC-RAS reach with its network-edge association, "
+            "cross-section limits, alignment metrics, coverage, and flags."
+        ),
+        "accessor": "RasHydrofabric.conflate(...).reach_metrics",
+        "source": "RasHydrofabric._build_reach_metrics()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str", "description": "HEC-RAS reach identifier."},
+            {"name": "feature_id", "dtype": "str | None", "description": "Accepted network-edge identifier; null unless matched."},
+            {"name": "best_candidate_feature_id", "dtype": "str | None", "description": "Best network-edge candidate retained for review."},
+            {"name": "status", "dtype": "str", "description": "Matched, ambiguous, or unmatched association state."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Top multi-criteria association score."},
+            {"name": "upstream_xs_id", "dtype": "str | None", "description": "First intersecting cross section from the directed network geometry start."},
+            {"name": "downstream_xs_id", "dtype": "str | None", "description": "Last intersecting cross section from the directed network geometry start."},
+            {"name": "xs_intersection_count", "dtype": "int64", "description": "Distinct RAS cross sections intersecting the selected network edge."},
+            {"name": "coverage_start", "dtype": "float64 | None", "description": "Upstream cross-section measure divided by network-edge length."},
+            {"name": "coverage_end", "dtype": "float64 | None", "description": "Downstream cross-section measure divided by network-edge length."},
+            {"name": "coverage_ratio", "dtype": "float64 | None", "description": "Network-edge fraction between the selected XS limits."},
+            {"name": "ras_length", "dtype": "float64 | None", "description": "RAS centerline length between selected XS limits."},
+            {"name": "network_length", "dtype": "float64 | None", "description": "Network length between selected XS limits."},
+            {"name": "network_to_ras_ratio", "dtype": "float64 | None", "description": "Network length divided by RAS centerline length."},
+            {"name": "centerline_offset_count", "dtype": "int64", "description": "Cross sections contributing centerline offsets."},
+            {"name": "centerline_offset_mean", "dtype": "float64 | None", "description": "Mean RAS-centerline to network crossing offset."},
+            {"name": "centerline_offset_std", "dtype": "float64 | None", "description": "Population standard deviation of centerline offsets."},
+            {"name": "centerline_offset_min", "dtype": "float64 | None", "description": "Minimum centerline offset."},
+            {"name": "centerline_offset_max", "dtype": "float64 | None", "description": "Maximum centerline offset."},
+            {"name": "thalweg_offset_count", "dtype": "int64", "description": "Cross sections contributing thalweg offsets."},
+            {"name": "thalweg_offset_mean", "dtype": "float64 | None", "description": "Mean thalweg-point to network crossing offset."},
+            {"name": "thalweg_offset_std", "dtype": "float64 | None", "description": "Population standard deviation of thalweg offsets."},
+            {"name": "thalweg_offset_min", "dtype": "float64 | None", "description": "Minimum thalweg offset."},
+            {"name": "thalweg_offset_max", "dtype": "float64 | None", "description": "Maximum thalweg offset."},
+            {"name": "ambiguous", "dtype": "bool", "description": "Whether candidate scores are too close to resolve."},
+            {"name": "eclipsed", "dtype": "bool", "description": "Whether no two distinct XS limits intersect the selected edge."},
+            {"name": "connectivity_evaluable", "dtype": "bool", "description": "Whether normalized network node fields permit divergence review."},
+            {"name": "divergent", "dtype": "bool", "description": "Whether the selected edge belongs to or terminates at a network split."},
+            {"name": "insufficient_coverage", "dtype": "bool", "description": "Whether XS limits span less than the configured minimum edge fraction."},
+            {"name": "flagged", "dtype": "bool", "description": "Any ambiguous, unmatched, eclipsed, divergent, or insufficient-coverage condition."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable review reasons."},
+            {"name": "geometry", "dtype": "geometry", "description": "HEC-RAS reach centerline geometry."},
+        ],
+    },
+    "hydrofabric_huc_intersections": {
+        "description": "Model-footprint intersections with an optional HUC polygon layer.",
+        "accessor": "RasHydrofabric.conflate(...).huc_intersections",
+        "source": "RasHydrofabric.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "HEC-RAS geometry/model identifier."},
+            {"name": "huc_id", "dtype": "str", "description": "HUC identifier preserved as text."},
+            {"name": "intersection_area", "dtype": "float64", "description": "Intersection area in squared analysis-CRS units."},
+            {"name": "geometry_area_fraction", "dtype": "float64 | None", "description": "Fraction of the model footprint within the HUC."},
+            {"name": "huc_area_fraction", "dtype": "float64 | None", "description": "Fraction of the HUC within the model footprint."},
+            {"name": "geometry", "dtype": "geometry", "description": "Footprint/HUC intersection geometry."},
         ],
     },
     "hdf_result_frames": {

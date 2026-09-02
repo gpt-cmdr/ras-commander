@@ -78,6 +78,8 @@ plugins:
         API Reference:
           - api/index.md
           - api/core.md
+          - api/hydrofabric.md
+          - api/breakout-1d.md
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
@@ -210,6 +212,8 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
+    - Hydrofabric Conflation: api/hydrofabric.md
+    - 1D Breakout Extraction: api/breakout-1d.md
     - Benefits Analysis: api/benefits.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md

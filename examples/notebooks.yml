@@ -1618,6 +1618,46 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 8
+- id: 235_1d_breakout_model
+  filename: 235_1d_breakout_model.ipynb
+  title: Clip a Texas FEMA eBFE Model to One NWM Reach
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Classify real NOAA NWM v3 reaches against the Shiloh Branch eBFE footprint, retain 10% upstream
+    and 25% downstream hydraulic buffers around feature 5790868, rasterize a stricter one-cross-section-overlap
+    export domain, and compare the independent breakout to the source model.
+  tags:
+  - 1d
+  - steady
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
+  - raster
+  - boundary-effects
+  - validation
+  difficulty: advanced
+  est_runtime: 1 min
+  data_project: null
+  functions_used:
+  - GeomParser.get_river_centerlines
+  - GeomParser.get_xs_cut_lines
+  - HdfProject.get_project_extent
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_xs_interpolation_surface
+  - RasBreakout1D.compare_geometry
+  - RasBreakout1D.compare_results
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.run
+  - RasBreakout1D.select_domains_by_network_edge
+  - RasCmdr.compute_plan
+  - RasNetworkConflation.classify_edges
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
