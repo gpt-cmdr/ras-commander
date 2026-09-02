@@ -361,7 +361,7 @@ DATAFRAME_SCHEMAS = {
             "network edge."
         ),
         "accessor": "RasNetworkConflation.classify_edges(...).coverage_df",
-        "source": "RasHydrofabric.classify_edges()",
+        "source": "RasNetworkConflation.classify_edges()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -387,7 +387,7 @@ DATAFRAME_SCHEMAS = {
             "geometry, reach, and cross section."
         ),
         "accessor": "RasNetworkConflation.conflate(...).matches",
-        "source": "RasHydrofabric.conflate()",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -418,7 +418,7 @@ DATAFRAME_SCHEMAS = {
             "hydrologic score evidence."
         ),
         "accessor": "RasNetworkConflation.conflate(...).candidates",
-        "source": "RasHydrofabric.conflate()",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -461,7 +461,7 @@ DATAFRAME_SCHEMAS = {
             "cross-section limits, alignment metrics, coverage, and flags."
         ),
         "accessor": "RasNetworkConflation.conflate(...).reach_metrics",
-        "source": "RasHydrofabric._build_reach_metrics()",
+        "source": "RasNetworkConflation._build_reach_metrics()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -503,7 +503,7 @@ DATAFRAME_SCHEMAS = {
     "hydrofabric_huc_intersections": {
         "description": "Model-footprint intersections with an optional HUC polygon layer.",
         "accessor": "RasNetworkConflation.conflate(...).huc_intersections",
-        "source": "RasHydrofabric.conflate()",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [

@@ -58,7 +58,7 @@ Measurements use the centerline's projected CRS, an explicitly supplied
 `analysis_crs`, or an automatically estimated local UTM CRS when the
 centerlines are geographic.
 
-The method returns a `HydrofabricConflationResult` with three GeoDataFrames:
+The method returns a `NetworkConflationResult` with four GeoDataFrames:
 
 | Property | Contents | Active geometry |
 | --- | --- | --- |
@@ -202,9 +202,9 @@ model footprint from supplying false continuity evidence.
 For another schema, supply a custom adapter:
 
 ```python
-from ras_commander import HydrofabricAdapter, RasNetworkConflation
+from ras_commander import NetworkAdapter, RasNetworkConflation
 
-custom = HydrofabricAdapter(
+custom = NetworkAdapter(
     name="agency_flowpaths",
     feature_id_fields=("agency_reach_id",),
     to_feature_id_fields=("downstream_reach_id",),
@@ -221,7 +221,7 @@ result = RasNetworkConflation.conflate(
 )
 ```
 
-::: ras_commander.RasHydrofabric.RasNetworkConflation
+::: ras_commander.RasNetworkConflation.RasNetworkConflation
     options:
       show_source: false
       members:

@@ -8,13 +8,12 @@ from shapely.geometry import LineString, Point, Polygon
 import ras_commander
 from ras_commander import (
     ConflationStatus,
-    HydrofabricConflationResult,
+    NetworkAdapter,
     NetworkConflationResult,
     NetworkEdgeCoverageResult,
     NextGenFlowpathAdapter,
     NHDPlusAdapter,
     NWMHydrofabricAdapter,
-    RasHydrofabric,
     RasNetworkConflation,
 )
 from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
@@ -22,9 +21,10 @@ from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
 CRS = "EPSG:3857"
 
 
-def test_generic_network_public_names_alias_the_hydrofabric_contract():
-    assert issubclass(RasNetworkConflation, RasHydrofabric)
-    assert NetworkConflationResult is HydrofabricConflationResult
+def test_generic_network_public_names_are_canonical():
+    assert RasNetworkConflation.__module__ == "ras_commander.RasNetworkConflation"
+    assert NetworkConflationResult.__name__ == "NetworkConflationResult"
+    assert NetworkAdapter.__name__ == "NetworkAdapter"
 
 
 def _model_inputs():
@@ -144,7 +144,7 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
         crs=CRS,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         cross_sections,
@@ -157,7 +157,7 @@ def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
         search_distance=25.0,
     )
 
-    assert isinstance(result, HydrofabricConflationResult)
+    assert isinstance(result, NetworkConflationResult)
     assert result.adapter == "nhdplus"
     assert set(result.matches["element_type"]) == {
         "geometry",
@@ -244,7 +244,7 @@ def test_ambiguous_results_do_not_encode_a_candidate_as_a_match():
         crs=CRS,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         cross_sections,
@@ -274,7 +274,7 @@ def test_unmatched_results_use_null_ids_not_numeric_failure_sentinels():
         crs=CRS,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         cross_sections,
@@ -293,7 +293,7 @@ def test_unmatched_results_use_null_ids_not_numeric_failure_sentinels():
 
 def test_reach_metrics_flag_eclipsed_and_insufficient_xs_coverage():
     footprints, reaches, cross_sections = _model_inputs()
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         cross_sections.iloc[[0]].copy(),
@@ -331,7 +331,7 @@ def test_reach_metrics_detect_network_divergence_from_generic_node_fields():
         crs=CRS,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         cross_sections,
@@ -378,7 +378,7 @@ def test_topological_continuity_uses_adjacent_reaches_and_flowpath_nodes():
         crs=CRS,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         None,
@@ -561,7 +561,7 @@ def test_geographic_inputs_use_an_estimated_projected_analysis_crs():
         crs=geographic_crs,
     )
 
-    result = RasHydrofabric.conflate(
+    result = RasNetworkConflation.conflate(
         footprints,
         reaches,
         None,
@@ -616,15 +616,21 @@ def test_builtin_adapters_normalize_flowpath_contract(adapter, columns, expected
 
 def test_public_exports_and_dataframe_schemas_are_registered():
     expected_exports = {
-        "RasHydrofabric",
-        "HydrofabricConflationResult",
+        "RasNetworkConflation",
+        "NetworkConflationResult",
         "ConflationStatus",
-        "HydrofabricAdapter",
+        "NetworkAdapter",
         "NHDPlusAdapter",
         "NWMHydrofabricAdapter",
         "NextGenFlowpathAdapter",
     }
     assert expected_exports <= set(ras_commander.__all__)
+    assert "RasHydrofabric" not in ras_commander.__all__
+    assert "HydrofabricConflationResult" not in ras_commander.__all__
+    assert "HydrofabricAdapter" not in ras_commander.__all__
+    assert not hasattr(ras_commander, "RasHydrofabric")
+    assert not hasattr(ras_commander, "HydrofabricConflationResult")
+    assert not hasattr(ras_commander, "HydrofabricAdapter")
     assert SCHEMA_VERSION == "1.9"
     assert {
         "network_edge_coverage",
