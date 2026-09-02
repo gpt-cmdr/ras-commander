@@ -28,7 +28,7 @@ HEC-RAS 7.0 added an official [Run Multiple Plans core-exploration workflow](htt
 
 But that doesn’t mean RAS can parallelize yet. The new 7.0 feature runs the trials serially, and the published material for RAS 7.0 and RAS "2025" still does not put concurrent multi-simulation orchestration on the roadmap. The [RAS "2025" quick-start material](https://www.hec.usace.army.mil/confluence/rasdocs/hecras/latest/quick-start-guide) discusses the possibility of dynamically adding and removing cores *within* a simulation in the future, but not running independent plans concurrently.
 
-For engineers who need to protect the public today -- not at some nebulous point in the future -- RAS Commander's command-line approach will continue to be the best tool for parallel analysis. Other software packages have yet to adopt this approach, despite the benchmarks and open-source code having been published for almost three years.
+For engineers who need to protect the public today -- not at some nebulous point in the future -- RAS Commander's command-line approach will continue to be the best tool for parallel analysis.
 
 The default software behavior still hasn't changed where it matters for throughput. You still get "All Cores" and have no parallelization available by default other than manual folder copying and results-file copy-back. Try to do it through the `HECRASController`'s COM interface and you will find it only supports one instance. Parallelization was impossible under the currently supported technical paradigm. Anything built on that tech stack has the same limitations. Only RAS Commander was built around a different method -- an obscure one that you would only find by attempting to run `Ras.exe` from the command line:
 
@@ -62,4 +62,4 @@ Of course, we still support the [COM interface for older versions](../user-guide
 
 And the best part about it is that Command Line really is all you need these days. Software development generally has been totally disrupted by command-line coding agents. It's not just HEC-RAS being disrupted by an LLM on a command line.
 
-We think there is a better way and we hope you copy it.
+RAS Commander is our proof that HEC-RAS can be faster, simpler, and more scalable today—and that many of our technical limitations are not immutable. We can get a lot further by working openly together to protect the public.

@@ -184,6 +184,10 @@ _LAZY_EXPORTS = {
             'BenefitCategory', 'RasBenefits',
         )
     },
+    **{
+        name: ('.RasCrossSections', name)
+        for name in ('RasCrossSections', 'VerticalTransform')
+    },
     'BenefitAreaConfig': ('._execution_types', 'BenefitAreaConfig'),
     **{
         name: ('.RasterPerformance', name)
@@ -380,6 +384,7 @@ __all__ = [
     'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
     'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
     'NextGenFlowpathAdapter',
+    'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',

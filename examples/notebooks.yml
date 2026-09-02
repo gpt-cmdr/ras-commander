@@ -2154,6 +2154,7 @@ notebooks:
   - HdfXsec.get_river_centerlines
   - HdfXsec.get_river_edge_lines
   - RasCmdr.compute_plan
+  - RasCrossSections.get_points
   - RasExamples.extract_project
   - ras.boundaries_df
   - ras.geom_df
@@ -2165,7 +2166,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 70
+  code_cells: 73
   executed_cells: 52
 - id: 401_steady_flow_analysis
   filename: 401_steady_flow_analysis.ipynb

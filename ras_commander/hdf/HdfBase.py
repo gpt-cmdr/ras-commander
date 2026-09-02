@@ -393,6 +393,214 @@ class HdfBase:
         return None
 
     @staticmethod
+    def _decode_unit_attribute(value: Any) -> str:
+        """Return one stable text representation for an HDF attribute."""
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace").strip()
+        if isinstance(value, np.ndarray):
+            if value.size == 1:
+                return HdfBase._decode_unit_attribute(value.reshape(-1)[0])
+            return str(value.tolist())
+        if isinstance(value, np.generic):
+            value = value.item()
+        return str(value).strip()
+
+    @staticmethod
+    def _parse_si_units_attribute(value: Any) -> Optional[bool]:
+        """Parse the HEC-RAS ``Geometry/@SI Units`` attribute."""
+        if isinstance(value, np.ndarray) and value.size == 1:
+            value = value.reshape(-1)[0]
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)) and value in {0, 1}:
+            return bool(value)
+        text = HdfBase._decode_unit_attribute(value).casefold()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+        return None
+
+    @staticmethod
+    def _parse_unit_system_attribute(value: Any) -> Optional[bool]:
+        """Return True for SI and False for US Customary root metadata."""
+        text = HdfBase._decode_unit_attribute(value).casefold()
+        if text.startswith("si") or text == "metric":
+            return True
+        if text.startswith("us") or text in {"english", "imperial"}:
+            return False
+        return None
+
+    @staticmethod
+    def _result_unit_metadata_from_file(
+        hdf_file: h5py.File,
+        *,
+        source_file: Union[str, Path],
+        strict: bool,
+    ) -> Dict[str, Any]:
+        """Build normalized result-HDF unit metadata from an open file."""
+        source_path = Path(source_file)
+        try:
+            source_text = str(source_path.resolve())
+        except OSError:
+            source_text = str(source_path.absolute())
+
+        evidence: List[Dict[str, Optional[str]]] = []
+        recognized: List[Tuple[str, bool]] = []
+        problems: List[str] = []
+
+        if "Results" not in hdf_file:
+            problems.append("HDF file does not contain a /Results group")
+
+        geometry = hdf_file.get("Geometry")
+        if geometry is not None and "SI Units" in geometry.attrs:
+            raw_value = geometry.attrs["SI Units"]
+            si_units = HdfBase._parse_si_units_attribute(raw_value)
+            evidence.append(
+                {
+                    "attribute": "/Geometry/@SI Units",
+                    "raw_value": HdfBase._decode_unit_attribute(raw_value),
+                    "unit_system": (
+                        "SI"
+                        if si_units is True
+                        else "US Customary"
+                        if si_units is False
+                        else None
+                    ),
+                }
+            )
+            if si_units is None:
+                problems.append(
+                    "Unrecognized /Geometry/@SI Units value "
+                    f"{HdfBase._decode_unit_attribute(raw_value)!r}"
+                )
+            else:
+                recognized.append(("/Geometry/@SI Units", si_units))
+
+        if "Units System" in hdf_file.attrs:
+            raw_value = hdf_file.attrs["Units System"]
+            si_units = HdfBase._parse_unit_system_attribute(raw_value)
+            evidence.append(
+                {
+                    "attribute": "/@Units System",
+                    "raw_value": HdfBase._decode_unit_attribute(raw_value),
+                    "unit_system": (
+                        "SI"
+                        if si_units is True
+                        else "US Customary"
+                        if si_units is False
+                        else None
+                    ),
+                }
+            )
+            if si_units is None:
+                problems.append(
+                    "Unrecognized /@Units System value "
+                    f"{HdfBase._decode_unit_attribute(raw_value)!r}"
+                )
+            else:
+                recognized.append(("/@Units System", si_units))
+
+        states = {state for _, state in recognized}
+        if len(states) > 1:
+            detail = ", ".join(
+                f"{attribute}={'SI' if state else 'US Customary'}"
+                for attribute, state in recognized
+            )
+            problems.append(
+                "Result HDF unit-system metadata is contradictory: " + detail
+            )
+        if not evidence:
+            problems.append(
+                "Result HDF contains no recognized embedded unit-system metadata"
+            )
+
+        resolved = not problems and len(states) == 1
+        si_units = states.pop() if resolved else None
+        if resolved:
+            unit_system = "SI" if si_units else "US Customary"
+            length_units = "m" if si_units else "ft"
+            result = {
+                "status": "resolved",
+                "unit_system": unit_system,
+                "length_units": length_units,
+                "depth_units": length_units,
+                "velocity_units": "m/s" if si_units else "ft/s",
+                "flow_units": "m3/s" if si_units else "ft3/s",
+                "source": "plan_hdf",
+                "source_file": source_text,
+                "evidence": evidence,
+                "contradictions": [],
+            }
+            return result
+
+        if len(states) > 1:
+            status = "contradictory"
+        elif evidence and any(item["unit_system"] is None for item in evidence):
+            status = "unrecognized"
+        elif "Results" not in hdf_file:
+            status = "unrecognized"
+        else:
+            status = "missing"
+        result = {
+            "status": status,
+            "unit_system": None,
+            "length_units": None,
+            "depth_units": None,
+            "velocity_units": None,
+            "flow_units": None,
+            "source": "plan_hdf",
+            "source_file": source_text,
+            "evidence": evidence,
+            "contradictions": problems,
+        }
+        if strict:
+            raise ValueError(
+                f"Could not resolve result-HDF units for {source_path.name}: "
+                + "; ".join(problems)
+            )
+        return result
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def get_result_unit_metadata(
+        hdf_path: Path,
+        *,
+        strict: bool = True,
+    ) -> Dict[str, Any]:
+        """Read normalized units from a standalone HEC-RAS result HDF.
+
+        This is a fallback for workflows that have only a plan-result HDF. If
+        the full HEC-RAS project is available, use
+        :meth:`RasPrj.get_project_units` instead; the text project marker is
+        authoritative and embedded HDF attributes must not override it.
+
+        The reader checks both ``/Geometry/@SI Units`` and
+        ``/@Units System``. With ``strict=True`` (default), missing,
+        unrecognized, non-result, or contradictory metadata raises
+        :class:`ValueError`. With ``strict=False``, the same condition returns
+        a JSON-serializable unresolved record with evidence and contradictions.
+
+        Args:
+            hdf_path: Standalone HEC-RAS plan-result HDF path or plan selector.
+            strict: Raise when the embedded metadata cannot be resolved.
+
+        Returns:
+            Dict containing status, normalized unit labels, provenance,
+            source evidence, and contradictions.
+        """
+        source = Path(hdf_path)
+        with h5py.File(source, "r") as hdf_file:
+            return HdfBase._result_unit_metadata_from_file(
+                hdf_file,
+                source_file=source,
+                strict=strict,
+            )
+
+    @staticmethod
     @standardize_input(file_type='plan_hdf')
     def get_attrs(hdf_file: h5py.File, attr_path: str) -> Dict[str, Any]:
         """

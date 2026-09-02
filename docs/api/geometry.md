@@ -2,6 +2,68 @@
 
 Classes for parsing and modifying HEC-RAS geometry files.
 
+## Unified Cross-Section Points
+
+`RasCrossSections.get_points(project, geometry)` exports the same stable point
+schema from a plain-text `.g##` geometry or compiled `.g##.hdf`. Pass a
+`RasPrj`, project folder, or `.prj` file for `project`; pass a geometry number,
+title, text path, or HDF path for `geometry`. `source="auto"` prefers an
+available HDF for project geometry selectors, while an explicit source path
+keeps its source type.
+
+```python
+from ras_commander import RasCrossSections
+
+points = RasCrossSections.get_points("Muncie.prj", "01")
+points.to_csv("muncie-xs-points.csv", index=False)
+```
+
+The frame includes model/geometry/reach/XS identifiers; exact river, reach, and
+river-station strings; native and station order; cut-line relative distance;
+XYZ; Manning's n and bank fields; horizontal CRS/units; vertical units/datum;
+`vertical_units_source`; and source/extraction provenance. Native elevations are preserved by default.
+A vertical datum is never inferred from a horizontal CRS or a model centroid.
+When the source does not store a datum, pass `vertical_datum=` explicitly;
+`vertical_units=` is the highest-priority override, followed by the full
+project's text `.prj` marker. A direct `HdfXsec.get_xs_coords()` call uses only
+genuinely explicit HDF vertical-unit metadata and does not infer units from
+generic HDF unit-system flags. The source column reports `explicit`,
+`project_text`, `geometry_hdf_explicit`, or `unknown`.
+
+The identifiers are deterministic within one export; collection-wide model
+identity remains the responsibility of the consuming catalog. Prefer Parquet
+for large exports because the complete transform-provenance JSON is repeated
+per point and can make CSV files unnecessarily large.
+
+Vertical conversion is opt-in through `VerticalTransform`. Use either an exact
+PROJ pipeline or explicit source and target 3D/compound CRSs. The operation is
+run against every point's own X/Y/Z coordinate, and the requested operation,
+resolved PROJ definition, datum/unit labels, and PROJ/pyproj versions are
+stored in `vertical_transform_provenance` and `DataFrame.attrs`.
+
+```python
+from ras_commander import RasCrossSections, VerticalTransform
+
+transform = VerticalTransform(
+    source_vertical_datum="NAVD88",
+    target_vertical_datum="Local project datum",
+    source_vertical_units="ft",
+    target_vertical_units="ft",
+    pipeline="+proj=pipeline +step +proj=affine +zoff=1.25",
+)
+
+adjusted = RasCrossSections.get_points(
+    "Muncie.prj",
+    "01",
+    vertical_datum="NAVD88",
+    vertical_transform=transform,
+)
+```
+
+An affine offset is shown only to make the explicit operation easy to inspect.
+For geodetic vertical transformations, use the project-approved PROJ pipeline
+or full compound CRS definitions and confirm required grid files are installed.
+
 ## GeomProjection
 
 Model geometry reprojection helpers for copied HEC-RAS projects and plain-text

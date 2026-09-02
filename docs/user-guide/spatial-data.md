@@ -642,7 +642,10 @@ HEC-RAS can generate stored maps (raster outputs like depth and water surface el
 
 ### Headless Generation with RasProcess (Recommended)
 
-The `RasProcess` class uses the undocumented RasProcess.exe CLI tool bundled with HEC-RAS to generate stored maps without opening the GUI. This is faster and more reliable for batch processing.
+The canonical `RasMap.store_all_maps()` facade and its `RasProcess` engine use
+ras-commander's packaged RAS Mapper helper and the mapping libraries installed
+with HEC-RAS. They generate stored maps without opening the GUI and support the
+same aggregate path on Windows and Wine.
 
 ```python
 from ras_commander import RasCmdr, RasProcess
@@ -691,6 +694,39 @@ results = RasProcess.store_maps(plan_number="01", profile="Min")
 timestamps = RasProcess.get_plan_timestamps("01")
 results = RasProcess.store_maps(plan_number="01", profile=timestamps[10])
 ```
+
+#### All Steady Profiles in One Launch
+
+For a steady plan, use the canonical `steady_profiles` mode. It resolves names
+and zero-based indexes from the result HDF, writes every selected layer to the
+temporary `.rasmap` in one transaction, and launches aggregate `StoreAllMaps`
+once for the plan. `map_types` accepts `wse`, `depth`, `velocity`, `froude`,
+`shear_stress`, `depth_x_velocity`, `depth_x_velocity_sq`, and `flow`.
+
+```python
+from ras_commander import RasMap
+
+summary = RasMap.store_all_maps(
+    "01",
+    mode="steady_profiles",
+    profiles=None,                 # every HDF profile, in HDF order
+    map_types=("depth",),
+    inundation_boundary=True,      # one polygon for the final selected profile
+    output_path="steady_maps",
+)
+```
+
+The final selected profile is not assumed to be hydraulically highest for an
+arbitrary model. ras2fim constructs ascending discharge ladders, so its final
+profile is the highest ladder step. Exact names and zero-based indexes can be
+mixed when a subset or custom order is needed.
+
+The lower-level
+`RasProcess.store_maps_at_steady_profiles()` returns one DataFrame row per
+logical profile/product. It records the VRT or SHP primary path, all TIFF tiles
+or shapefile sidecars, and performance metadata including configuration time,
+helper time, helper launch count, and generated file count. The original
+`.rasmap` is restored after success or failure.
 
 #### Batch Processing All Plans
 
