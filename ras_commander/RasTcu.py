@@ -7,16 +7,17 @@ version**. The dialog is a VB6 form (window class ``ThunderRT6FormDC``), not a
 standard Windows dialog (``#32770``), so ``DialogWatchdog`` cannot see or dismiss
 it -- and it blocks headless / COM launches until a human clicks *I Agree*.
 
-Acceptance is recorded implicitly, per user, in the VB6 settings hive. HEC-RAS
-keys its settings by the **install path**, so once a user has run a version
-successfully its settings live under::
+Acceptance is recorded per user in the VB6 settings hive. HEC-RAS keys its
+settings by the **install path**, so once a user has accepted a version its
+settings live under::
 
     HKCU\\Software\\VB and VBA Program Settings\\<install-dir>\\<node>\\...
 
 where ``<install-dir>`` is the folder containing ``Ras.exe`` and ``<node>`` is
-``ras.exe`` (HEC-RAS 5.0+) or ``ras`` (4.x). The presence of that initialized
-per-version subtree is what suppresses the TCU on later launches -- there is no
-explicit ``Accepted=1`` value.
+``ras.exe`` (HEC-RAS 5.0+) or ``ras`` (4.x). Opening a release initializes this
+subtree even before acceptance. The release-specific
+``Projects\\System Statistic`` sentinel is the acceptance evidence; subtree
+presence, recent projects, and window positions are not.
 
 This module lets ras-commander:
 
@@ -24,10 +25,11 @@ This module lets ras-commander:
   safe on any OS. ``init_ras_project`` calls this and emits a one-line warning
   when the TCU has not been accepted, so headless users are told *before* a run
   hangs.
-* **Accept** it on demand (``RasTcu.accept``, or ``init_ras_project(accept_tcu=True)``)
-  -- an explicit, opt-in write that seeds the current user's registry by
-  replicating an already-accepted subtree found on the machine. **Never called
-  automatically.**
+* **Accept** it on demand (``RasTcu.accept``, or
+  ``init_ras_project(accept_tcu=True)``) -- an explicit, opt-in registry copy
+  from an already-accepted subtree plus the target release's exact sentinel.
+  The result is revalidated and is never reported as accepted unless it matches.
+  **Never called automatically.**
 
 For fleet / template provisioning (seeding the Default User profile and
 ``HKU\\.DEFAULT`` so every *new* user or cloned VM inherits acceptance), use the
@@ -41,8 +43,9 @@ All methods are static and designed to be used without instantiation.
 """
 
 import os
+import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import List, Optional, Tuple
 
 from .LoggingConfig import get_logger
@@ -65,6 +68,8 @@ _PERSONAL_SECTION_NAMES = {section.casefold() for section in _PERSONAL_SECTIONS}
 # remain excluded from acceptance inference and donor copying.
 _TCU_SENTINEL_SECTION = "Projects"
 _TCU_SENTINEL_VALUE = "System Statistic"
+_LEGACY_SENTINEL_PREFIX = 0x3F800000
+_VERSION_PATTERN = re.compile(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?")
 
 HEC_TERMS_URL = "https://www.hec.usace.army.mil/software/hec-ras/"
 
@@ -80,7 +85,7 @@ class TcuStatus:
         install_dir: Folder containing Ras.exe, if resolved.
         registry_key: The per-version HKCU subkey that gates the TCU.
         reason: Short machine-readable reason
-            ("accepted" | "no-vb6-subtree" | "personal-only-vb6-subtree" |
+            ("accepted" | "no-vb6-subtree" | "unaccepted-vb6-subtree" |
             "seeded-unverified" | "not-windows" | "version-unresolved").
     """
 
@@ -122,9 +127,15 @@ class RasTcu:
     @staticmethod
     def _version_label(ras_object=None, ras_version=None, install_dir=None) -> Optional[str]:
         if ras_version is not None:
-            return str(ras_version)
+            label = str(ras_version)
+            if PureWindowsPath(label).name.casefold() == "ras.exe":
+                return PureWindowsPath(label).parent.name
+            return label
         if ras_object is not None and getattr(ras_object, "ras_version", None):
-            return str(ras_object.ras_version)
+            label = str(ras_object.ras_version)
+            if PureWindowsPath(label).name.casefold() == "ras.exe":
+                return PureWindowsPath(label).parent.name
+            return label
         if install_dir:
             return Path(install_dir).name
         return None
@@ -146,37 +157,96 @@ class RasTcu:
             return False
 
     @staticmethod
-    def _node_has_acceptance_state(hive, subkey: str) -> bool:
-        """Return True only for a VB6 settings node with acceptance-bearing state.
+    def _node_has_acceptance_state(
+        hive,
+        subkey: str,
+        version_label: Optional[str] = None,
+    ) -> bool:
+        """Return whether a node has the exact TCU sentinel for its release.
 
-        HEC-RAS stores recent projects and window layout under child sections such as
-        ``Projects`` and ``Form Position``. Those sections can exist without the TCU
-        having been accepted for the target version. HEC-RAS 6.x also stores its
-        ``System Statistic`` acceptance sentinel inside ``Projects``. Treat that exact,
-        non-empty value as acceptance-bearing; continue to ignore ordinary MRU values.
-        Root values and non-personal child sections remain acceptance-bearing for older
-        and future layouts.
+        Merely opening HEC-RAS initializes many VB6 settings sections before the
+        user accepts the TCU, so root values and non-personal child sections are
+        not acceptance evidence. The version-specific ``System Statistic`` value
+        is the authoritative signal.
         """
-        import winreg
-
-        try:
-            with winreg.OpenKey(hive, subkey) as key:
-                n_sub, n_val, _ = winreg.QueryInfoKey(key)
-                if n_val > 0:
-                    return True
-                if RasTcu._has_tcu_sentinel(hive, subkey):
-                    return True
-                for idx in range(n_sub):
-                    child = winreg.EnumKey(key, idx)
-                    if child.casefold() not in _PERSONAL_SECTION_NAMES:
-                        return True
-                return False
-        except OSError:
-            return False
+        if version_label is None:
+            parts = str(subkey).replace("/", "\\").rstrip("\\").split("\\")
+            if len(parts) >= 2:
+                version_label = parts[-2]
+        return RasTcu._has_tcu_sentinel(hive, subkey, version_label)
 
     @staticmethod
-    def _has_tcu_sentinel(hive, subkey: str) -> bool:
-        """Return whether ``Projects`` contains the exact non-empty TCU sentinel."""
+    def _version_tuple(version_label: Optional[str]) -> Optional[Tuple[int, int, int]]:
+        match = _VERSION_PATTERN.search(str(version_label or ""))
+        if match is None:
+            return None
+        major, minor, patch = match.groups()
+        return int(major), int(minor), int(patch or 0)
+
+    @staticmethod
+    def _sentinel_accepts_version(value, version_label: Optional[str]) -> bool:
+        """Validate one ``System Statistic`` value for an exact HEC-RAS release."""
+        version = RasTcu._version_tuple(version_label)
+        if version is None or isinstance(value, bool):
+            return False
+
+        major, minor, patch = version
+        text = str(value).strip()
+        if not text:
+            return False
+
+        if (major, minor) <= (6, 0):
+            try:
+                numeric = int(text, 10)
+            except ValueError:
+                return False
+            release_code = major * 100 + minor * 10 + patch
+            return numeric == _LEGACY_SENTINEL_PREFIX + release_code - 3
+
+        release_code = str(major * 100 + minor * 10 + patch)
+        return text == release_code or text.startswith(f"{release_code} ")
+
+    @staticmethod
+    def _accepted_sentinel_value(version_label: Optional[str]) -> Optional[str]:
+        """Return the exact stable-release sentinel written after acceptance."""
+        if "beta" in str(version_label or "").casefold():
+            return None
+        version = RasTcu._version_tuple(version_label)
+        if version is None:
+            return None
+
+        major, minor, patch = version
+        release_code = major * 100 + minor * 10 + patch
+        if (major, minor) <= (6, 0):
+            return str(_LEGACY_SENTINEL_PREFIX + release_code - 3)
+        return str(release_code)
+
+    @staticmethod
+    def _write_target_sentinel(hive, target_key: str, version_label: str) -> bool:
+        """Record explicit acceptance using the target release's sentinel."""
+        import winreg
+
+        sentinel = RasTcu._accepted_sentinel_value(version_label)
+        if sentinel is None:
+            return False
+        projects_key = f"{target_key}\\{_TCU_SENTINEL_SECTION}"
+        with winreg.CreateKey(hive, projects_key) as key:
+            winreg.SetValueEx(
+                key,
+                _TCU_SENTINEL_VALUE,
+                0,
+                winreg.REG_SZ,
+                sentinel,
+            )
+        return True
+
+    @staticmethod
+    def _has_tcu_sentinel(
+        hive,
+        subkey: str,
+        version_label: Optional[str] = None,
+    ) -> bool:
+        """Return whether ``Projects`` contains the valid release-specific sentinel."""
         import winreg
 
         projects_key = f"{subkey}\\{_TCU_SENTINEL_SECTION}"
@@ -187,11 +257,7 @@ class RasTcu:
                     name, value, _ = winreg.EnumValue(key, idx)
                     if name.casefold() != _TCU_SENTINEL_VALUE.casefold():
                         continue
-                    if isinstance(value, str):
-                        return bool(value.strip())
-                    if isinstance(value, int) and not isinstance(value, bool):
-                        return value > 0
-                    return False
+                    return RasTcu._sentinel_accepts_version(value, version_label)
         except OSError:
             pass
         return False
@@ -227,18 +293,36 @@ class RasTcu:
 
         install_dir = str(Path(exe).parent)
         version = version or Path(install_dir).name
+        install_version = Path(install_dir).name
 
         try:
             import winreg
         except ImportError:  # pragma: no cover - Windows only
             return TcuStatus(None, version, install_dir, None, "not-windows")
 
+        existing_key = None
         for node in ("ras.exe", "ras"):
             subkey = f"{_VB_ROOT}\\{install_dir}\\{node}"
-            if RasTcu._node_has_acceptance_state(winreg.HKEY_CURRENT_USER, subkey):
+            if RasTcu._node_has_acceptance_state(
+                winreg.HKEY_CURRENT_USER,
+                subkey,
+                install_version,
+            ):
                 return TcuStatus(True, version, install_dir, subkey, "accepted")
-            if RasTcu._node_exists(winreg.HKEY_CURRENT_USER, subkey):
-                return TcuStatus(False, version, install_dir, subkey, "personal-only-vb6-subtree")
+            if (
+                existing_key is None
+                and RasTcu._node_exists(winreg.HKEY_CURRENT_USER, subkey)
+            ):
+                existing_key = subkey
+
+        if existing_key is not None:
+            return TcuStatus(
+                False,
+                version,
+                install_dir,
+                existing_key,
+                "unaccepted-vb6-subtree",
+            )
 
         target = f"{_VB_ROOT}\\{install_dir}\\{RasTcu._node_name_for(version, install_dir)}"
         return TcuStatus(False, version, install_dir, target, "no-vb6-subtree")
@@ -267,7 +351,7 @@ class RasTcu:
                     idx += 1
                     for node in ("ras.exe", "ras"):
                         candidate = f"{vb_parent}\\{ver}\\{node}"
-                        if RasTcu._node_has_acceptance_state(hive, candidate):
+                        if RasTcu._node_has_acceptance_state(hive, candidate, ver):
                             yield candidate
         except OSError:
             return
@@ -276,18 +360,41 @@ class RasTcu:
     def _find_donor(install_dir: str) -> Tuple[Optional[int], Optional[str]]:
         """Find an already-accepted subtree to replicate.
 
-        Search order: (1) the current user's other installed versions, then
-        (2) other users' hives (readable only with sufficient privilege).
+        Search order: (1) the nearest accepted release for the current user,
+        then (2) the nearest accepted release in other users' readable hives.
         Returns ``(hive, subkey)`` or ``(None, None)``.
         """
         import winreg
 
         install_parent = str(Path(install_dir).parent)  # ...\HEC\HEC-RAS
         vb_parent = f"{_VB_ROOT}\\{install_parent}"
+        target_version = RasTcu._version_tuple(Path(install_dir).name)
 
-        for node in RasTcu._iter_accepted_nodes(winreg.HKEY_CURRENT_USER, vb_parent):
-            return winreg.HKEY_CURRENT_USER, node
+        def donor_key(subkey: str):
+            parts = subkey.replace("/", "\\").rstrip("\\").split("\\")
+            version_label = parts[-2] if len(parts) >= 2 else ""
+            version = RasTcu._version_tuple(version_label)
+            if target_version is None or version is None:
+                return 2, float("inf"), version_label.casefold()
+            target_code = (
+                target_version[0] * 100
+                + target_version[1] * 10
+                + target_version[2]
+            )
+            version_code = version[0] * 100 + version[1] * 10 + version[2]
+            return (
+                0 if version[0] == target_version[0] else 1,
+                abs(version_code - target_code),
+                version_label.casefold(),
+            )
 
+        current_user_nodes = list(
+            RasTcu._iter_accepted_nodes(winreg.HKEY_CURRENT_USER, vb_parent)
+        )
+        if current_user_nodes:
+            return winreg.HKEY_CURRENT_USER, min(current_user_nodes, key=donor_key)
+
+        other_user_nodes = []
         try:
             idx = 0
             while True:
@@ -299,9 +406,12 @@ class RasTcu:
                 if sid.endswith("_Classes") or not sid.startswith("S-1-5-21"):
                     continue
                 for node in RasTcu._iter_accepted_nodes(winreg.HKEY_USERS, f"{sid}\\{vb_parent}"):
-                    return winreg.HKEY_USERS, node
+                    other_user_nodes.append(node)
         except OSError:
             pass
+
+        if other_user_nodes:
+            return winreg.HKEY_USERS, min(other_user_nodes, key=donor_key)
 
         return None, None
 
@@ -349,8 +459,10 @@ class RasTcu:
         Seeds the current user's HKCU by replicating an already-accepted HEC-RAS
         settings subtree found elsewhere on the machine (another installed
         version the user has run, or -- with sufficient privilege -- another
-        user's profile). This is the validated, reliable mechanism: HEC-RAS then
-        treats this version as already-run and never shows the TCU.
+        user's profile), then records the target release's exact sentinel. This
+        method is itself the user's explicit acceptance action. The target is
+        validated after writing; any mismatch returns ``accepted=None`` with
+        ``reason="seeded-unverified"``.
 
         If nothing on the machine has ever accepted any version, there is no
         subtree to replicate; this returns ``accepted=None`` and logs guidance to
@@ -370,7 +482,7 @@ class RasTcu:
         Returns:
             TcuStatus reflecting the state after the operation (``reason`` is
             "accepted", "already-accepted", "no-donor-available", "not-windows",
-            "version-unresolved", "personal-only-vb6-subtree", or
+            "version-unresolved", "unaccepted-vb6-subtree", or
             "seeded-unverified").
         """
         pre = RasTcu.status(ras_object, ras_version)
@@ -414,6 +526,15 @@ class RasTcu:
                         f"{target_key}\\{section}",
                         preserve_names=preserve_names,
                     )
+            if not dry_run and not RasTcu._write_target_sentinel(
+                winreg.HKEY_CURRENT_USER,
+                target_key,
+                Path(install_dir).name,
+            ):
+                logger.warning(
+                    "Could not derive the TCU sentinel for HEC-RAS %s.",
+                    pre.version,
+                )
         except OSError as exc:
             logger.error("Failed to seed HEC-RAS %s TCU acceptance: %s", pre.version, exc)
             return TcuStatus(False, pre.version, install_dir, target_key, "no-vb6-subtree")
@@ -425,7 +546,11 @@ class RasTcu:
             )
             return TcuStatus(False, pre.version, install_dir, target_key, "no-vb6-subtree")
 
-        if not RasTcu._node_has_acceptance_state(winreg.HKEY_CURRENT_USER, target_key):
+        if not RasTcu._node_has_acceptance_state(
+            winreg.HKEY_CURRENT_USER,
+            target_key,
+            Path(install_dir).name,
+        ):
             logger.warning(
                 "Seeded HEC-RAS %s TCU registry data, but the target key still does not "
                 "contain acceptance-bearing state. Refusing to report accepted for "
