@@ -12,8 +12,9 @@ Workflow (single attempt):
 2. Launch the project with its configured HEC-RAS version
 3. Transactionally displace only the selected geometry HDF
 4. Open RASMapper and save the exact registered geometry from modified .g## text
-5. Validate the imported 2D perimeter, close the owned process tree, and restore
-   the captured associations before committing the replacement HDF
+5. Close the owned process tree, restore protected non-target geometry HDFs,
+   validate the imported 2D perimeter, and restore captured associations before
+   committing the replacement HDF
 
 Iterative workflow (with error correction):
 1. Attempt mesh regeneration
@@ -25,6 +26,7 @@ Iterative workflow (with error correction):
 
 import os
 import re
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -595,9 +597,11 @@ def _prepare_geometry_refresh_context(
         target["geom_file"], flow_area_name
     )
     # ``Edit Geometry`` is a context-menu action on the registered geometry
-    # root, not on its ``2D Flow Areas`` child. The flow area remains an
-    # independent semantic selector for post-save validation.
-    target_path = [target["geometry_name"]]
+    # root, not on its ``2D Flow Areas`` child. Include the Geometries parent
+    # so TreeView automation expands a newly opened, collapsed RASMapper tree
+    # before resolving the exact geometry. The flow area remains an independent
+    # semantic selector for post-save validation.
+    target_path = ["Geometries", target["geometry_name"]]
     pre_stats = _geometry_hdf_stats(ras_obj)
     pre_association_paths = _capture_geometry_association_paths(target["geom_hdf"])
     pre_perimeter = _perimeter_validation(
@@ -735,19 +739,80 @@ def _validate_geometry_refresh(context: dict) -> dict:
 
 
 def _begin_geometry_hdf_transaction(context: dict) -> None:
-    """Temporarily remove the exact HDF so HEC-RAS imports geometry text."""
+    """Protect all geometry HDFs and remove the target for exact text import.
+
+    RASMapper can upgrade or rewrite other registered geometry HDFs merely by
+    opening a project created with an older HEC-RAS release. Preserve those
+    files byte-for-byte so the one-target operation remains isolated.
+    """
     target = Path(context["geom_hdf"])
+    non_target_backups = []
+    try:
+        for raw_path in sorted(context.get("pre_hdf_stats", {})):
+            path = Path(raw_path)
+            if path.resolve() == target.resolve() or not path.is_file():
+                continue
+            backup = path.with_name(
+                f".{path.name}.rascommander-{uuid4().hex}.bak"
+            )
+            shutil.copy2(path, backup)
+            non_target_backups.append(
+                {
+                    "target": path,
+                    "backup": backup,
+                    "pre_stat": context["pre_hdf_stats"][raw_path],
+                }
+            )
+    except Exception:
+        for item in non_target_backups:
+            Path(item["backup"]).unlink(missing_ok=True)
+        raise
+
     temporary_backup = target.with_name(
         f".{target.name}.rascommander-{uuid4().hex}.bak"
     )
     had_original = target.is_file()
-    if had_original:
-        os.replace(target, temporary_backup)
+    try:
+        if had_original:
+            os.replace(target, temporary_backup)
+    except Exception:
+        for item in non_target_backups:
+            Path(item["backup"]).unlink(missing_ok=True)
+        raise
     context["hdf_transaction"] = {
         "target": target,
         "temporary_backup": temporary_backup,
         "had_original": had_original,
+        "non_target_backups": non_target_backups,
     }
+
+
+def _restore_non_target_geometry_hdfs(context: dict) -> dict:
+    """Restore protected non-target geometry HDFs after the owned GUI closes."""
+    transaction = context.get("hdf_transaction") or {}
+    items = transaction.get("non_target_backups") or []
+    evidence = {
+        "protected_paths": [str(item["target"]) for item in items],
+        "changed_during_gui": [],
+        "restored_paths": [],
+    }
+    for item in items:
+        target = Path(item["target"])
+        backup = Path(item["backup"])
+        if not backup.is_file():
+            # A completed prior call is intentionally idempotent.
+            continue
+        if target.is_file():
+            stat = target.stat()
+            observed = (stat.st_size, stat.st_mtime_ns)
+        else:
+            observed = None
+        if observed != tuple(item["pre_stat"]):
+            evidence["changed_during_gui"].append(str(target))
+        os.replace(backup, target)
+        evidence["restored_paths"].append(str(target))
+    context["non_target_hdf_restoration"] = evidence
+    return evidence
 
 
 def _finish_geometry_hdf_transaction(
@@ -1016,6 +1081,28 @@ class MeshRegenerationWorkflow:
             result.success = False
             result.error = cleanup_error
             result.steps_failed.append("Close owned HEC-RAS process tree")
+
+        try:
+            pending_isolation = any(
+                Path(item["backup"]).is_file()
+                for item in context["hdf_transaction"].get(
+                    "non_target_backups", []
+                )
+            )
+            isolation = (
+                _restore_non_target_geometry_hdfs(context)
+                if pending_isolation
+                else context.get(
+                    "non_target_hdf_restoration",
+                    {"restored_paths": []},
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            result.success = False
+            result.error = exc
+            result.steps_failed.append("Restore non-target geometry HDFs")
+            isolation = {"restored_paths": [], "error": str(exc)}
+        result.step_results["Restore non-target geometry HDFs"] = isolation
 
         if result.success:
             try:
@@ -1339,19 +1426,6 @@ class MeshRegenerationWorkflow:
                 max_retries=1,
                 timeout=context.get('timeout', 600),
             ),
-            WorkflowStep(
-                name=(
-                    "Validate exact geometry HDF"
-                    if require_mesh
-                    else "Validate exact geometry import"
-                ),
-                action=(
-                    MeshRegenerationWorkflow._step_validate_geometry
-                    if require_mesh
-                    else MeshRegenerationWorkflow._step_validate_geometry_import
-                ),
-                max_retries=1,
-            ),
         ]
 
         if context.get('close_after', True):
@@ -1362,6 +1436,28 @@ class MeshRegenerationWorkflow:
                 retry_delay=1.0,
                 required=True,
             ))
+
+        if context.get("hdf_transaction"):
+            steps.append(WorkflowStep(
+                name="Restore non-target geometry HDFs",
+                action=_restore_non_target_geometry_hdfs,
+                max_retries=1,
+                required=True,
+            ))
+
+        steps.append(WorkflowStep(
+            name=(
+                "Validate exact geometry HDF"
+                if require_mesh
+                else "Validate exact geometry import"
+            ),
+            action=(
+                MeshRegenerationWorkflow._step_validate_geometry
+                if require_mesh
+                else MeshRegenerationWorkflow._step_validate_geometry_import
+            ),
+            max_retries=1,
+        ))
 
         return steps
 
@@ -1377,7 +1473,8 @@ class MeshRegenerationWorkflow:
         """Launch HEC-RAS and store process/hwnd in context."""
         process, hwnd = HecRasElements.launch_and_wait(
             ras_object=context.get('ras_object'),
-            timeout=30,
+            timeout=int(context.get('timeout', 600)),
+            synchronous_project_open=True,
         )
         if not hwnd:
             raise RuntimeError("Failed to launch HEC-RAS")

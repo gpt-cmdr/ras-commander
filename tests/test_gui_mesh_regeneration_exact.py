@@ -20,10 +20,12 @@ from ras_commander.gui.workflows.mesh_regeneration import (
     _prepare_geometry_refresh_context,
     _resolve_geometry_target,
     _restore_geometry_association,
+    _restore_non_target_geometry_hdfs,
     _supervise_owned_process_exit,
     _validate_geometry_import,
     _validate_geometry_refresh,
 )
+from ras_commander.gui.hecras_elements import HecRasElements
 
 
 def _fake_project(tmp_path):
@@ -177,7 +179,7 @@ def test_refresh_context_edits_exact_geometry_root(tmp_path, monkeypatch):
         coordinate_tolerance=None,
     )
 
-    assert context["target_path"] == ["Geometry 03"]
+    assert context["target_path"] == ["Geometries", "Geometry 03"]
 
 
 def test_perimeter_validation_rejects_stale_compiled_geometry(tmp_path):
@@ -349,6 +351,63 @@ def test_geometry_hdf_transaction_rolls_back_failed_import(tmp_path):
 
     assert target.read_bytes() == b"original"
     assert evidence["rolled_back"] is True
+
+
+def test_geometry_hdf_transaction_restores_non_target_side_effects(tmp_path):
+    target = tmp_path / "Model.g03.hdf"
+    other = tmp_path / "Model.g01.hdf"
+    target.write_bytes(b"target original")
+    other.write_bytes(b"parent original")
+    other_stat = other.stat()
+    context = {
+        "geom_hdf": target,
+        "pre_hdf_stats": {
+            str(target.resolve()): (target.stat().st_size, target.stat().st_mtime_ns),
+            str(other.resolve()): (other_stat.st_size, other_stat.st_mtime_ns),
+        },
+    }
+
+    _begin_geometry_hdf_transaction(context)
+    other.write_bytes(b"RASMapper side effect")
+    evidence = _restore_non_target_geometry_hdfs(context)
+
+    assert other.read_bytes() == b"parent original"
+    assert evidence["changed_during_gui"] == [str(other)]
+    assert evidence["restored_paths"] == [str(other)]
+
+    # Cleanup is idempotent when the outer workflow's finally path runs.
+    again = _restore_non_target_geometry_hdfs(context)
+    assert again["restored_paths"] == []
+
+
+def test_synchronous_launch_routes_through_exact_project_open(monkeypatch):
+    project = SimpleNamespace()
+    project.check_initialized = lambda: None
+    sentinel = (SimpleNamespace(pid=123), 456)
+    calls = []
+
+    monkeypatch.setattr(
+        "ras_commander.gui.hecras_elements.WIN32_AVAILABLE",
+        True,
+    )
+    monkeypatch.setattr(
+        HecRasElements,
+        "_launch_project_with_com",
+        staticmethod(
+            lambda ras_object, *, timeout: (
+                calls.append((ras_object, timeout)) or sentinel
+            )
+        ),
+    )
+
+    result = HecRasElements.launch_and_wait(
+        ras_object=project,
+        timeout=45,
+        synchronous_project_open=True,
+    )
+
+    assert result == sentinel
+    assert calls == [(project, 45)]
 
 
 def test_geometry_hdf_transaction_commits_with_optional_backup(tmp_path):

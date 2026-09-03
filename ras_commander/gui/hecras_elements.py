@@ -7,10 +7,11 @@ Uses Win32Primitives for all low-level operations.
 All methods are static and use the @log_call decorator.
 """
 
-import time
+import ctypes
 import subprocess
 import sys
-from typing import Optional, List, Tuple
+import time
+from typing import Any, List, Optional, Tuple
 
 # Win32 imports - Windows only
 try:
@@ -23,12 +24,60 @@ except ImportError:
     win32gui = win32con = win32api = win32com = None
     WIN32_AVAILABLE = False
 
-from ..LoggingConfig import get_logger
 from ..Decorators import log_call
-from .win32_primitives import Win32Primitives
+from ..LoggingConfig import get_logger
 from .constants import Win32Constants
+from .win32_primitives import Win32Primitives
 
 logger = get_logger(__name__)
+
+
+class _OwnedComRasProcess:
+    """Popen-compatible handle for a COM-owned HEC-RAS process."""
+
+    def __init__(self, pid: int, controller: Any):
+        import psutil
+
+        self.pid = int(pid)
+        self._process = psutil.Process(self.pid)
+        self._controller = controller
+
+    def poll(self) -> Optional[int]:
+        import psutil
+
+        try:
+            if (
+                self._process.is_running()
+                and self._process.status() != psutil.STATUS_ZOMBIE
+            ):
+                return None
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        return 0
+
+    def wait(self, timeout: Optional[float] = None) -> int:
+        import psutil
+
+        try:
+            return int(self._process.wait(timeout=timeout) or 0)
+        except psutil.TimeoutExpired as exc:
+            raise subprocess.TimeoutExpired("Ras.exe", timeout) from exc
+
+    def terminate(self) -> None:
+        try:
+            self._controller.QuitRas()
+        except Exception:
+            pass
+        try:
+            self._process.terminate()
+        except Exception:
+            pass
+
+    def kill(self) -> None:
+        try:
+            self._process.kill()
+        except Exception:
+            pass
 
 
 class HecRasElements:
@@ -103,7 +152,7 @@ class HecRasElements:
                                         text = win32gui.GetWindowText(child_hwnd)
                                         if text:
                                             texts.append(text.lower())
-                                    except:
+                                    except Exception:
                                         pass
                                     return True
                                 win32gui.EnumChildWindows(hwnd, child_callback, child_texts)
@@ -210,8 +259,10 @@ class HecRasElements:
     @log_call
     def launch_and_wait(
         ras_object=None,
-        timeout: int = 30
-    ) -> Tuple[Optional[subprocess.Popen], Optional[int]]:
+        timeout: int = 30,
+        *,
+        synchronous_project_open: bool = False,
+    ) -> Tuple[Optional[Any], Optional[int]]:
         """
         Launch HEC-RAS, handle the already-running dialog, and wait for main window.
 
@@ -221,6 +272,10 @@ class HecRasElements:
         Args:
             ras_object: Optional RAS object instance.
             timeout: Maximum seconds to wait for main window. Default 30.
+            synchronous_project_open: Open through the version-specific COM
+                controller and wait for the exact project to be registered
+                before returning. Use this for owned geometry-edit workflows;
+                command-line launch alone can expose an empty application shell.
 
         Returns:
             (process, hwnd) tuple. Both are None on failure.
@@ -233,17 +288,23 @@ class HecRasElements:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
+        if synchronous_project_open:
+            return HecRasElements._launch_project_with_com(
+                ras_obj,
+                timeout=timeout,
+            )
+
         # Step 1: Open HEC-RAS
         logger.info("Opening HEC-RAS...")
         ras_exe = ras_obj.ras_exe_path
-        prj_path = f'"{str(ras_obj.prj_file)}"'
-        command = f"{ras_exe} {prj_path}"
-
         try:
-            if sys.platform == "win32":
-                hecras_process = subprocess.Popen(command)
-            else:
-                hecras_process = subprocess.Popen([str(ras_exe), str(ras_obj.prj_file)])
+            argv = [str(ras_exe), str(ras_obj.prj_file)]
+            # Legacy VB6 HEC-RAS consumes the raw Windows command line. Passing
+            # an argv sequence can open an empty application shell while
+            # silently dropping the project argument, so preserve its native
+            # quoted command-line behavior on Windows.
+            command = subprocess.list2cmdline(argv) if sys.platform == "win32" else argv
+            hecras_process = subprocess.Popen(command)
 
             logger.info("HEC-RAS opened")
             logger.debug("HEC-RAS process ID: %s", hecras_process.pid)
@@ -271,13 +332,116 @@ class HecRasElements:
             logger.error("Could not find main HEC-RAS window")
             try:
                 hecras_process.terminate()
-            except:
+            except Exception:
                 pass
             return None, None
+
+        # A large geometry can expose the VB6 main window several minutes
+        # before Project_Open finishes. RASMapper opened during that interval
+        # contains empty tree roots. Wait for the owned application to become
+        # responsive before returning the handle.
+        if sys.platform == "win32":
+            responsive_deadline = time.time() + timeout
+            time.sleep(1.0)
+            # ``IsHungAppWindow`` is a user32 API, but not every pywin32 build
+            # exposes it through ``win32gui``. Call user32 directly so this
+            # readiness guard works across the supported Windows environments.
+            while bool(ctypes.windll.user32.IsHungAppWindow(hec_ras_hwnd)):
+                if time.time() >= responsive_deadline:
+                    logger.error("HEC-RAS project did not become responsive")
+                    try:
+                        hecras_process.terminate()
+                    except Exception:
+                        pass
+                    return None, None
+                time.sleep(1.0)
 
         logger.info("Found HEC-RAS main window")
         logger.debug("HEC-RAS main window title: %s", win32gui.GetWindowText(hec_ras_hwnd))
         return hecras_process, hec_ras_hwnd
+
+    @staticmethod
+    def _launch_project_with_com(
+        ras_obj,
+        *,
+        timeout: int,
+    ) -> Tuple[Optional[Any], Optional[int]]:
+        """Synchronously open the exact project and retain its COM owner."""
+        import psutil
+
+        from ..RasControl import RasControl
+
+        before_pids = {
+            process.pid
+            for process in psutil.process_iter(["name"])
+            if process.info["name"]
+            and process.info["name"].lower() == "ras.exe"
+        }
+        controller = None
+        try:
+            controller = win32com.client.Dispatch(
+                RasControl.get_controller_progid(ras_obj.ras_version)
+            )
+            controller.Project_Open(str(ras_obj.prj_file))
+            controller.ShowRas()
+        except Exception as exc:
+            logger.error("Failed to open HEC-RAS project through COM")
+            logger.debug("Synchronous project open failure: %s", exc)
+            if controller is not None:
+                try:
+                    controller.QuitRas()
+                except Exception:
+                    pass
+            return None, None
+
+        def find_owned_window():
+            for process in psutil.process_iter(["pid", "name"]):
+                if (
+                    not process.info["name"]
+                    or process.info["name"].lower() != "ras.exe"
+                    or process.pid in before_pids
+                ):
+                    continue
+                windows = Win32Primitives.get_windows_by_pid(process.pid)
+                hwnd, _title = HecRasElements.find_main_hecras_window(windows)
+                if hwnd:
+                    return process.pid, hwnd
+            return None
+
+        owned = None
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            owned = find_owned_window()
+            if owned:
+                break
+            time.sleep(0.5)
+        if not owned:
+            logger.error("Could not find COM-owned HEC-RAS main window")
+            try:
+                controller.QuitRas()
+            except Exception:
+                pass
+            return None, None
+
+        pid, hwnd = owned
+        expected_project = str(ras_obj.prj_file).casefold()
+        while time.time() < deadline:
+            menus = Win32Primitives.enumerate_all_menus(hwnd)
+            file_items = menus.get("&File", [])
+            recent_paths = [str(text).casefold() for text, _item_id in file_items]
+            if expected_project in recent_paths:
+                process = _OwnedComRasProcess(pid, controller)
+                logger.info("Opened exact HEC-RAS project through COM")
+                logger.debug("HEC-RAS process ID: %s", pid)
+                return process, hwnd
+            time.sleep(0.5)
+
+        logger.error("HEC-RAS opened but did not register the requested project")
+        try:
+            controller.QuitRas()
+        except Exception:
+            pass
+        return None, None
 
     @staticmethod
     @log_call

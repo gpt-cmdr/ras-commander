@@ -145,6 +145,14 @@ _LAZY_EXPORTS = {
             'Breakout1DValidationReport',
         )
     },
+    **{
+        name: ('.RasBreakout2D', name)
+        for name in (
+            'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
+            'Breakout2DCloneResult', 'Breakout2DPreparationResult',
+            'Breakout2DFluxReview',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
@@ -380,6 +388,9 @@ __all__ = [
     'RasBreakout1D', 'Breakout1DDomainSelection',
     'Breakout1DResult', 'Breakout1DSelection',
     'Breakout1DValidationReport',
+    'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
+    'Breakout2DCloneResult', 'Breakout2DPreparationResult',
+    'Breakout2DFluxReview',
     'RasNetworkConflation', 'NetworkConflationResult',
     'NetworkEdgeCoverageResult',
     'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',

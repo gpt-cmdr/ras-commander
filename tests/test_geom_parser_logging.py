@@ -79,6 +79,21 @@ def test_safe_write_success_is_debug_only(tmp_path, caplog):
     assert any("Successfully wrote geometry file:" in msg and str(geom_file) in msg for msg in debug_messages)
 
 
+def test_safe_write_geometry_preserves_native_crlf(tmp_path):
+    geom_file = tmp_path / "Model.g01"
+    geom_file.write_bytes(b"Geom Title=Original\r\nProgram Version=6.6\r\n")
+
+    GeomParser.safe_write_geometry(
+        geom_file,
+        ["Geom Title=Clone\n", "Program Version=6.6\n"],
+        create_backup=False,
+    )
+
+    assert geom_file.read_bytes() == (
+        b"Geom Title=Clone\r\nProgram Version=6.6\r\n"
+    )
+
+
 def test_geometry_read_helper_progress_is_debug_only(tmp_path, caplog):
     geom_file = _write_geom(tmp_path)
 
