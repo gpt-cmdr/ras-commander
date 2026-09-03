@@ -69,6 +69,8 @@ List of Functions in RasMap:
 - add_wse_comparison_layers(): Batch add WSE comparison layers for existing/proposed plan pairs
 """
 
+import copy
+import os
 import json
 import re
 import subprocess
@@ -1586,6 +1588,127 @@ class RasMap:
 
         logger.debug("Found %d geometries in .rasmap", len(geometries))
         return geometries
+
+    @staticmethod
+    @log_call
+    def clone_geometry_layer(
+        source_geometry: Union[str, int],
+        target_geometry: Union[str, int],
+        *,
+        name: Optional[str] = None,
+        checked: bool = True,
+        expanded: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """Register a cloned geometry HDF in the RASMapper tree.
+
+        ``RasGeo.clone_geom()`` copies the geometry control file and HDF, but
+        HEC-RAS does not add the cloned HDF to ``<Geometries>`` in the project
+        ``.rasmap`` file. Exact text-to-HDF refresh workflows therefore cannot
+        resolve the clone until it has a RASMapper geometry layer.
+
+        The source geometry layer is deep-copied so the target keeps the same
+        child-layer display configuration. Only the top-level display name,
+        visibility, expansion state, and HDF filename are changed. Repeating
+        the call for the same target is idempotent.
+
+        Args:
+            source_geometry: Source geometry number, such as ``"01"``.
+            target_geometry: Cloned geometry number, such as ``"02"``.
+            name: Optional target display name. Defaults to the source name.
+            checked: Whether the target geometry is visible.
+            expanded: Whether the target geometry tree is expanded.
+            ras_object: Optional initialized :class:`RasPrj` instance.
+
+        Returns:
+            Dict[str, Any]: Registered layer metadata and the ``.rasmap`` path.
+
+        Raises:
+            FileNotFoundError: If the ``.rasmap`` or target geometry HDF is absent.
+            ValueError: If the source layer is absent or the numbers are equal.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        source_number = RasUtils.normalize_ras_number(source_geometry)
+        target_number = RasUtils.normalize_ras_number(target_geometry)
+        if source_number == target_number:
+            raise ValueError("source_geometry and target_geometry must differ")
+
+        project_folder = Path(ras_obj.project_folder)
+        project_name = str(ras_obj.project_name)
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+        target_hdf = project_folder / f"{project_name}.g{target_number}.hdf"
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+        if not target_hdf.exists():
+            raise FileNotFoundError(f"Cloned geometry HDF not found: {target_hdf}")
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+        geometries = root.find("Geometries")
+        if geometries is None:
+            raise ValueError("No Geometries section found in .rasmap")
+
+        source_token = f".g{source_number}.hdf"
+        target_token = f".g{target_number}.hdf"
+        source_layer = None
+        target_layer = None
+        for layer in geometries.findall("Layer"):
+            filename = _normalize_rasmap_filename(layer.get("Filename"))
+            if source_token in filename:
+                source_layer = layer
+            if target_token in filename:
+                target_layer = layer
+        if source_layer is None:
+            raise ValueError(
+                f"Source geometry g{source_number} is not registered in {rasmap_path}"
+            )
+
+        if target_layer is None:
+            target_layer = copy.deepcopy(source_layer)
+            source_index = list(geometries).index(source_layer)
+            geometries.insert(source_index + 1, target_layer)
+
+        rel_hdf = _rasmap_relative_path(project_folder, target_hdf)
+        layer_name = str(name).strip() if name is not None else ""
+        target_layer.set("Name", layer_name or source_layer.get("Name", ""))
+        target_layer.set("Type", "RASGeometry")
+        target_layer.set("Checked", "True" if checked else "False")
+        target_layer.set("Expanded", "True" if expanded else "False")
+        target_layer.set("Filename", rel_hdf)
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+
+        readback = ET.parse(rasmap_path).getroot().find("Geometries")
+        registered = None if readback is None else next(
+            (
+                layer
+                for layer in readback.findall("Layer")
+                if target_token
+                in _normalize_rasmap_filename(layer.get("Filename"))
+            ),
+            None,
+        )
+        if registered is None:
+            raise RuntimeError(
+                f"RASMapper geometry registration failed readback for g{target_number}"
+            )
+        record = {
+            "name": registered.get("Name", ""),
+            "filename": registered.get("Filename", ""),
+            "geom_number": target_number,
+            "checked": registered.get("Checked", "").lower() == "true",
+            "expanded": registered.get("Expanded", "").lower() == "true",
+            "rasmap_path": rasmap_path,
+        }
+        logger.info(
+            "Registered cloned geometry g%s as RASMapper layer '%s'",
+            target_number,
+            record["name"],
+        )
+        return record
 
     @staticmethod
     @log_call
@@ -5079,6 +5202,177 @@ class RasMap:
         action = "Replaced" if existing_layer is not None else "Added"
         logger.info("%s terrain layer '%s' in .rasmap", action, layer_name)
         logger.debug("Terrain layer '%s' filename: %s", layer_name, rel_path_str)
+
+    @staticmethod
+    @log_call
+    def prune_event_condition_layers(
+        keep_filenames: Sequence[Union[str, Path]],
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        backup: bool = True,
+    ) -> Dict[str, Any]:
+        """Remove stale event-condition layers from a cloned project.
+
+        HEC-RAS evaluates ``RASEventConditions`` layers during unsteady
+        preprocessing, including unchecked layers inherited from other plans
+        or source-project folders.  A cloned breakout project can therefore
+        fail with ``Error processing event conditions`` even when its current
+        plan and unsteady-flow file are valid.
+
+        This method retains only exact filename matches, removes unmatched
+        event-condition layers anywhere in the ``.rasmap`` tree, writes
+        atomically, and validates exact readback.  It never edits the referenced
+        HDF files.  Pass an empty sequence to remove every event-condition
+        layer.
+
+        Args:
+            keep_filenames: Exact layer ``Filename`` values to retain. Paths
+                inside the project folder may be supplied as absolute paths;
+                they are normalized to ``.\\`` relative Windows form.
+            rasmap_path: Explicit ``.rasmap`` path. When omitted, resolve it
+                from ``ras_object``.
+            ras_object: Optional initialized project object.
+            backup: Create a durable sibling backup before mutation.
+
+        Returns:
+            JSON-safe mutation evidence including removed/retained layers,
+            backup path, and exact readback counts.
+
+        Raises:
+            FileNotFoundError: If the ``.rasmap`` does not exist.
+            FileExistsError: If the backup or atomic staging path exists.
+            ValueError: If XML is invalid or a requested retained filename is
+                absent before mutation.
+            RuntimeError: If exact readback validation fails.
+        """
+        ras_obj = ras_object or ras
+        if rasmap_path is None:
+            resolved = RasMap.get_rasmap_path(ras_obj)
+            if resolved is None:
+                raise FileNotFoundError("Project .rasmap file was not found")
+            target = Path(resolved)
+        else:
+            target = Path(rasmap_path)
+        if not target.is_file():
+            raise FileNotFoundError(f"RASMapper file not found: {target}")
+
+        def normalize_filename(value: Union[str, Path]) -> str:
+            raw = str(value).strip()
+            candidate = Path(raw)
+            if candidate.is_absolute():
+                try:
+                    raw = ".\\" + str(
+                        RasUtils.safe_resolve(candidate).relative_to(
+                            RasUtils.safe_resolve(target.parent)
+                        )
+                    )
+                except ValueError:
+                    raw = str(candidate)
+            return raw.replace("/", "\\").casefold()
+
+        requested = {normalize_filename(value) for value in keep_filenames}
+        try:
+            tree = ET.parse(target)
+        except ET.ParseError as exc:
+            raise ValueError(f"Error parsing .rasmap XML: {exc}") from exc
+        root = tree.getroot()
+
+        layers = []
+        for parent in root.iter():
+            for layer in list(parent):
+                if (
+                    layer.tag == "Layer"
+                    and layer.get("Type") == "RASEventConditions"
+                ):
+                    layers.append((parent, layer))
+        available = {
+            normalize_filename(layer.get("Filename") or "")
+            for _parent, layer in layers
+        }
+        missing = sorted(requested - available)
+        if missing:
+            raise ValueError(
+                "Requested event-condition layer filename(s) are absent: "
+                + ", ".join(missing)
+            )
+
+        removed = []
+        retained = []
+        for parent, layer in layers:
+            record = {
+                "name": layer.get("Name") or "",
+                "filename": layer.get("Filename") or "",
+                "checked": layer.get("Checked"),
+            }
+            if normalize_filename(record["filename"]) in requested:
+                retained.append(record)
+            else:
+                parent.remove(layer)
+                removed.append(record)
+
+        backup_path = None
+        staging = target.with_name(f".{target.name}.event-conditions.tmp")
+        if removed:
+            if staging.exists():
+                raise FileExistsError(
+                    f"Atomic .rasmap staging path already exists: {staging}"
+                )
+            if backup:
+                backup_path = target.with_name(
+                    f"{target.stem}.event-conditions.bak{target.suffix}"
+                )
+                if backup_path.exists():
+                    raise FileExistsError(
+                        f"Event-condition backup already exists: {backup_path}"
+                    )
+                shutil.copy2(target, backup_path)
+            try:
+                tree.write(staging, encoding="utf-8", xml_declaration=False)
+                ET.parse(staging)
+                os.replace(staging, target)
+            finally:
+                if staging.exists():
+                    staging.unlink()
+
+        readback_root = ET.parse(target).getroot()
+        readback = []
+        for layer in readback_root.iter("Layer"):
+            if layer.get("Type") == "RASEventConditions":
+                readback.append(
+                    {
+                        "name": layer.get("Name") or "",
+                        "filename": layer.get("Filename") or "",
+                        "checked": layer.get("Checked"),
+                    }
+                )
+        readback_filenames = {
+            normalize_filename(layer["filename"]) for layer in readback
+        }
+        if readback_filenames != requested:
+            raise RuntimeError(
+                "Event-condition readback mismatch: expected "
+                f"{sorted(requested)}, observed {sorted(readback_filenames)}"
+            )
+
+        evidence = {
+            "rasmap_path": str(target),
+            "backup_path": str(backup_path) if backup_path is not None else None,
+            "requested_filenames": sorted(requested),
+            "before_count": len(layers),
+            "removed_count": len(removed),
+            "retained_count": len(retained),
+            "readback_count": len(readback),
+            "removed": removed,
+            "retained": retained,
+            "readback": readback,
+            "changed": bool(removed),
+        }
+        logger.info(
+            "Pruned %d stale event-condition layer(s); retained %d",
+            len(removed),
+            len(retained),
+        )
+        return evidence
 
     # ── Calculated Layers ───────────────────────────────────────────────
 

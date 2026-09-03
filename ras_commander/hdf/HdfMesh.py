@@ -172,10 +172,44 @@ class HdfMesh:
                 mesh_area_names = HdfMesh.get_mesh_area_names(hdf_path)
                 if not mesh_area_names:
                     return GeoDataFrame()
-                mesh_area_polygons = [
-                    Polygon(hdf_file["Geometry/2D Flow Areas/{}/Perimeter".format(n)][()])
-                    for n in mesh_area_names
-                ]
+                group = hdf_file["Geometry/2D Flow Areas"]
+                mesh_area_polygons = []
+                polygon_info = group.get("Polygon Info")
+                polygon_parts = group.get("Polygon Parts")
+                polygon_points = group.get("Polygon Points")
+                for index, name in enumerate(mesh_area_names):
+                    perimeter_path = f"{name}/Perimeter"
+                    if perimeter_path in group:
+                        mesh_area_polygons.append(Polygon(group[perimeter_path][()]))
+                        continue
+
+                    if polygon_info is None or polygon_points is None:
+                        raise KeyError(
+                            f"2D flow area {name!r} has neither Perimeter nor "
+                            "collection-level Polygon datasets"
+                        )
+                    point_start, point_count, part_start, part_count = (
+                        int(value) for value in polygon_info[index, :4]
+                    )
+                    points = polygon_points[()]
+                    if part_count <= 1 or polygon_parts is None:
+                        mesh_area_polygons.append(
+                            Polygon(points[point_start : point_start + point_count])
+                        )
+                        continue
+
+                    parts = polygon_parts[part_start : part_start + part_count, :2]
+                    rings = []
+                    for raw_start, raw_count in parts:
+                        ring_start, ring_count = int(raw_start), int(raw_count)
+                        if not (point_start <= ring_start < point_start + point_count):
+                            ring_start += point_start
+                        ring = points[ring_start : ring_start + ring_count]
+                        if len(ring) >= 3:
+                            rings.append(ring)
+                    if not rings:
+                        raise ValueError(f"2D flow area {name!r} has no valid polygon ring")
+                    mesh_area_polygons.append(Polygon(rings[0], rings[1:]))
                 return GeoDataFrame(
                     {"mesh_name": mesh_area_names, "geometry": mesh_area_polygons},
                     geometry="geometry",

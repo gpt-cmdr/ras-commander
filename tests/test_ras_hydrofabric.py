@@ -508,7 +508,7 @@ def test_public_exports_and_dataframe_schemas_are_registered():
         "NextGenFlowpathAdapter",
     }
     assert expected_exports <= set(ras_commander.__all__)
-    assert SCHEMA_VERSION == "1.9"
+    assert SCHEMA_VERSION == "1.10"
     assert {
         "network_edge_coverage",
         "hydrofabric_matches",

@@ -2254,13 +2254,40 @@ class RasCmdr:
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
 
-        # Set num_cores if specified
+        effective_num_cores = None
+        # Set num_cores in both the text plan and the compiled execution HDF.
+        # Native RasUnsteady reads the latter; changing only .p## leaves the
+        # Phase-1 core count in force.
         if num_cores is not None:
             try:
-                RasPlan.set_num_cores(plan_path, num_cores=num_cores, ras_object=ras_obj)
-                logger.info(f"Set number of cores to {num_cores} for plan: {plan_num_str}")
+                effective_num_cores = RasCmdr._effective_linux_core_count(num_cores)
+                RasPlan.set_num_cores(
+                    plan_path,
+                    num_cores=effective_num_cores,
+                    ras_object=ras_obj,
+                )
+                hdf_core_evidence = None
+                if not layout["needs_c_file"]:
+                    hdf_core_evidence = RasCmdr._set_linux_hdf_num_cores(
+                        tmp_hdf,
+                        effective_num_cores,
+                    )
+                logger.info(
+                    "Configured %d native solver core(s) for plan %s%s",
+                    effective_num_cores,
+                    plan_num_str,
+                    (
+                        f" in {len(hdf_core_evidence['updated_attributes'])} "
+                        "compiled-HDF attribute(s)"
+                        if hdf_core_evidence is not None
+                        else ""
+                    ),
+                )
             except Exception as e:
-                logger.error(f"Error setting number of cores: {e}")
+                raise RuntimeError(
+                    f"Could not configure native solver cores for plan "
+                    f"{plan_num_str}: {e}"
+                ) from e
 
         if run_via_wsl:
             return RasCmdr._compute_plan_linux_via_wsl(
@@ -2333,6 +2360,9 @@ class RasCmdr:
 
             env = os.environ.copy()
             env["LD_LIBRARY_PATH"] = ld_path
+            if effective_num_cores is not None:
+                env["OMP_NUM_THREADS"] = str(effective_num_cores)
+                env["MKL_NUM_THREADS"] = str(effective_num_cores)
 
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"
             success = False
@@ -2494,6 +2524,87 @@ class RasCmdr:
         }
 
     @staticmethod
+    def _effective_linux_core_count(requested_cores: int) -> int:
+        """Cap a requested solver core count to the process affinity envelope."""
+        if (
+            isinstance(requested_cores, bool)
+            or not isinstance(requested_cores, Number)
+            or int(requested_cores) != requested_cores
+            or int(requested_cores) < 1
+        ):
+            raise ValueError("num_cores must be a positive integer")
+        requested = int(requested_cores)
+
+        available = None
+        affinity_reader = getattr(os, "sched_getaffinity", None)
+        if callable(affinity_reader):
+            try:
+                available = len(affinity_reader(0))
+            except (OSError, TypeError):
+                available = None
+        if not available:
+            cpu_reader = getattr(os, "cpu_count", None)
+            if callable(cpu_reader):
+                available = cpu_reader()
+        if not available:
+            return requested
+
+        effective = min(requested, int(available))
+        if effective < requested:
+            logger.warning(
+                "Capped requested native solver cores from %d to %d based on "
+                "the process affinity envelope",
+                requested,
+                effective,
+            )
+        return effective
+
+    @staticmethod
+    def _set_linux_hdf_num_cores(tmp_hdf: Path, num_cores: int) -> dict:
+        """Write the effective core count into a canonical plan ``*.tmp.hdf``."""
+        import h5py
+        import numpy as np
+
+        tmp_hdf = Path(tmp_hdf)
+        if not tmp_hdf.name.casefold().endswith(".tmp.hdf"):
+            raise ValueError("Core control target must be a '*.tmp.hdf' file")
+        if not tmp_hdf.is_file():
+            raise FileNotFoundError(f"Compiled plan HDF not found: {tmp_hdf}")
+
+        updated_attributes = []
+        with h5py.File(tmp_hdf, "r+") as hdf_file:
+            parameters = hdf_file.get("Plan Data/Plan Parameters")
+            if parameters is None:
+                raise ValueError("Compiled plan HDF lacks /Plan Data/Plan Parameters")
+            for attribute_name in ("1D Cores", "2D Cores (per mesh)"):
+                if attribute_name not in parameters.attrs:
+                    continue
+                prior = np.asarray(parameters.attrs[attribute_name])
+                replacement = np.full(prior.shape, num_cores, dtype=prior.dtype)
+                if prior.shape == ():
+                    replacement = replacement[()]
+                parameters.attrs.modify(attribute_name, replacement)
+                updated_attributes.append(
+                    {
+                        "attribute": attribute_name,
+                        "before": prior.tolist(),
+                        "after": np.asarray(
+                            parameters.attrs[attribute_name]
+                        ).tolist(),
+                    }
+                )
+            if not updated_attributes:
+                raise ValueError(
+                    "Compiled plan HDF contains no supported solver-core attributes"
+                )
+            hdf_file.flush()
+        return {
+            "path": str(tmp_hdf),
+            "effective_cores": num_cores,
+            "updated_attributes": updated_attributes,
+        }
+
+    @staticmethod
     def _build_linux_ld_path(ras_exe_dir: Path, layout: dict) -> str:
         """Build LD_LIBRARY_PATH for a Linux RasUnsteady run, per layout (CLB-886)."""
         ras_exe_dir = Path(ras_exe_dir)
@@ -2548,14 +2659,38 @@ class RasCmdr:
         for marker in error_markers:
             if marker in low:
                 return False, f"solver log reports failure ('{marker}')"
+        import re
+
+        explicit_error = re.search(
+            r"(?im)^\s*(?:error\s*:|hdf_error\b)",
+            log_text,
+        )
+        if explicit_error:
+            return False, (
+                "solver log reports failure "
+                f"('{explicit_error.group(0).strip()}')"
+            )
+        if "finished unsteady flow simulation" not in low:
+            return False, "solver log missing 'Finished Unsteady Flow Simulation' banner"
         try:
             import h5py
             with h5py.File(str(result_hdf), "r") as hf:
                 results = hf.get("Results")
                 if results is None:
                     return False, "result HDF missing /Results group"
-                if results.get("Unsteady") is None:
+                unsteady = results.get("Unsteady")
+                if unsteady is None:
                     return False, "result HDF missing /Results/Unsteady group"
+                populated_datasets = 0
+
+                def _count_populated(_name, item):
+                    nonlocal populated_datasets
+                    if isinstance(item, h5py.Dataset) and item.size > 0:
+                        populated_datasets += 1
+
+                unsteady.visititems(_count_populated)
+                if populated_datasets == 0:
+                    return False, "result HDF has no populated /Results/Unsteady datasets"
         except Exception as e:
             return False, f"result HDF unreadable or invalid: {e}"
         return True, "ok"

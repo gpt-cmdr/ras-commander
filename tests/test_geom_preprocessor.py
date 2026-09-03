@@ -52,6 +52,26 @@ def _write_legacy_geometry_hdf(
     return path
 
 
+def _write_ready_2d_geometry_hdf(path: Path) -> Path:
+    with h5py.File(path, "w") as hdf:
+        hdf.attrs["File Type"] = "HEC-RAS Geometry"
+        collection = hdf.create_group("Geometry/2D Flow Areas")
+        collection.create_dataset(
+            "Attributes",
+            data=np.array([(b"MainArea",)], dtype=[("Name", "S32")]),
+        )
+        mesh = collection.create_group("MainArea")
+        mesh.create_dataset(
+            "Cells Center Coordinate",
+            data=np.array([[1.0, 2.0]], dtype=np.float64),
+        )
+        mesh.create_dataset(
+            "Faces FacePoint Indexes",
+            data=np.array([[0, 1]], dtype=np.int32),
+        )
+    return path
+
+
 def test_compute_message_paths_include_data_error_files(tmp_path):
     paths = GeomPreprocessor._compute_message_paths(tmp_path, "Model", "04")
 
@@ -124,6 +144,52 @@ def test_preprocessor_artifacts_include_fresh_tmp_hdf_only(tmp_path):
     )
 
     assert artifacts == [fresh_tmp_hdf]
+
+
+def test_geometry_hdf_readiness_rejects_empty_placeholder(tmp_path):
+    hdf_path = tmp_path / "Model.g03.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.create_group("Geometry")
+
+    ready, reason = GeomPreprocessor._geometry_hdf_readiness(
+        hdf_path,
+        flow_type="unsteady_2d",
+    )
+
+    assert not ready
+    assert "File Type" in reason
+
+
+def test_geometry_hdf_readiness_rejects_2d_area_without_topology(tmp_path):
+    hdf_path = tmp_path / "Model.g03.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.attrs["File Type"] = "HEC-RAS Geometry"
+        collection = hdf.create_group("Geometry/2D Flow Areas")
+        collection.create_dataset(
+            "Attributes",
+            data=np.array([(b"MainArea",)], dtype=[("Name", "S32")]),
+        )
+        collection.create_group("MainArea")
+
+    ready, reason = GeomPreprocessor._geometry_hdf_readiness(
+        hdf_path,
+        flow_type="unsteady_2d",
+    )
+
+    assert not ready
+    assert "cell/face topology" in reason
+
+
+def test_geometry_hdf_readiness_accepts_populated_2d_mesh(tmp_path):
+    hdf_path = _write_ready_2d_geometry_hdf(tmp_path / "Model.g03.hdf")
+
+    ready, reason = GeomPreprocessor._geometry_hdf_readiness(
+        hdf_path,
+        flow_type="unsteady_2d",
+    )
+
+    assert ready
+    assert "MainArea" in reason
 
 
 def test_geometry_only_run_flags_disable_unsteady_flow(tmp_path):

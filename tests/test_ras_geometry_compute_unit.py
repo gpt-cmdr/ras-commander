@@ -219,6 +219,104 @@ def test_rasprocess_compute_geometry_rejects_stderr_error(monkeypatch, tmp_path)
     assert result["success"] is False
 
 
+def _write_complete_2d_geometry(path, include_face_values=True):
+    import h5py
+
+    with h5py.File(path, "w") as hdf:
+        collection = hdf.create_group("Geometry/2D Flow Areas")
+        collection.create_dataset("Attributes", data=[1])
+        area = collection.create_group("Area")
+        area.create_dataset(
+            "Cells Center Coordinate",
+            data=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        area.create_dataset("Faces FacePoint Indexes", data=[[0, 1]])
+        area.create_dataset("Cells Volume Elevation Info", data=[[0, 1], [1, 1]])
+        area.create_dataset(
+            "Cells Volume Elevation Values",
+            data=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        area.create_dataset("Faces Area Elevation Info", data=[[0, 1]])
+        if include_face_values:
+            area.create_dataset(
+                "Faces Area Elevation Values",
+                data=[[0.0, 1.0, 1.0, 0.04]],
+            )
+    return path
+
+
+def test_geometry_completion_semantics_accepts_complete_2d_tables(tmp_path):
+    geom = _write_complete_2d_geometry(tmp_path / "model.g01.hdf")
+
+    evidence = RasProcess._geometry_completion_semantics(geom)
+
+    assert evidence["success"] is True
+    assert evidence["has_2d_geometry"] is True
+    assert evidence["has_1d_geometry"] is False
+    assert evidence["two_d_flow_areas"]["Area"]["ready"] is True
+
+
+def test_geometry_completion_semantics_rejects_incomplete_2d_tables(tmp_path):
+    geom = _write_complete_2d_geometry(
+        tmp_path / "model.g01.hdf",
+        include_face_values=False,
+    )
+
+    evidence = RasProcess._geometry_completion_semantics(geom)
+
+    assert evidence["success"] is False
+    assert evidence["two_d_flow_areas"]["Area"]["ready"] is False
+
+
+def test_compute_geometry_accepts_supervised_wine_semantic_completion(
+    monkeypatch,
+    tmp_path,
+):
+    geom = _write_complete_2d_geometry(tmp_path / "model.g01.hdf")
+    rasprocess_exe = tmp_path / "RasProcess.exe"
+    rasprocess_exe.touch()
+    cleanup = {
+        "root_pid": 42,
+        "observed_pids": [42],
+        "terminated_pids": [42],
+        "killed_pids": [],
+        "survivor_pids": [],
+    }
+
+    monkeypatch.setattr(
+        RasProcess,
+        "find_rasprocess",
+        staticmethod(lambda version=None: rasprocess_exe),
+    )
+    rasprocess_module = __import__(
+        "ras_commander.RasProcess",
+        fromlist=["_is_wine_helper_runtime"],
+    )
+    monkeypatch.setattr(
+        rasprocess_module,
+        "_is_wine_helper_runtime",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_run_complete_geometry_supervised",
+        staticmethod(
+            lambda *args, **kwargs: (
+                SimpleNamespace(returncode=15, stdout="", stderr=""),
+                "semantic_hdf_stable",
+                cleanup,
+            )
+        ),
+    )
+
+    result = RasProcess.compute_geometry(geom, ras_version="6.6")
+
+    assert result["success"] is True
+    assert result["completion_mode"] == "semantic_hdf_stable"
+    assert result["semantic_validation"]["success"] is True
+    assert result["owned_process_cleanup"] == cleanup
+
+
 def _diff_frames(left, channel, right):
     import geopandas as gpd
     from shapely.geometry import LineString

@@ -28,6 +28,7 @@ _ensure_hdf = geom_mesh_module._ensure_hdf
 _dedupe_seed_points = geom_mesh_module._dedupe_seed_points
 _bad_seed_indexes = geom_mesh_module._bad_seed_indexes
 _remove_seed_indexes = geom_mesh_module._remove_seed_indexes
+_seed_indexes_outside_perimeter = geom_mesh_module._seed_indexes_outside_perimeter
 _safe_non_virtual_cell_count = geom_mesh_module._safe_non_virtual_cell_count
 
 HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
@@ -337,13 +338,39 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
                 "spacing_dy": 50.0,
                 "cell_count": 0,
                 "dataset_count": 2,
-            }
+            },
+            {
+                "name": "SecondaryArea",
+                "spacing_dx": 50.0,
+                "spacing_dy": 50.0,
+                "cell_count": 0,
+                "dataset_count": 2,
+            },
         ],
     )
     hdf_mtime = geom_text_path.stat().st_mtime + 1.0
     os.utime(hdf_path, (hdf_mtime, hdf_mtime))
 
     monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda hecras_dir=None: None)
+    monkeypatch.setattr(
+        geom_mesh_module,
+        "_audit_domain_containment_hdf",
+        lambda hdf_path, mesh_name, base_cell_spacing: (
+            geom_mesh_module.DomainContainmentResult(
+                mesh_name=mesh_name,
+                geom_hdf_path=str(hdf_path),
+                base_cell_spacing=float(base_cell_spacing),
+                inward_buffer_distance=float(base_cell_spacing),
+                admissible_geometry_type="Polygon",
+                checked_counts={
+                    "breakline": 0,
+                    "refinement_region": 0,
+                    "structure": 0,
+                },
+                violations=[],
+            )
+        ),
+    )
 
     # Build mock .NET geometry chain
     mock_geom_obj = MagicMock()
@@ -456,6 +483,184 @@ def _write_mesh_hdf(hdf_path: Path, areas):
                 data=np.zeros((max(dataset_count, 0), 2), dtype=np.float64),
             )
         flow_areas.create_dataset("Attributes", data=np.array(records, dtype=dtype))
+
+
+def _write_2d_perimeter_pair(tmp_path: Path, hdf_coords=None):
+    text_coords = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
+    if hdf_coords is None:
+        hdf_coords = text_coords
+    geom_text = tmp_path / "perimeter.g01"
+    coordinate_lines = "".join(
+        f"{x_coord:16.6f}{y_coord:16.6f}\n" for x_coord, y_coord in text_coords
+    )
+    geom_text.write_text(
+        "Geom Title=Perimeter Test\n"
+        "Storage Area=MainArea,5,5\n"
+        "Storage Area Surface Line= 5\n"
+        + coordinate_lines
+        + "Storage Area Type= 0\n"
+        "Storage Area Area=\n"
+        "Storage Area Min Elev=\n"
+        "Storage Area Is2D=-1\n"
+        "Storage Area Point Generation Data=50,50,,\n"
+        "Storage Area 2D Points= 3\n",
+        encoding="utf-8",
+    )
+    hdf_path = geom_text.with_suffix(".g01.hdf")
+    _write_mesh_hdf(
+        hdf_path,
+        [{"name": "MainArea", "spacing_dx": 50.0, "spacing_dy": 50.0, "cell_count": 0}],
+    )
+    with h5py.File(hdf_path, "a") as hdf:
+        group = hdf["Geometry/2D Flow Areas"]
+        group.create_dataset(
+            "Polygon Info",
+            data=np.array([[0, len(hdf_coords), 0, 1]], dtype=np.int32),
+        )
+        group.create_dataset(
+            "Polygon Parts",
+            data=np.array([[0, len(hdf_coords)]], dtype=np.int32),
+        )
+        group.create_dataset(
+            "Polygon Points",
+            data=np.asarray(hdf_coords, dtype=np.float64),
+        )
+    return geom_text, hdf_path
+
+
+def _write_containment_fixture(
+    tmp_path: Path,
+    *,
+    breaklines=(),
+    refinement_regions=(),
+    structures=(),
+    bc_lines=(),
+):
+    """Write a one-area geometry/HDF pair for domain-containment tests."""
+    perimeter = np.array(
+        [[0.0, 0.0], [1000.0, 0.0], [1000.0, 1000.0], [0.0, 1000.0], [0.0, 0.0]],
+        dtype=np.float64,
+    )
+    geom_text = tmp_path / "containment.g01"
+    text = (
+        "Geom Title=Containment Test\n"
+        "Storage Area=MainArea,500,500\n"
+        "Storage Area Surface Line= 5\n"
+        + "".join(f"{x:16.6f}{y:16.6f}\n" for x, y in perimeter)
+        + "Storage Area Type= 0\n"
+        "Storage Area Area=\n"
+        "Storage Area Min Elev=\n"
+        "Storage Area Is2D=-1\n"
+        "Storage Area Point Generation Data=,,100.000000,100.000000\n"
+        "Storage Area 2D Points= 0 \n"
+    )
+    for name, coords in breaklines:
+        text += (
+            f"BreakLine Name={name}\n"
+            "BreakLine CellSize Min=25.0\n"
+            "BreakLine CellSize Max=100.0\n"
+            "BreakLine Near Repeats=0\n"
+            "BreakLine Protection Radius=0\n"
+            f"BreakLine Polyline= {len(coords)} \n"
+            + "".join(f"{x:16.6f}{y:16.6f}\n" for x, y in coords)
+        )
+    geom_text.write_text(text, encoding="utf-8")
+    hdf_path = geom_text.with_suffix(".g01.hdf")
+    _write_mesh_hdf(
+        hdf_path,
+        [{"name": "MainArea", "spacing_dx": 100.0, "spacing_dy": 100.0, "cell_count": 0}],
+    )
+
+    def add_polylines(hf, path, features, dtype, info_name="Polyline Info", points_name="Polyline Points"):
+        if not features:
+            return
+        group = hf.create_group(path)
+        records = []
+        info = []
+        parts = []
+        points = []
+        for index, feature in enumerate(features):
+            name, coords, *extra = feature
+            start = len(points)
+            points.extend(coords)
+            info.append((start, len(coords), index, 1))
+            parts.append((0, len(coords)))
+            records.append((name.encode(), *(value.encode() for value in extra)))
+        group.create_dataset("Attributes", data=np.array(records, dtype=dtype))
+        group.create_dataset(info_name, data=np.array(info, dtype=np.int32))
+        group.create_dataset("Polyline Parts", data=np.array(parts, dtype=np.int32))
+        group.create_dataset(points_name, data=np.asarray(points, dtype=np.float64))
+
+    with h5py.File(hdf_path, "a") as hf:
+        areas = hf["Geometry/2D Flow Areas"]
+        areas.create_dataset("Polygon Info", data=np.array([[0, 5, 0, 1]], dtype=np.int32))
+        areas.create_dataset("Polygon Parts", data=np.array([[0, 5]], dtype=np.int32))
+        areas.create_dataset("Polygon Points", data=perimeter)
+        add_polylines(
+            hf,
+            "Geometry/2D Flow Area Break Lines",
+            breaklines,
+            np.dtype([("Name", "S64")]),
+        )
+        if refinement_regions:
+            group = hf.create_group("Geometry/2D Flow Area Refinement Regions")
+            records = []
+            info = []
+            parts = []
+            points = []
+            for index, (name, coords) in enumerate(refinement_regions):
+                start = len(points)
+                points.extend(coords)
+                info.append((start, len(coords), index, 1))
+                parts.append((0, len(coords)))
+                records.append((name.encode(),))
+            group.create_dataset(
+                "Attributes",
+                data=np.array(records, dtype=np.dtype([("Name", "S64")])),
+            )
+            group.create_dataset("Polygon Info", data=np.array(info, dtype=np.int32))
+            group.create_dataset("Polygon Parts", data=np.array(parts, dtype=np.int32))
+            group.create_dataset("Polygon Points", data=np.asarray(points, dtype=np.float64))
+        if structures:
+            group = hf.create_group("Geometry/Structures")
+            records = []
+            info = []
+            points = []
+            for name, coords, structure_type, upstream, downstream in structures:
+                start = len(points)
+                points.extend(coords)
+                info.append((start, len(coords)))
+                records.append(
+                    (
+                        name.encode(),
+                        structure_type.encode(),
+                        upstream.encode(),
+                        downstream.encode(),
+                    )
+                )
+            group.create_dataset(
+                "Attributes",
+                data=np.array(
+                    records,
+                    dtype=np.dtype(
+                        [
+                            ("Name", "S64"),
+                            ("Type", "S32"),
+                            ("US SA/2D", "S64"),
+                            ("DS SA/2D", "S64"),
+                        ]
+                    ),
+                ),
+            )
+            group.create_dataset("Centerline Info", data=np.array(info, dtype=np.int32))
+            group.create_dataset("Centerline Points", data=np.asarray(points, dtype=np.float64))
+        add_polylines(
+            hf,
+            "Geometry/Boundary Condition Lines",
+            bc_lines,
+            np.dtype([("Name", "S64"), ("SA-2D", "S64"), ("Type", "S16")]),
+        )
+    return geom_text, hdf_path
 
 
 def _install_fake_rasmapper_scripting(monkeypatch):
@@ -692,6 +897,34 @@ class TestGeometryHdfAvailability:
 
         assert _ensure_hdf(breakline_geom_text) == hdf_path
 
+    def test_generate_gate_ignores_old_seeds_but_not_stale_perimeter(self, tmp_path):
+        geom_text, hdf_path = _write_2d_perimeter_pair(tmp_path)
+
+        strict = geom_mesh_module._mesh_hdf_consistency_issues(geom_text, hdf_path)
+        regeneration = geom_mesh_module._mesh_hdf_consistency_issues(
+            geom_text,
+            hdf_path,
+            ignore_seed_count=True,
+        )
+
+        assert any("Storage Area 2D Points=3" in issue for issue in strict)
+        assert regeneration == []
+
+        stale_coords = [
+            (0.0, 0.0),
+            (20.0, 0.0),
+            (20.0, 20.0),
+            (0.0, 20.0),
+            (0.0, 0.0),
+        ]
+        _geom_text, stale_hdf = _write_2d_perimeter_pair(tmp_path, stale_coords)
+        issues = geom_mesh_module._mesh_hdf_consistency_issues(
+            geom_text,
+            stale_hdf,
+            ignore_seed_count=True,
+        )
+        assert any("does not match HDF perimeter" in issue for issue in issues)
+
     def test_ensure_hdf_recompiles_missing_geometry_when_opted_in(
         self, monkeypatch, breakline_geom_text
     ):
@@ -784,6 +1017,215 @@ class TestGeometryHdfAvailability:
         assert geom_mesh_module._count_breaklines_in_text(geom_text) == 1
         assert geom_mesh_module._count_breaklines_in_hdf(hdf_path) == 1
         assert _ensure_hdf(geom_text) == hdf_path
+
+
+class TestDomainContainmentAudit:
+    """One-cell inward containment is a mandatory pre-mesh gate."""
+
+    def test_audits_breaklines_refinements_and_target_structures(self, tmp_path):
+        geom_text, _hdf_path = _write_containment_fixture(
+            tmp_path,
+            breaklines=[
+                ("inside", [(100.0, 100.0), (900.0, 900.0)]),
+                ("crossing", [(50.0, 500.0), (500.0, 500.0)]),
+                ("outside", [(20.0, 20.0), (80.0, 80.0)]),
+            ],
+            refinement_regions=[
+                (
+                    "margin-region",
+                    [
+                        (50.0, 300.0),
+                        (150.0, 300.0),
+                        (150.0, 400.0),
+                        (50.0, 400.0),
+                        (50.0, 300.0),
+                    ],
+                )
+            ],
+            structures=[
+                (
+                    "inside-connection",
+                    [(200.0, 200.0), (800.0, 200.0)],
+                    "SA/2D Area Connection",
+                    "MainArea",
+                    "",
+                ),
+                (
+                    "crossing-connection",
+                    [(50.0, 600.0), (500.0, 600.0)],
+                    "SA/2D Area Connection",
+                    "MainArea",
+                    "",
+                ),
+                (
+                    "other-area-connection",
+                    [(-1000.0, -1000.0), (-900.0, -900.0)],
+                    "SA/2D Area Connection",
+                    "OtherArea",
+                    "",
+                ),
+            ],
+            # External BC lines are intentionally outside this gate.
+            bc_lines=[
+                (
+                    "external-bc",
+                    [(-500.0, 0.0), (-500.0, 1000.0)],
+                    "MainArea",
+                    "External",
+                )
+            ],
+        )
+
+        result = GeomMesh.audit_domain_containment(
+            geom_text,
+            mesh_name="MainArea",
+        )
+
+        assert result.base_cell_spacing == 100.0
+        assert result.inward_buffer_distance == 100.0
+        assert result.checked_counts == {
+            "breakline": 3,
+            "refinement_region": 1,
+            "structure": 2,
+        }
+        assert not result.ok
+        assert len(result.violations) == 4
+        assert {
+            (item.feature_type, item.feature_name)
+            for item in result.violations
+        } == {
+            ("breakline", "crossing"),
+            ("breakline", "outside"),
+            ("refinement_region", "margin-region"),
+            ("structure", "crossing-connection"),
+        }
+        assert all(
+            item.reason == "outside_one_cell_inward_buffer"
+            for item in result.violations
+        )
+        evidence = result.to_dict()
+        assert evidence["violation_count"] == 4
+        assert evidence["ok"] is False
+        assert all(not hasattr(value, "geom_type") for value in evidence.values())
+
+    def test_boundary_condition_lines_do_not_fail_mesh_feature_gate(self, tmp_path):
+        geom_text, _hdf_path = _write_containment_fixture(
+            tmp_path,
+            bc_lines=[
+                (
+                    "external-bc",
+                    [(-500.0, 0.0), (-500.0, 1000.0)],
+                    "MainArea",
+                    "External",
+                )
+            ],
+        )
+
+        result = GeomMesh.audit_domain_containment(geom_text)
+
+        assert result.ok
+        assert result.checked_counts == {
+            "breakline": 0,
+            "refinement_region": 0,
+            "structure": 0,
+        }
+
+    def test_generate_refuses_before_loading_native_mesher(self, monkeypatch, tmp_path):
+        geom_text, _hdf_path = _write_containment_fixture(
+            tmp_path,
+            breaklines=[("too-close", [(50.0, 500.0), (500.0, 500.0)])],
+        )
+        loaded = []
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_load_dlls",
+            lambda hecras_dir=None: loaded.append(hecras_dir),
+        )
+
+        result = GeomMesh.generate(geom_text, mesh_name="MainArea")
+
+        assert not result.ok
+        assert "Pre-mesh domain containment failed" in result.error_message
+        assert result.domain_containment is not None
+        assert result.domain_containment.violations[0].feature_name == "too-close"
+        assert loaded == []
+
+    def test_malformed_structure_collection_fails_closed(self, tmp_path):
+        geom_text, hdf_path = _write_containment_fixture(tmp_path)
+        with h5py.File(hdf_path, "a") as hf:
+            structures = hf.create_group("Geometry/Structures")
+            structures.create_dataset(
+                "Attributes",
+                data=np.array([(b"broken",)], dtype=np.dtype([("Name", "S32")])),
+            )
+            structures.create_dataset(
+                "Centerline Info",
+                data=np.array([[0, 2]], dtype=np.int32),
+            )
+
+        with pytest.raises(RuntimeError, match="Centerline Points"):
+            GeomMesh.audit_domain_containment(geom_text)
+
+    def test_native_zero_count_structure_group_is_empty(self, tmp_path):
+        geom_text, hdf_path = _write_containment_fixture(tmp_path)
+        with h5py.File(hdf_path, "a") as hf:
+            structures = hf.create_group("Geometry/Structures")
+            structures.attrs["Bridge/Culvert Count"] = 0
+            structures.attrs["Connection Count"] = 0
+            structures.attrs["Inline Structure Count"] = 0
+            structures.attrs["Lateral Structure Count"] = 0
+
+        result = GeomMesh.audit_domain_containment(geom_text)
+
+        assert result.ok
+        assert result.checked_counts["structure"] == 0
+
+    def test_native_multipart_collection_accepts_absolute_part_indexes(self, tmp_path):
+        _geom_text, hdf_path = _write_containment_fixture(tmp_path)
+        with h5py.File(hdf_path, "a") as hf:
+            group = hf.create_group("Geometry/2D Flow Area Break Lines")
+            group.create_dataset(
+                "Attributes",
+                data=np.array(
+                    [(b"single",), (b"multipart",)],
+                    dtype=np.dtype([("Name", "S32")]),
+                ),
+            )
+            group.create_dataset(
+                "Polyline Info",
+                data=np.array([[0, 2, 0, 1], [2, 4, 1, 2]], dtype=np.int32),
+            )
+            group.create_dataset(
+                "Polyline Parts",
+                # The multipart feature uses absolute offsets 2 and 4.
+                data=np.array([[0, 2], [2, 2], [4, 2]], dtype=np.int32),
+            )
+            group.create_dataset(
+                "Polyline Points",
+                data=np.array(
+                    [
+                        [200.0, 200.0],
+                        [300.0, 300.0],
+                        [200.0, 400.0],
+                        [300.0, 400.0],
+                        [600.0, 700.0],
+                        [700.0, 700.0],
+                    ],
+                    dtype=np.float64,
+                ),
+            )
+
+        with h5py.File(hdf_path, "r") as hf:
+            features = geom_mesh_module._hdf_polyline_features(
+                hf,
+                "Geometry/2D Flow Area Break Lines",
+            )
+
+        multipart = features[1]["geometry"]
+        assert multipart.geom_type == "MultiLineString"
+        assert len(multipart.geoms) == 2
+        assert list(multipart.geoms[0].coords)[0] == (200.0, 400.0)
+        assert list(multipart.geoms[1].coords)[0] == (600.0, 700.0)
 
 
 class TestGeometryAssociation:
@@ -967,6 +1409,17 @@ class TestGenerate:
             (3.0, 3.0),
         ]
 
+    def test_seed_outside_filter_preserves_exact_perimeter(self):
+        seeds = MockPointMs()
+        seeds.Add(MockPointM(5.0, 5.0))
+        seeds.Add(MockPointM(10.0, 5.0))
+        seeds.Add(MockPointM(10.1, 5.0))
+        perimeter = MockPolygon(
+            [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+        )
+
+        assert _seed_indexes_outside_perimeter(seeds, perimeter) == {2}
+
     def test_defaults_persist_geometry_with_existing_hdf(self, monkeypatch, breakline_geom_text):
         captured = _mock_generate_success(
             monkeypatch,
@@ -1031,7 +1484,7 @@ class TestGenerate:
         )
 
     def test_accepts_breakline_spacing_override(self, monkeypatch, breakline_geom_text):
-        captured = _mock_generate_success(
+        _mock_generate_success(
             monkeypatch,
             breakline_geom_text,
             has_breaklines=True,
@@ -1049,7 +1502,7 @@ class TestGenerate:
         assert "BreakLine CellSize Min=75.000000" in text
         assert "BreakLine CellSize Max=125.000000" in text
 
-    def test_perimeter_fix_reports_external_hdf_requirement(
+    def test_short_segment_suggestion_preserves_authored_perimeter(
         self, monkeypatch, breakline_geom_text
     ):
         captured = _mock_generate_success(
@@ -1104,9 +1557,9 @@ class TestGenerate:
 
         result = GeomMesh.generate(breakline_geom_text, mesh_index=1)
 
-        assert result.ok is False
-        assert result.status == "exception"
-        assert "cannot generate .g##.hdf" in result.error_message
+        assert result.ok is True
+        assert result.status == "complete"
+        assert result.fixes_applied == []
         assert seed_calls == [1]
 
     @pytest.mark.parametrize(
@@ -1454,6 +1907,81 @@ class TestRefinementRegions:
         stored = names[0][1]
         stored.encode("utf-8")
         assert "\ufffd" not in stored
+
+    def test_replace_collection_is_atomic_and_preserves_other_hdf_content(
+        self, refinement_region_hdf
+    ):
+        geom_text, hdf_path = refinement_region_hdf
+        with h5py.File(str(hdf_path), "a") as hf:
+            hf.create_dataset("Geometry/Sentinel", data=np.array([7, 8, 9]))
+
+        backup = GeomMesh.replace_refinement_regions(
+            geom_text,
+            [
+                {
+                    "name": "Clipped",
+                    "polygon": [
+                        (25.0, 25.0),
+                        (75.0, 25.0),
+                        (75.0, 75.0),
+                        (25.0, 75.0),
+                    ],
+                    "spacing_dx": 20.0,
+                    "spacing_dy": 10.0,
+                }
+            ],
+            expected_existing_names=["North", "North", ""],
+        )
+
+        assert backup == hdf_path.with_suffix(".hdf.bak")
+        assert backup.is_file()
+        regions = GeomMesh.get_refinement_regions(geom_text)
+        assert regions == [
+            {
+                "fid": 0,
+                "name": "Clipped",
+                "spacing_dx": 20.0,
+                "spacing_dy": 10.0,
+            }
+        ]
+        with h5py.File(str(hdf_path), "r") as hf:
+            assert np.array_equal(hf["Geometry/Sentinel"][:], [7, 8, 9])
+            points = hf[
+                "Geometry/2D Flow Area Refinement Regions/Polygon Points"
+            ][:]
+            assert len(points) == 5
+            assert np.allclose(points[0], points[-1])
+
+    def test_replace_collection_guard_failure_preserves_hdf(
+        self, refinement_region_hdf
+    ):
+        geom_text, hdf_path = refinement_region_hdf
+        original = hdf_path.read_bytes()
+
+        with pytest.raises(ValueError, match="collection changed"):
+            GeomMesh.replace_refinement_regions(
+                geom_text,
+                [],
+                expected_existing_names=["wrong"],
+            )
+
+        assert hdf_path.read_bytes() == original
+        assert not hdf_path.with_suffix(".hdf.bak").exists()
+
+    def test_replace_collection_with_empty_removes_group(
+        self, refinement_region_hdf
+    ):
+        geom_text, hdf_path = refinement_region_hdf
+
+        GeomMesh.replace_refinement_regions(
+            geom_text,
+            [],
+            expected_existing_names=["North", "North", ""],
+            create_backup=False,
+        )
+
+        with h5py.File(str(hdf_path), "r") as hf:
+            assert "Geometry/2D Flow Area Refinement Regions" not in hf
 
 
 # ── Add refinement region tests ───────────────────────────────────
