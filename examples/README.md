@@ -5,7 +5,7 @@ The notebooks are reference workflows for hydraulic modelers and developers;
 use them to understand API patterns, then move repeatable production logic into
 library code or scripts.
 
-The current git inventory contains **136 canonical notebooks** under
+The current git inventory contains **137 canonical notebooks** under
 `examples/`. Executed copies, temporary test notebooks, extracted HEC-RAS
 projects, and generated artifacts are intentionally excluded from this README.
 
@@ -155,6 +155,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 `950_ebfe_spring_creek.ipynb`, `951_ebfe_north_galveston_bay.ipynb`,
 `952_ebfe_upper_guadalupe_cascade.ipynb`, `953_ebfe_rio_hondo_steady_collection.ipynb`,
 `954_ebfe_lake_maurepas_validation.ipynb`, `955_ebfe_tickfaw_validation.ipynb`,
+`956_hydrofabric_conflation_visual_qa.ipynb`,
 `957_ebfe_spring_river_validation.ipynb`, `958_model_sources_showcase.ipynb`
 
 ### 960s - Cloud-Native Export

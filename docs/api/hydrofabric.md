@@ -58,7 +58,7 @@ Measurements use the centerline's projected CRS, an explicitly supplied
 `analysis_crs`, or an automatically estimated local UTM CRS when the
 centerlines are geographic.
 
-The method returns a `HydrofabricConflationResult` with three GeoDataFrames:
+The method returns a `NetworkConflationResult` with four GeoDataFrames:
 
 | Property | Contents | Active geometry |
 | --- | --- | --- |
@@ -107,7 +107,7 @@ sections—the method removes that group and renormalizes the remaining weights.
 Override only the weights that need adjustment:
 
 ```python
-result = RasHydrofabric.conflate(
+result = RasNetworkConflation.conflate(
     footprints_gdf,
     reach_centerlines_gdf,
     xs_cut_lines_gdf,
@@ -188,12 +188,23 @@ Pass `adapter="auto"` or select a built-in schema explicitly:
 | `nwm` | `id` / `feature_id` | `toid`, `order`, `areasqkm`, hydroseq |
 | `nextgen` | `feature_id` / `flowpath_id` | downstream/nexus IDs, order, drainage area, sequence |
 
+The NWM and NextGen adapters recognize native `wb-*` flowpaths and `nex-*`
+connectivity. A downstream `nex-123` is resolved to `wb-123` only when that
+flowpath is present in the supplied network; terminal, coastal, internal, or
+clipped nexuses remain nodes rather than becoming invented edge IDs. When both
+incremental and total drainage-area attributes are available, the adapters use
+the total upstream area for scale agreement.
+
+Topology contributes to candidate scoring only for flowpaths inside the local
+reach search buffer. This prevents a connected flowpath elsewhere in a broad
+model footprint from supplying false continuity evidence.
+
 For another schema, supply a custom adapter:
 
 ```python
-from ras_commander import HydrofabricAdapter, RasNetworkConflation
+from ras_commander import NetworkAdapter, RasNetworkConflation
 
-custom = HydrofabricAdapter(
+custom = NetworkAdapter(
     name="agency_flowpaths",
     feature_id_fields=("agency_reach_id",),
     to_feature_id_fields=("downstream_reach_id",),
@@ -210,7 +221,7 @@ result = RasNetworkConflation.conflate(
 )
 ```
 
-::: ras_commander.RasHydrofabric.RasNetworkConflation
+::: ras_commander.RasNetworkConflation.RasNetworkConflation
     options:
       show_source: false
       members:

@@ -357,7 +357,7 @@ DATAFRAME_SCHEMAS = {
             "network edge."
         ),
         "accessor": "RasNetworkConflation.classify_edges(...).coverage_df",
-        "source": "RasHydrofabric.classify_edges()",
+        "source": "RasNetworkConflation.classify_edges()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -371,7 +371,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "from_node", "dtype": "str | None", "description": "Adapter-normalized upstream node or nexus identifier."},
             {"name": "to_node", "dtype": "str | None", "description": "Adapter-normalized downstream node or nexus identifier."},
             {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized stream order."},
-            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized drainage area."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized drainage area; total upstream area is preferred when available."},
             {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence."},
             {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
             {"name": "geometry", "dtype": "geometry", "description": "Full network edge geometry."},
@@ -382,8 +382,8 @@ DATAFRAME_SCHEMAS = {
             "One explicit matched, ambiguous, or unmatched row per HEC-RAS "
             "geometry, reach, and cross section."
         ),
-        "accessor": "RasHydrofabric.conflate(...).matches",
-        "source": "RasHydrofabric.conflate()",
+        "accessor": "RasNetworkConflation.conflate(...).matches",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -413,8 +413,8 @@ DATAFRAME_SCHEMAS = {
             "Ranked hydrofabric candidates with all spatial, topological, and "
             "hydrologic score evidence."
         ),
-        "accessor": "RasHydrofabric.conflate(...).candidates",
-        "source": "RasHydrofabric.conflate()",
+        "accessor": "RasNetworkConflation.conflate(...).candidates",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -439,9 +439,9 @@ DATAFRAME_SCHEMAS = {
             {"name": "topological_continuity_score", "dtype": "float64 | None", "description": "Connectivity support across adjacent model reaches."},
             {"name": "hydrologic_score", "dtype": "float64 | None", "description": "Stream-order and drainage-area support score."},
             {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized candidate stream order."},
-            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized candidate drainage area."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized candidate drainage area; total upstream area is preferred when available."},
             {"name": "sequence_consistency_score", "dtype": "float64 | None", "description": "Reach/cross-section ordering agreement along the flowpath."},
-            {"name": "to_feature_id", "dtype": "str | None", "description": "Adapter-normalized downstream feature or nexus identifier."},
+            {"name": "to_feature_id", "dtype": "str | None", "description": "Adapter-normalized downstream edge identifier; raw nexus identity remains in to_node."},
             {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence value."},
             {"name": "flowpath_measure", "dtype": "float64 | None", "description": "Candidate cross-section measure from flowpath start."},
             {"name": "flowpath_measure_fraction", "dtype": "float64 | None", "description": "Candidate normalized flowpath measure."},
@@ -456,8 +456,8 @@ DATAFRAME_SCHEMAS = {
             "One row per HEC-RAS reach with its network-edge association, "
             "cross-section limits, alignment metrics, coverage, and flags."
         ),
-        "accessor": "RasHydrofabric.conflate(...).reach_metrics",
-        "source": "RasHydrofabric._build_reach_metrics()",
+        "accessor": "RasNetworkConflation.conflate(...).reach_metrics",
+        "source": "RasNetworkConflation._build_reach_metrics()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -498,8 +498,8 @@ DATAFRAME_SCHEMAS = {
     },
     "hydrofabric_huc_intersections": {
         "description": "Model-footprint intersections with an optional HUC polygon layer.",
-        "accessor": "RasHydrofabric.conflate(...).huc_intersections",
-        "source": "RasHydrofabric.conflate()",
+        "accessor": "RasNetworkConflation.conflate(...).huc_intersections",
+        "source": "RasNetworkConflation.conflate()",
         "extra_columns": False,
         "dynamic": False,
         "columns": [

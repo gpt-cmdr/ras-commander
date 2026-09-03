@@ -40,8 +40,8 @@ class ConflationStatus(str, Enum):
 
 
 @dataclass(frozen=True)
-class HydrofabricConflationResult:
-    """Long-form model-to-hydrofabric conflation output.
+class NetworkConflationResult:
+    """Long-form model-to-network conflation output.
 
     Attributes:
         matches: One resolved row per geometry, reach, and cross section.
@@ -106,7 +106,7 @@ class NetworkEdgeCoverageResult:
 
 
 @dataclass(frozen=True)
-class HydrofabricAdapter:
+class NetworkAdapter:
     """Column aliases used to normalize a flowpath product.
 
     Custom products can use this class directly.  The three built-in subclasses
@@ -174,7 +174,39 @@ class HydrofabricAdapter:
         return frame
 
 
-class NHDPlusAdapter(HydrofabricAdapter):
+def _normalise_wb_nexus_topology(frame: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Resolve native ``wb-*`` / nexus links within a loaded flowpath set."""
+    feature_ids = set(frame["feature_id"].dropna().astype(str))
+    nexus_prefixes = ("nex-", "tnx-", "cnx-", "inx-")
+
+    def _flowpath_from_nexus(value: Any) -> Optional[str]:
+        value = _normalise_identifier(value)
+        if value is None:
+            return None
+        if value.startswith("nex-"):
+            candidate = f"wb-{value[4:]}"
+            return candidate if candidate in feature_ids else None
+        if value.startswith(nexus_prefixes):
+            return None
+        return value
+
+    frame["to_feature_id"] = frame["to_feature_id"].map(_flowpath_from_nexus)
+
+    missing_from_node = frame["from_node"].isna()
+    inferred_from_node = frame["feature_id"].map(
+        lambda value: (
+            f"nex-{value[3:]}"
+            if isinstance(value, str) and value.startswith("wb-")
+            else None
+        )
+    )
+    frame.loc[missing_from_node, "from_node"] = inferred_from_node.loc[
+        missing_from_node
+    ]
+    return frame
+
+
+class NHDPlusAdapter(NetworkAdapter):
     """Adapter for NHDPlus V2 and NHDPlus HR flowlines."""
 
     def __init__(self) -> None:
@@ -199,7 +231,7 @@ class NHDPlusAdapter(HydrofabricAdapter):
         )
 
 
-class NWMHydrofabricAdapter(HydrofabricAdapter):
+class NWMHydrofabricAdapter(NetworkAdapter):
     """Adapter for the current NOAA/NWM hydrofabric flowpaths layer."""
 
     def __init__(self) -> None:
@@ -215,13 +247,18 @@ class NWMHydrofabricAdapter(HydrofabricAdapter):
                 "order", "stream_order", "strm_order", "streamorde",
             ),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "totdasqkm", "drainage_area",
+                "tot_drainage_areasqkm", "tot_drainage_area_sqkm", "totdasqkm",
+                "drainage_area", "area_sqkm", "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "hf_hydroseq"),
         )
 
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize NWM ``wb-*`` flowpaths and nexus-linked topology."""
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
-class NextGenFlowpathAdapter(HydrofabricAdapter):
+
+class NextGenFlowpathAdapter(NetworkAdapter):
     """Adapter for NextGen-style flowpaths and nexus-linked networks."""
 
     def __init__(self) -> None:
@@ -241,10 +278,22 @@ class NextGenFlowpathAdapter(HydrofabricAdapter):
             ),
             stream_order_fields=("order", "stream_order", "streamorde"),
             drainage_area_fields=(
-                "areasqkm", "area_sqkm", "drainage_area", "totdasqkm",
+                "tot_drainage_areasqkm", "tot_drainage_area_sqkm", "totdasqkm",
+                "drainage_area", "area_sqkm", "areasqkm",
             ),
             hydrosequence_fields=("hydroseq", "hydrosequence", "sequence"),
         )
+
+    def normalize(self, flowpaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        """Normalize native ``wb-*`` flowpaths and ``nex-*`` topology.
+
+        NextGen's native ``toid`` identifies the downstream nexus, not the
+        downstream flowpath. Within a loaded flowpath set, ``nex-123`` is the
+        upstream node of ``wb-123``. Preserve the nexus in ``to_node`` and
+        resolve ``to_feature_id`` only when the corresponding flowpath is
+        present, so terminal or clipped nexuses do not become invented IDs.
+        """
+        return _normalise_wb_nexus_topology(super().normalize(flowpaths))
 
 
 DEFAULT_CONFLATION_WEIGHTS: Mapping[str, float] = {
@@ -292,7 +341,7 @@ _REACH_METRIC_COLUMNS = [
 ]
 
 
-class RasHydrofabric:
+class RasNetworkConflation:
     """Conflate HEC-RAS geometry with generic directed network flowpaths.
 
     This is a static namespace; do not instantiate it.
@@ -306,7 +355,7 @@ class RasHydrofabric:
         model_footprints: GeoInput,
         network_edges: GeoInput,
         *,
-        adapter: Union[str, HydrofabricAdapter] = "auto",
+        adapter: Union[str, NetworkAdapter] = "auto",
         geometry_id_col: Optional[str] = None,
         network_edges_layer: Optional[str] = None,
         analysis_crs: Optional[Any] = None,
@@ -356,7 +405,7 @@ class RasHydrofabric:
         if footprints["geometry_id"].duplicated().any():
             raise ValueError("model_footprints geometry IDs must be unique")
 
-        selected_adapter = RasHydrofabric.get_adapter(adapter, raw_edges)
+        selected_adapter = RasNetworkConflation.get_adapter(adapter, raw_edges)
         edges = selected_adapter.normalize(raw_edges)
         target_crs = _choose_extent_analysis_crs(
             footprints, edges, analysis_crs
@@ -436,11 +485,11 @@ class RasHydrofabric:
 
     @staticmethod
     def get_adapter(
-        adapter: Union[str, HydrofabricAdapter],
+        adapter: Union[str, NetworkAdapter],
         flowpaths: Optional[gpd.GeoDataFrame] = None,
-    ) -> HydrofabricAdapter:
+    ) -> NetworkAdapter:
         """Resolve a built-in, custom, or auto-detected adapter."""
-        if isinstance(adapter, HydrofabricAdapter):
+        if isinstance(adapter, NetworkAdapter):
             return adapter
         key = str(adapter).strip().lower().replace("-", "_")
         if key in {"nhd", "nhdplus", "nhdplus_v2", "nhdplus_hr"}:
@@ -452,7 +501,7 @@ class RasHydrofabric:
         if key != "auto":
             raise ValueError(
                 "adapter must be 'auto', 'nhdplus', 'nwm', 'nextgen', or a "
-                "HydrofabricAdapter instance"
+                "NetworkAdapter instance"
             )
         if flowpaths is None:
             raise ValueError("flowpaths are required for adapter='auto'")
@@ -467,7 +516,7 @@ class RasHydrofabric:
             return NWMHydrofabricAdapter()
         raise ValueError(
             "Could not auto-detect the hydrofabric schema; pass an explicit "
-            "adapter or HydrofabricAdapter"
+            "adapter or NetworkAdapter"
         )
 
     @staticmethod
@@ -479,7 +528,7 @@ class RasHydrofabric:
         flowpaths: GeoInput,
         *,
         thalweg_points: Optional[GeoInput] = None,
-        adapter: Union[str, HydrofabricAdapter] = "auto",
+        adapter: Union[str, NetworkAdapter] = "auto",
         hucs: Optional[GeoInput] = None,
         analysis_crs: Optional[Any] = None,
         geometry_id_col: Optional[str] = "geometry_id",
@@ -501,7 +550,7 @@ class RasHydrofabric:
         min_coverage: float = 0.50,
         weights: Optional[Mapping[str, float]] = None,
         sample_count: int = 9,
-    ) -> HydrofabricConflationResult:
+    ) -> NetworkConflationResult:
         """Conflate model footprints, reaches, and cross sections to flowpaths.
 
         Candidate flowpaths are scored using model-footprint overlap, symmetric
@@ -521,7 +570,7 @@ class RasHydrofabric:
                 and reach ID.  If omitted, ``xs_thalweg_col`` is used when that
                 point-valued column exists on ``cross_sections``.
             adapter: ``'auto'``, ``'nhdplus'``, ``'nwm'``, ``'nextgen'``, or a
-                custom :class:`HydrofabricAdapter`.
+                custom :class:`NetworkAdapter`.
             hucs: Optional HUC polygon layer.  Intersections are returned without
                 influencing the candidate score.
             analysis_crs: Optional projected CRS for measurements.  A local UTM
@@ -538,7 +587,7 @@ class RasHydrofabric:
             weights: Optional overrides for :data:`DEFAULT_CONFLATION_WEIGHTS`.
 
         Returns:
-            :class:`HydrofabricConflationResult`.  Ambiguous and unmatched rows
+            :class:`NetworkConflationResult`.  Ambiguous and unmatched rows
             have ``feature_id=None``; their best evidence remains in
             ``best_candidate_feature_id`` and ``candidates``.
         """
@@ -572,7 +621,7 @@ class RasHydrofabric:
         if not thalweg_frame.empty:
             _require_crs(thalweg_frame, "thalweg_points")
 
-        selected_adapter = RasHydrofabric.get_adapter(adapter, raw_flowpaths)
+        selected_adapter = RasNetworkConflation.get_adapter(adapter, raw_flowpaths)
         normalized_flowpaths = selected_adapter.normalize(raw_flowpaths)
 
         footprints, reaches, xs = _prepare_model_frames(
@@ -737,7 +786,7 @@ class RasHydrofabric:
             "min_coverage": float(min_coverage),
             "sample_count": int(sample_count),
         }
-        return HydrofabricConflationResult(
+        return NetworkConflationResult(
             matches=matches,
             candidates=candidates,
             reach_metrics=reach_metrics,
@@ -746,17 +795,6 @@ class RasHydrofabric:
             analysis_crs=target_crs.to_string(),
             parameters=parameters,
         )
-
-
-class RasNetworkConflation(RasHydrofabric):
-    """Generic public name for :class:`RasHydrofabric` conflation.
-
-    NHDPlus, NWM, and NextGen are schema adapters to this network-neutral core;
-    custom directed networks use :class:`HydrofabricAdapter` directly.
-    """
-
-
-NetworkConflationResult = HydrofabricConflationResult
 
 
 def _validate_thresholds(
@@ -942,7 +980,14 @@ def _prepare_model_frames(
     area_col = _find_column(
         reaches,
         None,
-        ("drainage_area", "areasqkm", "totdasqkm", "area_sqkm"),
+        (
+            "drainage_area",
+            "tot_drainage_areasqkm",
+            "tot_drainage_area_sqkm",
+            "totdasqkm",
+            "area_sqkm",
+            "areasqkm",
+        ),
     )
     reaches["model_stream_order"] = (
         pd.to_numeric(reaches[order_col], errors="coerce")
@@ -1212,8 +1257,9 @@ def _score_reach_candidates(
         if reach_geometry is None or reach_geometry.is_empty:
             continue
         footprint = footprint_lookup[str(reach.geometry_id)]
+        local_search_geometry = reach_geometry.buffer(search_distance)
         search_geometry = unary_union(
-            [reach_geometry.buffer(search_distance), footprint]
+            [local_search_geometry, footprint]
         )
         if spatial_index is not None:
             indices = list(
@@ -1245,6 +1291,9 @@ def _score_reach_candidates(
                     "mean_distance": mean_distance,
                     "overlap_ratio": overlap_ratio,
                     "xs_count": xs_count,
+                    "is_local_candidate": flow_geometry.intersects(
+                        local_search_geometry
+                    ),
                 }
             )
         preliminary.sort(
@@ -1301,6 +1350,7 @@ def _score_reach_candidates(
                 "model_drainage_area": _finite_or_none(
                     reach.model_drainage_area
                 ),
+                "is_local_candidate": bool(item["is_local_candidate"]),
                 "geometry": flow_geometry,
                 "flowpath_measure": None,
                 "flowpath_measure_fraction": None,
@@ -1320,10 +1370,17 @@ def _score_reach_candidates(
         if not neighbours:
             record["topological_continuity_score"] = None
             continue
+        if not record["is_local_candidate"]:
+            record["topological_continuity_score"] = 0.0
+            continue
         supported = 0
         considered = 0
         for neighbour in neighbours:
-            neighbour_candidates = grouped.get(neighbour, [])
+            neighbour_candidates = [
+                candidate
+                for candidate in grouped.get(neighbour, [])
+                if candidate["is_local_candidate"]
+            ]
             if not neighbour_candidates:
                 continue
             considered += 1
@@ -1420,17 +1477,17 @@ def _flowpaths_connected(
     right: Mapping[str, Any],
     tolerance: float,
 ) -> bool:
-    if left["feature_id"] == right["feature_id"]:
+    if _identifiers_equal(left["feature_id"], right["feature_id"]):
         return True
-    if left.get("to_feature_id") == right["feature_id"]:
+    if _identifiers_equal(left.get("to_feature_id"), right["feature_id"]):
         return True
-    if right.get("to_feature_id") == left["feature_id"]:
+    if _identifiers_equal(right.get("to_feature_id"), left["feature_id"]):
         return True
     node_pairs = (
         (left.get("to_node"), right.get("from_node")),
         (right.get("to_node"), left.get("from_node")),
     )
-    if any(a is not None and a == b for a, b in node_pairs):
+    if any(_identifiers_equal(a, b) for a, b in node_pairs):
         return True
     left_endpoints = _line_endpoints(left["geometry"])
     right_endpoints = _line_endpoints(right["geometry"])
@@ -1441,6 +1498,13 @@ def _flowpaths_connected(
         for point_a in left_endpoints
         for point_b in right_endpoints
     ) <= tolerance
+
+
+def _identifiers_equal(left: Any, right: Any) -> bool:
+    """Compare optional scalar identifiers without treating nulls as IDs."""
+    if left is None or right is None or pd.isna(left) or pd.isna(right):
+        return False
+    return str(left) == str(right)
 
 
 def _weighted_score(
