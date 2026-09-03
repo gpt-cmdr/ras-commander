@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*135 notebooks indexed - 122 with runtime data, 13 without.*
+*136 notebooks indexed - 122 with runtime data, 14 without.*
 
 ## 100s - Initialization & Execution
 
@@ -72,6 +72,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [232 - 2D Mesh Cell-Size Sensitivity for Sediment Transport - Second Case: Weise Flume](../notebooks/232_weise_2d_sediment_mesh_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/232_weise_2d_sediment_mesh_sensitivity.ipynb) | 16.7 min |
 | [233 - Manning's n Region Polygon Authoring](../notebooks/233_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/233_mannings_region_polygon_authoring.ipynb) | 3 s |
 | [234 - Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)](../notebooks/234_rasmapper_geometry_completion.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/234_rasmapper_geometry_completion.ipynb) | 29 s |
+| [235 - Clip a Texas FEMA eBFE model to one NWM reach](../notebooks/235_1d_breakout_model.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/235_1d_breakout_model.ipynb) | N/A |
 
 ## 300s - Unsteady Flow & DSS
 
@@ -132,7 +133,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | Notebook | Source | Runtime |
 | --- | --- | --- |
 | [700 - Core Sensitivity Testing with results_df](../notebooks/700_core_sensitivity.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/700_core_sensitivity.ipynb) | 17.0 min |
-| [701 - Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)](../notebooks/701_benchmarking_versions_6.1_to_6.6.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/701_benchmarking_versions_6.1_to_6.6.ipynb) | 2 s |
+| [701 - Version Benchmarking and Core Scaling (HEC-RAS 5.0.5, 6.0, 6.3.1, 6.6, 7.0)](../notebooks/701_benchmarking_versions_6.1_to_6.6.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/701_benchmarking_versions_6.1_to_6.6.ipynb) | 2 s |
 | [710 - Manning's n Bulk Sensitivity Analysis](../notebooks/710_mannings_sensitivity_bulk_analysis.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/710_mannings_sensitivity_bulk_analysis.ipynb) | 2.0 min |
 | [711 - One-at-a-Time (OAT) Manning's n Sensitivity Analysis](../notebooks/711_mannings_sensitivity_multi_interval.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) | 12.1 min |
 | [720 - Precipitation Hyetograph Generation - Complete Method Comparison](../notebooks/720_precipitation_methods_comprehensive.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/720_precipitation_methods_comprehensive.ipynb) | 16 s |

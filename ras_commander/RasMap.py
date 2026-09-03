@@ -70,6 +70,7 @@ List of Functions in RasMap:
 """
 
 import os
+import json
 import re
 import subprocess
 import warnings
@@ -3377,6 +3378,9 @@ class RasMap:
         output_folder: Optional[str] = None,
         output_path: Optional[Union[str, Path]] = None,
         profile: str = "Max",
+        profiles: Optional[
+            Union[str, int, Sequence[Union[str, int]]]
+        ] = None,
         timesteps: Optional[
             Union[int, str, datetime, Sequence[Union[int, str, datetime]]]
         ] = None,
@@ -3419,6 +3423,9 @@ class RasMap:
           enables memory-admitted map-level parallelism.
         - ``"timesteps"`` generates selected products for requested output
           timesteps.
+        - ``"steady_profiles"`` configures every selected steady profile in
+          one XML transaction and invokes aggregate ``StoreAllMaps`` once per
+          plan.
         - ``"all_plans"`` applies the selected-map configuration to every
           project plan with an HDF result.
         - ``"auto"`` preserves a plain historic call as ``"configured"``,
@@ -3438,15 +3445,18 @@ class RasMap:
             render_mode: Optional water-surface rendering override.
             ras_object: Initialized project object; defaults to the active project.
             timeout: Per-helper timeout in seconds.
-            mode: ``auto``, ``configured``, ``selected``, ``timesteps``, or
-                ``all_plans``. ``native`` remains a deprecated compatibility
-                alias for ``configured``.
+            mode: ``auto``, ``configured``, ``selected``, ``timesteps``,
+                ``steady_profiles``, or ``all_plans``. ``native`` remains a
+                deprecated compatibility alias for ``configured``.
             output_folder: Relative ``.rasmap`` StoredFilename folder name for
                 configured non-timestep modes. It is not an output destination.
             output_path: Destination directory to which generated products are
                 moved. Multi-plan modes create ``plan_XX`` children.
             profile: ``Max``, ``Min``, or a timestamp for configured
                 non-timestep modes.
+            profiles: Steady-profile selectors for ``steady_profiles`` mode.
+                ``None`` selects all profiles; exact names and zero-based
+                indexes may be mixed in a sequence.
             timesteps, max_timesteps: Timestep selectors for ``timesteps`` mode.
             map_types: One product name or a sequence of names. Do not combine
                 with individual product flags. Defaults are WSE/Depth/Velocity
@@ -3491,10 +3501,18 @@ class RasMap:
             "all": "all_plans",
         }
         resolved_mode = mode_aliases.get(requested_mode, requested_mode)
-        valid_modes = {"auto", "configured", "selected", "timesteps", "all_plans"}
+        valid_modes = {
+            "auto",
+            "configured",
+            "selected",
+            "timesteps",
+            "steady_profiles",
+            "all_plans",
+        }
         if resolved_mode not in valid_modes:
             raise ValueError(
-                "mode must be auto, configured, selected, timesteps, or all_plans"
+                "mode must be auto, configured, selected, timesteps, "
+                "steady_profiles, or all_plans"
             )
 
         requested_flags = {
@@ -3515,6 +3533,7 @@ class RasMap:
                 output_folder is not None,
                 output_path is not None,
                 profile != "Max",
+                profiles is not None,
                 timesteps is not None,
                 max_timesteps is not None,
                 map_types is not None,
@@ -3530,7 +3549,9 @@ class RasMap:
             )
         )
         if resolved_mode == "auto":
-            if timesteps is not None or max_timesteps is not None:
+            if profiles is not None:
+                resolved_mode = "steady_profiles"
+            elif timesteps is not None or max_timesteps is not None:
                 resolved_mode = "timesteps"
             elif plan_number is None:
                 resolved_mode = "all_plans"
@@ -3570,12 +3591,20 @@ class RasMap:
 
         if resolved_mode == "all_plans" and plan_number is not None:
             raise ValueError("plan_number must be omitted for mode='all_plans'")
-        if resolved_mode in {"selected", "timesteps"} and plan_number is None:
+        if resolved_mode in {
+            "selected",
+            "timesteps",
+            "steady_profiles",
+        } and plan_number is None:
             raise ValueError(f"plan_number is required for mode='{resolved_mode}'")
         if resolved_mode != "timesteps" and timesteps is not None:
             raise ValueError("timesteps are only valid with mode='timesteps'")
         if resolved_mode != "timesteps" and max_timesteps is not None:
             raise ValueError("max_timesteps is only valid with mode='timesteps'")
+        if resolved_mode != "steady_profiles" and profiles is not None:
+            raise ValueError(
+                "profiles are only valid with mode='steady_profiles'"
+            )
         if resolved_mode == "timesteps":
             unsupported_timestep_options = []
             if output_folder is not None:
@@ -3594,7 +3623,37 @@ class RasMap:
                     + ", ".join(unsupported_timestep_options)
                 )
 
+        if resolved_mode == "steady_profiles":
+            unsupported_steady_options = []
+            if output_folder is not None:
+                unsupported_steady_options.append("output_folder (use output_path)")
+            if profile != "Max":
+                unsupported_steady_options.append("profile (use profiles)")
+            if timesteps is not None or max_timesteps is not None:
+                unsupported_steady_options.append("timesteps")
+            if arrival_depth != 0.0:
+                unsupported_steady_options.append("arrival_depth")
+            if benefit_area is not None:
+                unsupported_steady_options.append("benefit_area")
+            if performance is not None:
+                unsupported_steady_options.append(
+                    "performance (steady batches use one aggregate helper)"
+                )
+            for product in ("arrival_time", "duration", "percent_inundated"):
+                if requested_flags.get(product):
+                    unsupported_steady_options.append(product)
+            if unsupported_steady_options:
+                raise ValueError(
+                    "mode='steady_profiles' does not support: "
+                    + ", ".join(unsupported_steady_options)
+                )
+
         supported_map_types = tuple(requested_flags)
+        if resolved_mode == "steady_profiles":
+            # Flow is a profile-dependent RASMapper product supported by the
+            # steady batch engine, but it has no legacy individual boolean
+            # flag on this facade. It is therefore selected through map_types.
+            supported_map_types += ("flow",)
         supported_map_type_set = set(supported_map_types)
         explicit_map_selection = map_types is not None or any(
             value is not None for value in requested_flags.values()
@@ -3618,7 +3677,7 @@ class RasMap:
         elif benefit_area is not None:
             # BenefitArea has configuration-dependent defaults in RasProcess.
             map_flags = dict(requested_flags)
-        elif resolved_mode == "timesteps":
+        elif resolved_mode in {"timesteps", "steady_profiles"}:
             map_flags = {name: name == "depth" for name in supported_map_types}
         else:
             map_flags = {
@@ -3644,6 +3703,18 @@ class RasMap:
                 raise ValueError(
                     "mode='timesteps' does not support: "
                     + ", ".join(unsupported_timestep_products)
+                )
+
+        if resolved_mode == "steady_profiles":
+            unsupported_steady_products = sorted(
+                name
+                for name in ("arrival_time", "duration", "percent_inundated")
+                if map_flags.get(name)
+            )
+            if unsupported_steady_products:
+                raise ValueError(
+                    "mode='steady_profiles' does not support: "
+                    + ", ".join(unsupported_steady_products)
                 )
 
         if resolved_mode == "all_plans":
@@ -3753,6 +3824,82 @@ class RasMap:
                         "success": True,
                         "timesteps": timestep_summary,
                         "files": flat_files,
+                    }
+                elif resolved_mode == "steady_profiles":
+                    steady_map_types = [
+                        name
+                        for name in (
+                            "wse",
+                            "depth",
+                            "velocity",
+                            "froude",
+                            "shear_stress",
+                            "depth_x_velocity",
+                            "depth_x_velocity_sq",
+                            "flow",
+                        )
+                        if map_flags.get(name)
+                    ]
+                    if not steady_map_types:
+                        raise ValueError(
+                            "At least one steady profile raster product is required"
+                        )
+                    frame = RasProcess.store_maps_at_steady_profiles(
+                        plan_number=plan_num,
+                        profiles=profiles,
+                        output_path=plan_output_path,
+                        map_types=steady_map_types,
+                        render_mode=render_mode,
+                        clear_existing=clear_existing,
+                        fix_georef=fix_georef,
+                        ras_object=ras_obj,
+                        ras_version=ras_version,
+                        timeout=timeout,
+                        terrain_name=terrain_name,
+                        inundation_boundary=(
+                            True
+                            if inundation_boundary is None
+                            else bool(inundation_boundary)
+                        ),
+                    )
+                    records = frame.to_dict(orient="records")
+                    grouped_profiles = []
+                    for profile_index in frame["profile_index"].drop_duplicates():
+                        profile_rows = frame[
+                            frame["profile_index"] == profile_index
+                        ]
+                        grouped_profiles.append(
+                            {
+                                "profile_index": int(profile_index),
+                                "profile_name": str(
+                                    profile_rows.iloc[0]["profile_name"]
+                                ),
+                                "products": profile_rows.to_dict(orient="records"),
+                            }
+                        )
+                    flat_files = list(
+                        dict.fromkeys(
+                            path
+                            for record in records
+                            for path in record["files"]
+                        )
+                    )
+                    output_directories = sorted(
+                        {str(Path(path).parent) for path in flat_files}
+                    )
+                    summary["plans"][plan_num] = {
+                        "success": True,
+                        "output_dir": (
+                            output_directories[0]
+                            if len(output_directories) == 1
+                            else None
+                        ),
+                        "files": flat_files,
+                        "stored_maps": records,
+                        "profiles": grouped_profiles,
+                        "performance": json.loads(
+                            json.dumps(frame.attrs, default=str)
+                        ),
                     }
                 else:
                     generated = RasProcess.store_maps(**shared_arguments)

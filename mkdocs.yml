@@ -78,6 +78,8 @@ plugins:
         API Reference:
           - api/index.md
           - api/core.md
+          - api/hydrofabric.md
+          - api/breakout-1d.md
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
@@ -210,6 +212,8 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
+    - Hydrofabric Conflation: api/hydrofabric.md
+    - 1D Breakout Extraction: api/breakout-1d.md
     - Benefits Analysis: api/benefits.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
@@ -242,5 +246,6 @@ nav:
     - Release Notes: development/release-notes.md
   - About:
     - Cite and Support RAS Commander: cite.md
+    - Command Line is All You Need: about/command-line-is-all-you-need.md
     - Acknowledgments: about/acknowledgments.md
     - CLB Engineering: about/clb-engineering.md

@@ -38,6 +38,7 @@ List of Functions in RasCmdr:
 """
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -59,6 +60,7 @@ from .RasBco import BcoMonitor
 from .RasGeo import RasGeo
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj, init_ras_project, ras
+from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
@@ -78,6 +80,70 @@ class RasCmdr:
         compute_parallel(): Execute multiple plans in parallel using worker folders
         compute_test_mode(): Execute multiple plans sequentially in a test folder
     """
+
+    _RAS_VERSION_PATTERN = re.compile(
+        r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?"
+    )
+
+    @staticmethod
+    def _ras_version_tuple(ras_object: 'RasPrj') -> Optional[tuple[int, int, int]]:
+        """Resolve a numeric release from an initialized RAS object."""
+        candidates = []
+        ras_exe_path = getattr(ras_object, "ras_exe_path", None)
+        if ras_exe_path:
+            candidates.append(Path(str(ras_exe_path)).parent.name)
+        ras_version = getattr(ras_object, "ras_version", None)
+        if ras_version:
+            candidates.append(str(ras_version))
+
+        for candidate in candidates:
+            match = RasCmdr._RAS_VERSION_PATTERN.search(candidate)
+            if match is None:
+                continue
+            major, minor, patch = match.groups()
+            return int(major), int(minor), int(patch or 0)
+        return None
+
+    @staticmethod
+    def _uses_legacy_project_cli(ras_object: 'RasPrj') -> bool:
+        """Return whether Ras.exe expects ``project.prj -c`` syntax.
+
+        Installed-version probes establish this layout for HEC-RAS 5.x. Live
+        6.0 probes accept the modern full project/plan layout, so the boundary
+        is the major release rather than the help text's visual grouping.
+        """
+        version = RasCmdr._ras_version_tuple(ras_object)
+        return version is not None and version[0] == 5
+
+    @staticmethod
+    def _build_compute_command(
+        ras_object: 'RasPrj',
+        project_path: Union[str, Path],
+        plan_path: Union[str, Path],
+    ) -> str:
+        """Build the version-compatible Windows Ras.exe batch command."""
+        ras_exe_path = getattr(ras_object, "ras_exe_path")
+        if RasCmdr._uses_legacy_project_cli(ras_object):
+            return f'"{ras_exe_path}" "{project_path}" -c'
+        return f'"{ras_exe_path}" -c "{project_path}" "{plan_path}"'
+
+    @staticmethod
+    def _tcu_blocks_launch(ras_object: 'RasPrj') -> bool:
+        """Fail closed only when a real installed Ras.exe has a negative TCU state."""
+        ras_exe_path = Path(str(getattr(ras_object, "ras_exe_path", "")))
+        if not ras_exe_path.is_file():
+            return False
+        status = RasTcu.status(ras_object=ras_object)
+        if status.accepted is not False:
+            return False
+        logger.error(
+            "HEC-RAS %s cannot be launched because its Terms & Conditions for "
+            "Use have not been accepted for this Windows user (state: %s). "
+            "Open that installed version once and accept the TCU, then retry.",
+            status.version or ras_exe_path.parent.name,
+            status.reason,
+        )
+        return True
 
     @staticmethod
     def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
@@ -579,8 +645,9 @@ class RasCmdr:
         """Stop only the active Windows process tree for one project plan.
 
         Process matching is deliberately strict: a ``Ras.exe`` launcher must
-        contain both the initialized project path and resolved plan path, while
-        a solver must contain the exact plan ``.tmp.hdf`` path. Unrelated RAS
+        contain the initialized project path plus either the resolved plan path
+        or a ``-c`` flag while that plan is the project's declared Current Plan.
+        A solver must contain the exact plan ``.tmp.hdf`` path. Unrelated RAS
         sessions are never selected by executable name alone.
 
         Args:
@@ -621,18 +688,43 @@ class RasCmdr:
         project_needle = command_needle(project_path)
         plan_needle = command_needle(plan_path)
         tmp_hdf_needle = command_needle(tmp_hdf_path)
+        current_plan_is_target = False
+        try:
+            current_plan_is_target = any(
+                line.strip().casefold() == f"current plan=p{plan_num}".casefold()
+                for line in project_path.read_text(errors="replace").splitlines()
+            )
+        except OSError as exc:
+            logger.debug(
+                "Could not inspect Current Plan while matching cancellation for %s: %s",
+                project_path,
+                exc,
+            )
         roots = []
 
         for process in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
                 name = str(process.info.get("name") or "").lower()
-                command_line = " ".join(
-                    str(part) for part in (process.info.get("cmdline") or [])
-                ).replace("/", "\\").lower()
+                command_parts = [
+                    str(part).replace("/", "\\").lower()
+                    for part in (process.info.get("cmdline") or [])
+                ]
+                command_line = " ".join(command_parts)
+                project_only_current_plan = (
+                    current_plan_is_target
+                    and project_needle in command_parts
+                    and "-c" in command_parts
+                    and plan_needle not in command_parts
+                )
                 is_launcher = (
                     name == "ras.exe"
-                    and project_needle in command_line
-                    and plan_needle in command_line
+                    and (
+                        (
+                            project_needle in command_line
+                            and plan_needle in command_line
+                        )
+                        or project_only_current_plan
+                    )
                 )
                 is_solver = (
                     name == "rasunsteady.exe"
@@ -840,6 +932,9 @@ class RasCmdr:
             logger.debug(f"Using ras_object with project folder: {ras_obj.project_folder}")
             ras_obj.check_initialized()
 
+            if RasCmdr._tcu_blocks_launch(ras_obj):
+                return ComputeResult(success=False, results_df_row=None)
+
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
 
@@ -879,6 +974,16 @@ class RasCmdr:
                 logger.error(f"Could not find project file or plan file for plan {plan_number}")
                 _success = False
                 return ComputeResult(success=False, results_df_row=None)
+
+            if RasCmdr._uses_legacy_project_cli(compute_ras):
+                legacy_plan_number = RasUtils.normalize_ras_number(
+                    compute_plan_path.suffix.lstrip(".pP")
+                )
+                compute_ras.set_current_plan(legacy_plan_number)
+                logger.debug(
+                    "Set Current Plan=p%s for legacy project-only Ras.exe launch",
+                    legacy_plan_number,
+                )
 
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
@@ -1022,7 +1127,11 @@ class RasCmdr:
                 stream_callback.on_prep_complete(str(plan_number))
 
             # Prepare the command for HEC-RAS execution
-            cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+            cmd = RasCmdr._build_compute_command(
+                compute_ras,
+                compute_prj_path,
+                compute_plan_path,
+            )
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 

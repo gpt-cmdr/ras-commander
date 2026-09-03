@@ -289,7 +289,7 @@ with h5py.File("project.p01.hdf", "r") as hdf:
 | **2D Mesh Faces** | `/Geometry/2D Flow Areas/{name}/Faces FacePoint Indexes` | `HdfMesh.get_mesh_faces()` |
 | **Cell Elevations** | `/Geometry/2D Flow Areas/{name}/Cells Minimum Elevation` | `HdfMesh.get_mesh_cell_min_elevations()` |
 | **Perimeter** | `/Geometry/2D Flow Areas/{name}/Perimeter/` | `HdfMesh.get_mesh_perimeter()` |
-| **Cross Section XY** | `/Geometry/Cross Sections/Polyline Info` | `HdfXsec.get_cross_section_coords()` |
+| **Cross Section XYZ points** | `/Geometry/Cross Sections/{Polyline, Station Elevation, Manning's n}*` | `HdfXsec.get_xs_coords()` |
 | **River Centerline** | `/Geometry/River Centerlines/Polyline Info` | `HdfXsec.get_river_centerlines()` |
 | **Bank Lines** | `/Geometry/Bank Lines/Polyline Info` | `HdfXsec.get_bank_lines()` |
 | **Structures** | `/Geometry/Structures/` | `HdfStruc.get_structures()` |

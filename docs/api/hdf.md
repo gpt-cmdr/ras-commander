@@ -11,8 +11,17 @@ Base functionality for HDF file operations.
 - `get_dataset_info(hdf_path, group_path=None)` - Print HDF structure
 - `get_attrs(hdf_path, path)` - Get attributes at path
 - `get_projection(hdf_path)` - Get coordinate system
+- `get_result_unit_metadata(hdf_path, strict=True)` - Read normalized unit
+  metadata and source evidence from a standalone plan-result HDF
 - `parse_ras_datetime(datetime_str)` - Parse HEC-RAS datetime string
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
+
+`get_result_unit_metadata()` is deliberately a result-HDF fallback. When the
+full project is available, use `RasPrj.get_project_units()` and treat the text
+`.prj` marker as authoritative. The HDF reader never defaults missing metadata
+to English units. It raises on missing, unrecognized, geometry-only, or
+contradictory metadata unless `strict=False`, which returns the raw evidence
+and an unresolved status for audit workflows.
 
 ### HdfPlan
 
@@ -185,6 +194,9 @@ Plan-level results.
 Cross-section and river geometry extraction from HDF.
 
 - `get_cross_sections(hdf_path)` - Extract cross-section geometries as GeoDataFrame
+- `get_xs_coords(hdf_path, river=None, reach=None, rs=None)` - Extract native
+  station/elevation points as XYZ with point/station order, cut-line distance,
+  Manning's n, bank classification, coordinate metadata, and source provenance
 - `get_river_centerlines(hdf_path)` - Extract river centerlines
 - `get_river_stationing(hdf_path)` - Calculate river stationing along centerlines
 - `get_river_reaches(hdf_path)` - Return model 1D river reach lines

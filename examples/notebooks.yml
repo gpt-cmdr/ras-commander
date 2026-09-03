@@ -1618,6 +1618,46 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 8
+- id: 235_1d_breakout_model
+  filename: 235_1d_breakout_model.ipynb
+  title: Clip a Texas FEMA eBFE Model to One NWM Reach
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Classify real NOAA NWM v3 reaches against the Shiloh Branch eBFE footprint, retain 10% upstream
+    and 25% downstream hydraulic buffers around feature 5790868, rasterize a stricter one-cross-section-overlap
+    export domain, and compare the independent breakout to the source model.
+  tags:
+  - 1d
+  - steady
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
+  - raster
+  - boundary-effects
+  - validation
+  difficulty: advanced
+  est_runtime: 1 min
+  data_project: null
+  functions_used:
+  - GeomParser.get_river_centerlines
+  - GeomParser.get_xs_cut_lines
+  - HdfProject.get_project_extent
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_xs_interpolation_surface
+  - RasBreakout1D.compare_geometry
+  - RasBreakout1D.compare_results
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.run
+  - RasBreakout1D.select_domains_by_network_edge
+  - RasCmdr.compute_plan
+  - RasNetworkConflation.classify_edges
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
@@ -2114,6 +2154,7 @@ notebooks:
   - HdfXsec.get_river_centerlines
   - HdfXsec.get_river_edge_lines
   - RasCmdr.compute_plan
+  - RasCrossSections.get_points
   - RasExamples.extract_project
   - ras.boundaries_df
   - ras.geom_df
@@ -2125,7 +2166,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 70
+  code_cells: 73
   executed_cells: 52
 - id: 401_steady_flow_analysis
   filename: 401_steady_flow_analysis.ipynb
@@ -2798,10 +2839,10 @@ notebooks:
   executed_cells: 7
 - id: 701_benchmarking_versions_6.1_to_6.6
   filename: 701_benchmarking_versions_6.1_to_6.6.ipynb
-  title: Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)
+  title: Version Benchmarking and Core Scaling (HEC-RAS 5.0.5, 6.0, 6.3.1, 6.6, 7.0)
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: 'This notebook benchmarks the same 2D plan across four HEC-RAS versions and an explicit set
+  summary: 'This notebook benchmarks the same 2D plan across five HEC-RAS versions and an explicit set
     of processor core counts. The goal is to separate:'
   tags: []
   difficulty: intermediate
@@ -2815,6 +2856,7 @@ notebooks:
   - RasPlan.get_results_path
   - RasPlan.set_num_cores
   - RasPlan.update_run_flags
+  - RasTcu.status
   - RasUtils.discover_ras_versions
   hec_refs: []
   learning_paths: []

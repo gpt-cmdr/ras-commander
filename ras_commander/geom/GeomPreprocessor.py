@@ -125,7 +125,9 @@ class GeomPreprocessor:
         1. Initialize/validate the ras project and target plan.
         2. Enable detailed logging in the plan file.
         3. Optionally force geometry preprocessing via plan flags.
-        4. Launch ``Ras.exe -c <project.prj> <plan.p##>``.
+        4. Launch through ``RasCmdr.compute_plan()`` using the release-specific
+           command layout (project-first for 5.x; explicit project/plan for
+           6.0+).
         5. Monitor detailed compute messages for the start of hydraulic
            computations, then terminate early when possible.
         6. Parse ``.bco##``, detailed compute messages, and

@@ -6,6 +6,7 @@ internal helpers that touch winreg, so they run on any platform.
 
 import logging
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -63,7 +64,7 @@ def test_status_accepted_when_node_has_acceptance_state(monkeypatch):
     monkeypatch.setattr(
         RasTcu,
         "_node_has_acceptance_state",
-        staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")),
+        staticmethod(lambda hive, sub, version=None: sub.endswith(r"\ras.exe")),
     )
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is True
@@ -71,11 +72,32 @@ def test_status_accepted_when_node_has_acceptance_state(monkeypatch):
     assert status.registry_key.endswith(r"HEC-RAS\6.6\ras.exe")
 
 
+def test_status_checks_both_legacy_node_names_before_rejecting(monkeypatch):
+    monkeypatch.setattr("os.name", "nt")
+    monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
+    monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
+    monkeypatch.setattr(
+        RasTcu,
+        "_node_has_acceptance_state",
+        staticmethod(lambda _hive, subkey, _version=None: subkey.endswith(r"\ras")),
+    )
+    monkeypatch.setattr(
+        RasTcu,
+        "_node_exists",
+        staticmethod(lambda _hive, subkey: subkey.endswith(r"\ras.exe")),
+    )
+
+    status = RasTcu.status(ras_version="6.6")
+
+    assert status.accepted is True
+    assert status.registry_key.endswith(r"HEC-RAS\6.6\ras")
+
+
 def test_status_not_accepted_when_no_subtree(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
     monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda hive, sub: False))
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *args: False))
     monkeypatch.setattr(RasTcu, "_node_exists", staticmethod(lambda hive, sub: False))
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is False
@@ -87,22 +109,24 @@ def test_status_rejects_personal_only_subtree(monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     monkeypatch.setattr(RasTcu, "_resolve_exe", staticmethod(lambda *a, **k: _EXE))
     monkeypatch.setitem(sys.modules, "winreg", _FakeWinregModule())
-    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda hive, sub: False))
+    monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *args: False))
     monkeypatch.setattr(RasTcu, "_node_exists", staticmethod(lambda hive, sub: sub.endswith(r"\ras.exe")))
     status = RasTcu.status(ras_version="6.6")
     assert status.accepted is False
-    assert status.reason == "personal-only-vb6-subtree"
+    assert status.reason == "unaccepted-vb6-subtree"
     assert status.registry_key.endswith(r"HEC-RAS\6.6\ras.exe")
 
 
-def test_node_has_acceptance_state_ignores_projects_only(monkeypatch):
+def test_node_has_acceptance_state_ignores_projects_without_sentinel(monkeypatch):
     fake = _FakeWinregModule(
         {
             (1, "node"): {"values": [], "subkeys": ["Projects", "Form Position"]},
         }
     )
     monkeypatch.setitem(sys.modules, "winreg", fake)
-    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is False
+    assert RasTcu._node_has_acceptance_state(
+        fake.HKEY_CURRENT_USER, "node", "6.6"
+    ) is False
 
 
 def test_node_has_acceptance_state_accepts_exact_projects_sentinel(monkeypatch):
@@ -119,7 +143,9 @@ def test_node_has_acceptance_state_accepts_exact_projects_sentinel(monkeypatch):
         }
     )
     monkeypatch.setitem(sys.modules, "winreg", fake)
-    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
+    assert RasTcu._node_has_acceptance_state(
+        fake.HKEY_CURRENT_USER, "node", "6.6"
+    ) is True
 
 
 @pytest.mark.parametrize("sentinel", ["", "   ", 0, False, b"660"])
@@ -134,7 +160,9 @@ def test_node_has_acceptance_state_rejects_empty_or_invalid_sentinel(monkeypatch
         }
     )
     monkeypatch.setitem(sys.modules, "winreg", fake)
-    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is False
+    assert RasTcu._node_has_acceptance_state(
+        fake.HKEY_CURRENT_USER, "node", "6.6"
+    ) is False
 
 
 def test_clear_values_preserves_tcu_sentinel(monkeypatch):
@@ -153,24 +181,113 @@ def test_clear_values_preserves_tcu_sentinel(monkeypatch):
     assert projects["values"] == [("System Statistic", "660", 1)]
 
 
-def test_node_has_acceptance_state_accepts_root_values(monkeypatch):
+def test_node_has_acceptance_state_rejects_root_values(monkeypatch):
     fake = _FakeWinregModule(
         {
             (1, "node"): {"values": [("Accepted", "1", 1)], "subkeys": ["Projects"]},
         }
     )
     monkeypatch.setitem(sys.modules, "winreg", fake)
-    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
+    assert RasTcu._node_has_acceptance_state(
+        fake.HKEY_CURRENT_USER, "node", "6.6"
+    ) is False
 
 
-def test_node_has_acceptance_state_accepts_non_personal_child(monkeypatch):
+def test_node_has_acceptance_state_rejects_non_personal_child(monkeypatch):
     fake = _FakeWinregModule(
         {
             (1, "node"): {"values": [], "subkeys": ["Projects", "TCU"]},
         }
     )
     monkeypatch.setitem(sys.modules, "winreg", fake)
-    assert RasTcu._node_has_acceptance_state(fake.HKEY_CURRENT_USER, "node") is True
+    assert RasTcu._node_has_acceptance_state(
+        fake.HKEY_CURRENT_USER, "node", "6.6"
+    ) is False
+
+
+@pytest.mark.parametrize(
+    ("value", "version", "expected"),
+    [
+        (1065353713, "5.0", True),
+        ("1065353720", "5.0.7", True),
+        (2136867313, "5.0", False),
+        (2136867413, "6.0", False),
+        (1065353813, "6.0", True),
+        ("610", "6.1", True),
+        ("631", "6.3.1", True),
+        ("670 Beta 5 Development", "6.7 Beta 5", True),
+        ("660", "6.5", False),
+        ("", "6.6", False),
+        (False, "6.6", False),
+    ],
+)
+def test_sentinel_acceptance_is_release_specific(value, version, expected):
+    assert RasTcu._sentinel_accepts_version(value, version) is expected
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("5.0", "1065353713"),
+        ("5.0.5", "1065353718"),
+        ("6.0", "1065353813"),
+        ("6.1", "610"),
+        ("6.7 Beta 5", None),
+        ("unknown", None),
+    ],
+)
+def test_accepted_sentinel_value_is_exact_for_target_release(version, expected):
+    assert RasTcu._accepted_sentinel_value(version) == expected
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_version"),
+    [("5.0.5", "5.0.4"), ("6.0", "6.1")],
+)
+def test_find_donor_prefers_nearest_same_major_release(
+    monkeypatch,
+    target,
+    expected_version,
+):
+    fake_winreg = SimpleNamespace(HKEY_CURRENT_USER=1, HKEY_USERS=2)
+    monkeypatch.setitem(sys.modules, "winreg", fake_winreg)
+    nodes = [
+        rf"root\4.0\ras",
+        rf"root\5.0.4\ras.exe",
+        rf"root\5.0.6\ras.exe",
+        rf"root\6.1\ras.exe",
+    ]
+    monkeypatch.setattr(
+        RasTcu,
+        "_iter_accepted_nodes",
+        staticmethod(lambda _hive, _parent: iter(nodes)),
+    )
+
+    hive, donor = RasTcu._find_donor(
+        rf"C:\Program Files (x86)\HEC\HEC-RAS\{target}"
+    )
+
+    assert hive == fake_winreg.HKEY_CURRENT_USER
+    assert f"\\{expected_version}\\" in donor
+
+
+def test_version_label_uses_parent_folder_for_executable_path():
+    assert RasTcu._version_label(
+        ras_version=r"C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe"
+    ) == "5.0.7"
+
+
+def test_version_label_uses_parent_folder_for_ras_object_executable_path():
+    ras_object = type(
+        "FakeRas",
+        (),
+        {
+            "ras_version": (
+                r"C:\Program Files (x86)\HEC\HEC-RAS\5.0.7\Ras.exe"
+            )
+        },
+    )()
+    assert RasTcu._version_label(ras_object=ras_object) == "5.0.7"
 
 
 def test_is_accepted_wrapper(monkeypatch):
@@ -239,6 +356,11 @@ def test_accept_success_records_acceptance(monkeypatch):
     monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(
         lambda *a, **k: a[4].append("one")))  # writes list is 5th positional arg
     monkeypatch.setattr(RasTcu, "_clear_values", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(
+        RasTcu,
+        "_write_target_sentinel",
+        staticmethod(lambda *a, **k: True),
+    )
     monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *a, **k: True))
     acks = []
     monkeypatch.setattr(RasTcu, "_write_ack", staticmethod(lambda *a, **k: acks.append(a)))
@@ -257,6 +379,11 @@ def test_accept_does_not_report_success_when_seeded_state_is_unverified(monkeypa
     monkeypatch.setattr(RasTcu, "_copy_key", staticmethod(
         lambda *a, **k: a[4].append("one")))  # writes list is 5th positional arg
     monkeypatch.setattr(RasTcu, "_clear_values", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(
+        RasTcu,
+        "_write_target_sentinel",
+        staticmethod(lambda *a, **k: True),
+    )
     monkeypatch.setattr(RasTcu, "_node_has_acceptance_state", staticmethod(lambda *a, **k: False))
     acks = []
     monkeypatch.setattr(RasTcu, "_write_ack", staticmethod(lambda *a, **k: acks.append(a)))

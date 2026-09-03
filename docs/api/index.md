@@ -28,6 +28,20 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
 - [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
 
+## Hydrofabric Conflation
+
+- [`RasNetworkConflation`](hydrofabric.md) - Extent-first network-edge classification with optional multi-criteria QA
+- [`NetworkEdgeCoverageResult`](hydrofabric.md#extent-first-edge-classification) - One model–edge row with inside length and fraction
+- [`RasHydrofabric`](hydrofabric.md) - Equivalent hydrofabric-oriented public name
+- [`HydrofabricConflationResult`](hydrofabric.md#advanced-reach-edge-candidate-audit) - Resolved matches, ranked candidates, and HUC intersections
+- [`HydrofabricAdapter`](hydrofabric.md#hydrofabric-adapters) - NHDPlus, NWM, NextGen, and custom flowpath schema normalization
+
+## 1D Breakout Extraction
+
+- [`RasBreakout1D`](breakout-1d.md) - One-reach steady breakout selection, extraction, validation, execution, and comparison
+- [`Breakout1DSelection`](breakout-1d.md#select-a-reach-slice) - Resolved contiguous cross-section selection
+- [`Breakout1DResult`](breakout-1d.md#extract-and-validate) - Independent project artifacts, validation, and boundary provenance
+
 ## HDF Modules
 
 Classes for reading HDF result files:

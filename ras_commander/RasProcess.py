@@ -2808,6 +2808,164 @@ Step 5: Configure (optional — auto-detection usually works)
         return None
 
     @staticmethod
+    def _stored_map_display_name(map_type: str) -> str:
+        """Return the canonical display name for one RASMapper map type."""
+        for xml_name, display_name, _ in RasProcess.MAP_TYPES.values():
+            if xml_name == map_type:
+                return display_name
+        return str(map_type).title()
+
+    @staticmethod
+    def _safe_stored_map_profile(profile_name: str) -> str:
+        """Normalize a profile label exactly once for a Windows-safe filename."""
+        return re.sub(r'[<>:"/\\|?*]', "_", str(profile_name)).rstrip(". ")
+
+    @staticmethod
+    def _stored_map_output_filename(
+        *,
+        output_folder: str,
+        display_name: str,
+        profile_name: str,
+        output_mode: str,
+    ) -> str:
+        safe_profile = RasProcess._safe_stored_map_profile(profile_name)
+        extension = ".shp" if "Polygon" in output_mode else ".vrt"
+        return f".\\{output_folder}\\{display_name} ({safe_profile}){extension}"
+
+    @staticmethod
+    def _add_stored_maps_to_rasmap(
+        rasmap_path: Path,
+        plan_hdf_filename: str,
+        output_folder: str,
+        map_specs: Sequence[Dict[str, Any]],
+        *,
+        clear_existing: bool,
+    ) -> List[Dict[str, Any]]:
+        """Configure a stored-map batch in one XML parse/write transaction."""
+        rasmap_path = Path(rasmap_path)
+        tree = ET.parse(_windows_extended_length_path(rasmap_path))
+        root = tree.getroot()
+
+        results_elem = root.find(".//Results")
+        if results_elem is None:
+            results_elem = ET.Element("Results")
+            results_elem.set("Checked", "True")
+            results_elem.set("Expanded", "True")
+            geom_elem = root.find(".//Geometries")
+            if geom_elem is not None and geom_elem in list(root):
+                root.insert(list(root).index(geom_elem) + 1, results_elem)
+            else:
+                root.append(results_elem)
+            logger.debug("Created Results element in rasmap")
+
+        plan_layer = None
+        plan_basename = Path(plan_hdf_filename).name.casefold()
+        for layer in results_elem.findall("Layer"):
+            filename = layer.get("Filename", "")
+            if PureWindowsPath(filename).name.casefold() == plan_basename:
+                plan_layer = layer
+                break
+        if plan_layer is None:
+            plan_layer = ET.SubElement(results_elem, "Layer")
+            plan_layer.set("Name", output_folder)
+            plan_layer.set("Filename", f".\\{plan_hdf_filename}")
+            logger.debug(
+                "Created plan layer '%s' in rasmap for %s",
+                output_folder,
+                plan_hdf_filename,
+            )
+        plan_layer.set("Type", "RASResults")
+        plan_layer.set("Checked", "True")
+        plan_layer.set("Expanded", "True")
+
+        existing_filenames = set()
+        for layer in list(plan_layer.findall("Layer")):
+            if layer.get("Type") != "RASResultsMap":
+                continue
+            parameters = layer.find("MapParameters")
+            if parameters is None or "Stored" not in parameters.get(
+                "OutputMode", ""
+            ):
+                continue
+            if clear_existing:
+                plan_layer.remove(layer)
+            else:
+                stored_filename = parameters.get("StoredFilename", "")
+                if stored_filename:
+                    existing_filenames.add(stored_filename.casefold())
+
+        configured = []
+        batch_filenames = set()
+        for raw_spec in map_specs:
+            spec = dict(raw_spec)
+            map_type = str(spec["map_type"])
+            profile_name = str(spec["profile_name"])
+            profile_index = int(spec["profile_index"])
+            output_mode = str(
+                spec.get("output_mode", "Stored Current Terrain")
+            )
+            display_name = str(
+                spec.get("display_name")
+                or RasProcess._stored_map_display_name(map_type)
+            )
+            output_filename = RasProcess._stored_map_output_filename(
+                output_folder=output_folder,
+                display_name=display_name,
+                profile_name=profile_name,
+                output_mode=output_mode,
+            )
+            filename_key = output_filename.casefold()
+            if filename_key in batch_filenames or filename_key in existing_filenames:
+                raise ValueError(
+                    "Stored-map output filename collision: " + output_filename
+                )
+            batch_filenames.add(filename_key)
+
+            layer_elem = ET.SubElement(plan_layer, "Layer")
+            layer_elem.set("Name", display_name)
+            layer_elem.set("Type", "RASResultsMap")
+            layer_elem.set("Checked", "True")
+            layer_elem.set("Filename", output_filename)
+
+            map_params = ET.SubElement(layer_elem, "MapParameters")
+            map_params.set("MapType", map_type)
+            map_params.set("OutputMode", output_mode)
+            map_params.set("StoredFilename", output_filename)
+            map_params.set("ProfileIndex", str(profile_index))
+            map_params.set("ProfileName", profile_name)
+            for attr_name, attr_value in spec.get("extra_attrs", {}).items():
+                map_params.set(str(attr_name), str(attr_value))
+
+            spec["display_name"] = display_name
+            spec["output_filename"] = output_filename
+            configured.append(spec)
+
+        temporary_path = rasmap_path.with_name(
+            f".{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+        )
+        try:
+            tree.write(
+                _windows_extended_length_path(temporary_path),
+                encoding="utf-8",
+                xml_declaration=True,
+            )
+            os.replace(
+                _windows_extended_length_path(temporary_path),
+                _windows_extended_length_path(rasmap_path),
+            )
+        finally:
+            temporary_io = _windows_extended_length_path(temporary_path)
+            if os.path.exists(temporary_io):
+                os.remove(temporary_io)
+
+        logger.debug(
+            "Configured %d stored maps in one rasmap update for %s",
+            len(configured),
+            plan_hdf_filename,
+        )
+        return configured
+
+    @staticmethod
     @log_call
     def _add_stored_map_to_rasmap(
         rasmap_path: Path,
@@ -4373,6 +4531,531 @@ Step 5: Configure (optional — auto-detection usually works)
                     _windows_extended_length_path(rasmap_path),
                 )
                 os.remove(rasmap_backup_path)
+
+    @staticmethod
+    def _resolve_steady_profile_selectors(
+        profile_names: Sequence[str],
+        profiles: Optional[
+            Union[str, int, Sequence[Union[str, int]]]
+        ] = None,
+    ) -> List[Tuple[int, str]]:
+        """Resolve exact steady profile names/indexes without fallback."""
+        available = [str(name) for name in profile_names]
+        if not available:
+            raise ValueError("Steady result HDF contains no profiles")
+
+        if profiles is None:
+            requested: List[Union[str, int]] = list(range(len(available)))
+        elif isinstance(profiles, bool):
+            raise ValueError("Boolean values are not valid steady profile indexes")
+        elif isinstance(profiles, (str, int, np.integer)):
+            requested = [profiles]
+        else:
+            requested = list(profiles)
+        if not requested:
+            raise ValueError("At least one steady profile must be selected")
+
+        resolved: List[Tuple[int, str]] = []
+        seen_indexes = set()
+        for selector in requested:
+            if isinstance(selector, bool):
+                raise ValueError(
+                    "Boolean values are not valid steady profile indexes"
+                )
+            if isinstance(selector, (int, np.integer)):
+                selector = int(selector)
+                if selector < 0 or selector >= len(available):
+                    raise ValueError(
+                        f"Steady profile index {selector} is out of range for "
+                        f"{len(available)} profiles"
+                    )
+                index = selector
+            elif isinstance(selector, str):
+                matches = [
+                    index
+                    for index, name in enumerate(available)
+                    if name == selector
+                ]
+                if not matches:
+                    raise ValueError(
+                        f"Steady profile {selector!r} was not found. "
+                        f"Available profiles: {available}"
+                    )
+                if len(matches) > 1:
+                    raise ValueError(
+                        f"Steady profile name {selector!r} is ambiguous at "
+                        f"indexes {matches}; select by zero-based index"
+                    )
+                index = matches[0]
+            else:
+                raise TypeError(
+                    "Steady profile selectors must be exact names or "
+                    f"zero-based integer indexes, got {type(selector).__name__}"
+                )
+            if index in seen_indexes:
+                raise ValueError(
+                    f"Steady profile {available[index]!r} (index {index}) "
+                    "was selected more than once"
+                )
+            seen_indexes.add(index)
+            resolved.append((index, available[index]))
+        return resolved
+
+    @staticmethod
+    def _normalize_steady_map_types(
+        map_types: Union[str, Sequence[str]],
+    ) -> List[str]:
+        """Normalize and validate profile-dependent stored-map products."""
+        supported = {
+            "wse",
+            "depth",
+            "velocity",
+            "froude",
+            "shear_stress",
+            "depth_x_velocity",
+            "depth_x_velocity_sq",
+            "flow",
+        }
+        raw_values = [map_types] if isinstance(map_types, str) else list(map_types)
+        normalized = [
+            str(value).strip().casefold().replace(" ", "_")
+            for value in raw_values
+        ]
+        if not normalized or any(not value for value in normalized):
+            raise ValueError("At least one steady stored-map product is required")
+        unknown = sorted(set(normalized) - supported)
+        if unknown:
+            raise ValueError(
+                "Unsupported steady stored-map products: " + ", ".join(unknown)
+            )
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("Steady stored-map products contain duplicates")
+        return normalized
+
+    @staticmethod
+    @_serialize_store_maps
+    @log_call
+    def store_maps_at_steady_profiles(
+        plan_number: str,
+        profiles: Optional[
+            Union[str, int, Sequence[Union[str, int]]]
+        ] = None,
+        output_path: Union[str, Path] = None,
+        map_types: Union[str, Sequence[str]] = ("depth",),
+        render_mode: str = None,
+        clear_existing: bool = True,
+        fix_georef: bool = True,
+        ras_object=None,
+        ras_version: str = None,
+        timeout: int = 1800,
+        *,
+        terrain_name: Optional[str] = None,
+        inundation_boundary: bool = True,
+    ) -> pd.DataFrame:
+        """Generate all selected steady-profile maps with one helper launch.
+
+        Profiles are resolved from the result HDF in exact HDF order. ``None``
+        selects every profile; exact names and zero-based indexes may be mixed
+        in a sequence. The request order is preserved and no selector falls
+        back to ``Max``.
+
+        Every profile/product layer is configured in one ``.rasmap`` XML
+        transaction, then aggregate ``StoreAllMaps`` is invoked exactly once.
+        By default, one inundation boundary is also generated for the final
+        selected profile. This means the highest profile for ras2fim's
+        ascending ladders, but no hydraulic ordering is inferred here.
+
+        Args:
+            plan_number: Steady plan number.
+            profiles: ``None``, an exact profile name, zero-based index, or a
+                sequence mixing names and indexes.
+            output_path: Optional destination for all newly generated files.
+            map_types: Profile-dependent product key(s). Defaults to Depth.
+            render_mode: Optional water-surface render-mode override.
+            clear_existing: Remove existing stored-map layers for this plan in
+                the temporary configuration.
+            fix_georef: Apply the existing terrain georeferencing repair to
+                generated TIFF tiles.
+            ras_object: Optional initialized project object.
+            ras_version: Optional installed HEC-RAS mapping-runtime version.
+            timeout: Aggregate helper timeout in seconds.
+            terrain_name: Optional registered RASMapper terrain to select.
+            inundation_boundary: Generate one polygon for the final selected
+                profile. Defaults to True.
+
+        Returns:
+            DataFrame with one row per logical profile/product and stable
+            columns registered as ``steady_profile_stored_maps`` in
+            :mod:`ras_commander.schemas`.
+
+        Raises:
+            FileNotFoundError: If required project, HDF, mapper, runtime, or
+                terrain files are missing.
+            ValueError: If the plan, selectors, products, or output filenames
+                are invalid or ambiguous.
+            RuntimeError: If StoreAllMaps fails or a requested product is
+                missing from the fresh outputs.
+            subprocess.TimeoutExpired: If the aggregate StoreAllMaps helper
+                exceeds ``timeout``.
+        """
+        from .hdf.HdfResultsPlan import HdfResultsPlan
+
+        started = time.perf_counter()
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        plan_num = RasUtils.normalize_ras_number(plan_number)
+
+        hecras_dir = Path(str(ras_obj.ras_exe_path)).parent
+        if not hecras_dir.is_dir():
+            raise FileNotFoundError(f"HEC-RAS directory not found: {hecras_dir}")
+        rasmap_path = RasMap.get_rasmap_path(ras_obj)
+        if rasmap_path is None or not Path(rasmap_path).is_file():
+            raise FileNotFoundError("No .rasmap file found in project folder")
+        rasmap_path = Path(rasmap_path)
+
+        plan_hdf_name = f"{ras_obj.project_name}.p{plan_num}.hdf"
+        plan_hdf_path = ras_obj.project_folder / plan_hdf_name
+        if not plan_hdf_path.is_file():
+            raise FileNotFoundError(f"Plan HDF not found: {plan_hdf_path}")
+        if not HdfResultsPlan.is_steady_plan(plan_hdf_path):
+            raise ValueError(
+                f"Plan {plan_num} does not contain steady results: {plan_hdf_path}"
+            )
+
+        available_profiles = HdfResultsPlan.get_steady_profile_names(plan_hdf_path)
+        selected_profiles = RasProcess._resolve_steady_profile_selectors(
+            available_profiles,
+            profiles,
+        )
+        selected_map_types = RasProcess._normalize_steady_map_types(map_types)
+
+        plan_short_id = RasProcess._get_plan_short_id(plan_hdf_path)
+        if not plan_short_id:
+            plan_rows = ras_obj.plan_df[
+                ras_obj.plan_df["plan_number"].astype(str).eq(plan_num)
+            ]
+            plan_short_id = (
+                str(plan_rows.iloc[0].get("Short Identifier", "")).strip()
+                if not plan_rows.empty
+                else ""
+            )
+        output_folder = plan_short_id or f"Plan_{plan_num}"
+        output_dir = ras_obj.project_folder / output_folder
+
+        extra_attrs = {"Terrain": terrain_name} if terrain_name is not None else {}
+        map_specs: List[Dict[str, Any]] = []
+        for profile_index, profile_name in selected_profiles:
+            for map_key in selected_map_types:
+                xml_name, display_name, _ = RasProcess.MAP_TYPES[map_key]
+                map_specs.append(
+                    {
+                        "map_key": map_key,
+                        "map_type": xml_name,
+                        "display_name": display_name,
+                        "profile_index": profile_index,
+                        "profile_name": profile_name,
+                        "output_mode": "Stored Current Terrain",
+                        "extra_attrs": dict(extra_attrs),
+                    }
+                )
+        if inundation_boundary:
+            boundary_index, boundary_name = selected_profiles[-1]
+            boundary_attrs = {**extra_attrs, "ArrivalDepth": "0"}
+            map_specs.append(
+                {
+                    "map_key": "inundation_boundary",
+                    "map_type": "depth",
+                    "display_name": "Inundation Boundary",
+                    "profile_index": boundary_index,
+                    "profile_name": boundary_name,
+                    "output_mode": "Stored Polygon Specified Depth",
+                    "extra_attrs": boundary_attrs,
+                }
+            )
+
+        # Fail before mutating the rasmap when two selected labels normalize to
+        # the same StoredFilename.
+        requested_filenames = []
+        for spec in map_specs:
+            requested_filenames.append(
+                RasProcess._stored_map_output_filename(
+                    output_folder=output_folder,
+                    display_name=spec["display_name"],
+                    profile_name=spec["profile_name"],
+                    output_mode=spec["output_mode"],
+                )
+            )
+        collision_keys = [name.casefold() for name in requested_filenames]
+        if len(set(collision_keys)) != len(collision_keys):
+            duplicates = sorted(
+                {
+                    name
+                    for name in requested_filenames
+                    if collision_keys.count(name.casefold()) > 1
+                }
+            )
+            raise ValueError(
+                "Steady stored-map output filename collision: "
+                + ", ".join(duplicates)
+            )
+
+        resolved_output_path = None
+        if output_path is not None:
+            resolved_output_path = Path(output_path)
+            if not resolved_output_path.is_absolute():
+                resolved_output_path = RasUtils.safe_resolve(
+                    ras_obj.project_folder / resolved_output_path
+                )
+
+        rasmap_backup = rasmap_path.with_name(
+            f"{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.bak"
+        )
+        shutil.copy2(
+            _windows_extended_length_path(rasmap_path),
+            _windows_extended_length_path(rasmap_backup),
+        )
+
+        helper_elapsed = 0.0
+        configuration_elapsed = 0.0
+        try:
+            configuration_started = time.perf_counter()
+            configured_specs = RasProcess._add_stored_maps_to_rasmap(
+                rasmap_path,
+                plan_hdf_name,
+                output_folder,
+                map_specs,
+                clear_existing=clear_existing,
+            )
+            configuration_elapsed = time.perf_counter() - configuration_started
+
+            if terrain_name is not None:
+                RasProcess._select_terrain_for_mapping(
+                    rasmap_path,
+                    terrain_name,
+                    ras_object=ras_obj,
+                )
+            if render_mode is not None:
+                RasMap.set_water_surface_render_mode(
+                    mode=render_mode,
+                    ras_object=ras_obj,
+                )
+
+            os.makedirs(_windows_extended_length_path(output_dir), exist_ok=True)
+            if resolved_output_path is not None:
+                os.makedirs(
+                    _windows_extended_length_path(resolved_output_path),
+                    exist_ok=True,
+                )
+
+            before = {}
+            for item in _iterdir_paths(output_dir):
+                if not os.path.isfile(_windows_extended_length_path(item)):
+                    continue
+                stat = os.stat(_windows_extended_length_path(item))
+                before[item.name] = (stat.st_mtime_ns, stat.st_size)
+
+            current_mode = render_mode or RasMap.get_water_surface_render_mode(
+                ras_object=ras_obj
+            )
+            helper_mode = normalize_store_map_render_mode(current_mode)
+            effective_ras_version = ras_version or getattr(
+                ras_obj,
+                "ras_version",
+                None,
+            )
+            runtime_provenance = store_maps_runtime_provenance(hecras_dir)
+
+            with RasProcess._mapper_compatible_result_hdf(
+                plan_hdf_path,
+                effective_ras_version,
+            ) as mapper_hdf_path:
+                helper_started = time.perf_counter()
+                result = run_store_all_maps_helper(
+                    hecras_dir=hecras_dir,
+                    render_mode=helper_mode,
+                    rasmap_path=rasmap_path,
+                    result_hdf_path=mapper_hdf_path,
+                    timeout=timeout,
+                    working_dir=ras_obj.project_folder,
+                )
+                helper_elapsed = time.perf_counter() - helper_started
+
+            logger.debug("Steady StoreAllMaps stdout: %s", result.stdout)
+            if result.stderr:
+                logger.debug("Steady StoreAllMaps stderr: %s", result.stderr)
+            if result.returncode != 0:
+                detail = next(
+                    (line.strip() for line in result.stderr.splitlines() if line.strip()),
+                    "",
+                )
+                raise RuntimeError(
+                    f"StoreAllMaps failed for steady plan {plan_num} "
+                    f"(exit code {result.returncode})"
+                    + (f": {detail[:500]}" if detail else "")
+                )
+
+            produced_paths = []
+            for item in _iterdir_paths(output_dir):
+                if not os.path.isfile(_windows_extended_length_path(item)):
+                    continue
+                stat = os.stat(_windows_extended_length_path(item))
+                signature = (stat.st_mtime_ns, stat.st_size)
+                if before.get(item.name) != signature:
+                    produced_paths.append(item)
+
+            if resolved_output_path is not None and os.path.normcase(
+                os.path.abspath(resolved_output_path)
+            ) != os.path.normcase(os.path.abspath(output_dir)):
+                moved_paths = []
+                for item in produced_paths:
+                    if item.name == "PostProcessing.hdf":
+                        continue
+                    destination = resolved_output_path / item.name
+                    destination_io = _windows_extended_length_path(destination)
+                    if os.path.exists(destination_io):
+                        os.remove(destination_io)
+                    shutil.move(
+                        _windows_extended_length_path(item),
+                        destination_io,
+                    )
+                    moved_paths.append(destination)
+                produced_paths = moved_paths
+
+            if fix_georef:
+                tif_paths = [
+                    path
+                    for path in produced_paths
+                    if path.suffix.casefold() in {".tif", ".tiff"}
+                ]
+                if tif_paths:
+                    projection = RasProcess._get_projection_info(rasmap_path)
+                    terrain_paths = projection.terrain_paths
+                    if not terrain_paths and projection.terrain_path is not None:
+                        terrain_paths = (projection.terrain_path,)
+                    for tif_path in tif_paths:
+                        terrain_path = RasProcess._terrain_for_stored_map(
+                            tif_path,
+                            terrain_paths,
+                        )
+                        if terrain_path is None:
+                            logger.warning(
+                                "Could not match steady stored-map TIFF to a "
+                                "terrain; georeferencing was not changed: %s",
+                                tif_path,
+                            )
+                            continue
+                        RasProcess._fix_georeferencing(
+                            tif_path,
+                            projection.prj_path,
+                            terrain_path,
+                        )
+                    readable = {"batch": list(tif_paths)}
+                    RasProcess._drop_unreadable_tifs(readable)
+                    readable_keys = {
+                        os.path.normcase(os.path.abspath(path))
+                        for path in readable["batch"]
+                    }
+                    produced_paths = [
+                        path
+                        for path in produced_paths
+                        if path.suffix.casefold() not in {".tif", ".tiff"}
+                        or os.path.normcase(os.path.abspath(path)) in readable_keys
+                    ]
+
+            produced_paths = sorted(
+                produced_paths,
+                key=lambda path: path.name.casefold(),
+            )
+            rows = []
+            for spec in configured_specs:
+                safe_profile = RasProcess._safe_stored_map_profile(
+                    spec["profile_name"]
+                )
+                filename_base = (
+                    f"{spec['display_name']} ({safe_profile})"
+                ).casefold()
+                associated = [
+                    path
+                    for path in produced_paths
+                    if path.name.casefold().startswith(filename_base)
+                ]
+                is_polygon = "Polygon" in spec["output_mode"]
+                primary_suffix = ".shp" if is_polygon else ".vrt"
+                primary = next(
+                    (
+                        path
+                        for path in associated
+                        if path.suffix.casefold() == primary_suffix
+                    ),
+                    None,
+                )
+                raster_tiles = [
+                    path
+                    for path in associated
+                    if path.suffix.casefold() in {".tif", ".tiff"}
+                ]
+                if primary is None or (not is_polygon and not raster_tiles):
+                    expected = "SHP" if is_polygon else "VRT and TIFF tile(s)"
+                    raise RuntimeError(
+                        f"StoreAllMaps did not produce requested {expected} for "
+                        f"{spec['map_key']} profile {spec['profile_name']!r}"
+                    )
+                rows.append(
+                    {
+                        "plan_number": plan_num,
+                        "result_hdf_path": str(plan_hdf_path.resolve()),
+                        "profile_index": int(spec["profile_index"]),
+                        "profile_name": str(spec["profile_name"]),
+                        "map_type": str(spec["map_key"]),
+                        "output_mode": "polygon" if is_polygon else "raster",
+                        "primary_path": str(primary.resolve()),
+                        "files": [str(path.resolve()) for path in associated],
+                        "file_count": len(associated),
+                    }
+                )
+
+            frame = pd.DataFrame(
+                rows,
+                columns=[
+                    "plan_number",
+                    "result_hdf_path",
+                    "profile_index",
+                    "profile_name",
+                    "map_type",
+                    "output_mode",
+                    "primary_path",
+                    "files",
+                    "file_count",
+                ],
+            )
+            frame.attrs["schema"] = (
+                "ras_commander.steady_profile_stored_maps.v1"
+            )
+            frame.attrs["helper_launch_count"] = 1
+            frame.attrs["elapsed_seconds"] = time.perf_counter() - started
+            frame.attrs["configuration_elapsed_seconds"] = configuration_elapsed
+            frame.attrs["helper_elapsed_seconds"] = helper_elapsed
+            frame.attrs["profile_count"] = len(selected_profiles)
+            frame.attrs["configured_map_count"] = len(configured_specs)
+            frame.attrs["generated_file_count"] = len(produced_paths)
+            frame.attrs["runtime_provenance"] = runtime_provenance
+            logger.info(
+                "Steady-profile StoreAllMaps complete: plan=%s; profiles=%d; "
+                "configured_maps=%d; helper_launches=1; files=%d",
+                plan_num,
+                len(selected_profiles),
+                len(configured_specs),
+                len(produced_paths),
+            )
+            return frame
+        finally:
+            backup_io = _windows_extended_length_path(rasmap_backup)
+            if os.path.exists(backup_io):
+                shutil.copy2(
+                    backup_io,
+                    _windows_extended_length_path(rasmap_path),
+                )
+                os.remove(backup_io)
 
     @staticmethod
     @log_call

@@ -849,6 +849,28 @@ results = RasProcess.store_maps(
 )
 ```
 
+##### Steady Profile Batch
+
+`RasProcess.store_maps_at_steady_profiles()` configures all requested profile
+products in one `.rasmap` update and invokes aggregate `StoreAllMaps` exactly
+once. `profiles=None` selects all HDF profiles; exact names and zero-based
+indexes can be mixed. One inundation boundary for the final selected profile is
+included by default. Supported profile rasters are `wse`, `depth`, `velocity`,
+`froude`, `shear_stress`, `depth_x_velocity`, `depth_x_velocity_sq`, and
+`flow`.
+
+```python
+frame = RasProcess.store_maps_at_steady_profiles(
+    "01",
+    profiles=None,
+    map_types=("depth",),
+    output_path="steady_maps",
+)
+```
+
+Use `RasMap.store_all_maps(mode="steady_profiles", ...)` when a directly
+JSON-serializable project summary is preferred.
+
 !!! warning "Georeferencing Fix"
     RasProcess.exe has a known bug where generated TIFs may lack proper CRS information.
     Set `fix_georef=True` (default) to automatically apply the CRS from the project's

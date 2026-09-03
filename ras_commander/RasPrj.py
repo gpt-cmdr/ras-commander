@@ -130,6 +130,35 @@ class RasPrj:
         self.project_crs_source = None
         self._plan_flow_prefixes = {}
 
+    @staticmethod
+    @log_call
+    def get_project_units(project_file: Union[str, Path]) -> Optional[str]:
+        """Return the HEC-RAS project length units as ``"ft"`` or ``"m"``.
+
+        HEC-RAS project files normally use a bare ``English Units`` or
+        ``SI Units`` marker. Some generated projects instead use the legacy
+        boolean form ``SI Units=<bool>``. Both representations are parsed
+        case-insensitively; unreadable files or unknown values return ``None``.
+        """
+        path = Path(project_file)
+        try:
+            with open(path, encoding='utf-8', errors='replace') as stream:
+                for raw_line in stream:
+                    line = raw_line.strip().casefold()
+                    if line == 'english units':
+                        return 'ft'
+                    if line == 'si units':
+                        return 'm'
+                    if line.startswith('si units='):
+                        value = line.split('=', 1)[1].strip()
+                        if value in {'1', 'true', 'yes', 'on'}:
+                            return 'm'
+                        if value in {'0', 'false', 'no', 'off'}:
+                            return 'ft'
+        except OSError as exc:
+            logger.debug("Could not read project units from %s: %s", path, exc)
+        return None
+
     @log_call
     def initialize(
         self,
@@ -2456,10 +2485,11 @@ def init_ras_project(
                                           Use" dialog the first time it runs for a Windows
                                           user+version, which blocks headless/COM launches.
                                           When False (default), init only WARNS if the TCU
-                                          has not been accepted. When True, acceptance is
-                                          recorded now for the current user (opt-in registry
-                                          write) so unattended runs do not block. See
-                                          ras_commander.RasTcu.
+                                          has not been accepted. When True, ras-commander
+                                          explicitly attempts to seed an accepted registry
+                                          subtree and verifies the release-specific sentinel.
+                                          If verification fails, interactive acceptance is
+                                          still required. See ras_commander.RasTcu.
         load_hdf_metadata (bool, default=True): If False, initialize project
                                                 tables without opening HDF or
                                                 raster datasets for geometry
@@ -2684,22 +2714,20 @@ def init_ras_project(
     # HEC-RAS Terms & Conditions for Use (TCU) check. By default this is read-only:
     # it warns (once) when the TCU has not been accepted for this Windows user+version,
     # because the first headless/COM launch would otherwise block on a modal VB6 dialog.
-    # When accept_tcu=True, acceptance is recorded now (opt-in registry write) so the
-    # project is ready for unattended runs. Never raises; never writes unless asked.
+    # When accept_tcu=True, registry seeding is attempted (opt-in write) and then
+    # revalidated for the exact release. Never raises; never writes unless asked.
     try:
         from .RasTcu import RasTcu
         _tcu = RasTcu.status(ras_object=ras_object)
         if _tcu.accepted is False:
             if accept_tcu:
-                RasTcu.accept(ras_object=ras_object)
-            else:
+                _tcu = RasTcu.accept(ras_object=ras_object)
+            if _tcu.accepted is not True:
                 logger.warning(
                     "HEC-RAS %s Terms & Conditions for Use have NOT been accepted for the "
                     "current Windows user. The first headless/COM launch will block on a modal "
-                    "\"Terms and Conditions for Use\" dialog. Resolve it once by either: "
-                    "(a) opening HEC-RAS %s in the GUI and clicking \"I Agree\", "
-                    "(b) calling ras_commander.RasTcu.accept(), or "
-                    "(c) passing accept_tcu=True to init_ras_project(). "
+                    "\"Terms and Conditions for Use\" dialog. Open HEC-RAS %s in the GUI "
+                    "and click \"I Agree\" for that exact installed release. "
                     "Terms: https://www.hec.usace.army.mil/software/hec-ras/",
                     _tcu.version or "", _tcu.version or "",
                 )

@@ -176,7 +176,10 @@ class HdfResultsProducts:
                 timestamp_count=len(timestamp_index),
             )
 
-        intervals = np.diff(timestamp_index.asi8).astype(float) / 1e9
+        timestamp_ns = timestamp_index.to_numpy(
+            dtype="datetime64[ns]"
+        ).astype("int64")
+        intervals = np.diff(timestamp_ns).astype(float) / 1e9
         regular = bool(
             intervals.size > 0
             and np.allclose(intervals, intervals[0], rtol=0.0, atol=1e-6)
@@ -1109,9 +1112,17 @@ class HdfResultsProducts:
         primary = axes[paths[0]]
         for path in paths[1:]:
             candidate = axes[path]
+            candidate_seconds = (
+                candidate.to_numpy(dtype="datetime64[ns]").astype("int64")
+                // 1_000_000_000
+            )
+            primary_seconds = (
+                primary.to_numpy(dtype="datetime64[ns]").astype("int64")
+                // 1_000_000_000
+            )
             if len(candidate) != len(primary) or not np.array_equal(
-                candidate.asi8 // 1_000_000_000,
-                primary.asi8 // 1_000_000_000,
+                candidate_seconds,
+                primary_seconds,
             ):
                 raise ValueError(
                     "Result HDF timestamp datasets disagree: "
@@ -1139,56 +1150,19 @@ class HdfResultsProducts:
 
     @staticmethod
     def _unit_metadata(hdf_file: h5py.File) -> dict[str, str]:
-        candidates: list[tuple[str, bool]] = []
-        geometry = hdf_file.get("Geometry")
-        if geometry is not None and "SI Units" in geometry.attrs:
-            candidates.append(
-                (
-                    "Geometry/SI Units",
-                    HdfResultsProducts._required_bool(
-                        geometry.attrs["SI Units"],
-                        label="Geometry/SI Units",
-                    ),
-                )
-            )
-
-        if "Units System" in hdf_file.attrs:
-            units_text = HdfResultsProducts._decode(
-                hdf_file.attrs["Units System"]
-            ).strip().casefold()
-            if units_text.startswith("si") or units_text in {"metric"}:
-                candidates.append(("Units System", True))
-            elif units_text.startswith("us") or units_text in {
-                "english",
-                "imperial",
-            }:
-                candidates.append(("Units System", False))
-            else:
-                raise ValueError(
-                    "Result HDF has an unrecognized Units System attribute: "
-                    f"{units_text!r}"
-                )
-
-        if not candidates:
-            raise ValueError(
-                "Result HDF contains no recognized embedded unit-system metadata"
-            )
-        states = {state for _, state in candidates}
-        if len(states) != 1:
-            evidence = ", ".join(
-                f"{label}={'SI' if state else 'US Customary'}"
-                for label, state in candidates
-            )
-            raise ValueError(
-                f"Result HDF unit-system metadata is contradictory: {evidence}"
-            )
-        si_units = states.pop()
-        length = "m" if si_units else "ft"
+        metadata = HdfBase._result_unit_metadata_from_file(
+            hdf_file,
+            source_file=Path(hdf_file.filename),
+            strict=True,
+        )
         return {
-            "unit_system": "SI" if si_units else "US Customary",
-            "length_units": length,
-            "depth_units": length,
-            "velocity_units": "m/s" if si_units else "ft/s",
+            key: metadata[key]
+            for key in (
+                "unit_system",
+                "length_units",
+                "depth_units",
+                "velocity_units",
+            )
         }
 
     @staticmethod

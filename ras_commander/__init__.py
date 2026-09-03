@@ -124,9 +124,27 @@ _LAZY_EXPORTS = {
     'RasBreach': ('.RasBreach', 'RasBreach'),
     'RasFloodway': ('.RasFloodway', 'RasFloodway'),
     'RasHydroCompare': ('.RasHydroCompare', 'RasHydroCompare'),
+    **{
+        name: ('.RasHydrofabric', name)
+        for name in (
+            'RasNetworkConflation', 'NetworkConflationResult',
+            'NetworkEdgeCoverageResult',
+            'RasHydrofabric', 'HydrofabricConflationResult',
+            'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
+            'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
+        )
+    },
     'RasModPuls': ('.RasModPuls', 'RasModPuls'),
     'RasMonteCarlo': ('.RasMonteCarlo', 'RasMonteCarlo'),
     'RasFlowOptimization': ('.RasFlowOptimization', 'RasFlowOptimization'),
+    **{
+        name: ('.RasBreakout1D', name)
+        for name in (
+            'RasBreakout1D', 'Breakout1DDomainSelection',
+            'Breakout1DResult', 'Breakout1DSelection',
+            'Breakout1DValidationReport',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
@@ -165,6 +183,10 @@ _LAZY_EXPORTS = {
             'BenefitAreaResult',
             'BenefitCategory', 'RasBenefits',
         )
+    },
+    **{
+        name: ('.RasCrossSections', name)
+        for name in ('RasCrossSections', 'VerticalTransform')
     },
     'BenefitAreaConfig': ('._execution_types', 'BenefitAreaConfig'),
     **{
@@ -355,6 +377,15 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasBreakout1D', 'Breakout1DDomainSelection',
+    'Breakout1DResult', 'Breakout1DSelection',
+    'Breakout1DValidationReport',
+    'RasNetworkConflation', 'NetworkConflationResult',
+    'NetworkEdgeCoverageResult',
+    'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
+    'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
+    'NextGenFlowpathAdapter',
+    'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
