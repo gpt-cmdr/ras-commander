@@ -11,6 +11,7 @@ from ras_commander import (
     NetworkAdapter,
     NetworkConflationResult,
     NetworkEdgeCoverageResult,
+    NetworkEdgeCoveragePlanResult,
     NextGenFlowpathAdapter,
     NHDPlusAdapter,
     NWMHydrofabricAdapter,
@@ -123,6 +124,267 @@ def test_classify_edges_preserves_one_model_to_many_edge_cardinality():
         footprint, edges, adapter="nwm", include_outside=True
     )
     assert with_outside.summary["outside"] == 1
+
+
+def test_classify_edges_reports_directed_parts_and_multi_model_overlap():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["upstream", "downstream"]},
+        geometry=[
+            Polygon([(-5, -10), (65, -10), (65, 10), (-5, 10)]),
+            Polygon([(45, -10), (105, -10), (105, 10), (45, 10)]),
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"], "toid": [None]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+
+    result = RasNetworkConflation.classify_edges(
+        footprints, edges, adapter="nwm"
+    )
+
+    parts = result.coverage_parts_df.sort_values("coverage_start")
+    assert list(parts["geometry_id"]) == ["upstream", "downstream"]
+    assert list(parts["coverage_start"]) == pytest.approx([0.0, 45.0])
+    assert list(parts["coverage_end"]) == pytest.approx([65.0, 100.0])
+    assert list(parts["coverage_start_fraction"]) == pytest.approx([0.0, 0.45])
+    assert list(parts["coverage_end_fraction"]) == pytest.approx([0.65, 1.0])
+
+    summary = result.edge_summary_df.iloc[0]
+    assert summary["model_count"] == 2
+    assert summary["coverage_part_count"] == 2
+    assert summary["union_length"] == pytest.approx(100.0)
+    assert summary["union_fraction"] == pytest.approx(1.0)
+    assert summary["overlap_length"] == pytest.approx(20.0)
+    assert summary["gap_length"] == pytest.approx(0.0)
+    assert bool(summary["fully_covered"])
+
+    overlap = result.model_overlap_df.iloc[0]
+    assert overlap["geometry_id_a"] == "downstream"
+    assert overlap["geometry_id_b"] == "upstream"
+    assert overlap["overlap_start"] == pytest.approx(45.0)
+    assert overlap["overlap_end"] == pytest.approx(65.0)
+    assert overlap["overlap_length"] == pytest.approx(20.0)
+    assert list(result.coverage_parts_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_coverage_parts"]["columns"]
+    ]
+    assert list(result.edge_summary_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_coverage_summary"]["columns"]
+    ]
+    assert list(result.model_overlap_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_model_overlap"]["columns"]
+    ]
+
+
+def test_classify_edges_preserves_disjoint_coverage_parts():
+    footprint = gpd.GeoDataFrame(
+        {"geometry_id": ["split"]},
+        geometry=[
+            Polygon([(-5, -5), (25, -5), (25, 5), (-5, 5)]).union(
+                Polygon([(75, -5), (105, -5), (105, 5), (75, 5)])
+            )
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+
+    result = RasNetworkConflation.classify_edges(
+        footprint, edges, adapter="nwm"
+    )
+
+    parts = result.coverage_parts_df.sort_values("part_index")
+    assert len(parts) == 2
+    assert list(parts["coverage_start"]) == pytest.approx([0.0, 75.0])
+    assert list(parts["coverage_end"]) == pytest.approx([25.0, 100.0])
+    summary = result.edge_summary_df.iloc[0]
+    assert summary["union_fraction"] == pytest.approx(0.5)
+    assert summary["gap_length"] == pytest.approx(50.0)
+
+
+def test_plan_edge_coverage_selects_minimal_multi_model_chain_and_seam():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["upstream", "contained", "downstream"]},
+        geometry=[
+            Polygon([(-5, -10), (65, -10), (65, 10), (-5, 10)]),
+            Polygon([(10, -10), (35, -10), (35, 10), (10, 10)]),
+            Polygon([(45, -10), (105, -10), (105, 10), (45, 10)]),
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+    coverage = RasNetworkConflation.classify_edges(
+        footprints, edges, adapter="nwm"
+    )
+
+    result = RasNetworkConflation.plan_edge_coverage(coverage)
+
+    assert isinstance(result, NetworkEdgeCoveragePlanResult)
+    plan = result.plans_df.iloc[0]
+    assert plan["status"] == "multi_source_ready"
+    assert bool(plan["fully_covered"])
+    assert plan["selected_model_count"] == 2
+    assert plan["selected_slice_count"] == 2
+    assert plan["source_geometry_ids"] == ("upstream", "downstream")
+    assert plan["source_slice_geometry_ids"] == (
+        "upstream", "downstream"
+    )
+    assert plan["coverage_fraction"] == pytest.approx(1.0)
+
+    slices = result.source_slices_df.sort_values("source_order")
+    assert list(slices["geometry_id"]) == ["upstream", "downstream"]
+    assert list(slices["retained_start"]) == pytest.approx([0.0, 55.0])
+    assert list(slices["retained_end"]) == pytest.approx([55.0, 100.0])
+
+    seam = result.seams_df.iloc[0]
+    assert seam["upstream_geometry_id"] == "upstream"
+    assert seam["downstream_geometry_id"] == "downstream"
+    assert seam["relationship"] == "overlap"
+    assert seam["overlap_length"] == pytest.approx(20.0)
+    assert seam["gap_length"] == pytest.approx(0.0)
+    assert seam["seam_measure"] == pytest.approx(55.0)
+    assert seam.geometry.distance(Point(55.0, 0.0)) == pytest.approx(0.0)
+    assert list(result.plans_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_coverage_plans"]["columns"]
+    ]
+    assert list(result.source_slices_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_source_slices"]["columns"]
+    ]
+    assert list(result.seams_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS["network_edge_seams"]["columns"]
+    ]
+
+
+def test_plan_edge_coverage_reports_gap_without_extending_source_ownership():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["upstream", "downstream"]},
+        geometry=[
+            Polygon([(-5, -10), (45, -10), (45, 10), (-5, 10)]),
+            Polygon([(52, -10), (105, -10), (105, 10), (52, 10)]),
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+    coverage = RasNetworkConflation.classify_edges(
+        footprints, edges, adapter="nwm"
+    )
+
+    result = RasNetworkConflation.plan_edge_coverage(
+        coverage, gap_tolerance=1.0
+    )
+
+    plan = result.plans_df.iloc[0]
+    assert plan["status"] == "coverage_gap"
+    assert not bool(plan["fully_covered"])
+    assert plan["total_gap_length"] == pytest.approx(7.0)
+    assert plan["maximum_gap_length"] == pytest.approx(7.0)
+    slices = result.source_slices_df.sort_values("source_order")
+    assert list(slices["retained_start"]) == pytest.approx([0.0, 52.0])
+    assert list(slices["retained_end"]) == pytest.approx([45.0, 100.0])
+    seam = result.seams_df.iloc[0]
+    assert seam["relationship"] == "gap"
+    assert seam["gap_length"] == pytest.approx(7.0)
+    assert seam["seam_measure"] == pytest.approx(48.5)
+
+
+def test_plan_edge_coverage_keeps_one_complete_source_over_contained_model():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["complete", "contained"]},
+        geometry=[
+            Polygon([(-5, -10), (105, -10), (105, 10), (-5, 10)]),
+            Polygon([(25, -10), (75, -10), (75, 10), (25, 10)]),
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+    coverage = RasNetworkConflation.classify_edges(
+        footprints, edges, adapter="nwm"
+    )
+
+    result = RasNetworkConflation.plan_edge_coverage(coverage)
+
+    plan = result.plans_df.iloc[0]
+    assert plan["status"] == "single_source_ready"
+    assert plan["source_geometry_ids"] == ("complete",)
+    assert result.seams_df.empty
+
+
+def test_plan_edge_coverage_accepts_scalar_integer_edge_id():
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["complete"]},
+        geometry=[Polygon([(-5, -5), (105, -5), (105, 5), (-5, 5)])],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": [123]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+    coverage = RasNetworkConflation.classify_edges(
+        footprints, edges, adapter="nwm"
+    )
+
+    result = RasNetworkConflation.plan_edge_coverage(
+        coverage, edge_ids=123
+    )
+
+    assert list(result.plans_df["edge_id"]) == ["123"]
+
+
+def test_plan_edge_coverage_distinguishes_models_from_disjoint_slices():
+    footprint = gpd.GeoDataFrame(
+        {"geometry_id": ["split"]},
+        geometry=[
+            Polygon([(-5, -5), (45, -5), (45, 5), (-5, 5)]).union(
+                Polygon([(55, -5), (105, -5), (105, 5), (55, 5)])
+            )
+        ],
+        crs=CRS,
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=CRS,
+    )
+    coverage = RasNetworkConflation.classify_edges(
+        footprint, edges, adapter="nwm"
+    )
+
+    result = RasNetworkConflation.plan_edge_coverage(
+        coverage, gap_tolerance=10.0
+    )
+
+    plan = result.plans_df.iloc[0]
+    assert plan["status"] == "single_source_ready"
+    assert plan["selected_model_count"] == 1
+    assert plan["selected_slice_count"] == 2
+    assert plan["source_geometry_ids"] == ("split",)
+    assert plan["source_slice_geometry_ids"] == ("split", "split")
+    assert len(result.source_slices_df) == 2
+    assert result.seams_df.iloc[0]["relationship"] == "gap"
 
 
 def test_conflate_scores_and_maps_geometry_reach_and_cross_sections():
@@ -618,6 +880,8 @@ def test_public_exports_and_dataframe_schemas_are_registered():
     expected_exports = {
         "RasNetworkConflation",
         "NetworkConflationResult",
+        "NetworkEdgeCoverageResult",
+        "NetworkEdgeCoveragePlanResult",
         "ConflationStatus",
         "NetworkAdapter",
         "NHDPlusAdapter",
@@ -631,9 +895,20 @@ def test_public_exports_and_dataframe_schemas_are_registered():
     assert not hasattr(ras_commander, "RasHydrofabric")
     assert not hasattr(ras_commander, "HydrofabricConflationResult")
     assert not hasattr(ras_commander, "HydrofabricAdapter")
-    assert SCHEMA_VERSION == "1.9"
+    assert SCHEMA_VERSION == "1.10"
     assert {
         "network_edge_coverage",
+        "network_edge_coverage_parts",
+        "network_edge_coverage_summary",
+        "network_model_overlap",
+        "network_edge_coverage_plans",
+        "network_edge_source_slices",
+        "network_edge_seams",
+        "breakout_1d_source_models",
+        "breakout_1d_source_footprints",
+        "breakout_1d_source_centerlines",
+        "breakout_1d_source_cross_sections",
+        "breakout_1d_reach_assignments",
         "hydrofabric_matches",
         "hydrofabric_candidates",
         "hydrofabric_huc_intersections",

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from itertools import combinations
 from math import atan2, cos, degrees, exp, hypot, log, radians
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
@@ -21,7 +22,7 @@ from pyproj import CRS
 from shapely.errors import GEOSException
 from shapely.geometry import LineString, MultiLineString, Point
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import linemerge, nearest_points, unary_union
+from shapely.ops import linemerge, nearest_points, substring, unary_union
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
@@ -89,6 +90,9 @@ class NetworkEdgeCoverageResult:
     """
 
     coverage_df: gpd.GeoDataFrame
+    coverage_parts_df: gpd.GeoDataFrame
+    edge_summary_df: gpd.GeoDataFrame
+    model_overlap_df: gpd.GeoDataFrame
     adapter: str
     analysis_crs: str
     parameters: Mapping[str, Any]
@@ -102,6 +106,42 @@ class NetworkEdgeCoverageResult:
             "partial": int(counts.get("partial", 0)),
             "outside": int(counts.get("outside", 0)),
             "total": int(len(self.coverage_df)),
+        }
+
+    @property
+    def multi_model_edges(self) -> gpd.GeoDataFrame:
+        """Return edge summaries covered by more than one distinct model."""
+        return self.edge_summary_df[
+            self.edge_summary_df["model_count"] > 1
+        ].reset_index(drop=True)
+
+
+@dataclass(frozen=True)
+class NetworkEdgeCoveragePlanResult:
+    """Directed source-model coverage chains for network edges.
+
+    ``plans_df`` contains one row per planned edge, ``source_slices_df`` gives
+    the selected upstream-to-downstream source ownership, and ``seams_df``
+    describes every transition between consecutive source coverage slices.
+    Measures follow the network edge coordinate order.
+    """
+
+    plans_df: gpd.GeoDataFrame
+    source_slices_df: gpd.GeoDataFrame
+    seams_df: gpd.GeoDataFrame
+    analysis_crs: str
+    parameters: Mapping[str, Any]
+
+    @property
+    def summary(self) -> Dict[str, int]:
+        """Return plan-status counts."""
+        counts = self.plans_df["status"].value_counts().to_dict()
+        return {
+            "single_source_ready": int(counts.get("single_source_ready", 0)),
+            "multi_source_ready": int(counts.get("multi_source_ready", 0)),
+            "coverage_gap": int(counts.get("coverage_gap", 0)),
+            "uncovered": int(counts.get("uncovered", 0)),
+            "total": int(len(self.plans_df)),
         }
 
 
@@ -414,20 +454,37 @@ class RasNetworkConflation:
         edges = edges.to_crs(target_crs)
 
         rows: list[Dict[str, Any]] = []
+        part_rows: list[Dict[str, Any]] = []
         for footprint in footprints.itertuples(index=False):
             footprint_geometry = footprint.geometry
-            for edge in edges.itertuples(index=False):
-                edge_geometry = edge.geometry
+            if include_outside:
+                candidate_positions = range(len(edges))
+            else:
+                candidate_positions = edges.sindex.query(
+                    footprint_geometry, predicate="intersects"
+                )
+            for edge_position in candidate_positions:
+                edge = edges.iloc[int(edge_position)]
+                edge_geometry = _representative_line(edge.geometry)
                 if edge_geometry is None or edge_geometry.is_empty:
                     continue
                 edge_length = float(edge_geometry.length)
                 if not np.isfinite(edge_length) or edge_length <= 0:
                     continue
-                inside_length = (
-                    float(edge_geometry.intersection(footprint_geometry).length)
+                intersection = (
+                    edge_geometry.intersection(footprint_geometry)
                     if edge_geometry.intersects(footprint_geometry)
-                    else 0.0
+                    else None
                 )
+                coverage_parts = _linear_parts(intersection)
+                measured_parts = []
+                for part in coverage_parts:
+                    start, end = _line_part_measures(edge_geometry, part)
+                    if end - start <= 0.0:
+                        continue
+                    measured_parts.append((start, end, part))
+                measured_parts.sort(key=lambda item: (item[0], item[1]))
+                inside_length = float(sum(item[2].length for item in measured_parts))
                 inside_fraction = min(max(inside_length / edge_length, 0.0), 1.0)
                 if inside_fraction <= 0.0:
                     extent_status = "outside"
@@ -457,6 +514,23 @@ class RasNetworkConflation:
                         "geometry": edge_geometry,
                     }
                 )
+                for part_index, (start, end, part) in enumerate(measured_parts):
+                    part_rows.append(
+                        {
+                            "geometry_id": str(footprint.geometry_id),
+                            "edge_id": str(edge.feature_id),
+                            "part_index": int(part_index),
+                            "part_length": float(part.length),
+                            "edge_length": edge_length,
+                            "coverage_start": start,
+                            "coverage_end": end,
+                            "coverage_start_fraction": start / edge_length,
+                            "coverage_end_fraction": end / edge_length,
+                            "extent_status": extent_status,
+                            "adapter": str(edge.adapter),
+                            "geometry": part,
+                        }
+                    )
 
         columns = [
             "geometry_id", "edge_id", "inside_length", "edge_length",
@@ -472,14 +546,274 @@ class RasNetworkConflation:
                 ["geometry_id", "inside_fraction", "edge_id"],
                 ascending=[True, False, True],
             ).reset_index(drop=True)
+        coverage_parts_columns = [
+            "geometry_id", "edge_id", "part_index", "part_length",
+            "edge_length", "coverage_start", "coverage_end",
+            "coverage_start_fraction", "coverage_end_fraction",
+            "extent_status", "adapter", "geometry",
+        ]
+        coverage_parts = gpd.GeoDataFrame(
+            part_rows,
+            columns=coverage_parts_columns,
+            geometry="geometry",
+            crs=target_crs,
+        )
+        if not coverage_parts.empty:
+            coverage_parts = coverage_parts.sort_values(
+                ["edge_id", "coverage_start", "coverage_end", "geometry_id"]
+            ).reset_index(drop=True)
+
+        edge_summary, model_overlap = _summarize_edge_coverage(
+            coverage,
+            coverage_parts,
+            target_crs=target_crs,
+            inside_tolerance=inside_tolerance,
+        )
         return NetworkEdgeCoverageResult(
             coverage_df=coverage,
+            coverage_parts_df=coverage_parts,
+            edge_summary_df=edge_summary,
+            model_overlap_df=model_overlap,
             adapter=selected_adapter.name,
             analysis_crs=target_crs.to_string(),
             parameters={
                 "include_outside": bool(include_outside),
                 "min_inside_fraction": float(min_inside_fraction),
                 "inside_tolerance": float(inside_tolerance),
+            },
+        )
+
+    @staticmethod
+    @log_call
+    def plan_edge_coverage(
+        coverage: NetworkEdgeCoverageResult,
+        *,
+        edge_ids: Optional[
+            Union[str, int, Sequence[Union[str, int]]]
+        ] = None,
+        gap_tolerance: float = 0.0,
+        measure_tolerance: float = 1e-9,
+    ) -> NetworkEdgeCoveragePlanResult:
+        """Plan a minimal directed source-model chain for each network edge.
+
+        The planner operates only on model-footprint coverage. It does not run
+        the seven-signal reach conflation scorer and does not yet approve a
+        hydraulic geometry seam. Measures follow each edge's coordinate order.
+
+        A greedy interval-cover algorithm chooses the source interval that
+        extends farthest downstream at each step. This produces a deterministic
+        minimum-switch chain for ordinary nested and overlapping BLE model
+        extents. Gaps remain unowned and are reported explicitly.
+        """
+        if not isinstance(coverage, NetworkEdgeCoverageResult):
+            raise TypeError("coverage must be a NetworkEdgeCoverageResult")
+        gap_tolerance = _nonnegative_number(gap_tolerance, "gap_tolerance")
+        measure_tolerance = _nonnegative_number(
+            measure_tolerance, "measure_tolerance"
+        )
+        available_ids = set(coverage.edge_summary_df["edge_id"].astype(str))
+        if edge_ids is None:
+            selected_ids = sorted(available_ids)
+        elif isinstance(edge_ids, (str, int)) and not isinstance(
+            edge_ids, bool
+        ):
+            selected_ids = [str(edge_ids)]
+        else:
+            selected_ids = list(
+                dict.fromkeys(str(value) for value in edge_ids)
+            )
+        missing = sorted(set(selected_ids) - available_ids)
+        if missing:
+            raise ValueError(
+                "Coverage does not contain requested edge IDs: "
+                + ", ".join(missing)
+            )
+
+        plan_rows: list[Dict[str, Any]] = []
+        slice_rows: list[Dict[str, Any]] = []
+        seam_rows: list[Dict[str, Any]] = []
+        for edge_id in selected_ids:
+            summary = coverage.edge_summary_df.loc[
+                coverage.edge_summary_df["edge_id"].astype(str) == edge_id
+            ].iloc[0]
+            edge_geometry = _representative_line(summary.geometry)
+            if edge_geometry is None or edge_geometry.length <= 0:
+                continue
+            edge_length = float(edge_geometry.length)
+            parts = coverage.coverage_parts_df.loc[
+                coverage.coverage_parts_df["edge_id"].astype(str) == edge_id
+            ]
+            intervals = _merge_model_intervals(parts, measure_tolerance)
+            chain = _select_coverage_chain(
+                intervals,
+                target_start=0.0,
+                target_end=edge_length,
+                gap_tolerance=gap_tolerance,
+                measure_tolerance=measure_tolerance,
+            )
+            retained = [
+                {
+                    **item,
+                    "retained_start": max(0.0, float(item["start"])),
+                    "retained_end": min(edge_length, float(item["end"])),
+                }
+                for item in chain
+            ]
+            transition_rows: list[Dict[str, Any]] = []
+            for index, (upstream, downstream) in enumerate(
+                zip(retained, retained[1:])
+            ):
+                overlap_start = max(upstream["start"], downstream["start"])
+                overlap_end = min(upstream["end"], downstream["end"])
+                overlap_length = max(0.0, overlap_end - overlap_start)
+                gap_length = max(0.0, downstream["start"] - upstream["end"])
+                if overlap_length > measure_tolerance:
+                    relationship = "overlap"
+                    seam_measure = (overlap_start + overlap_end) / 2.0
+                    upstream["retained_end"] = seam_measure
+                    downstream["retained_start"] = seam_measure
+                elif gap_length <= measure_tolerance:
+                    relationship = "touching"
+                    seam_measure = (
+                        float(upstream["end"]) + float(downstream["start"])
+                    ) / 2.0
+                    upstream["retained_end"] = seam_measure
+                    downstream["retained_start"] = seam_measure
+                else:
+                    relationship = "gap"
+                    seam_measure = (
+                        float(upstream["end"]) + float(downstream["start"])
+                    ) / 2.0
+                    upstream["retained_end"] = min(
+                        upstream["retained_end"], float(upstream["end"])
+                    )
+                    downstream["retained_start"] = max(
+                        downstream["retained_start"], float(downstream["start"])
+                    )
+                transition_rows.append(
+                    {
+                        "edge_id": edge_id,
+                        "seam_index": index,
+                        "upstream_geometry_id": upstream["geometry_id"],
+                        "downstream_geometry_id": downstream["geometry_id"],
+                        "relationship": relationship,
+                        "overlap_start": overlap_start if overlap_length > 0 else None,
+                        "overlap_end": overlap_end if overlap_length > 0 else None,
+                        "overlap_length": overlap_length,
+                        "gap_length": gap_length,
+                        "seam_measure": seam_measure,
+                        "seam_fraction": seam_measure / edge_length,
+                        "geometry": edge_geometry.interpolate(seam_measure),
+                    }
+                )
+
+            selected_intervals = [
+                (float(item["start"]), float(item["end"])) for item in chain
+            ]
+            gaps = _interval_gaps(
+                selected_intervals,
+                target_start=0.0,
+                target_end=edge_length,
+                measure_tolerance=measure_tolerance,
+            )
+            total_gap = float(sum(end - start for start, end in gaps))
+            maximum_gap = float(
+                max((end - start for start, end in gaps), default=0.0)
+            )
+            covered_length = max(0.0, edge_length - total_gap)
+            fully_covered = bool(chain) and (
+                maximum_gap <= gap_tolerance + measure_tolerance
+            )
+            source_slice_ids = tuple(
+                str(item["geometry_id"]) for item in chain
+            )
+            source_ids = tuple(dict.fromkeys(source_slice_ids))
+            if not chain:
+                status = "uncovered"
+            elif not fully_covered:
+                status = "coverage_gap"
+            elif len(source_ids) == 1:
+                status = "single_source_ready"
+            else:
+                status = "multi_source_ready"
+            plan_rows.append(
+                {
+                    "edge_id": edge_id,
+                    "status": status,
+                    "edge_length": edge_length,
+                    "selected_model_count": len(source_ids),
+                    "selected_slice_count": len(chain),
+                    "source_geometry_ids": source_ids,
+                    "source_slice_geometry_ids": source_slice_ids,
+                    "covered_length": covered_length,
+                    "coverage_fraction": (
+                        covered_length / edge_length if edge_length > 0 else 0.0
+                    ),
+                    "total_gap_length": total_gap,
+                    "maximum_gap_length": maximum_gap,
+                    "fully_covered": fully_covered,
+                    "orientation_source": "edge_coordinate_order",
+                    "geometry": edge_geometry,
+                }
+            )
+            for source_order, item in enumerate(retained):
+                retained_start = float(item["retained_start"])
+                retained_end = float(item["retained_end"])
+                slice_rows.append(
+                    {
+                        "edge_id": edge_id,
+                        "source_order": source_order,
+                        "geometry_id": str(item["geometry_id"]),
+                        "coverage_start": float(item["start"]),
+                        "coverage_end": float(item["end"]),
+                        "retained_start": retained_start,
+                        "retained_end": retained_end,
+                        "retained_length": max(0.0, retained_end - retained_start),
+                        "geometry": _line_substring(
+                            edge_geometry, retained_start, retained_end
+                        ),
+                    }
+                )
+            seam_rows.extend(transition_rows)
+
+        plans_columns = [
+            "edge_id", "status", "edge_length", "selected_model_count",
+            "selected_slice_count", "source_geometry_ids",
+            "source_slice_geometry_ids", "covered_length", "coverage_fraction",
+            "total_gap_length", "maximum_gap_length", "fully_covered",
+            "orientation_source", "geometry",
+        ]
+        slices_columns = [
+            "edge_id", "source_order", "geometry_id", "coverage_start",
+            "coverage_end", "retained_start", "retained_end",
+            "retained_length", "geometry",
+        ]
+        seams_columns = [
+            "edge_id", "seam_index", "upstream_geometry_id",
+            "downstream_geometry_id", "relationship", "overlap_start",
+            "overlap_end", "overlap_length", "gap_length", "seam_measure",
+            "seam_fraction", "geometry",
+        ]
+        crs = coverage.coverage_parts_df.crs or coverage.edge_summary_df.crs
+        plans_df = gpd.GeoDataFrame(
+            plan_rows, columns=plans_columns, geometry="geometry", crs=crs
+        )
+        source_slices_df = gpd.GeoDataFrame(
+            slice_rows, columns=slices_columns, geometry="geometry", crs=crs
+        )
+        seams_df = gpd.GeoDataFrame(
+            seam_rows, columns=seams_columns, geometry="geometry", crs=crs
+        )
+        return NetworkEdgeCoveragePlanResult(
+            plans_df=plans_df,
+            source_slices_df=source_slices_df,
+            seams_df=seams_df,
+            analysis_crs=coverage.analysis_crs,
+            parameters={
+                "edge_ids": tuple(selected_ids),
+                "gap_tolerance": gap_tolerance,
+                "measure_tolerance": measure_tolerance,
+                "orientation_source": "edge_coordinate_order",
             },
         )
 
@@ -1856,6 +2190,301 @@ def _sample_line(geometry: BaseGeometry, count: int) -> list[Point]:
         line.interpolate(float(fraction), normalized=True)
         for fraction in np.linspace(0.0, 1.0, count)
     ]
+
+
+def _linear_parts(geometry: Optional[BaseGeometry]) -> list[LineString]:
+    """Return every positive-length LineString contained in ``geometry``."""
+    if geometry is None or geometry.is_empty:
+        return []
+    if isinstance(geometry, LineString):
+        return [geometry] if geometry.length > 0 else []
+    if isinstance(geometry, MultiLineString):
+        return [part for part in geometry.geoms if part.length > 0]
+    if hasattr(geometry, "geoms"):
+        parts: list[LineString] = []
+        for child in geometry.geoms:
+            parts.extend(_linear_parts(child))
+        return parts
+    return []
+
+
+def _line_part_measures(
+    edge: LineString, part: LineString
+) -> tuple[float, float]:
+    """Return ordered edge measures for a line part lying on ``edge``."""
+    coordinates = list(part.coords)
+    if len(coordinates) < 2:
+        return 0.0, 0.0
+    first = float(edge.project(Point(coordinates[0])))
+    last = float(edge.project(Point(coordinates[-1])))
+    return min(first, last), max(first, last)
+
+
+def _summarize_edge_coverage(
+    coverage: gpd.GeoDataFrame,
+    coverage_parts: gpd.GeoDataFrame,
+    *,
+    target_crs: CRS,
+    inside_tolerance: float,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """Build edge-union and pairwise model-overlap diagnostics."""
+    summary_columns = [
+        "edge_id", "model_count", "coverage_part_count", "inside_length_sum",
+        "union_length", "edge_length", "union_fraction", "overlap_length",
+        "overlap_fraction", "gap_length", "gap_fraction", "fully_covered",
+        "has_overlap", "has_gap", "source_geometry_ids", "adapter", "geometry",
+    ]
+    overlap_columns = [
+        "edge_id", "geometry_id_a", "geometry_id_b", "overlap_part_index",
+        "overlap_start", "overlap_end", "overlap_length", "overlap_fraction",
+        "geometry",
+    ]
+    summary_rows: list[Dict[str, Any]] = []
+    overlap_rows: list[Dict[str, Any]] = []
+    if coverage.empty:
+        return (
+            gpd.GeoDataFrame(
+                columns=summary_columns, geometry="geometry", crs=target_crs
+            ),
+            gpd.GeoDataFrame(
+                columns=overlap_columns, geometry="geometry", crs=target_crs
+            ),
+        )
+
+    for edge_id, relationships in coverage.groupby("edge_id", sort=True):
+        edge_geometry = _representative_line(relationships.iloc[0].geometry)
+        if edge_geometry is None or edge_geometry.length <= 0:
+            continue
+        edge_length = float(edge_geometry.length)
+        edge_parts = coverage_parts.loc[
+            coverage_parts["edge_id"].astype(str) == str(edge_id)
+        ]
+        positive = relationships.loc[relationships["inside_length"] > 0]
+        source_ids = tuple(sorted(positive["geometry_id"].astype(str).unique()))
+        union_geometry = (
+            unary_union(edge_parts.geometry.tolist())
+            if not edge_parts.empty
+            else None
+        )
+        union_length = float(union_geometry.length) if union_geometry is not None else 0.0
+        inside_length_sum = float(positive["inside_length"].sum())
+        overlap_length = max(0.0, inside_length_sum - union_length)
+        gap_length = max(0.0, edge_length - union_length)
+        absolute_tolerance = max(1e-9, inside_tolerance * edge_length)
+        summary_rows.append(
+            {
+                "edge_id": str(edge_id),
+                "model_count": len(source_ids),
+                "coverage_part_count": int(len(edge_parts)),
+                "inside_length_sum": inside_length_sum,
+                "union_length": union_length,
+                "edge_length": edge_length,
+                "union_fraction": min(max(union_length / edge_length, 0.0), 1.0),
+                "overlap_length": overlap_length,
+                "overlap_fraction": overlap_length / edge_length,
+                "gap_length": gap_length,
+                "gap_fraction": gap_length / edge_length,
+                "fully_covered": gap_length <= absolute_tolerance,
+                "has_overlap": overlap_length > absolute_tolerance,
+                "has_gap": gap_length > absolute_tolerance,
+                "source_geometry_ids": source_ids,
+                "adapter": str(relationships.iloc[0]["adapter"]),
+                "geometry": edge_geometry,
+            }
+        )
+
+        for geometry_id_a, geometry_id_b in combinations(source_ids, 2):
+            parts_a = edge_parts.loc[
+                edge_parts["geometry_id"].astype(str) == geometry_id_a
+            ]
+            parts_b = edge_parts.loc[
+                edge_parts["geometry_id"].astype(str) == geometry_id_b
+            ]
+            if parts_a.empty or parts_b.empty:
+                continue
+            common = unary_union(parts_a.geometry.tolist()).intersection(
+                unary_union(parts_b.geometry.tolist())
+            )
+            measured = []
+            for part in _linear_parts(common):
+                start, end = _line_part_measures(edge_geometry, part)
+                if end - start > 0:
+                    measured.append((start, end, part))
+            measured.sort(key=lambda item: (item[0], item[1]))
+            for overlap_part_index, (start, end, part) in enumerate(measured):
+                part_length = float(part.length)
+                overlap_rows.append(
+                    {
+                        "edge_id": str(edge_id),
+                        "geometry_id_a": geometry_id_a,
+                        "geometry_id_b": geometry_id_b,
+                        "overlap_part_index": overlap_part_index,
+                        "overlap_start": start,
+                        "overlap_end": end,
+                        "overlap_length": part_length,
+                        "overlap_fraction": part_length / edge_length,
+                        "geometry": part,
+                    }
+                )
+
+    return (
+        gpd.GeoDataFrame(
+            summary_rows, columns=summary_columns, geometry="geometry", crs=target_crs
+        ),
+        gpd.GeoDataFrame(
+            overlap_rows, columns=overlap_columns, geometry="geometry", crs=target_crs
+        ),
+    )
+
+
+def _nonnegative_number(value: Any, name: str) -> float:
+    """Normalize a finite non-negative numeric option."""
+    if isinstance(value, bool):
+        raise TypeError(f"{name} must be a finite number")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be a finite number") from exc
+    if not np.isfinite(normalized):
+        raise ValueError(f"{name} must be finite")
+    if normalized < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return normalized
+
+
+def _merge_model_intervals(
+    parts: gpd.GeoDataFrame, measure_tolerance: float
+) -> list[Dict[str, Any]]:
+    """Merge touching coverage parts independently for each source model."""
+    intervals: list[Dict[str, Any]] = []
+    if parts.empty:
+        return intervals
+    for geometry_id, group in parts.groupby("geometry_id", sort=True):
+        ordered = sorted(
+            (
+                float(row.coverage_start),
+                float(row.coverage_end),
+            )
+            for row in group.itertuples(index=False)
+        )
+        current_start, current_end = ordered[0]
+        for start, end in ordered[1:]:
+            if start <= current_end + measure_tolerance:
+                current_end = max(current_end, end)
+            else:
+                intervals.append(
+                    {
+                        "geometry_id": str(geometry_id),
+                        "start": current_start,
+                        "end": current_end,
+                    }
+                )
+                current_start, current_end = start, end
+        intervals.append(
+            {
+                "geometry_id": str(geometry_id),
+                "start": current_start,
+                "end": current_end,
+            }
+        )
+    return sorted(
+        intervals,
+        key=lambda item: (item["start"], -item["end"], item["geometry_id"]),
+    )
+
+
+def _select_coverage_chain(
+    intervals: Sequence[Mapping[str, Any]],
+    *,
+    target_start: float,
+    target_end: float,
+    gap_tolerance: float,
+    measure_tolerance: float,
+) -> list[Dict[str, Any]]:
+    """Select a deterministic farthest-reaching interval chain."""
+    remaining = [
+        dict(item)
+        for item in intervals
+        if float(item["end"]) > target_start + measure_tolerance
+        and float(item["start"]) < target_end - measure_tolerance
+    ]
+    chain: list[Dict[str, Any]] = []
+    cursor = target_start
+    while cursor < target_end - measure_tolerance and remaining:
+        eligible = [
+            item
+            for item in remaining
+            if float(item["start"]) <= cursor + gap_tolerance
+            and float(item["end"]) > cursor + measure_tolerance
+        ]
+        if not eligible:
+            future_starts = [
+                float(item["start"])
+                for item in remaining
+                if float(item["end"]) > cursor + measure_tolerance
+            ]
+            if not future_starts:
+                break
+            cursor = min(future_starts)
+            eligible = [
+                item
+                for item in remaining
+                if float(item["start"]) <= cursor + gap_tolerance
+                and float(item["end"]) > cursor + measure_tolerance
+            ]
+        chosen = sorted(
+            eligible,
+            key=lambda item: (
+                -float(item["end"]),
+                float(item["start"]),
+                str(item["geometry_id"]),
+            ),
+        )[0]
+        chain.append(chosen)
+        cursor = max(cursor, float(chosen["end"]))
+        remaining.remove(chosen)
+        remaining = [
+            item
+            for item in remaining
+            if float(item["end"]) > cursor + measure_tolerance
+        ]
+    return chain
+
+
+def _interval_gaps(
+    intervals: Sequence[tuple[float, float]],
+    *,
+    target_start: float,
+    target_end: float,
+    measure_tolerance: float,
+) -> list[tuple[float, float]]:
+    """Return uncovered intervals within the requested target measure range."""
+    clipped = sorted(
+        (
+            max(target_start, float(start)),
+            min(target_end, float(end)),
+        )
+        for start, end in intervals
+        if end > target_start and start < target_end
+    )
+    gaps: list[tuple[float, float]] = []
+    cursor = target_start
+    for start, end in clipped:
+        if start > cursor + measure_tolerance:
+            gaps.append((cursor, start))
+        cursor = max(cursor, end)
+    if cursor < target_end - measure_tolerance:
+        gaps.append((cursor, target_end))
+    return gaps
+
+
+def _line_substring(
+    edge: LineString, start_measure: float, end_measure: float
+) -> BaseGeometry:
+    """Return an edge-coordinate-order substring with bounded measures."""
+    start = min(max(float(start_measure), 0.0), float(edge.length))
+    end = min(max(float(end_measure), 0.0), float(edge.length))
+    return substring(edge, start, end)
 
 
 def _representative_line(geometry: BaseGeometry) -> Optional[LineString]:
