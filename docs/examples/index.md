@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*137 notebooks indexed - 123 with runtime data, 14 without.*
+*138 notebooks indexed - 124 with runtime data, 14 without.*
 
 ## 100s - Initialization & Execution
 
@@ -73,6 +73,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [233 - Manning's n Region Polygon Authoring](../notebooks/233_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/233_mannings_region_polygon_authoring.ipynb) | 3 s |
 | [234 - Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)](../notebooks/234_rasmapper_geometry_completion.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/234_rasmapper_geometry_completion.ipynb) | 29 s |
 | [235 - Clip a Texas FEMA eBFE model to one NWM reach](../notebooks/235_1d_breakout_model.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/235_1d_breakout_model.ipynb) | N/A |
+| [236 - Plan a Texas FEMA eBFE Breakout from Two Source Models](../notebooks/236_multi_model_1d_breakout_planning.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/236_multi_model_1d_breakout_planning.ipynb) | 4 s |
 
 ## 300s - Unsteady Flow & DSS
 
