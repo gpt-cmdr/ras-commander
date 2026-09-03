@@ -2798,10 +2798,10 @@ notebooks:
   executed_cells: 7
 - id: 701_benchmarking_versions_6.1_to_6.6
   filename: 701_benchmarking_versions_6.1_to_6.6.ipynb
-  title: Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)
+  title: Version Benchmarking and Core Scaling (HEC-RAS 5.0.5, 6.0, 6.3.1, 6.6, 7.0)
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: 'This notebook benchmarks the same 2D plan across four HEC-RAS versions and an explicit set
+  summary: 'This notebook benchmarks the same 2D plan across five HEC-RAS versions and an explicit set
     of processor core counts. The goal is to separate:'
   tags: []
   difficulty: intermediate
@@ -2815,6 +2815,7 @@ notebooks:
   - RasPlan.get_results_path
   - RasPlan.set_num_cores
   - RasPlan.update_run_flags
+  - RasTcu.status
   - RasUtils.discover_ras_versions
   hec_refs: []
   learning_paths: []

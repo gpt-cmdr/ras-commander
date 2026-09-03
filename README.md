@@ -149,7 +149,7 @@ RAS ASCII File Operations
 
 Note about support for Pipe Networks:  As a relatively new feature, only read access to Pipe Network geometry and results data has been included.  Users will need to code their own methods to modify/add pipe network data, and pull requests are always welcome to incorporate this capability.
 
-Note about version support: The modern HDF-based features target HEC-RAS 6.2+ for optimal compatibility. For legacy versions (3.1, 4.1, 5.0.x), use the RasControl class which provides COM-based access to steady state profile extraction and plan execution (see example notebook 17).
+Note about version support: The modern HDF-based features target HEC-RAS 6.2+ for optimal compatibility. HEC-RAS 5.0.x plan execution is supported through the version-aware `RasCmdr.compute_plan()` command path. For HEC-RAS 3.1/4.1 and legacy steady-profile extraction, use the COM-based `RasControl` class (see [notebook 121](examples/121_legacy_hecrascontroller_and_rascontrol.ipynb)).
 
 ## Installation
 
@@ -302,7 +302,16 @@ RasPlan.set_geom("01", "02")
 
 RAS Commander provides multiple methods for executing HEC-RAS plans:
 
-#### Modern Command-Line Execution (HEC-RAS 6.0+)
+#### Command-Line Execution (HEC-RAS 5.0+)
+
+`RasCmdr.compute_plan()` owns the version-specific command layout. HEC-RAS 5.x
+uses the project-first form and runs the project's current plan; ras-commander
+sets the requested plan current before launch. HEC-RAS 6.0+ uses the explicit
+`-c`, project, and plan form. For unattended Windows runs, the Terms and
+Conditions of Use must be accepted for the exact installed release and current
+user; a definitively unaccepted release fails preflight before launch. A
+model's features may still require a newer HEC-RAS release independently of
+the command layout.
 
 **Single Plan Execution:**
 ```python
