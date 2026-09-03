@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*136 notebooks indexed - 122 with runtime data, 14 without.*
+*137 notebooks indexed - 122 with runtime data, 15 without.*
 
 ## 100s - Initialization & Execution
 
