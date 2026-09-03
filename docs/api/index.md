@@ -42,6 +42,14 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`Breakout1DSelection`](breakout-1d.md#select-a-reach-slice) - Resolved contiguous cross-section selection
 - [`Breakout1DResult`](breakout-1d.md#extract-and-validate) - Independent project artifacts, validation, and boundary provenance
 
+## 2D Breakout Geometry Preparation
+
+- [`RasBreakout2D`](breakout-2d.md) - Pure-2D qualification, component cloning, geometry trimming/remeshing, and parent-flux review without boundary authoring or plan execution
+- [`Breakout2DSpec`](breakout-2d.md#qualify-the-proposed-child-domain) - Source plan, 2D area, and contained child-boundary contract
+- [`Breakout2DPreflight`](breakout-2d.md#qualify-the-proposed-child-domain) - Spatial checks, feature dispositions, and existing-boundary inventory
+- [`Breakout2DPreparationResult`](breakout-2d.md#clone-associations-and-prepare-geometry) - Clone associations, mesh audit, and byte-identical unsteady-file evidence
+- [`Breakout2DFluxReview`](breakout-2d.md#review-parent-face-flux-locations) - Oriented parent-face series and unassigned candidate flux zones
+
 ## HDF Modules
 
 Classes for reading HDF result files:

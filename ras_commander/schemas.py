@@ -29,9 +29,158 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.9"
+SCHEMA_VERSION = "1.10"
 
 DATAFRAME_SCHEMAS = {
+    "ras_breakout_2d_boundaries": {
+        "description": (
+            "Parent and normalized child polygon evidence used by a contained "
+            "RasBreakout2D preflight."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.parent_boundary / child_boundary or "
+            "RasBreakout2D.normalize_child_boundary(...)"
+        ),
+        "source": "RasBreakout2D.preflight() and normalize_child_boundary()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry", "dtype": "geometry", "description": "Parent or child polygon in the parent mesh CRS."},
+        ],
+        "note": (
+            "Parent rows add mesh_name. Child rows add breakout_id, "
+            "topology_repaired, and hole_count."
+        ),
+    },
+    "ras_breakout_2d_boundary_segments": {
+        "description": (
+            "Ordered child-perimeter segments classified as inherited parent "
+            "boundary or artificial cut."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.boundary_segments or "
+            "RasBreakout2D.classify_boundary_segments(...)"
+        ),
+        "source": "RasBreakout2D.classify_boundary_segments()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "segment_type", "dtype": "str", "description": "inherited or artificial_cut."},
+            {"name": "station", "dtype": "float64", "description": "Distance along the child exterior to the segment midpoint."},
+            {"name": "length", "dtype": "float64", "description": "Segment length in project horizontal units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Classified child-perimeter line geometry."},
+            {"name": "segment_id", "dtype": "str", "description": "Stable display identifier within the classified perimeter."},
+        ],
+    },
+    "ras_breakout_2d_feature_actions": {
+        "description": (
+            "One auditable keep, clip, drop, replace, or preserve decision per "
+            "2D geometry or unsteady-boundary feature."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.feature_actions or "
+            "Breakout2DPreparationResult.feature_actions"
+        ),
+        "source": "RasBreakout2D.preflight()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "feature_type", "dtype": "str", "description": "Mesh area, breakline, refinement, reference, BC-line, or unsteady-boundary category."},
+            {"name": "feature_id", "dtype": "str", "description": "Source feature identifier."},
+            {"name": "name", "dtype": "str", "description": "Source feature name."},
+            {"name": "action", "dtype": "str", "description": "keep, clip, drop, replace, or preserve."},
+            {"name": "reason", "dtype": "str", "description": "Machine-readable rationale for the disposition."},
+            {"name": "source_measure", "dtype": "float64", "description": "Source area or length in project units."},
+            {"name": "retained_measure", "dtype": "float64", "description": "Retained area or length after the proposed action."},
+            {"name": "retained_fraction", "dtype": "float64", "description": "Retained measure divided by source measure."},
+            {"name": "geometry", "dtype": "geometry | None", "description": "Retained geometry when the feature has a spatial representation."},
+        ],
+    },
+    "ras_breakout_2d_checks": {
+        "description": "One pass/fail qualification check for a proposed pure-2D breakout.",
+        "accessor": "Breakout2DPreflight.checks",
+        "source": "RasBreakout2D.preflight()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "check_id", "dtype": "str", "description": "Stable qualification-check identifier."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "blocking", "dtype": "bool", "description": "Whether failure prevents preparation."},
+            {"name": "message", "dtype": "str", "description": "Human-readable requirement."},
+            {"name": "details", "dtype": "dict", "description": "Structured check evidence."},
+        ],
+    },
+    "ras_breakout_2d_boundary_faces": {
+        "description": (
+            "Parent mesh faces separating retained and discarded cell centers, "
+            "or those faces augmented with flux-review metrics."
+        ),
+        "accessor": (
+            "RasBreakout2D.select_parent_boundary_faces(...) or "
+            "Breakout2DFluxReview.faces"
+        ),
+        "source": (
+            "RasBreakout2D.select_parent_boundary_faces() and "
+            "review_parent_boundary_flux()"
+        ),
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "mesh_name", "dtype": "str", "description": "Parent 2D flow-area name."},
+            {"name": "face_id", "dtype": "int64", "description": "Zero-based parent mesh face index."},
+            {"name": "cell_0", "dtype": "int64", "description": "First native adjacent cell index."},
+            {"name": "cell_1", "dtype": "int64", "description": "Second native adjacent cell index."},
+            {"name": "inside_cell", "dtype": "int64", "description": "Adjacent cell retained by the child polygon."},
+            {"name": "outside_cell", "dtype": "int64", "description": "Adjacent cell discarded by the child polygon."},
+            {"name": "normal_x", "dtype": "float64", "description": "Native face-normal X component."},
+            {"name": "normal_y", "dtype": "float64", "description": "Native face-normal Y component."},
+            {"name": "face_length", "dtype": "float64", "description": "Face length in project horizontal units."},
+            {"name": "orientation_multiplier", "dtype": "float64", "description": "Multiplier orienting native flux positive outward from the child."},
+            {"name": "boundary_station", "dtype": "float64", "description": "Face-midpoint distance along the child exterior."},
+            {"name": "geometry", "dtype": "geometry", "description": "Parent mesh-face line geometry."},
+        ],
+        "note": (
+            "Flux-review faces additionally expose peak/volume metrics, "
+            "dominant_direction, significant, and arrow_dx/arrow_dy."
+        ),
+    },
+    "ras_breakout_2d_flux_zones": {
+        "description": (
+            "Adjacent significant parent faces combined by perimeter gap and "
+            "dominant flow direction for engineering review only."
+        ),
+        "accessor": "Breakout2DFluxReview.zones",
+        "source": "RasBreakout2D.review_parent_boundary_flux()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "zone_id", "dtype": "str", "description": "Review-only combined-zone identifier."},
+            {"name": "dominant_direction", "dtype": "str", "description": "inflow or outflow by integrated parent flux."},
+            {"name": "face_count", "dtype": "int64", "description": "Number of significant adjacent faces in the zone."},
+            {"name": "face_ids", "dtype": "str", "description": "JSON array of parent face indexes."},
+            {"name": "peak_flow", "dtype": "float64", "description": "Signed peak simultaneous zone flow; positive leaves the child."},
+            {"name": "peak_abs_flow", "dtype": "float64", "description": "Absolute value of peak_flow."},
+            {"name": "absolute_volume_fraction", "dtype": "float64", "description": "Zone absolute-flow volume divided by all cut-face absolute-flow volume."},
+            {"name": "arrow_dx", "dtype": "float64", "description": "Unit X component of dominant flow direction."},
+            {"name": "arrow_dy", "dtype": "float64", "description": "Unit Y component of dominant flow direction."},
+            {"name": "geometry", "dtype": "geometry", "description": "Merged parent face-line geometry."},
+        ],
+    },
+    "ras_breakout_2d_face_flow": {
+        "description": (
+            "Parent cut-face flow time series oriented positive outward from "
+            "the proposed child domain."
+        ),
+        "accessor": "Breakout2DFluxReview.face_flow_outward",
+        "source": "RasBreakout2D.review_parent_boundary_flux()",
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [],
+        "note": (
+            "The index is parent-result time and each integer column is a "
+            "parent face_id selected at the child partition."
+        ),
+    },
     "ras_breakout_1d_validation": {
         "description": (
             "One row per structural validation check for a RasBreakout1D "

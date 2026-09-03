@@ -536,7 +536,7 @@ def test_set_geometry_layer_visibility_accepts_multiple_layer_types(tmp_path):
     assert modified > 0
     layers = RasMap.list_geometry_layers(project_dir)
     elements = layers.loc[layers["category"] == "geometry_element"].copy()
-    visible = elements.loc[elements["checked"] == True, "layer_type"].tolist()
+    visible = elements.loc[elements["checked"], "layer_type"].tolist()
     assert visible == ["RASD2FlowArea", "LateralStructureLayer"]
     root = ET.parse(project_dir / "GeometryLayerProject.rasmap").getroot()
     assert root.find("./Geometries").attrib["Checked"] == "True"
@@ -565,7 +565,7 @@ def test_result_layer_visibility_can_hide_all_and_select_child_layer(tmp_path):
     )
     assert shown > 0
     result_layers = RasMap.list_result_layers(project_dir)
-    visible = result_layers.loc[result_layers["checked"] == True]
+    visible = result_layers.loc[result_layers["checked"]]
     assert set(visible["layer_name"]) == {"Plan A", "Depth"}
     assert set(visible["plan_name"]) == {"Plan A"}
     root = ET.parse(project_dir / "GeometryLayerProject.rasmap").getroot()
@@ -594,7 +594,7 @@ def test_map_layer_visibility_can_hide_all_and_selective_layers(tmp_path):
     )
     assert shown > 0
     map_layers = RasMap.list_map_layers(project_dir)
-    visible = map_layers.loc[map_layers["checked"] == True]
+    visible = map_layers.loc[map_layers["checked"]]
     assert visible["name"].tolist() == ["Land Cover"]
     root = ET.parse(project_dir / "GeometryLayerProject.rasmap").getroot()
     assert root.find("./MapLayers").attrib["Checked"] == "True"
@@ -845,7 +845,7 @@ def test_create_spatial_review_package_writes_audit_bundle(tmp_path):
     geometry_layers = RasMap.list_geometry_layers(project_dir)
     visible = geometry_layers.loc[
         (geometry_layers["category"] == "geometry_element")
-        & (geometry_layers["checked"] == True),
+        & geometry_layers["checked"],
         "layer_type",
     ].tolist()
     assert visible == ["RASD2FlowArea", "LateralStructureLayer"]
@@ -913,11 +913,11 @@ def test_create_spatial_review_package_can_select_result_and_map_layers(tmp_path
     )
 
     result_layers = pd.read_csv(state["artifacts"]["result_layers"])
-    visible_results = result_layers.loc[result_layers["checked"] == True]
+    visible_results = result_layers.loc[result_layers["checked"]]
     assert set(visible_results["layer_name"]) == {"Plan A", "Depth"}
 
     map_layers = pd.read_csv(state["artifacts"]["map_layers"])
-    visible_maps = map_layers.loc[map_layers["checked"] == True]
+    visible_maps = map_layers.loc[map_layers["checked"]]
     assert visible_maps["name"].tolist() == ["Land Cover"]
 
 
@@ -958,6 +958,49 @@ def test_ensure_results_plan_layer_creates_and_updates_rasresults(tmp_path, capl
     assert "Ensured RASResults layer 'Encroached Result'" in messages
     assert "Ensured RASResults layer 'Encroached'" in messages
     assert all(str(project_dir) not in message for message in messages)
+
+
+def test_clone_geometry_layer_registers_clone_and_preserves_child_layers(tmp_path):
+    project_dir = _make_geometry_project(tmp_path)
+    (project_dir / "GeometryLayerProject.g05.hdf").write_bytes(b"")
+
+    class DummyProject:
+        project_folder = project_dir
+        project_name = "GeometryLayerProject"
+
+        def check_initialized(self):
+            return None
+
+    first = RasMap.clone_geometry_layer(
+        "04",
+        "05",
+        name="Contained Breakout",
+        checked=False,
+        expanded=True,
+        ras_object=DummyProject(),
+    )
+    second = RasMap.clone_geometry_layer(
+        "04",
+        "05",
+        name="Contained Breakout",
+        checked=False,
+        expanded=True,
+        ras_object=DummyProject(),
+    )
+
+    assert first["filename"] == r".\GeometryLayerProject.g05.hdf"
+    assert second["geom_number"] == "05"
+    root = ET.parse(project_dir / "GeometryLayerProject.rasmap").getroot()
+    layers = root.findall("./Geometries/Layer[@Type='RASGeometry']")
+    assert len(layers) == 2
+    clone = next(layer for layer in layers if ".g05.hdf" in layer.get("Filename"))
+    source = next(layer for layer in layers if ".g04.hdf" in layer.get("Filename"))
+    assert clone.get("Name") == "Contained Breakout"
+    assert clone.get("Checked") == "False"
+    assert clone.get("Expanded") == "True"
+    assert [child.get("Type") for child in clone.findall("Layer")] == [
+        child.get("Type") for child in source.findall("Layer")
+    ]
 
 
 def test_add_wse_comparison_layers_uses_project_rasmap_for_terrains(tmp_path):

@@ -69,6 +69,7 @@ List of Functions in RasMap:
 - add_wse_comparison_layers(): Batch add WSE comparison layers for existing/proposed plan pairs
 """
 
+import copy
 import os
 import json
 import re
@@ -1587,6 +1588,127 @@ class RasMap:
 
         logger.debug("Found %d geometries in .rasmap", len(geometries))
         return geometries
+
+    @staticmethod
+    @log_call
+    def clone_geometry_layer(
+        source_geometry: Union[str, int],
+        target_geometry: Union[str, int],
+        *,
+        name: Optional[str] = None,
+        checked: bool = True,
+        expanded: bool = True,
+        ras_object=None,
+    ) -> Dict[str, Any]:
+        """Register a cloned geometry HDF in the RASMapper tree.
+
+        ``RasGeo.clone_geom()`` copies the geometry control file and HDF, but
+        HEC-RAS does not add the cloned HDF to ``<Geometries>`` in the project
+        ``.rasmap`` file. Exact text-to-HDF refresh workflows therefore cannot
+        resolve the clone until it has a RASMapper geometry layer.
+
+        The source geometry layer is deep-copied so the target keeps the same
+        child-layer display configuration. Only the top-level display name,
+        visibility, expansion state, and HDF filename are changed. Repeating
+        the call for the same target is idempotent.
+
+        Args:
+            source_geometry: Source geometry number, such as ``"01"``.
+            target_geometry: Cloned geometry number, such as ``"02"``.
+            name: Optional target display name. Defaults to the source name.
+            checked: Whether the target geometry is visible.
+            expanded: Whether the target geometry tree is expanded.
+            ras_object: Optional initialized :class:`RasPrj` instance.
+
+        Returns:
+            Dict[str, Any]: Registered layer metadata and the ``.rasmap`` path.
+
+        Raises:
+            FileNotFoundError: If the ``.rasmap`` or target geometry HDF is absent.
+            ValueError: If the source layer is absent or the numbers are equal.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        source_number = RasUtils.normalize_ras_number(source_geometry)
+        target_number = RasUtils.normalize_ras_number(target_geometry)
+        if source_number == target_number:
+            raise ValueError("source_geometry and target_geometry must differ")
+
+        project_folder = Path(ras_obj.project_folder)
+        project_name = str(ras_obj.project_name)
+        rasmap_path = project_folder / f"{project_name}.rasmap"
+        target_hdf = project_folder / f"{project_name}.g{target_number}.hdf"
+        if not rasmap_path.exists():
+            raise FileNotFoundError(f"RASMapper file not found: {rasmap_path}")
+        if not target_hdf.exists():
+            raise FileNotFoundError(f"Cloned geometry HDF not found: {target_hdf}")
+
+        try:
+            tree = ET.parse(rasmap_path)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            raise ValueError(f"Error parsing .rasmap XML: {e}") from e
+        geometries = root.find("Geometries")
+        if geometries is None:
+            raise ValueError("No Geometries section found in .rasmap")
+
+        source_token = f".g{source_number}.hdf"
+        target_token = f".g{target_number}.hdf"
+        source_layer = None
+        target_layer = None
+        for layer in geometries.findall("Layer"):
+            filename = _normalize_rasmap_filename(layer.get("Filename"))
+            if source_token in filename:
+                source_layer = layer
+            if target_token in filename:
+                target_layer = layer
+        if source_layer is None:
+            raise ValueError(
+                f"Source geometry g{source_number} is not registered in {rasmap_path}"
+            )
+
+        if target_layer is None:
+            target_layer = copy.deepcopy(source_layer)
+            source_index = list(geometries).index(source_layer)
+            geometries.insert(source_index + 1, target_layer)
+
+        rel_hdf = _rasmap_relative_path(project_folder, target_hdf)
+        layer_name = str(name).strip() if name is not None else ""
+        target_layer.set("Name", layer_name or source_layer.get("Name", ""))
+        target_layer.set("Type", "RASGeometry")
+        target_layer.set("Checked", "True" if checked else "False")
+        target_layer.set("Expanded", "True" if expanded else "False")
+        target_layer.set("Filename", rel_hdf)
+        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+
+        readback = ET.parse(rasmap_path).getroot().find("Geometries")
+        registered = None if readback is None else next(
+            (
+                layer
+                for layer in readback.findall("Layer")
+                if target_token
+                in _normalize_rasmap_filename(layer.get("Filename"))
+            ),
+            None,
+        )
+        if registered is None:
+            raise RuntimeError(
+                f"RASMapper geometry registration failed readback for g{target_number}"
+            )
+        record = {
+            "name": registered.get("Name", ""),
+            "filename": registered.get("Filename", ""),
+            "geom_number": target_number,
+            "checked": registered.get("Checked", "").lower() == "true",
+            "expanded": registered.get("Expanded", "").lower() == "true",
+            "rasmap_path": rasmap_path,
+        }
+        logger.info(
+            "Registered cloned geometry g%s as RASMapper layer '%s'",
+            target_number,
+            record["name"],
+        )
+        return record
 
     @staticmethod
     @log_call

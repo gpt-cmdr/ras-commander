@@ -3956,6 +3956,35 @@ notebooks:
   excluded: false
   code_cells: 11
   executed_cells: 9
+- id: 956_ebfe_2d_breakout_geometry_preparation
+  filename: 956_ebfe_2d_breakout_geometry_preparation.ipynb
+  title: eBFE 2D Breakout Geometry Preparation
+  series: 950
+  series_name: eBFE Delivery Validation
+  summary: Qualify and prepare a contained pure-2D HUC12 breakout from Upper Guadalupe 3 plan 08, with
+    byte-identical unsteady cloning, geometry trimming/remeshing, parent terrain and inundation context,
+    and unassigned parent-face flux review.
+  tags:
+  - 2d
+  - breakout
+  - ebfe
+  - geometry
+  - mesh
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - HdfMesh.get_mesh_sloped_topology
+  - HdfResultsMesh.get_mesh_max_ws
+  - RasBreakout2D.clone_plan_components
+  - RasBreakout2D.preflight
+  - RasBreakout2D.prepare_cloned_geometry
+  - RasBreakout2D.review_parent_boundary_flux
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 9
 - id: 957_ebfe_spring_river_validation
   filename: 957_ebfe_spring_river_validation.ipynb
   title: 'Using eBFE Models: Spring River Validation'
