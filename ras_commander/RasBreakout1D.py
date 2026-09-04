@@ -10,16 +10,26 @@ downstream cross section in the destination model.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
 
+import geopandas as gpd
 import pandas as pd
+from pyproj import CRS
+from shapely.ops import unary_union
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from .RasNetworkConflation import (
+    NetworkAdapter,
+    NetworkEdgeCoveragePlanResult,
+    NetworkEdgeCoverageResult,
+    RasNetworkConflation,
+)
 from .RasPrj import RasPrj
 
 
@@ -106,6 +116,146 @@ class Breakout1DResult:
 
 
 @dataclass(frozen=True)
+class Breakout1DSourceCatalog:
+    """Normalized source models and geometry used to plan network breakouts."""
+
+    models_df: pd.DataFrame
+    footprints_gdf: gpd.GeoDataFrame
+    centerlines_gdf: gpd.GeoDataFrame
+    cross_sections_gdf: gpd.GeoDataFrame
+    analysis_crs: str
+    parameters: Mapping[str, Any]
+
+    @property
+    def summary(self) -> dict[str, int]:
+        """Return catalog counts, including exact geometry duplicates."""
+        active = self.models_df["included"].astype(bool)
+        duplicate = self.models_df["duplicate_of"].notna()
+        return {
+            "source_models": int(len(self.models_df)),
+            "included_models": int(active.sum()),
+            "duplicate_models": int(duplicate.sum()),
+            "reaches": int(len(self.centerlines_gdf)),
+            "cross_sections": int(len(self.cross_sections_gdf)),
+        }
+
+    @log_call
+    def write(
+        self, directory: Union[str, Path], *, overwrite: bool = False
+    ) -> Path:
+        """Persist the catalog as Parquet and GeoParquet tables."""
+        directory = Path(directory)
+        outputs = {
+            "models": directory / "models.parquet",
+            "footprints": directory / "footprints.parquet",
+            "centerlines": directory / "centerlines.parquet",
+            "cross_sections": directory / "cross_sections.parquet",
+            "metadata": directory / "catalog.json",
+        }
+        existing = [path for path in outputs.values() if path.exists()]
+        if existing and not overwrite:
+            raise FileExistsError(
+                "Catalog outputs already exist: "
+                + ", ".join(str(path) for path in existing)
+            )
+        directory.mkdir(parents=True, exist_ok=True)
+        self.models_df.to_parquet(outputs["models"], index=False)
+        self.footprints_gdf.to_parquet(outputs["footprints"], index=False)
+        self.centerlines_gdf.to_parquet(outputs["centerlines"], index=False)
+        self.cross_sections_gdf.to_parquet(
+            outputs["cross_sections"], index=False
+        )
+        outputs["metadata"].write_text(
+            json.dumps(
+                {
+                    "catalog_version": "1",
+                    "analysis_crs": self.analysis_crs,
+                    "parameters": dict(self.parameters),
+                    "summary": self.summary,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return directory
+
+    @classmethod
+    @log_call
+    def read(cls, directory: Union[str, Path]) -> "Breakout1DSourceCatalog":
+        """Load a catalog written by :meth:`write`."""
+        directory = Path(directory)
+        metadata = json.loads(
+            (directory / "catalog.json").read_text(encoding="utf-8")
+        )
+        if str(metadata.get("catalog_version")) != "1":
+            raise ValueError(
+                "Unsupported breakout source catalog version: "
+                f"{metadata.get('catalog_version')!r}"
+            )
+        return cls(
+            models_df=pd.read_parquet(directory / "models.parquet"),
+            footprints_gdf=gpd.read_parquet(directory / "footprints.parquet"),
+            centerlines_gdf=gpd.read_parquet(directory / "centerlines.parquet"),
+            cross_sections_gdf=gpd.read_parquet(
+                directory / "cross_sections.parquet"
+            ),
+            analysis_crs=str(metadata["analysis_crs"]),
+            parameters=dict(metadata.get("parameters", {})),
+        )
+
+
+@dataclass(frozen=True)
+class Breakout1DPlan:
+    """Auditable source-coverage plan for one directed network edge.
+
+    This first planning surface resolves model coverage and the best matching
+    source reach inside each model. It does not yet approve or write the final
+    cross-model hydraulic geometry seam.
+    """
+
+    edge_id: str
+    source_models_df: pd.DataFrame
+    reach_assignments_df: gpd.GeoDataFrame
+    handoff_diagnostics_df: gpd.GeoDataFrame
+    edge_coverage: NetworkEdgeCoverageResult
+    coverage_plan: NetworkEdgeCoveragePlanResult
+    analysis_crs: str
+    parameters: Mapping[str, Any]
+
+    @property
+    def status(self) -> str:
+        """Return the edge-level plan status, including handoff eligibility."""
+        rows = self.coverage_plan.plans_df
+        if len(rows) != 1:
+            return "uncovered"
+        coverage_status = str(rows.iloc[0]["status"])
+        if (
+            coverage_status == "multi_source_ready"
+            and not self.handoff_diagnostics_df.empty
+            and not self.handoff_diagnostics_df["handoff_eligible"].all()
+        ):
+            return "multi_source_handoff_conflict"
+        return coverage_status
+
+    @property
+    def join_ready(self) -> bool:
+        """Return whether coverage and every cross-model handoff are eligible."""
+        return self.status in {"single_source_ready", "multi_source_ready"}
+
+    @property
+    def source_slices_df(self) -> gpd.GeoDataFrame:
+        """Return selected upstream-to-downstream source ownership slices."""
+        return self.coverage_plan.source_slices_df
+
+    @property
+    def seams_df(self) -> gpd.GeoDataFrame:
+        """Return provisional footprint-overlap seam locations."""
+        return self.coverage_plan.seams_df
+
+
+@dataclass(frozen=True)
 class _NodeBlock:
     start: int
     end: int
@@ -115,6 +265,625 @@ class _NodeBlock:
 
 class RasBreakout1D:
     """Static workflow for extracting an independent 1D steady breakout."""
+
+    @staticmethod
+    @log_call
+    def catalog_sources(
+        source_models: Mapping[str, RasPrj],
+        *,
+        plan_numbers: Optional[Mapping[str, Union[str, int]]] = None,
+        model_footprints: Optional[gpd.GeoDataFrame] = None,
+        analysis_crs: Optional[Any] = None,
+        deduplicate: bool = True,
+    ) -> Breakout1DSourceCatalog:
+        """Catalog steady 1D source models for network-edge planning.
+
+        ``source_models`` maps stable caller-defined model IDs to initialized
+        :class:`RasPrj` objects. Exact duplicate geometry files are retained in
+        ``models_df`` for provenance but excluded from the spatial catalog by
+        default. Supplied footprints are authoritative. When omitted, an HDF
+        project footprint is preferred and legacy text geometry falls back to
+        the convex hull of its centerlines and cross-section cut lines.
+
+        The returned tables use one projected ``analysis_crs`` and can be
+        persisted with :meth:`Breakout1DSourceCatalog.write` as GeoParquet.
+        """
+        if not isinstance(source_models, Mapping) or not source_models:
+            raise ValueError("source_models must be a non-empty mapping")
+        normalized_sources: dict[str, RasPrj] = {}
+        for raw_id, ras_object in source_models.items():
+            source_id = str(raw_id).strip()
+            if not source_id:
+                raise ValueError("source_models contains a blank source model ID")
+            if source_id in normalized_sources:
+                raise ValueError(f"Duplicate source model ID: {source_id}")
+            if not isinstance(ras_object, RasPrj) or not ras_object.is_initialized:
+                raise TypeError(
+                    f"source_models[{source_id!r}] must be an initialized RasPrj"
+                )
+            normalized_sources[source_id] = ras_object
+
+        normalized_plan_numbers: dict[str, Union[str, int]] = {}
+        if plan_numbers is not None:
+            if not isinstance(plan_numbers, Mapping):
+                raise TypeError("plan_numbers must be a mapping")
+            for raw_id, plan_number in plan_numbers.items():
+                source_id = str(raw_id).strip()
+                if source_id in normalized_plan_numbers:
+                    raise ValueError(
+                        f"Duplicate plan_numbers source ID: {source_id}"
+                    )
+                normalized_plan_numbers[source_id] = plan_number
+            unknown_plan_ids = sorted(
+                set(normalized_plan_numbers) - set(normalized_sources)
+            )
+            if unknown_plan_ids:
+                raise ValueError(
+                    "plan_numbers contain unknown source model IDs: "
+                    + ", ".join(unknown_plan_ids)
+                )
+
+        supplied_footprints = None
+        if model_footprints is not None:
+            if not isinstance(model_footprints, gpd.GeoDataFrame):
+                raise TypeError("model_footprints must be a GeoDataFrame")
+            if model_footprints.crs is None:
+                raise ValueError("model_footprints must have a CRS")
+            if "geometry_id" not in model_footprints.columns:
+                raise ValueError("model_footprints must contain geometry_id")
+            supplied_footprints = model_footprints.copy()
+            supplied_footprints["geometry_id"] = supplied_footprints[
+                "geometry_id"
+            ].map(lambda value: str(value).strip())
+            if supplied_footprints["geometry_id"].duplicated().any():
+                raise ValueError("model_footprints geometry_id values must be unique")
+            unknown = sorted(
+                set(supplied_footprints["geometry_id"]) - set(normalized_sources)
+            )
+            if unknown:
+                raise ValueError(
+                    "model_footprints contain unknown source model IDs: "
+                    + ", ".join(unknown)
+                )
+
+        crs_candidates = [analysis_crs]
+        if supplied_footprints is not None:
+            crs_candidates.append(supplied_footprints.crs)
+        crs_candidates.extend(
+            ras_object.project_crs for ras_object in normalized_sources.values()
+        )
+        target_crs_input = next(
+            (value for value in crs_candidates if value is not None), None
+        )
+        if target_crs_input is None:
+            raise ValueError(
+                "analysis_crs is required when source projects and supplied "
+                "footprints do not provide a CRS"
+            )
+        target_crs = CRS.from_user_input(target_crs_input)
+        if not target_crs.is_projected:
+            raise ValueError("analysis_crs must be projected")
+        if supplied_footprints is not None:
+            supplied_footprints = supplied_footprints.to_crs(target_crs)
+
+        from .RasSteady import RasSteady
+
+        resolved: list[dict[str, Any]] = []
+        for source_id in sorted(normalized_sources):
+            ras_object = normalized_sources[source_id]
+            plan_number = normalized_plan_numbers.get(source_id)
+            plan = RasBreakout1D._resolve_source_plan(ras_object, plan_number)
+            flow_data = RasSteady.read_flow_file(plan["flow_path"])
+            resolved.append(
+                {
+                    "geometry_id": source_id,
+                    "ras_object": ras_object,
+                    "plan": plan,
+                    "geometry_hash": RasBreakout1D._sha256(plan["geometry_path"]),
+                    "profile_names": tuple(flow_data.get("profile_names", ())),
+                    "profile_count": int(flow_data.get("number_of_profiles", 0)),
+                }
+            )
+
+        canonical_by_hash: dict[str, str] = {}
+        model_rows: list[dict[str, Any]] = []
+        for item in resolved:
+            geometry_hash = item["geometry_hash"]
+            duplicate_of = canonical_by_hash.get(geometry_hash)
+            if duplicate_of is None:
+                canonical_by_hash[geometry_hash] = item["geometry_id"]
+            included = not (deduplicate and duplicate_of is not None)
+            item["duplicate_of"] = duplicate_of
+            item["included"] = included
+            ras_object = item["ras_object"]
+            plan = item["plan"]
+            model_rows.append(
+                {
+                    "geometry_id": item["geometry_id"],
+                    "project_path": str(Path(ras_object.prj_file).resolve()),
+                    "project_name": str(ras_object.project_name),
+                    "plan_number": str(plan["plan_number"]),
+                    "geometry_path": str(Path(plan["geometry_path"]).resolve()),
+                    "flow_path": str(Path(plan["flow_path"]).resolve()),
+                    "geometry_sha256": geometry_hash,
+                    "duplicate_of": duplicate_of,
+                    "included": included,
+                    "project_crs": ras_object.project_crs,
+                    "units_system": RasBreakout1D._project_units_system(
+                        ras_object.prj_file
+                    ),
+                    "ras_version": RasBreakout1D._keyword_value(
+                        plan["plan_path"], "Program Version"
+                    ),
+                    "profile_count": item["profile_count"],
+                    "profile_names": item["profile_names"],
+                }
+            )
+
+        footprint_rows: list[dict[str, Any]] = []
+        centerline_frames: list[gpd.GeoDataFrame] = []
+        cross_section_frames: list[gpd.GeoDataFrame] = []
+        from .geom import GeomParser
+
+        for item in resolved:
+            if not item["included"]:
+                continue
+            source_id = item["geometry_id"]
+            ras_object = item["ras_object"]
+            geom_file = Path(item["plan"]["geometry_path"])
+            source_crs = CRS.from_user_input(
+                ras_object.project_crs or target_crs
+            )
+            centerlines = GeomParser.get_river_centerlines(geom_file)
+            cross_sections = GeomParser.get_xs_cut_lines(geom_file)
+            if centerlines.empty:
+                raise ValueError(f"Source model {source_id} has no river centerline")
+            if len(cross_sections) < 2:
+                raise ValueError(
+                    f"Source model {source_id} must contain at least two GIS "
+                    "cross-section cut lines"
+                )
+            centerlines = centerlines.set_crs(source_crs, allow_override=True).to_crs(
+                target_crs
+            )
+            cross_sections = cross_sections.set_crs(
+                source_crs, allow_override=True
+            ).to_crs(target_crs)
+            centerlines.insert(0, "geometry_id", source_id)
+            centerlines.insert(
+                1,
+                "reach_id",
+                centerlines.apply(
+                    lambda row: RasBreakout1D._catalog_reach_id(
+                        source_id, row["river"], row["reach"]
+                    ),
+                    axis=1,
+                ),
+            )
+            cross_sections.insert(0, "geometry_id", source_id)
+            cross_sections.insert(
+                1,
+                "reach_id",
+                cross_sections.apply(
+                    lambda row: RasBreakout1D._catalog_reach_id(
+                        source_id, row["river"], row["reach"]
+                    ),
+                    axis=1,
+                ),
+            )
+            cross_sections.insert(
+                2,
+                "xs_id",
+                cross_sections.apply(
+                    lambda row: f"{row['reach_id']}::{row['station']}", axis=1
+                ),
+            )
+            centerline_frames.append(centerlines)
+            cross_section_frames.append(cross_sections)
+
+            supplied = None
+            if supplied_footprints is not None:
+                matches = supplied_footprints.loc[
+                    supplied_footprints["geometry_id"] == source_id
+                ]
+                if len(matches) == 1:
+                    supplied = matches.iloc[0].geometry
+                elif len(matches) == 0:
+                    raise ValueError(
+                        f"model_footprints has no row for source model {source_id}"
+                    )
+            if supplied is not None:
+                footprint_geometry = supplied
+                footprint_source = "supplied"
+            else:
+                footprint_geometry, footprint_source = (
+                    RasBreakout1D._catalog_footprint(
+                        geom_file,
+                        centerlines,
+                        cross_sections,
+                        source_crs=source_crs,
+                        target_crs=target_crs,
+                    )
+                )
+            if footprint_geometry is None or footprint_geometry.is_empty:
+                raise ValueError(f"Source model {source_id} has an empty footprint")
+            footprint_rows.append(
+                {
+                    "geometry_id": source_id,
+                    "footprint_source": footprint_source,
+                    "geometry": footprint_geometry,
+                }
+            )
+
+        models_columns = [
+            "geometry_id", "project_path", "project_name", "plan_number",
+            "geometry_path", "flow_path", "geometry_sha256", "duplicate_of",
+            "included", "project_crs", "units_system", "ras_version",
+            "profile_count", "profile_names",
+        ]
+        models_df = pd.DataFrame(model_rows, columns=models_columns).sort_values(
+            "geometry_id"
+        ).reset_index(drop=True)
+        footprints_gdf = gpd.GeoDataFrame(
+            footprint_rows,
+            columns=["geometry_id", "footprint_source", "geometry"],
+            geometry="geometry",
+            crs=target_crs,
+        ).sort_values("geometry_id").reset_index(drop=True)
+        centerlines_gdf = gpd.GeoDataFrame(
+            pd.concat(centerline_frames, ignore_index=True),
+            geometry="geometry",
+            crs=target_crs,
+        ).sort_values(["geometry_id", "river", "reach"]).reset_index(drop=True)
+        cross_sections_gdf = gpd.GeoDataFrame(
+            pd.concat(cross_section_frames, ignore_index=True),
+            geometry="geometry",
+            crs=target_crs,
+        ).sort_values(
+            ["geometry_id", "river", "reach", "station"]
+        ).reset_index(drop=True)
+        return Breakout1DSourceCatalog(
+            models_df=models_df,
+            footprints_gdf=footprints_gdf,
+            centerlines_gdf=centerlines_gdf,
+            cross_sections_gdf=cross_sections_gdf,
+            analysis_crs=target_crs.to_string(),
+            parameters={"deduplicate": bool(deduplicate)},
+        )
+
+    @staticmethod
+    @log_call
+    def plan_network_edge(
+        source_catalog: Breakout1DSourceCatalog,
+        network_edges: Union[gpd.GeoDataFrame, str, Path],
+        *,
+        edge_id: Optional[Union[str, int]] = None,
+        adapter: Union[str, NetworkAdapter] = "auto",
+        network_edges_layer: Optional[str] = None,
+        min_xs_intersections: int = 2,
+        xs_tolerance: float = 0.0,
+        max_centerline_offset: Optional[float] = None,
+        gap_tolerance: float = 0.0,
+        max_cross_centerline_xs: int = 1,
+    ) -> Breakout1DPlan:
+        """Plan source-model coverage for one directed network edge.
+
+        Footprints generate candidate models. A model is retained only when one
+        source reach has at least ``min_xs_intersections`` cut lines meeting the
+        edge and those sections form a monotonic upstream-to-downstream sequence
+        in edge-coordinate order. The extent-first coverage planner then chooses
+        a deterministic minimum-switch model chain.
+
+        The returned seam points are provisional footprint handoffs. Geometry
+        assembly must still evaluate source-centerline intersections, duplicate
+        cut lines, structures, station identifiers, and steady-flow continuity.
+
+        A cross-model handoff fails closed when more than
+        ``max_cross_centerline_xs`` source cross sections intersect both selected
+        river centerlines. This prevents the overlapping tributary/main-stem
+        geometry seen in invalid candidates from being treated as join-ready.
+        """
+        if not isinstance(source_catalog, Breakout1DSourceCatalog):
+            raise TypeError(
+                "source_catalog must be a Breakout1DSourceCatalog"
+            )
+        if isinstance(min_xs_intersections, bool) or not isinstance(
+            min_xs_intersections, int
+        ):
+            raise TypeError("min_xs_intersections must be an integer")
+        if min_xs_intersections < 1:
+            raise ValueError("min_xs_intersections must be at least 1")
+        if isinstance(max_cross_centerline_xs, bool) or not isinstance(
+            max_cross_centerline_xs, int
+        ):
+            raise TypeError("max_cross_centerline_xs must be an integer")
+        if max_cross_centerline_xs < 0:
+            raise ValueError("max_cross_centerline_xs must be non-negative")
+        xs_tolerance = RasBreakout1D._nonnegative_distance(
+            xs_tolerance, "xs_tolerance"
+        )
+        gap_tolerance = RasBreakout1D._nonnegative_distance(
+            gap_tolerance, "gap_tolerance"
+        )
+        if max_centerline_offset is not None:
+            max_centerline_offset = RasBreakout1D._nonnegative_distance(
+                max_centerline_offset, "max_centerline_offset"
+            )
+
+        from shapely.ops import nearest_points
+
+        raw_coverage = RasNetworkConflation.classify_edges(
+            source_catalog.footprints_gdf[["geometry_id", "geometry"]],
+            network_edges,
+            adapter=adapter,
+            network_edges_layer=network_edges_layer,
+            analysis_crs=source_catalog.analysis_crs,
+        )
+        available_edge_ids = sorted(
+            raw_coverage.edge_summary_df["edge_id"].astype(str).unique()
+        )
+        if edge_id is None:
+            if len(available_edge_ids) != 1:
+                raise ValueError(
+                    "edge_id is required unless exactly one intersecting network "
+                    f"edge is supplied; found {len(available_edge_ids)}"
+                )
+            resolved_edge_id = available_edge_ids[0]
+        else:
+            resolved_edge_id = str(edge_id)
+            if resolved_edge_id not in available_edge_ids:
+                raise ValueError(
+                    f"Network edge {resolved_edge_id!r} has no catalog footprint "
+                    "coverage"
+                )
+        edge_row = raw_coverage.edge_summary_df.loc[
+            raw_coverage.edge_summary_df["edge_id"].astype(str)
+            == resolved_edge_id
+        ].iloc[0]
+        edge_geometry = edge_row.geometry
+        xs_test_geometry = (
+            edge_geometry.buffer(xs_tolerance)
+            if xs_tolerance > 0
+            else edge_geometry
+        )
+
+        assignment_rows: list[dict[str, Any]] = []
+        relationships = raw_coverage.coverage_df.loc[
+            raw_coverage.coverage_df["edge_id"].astype(str)
+            == resolved_edge_id
+        ]
+        for relationship in relationships.itertuples(index=False):
+            source_id = str(relationship.geometry_id)
+            source_centerlines = source_catalog.centerlines_gdf.loc[
+                source_catalog.centerlines_gdf["geometry_id"].astype(str)
+                == source_id
+            ]
+            source_cross_sections = source_catalog.cross_sections_gdf.loc[
+                source_catalog.cross_sections_gdf["geometry_id"].astype(str)
+                == source_id
+            ]
+            candidates: list[dict[str, Any]] = []
+            for centerline in source_centerlines.itertuples(index=False):
+                reach_xs = source_cross_sections.loc[
+                    source_cross_sections["reach_id"] == centerline.reach_id
+                ]
+                intersected = reach_xs.loc[
+                    reach_xs.intersects(xs_test_geometry)
+                ].copy()
+                measures = []
+                if not intersected.empty:
+                    intersected["_station_value"] = intersected["station"].map(
+                        RasBreakout1D._station_value
+                    )
+                    intersected = intersected.sort_values(
+                        "_station_value", ascending=False
+                    )
+                    for xs_geometry in intersected.geometry:
+                        edge_point, _ = nearest_points(edge_geometry, xs_geometry)
+                        measures.append(float(edge_geometry.project(edge_point)))
+                sequence = RasBreakout1D._measure_sequence(
+                    measures, tolerance=max(xs_tolerance, 1e-9)
+                )
+                covered_parts = raw_coverage.coverage_parts_df.loc[
+                    (
+                        raw_coverage.coverage_parts_df["edge_id"].astype(str)
+                        == resolved_edge_id
+                    )
+                    & (
+                        raw_coverage.coverage_parts_df["geometry_id"].astype(str)
+                        == source_id
+                    )
+                ]
+                sample_points = []
+                for part in covered_parts.geometry:
+                    if part is None or part.is_empty or part.length <= 0:
+                        continue
+                    sample_points.extend(
+                        part.interpolate(fraction, normalized=True)
+                        for fraction in (0.0, 0.25, 0.5, 0.75, 1.0)
+                    )
+                offsets = [
+                    float(point.distance(centerline.geometry))
+                    for point in sample_points
+                ]
+                candidates.append(
+                    {
+                        "geometry_id": source_id,
+                        "edge_id": resolved_edge_id,
+                        "reach_id": str(centerline.reach_id),
+                        "river": str(centerline.river),
+                        "reach": str(centerline.reach),
+                        "xs_intersection_count": int(len(intersected)),
+                        "xs_measure_start": min(measures) if measures else None,
+                        "xs_measure_end": max(measures) if measures else None,
+                        "xs_sequence": sequence,
+                        "centerline_offset_mean": (
+                            float(sum(offsets) / len(offsets)) if offsets else None
+                        ),
+                        "geometry": centerline.geometry,
+                    }
+                )
+
+            candidates.sort(
+                key=lambda item: (
+                    -item["xs_intersection_count"],
+                    (
+                        item["centerline_offset_mean"]
+                        if item["centerline_offset_mean"] is not None
+                        else float("inf")
+                    ),
+                    item["reach_id"],
+                )
+            )
+            best = candidates[0] if candidates else None
+            ambiguous = False
+            if best is not None and len(candidates) > 1:
+                runner_up = candidates[1]
+                runner_offset = runner_up["centerline_offset_mean"]
+                best_offset = best["centerline_offset_mean"]
+                ambiguous = (
+                    runner_up["xs_intersection_count"]
+                    == best["xs_intersection_count"]
+                    and math.isclose(
+                        (
+                            runner_offset
+                            if runner_offset is not None
+                            else float("inf")
+                        ),
+                        best_offset if best_offset is not None else float("inf"),
+                        rel_tol=0.0,
+                        abs_tol=max(xs_tolerance, 1e-9),
+                    )
+                )
+            reason_codes: list[str] = []
+            if best is None:
+                status = "unmatched"
+                reason_codes.append("NO_REACH")
+                best = {
+                    "geometry_id": source_id,
+                    "edge_id": resolved_edge_id,
+                    "reach_id": None,
+                    "river": None,
+                    "reach": None,
+                    "xs_intersection_count": 0,
+                    "xs_measure_start": None,
+                    "xs_measure_end": None,
+                    "xs_sequence": "unavailable",
+                    "centerline_offset_mean": None,
+                    "geometry": None,
+                }
+            elif ambiguous:
+                status = "ambiguous"
+                reason_codes.append("AMBIGUOUS_REACH")
+            elif best["xs_intersection_count"] < min_xs_intersections:
+                status = "unmatched"
+                reason_codes.append("INSUFFICIENT_XS_INTERSECTIONS")
+            elif best["xs_sequence"] != "with_edge":
+                status = "unmatched"
+                reason_codes.append("XS_SEQUENCE_CONFLICT")
+            elif (
+                max_centerline_offset is not None
+                and best["centerline_offset_mean"] is not None
+                and best["centerline_offset_mean"] > max_centerline_offset
+            ):
+                status = "unmatched"
+                reason_codes.append("CENTERLINE_OFFSET")
+            else:
+                status = "confirmed"
+            assignment_rows.append(
+                {
+                    **best,
+                    "status": status,
+                    "reason_codes": tuple(reason_codes),
+                }
+            )
+
+        assignment_columns = [
+            "geometry_id", "edge_id", "reach_id", "river", "reach",
+            "xs_intersection_count", "xs_measure_start", "xs_measure_end",
+            "xs_sequence", "centerline_offset_mean", "status",
+            "reason_codes", "geometry",
+        ]
+        reach_assignments = gpd.GeoDataFrame(
+            assignment_rows,
+            columns=assignment_columns,
+            geometry="geometry",
+            crs=source_catalog.analysis_crs,
+        ).sort_values(
+            ["status", "xs_intersection_count", "geometry_id"],
+            ascending=[True, False, True],
+        ).reset_index(drop=True)
+        confirmed_ids = set(
+            reach_assignments.loc[
+                reach_assignments["status"] == "confirmed", "geometry_id"
+            ].astype(str)
+        )
+        if not confirmed_ids:
+            raise ValueError(
+                f"No source reaches were confirmed for network edge {resolved_edge_id}"
+            )
+        confirmed_footprints = source_catalog.footprints_gdf.loc[
+            source_catalog.footprints_gdf["geometry_id"].astype(str).isin(
+                confirmed_ids
+            )
+        ]
+        confirmed_coverage = RasNetworkConflation.classify_edges(
+            confirmed_footprints[["geometry_id", "geometry"]],
+            network_edges,
+            adapter=adapter,
+            network_edges_layer=network_edges_layer,
+            analysis_crs=source_catalog.analysis_crs,
+        )
+        coverage_plan = RasNetworkConflation.plan_edge_coverage(
+            confirmed_coverage,
+            edge_ids=[resolved_edge_id],
+            gap_tolerance=gap_tolerance,
+        )
+        selected_source_order = tuple(
+            dict.fromkeys(
+                coverage_plan.source_slices_df["geometry_id"].astype(str)
+            )
+        )
+        selected_source_ids = set(selected_source_order)
+        source_order = {
+            source_id: index
+            for index, source_id in enumerate(selected_source_order)
+        }
+        source_models_df = source_catalog.models_df.loc[
+            source_catalog.models_df["geometry_id"].astype(str).isin(
+                selected_source_ids
+            )
+        ].copy()
+        source_models_df["_source_order"] = source_models_df[
+            "geometry_id"
+        ].astype(str).map(source_order)
+        source_models_df = source_models_df.sort_values(
+            "_source_order"
+        ).drop(columns="_source_order").reset_index(drop=True)
+        handoff_diagnostics = RasBreakout1D._handoff_diagnostics(
+            source_catalog,
+            reach_assignments,
+            coverage_plan,
+            max_cross_centerline_xs=max_cross_centerline_xs,
+        )
+        return Breakout1DPlan(
+            edge_id=resolved_edge_id,
+            source_models_df=source_models_df,
+            reach_assignments_df=reach_assignments,
+            handoff_diagnostics_df=handoff_diagnostics,
+            edge_coverage=confirmed_coverage,
+            coverage_plan=coverage_plan,
+            analysis_crs=source_catalog.analysis_crs,
+            parameters={
+                "adapter": getattr(adapter, "name", str(adapter)),
+                "min_xs_intersections": min_xs_intersections,
+                "xs_tolerance": xs_tolerance,
+                "max_centerline_offset": max_centerline_offset,
+                "gap_tolerance": gap_tolerance,
+                "max_cross_centerline_xs": max_cross_centerline_xs,
+                "seam_status": "provisional_footprint_handoff",
+            },
+        )
 
     @staticmethod
     @log_call
@@ -1886,6 +2655,231 @@ class RasBreakout1D:
         return matches[0]
 
     @staticmethod
+    def _handoff_diagnostics(
+        source_catalog: Breakout1DSourceCatalog,
+        reach_assignments: gpd.GeoDataFrame,
+        coverage_plan: NetworkEdgeCoveragePlanResult,
+        *,
+        max_cross_centerline_xs: int,
+    ) -> gpd.GeoDataFrame:
+        """Evaluate whether consecutive source reaches form a clean handoff."""
+        columns = [
+            "edge_id",
+            "seam_index",
+            "upstream_geometry_id",
+            "downstream_geometry_id",
+            "upstream_reach_id",
+            "downstream_reach_id",
+            "centerline_distance",
+            "centerline_intersects",
+            "upstream_xs_intersect_both_count",
+            "downstream_xs_intersect_both_count",
+            "upstream_xs_intersect_both_ids",
+            "downstream_xs_intersect_both_ids",
+            "cross_centerline_xs_count",
+            "cross_centerline_xs_ids",
+            "max_cross_centerline_xs",
+            "handoff_eligible",
+            "reason_codes",
+            "geometry",
+        ]
+        confirmed = reach_assignments.loc[
+            reach_assignments["status"] == "confirmed"
+        ]
+        assignment_by_source = {
+            str(row.geometry_id): row for row in confirmed.itertuples(index=False)
+        }
+        rows: list[dict[str, Any]] = []
+        for seam in coverage_plan.seams_df.itertuples(index=False):
+            upstream_id = str(seam.upstream_geometry_id)
+            downstream_id = str(seam.downstream_geometry_id)
+            if upstream_id == downstream_id:
+                continue
+            upstream = assignment_by_source.get(upstream_id)
+            downstream = assignment_by_source.get(downstream_id)
+            reason_codes: list[str] = []
+            if upstream is None or downstream is None:
+                reason_codes.append("MISSING_CONFIRMED_REACH")
+                rows.append(
+                    {
+                        "edge_id": str(seam.edge_id),
+                        "seam_index": int(seam.seam_index),
+                        "upstream_geometry_id": upstream_id,
+                        "downstream_geometry_id": downstream_id,
+                        "upstream_reach_id": getattr(upstream, "reach_id", None),
+                        "downstream_reach_id": getattr(downstream, "reach_id", None),
+                        "centerline_distance": None,
+                        "centerline_intersects": False,
+                        "upstream_xs_intersect_both_count": 0,
+                        "downstream_xs_intersect_both_count": 0,
+                        "upstream_xs_intersect_both_ids": (),
+                        "downstream_xs_intersect_both_ids": (),
+                        "cross_centerline_xs_count": 0,
+                        "cross_centerline_xs_ids": (),
+                        "max_cross_centerline_xs": max_cross_centerline_xs,
+                        "handoff_eligible": False,
+                        "reason_codes": tuple(reason_codes),
+                        "geometry": seam.geometry,
+                    }
+                )
+                continue
+
+            upstream_line = upstream.geometry
+            downstream_line = downstream.geometry
+            upstream_xs = source_catalog.cross_sections_gdf.loc[
+                source_catalog.cross_sections_gdf["reach_id"]
+                == upstream.reach_id
+            ]
+            downstream_xs = source_catalog.cross_sections_gdf.loc[
+                source_catalog.cross_sections_gdf["reach_id"]
+                == downstream.reach_id
+            ]
+            upstream_cross_both_mask = (
+                upstream_xs.intersects(upstream_line)
+                & upstream_xs.intersects(downstream_line)
+            )
+            downstream_cross_both_mask = (
+                downstream_xs.intersects(downstream_line)
+                & downstream_xs.intersects(upstream_line)
+            )
+            upstream_cross_both_ids = tuple(
+                upstream_xs.loc[upstream_cross_both_mask, "xs_id"].astype(str)
+            )
+            downstream_cross_both_ids = tuple(
+                downstream_xs.loc[downstream_cross_both_mask, "xs_id"].astype(str)
+            )
+            upstream_cross_both = len(upstream_cross_both_ids)
+            downstream_cross_both = len(downstream_cross_both_ids)
+            cross_centerline_xs_ids = (
+                upstream_cross_both_ids + downstream_cross_both_ids
+            )
+            cross_centerline_xs_count = (
+                upstream_cross_both + downstream_cross_both
+            )
+            if cross_centerline_xs_count > max_cross_centerline_xs:
+                reason_codes.append("MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES")
+            rows.append(
+                {
+                    "edge_id": str(seam.edge_id),
+                    "seam_index": int(seam.seam_index),
+                    "upstream_geometry_id": upstream_id,
+                    "downstream_geometry_id": downstream_id,
+                    "upstream_reach_id": str(upstream.reach_id),
+                    "downstream_reach_id": str(downstream.reach_id),
+                    "centerline_distance": float(
+                        upstream_line.distance(downstream_line)
+                    ),
+                    "centerline_intersects": bool(
+                        upstream_line.intersects(downstream_line)
+                    ),
+                    "upstream_xs_intersect_both_count": upstream_cross_both,
+                    "downstream_xs_intersect_both_count": downstream_cross_both,
+                    "upstream_xs_intersect_both_ids": upstream_cross_both_ids,
+                    "downstream_xs_intersect_both_ids": downstream_cross_both_ids,
+                    "cross_centerline_xs_count": cross_centerline_xs_count,
+                    "cross_centerline_xs_ids": cross_centerline_xs_ids,
+                    "max_cross_centerline_xs": max_cross_centerline_xs,
+                    "handoff_eligible": not reason_codes,
+                    "reason_codes": tuple(reason_codes),
+                    "geometry": seam.geometry,
+                }
+            )
+        crs = coverage_plan.seams_df.crs or source_catalog.centerlines_gdf.crs
+        return gpd.GeoDataFrame(
+            rows,
+            columns=columns,
+            geometry="geometry",
+            crs=crs,
+        )
+
+    @staticmethod
+    def _catalog_reach_id(source_id: str, river: Any, reach: Any) -> str:
+        """Return a globally unique reach identifier for a source catalog."""
+        return f"{source_id}::{str(river).strip()}::{str(reach).strip()}"
+
+    @staticmethod
+    def _measure_sequence(
+        measures: Sequence[float], *, tolerance: float
+    ) -> str:
+        """Classify XS measures ordered by decreasing HEC-RAS station."""
+        if len(measures) < 2:
+            return "insufficient"
+        deltas = [right - left for left, right in zip(measures, measures[1:])]
+        if all(delta >= -tolerance for delta in deltas):
+            return "with_edge"
+        if all(delta <= tolerance for delta in deltas):
+            return "against_edge"
+        return "nonmonotonic"
+
+    @staticmethod
+    def _catalog_footprint(
+        geom_file: Path,
+        centerlines: gpd.GeoDataFrame,
+        cross_sections: gpd.GeoDataFrame,
+        *,
+        source_crs: CRS,
+        target_crs: CRS,
+    ) -> tuple[Any, str]:
+        """Prefer an HDF footprint, with a legacy text-geometry fallback."""
+        geom_hdf = Path(f"{geom_file}.hdf")
+        if geom_hdf.is_file():
+            try:
+                from .hdf import HdfProject
+
+                footprint, _ = HdfProject.get_project_extent(
+                    geom_hdf,
+                    include_1d=True,
+                    include_2d=False,
+                    include_storage=False,
+                    buffer_percent=0.0,
+                    geometry_type="footprint",
+                )
+                if footprint is not None and not footprint.empty:
+                    if footprint.crs is None:
+                        footprint = footprint.set_crs(
+                            source_crs, allow_override=True
+                        )
+                    footprint = footprint.to_crs(target_crs)
+                    return unary_union(footprint.geometry.tolist()), "geometry_hdf"
+            except Exception as exc:
+                logger.debug(
+                    "Could not derive source-catalog footprint from %s: %s",
+                    geom_hdf,
+                    exc,
+                )
+        geometry = unary_union(
+            centerlines.geometry.tolist() + cross_sections.geometry.tolist()
+        ).convex_hull
+        return geometry, "geometry_text_convex_hull"
+
+    @staticmethod
+    def _project_units_system(project_file: Union[str, Path]) -> Optional[str]:
+        """Return the HEC-RAS project units declaration when present."""
+        for line in Path(project_file).read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines():
+            normalized = line.strip().lower()
+            if normalized == "english units":
+                return "English"
+            if normalized in {"si units", "metric units"}:
+                return "SI"
+        return None
+
+    @staticmethod
+    def _keyword_value(
+        path: Union[str, Path], keyword: str
+    ) -> Optional[str]:
+        """Read the first exact ``keyword=value`` entry from a RAS text file."""
+        prefix = f"{keyword}="
+        for line in Path(path).read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines():
+            if line.startswith(prefix):
+                value = line.split("=", 1)[1].strip()
+                return value or None
+        return None
+
+    @staticmethod
     def _sha256(path: Union[str, Path]) -> str:
         digest = hashlib.sha256()
         with Path(path).open("rb") as handle:
@@ -1900,6 +2894,8 @@ class RasBreakout1D:
 
 __all__ = [
     "RasBreakout1D",
+    "Breakout1DPlan",
+    "Breakout1DSourceCatalog",
     "Breakout1DDomainSelection",
     "Breakout1DResult",
     "Breakout1DSelection",

@@ -5,6 +5,105 @@ continuous slice of one 1D river reach. Selection and extraction are separate,
 so a station range, polygon, network edge, or explicit cross-section set can
 feed the same fail-closed writer and validation workflow.
 
+## Catalog multiple source models
+
+Use `catalog_sources()` before planning a network edge that may cross more than
+one source project. Caller-defined IDs remain stable throughout coverage,
+seam, and later geometry-provenance tables.
+
+```python
+from ras_commander import RasBreakout1D
+
+catalog = RasBreakout1D.catalog_sources(
+    {
+        "ble-upstream": upstream_ras,
+        "ble-downstream": downstream_ras,
+    },
+    model_footprints=footprints_gdf,
+    analysis_crs="EPSG:2277",
+)
+
+catalog.write("working/ble-breakout-source-catalog")
+```
+
+`source_models` values must be initialized `RasPrj` instances with steady 1D
+plans. The returned `Breakout1DSourceCatalog` contains:
+
+| Property | Contents |
+| --- | --- |
+| `models_df` | Project/plan/geometry/flow paths, exact geometry hash, units, version, and profile schema |
+| `footprints_gdf` | Deduplicated model footprints used by extent-first coverage |
+| `centerlines_gdf` | River centerlines with globally unique composite reach IDs |
+| `cross_sections_gdf` | GIS cut lines with globally unique composite XS IDs |
+
+Supplied footprints are authoritative. Without them, the catalog prefers the
+geometry-HDF footprint and falls back to the convex hull of legacy text-file
+centerlines and cut lines. A projected CRS is required. Exact duplicate
+geometry hashes remain visible in `models_df` through `duplicate_of` but are
+excluded from the spatial tables by default.
+
+Catalog persistence uses one ordinary Parquet table and three GeoParquet
+tables; it does not require GeoPackage, SQLite, or a long-running database.
+Load it later with `Breakout1DSourceCatalog.read()`.
+
+## Plan one network edge across multiple models
+
+`plan_network_edge()` turns model footprints into candidates, then confirms the
+best source reach in each model with deliberately small, interpretable checks:
+at least two cross-section intersections, station sequence agreement with the
+directed edge, an optional mean centerline-offset limit, and a fail-closed
+cross-model handoff check. It does not invoke the advanced seven-signal
+conflation scorer.
+
+```python
+plan = RasBreakout1D.plan_network_edge(
+    catalog,
+    nwm_flowlines_gdf,
+    edge_id="5790954",
+    adapter="nwm",
+    max_centerline_offset=500.0,
+    max_cross_centerline_xs=1,
+)
+
+print(plan.status)
+print(plan.reach_assignments_df)
+print(plan.source_slices_df)
+print(plan.seams_df)
+print(plan.handoff_diagnostics_df)
+```
+
+The `Breakout1DPlan` keeps the full audit trail:
+
+| Property | Contents |
+| --- | --- |
+| `reach_assignments_df` | Best reach per footprint candidate, confirmation status, and reason codes |
+| `edge_coverage` | Directed coverage parts after rejecting footprint-only false positives |
+| `source_slices_df` | Minimum-switch upstream-to-downstream source ownership intervals |
+| `seams_df` | Overlap, touching, or gap transitions with a provisional handoff point |
+| `handoff_diagnostics_df` | Centerline continuity plus IDs and counts of source cross sections intersecting both selected centerlines |
+| `source_models_df` | Distinct source projects selected by the interval plan, ordered upstream to downstream |
+
+The network geometry's coordinate order defines direction. Cross-section river
+stations must decrease as edge measure increases; a conflicting sequence is
+rejected explicitly. A footprint can contribute multiple disconnected
+coverage slices, so plan output reports both distinct model count and slice
+count.
+
+For every cross-model seam, `plan_network_edge()` checks the complete source
+cross-section sets against both selected centerlines. The default permits at
+most one cross section to intersect both lines. Two or more produce
+`plan.status == "multi_source_handoff_conflict"`, `plan.join_ready == False`,
+and the reason code `MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES`. This rejects the
+former overlapping tributary/main-stem example before a writer can treat it as
+an adjacent source reach. Set `max_cross_centerline_xs` explicitly only when a
+different reviewed threshold is warranted.
+
+An overlap midpoint is only an extent-planning seam. Before a combined geometry
+is written, the next-stage geometry assembler must choose a centerline
+intersection or documented nearest connection, remove duplicate/overlapping cut
+lines, preserve complete geometry blocks and flow-change locations, reconcile
+stations, and validate profile and units compatibility.
+
 ## Select a reach slice
 
 ```python
@@ -163,6 +262,8 @@ centerline clipping and reconnection remain outside the MVP.
     options:
       show_source: false
       members:
+        - catalog_sources
+        - plan_network_edge
         - select_by_stations
         - select_by_cross_sections
         - select_by_polygon

@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*136 notebooks indexed - 122 with runtime data, 14 without.*
+*138 notebooks indexed - 124 with runtime data, 14 without.*
 
 ## 100s - Initialization & Execution
 
@@ -73,6 +73,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [233 - Manning's n Region Polygon Authoring](../notebooks/233_mannings_region_polygon_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/233_mannings_region_polygon_authoring.ipynb) | 3 s |
 | [234 - Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)](../notebooks/234_rasmapper_geometry_completion.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/234_rasmapper_geometry_completion.ipynb) | 29 s |
 | [235 - Clip a Texas FEMA eBFE model to one NWM reach](../notebooks/235_1d_breakout_model.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/235_1d_breakout_model.ipynb) | N/A |
+| [236 - Plan a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models](../notebooks/236_multi_model_1d_breakout_planning.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/236_multi_model_1d_breakout_planning.ipynb) | 4 s |
 
 ## 300s - Unsteady Flow & DSS
 
@@ -209,6 +210,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [953 - Using eBFE Models: Rio Hondo 1D Steady Collection](../notebooks/953_ebfe_rio_hondo_steady_collection.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/953_ebfe_rio_hondo_steady_collection.ipynb) | 9 s |
 | [954 - Using eBFE Models: Lake Maurepas Validation](../notebooks/954_ebfe_lake_maurepas_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/954_ebfe_lake_maurepas_validation.ipynb) | 3 s |
 | [955 - Using eBFE Models: Tickfaw Results-Ready Validation](../notebooks/955_ebfe_tickfaw_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/955_ebfe_tickfaw_validation.ipynb) | 3 s |
+| [956 - NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch](../notebooks/956_hydrofabric_conflation_visual_qa.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/956_hydrofabric_conflation_visual_qa.ipynb) | 5 s |
 | [957 - Using eBFE Models: Spring River Validation](../notebooks/957_ebfe_spring_river_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | N/A |
 | [958 - Model Sources: Unified Discovery, Download & Visualization](../notebooks/958_model_sources_showcase.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb) | N/A |
 

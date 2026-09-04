@@ -125,12 +125,11 @@ _LAZY_EXPORTS = {
     'RasFloodway': ('.RasFloodway', 'RasFloodway'),
     'RasHydroCompare': ('.RasHydroCompare', 'RasHydroCompare'),
     **{
-        name: ('.RasHydrofabric', name)
+        name: ('.RasNetworkConflation', name)
         for name in (
             'RasNetworkConflation', 'NetworkConflationResult',
-            'NetworkEdgeCoverageResult',
-            'RasHydrofabric', 'HydrofabricConflationResult',
-            'ConflationStatus', 'HydrofabricAdapter', 'NHDPlusAdapter',
+            'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
+            'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
             'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
         )
     },
@@ -141,7 +140,8 @@ _LAZY_EXPORTS = {
         name: ('.RasBreakout1D', name)
         for name in (
             'RasBreakout1D', 'Breakout1DDomainSelection',
-            'Breakout1DResult', 'Breakout1DSelection',
+            'Breakout1DResult', 'Breakout1DSelection', 'Breakout1DSourceCatalog',
+            'Breakout1DPlan',
             'Breakout1DValidationReport',
         )
     },
@@ -377,12 +377,13 @@ __all__ = [
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasBreakout1D', 'Breakout1DDomainSelection',
-    'Breakout1DResult', 'Breakout1DSelection',
+    'Breakout1DResult', 'Breakout1DSelection', 'Breakout1DSourceCatalog',
+    'Breakout1DPlan',
     'Breakout1DValidationReport',
     'RasNetworkConflation', 'NetworkConflationResult',
-    'NetworkEdgeCoverageResult',
-    'RasHydrofabric', 'HydrofabricConflationResult', 'ConflationStatus',
-    'HydrofabricAdapter', 'NHDPlusAdapter', 'NWMHydrofabricAdapter',
+    'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
+    'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
+    'NWMHydrofabricAdapter',
     'NextGenFlowpathAdapter',
     'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',

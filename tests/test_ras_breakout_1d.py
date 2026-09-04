@@ -7,15 +7,22 @@ import importlib
 from pathlib import Path
 
 import h5py
+import geopandas as gpd
 import numpy as np
+import pandas as pd
 import pytest
+from shapely.geometry import LineString, Polygon
 
+import ras_commander
 from ras_commander import (
     Breakout1DDomainSelection,
+    Breakout1DPlan,
+    Breakout1DSourceCatalog,
     GeomParser,
     RasBreakout1D,
     RasPrj,
 )
+from ras_commander.schemas import DATAFRAME_SCHEMAS
 
 
 def _xs_block(station: int, downstream_length: int, y: int) -> str:
@@ -133,6 +140,240 @@ def _write_project(root: Path) -> RasPrj:
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_multi_model_breakout_public_names_are_exported():
+    assert {
+        "RasBreakout1D",
+        "Breakout1DSourceCatalog",
+        "Breakout1DPlan",
+    } <= set(ras_commander.__all__)
+
+
+def test_catalog_sources_deduplicates_geometry_and_round_trips_geoparquet(
+    tmp_path: Path,
+):
+    first = _write_project(tmp_path / "first")
+    duplicate = _write_project(tmp_path / "duplicate")
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["first", "duplicate"]},
+        geometry=[
+            Polygon([(-10, -20), (110, -20), (110, 120), (-10, 120)]),
+            Polygon([(-10, -20), (110, -20), (110, 120), (-10, 120)]),
+        ],
+        crs="EPSG:3857",
+    )
+
+    catalog = RasBreakout1D.catalog_sources(
+        {"first": first, "duplicate": duplicate},
+        model_footprints=footprints,
+        analysis_crs="EPSG:3857",
+    )
+
+    assert isinstance(catalog, Breakout1DSourceCatalog)
+    assert catalog.summary == {
+        "source_models": 2,
+        "included_models": 1,
+        "duplicate_models": 1,
+        "reaches": 2,
+        "cross_sections": 6,
+    }
+    models = catalog.models_df.set_index("geometry_id")
+    assert bool(models.loc["duplicate", "included"])
+    assert models.loc["first", "duplicate_of"] == "duplicate"
+    assert not bool(models.loc["first", "included"])
+    assert models.loc["duplicate", "profile_names"] == ("Low", "High")
+    assert list(catalog.footprints_gdf["geometry_id"]) == ["duplicate"]
+    assert catalog.centerlines_gdf["reach_id"].str.startswith(
+        "duplicate::"
+    ).all()
+    assert catalog.cross_sections_gdf["xs_id"].is_unique
+    for frame, schema_name in (
+        (catalog.models_df, "breakout_1d_source_models"),
+        (catalog.footprints_gdf, "breakout_1d_source_footprints"),
+        (catalog.centerlines_gdf, "breakout_1d_source_centerlines"),
+        (catalog.cross_sections_gdf, "breakout_1d_source_cross_sections"),
+    ):
+        assert list(frame.columns) == [
+            column["name"] for column in DATAFRAME_SCHEMAS[schema_name]["columns"]
+        ]
+
+    destination = catalog.write(tmp_path / "catalog")
+    loaded = Breakout1DSourceCatalog.read(destination)
+    assert loaded.summary == catalog.summary
+    assert loaded.analysis_crs == catalog.analysis_crs
+    assert loaded.footprints_gdf.geometry.equals(catalog.footprints_gdf.geometry)
+
+
+def test_catalog_sources_requires_projected_crs(tmp_path: Path):
+    source = _write_project(tmp_path / "source")
+
+    with pytest.raises(ValueError, match="must be projected"):
+        RasBreakout1D.catalog_sources(
+            {"source": source}, analysis_crs="EPSG:4326"
+        )
+
+
+def test_catalog_sources_rejects_unknown_plan_number_model_id(tmp_path: Path):
+    source = _write_project(tmp_path / "source")
+
+    with pytest.raises(ValueError, match="unknown source model IDs"):
+        RasBreakout1D.catalog_sources(
+            {"source": source},
+            plan_numbers={"different-source": "01"},
+            analysis_crs="EPSG:3857",
+        )
+
+
+def _network_plan_catalog(
+    *, overlapping_centerlines: bool
+) -> tuple[Breakout1DSourceCatalog, gpd.GeoDataFrame]:
+    crs = "EPSG:3857"
+    models = pd.DataFrame(
+        {
+            "geometry_id": ["upstream", "downstream", "false-positive"],
+            "included": [True, True, True],
+        }
+    )
+    footprints = gpd.GeoDataFrame(
+        {"geometry_id": ["upstream", "downstream", "false-positive"]},
+        geometry=[
+            Polygon([(-5, -10), (65, -10), (65, 10), (-5, 10)]),
+            Polygon([(45, -10), (105, -10), (105, 10), (45, 10)]),
+            Polygon([(-5, -30), (105, -30), (105, 30), (-5, 30)]),
+        ],
+        crs=crs,
+    )
+    centerlines = gpd.GeoDataFrame(
+        {
+            "geometry_id": ["upstream", "downstream", "false-positive"],
+            "reach_id": ["upstream::R::1", "downstream::R::1", "false::R::1"],
+            "river": ["R", "R", "Other"],
+            "reach": ["1", "1", "1"],
+        },
+        geometry=(
+            [
+                LineString([(0, 0), (65, 0)]),
+                LineString([(45, 0), (100, 0)]),
+                LineString([(0, 20), (100, 20)]),
+            ]
+            if overlapping_centerlines
+            else [
+                LineString([(0, 0), (50, 0)]),
+                LineString([(50, 0), (100, 0)]),
+                LineString([(0, 20), (100, 20)]),
+            ]
+        ),
+        crs=crs,
+    )
+    xs_rows = []
+    upstream_measures = (10, 35, 60) if overlapping_centerlines else (10, 35, 45)
+    downstream_measures = (50, 70, 90) if overlapping_centerlines else (55, 70, 90)
+    for geometry_id, reach_id, y0, y1, measures in (
+        ("upstream", "upstream::R::1", -10, 10, upstream_measures),
+        ("downstream", "downstream::R::1", -10, 10, downstream_measures),
+        ("false-positive", "false::R::1", 15, 25, (20, 40, 80)),
+    ):
+        for station, measure in zip((300, 200, 100), measures):
+            xs_rows.append(
+                {
+                    "geometry_id": geometry_id,
+                    "reach_id": reach_id,
+                    "xs_id": f"{reach_id}::{station}",
+                    "river": "R" if geometry_id != "false-positive" else "Other",
+                    "reach": "1",
+                    "station": str(station),
+                    "geometry": LineString([(measure, y0), (measure, y1)]),
+                }
+            )
+    cross_sections = gpd.GeoDataFrame(xs_rows, geometry="geometry", crs=crs)
+    catalog = Breakout1DSourceCatalog(
+        models_df=models,
+        footprints_gdf=footprints,
+        centerlines_gdf=centerlines,
+        cross_sections_gdf=cross_sections,
+        analysis_crs=crs,
+        parameters={},
+    )
+    edges = gpd.GeoDataFrame(
+        {"feature_id": ["target"]},
+        geometry=[LineString([(0, 0), (100, 0)])],
+        crs=crs,
+    )
+    return catalog, edges
+
+
+def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
+    catalog, edges = _network_plan_catalog(overlapping_centerlines=False)
+
+    plan = RasBreakout1D.plan_network_edge(
+        catalog,
+        edges,
+        adapter="nwm",
+        edge_id="target",
+        max_centerline_offset=5.0,
+    )
+
+    assert isinstance(plan, Breakout1DPlan)
+    assert plan.status == "multi_source_ready"
+    assert plan.join_ready
+    assert list(plan.source_slices_df["geometry_id"]) == [
+        "upstream",
+        "downstream",
+    ]
+    assert list(plan.source_models_df["geometry_id"]) == [
+        "upstream",
+        "downstream",
+    ]
+    assignments = plan.reach_assignments_df.set_index("geometry_id")
+    assert assignments.loc["upstream", "status"] == "confirmed"
+    assert assignments.loc["downstream", "status"] == "confirmed"
+    assert assignments.loc["false-positive", "status"] == "unmatched"
+    assert assignments.loc["false-positive", "reason_codes"] == (
+        "INSUFFICIENT_XS_INTERSECTIONS",
+    )
+    assert list(plan.reach_assignments_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS[
+            "breakout_1d_reach_assignments"
+        ]["columns"]
+    ]
+    assert plan.seams_df.iloc[0]["seam_measure"] == pytest.approx(55.0)
+    diagnostic = plan.handoff_diagnostics_df.iloc[0]
+    assert bool(diagnostic["handoff_eligible"])
+    assert diagnostic["cross_centerline_xs_count"] == 0
+    assert list(plan.handoff_diagnostics_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS[
+            "breakout_1d_handoff_diagnostics"
+        ]["columns"]
+    ]
+
+
+def test_plan_network_edge_rejects_multiple_xs_crossing_both_centerlines():
+    catalog, edges = _network_plan_catalog(overlapping_centerlines=True)
+
+    plan = RasBreakout1D.plan_network_edge(
+        catalog,
+        edges,
+        adapter="nwm",
+        edge_id="target",
+        max_centerline_offset=5.0,
+    )
+
+    assert plan.coverage_plan.plans_df.iloc[0]["status"] == "multi_source_ready"
+    assert plan.status == "multi_source_handoff_conflict"
+    assert not plan.join_ready
+    diagnostic = plan.handoff_diagnostics_df.iloc[0]
+    assert not bool(diagnostic["handoff_eligible"])
+    assert diagnostic["cross_centerline_xs_count"] == 2
+    assert diagnostic["cross_centerline_xs_ids"] == (
+        "upstream::R::1::100",
+        "downstream::R::1::300",
+    )
+    assert diagnostic["reason_codes"] == (
+        "MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES",
+    )
 
 
 def _write_steady_hdf(

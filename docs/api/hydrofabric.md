@@ -16,6 +16,9 @@ coverage = RasNetworkConflation.classify_edges(
 )
 
 edge_coverage_df = coverage.coverage_df
+coverage_parts_df = coverage.coverage_parts_df
+edge_summary_df = coverage.edge_summary_df
+model_overlap_df = coverage.model_overlap_df
 ```
 
 `coverage_df` has one row per `(geometry_id, edge_id)` with positive spatial
@@ -23,6 +26,19 @@ overlap by default. It reports `inside_length`, full `edge_length`,
 `inside_fraction`, and `extent_status` (`inside` or `partial`) while preserving
 the full edge geometry and normalized topology fields. Pass
 `include_outside=True` when an audit also needs nearby non-intersecting edges.
+
+The additional directed tables retain the information needed when several
+models cover one network edge:
+
+| Property | Cardinality | Purpose |
+| --- | --- | --- |
+| `coverage_parts_df` | One row per contiguous model/edge intersection | Start/end measures and fractions along the directed edge |
+| `edge_summary_df` | One row per edge | Model count, union coverage, overlap, and uncovered gap |
+| `model_overlap_df` | One row per contiguous model-pair overlap | Candidate handoff zones between source models |
+
+Measures start at the network edge's first coordinate and increase toward its
+last coordinate. Network inputs therefore need to follow their intended
+upstream-to-downstream orientation.
 
 All spatial inputs must have a CRS. Measurements prefer the model footprint's
 projected CRS, an explicitly supplied `analysis_crs`, or an automatically
@@ -35,6 +51,36 @@ This table is the starting point for NWM-sized `RasBreakout1D` models. Select an
 10% upstream and 25% downstream hydraulic buffers, while its stricter
 inundation-export selection retains the default one-cross-section downstream
 overlap.
+
+## Plan multi-model edge coverage
+
+`plan_edge_coverage()` selects the smallest deterministic source chain that
+extends farthest downstream at every step. Contained models are not selected,
+overlap seams are placed at the middle of the shared coverage interval, and
+uncovered gaps remain explicit rather than being assigned to either source.
+
+```python
+plan = RasNetworkConflation.plan_edge_coverage(
+    coverage,
+    edge_ids=[target_edge_id],
+    gap_tolerance=1.0,
+)
+
+print(plan.plans_df)
+print(plan.source_slices_df)
+print(plan.seams_df)
+```
+
+Plan status is `single_source_ready`, `multi_source_ready`, `coverage_gap`, or
+`uncovered`. `gap_tolerance` handles measurement noise only; the returned
+`total_gap_length` and `maximum_gap_length` always preserve the measured gap.
+`selected_model_count` counts distinct models, while `selected_slice_count`
+also exposes disconnected pieces from a repeated model. The parallel
+`source_geometry_ids` and `source_slice_geometry_ids` fields preserve those two
+views without hiding repetition.
+This is a footprint-coverage plan, not approval of a hydraulic geometry seam.
+Cross-section ordering, centerline joining, structures, station identifiers,
+and flow compatibility must be validated before building a combined model.
 
 ## Advanced reach-edge candidate audit
 
@@ -58,7 +104,7 @@ Measurements use the centerline's projected CRS, an explicitly supplied
 `analysis_crs`, or an automatically estimated local UTM CRS when the
 centerlines are geographic.
 
-The method returns a `HydrofabricConflationResult` with three GeoDataFrames:
+The method returns a `NetworkConflationResult` with four GeoDataFrames:
 
 | Property | Contents | Active geometry |
 | --- | --- | --- |
@@ -107,7 +153,7 @@ sections—the method removes that group and renormalizes the remaining weights.
 Override only the weights that need adjustment:
 
 ```python
-result = RasHydrofabric.conflate(
+result = RasNetworkConflation.conflate(
     footprints_gdf,
     reach_centerlines_gdf,
     xs_cut_lines_gdf,
@@ -188,12 +234,23 @@ Pass `adapter="auto"` or select a built-in schema explicitly:
 | `nwm` | `id` / `feature_id` | `toid`, `order`, `areasqkm`, hydroseq |
 | `nextgen` | `feature_id` / `flowpath_id` | downstream/nexus IDs, order, drainage area, sequence |
 
+The NWM and NextGen adapters recognize native `wb-*` flowpaths and `nex-*`
+connectivity. A downstream `nex-123` is resolved to `wb-123` only when that
+flowpath is present in the supplied network; terminal, coastal, internal, or
+clipped nexuses remain nodes rather than becoming invented edge IDs. When both
+incremental and total drainage-area attributes are available, the adapters use
+the total upstream area for scale agreement.
+
+Topology contributes to candidate scoring only for flowpaths inside the local
+reach search buffer. This prevents a connected flowpath elsewhere in a broad
+model footprint from supplying false continuity evidence.
+
 For another schema, supply a custom adapter:
 
 ```python
-from ras_commander import HydrofabricAdapter, RasNetworkConflation
+from ras_commander import NetworkAdapter, RasNetworkConflation
 
-custom = HydrofabricAdapter(
+custom = NetworkAdapter(
     name="agency_flowpaths",
     feature_id_fields=("agency_reach_id",),
     to_feature_id_fields=("downstream_reach_id",),
@@ -210,10 +267,11 @@ result = RasNetworkConflation.conflate(
 )
 ```
 
-::: ras_commander.RasHydrofabric.RasNetworkConflation
+::: ras_commander.RasNetworkConflation.RasNetworkConflation
     options:
       show_source: false
       members:
         - get_adapter
         - classify_edges
+        - plan_edge_coverage
         - conflate
