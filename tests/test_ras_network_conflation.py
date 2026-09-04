@@ -895,7 +895,7 @@ def test_public_exports_and_dataframe_schemas_are_registered():
     assert not hasattr(ras_commander, "RasHydrofabric")
     assert not hasattr(ras_commander, "HydrofabricConflationResult")
     assert not hasattr(ras_commander, "HydrofabricAdapter")
-    assert SCHEMA_VERSION == "1.10"
+    assert SCHEMA_VERSION == "1.11"
     assert {
         "network_edge_coverage",
         "network_edge_coverage_parts",
@@ -909,6 +909,7 @@ def test_public_exports_and_dataframe_schemas_are_registered():
         "breakout_1d_source_centerlines",
         "breakout_1d_source_cross_sections",
         "breakout_1d_reach_assignments",
+        "breakout_1d_handoff_diagnostics",
         "hydrofabric_matches",
         "hydrofabric_candidates",
         "hydrofabric_huc_intersections",

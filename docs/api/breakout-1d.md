@@ -51,22 +51,25 @@ Load it later with `Breakout1DSourceCatalog.read()`.
 `plan_network_edge()` turns model footprints into candidates, then confirms the
 best source reach in each model with deliberately small, interpretable checks:
 at least two cross-section intersections, station sequence agreement with the
-directed edge, and an optional mean centerline-offset limit. It does not invoke
-the advanced seven-signal conflation scorer.
+directed edge, an optional mean centerline-offset limit, and a fail-closed
+cross-model handoff check. It does not invoke the advanced seven-signal
+conflation scorer.
 
 ```python
 plan = RasBreakout1D.plan_network_edge(
     catalog,
     nwm_flowlines_gdf,
-    edge_id="5789096",
+    edge_id="5790954",
     adapter="nwm",
     max_centerline_offset=500.0,
+    max_cross_centerline_xs=1,
 )
 
 print(plan.status)
 print(plan.reach_assignments_df)
 print(plan.source_slices_df)
 print(plan.seams_df)
+print(plan.handoff_diagnostics_df)
 ```
 
 The `Breakout1DPlan` keeps the full audit trail:
@@ -77,6 +80,7 @@ The `Breakout1DPlan` keeps the full audit trail:
 | `edge_coverage` | Directed coverage parts after rejecting footprint-only false positives |
 | `source_slices_df` | Minimum-switch upstream-to-downstream source ownership intervals |
 | `seams_df` | Overlap, touching, or gap transitions with a provisional handoff point |
+| `handoff_diagnostics_df` | Centerline continuity plus IDs and counts of source cross sections intersecting both selected centerlines |
 | `source_models_df` | Distinct source projects selected by the interval plan, ordered upstream to downstream |
 
 The network geometry's coordinate order defines direction. Cross-section river
@@ -84,6 +88,15 @@ stations must decrease as edge measure increases; a conflicting sequence is
 rejected explicitly. A footprint can contribute multiple disconnected
 coverage slices, so plan output reports both distinct model count and slice
 count.
+
+For every cross-model seam, `plan_network_edge()` checks the complete source
+cross-section sets against both selected centerlines. The default permits at
+most one cross section to intersect both lines. Two or more produce
+`plan.status == "multi_source_handoff_conflict"`, `plan.join_ready == False`,
+and the reason code `MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES`. This rejects the
+former overlapping tributary/main-stem example before a writer can treat it as
+an adjacent source reach. Set `max_cross_centerline_xs` explicitly only when a
+different reviewed threshold is warranted.
 
 An overlap midpoint is only an extent-planning seam. Before a combined geometry
 is written, the next-stage geometry assembler must choose a centerline

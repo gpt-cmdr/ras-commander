@@ -29,12 +29,16 @@ def _source() -> str:
 def test_notebook_236_uses_real_multi_model_texas_workflow():
     source = _source()
 
-    assert "ALUM CREEK TRIBUTARY 9" in source
-    assert "ALUM CREEK" in source
-    assert 'TARGET_EDGE_ID = "5789096"' in source
+    assert "WALNUT 0230" in source
+    assert "WALNUT 0229" in source
+    assert "ALUM CREEK TRIBUTARY 9" not in source
+    assert 'TARGET_EDGE_ID = "5790954"' in source
     assert "RasBreakout1D.catalog_sources(" in source
     assert "RasBreakout1D.plan_network_edge(" in source
     assert "MAX_CENTERLINE_OFFSET_FT = 500.0" in source
+    assert "MAX_CROSS_CENTERLINE_XS = 1" in source
+    assert "handoff_diagnostics_df" in source
+    assert "pairwise_xs_intersections == 0" in source
     assert "GeoParquet" in source
     assert "provisional" in source
     assert "Notebook 235" in source

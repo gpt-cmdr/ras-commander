@@ -218,6 +218,7 @@ class Breakout1DPlan:
     edge_id: str
     source_models_df: pd.DataFrame
     reach_assignments_df: gpd.GeoDataFrame
+    handoff_diagnostics_df: gpd.GeoDataFrame
     edge_coverage: NetworkEdgeCoverageResult
     coverage_plan: NetworkEdgeCoveragePlanResult
     analysis_crs: str
@@ -225,11 +226,23 @@ class Breakout1DPlan:
 
     @property
     def status(self) -> str:
-        """Return the edge-level coverage-plan status."""
+        """Return the edge-level plan status, including handoff eligibility."""
         rows = self.coverage_plan.plans_df
         if len(rows) != 1:
             return "uncovered"
-        return str(rows.iloc[0]["status"])
+        coverage_status = str(rows.iloc[0]["status"])
+        if (
+            coverage_status == "multi_source_ready"
+            and not self.handoff_diagnostics_df.empty
+            and not self.handoff_diagnostics_df["handoff_eligible"].all()
+        ):
+            return "multi_source_handoff_conflict"
+        return coverage_status
+
+    @property
+    def join_ready(self) -> bool:
+        """Return whether coverage and every cross-model handoff are eligible."""
+        return self.status in {"single_source_ready", "multi_source_ready"}
 
     @property
     def source_slices_df(self) -> gpd.GeoDataFrame:
@@ -551,6 +564,7 @@ class RasBreakout1D:
         xs_tolerance: float = 0.0,
         max_centerline_offset: Optional[float] = None,
         gap_tolerance: float = 0.0,
+        max_cross_centerline_xs: int = 1,
     ) -> Breakout1DPlan:
         """Plan source-model coverage for one directed network edge.
 
@@ -563,6 +577,11 @@ class RasBreakout1D:
         The returned seam points are provisional footprint handoffs. Geometry
         assembly must still evaluate source-centerline intersections, duplicate
         cut lines, structures, station identifiers, and steady-flow continuity.
+
+        A cross-model handoff fails closed when more than
+        ``max_cross_centerline_xs`` source cross sections intersect both selected
+        river centerlines. This prevents the overlapping tributary/main-stem
+        geometry seen in invalid candidates from being treated as join-ready.
         """
         if not isinstance(source_catalog, Breakout1DSourceCatalog):
             raise TypeError(
@@ -574,6 +593,12 @@ class RasBreakout1D:
             raise TypeError("min_xs_intersections must be an integer")
         if min_xs_intersections < 1:
             raise ValueError("min_xs_intersections must be at least 1")
+        if isinstance(max_cross_centerline_xs, bool) or not isinstance(
+            max_cross_centerline_xs, int
+        ):
+            raise TypeError("max_cross_centerline_xs must be an integer")
+        if max_cross_centerline_xs < 0:
+            raise ValueError("max_cross_centerline_xs must be non-negative")
         xs_tolerance = RasBreakout1D._nonnegative_distance(
             xs_tolerance, "xs_tolerance"
         )
@@ -835,10 +860,17 @@ class RasBreakout1D:
         source_models_df = source_models_df.sort_values(
             "_source_order"
         ).drop(columns="_source_order").reset_index(drop=True)
+        handoff_diagnostics = RasBreakout1D._handoff_diagnostics(
+            source_catalog,
+            reach_assignments,
+            coverage_plan,
+            max_cross_centerline_xs=max_cross_centerline_xs,
+        )
         return Breakout1DPlan(
             edge_id=resolved_edge_id,
             source_models_df=source_models_df,
             reach_assignments_df=reach_assignments,
+            handoff_diagnostics_df=handoff_diagnostics,
             edge_coverage=confirmed_coverage,
             coverage_plan=coverage_plan,
             analysis_crs=source_catalog.analysis_crs,
@@ -848,6 +880,7 @@ class RasBreakout1D:
                 "xs_tolerance": xs_tolerance,
                 "max_centerline_offset": max_centerline_offset,
                 "gap_tolerance": gap_tolerance,
+                "max_cross_centerline_xs": max_cross_centerline_xs,
                 "seam_status": "provisional_footprint_handoff",
             },
         )
@@ -2620,6 +2653,144 @@ class RasBreakout1D:
                 f"Station {station!r} resolved {len(matches)} times in geometry"
             )
         return matches[0]
+
+    @staticmethod
+    def _handoff_diagnostics(
+        source_catalog: Breakout1DSourceCatalog,
+        reach_assignments: gpd.GeoDataFrame,
+        coverage_plan: NetworkEdgeCoveragePlanResult,
+        *,
+        max_cross_centerline_xs: int,
+    ) -> gpd.GeoDataFrame:
+        """Evaluate whether consecutive source reaches form a clean handoff."""
+        columns = [
+            "edge_id",
+            "seam_index",
+            "upstream_geometry_id",
+            "downstream_geometry_id",
+            "upstream_reach_id",
+            "downstream_reach_id",
+            "centerline_distance",
+            "centerline_intersects",
+            "upstream_xs_intersect_both_count",
+            "downstream_xs_intersect_both_count",
+            "upstream_xs_intersect_both_ids",
+            "downstream_xs_intersect_both_ids",
+            "cross_centerline_xs_count",
+            "cross_centerline_xs_ids",
+            "max_cross_centerline_xs",
+            "handoff_eligible",
+            "reason_codes",
+            "geometry",
+        ]
+        confirmed = reach_assignments.loc[
+            reach_assignments["status"] == "confirmed"
+        ]
+        assignment_by_source = {
+            str(row.geometry_id): row for row in confirmed.itertuples(index=False)
+        }
+        rows: list[dict[str, Any]] = []
+        for seam in coverage_plan.seams_df.itertuples(index=False):
+            upstream_id = str(seam.upstream_geometry_id)
+            downstream_id = str(seam.downstream_geometry_id)
+            if upstream_id == downstream_id:
+                continue
+            upstream = assignment_by_source.get(upstream_id)
+            downstream = assignment_by_source.get(downstream_id)
+            reason_codes: list[str] = []
+            if upstream is None or downstream is None:
+                reason_codes.append("MISSING_CONFIRMED_REACH")
+                rows.append(
+                    {
+                        "edge_id": str(seam.edge_id),
+                        "seam_index": int(seam.seam_index),
+                        "upstream_geometry_id": upstream_id,
+                        "downstream_geometry_id": downstream_id,
+                        "upstream_reach_id": getattr(upstream, "reach_id", None),
+                        "downstream_reach_id": getattr(downstream, "reach_id", None),
+                        "centerline_distance": None,
+                        "centerline_intersects": False,
+                        "upstream_xs_intersect_both_count": 0,
+                        "downstream_xs_intersect_both_count": 0,
+                        "upstream_xs_intersect_both_ids": (),
+                        "downstream_xs_intersect_both_ids": (),
+                        "cross_centerline_xs_count": 0,
+                        "cross_centerline_xs_ids": (),
+                        "max_cross_centerline_xs": max_cross_centerline_xs,
+                        "handoff_eligible": False,
+                        "reason_codes": tuple(reason_codes),
+                        "geometry": seam.geometry,
+                    }
+                )
+                continue
+
+            upstream_line = upstream.geometry
+            downstream_line = downstream.geometry
+            upstream_xs = source_catalog.cross_sections_gdf.loc[
+                source_catalog.cross_sections_gdf["reach_id"]
+                == upstream.reach_id
+            ]
+            downstream_xs = source_catalog.cross_sections_gdf.loc[
+                source_catalog.cross_sections_gdf["reach_id"]
+                == downstream.reach_id
+            ]
+            upstream_cross_both_mask = (
+                upstream_xs.intersects(upstream_line)
+                & upstream_xs.intersects(downstream_line)
+            )
+            downstream_cross_both_mask = (
+                downstream_xs.intersects(downstream_line)
+                & downstream_xs.intersects(upstream_line)
+            )
+            upstream_cross_both_ids = tuple(
+                upstream_xs.loc[upstream_cross_both_mask, "xs_id"].astype(str)
+            )
+            downstream_cross_both_ids = tuple(
+                downstream_xs.loc[downstream_cross_both_mask, "xs_id"].astype(str)
+            )
+            upstream_cross_both = len(upstream_cross_both_ids)
+            downstream_cross_both = len(downstream_cross_both_ids)
+            cross_centerline_xs_ids = (
+                upstream_cross_both_ids + downstream_cross_both_ids
+            )
+            cross_centerline_xs_count = (
+                upstream_cross_both + downstream_cross_both
+            )
+            if cross_centerline_xs_count > max_cross_centerline_xs:
+                reason_codes.append("MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES")
+            rows.append(
+                {
+                    "edge_id": str(seam.edge_id),
+                    "seam_index": int(seam.seam_index),
+                    "upstream_geometry_id": upstream_id,
+                    "downstream_geometry_id": downstream_id,
+                    "upstream_reach_id": str(upstream.reach_id),
+                    "downstream_reach_id": str(downstream.reach_id),
+                    "centerline_distance": float(
+                        upstream_line.distance(downstream_line)
+                    ),
+                    "centerline_intersects": bool(
+                        upstream_line.intersects(downstream_line)
+                    ),
+                    "upstream_xs_intersect_both_count": upstream_cross_both,
+                    "downstream_xs_intersect_both_count": downstream_cross_both,
+                    "upstream_xs_intersect_both_ids": upstream_cross_both_ids,
+                    "downstream_xs_intersect_both_ids": downstream_cross_both_ids,
+                    "cross_centerline_xs_count": cross_centerline_xs_count,
+                    "cross_centerline_xs_ids": cross_centerline_xs_ids,
+                    "max_cross_centerline_xs": max_cross_centerline_xs,
+                    "handoff_eligible": not reason_codes,
+                    "reason_codes": tuple(reason_codes),
+                    "geometry": seam.geometry,
+                }
+            )
+        crs = coverage_plan.seams_df.crs or source_catalog.centerlines_gdf.crs
+        return gpd.GeoDataFrame(
+            rows,
+            columns=columns,
+            geometry="geometry",
+            crs=crs,
+        )
 
     @staticmethod
     def _catalog_reach_id(source_id: str, river: Any, reach: Any) -> str:

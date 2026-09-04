@@ -225,7 +225,9 @@ def test_catalog_sources_rejects_unknown_plan_number_model_id(tmp_path: Path):
         )
 
 
-def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
+def _network_plan_catalog(
+    *, overlapping_centerlines: bool
+) -> tuple[Breakout1DSourceCatalog, gpd.GeoDataFrame]:
     crs = "EPSG:3857"
     models = pd.DataFrame(
         {
@@ -249,17 +251,27 @@ def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
             "river": ["R", "R", "Other"],
             "reach": ["1", "1", "1"],
         },
-        geometry=[
-            LineString([(0, 0), (65, 0)]),
-            LineString([(45, 0), (100, 0)]),
-            LineString([(0, 20), (100, 20)]),
-        ],
+        geometry=(
+            [
+                LineString([(0, 0), (65, 0)]),
+                LineString([(45, 0), (100, 0)]),
+                LineString([(0, 20), (100, 20)]),
+            ]
+            if overlapping_centerlines
+            else [
+                LineString([(0, 0), (50, 0)]),
+                LineString([(50, 0), (100, 0)]),
+                LineString([(0, 20), (100, 20)]),
+            ]
+        ),
         crs=crs,
     )
     xs_rows = []
+    upstream_measures = (10, 35, 60) if overlapping_centerlines else (10, 35, 45)
+    downstream_measures = (50, 70, 90) if overlapping_centerlines else (55, 70, 90)
     for geometry_id, reach_id, y0, y1, measures in (
-        ("upstream", "upstream::R::1", -10, 10, (10, 35, 60)),
-        ("downstream", "downstream::R::1", -10, 10, (50, 70, 90)),
+        ("upstream", "upstream::R::1", -10, 10, upstream_measures),
+        ("downstream", "downstream::R::1", -10, 10, downstream_measures),
         ("false-positive", "false::R::1", 15, 25, (20, 40, 80)),
     ):
         for station, measure in zip((300, 200, 100), measures):
@@ -288,6 +300,11 @@ def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
         geometry=[LineString([(0, 0), (100, 0)])],
         crs=crs,
     )
+    return catalog, edges
+
+
+def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
+    catalog, edges = _network_plan_catalog(overlapping_centerlines=False)
 
     plan = RasBreakout1D.plan_network_edge(
         catalog,
@@ -299,6 +316,7 @@ def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
 
     assert isinstance(plan, Breakout1DPlan)
     assert plan.status == "multi_source_ready"
+    assert plan.join_ready
     assert list(plan.source_slices_df["geometry_id"]) == [
         "upstream",
         "downstream",
@@ -321,6 +339,41 @@ def test_plan_network_edge_filters_footprint_only_models_and_orders_sources():
         ]["columns"]
     ]
     assert plan.seams_df.iloc[0]["seam_measure"] == pytest.approx(55.0)
+    diagnostic = plan.handoff_diagnostics_df.iloc[0]
+    assert bool(diagnostic["handoff_eligible"])
+    assert diagnostic["cross_centerline_xs_count"] == 0
+    assert list(plan.handoff_diagnostics_df.columns) == [
+        column["name"]
+        for column in DATAFRAME_SCHEMAS[
+            "breakout_1d_handoff_diagnostics"
+        ]["columns"]
+    ]
+
+
+def test_plan_network_edge_rejects_multiple_xs_crossing_both_centerlines():
+    catalog, edges = _network_plan_catalog(overlapping_centerlines=True)
+
+    plan = RasBreakout1D.plan_network_edge(
+        catalog,
+        edges,
+        adapter="nwm",
+        edge_id="target",
+        max_centerline_offset=5.0,
+    )
+
+    assert plan.coverage_plan.plans_df.iloc[0]["status"] == "multi_source_ready"
+    assert plan.status == "multi_source_handoff_conflict"
+    assert not plan.join_ready
+    diagnostic = plan.handoff_diagnostics_df.iloc[0]
+    assert not bool(diagnostic["handoff_eligible"])
+    assert diagnostic["cross_centerline_xs_count"] == 2
+    assert diagnostic["cross_centerline_xs_ids"] == (
+        "upstream::R::1::100",
+        "downstream::R::1::300",
+    )
+    assert diagnostic["reason_codes"] == (
+        "MULTIPLE_XS_INTERSECT_BOTH_CENTERLINES",
+    )
 
 
 def _write_steady_hdf(
