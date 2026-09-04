@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.10"
+SCHEMA_VERSION = "1.11"
 
 DATAFRAME_SCHEMAS = {
     "ras_breakout_1d_validation": {
@@ -592,6 +592,33 @@ DATAFRAME_SCHEMAS = {
             {"name": "status", "dtype": "str", "description": "confirmed, ambiguous, or unmatched."},
             {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable rejection or ambiguity reasons."},
             {"name": "geometry", "dtype": "geometry | None", "description": "Selected source river centerline."},
+        ],
+    },
+    "breakout_1d_handoff_diagnostics": {
+        "description": "Cross-model centerline and cross-section eligibility checks at each planned handoff.",
+        "accessor": "RasBreakout1D.plan_network_edge(...).handoff_diagnostics_df",
+        "source": "RasBreakout1D.plan_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "seam_index", "dtype": "int64", "description": "Zero-based handoff order along the directed network edge."},
+            {"name": "upstream_geometry_id", "dtype": "str", "description": "Planned upstream source model."},
+            {"name": "downstream_geometry_id", "dtype": "str", "description": "Planned downstream source model."},
+            {"name": "upstream_reach_id", "dtype": "str | None", "description": "Confirmed upstream source reach."},
+            {"name": "downstream_reach_id", "dtype": "str | None", "description": "Confirmed downstream source reach."},
+            {"name": "centerline_distance", "dtype": "float64 | None", "description": "Minimum distance between the two selected source centerlines."},
+            {"name": "centerline_intersects", "dtype": "bool", "description": "Whether the selected source centerlines intersect."},
+            {"name": "upstream_xs_intersect_both_count", "dtype": "int64", "description": "Upstream-source cross sections intersecting both selected centerlines."},
+            {"name": "downstream_xs_intersect_both_count", "dtype": "int64", "description": "Downstream-source cross sections intersecting both selected centerlines."},
+            {"name": "upstream_xs_intersect_both_ids", "dtype": "tuple[str, ...]", "description": "Upstream-source cross-section IDs intersecting both selected centerlines."},
+            {"name": "downstream_xs_intersect_both_ids", "dtype": "tuple[str, ...]", "description": "Downstream-source cross-section IDs intersecting both selected centerlines."},
+            {"name": "cross_centerline_xs_count", "dtype": "int64", "description": "Total source cross sections intersecting both selected centerlines."},
+            {"name": "cross_centerline_xs_ids", "dtype": "tuple[str, ...]", "description": "All source cross-section IDs intersecting both selected centerlines."},
+            {"name": "max_cross_centerline_xs", "dtype": "int64", "description": "Maximum permitted count before the handoff fails closed."},
+            {"name": "handoff_eligible", "dtype": "bool", "description": "Whether the source pair passes the implemented handoff checks."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable handoff rejection reasons."},
+            {"name": "geometry", "dtype": "geometry", "description": "Provisional footprint seam point on the network edge."},
         ],
     },
     "hydrofabric_matches": {

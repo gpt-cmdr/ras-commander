@@ -1660,12 +1660,12 @@ notebooks:
   executed_cells: 0
 - id: 236_multi_model_1d_breakout_planning
   filename: 236_multi_model_1d_breakout_planning.ipynb
-  title: Plan a Texas FEMA eBFE Breakout from Two Source Models
+  title: Plan a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models
   series: 200
   series_name: Geometry & Calibration
-  summary: Catalog two real Lower Colorado–Cummins FEMA eBFE projects in GeoParquet, confirm both source
-    reaches against NOAA NWM feature 5789096, and visualize the directed coverage chain, overlap handoff,
-    and cross-section ownership around the provisional geometry seam.
+  summary: Catalog two adjacent Walnut Creek FEMA eBFE main-stem projects in GeoParquet, confirm both
+    source reaches against NOAA NWM feature 5790954, reject cross-centerline cross-section conflicts,
+    and visualize the clean centerline and cross-section handoff.
   tags:
   - 1d
   - steady
