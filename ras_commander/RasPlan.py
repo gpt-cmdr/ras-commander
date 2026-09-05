@@ -701,7 +701,21 @@ class RasPlan:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        
+        RasPlan._update_geom_preprocessor_file(
+            file_path,
+            run_htab=run_htab,
+            use_ib_tables=use_ib_tables,
+        )
+
+        # Update the ras object's dataframes
+        ras_obj.plan_df = ras_obj.get_plan_entries()
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        ras_obj.flow_df = ras_obj.get_flow_entries()
+        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+
+    @staticmethod
+    def _update_geom_preprocessor_file(file_path, run_htab, use_ib_tables):
+        """Update preprocessor flags without requiring project initialization."""
         if run_htab not in [-1, 0]:
             raise ValueError("Invalid value for `Run HTab`. Expected `0` or `-1`.")
         if use_ib_tables not in [-1, 0]:
@@ -724,12 +738,6 @@ class RasPlan:
             raise FileNotFoundError(f"The file '{file_path}' does not exist.")
         except IOError as e:
             raise IOError(f"An error occurred while reading or writing the file: {e}")
-
-        # Update the ras object's dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
-        ras_obj.geom_df = ras_obj.get_geom_entries()
-        ras_obj.flow_df = ras_obj.get_flow_entries()
-        ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
 
     @staticmethod
     @log_call

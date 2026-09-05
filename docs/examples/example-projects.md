@@ -36,6 +36,23 @@ below to review its geometry, terrain, and results.
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260724Tlibrary-final03"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260724Tlibrary-final03"></script>
 
+## Source Qualification Candidates
+
+The following public source is available through RAS Commander but is not yet
+admitted to the interactive explorer. Explorer admission requires a complete
+terrain and a successfully computed plan with the applicable vector and
+RASMapper Stored Map result families.
+
+| Source | RAS Commander entry point | Qualification | Known limitation |
+|---|---|---|---|
+| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. | The shared compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification data were not provided. The HDEMs are preserved but are not a source-equivalent replacement. |
+
+San Gabriel remains an `unsteady_start` source example until the original
+compiled terrain or its modification inputs are recovered and the full public
+terrain/results publication gates pass. The organizer nevertheless normalizes
+all five `.rasmap` files so their terrain-layer references resolve to the single
+expected organized target, `RAS Model\Terrain\Terrain.hdf`.
+
 ## Related Workflows
 
 - [Using RasExamples](../notebooks/100_using_ras_examples.md)

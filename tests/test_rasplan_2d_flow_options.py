@@ -119,6 +119,50 @@ def test_set_2d_flow_options_validates_option_names(tmp_path):
         )
 
 
+def test_set_geom_preprocessor_keeps_public_refresh_behavior(tmp_path):
+    class RefreshingRas:
+        def __init__(self):
+            self.initialized = False
+
+        def check_initialized(self):
+            self.initialized = True
+
+        def get_plan_entries(self):
+            return "plans"
+
+        def get_geom_entries(self):
+            return "geometries"
+
+        def get_flow_entries(self):
+            return "flows"
+
+        def get_unsteady_entries(self):
+            return "unsteady"
+
+    plan_path = tmp_path / "Project.p01"
+    plan_path.write_text(
+        "Run HTab= -1\nUNET Use Existing IB Tables= -1\n",
+        encoding="utf-8",
+    )
+    ras_object = RefreshingRas()
+
+    RasPlan.set_geom_preprocessor(
+        plan_path,
+        run_htab=0,
+        use_ib_tables=0,
+        ras_object=ras_object,
+    )
+
+    assert ras_object.initialized is True
+    assert plan_path.read_text(encoding="utf-8") == (
+        "Run HTab= 0 \nUNET Use Existing IB Tables= 0 \n"
+    )
+    assert ras_object.plan_df == "plans"
+    assert ras_object.geom_df == "geometries"
+    assert ras_object.flow_df == "flows"
+    assert ras_object.unsteady_df == "unsteady"
+
+
 def test_hdfplan_get_2d_flow_options_parses_hdf_attrs(tmp_path):
     hdf_path = tmp_path / "Project.p01.hdf"
     with h5py.File(hdf_path, "w") as hdf:
