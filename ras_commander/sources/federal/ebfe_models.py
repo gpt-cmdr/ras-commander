@@ -1300,7 +1300,9 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         provide boundary records to LBSG_505. Every project references one
         shared compiled ``Terrain/Terrain.hdf`` that FEMA did not provide.
         This organizer preserves the delivered HDEMs and compiled geometry
-        tables, records the terrain deficiency, and never rebuilds terrain.
+        tables, records the terrain deficiency, and does not automatically
+        rebuild terrain. An explicitly authorized HDEM-only reconstruction
+        must be recorded in the generated Record of Deficiencies (ROD).
 
         Args:
             downloaded_folder: Extracted ``12070205_Models`` delivery. When
@@ -3849,12 +3851,51 @@ Models, SpatialData, Documents, or ReferenceGuide source packages.
 The three source HDEMs are preserved under `../Terrain Submittal/Final/hdem`.
 They do not include the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`,
 or `Lake Georgetown` elevation-modification layers named by the RASMapper
-files. ras-commander intentionally does not rebuild or synthesize this file.
+files. The organizer does not automatically rebuild or synthesize this file.
+
+If a derived `Terrain.hdf` is present beside this notice, it is a single shared
+HDEM-only reconstruction for all five projects. Consult
+`../../agent/record_of_deficiencies.md` for its provenance and limitations; it
+must not be represented as FEMA's original or as numerically equivalent.
 
 The documented smoke plans preserve the delivered geometry property tables
 and are qualified only to reach the unsteady-computation phase. Recover the
 original compiled terrain or its modification inputs before geometry
 recomputation or numerical-comparison work.
+"""
+
+    @staticmethod
+    def _san_gabriel_record_of_deficiencies_text(
+        source: Path,
+        destination: Path,
+        terrain_path_stats: Dict[str, int],
+    ) -> str:
+        """Return the initial, durable San Gabriel deficiency record."""
+        return f"""# San Gabriel Record of Deficiencies (ROD)
+
+- **Study:** FEMA San Gabriel BLE (12070205)
+- **Delivered source:** {source}
+- **Organized copy:** {destination}
+- **Qualification:** `unsteady_start`
+
+This record distinguishes source-delivery deficiencies from mitigations made
+in a working copy. The delivered source is not modified. Add terrain-build
+provenance here whenever an explicitly authorized reconstruction is created.
+
+| ID | Deficiency | Status / disposition |
+|---|---|---|
+| SG-001 | Every project and the hydraulic inventory name one shared `Terrain/Terrain.hdf`, but no public source package contains the compiled file. | Open source deficiency. The organizer creates the intended shared folder and normalizes all {terrain_path_stats['terrain_hdf_references']} terrain references across {terrain_path_stats['rasmap_files']} projects. |
+| SG-002 | The three delivered HDEMs omit the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`, and `Lake Georgetown` modification payloads named in the RASMapper files. | Open. An HDEM-only terrain is not source-equivalent and is unsuitable for FEMA numerical-reproduction claims. |
+| SG-003 | Four smoke plans entered unsteady computation and then reported `READ_UN_HDF_XS_TAB` for a missing `Cross Sections` HDF group; LBSG_502 was stopped after owned solver-start detection. | Accepted only for the agreed `unsteady_start` qualification; full-plan completion remains unverified. |
+| SG-004 | `999999_Terrain_metadata.xml` is malformed because `Doucet & Associates` is not XML-escaped. | Open documentation defect; it does not block use of the HDEM rasters. |
+| SG-005 | The archive includes a 282-character member name and cannot be safely extracted under ordinary descriptive Windows paths. | Mitigated by concise workspaces and ras-commander's atomic, long-path-safe, size/CRC32-audited extraction. |
+
+## Terrain reconstruction record
+
+No reconstruction is performed automatically by the organizer. If
+`RAS Model/Terrain/Terrain.hdf` exists, record the HDEM inputs, projection,
+HEC-RAS version, build options, output size/hash, validation result, and any
+runtime warnings below before using it.
 """
 
     @staticmethod
@@ -3930,10 +3971,11 @@ The organizer made {dss_rewrites} exact cross-project DSS path corrections.
 
 Every project and the hydraulic inventory name one shared
 `Terrain/Terrain.hdf`, but FEMA did not provide it. The three source HDEMs were
-preserved; ras-commander did not rebuild terrain or claim numerical
-equivalence. All {terrain_path_stats['terrain_hdf_references']} RASMapper terrain
-layer references in {terrain_path_stats['rasmap_files']} projects point to that
-single organized target. See `../RAS Model/Terrain/README.md`.
+preserved; the organizer does not automatically rebuild terrain or claim
+numerical equivalence. All {terrain_path_stats['terrain_hdf_references']}
+RASMapper terrain layer references in {terrain_path_stats['rasmap_files']}
+projects point to that single organized target. See
+`record_of_deficiencies.md` and `../RAS Model/Terrain/README.md`.
 
 ## Copied Assets
 
@@ -3945,6 +3987,16 @@ single organized target. See `../RAS Model/Terrain/README.md`.
         (agent_folder / "model_log.md").write_text(
             log_text, encoding="utf-8"
         )
+        rod_path = agent_folder / "record_of_deficiencies.md"
+        if not rod_path.exists():
+            rod_path.write_text(
+                RasEbfeModels._san_gabriel_record_of_deficiencies_text(
+                    source=source,
+                    destination=destination,
+                    terrain_path_stats=terrain_path_stats,
+                ),
+                encoding="utf-8",
+            )
 
     # =========================================================================
     # Helper Methods

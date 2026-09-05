@@ -243,7 +243,8 @@ def test_organize_san_gabriel_preserves_bundle_and_repairs_exact_dss_paths(
         destination / "RAS Model" / "Terrain" / "README.md"
     ).read_text(encoding="utf-8")
     assert "not present" in terrain_notice
-    assert "intentionally does not rebuild" in terrain_notice
+    assert "does not automatically rebuild" in terrain_notice
+    assert "HDEM-only reconstruction" in terrain_notice
     for index in range(1, 4):
         assert (
             destination / "RAS Model" / "Terrain Submittal" / "Final"
@@ -296,6 +297,17 @@ def test_organize_san_gabriel_preserves_bundle_and_repairs_exact_dss_paths(
     assert manifest["dss_path_rewrites"] == 4
     assert manifest["validation_level"] == "unsteady_start"
 
+    rod_path = destination / "agent" / "record_of_deficiencies.md"
+    rod_text = rod_path.read_text(encoding="utf-8")
+    assert "San Gabriel Record of Deficiencies" in rod_text
+    assert "SG-001" in rod_text
+    assert "SG-005" in rod_text
+    assert "all 40 terrain references across 5 projects" in rod_text
+    assert "No reconstruction is performed automatically" in rod_text
+
+    # Reorganization must preserve subsequently recorded build provenance.
+    rod_path.write_text(rod_text + "\nAuthorized build record.\n", encoding="utf-8")
+
     # Reorganization is deterministic and does not accumulate path rewrites.
     RasEbfeModels.organize_san_gabriel(
         downloaded_folder=source,
@@ -308,6 +320,7 @@ def test_organize_san_gabriel_preserves_bundle_and_repairs_exact_dss_paths(
         )
     )
     assert repeated["dss_path_rewrites"] == 4
+    assert "Authorized build record." in rod_path.read_text(encoding="utf-8")
 
 
 def test_san_gabriel_smoke_flags_do_not_require_project_initialization(tmp_path):

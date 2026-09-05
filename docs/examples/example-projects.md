@@ -45,13 +45,14 @@ RASMapper Stored Map result families.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
-| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. | The shared compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification data were not provided. The HDEMs are preserved but are not a source-equivalent replacement. |
+| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. A validated working copy uses one shared terrain rebuilt from the three HDEMs. | The original compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification payloads were not provided. The HDEM-only reconstruction resolves all 40 paths but is not source-equivalent. |
 
 San Gabriel remains an `unsteady_start` source example until the original
 compiled terrain or its modification inputs are recovered and the full public
-terrain/results publication gates pass. The organizer nevertheless normalizes
-all five `.rasmap` files so their terrain-layer references resolve to the single
-expected organized target, `RAS Model\Terrain\Terrain.hdf`.
+terrain/results publication gates pass. The organizer normalizes all five
+`.rasmap` files so their 40 terrain and modification references resolve to the
+single expected organized target, `RAS Model\Terrain\Terrain.hdf`, and creates
+a durable Record of Deficiencies for any explicitly authorized reconstruction.
 
 ## Related Workflows
 

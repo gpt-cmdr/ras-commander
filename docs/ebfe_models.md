@@ -461,15 +461,19 @@ normalized to the one shared organized target,
 `RAS Model\Terrain\Terrain.hdf`. It does not use basename-based DSS repair
 because the delivery contains several unrelated files named `100.dss`.
 
-!!! warning "Shared compiled terrain not provided"
+!!! warning "Original compiled terrain not provided"
     The hydraulic inventory and all five `.rasmap` files name one shared
     `Terrain\Terrain.hdf`, but no public San Gabriel package contains it. The
     three HDEMs and the terrain spatial files are preserved under
     `RAS Model\Terrain Submittal`; deeply nested supplemental reports remain in
     the audited raw cache, outside the active RAS tree. The HDEMs omit the two
     road-crossing ground-line layers and Lake Georgetown polygon named as
-    terrain modifications. ras-commander does not synthesize a replacement or
-    claim numerical equivalence. The organized source is classified as
+    terrain modifications. The organizer does not automatically synthesize a
+    replacement. An explicitly authorized working copy can build one shared
+    HDEM-only terrain through `RasTerrain.create_terrain_hdf(...)`; all five
+    projects then point to that file, but it is not FEMA's original and cannot
+    support a numerical-equivalence claim. The generated Record of Deficiencies
+    preserves that distinction. The organized source is classified as
     `unsteady_start`, not fully delivery-ready.
 
 Qualified 1% smoke plans:

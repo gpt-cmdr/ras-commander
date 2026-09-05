@@ -133,15 +133,21 @@ the agreed startup threshold but do not establish clean full-plan completion.
    one shared organized target, `RAS Model\Terrain\Terrain.hdf`, and normalize
    the terrain source/destination folders around that same layout.
 
-No source folder was modified. A compiled terrain rebuild is not a correction
-for this startup gate. Recovering FEMA's original `Terrain.hdf` or its
-modification inputs remains necessary for faithful geometry recomputation and
-a defensible full rerun.
+No source folder was modified. Following explicit authorization on 2026-09-05,
+one shared HDEM-only `Terrain.hdf` was built in the organized validation copy
+through `RasTerrain.create_terrain_hdf(...)` using HEC-RAS 6.3. All 40 RASMapper
+references across the five projects resolve to it. This is a path/startup
+mitigation, not a correction of the source-fidelity deficiency. Recovering
+FEMA's original `Terrain.hdf` or its modification inputs remains necessary for
+faithful geometry recomputation and a defensible full rerun. See
+[the Record of Deficiencies](2026-09-05_san_gabriel_record_of_deficiencies.md)
+for build provenance, hash, and validation details.
 
 ## Terrain fidelity warning
 
-A diagnostic terrain rebuilt from the three HDEMs provided mesh coverage but
-changed delivered cell-minimum elevations:
+The validated shared terrain rebuilt from the three HDEMs provided mesh
+coverage but changed delivered cell-minimum elevations in the diagnostic
+comparison:
 
 | Model | Mean rebuilt minus delivered | Maximum absolute difference | Cells differing by more than 1 ft |
 |---|---:|---:|---:|
@@ -162,8 +168,9 @@ as numerically identical to FEMA's delivered results.
   expose the cascade and deficiency details through `ModelMetadata.extra`.
 - Make eBFE extraction atomic, long-path safe, member-audited, and
   timestamp-preserving while retaining incomplete legacy caches unchanged.
-- Store the five-project manifest, exact DSS repairs, smoke plans, and terrain
-  deficiency in the organized delivery's `agent/` records.
+- Store the five-project manifest, exact DSS repairs, smoke plans, terrain
+  build provenance, and durable Record of Deficiencies in the organized
+  delivery's `agent/` records.
 - Keep San Gabriel out of the interactive Example Project Explorer until the
   original terrain and the required full terrain/result publication gates are
   satisfied. It may be listed as an `unsteady_start` source candidate.
