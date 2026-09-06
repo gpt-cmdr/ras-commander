@@ -171,6 +171,7 @@ as numerically identical to FEMA's delivered results.
 - Store the five-project manifest, exact DSS repairs, smoke plans, terrain
   build provenance, and durable Record of Deficiencies in the organized
   delivery's `agent/` records.
-- Keep San Gabriel out of the interactive Example Project Explorer until the
-  original terrain and the required full terrain/result publication gates are
-  satisfied. It may be listed as an `unsteady_start` source candidate.
+- Show San Gabriel in the interactive Example Project Explorer as an explicit
+  `unsteady_start` source-qualification candidate. Publish its five-project
+  footprint and technical profile now, but withhold the project-viewer link
+  until the required full terrain/result publication gates are satisfied.

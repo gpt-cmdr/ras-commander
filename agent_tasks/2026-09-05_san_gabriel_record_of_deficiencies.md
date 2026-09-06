@@ -20,6 +20,7 @@ made in the organized validation copy. The delivered source was not modified.
 | SG-004 | `999999_Terrain_metadata.xml` is malformed because `Doucet & Associates` is not XML-escaped. | Automated XML parsing fails without tolerant handling or a corrected copy. | **Open documentation defect.** It does not prevent reading the HDEM rasters. |
 | SG-005 | The Models archive includes a 282-character member name. A normal descriptive Windows extraction path exceeds common path limits, and an earlier non-atomic retry could mistake a partial destination for success. | Extraction may fail silently or leave an incomplete model tree. | **Mitigated in ras-commander.** The extractor is atomic, Windows long-path aware, timestamp preserving, and validates every member by path, size, and CRC32. The active workspace follows `H:\Testing\eBFE\<HUC8>\{raw,organized,runs,reports}`. |
 | SG-006 | `RasProcess.exe CreateTerrain` returned code 0 and produced a structurally valid HDF, but emitted a non-fatal stderr warning whose text was not retained because DEBUG logging was not enabled. | No observed build failure; the warning cannot be independently classified from the retained log. | **Monitor.** Retain the validated HDF/hash. Rebuild with DEBUG logging if exact warning provenance becomes necessary. |
+| SG-007 | The first isolated LBSG_503 `p04` reconstructed-terrain run completed geometry preprocessing, but HEC-RAS 6.3 could not execute the removed Windows `wmic` utility. `RasUnsteady.exe` reached end-of-file reading its empty `systemInfo.txt` and exited with code 24. | The attempt produced only a 13,369-byte summary HDF and no hydraulic result datasets. The failure was a host/runtime compatibility issue, not evidence that the reconstructed terrain failed preprocessing. | **Mitigated in ras-commander; hydraulic rerun pending.** HEC-RAS 6.3 launches with a process-local, CPU-query-only WMIC compatibility shim backed by Windows CIM. The library does not install a Windows feature, change the system PATH, or expose a new public parameter. The failed run remains preserved. |
 
 ## HDEM-only terrain reconstruction
 
@@ -70,3 +71,20 @@ does not identify an exception or an alternate location for `Terrain.hdf`.
 
 The derived terrain therefore resolves the runtime path deficiency for the
 organized validation copy, but it does not cure the source-fidelity deficiency.
+
+## LBSG_503 hydraulic comparison
+
+The first isolated two-core `p04` run rebuilt the 2D property tables from the
+HDEM-only terrain and entered the unsteady solver, then stopped at SG-007 before
+hydraulic output began. Evidence is retained at:
+
+`H:\Testing\eBFE\12070205\runs\503_1pct_rebuilt_20260905`
+
+A fresh copy is being rerun after the scoped RAS Commander compatibility
+mitigation at:
+
+`H:\Testing\eBFE\12070205\runs\503_1pct_rebuilt_wmicfix_20260905`
+
+The supplied FEMA `p04` result is preserved separately within each run folder
+before RAS Commander writes the run copy. Hydraulic reasonableness remains
+unassessed until that rerun produces verified hydraulic datasets.

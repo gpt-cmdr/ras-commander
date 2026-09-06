@@ -122,6 +122,77 @@ def test_build_compute_command_preserves_modern_layout(version, tmp_path):
     assert command == f'"{ras_exe}" -c "{project_path}" "{plan_path}"'
 
 
+def test_legacy_wmic_subprocess_env_is_scoped_to_hec_ras_63(
+    monkeypatch,
+):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"),
+        ras_version="6.3",
+    )
+    monkeypatch.setattr(RasCmdr, "_is_windows", staticmethod(lambda: True))
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+
+    env, owner = RasCmdr._legacy_wmic_subprocess_env(ras_obj)
+
+    assert env is not None
+    assert owner is not None
+    shim_dir = Path(owner.name)
+    assert env["PATH"].split(os.pathsep)[0] == str(shim_dir)
+    assert (shim_dir / "wmic.cmd").is_file()
+    script = (shim_dir / "wmic.ps1").read_text(encoding="ascii")
+    assert "Get-CimInstance -ClassName Win32_Processor" in script
+    assert "NumberOfLogicalProcessors" in script
+    owner.cleanup()
+
+
+@pytest.mark.parametrize("version", ["6.2", "6.4", "7.0"])
+def test_legacy_wmic_subprocess_env_does_not_change_other_versions(
+    monkeypatch,
+    version,
+):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(rf"C:\HEC-RAS\{version}\Ras.exe"),
+        ras_version=version,
+    )
+    monkeypatch.setattr(RasCmdr, "_is_windows", staticmethod(lambda: True))
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+
+    assert RasCmdr._legacy_wmic_subprocess_env(ras_obj) == (None, None)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows CIM compatibility shim")
+def test_legacy_wmic_subprocess_env_answers_solver_cpu_queries(monkeypatch):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"),
+        ras_version="6.3",
+    )
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+    env, owner = RasCmdr._legacy_wmic_subprocess_env(ras_obj)
+    assert env is not None
+    assert owner is not None
+
+    try:
+        for field in (
+            "NumberOfCores",
+            "NumberOfLogicalProcessors",
+            "SocketDesignation",
+            "DeviceID",
+            "Name",
+        ):
+            result = subprocess.run(
+                ["cmd", "/d", "/c", "wmic", "CPU", "get", field],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            assert lines[0].lower() == field.lower()
+            assert len(lines) >= 2
+    finally:
+        owner.cleanup()
+
+
 def test_compute_plan_sets_current_plan_for_legacy_project_only_launch(
     monkeypatch,
     tmp_path,

@@ -3,9 +3,10 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
 <link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260724Tlibrary-final03">
 
-Explore HEC tutorial projects and organized public model releases used throughout
-the RAS Commander examples. Select a model area on the map or open a project
-below to review its geometry, terrain, and results.
+Explore HEC tutorial projects, organized public model releases, and explicitly
+marked source-qualification candidates used throughout the RAS Commander
+examples. Select a model area on the map or open a project below to review its
+available geometry, terrain, and results.
 
 ## Project Explorer
 
@@ -32,16 +33,17 @@ below to review its geometry, terrain, and results.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260905Tsan-gabriel01"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260724Tlibrary-final03"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260905Tsan-gabriel01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260905Tsan-gabriel01"></script>
 
-## Source Qualification Candidates
+## Dashboard Qualification Status
 
-The following public source is available through RAS Commander but is not yet
-admitted to the interactive explorer. Explorer admission requires a complete
-terrain and a successfully computed plan with the applicable vector and
-RASMapper Stored Map result families.
+The San Gabriel model system appears in the dashboard as a **source
+qualification candidate**. Its five-project footprint and technical profile are
+discoverable now, but the card intentionally has no project-viewer link until a
+complete results publication passes the remaining qualification gates.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
@@ -52,7 +54,8 @@ compiled terrain or its modification inputs are recovered and the full public
 terrain/results publication gates pass. The organizer normalizes all five
 `.rasmap` files so their 40 terrain and modification references resolve to the
 single expected organized target, `RAS Model\Terrain\Terrain.hdf`, and creates
-a durable Record of Deficiencies for any explicitly authorized reconstruction.
+a durable [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md)
+for any explicitly authorized reconstruction.
 
 ## Related Workflows
 

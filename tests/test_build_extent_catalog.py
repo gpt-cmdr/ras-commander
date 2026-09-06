@@ -24,6 +24,26 @@ def test_catalog_extent_outputs_do_not_overlap_viewer_artifacts() -> None:
         assert "/viewer/" not in project["extent_output"]
 
 
+def test_san_gabriel_catalog_entry_unions_all_five_linked_projects() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    project = next(
+        item for item in config["projects"] if item["id"] == "san-gabriel-ble-12070205"
+    )
+    assert project["status"] == "Source qualification candidate"
+    assert project["viewer_type"] == "Qualification candidate"
+    assert project["record_of_deficiencies"].endswith(
+        "2026-09-05_san_gabriel_record_of_deficiencies.md"
+    )
+    assert [Path(path).name for path in project["geometry_hdfs"]] == [
+        "BLE_LBSG_501.g02.hdf",
+        "BLE_LBSG_502.g03.hdf",
+        "BLE_LBSG_503.g04.hdf",
+        "BLE_LBSG_504.g05.hdf",
+        "BLE_LBSG_505.g06.hdf",
+    ]
+
+
 def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path) -> None:
     output = tmp_path / "ras-example-projects-data.js"
     catalog = {
