@@ -61,10 +61,40 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
       version: "HEC-RAS 6.1 (bundled results)",
       summary: "A FEMA base-level engineering model with seven completed unsteady plans over a large 2D domain. It represents the structure and scale of a regional BLE delivery rather than a compact instructional fixture.",
     },
-    "san-gabriel-ble-12070205": {
-      modelType: "Five linked 2D unsteady models",
-      version: "HEC-RAS 6.3 source; LBSG_503 solver-validated",
-      summary: "A regional FEMA BLE system delivered as five adjoining projects. LBSG_503 covers Florence and LBSG_504 covers Round Rock. An HDEM-only reconstructed-terrain LBSG_503 run completed successfully and is hydraulically reasonable for QA screening, but localized differences and the missing terrain modifications keep the source in qualification-candidate status.",
+    "san-gabriel-lbsg-501-12070205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.3 source; unsteady-start validated",
+      summary: "LBSG_501 domain in the five-project San Gabriel model system.",
+      groupId: "san-gabriel",
+      variantLabel: "LBSG_501",
+    },
+    "san-gabriel-lbsg-502-12070205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.3 source; unsteady-start validated",
+      summary: "Second domain in the five-project San Gabriel model system.",
+      groupId: "san-gabriel",
+      variantLabel: "LBSG_502",
+    },
+    "san-gabriel-lbsg-503-12070205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.3 source; reconstructed-terrain run completed",
+      summary: "Florence-area domain in the five-project San Gabriel model system.",
+      groupId: "san-gabriel",
+      variantLabel: "LBSG_503 (Florence)",
+    },
+    "san-gabriel-lbsg-504-12070205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.3 source; unsteady-start validated",
+      summary: "Round Rock-area domain in the five-project San Gabriel model system.",
+      groupId: "san-gabriel",
+      variantLabel: "LBSG_504 (Round Rock)",
+    },
+    "san-gabriel-lbsg-505-12070205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.3 source; unsteady-start validated",
+      summary: "LBSG_505 domain in the five-project San Gabriel model system.",
+      groupId: "san-gabriel",
+      variantLabel: "LBSG_505",
     },
     "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab": {
       modelType: "1D/2D unsteady dam-break",
@@ -107,6 +137,14 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
     },
   },
   groups: {
+    "san-gabriel": {
+      title: "San Gabriel Model Suite",
+      sourceLabel: "FEMA eBFE/BLE delivery",
+      modelType: "Five linked 2D unsteady models",
+      version: "HEC-RAS 6.3 source; source qualification candidate",
+      summary: "Five adjoining 2D projects cover the San Gabriel model system. LBSG_503 covers Florence and LBSG_504 covers Round Rock. Every selected 1% plan reached unsteady computation; the HDEM-only terrain reconstruction is not source-equivalent.",
+      recordOfDeficiencies: "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
+    },
     "upper-guadalupe": {
       title: "Upper Guadalupe Model Suite",
       sourceLabel: "FEMA eBFE/BLE delivery",

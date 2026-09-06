@@ -343,10 +343,15 @@
       links.className = "ras-library-project-links";
       for (const child of entry.features) {
         const childProfile = projectProfile(child);
-        const link = document.createElement("a");
-        link.href = child.properties?.webmap ? resolveHref(child.properties.webmap) : "#";
-        link.textContent = childProfile.variantLabel || child.properties?.title || child.id;
-        links.append(link);
+        const webmap = child.properties?.webmap;
+        const label = document.createElement(webmap ? "a" : "span");
+        if (webmap) {
+          label.href = resolveHref(webmap);
+        } else {
+          label.className = "ras-library-project-link--disabled";
+        }
+        label.textContent = childProfile.variantLabel || child.properties?.title || child.id;
+        links.append(label);
       }
       project.append(links);
     } else {
@@ -369,9 +374,10 @@
     const information = document.createElement("td");
     information.className = "ras-library-project-information";
     information.textContent = profile.summary || props.summary || props.notes || "";
-    if (props.recordOfDeficiencies) {
+    const recordOfDeficiencies = profile.recordOfDeficiencies || props.recordOfDeficiencies;
+    if (recordOfDeficiencies) {
       const details = document.createElement("a");
-      details.href = resolveHref(props.recordOfDeficiencies);
+      details.href = resolveHref(recordOfDeficiencies);
       details.textContent = "Record of Deficiencies";
       information.append(document.createElement("br"), details);
     }

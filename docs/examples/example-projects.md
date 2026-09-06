@@ -1,7 +1,7 @@
 # Example Project Library
 
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
-<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260724Tlibrary-final03">
+<link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260906Tsan-gabriel-submodels01">
 
 Explore HEC tutorial projects, organized public model releases, and explicitly
 marked source-qualification candidates used throughout the RAS Commander
@@ -33,17 +33,17 @@ available geometry, terrain, and results.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260905Tsan-gabriel01"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260906Tsan-gabriel-submodels01"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260906Texact-extents01"></script>
-<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260906Texact-extents01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260905Tsan-gabriel01"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260906Tsan-gabriel-submodels01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260906Tsan-gabriel-submodels01"></script>
 
 ## Dashboard Qualification Status
 
 The San Gabriel model system appears in the dashboard as a **source
-qualification candidate**. Its five-project footprint and technical profile are
-discoverable now, but the card intentionally has no project-viewer link until a
-complete results publication passes the remaining qualification gates.
+qualification candidate**. Its five sub-model footprints and technical profile
+are discoverable now, but the card intentionally has no project-viewer link
+until a complete results publication passes the remaining qualification gates.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
