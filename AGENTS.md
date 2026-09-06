@@ -91,6 +91,31 @@ This file is the canonical shared instruction contract for repository-local codi
   - `uv run python -c "import ras_commander as ras; print(ras.__version__)"`
 - HEC-RAS execution requires an installed `Ras.exe`. Pass an explicit executable path when the active environment does not already resolve one.
 
+## Short-Path Workspaces For External Models
+
+- Preflight the maximum expanded path before extracting external HEC-RAS,
+  eBFE/BLE, or similar archives. On Windows, keep HEC-RAS-active organized
+  project and run paths at or below 240 characters so HEC-RAS and legacy
+  utilities retain temporary-file headroom below `MAX_PATH`.
+- Use the caller-configured workspace root. For eBFE work, prefer
+  `RAS_COMMANDER_EBFE_ROOT`; the shared Windows-host convention is
+  `H:\Testing\eBFE\<HUC8>` with `raw/`, `organized/`, `runs/`, and `reports/`
+  beneath the study folder.
+- Do not improvise task folders directly under a drive root. If the configured
+  location is too long, choose a shorter named workspace under the approved
+  root and record the path choice in the task report.
+- Some archive member names exceed `MAX_PATH` before a destination is added.
+  Preserve those raw files through extended-length-path I/O under `raw/`, but
+  keep deeply nested supplemental reports outside the HEC-RAS-active organized
+  project tree. Do not flatten or rename source members inside the raw cache.
+- Extraction code must remain long-path safe even when the selected workspace
+  is short. Extract through a verified temporary sibling, prevent path
+  traversal, preserve archive timestamps, audit member counts, sizes, and
+  CRC32 values, and write a completion receipt before accepting the cache.
+- A non-empty extraction directory is not evidence of success. Audit legacy
+  caches before reuse, and never delete or relocate retained model data without
+  explicit approval.
+
 ## Repository Map
 
 - `ras_commander/` - core library code and subpackages. Read [ras_commander/AGENTS.md](ras_commander/AGENTS.md) for library-local rules.

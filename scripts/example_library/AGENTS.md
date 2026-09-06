@@ -93,6 +93,30 @@ Hold the project out of the public catalog until it runs successfully and both
 result branches pass validation. Preserve plan, geometry, profile/time, units,
 source HDF, map type, and interpolation authority in result metadata.
 
+### Discovery-only source candidates
+
+A maintainer may explicitly authorize a source-qualification candidate on the
+landing dashboard before the full result gate passes. This is a narrow
+discovery exception, not publication as a completed example project. A
+candidate entry must:
+
+- be labeled `Source qualification candidate` in both the catalog and public
+  explanation;
+- have a valid CRS and an API-derived WGS84 footprint;
+- link to a durable Record of Deficiencies that distinguishes source defects
+  from validation-copy mitigations;
+- have reached an explicitly recorded RAS Commander validation threshold, at
+  minimum unsteady-solver startup for an unsteady project;
+- omit its project-viewer link and hosted manifest until the complete terrain,
+  vector-result, raster-result, and browser-review gates pass; and
+- avoid any language suggesting that reconstructed terrain is source-equivalent
+  or that hydraulic results have been fully qualified.
+
+Keep discovery supplements separate from the generated fallback catalog and
+deduplicate them by project ID, with a future fully published catalog feature
+taking precedence. This permits the candidate to disappear cleanly into the
+normal publication path when all gates pass.
+
 ## Terrain Gate
 
 - Discover every TIFF/VRT member associated with each named terrain.
@@ -130,7 +154,9 @@ source HDF, map type, and interpolation authority in result metadata.
 
 ## Catalog Admission Checklist
 
-Add projects one at a time only after all checks pass:
+Add completed viewer projects one at a time only after all checks pass. The
+discovery-only exception above follows its own stricter labeling and no-viewer
+requirements:
 
 - source license permits publication;
 - project CRS is valid and catalog bounds are valid WGS84;

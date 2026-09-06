@@ -5,9 +5,9 @@ handoff, notebooks, or downstream automation. A project that only initializes in
 ras-commander is not fully validated; it must also pass a preprocessor run and
 compute-message review.
 
-Track canonical project-by-project readiness in the repository-level
-`VALIDATION_MATRIX.md`; generated reports belong under the shared eBFE data
-workspace, currently `H:\Testing\eBFE Model Organization\Validation`.
+Generated reports belong under the configured eBFE workspace. New work on the
+shared Windows host uses `H:\Testing\eBFE\<HUC8>\reports`; older records under
+`H:\Testing\eBFE Model Organization\Validation` remain historical evidence.
 
 ## Validation Status Levels
 
@@ -17,6 +17,34 @@ workspace, currently `H:\Testing\eBFE Model Organization\Validation`.
 - `preprocessor_validated`: A geometry preprocessor run completed and compute messages were reviewed.
 - `results_validated`: Existing HDF result files are present, loadable, and mapped to the project plans.
 - `notebook_validated`: Example notebooks run against the organized delivery without stale paths.
+- `unsteady_start`: A specifically identified plan entered unsteady computation,
+  based on an explicit compute message or an owned solver process plus complete
+  preprocessing artifacts. This is a smoke-test qualification and does not
+  imply `preprocessor_validated`, clean completion, or numerical equivalence.
+
+## Workspace Path-Length Gate
+
+Before downloading or extracting an archive, compute its maximum expanded path
+under the proposed destination. Some source members are inherently longer than
+legacy `MAX_PATH`; retain them in a long-path-safe raw cache. Keep the
+HEC-RAS-active organized project and run paths at or below 240 characters so
+HEC-RAS retains temporary-file headroom. Use:
+
+```text
+%RAS_COMMANDER_EBFE_ROOT%\<HUC8>\
+├── raw\
+├── organized\
+├── runs\
+└── reports\
+```
+
+Do not create ad hoc task directories directly under a drive root. Keep deeply
+nested supplemental reports in `raw/`, outside the active RAS project tree.
+Extraction must be atomic, long-path safe, traversal protected, timestamp
+preserving, and member-audited. A non-empty legacy extraction is reusable only
+after its member count, sizes, and CRC32 values match the source ZIP; incomplete
+caches remain untouched until the operator explicitly moves them or selects a
+new root.
 
 ## Standard Delivery Layout
 
@@ -182,3 +210,8 @@ An organized eBFE project is delivery-ready only when:
 - It has an `agent/validation_report.md` with the exact plans/geometries checked.
 - Any missing archives, manual checks, or unsupported steady preprocessor gaps are
   explicitly documented.
+
+A project with `unsteady_start` evidence but a missing required terrain or
+other source asset is not delivery-ready. Preserve the evidence and classify
+the missing asset as `Not Provided in Source`; do not synthesize a replacement
+and promote the status without a separate fidelity review.

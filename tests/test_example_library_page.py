@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 
@@ -61,3 +62,40 @@ def test_example_library_consumes_only_the_atomic_current_release() -> None:
     expected = "hec-ras-7.0/current/example-projects.geojson"
     assert expected in page
     assert expected in javascript
+
+
+def test_san_gabriel_candidate_is_merged_into_the_dashboard() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    library = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+    supplement_source = (
+        ROOT
+        / "docs"
+        / "assets"
+        / "javascripts"
+        / "ras-example-project-supplements.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    supplement = json.loads(
+        supplement_source.removeprefix(prefix).removesuffix(";\n")
+    )
+
+    assert "ras-example-project-supplements.js" in page
+    assert "mergeProjectCollections(await response.json())" in library
+    assert "!existingIds.has(id)" in library
+    feature = supplement["features"][0]
+    assert feature["id"] == "san-gabriel-ble-12070205"
+    assert feature["properties"]["status"] == "Source qualification candidate"
+    assert feature["properties"]["recordOfDeficiencies"].endswith(
+        "2026-09-05_san_gabriel_record_of_deficiencies.md"
+    )
+    assert "Record of Deficiencies" in library
+    assert feature["bbox"] == [
+        -98.26813645701162,
+        30.403250679780886,
+        -97.00285606221672,
+        30.918779935290782,
+    ]

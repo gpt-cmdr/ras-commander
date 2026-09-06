@@ -185,6 +185,28 @@
       "notes": "FEMA eBFE/BLE 2D-unsteady model with seven completed plans, consolidated terrain, raw HDF element results, and complete RASMapper Stored Map sets with NoData preserved as transparent."
     },
     {
+      "id": "san-gabriel-ble-12070205",
+      "title": "FEMA San Gabriel BLE (12070205)",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:2277",
+      "geometry_hdf": "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_501/Input/BLE_LBSG_501.g02.hdf",
+      "geometry_hdfs": [
+        "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_501/Input/BLE_LBSG_501.g02.hdf",
+        "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_502/Input/BLE_LBSG_502.g03.hdf",
+        "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_503/Input/BLE_LBSG_503.g04.hdf",
+        "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_504/Input/BLE_LBSG_504.g05.hdf",
+        "source_projects/ebfe_organized/SanGabriel_12070205/RAS Model/LBSG_505/Input/BLE_LBSG_505.g06.hdf"
+      ],
+      "extent_output": "project-extents/san-gabriel-ble-12070205.geojson",
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
+      "notes": "Five linked FEMA BLE 2D-unsteady projects covering the San Gabriel model system, including Florence (LBSG_503) and Round Rock (LBSG_504). A shared HDEM-only reconstructed-terrain LBSG_503 run completed successfully and is hydraulically reasonable for QA screening; the source delivery omitted the compiled Terrain.hdf and its terrain-modification payloads, so the reconstruction is not source-equivalent."
+    },
+    {
       "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
       "title": "Upper Guadalupe UPGU1",
       "source_family": "FEMA eBFE/BLE delivery",

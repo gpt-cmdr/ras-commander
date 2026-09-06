@@ -196,7 +196,8 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
         "webmap": project["webmap"],
         "manifest": project["manifest"],
         "projectManifest": project["project_manifest"],
-        "viewerType": "MapLibre",
+        "viewerType": project.get("viewer_type", "MapLibre"),
+        "recordOfDeficiencies": project.get("record_of_deficiencies", ""),
         "notes": project["notes"],
         "extentSource": (
             "HdfProject.get_project_extent(geometry_type='footprint', "

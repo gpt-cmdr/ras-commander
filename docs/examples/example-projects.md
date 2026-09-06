@@ -3,9 +3,10 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
 <link rel="stylesheet" href="../../assets/stylesheets/ras-example-library.css?v=20260724Tlibrary-final03">
 
-Explore HEC tutorial projects and organized public model releases used throughout
-the RAS Commander examples. Select a model area on the map or open a project
-below to review its geometry, terrain, and results.
+Explore HEC tutorial projects, organized public model releases, and explicitly
+marked source-qualification candidates used throughout the RAS Commander
+examples. Select a model area on the map or open a project below to review its
+available geometry, terrain, and results.
 
 ## Project Explorer
 
@@ -32,9 +33,29 @@ below to review its geometry, terrain, and results.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260905Tsan-gabriel01"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260724Tlibrary-final03"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260724Tlibrary-final03"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260905Tsan-gabriel01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260905Tsan-gabriel01"></script>
+
+## Dashboard Qualification Status
+
+The San Gabriel model system appears in the dashboard as a **source
+qualification candidate**. Its five-project footprint and technical profile are
+discoverable now, but the card intentionally has no project-viewer link until a
+complete results publication passes the remaining qualification gates.
+
+| Source | RAS Commander entry point | Qualification | Known limitation |
+|---|---|---|---|
+| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. A reconstructed-terrain LBSG_503 1% run also completed successfully with a 0.0236% volume error and 0.737-ft P95 maximum-WSE difference from the supplied result. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. | The original compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification payloads were not provided. The HDEM-only reconstruction resolves all 40 paths and is hydraulically reasonable for QA screening, but localized outliers show that it is not source-equivalent. |
+
+San Gabriel remains an `unsteady_start` source example until the original
+compiled terrain or its modification inputs are recovered and the full public
+terrain/results publication gates pass. The organizer normalizes all five
+`.rasmap` files so their 40 terrain and modification references resolve to the
+single expected organized target, `RAS Model\Terrain\Terrain.hdf`, and creates
+a durable [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md)
+for any explicitly authorized reconstruction.
 
 ## Related Workflows
 

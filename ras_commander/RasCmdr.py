@@ -42,6 +42,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -86,6 +87,11 @@ class RasCmdr:
     )
 
     @staticmethod
+    def _is_windows() -> bool:
+        """Return whether the current host uses Windows process semantics."""
+        return os.name == "nt"
+
+    @staticmethod
     def _ras_version_tuple(ras_object: 'RasPrj') -> Optional[tuple[int, int, int]]:
         """Resolve a numeric release from an initialized RAS object."""
         candidates = []
@@ -126,6 +132,77 @@ class RasCmdr:
         if RasCmdr._uses_legacy_project_cli(ras_object):
             return f'"{ras_exe_path}" "{project_path}" -c'
         return f'"{ras_exe_path}" -c "{project_path}" "{plan_path}"'
+
+    @staticmethod
+    def _legacy_wmic_subprocess_env(
+        ras_object: 'RasPrj',
+    ) -> tuple[Optional[dict[str, str]], Optional[tempfile.TemporaryDirectory]]:
+        """Supply the CPU-only WMIC surface required by HEC-RAS 6.3.
+
+        Current Windows releases can omit ``wmic.exe``.  The HEC-RAS 6.3
+        unsteady solver nevertheless invokes five read-only ``wmic CPU get``
+        queries before starting its numerical work and aborts when the
+        resulting ``systemInfo.txt`` is empty.  Provide those fields from CIM
+        through a process-local PATH shim; do not install a system component or
+        mutate the caller's environment.
+
+        Returns:
+            A subprocess environment and its temporary-directory owner.  The
+            caller must keep the owner alive for the complete solver run and
+            call ``cleanup()`` afterwards.  ``(None, None)`` means no shim is
+            required.
+        """
+        version = RasCmdr._ras_version_tuple(ras_object)
+        if (
+            not RasCmdr._is_windows()
+            or version is None
+            or version[:2] != (6, 3)
+            or shutil.which("wmic") is not None
+        ):
+            return None, None
+
+        shim_dir = tempfile.TemporaryDirectory(prefix="ras_commander_wmic_")
+        shim_path = Path(shim_dir.name)
+        (shim_path / "wmic.cmd").write_text(
+            "@echo off\n"
+            'if /I not "%~1"=="CPU" exit /b 1\n'
+            'if /I not "%~2"=="get" exit /b 1\n'
+            'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
+            '-File "%~dp0wmic.ps1" "%~3"\n'
+            "exit /b %ERRORLEVEL%\n",
+            encoding="ascii",
+        )
+        (shim_path / "wmic.ps1").write_text(
+            "param([string]$Property)\n"
+            "$names = @{\n"
+            "  'numberofcores' = 'NumberOfCores'\n"
+            "  'numberoflogicalprocessors' = 'NumberOfLogicalProcessors'\n"
+            "  'socketdesignation' = 'SocketDesignation'\n"
+            "  'deviceid' = 'DeviceID'\n"
+            "  'name' = 'Name'\n"
+            "}\n"
+            "$canonical = $names[$Property.ToLowerInvariant()]\n"
+            "if (-not $canonical) { exit 1 }\n"
+            "try {\n"
+            "  $processors = @(Get-CimInstance -ClassName Win32_Processor "
+            "-ErrorAction Stop)\n"
+            "} catch { exit 1 }\n"
+            "if (-not $processors) { exit 1 }\n"
+            "Write-Output $canonical\n"
+            "foreach ($processor in $processors) {\n"
+            "  $value = $processor.$canonical\n"
+            "  if ($null -ne $value) { Write-Output ([string]$value) }\n"
+            "}\n",
+            encoding="ascii",
+        )
+
+        env = os.environ.copy()
+        env["PATH"] = f"{shim_path}{os.pathsep}{env.get('PATH', '')}"
+        logger.warning(
+            "HEC-RAS 6.3 requires WMIC CPU queries, but wmic.exe is unavailable; "
+            "using a process-local CIM compatibility shim."
+        )
+        return env, shim_dir
 
     @staticmethod
     def _tcu_blocks_launch(ras_object: 'RasPrj') -> bool:
@@ -926,6 +1003,8 @@ class RasCmdr:
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
         _watchdog = None
+        _compute_env = None
+        _wmic_compat_dir = None
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
@@ -1135,6 +1214,10 @@ class RasCmdr:
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
 
+            _compute_env, _wmic_compat_dir = RasCmdr._legacy_wmic_subprocess_env(
+                compute_ras
+            )
+
             # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
             # rather than a PIPE to avoid an inherited-pipe deadlock (CLB-880): with
             # shell=True the pipe's write handle is inherited by the whole
@@ -1176,6 +1259,7 @@ class RasCmdr:
                             stdout=_run_log_fh,
                             stderr=subprocess.STDOUT,
                             cwd=str(compute_ras.project_folder),
+                            env=_compute_env,
                             shell=True
                         )
                         if _watchdog:
@@ -1207,6 +1291,7 @@ class RasCmdr:
                             shell=True,
                             stdout=_run_log_fh,
                             stderr=subprocess.STDOUT,
+                            env=_compute_env,
                         )
 
                 end_time = time.time()
@@ -1341,6 +1426,8 @@ class RasCmdr:
         finally:
             if _watchdog:
                 _watchdog.stop()
+            if _wmic_compat_dir is not None:
+                _wmic_compat_dir.cleanup()
 
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
