@@ -111,6 +111,17 @@ opening a missing `Cross Sections` HDF group. Model 502 was intentionally
 stopped at positive owned-process detection. These outcomes do not invalidate
 the agreed startup threshold but do not establish clean full-plan completion.
 
+Following the HDEM-only terrain reconstruction, a fresh isolated two-core run
+of LBSG_503 `p04` completed successfully through HEC-RAS 6.3 and passed RAS
+Commander completion verification. The reconstructed and supplied results have
+identical 124,511-cell wet footprints. Maximum WSE has a 0.205 ft mean absolute
+difference and 0.737 ft 95th-percentile absolute difference; maximum depth has
+a 0.231 ft mean absolute difference and 0.927 ft 95th-percentile absolute
+difference. The rebuilt volume-accounting error is 0.0236 percent. This is
+hydraulically reasonable for startup and QA screening, while localized maxima
+and a 1,429.734 acre-foot outflow redistribution confirm that it is not a
+source-equivalent reconstruction.
+
 ## Corrections for an unsteady-start copy
 
 1. Extract to a concise path and audit every member by path, size, and CRC32;
@@ -132,6 +143,9 @@ the agreed startup threshold but do not establish clean full-plan completion.
 9. Normalize every terrain-layer `Filename` in all five `.rasmap` files to the
    one shared organized target, `RAS Model\Terrain\Terrain.hdf`, and normalize
    the terrain source/destination folders around that same layout.
+10. On current Windows hosts without `wmic.exe`, launch HEC-RAS 6.3 through RAS
+    Commander's process-local CPU-query compatibility shim. Do not install a
+    system feature or alter the system PATH for this legacy solver dependency.
 
 No source folder was modified. Following explicit authorization on 2026-09-05,
 one shared HDEM-only `Terrain.hdf` was built in the organized validation copy
@@ -139,7 +153,7 @@ through `RasTerrain.create_terrain_hdf(...)` using HEC-RAS 6.3. All 40 RASMapper
 references across the five projects resolve to it. This is a path/startup
 mitigation, not a correction of the source-fidelity deficiency. Recovering
 FEMA's original `Terrain.hdf` or its modification inputs remains necessary for
-faithful geometry recomputation and a defensible full rerun. See
+faithful geometry recomputation and defensible numerical reproduction. See
 [the Record of Deficiencies](2026-09-05_san_gabriel_record_of_deficiencies.md)
 for build provenance, hash, and validation details.
 

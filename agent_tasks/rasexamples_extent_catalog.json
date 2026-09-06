@@ -204,7 +204,7 @@
       "manifest": "",
       "project_manifest": "",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
-      "notes": "Five linked FEMA BLE 2D-unsteady projects covering the San Gabriel model system, including Florence (LBSG_503) and Round Rock (LBSG_504). Unsteady-start validation uses one shared HDEM-only terrain reconstruction; the source delivery omitted the compiled Terrain.hdf and its terrain-modification payloads."
+      "notes": "Five linked FEMA BLE 2D-unsteady projects covering the San Gabriel model system, including Florence (LBSG_503) and Round Rock (LBSG_504). A shared HDEM-only reconstructed-terrain LBSG_503 run completed successfully and is hydraulically reasonable for QA screening; the source delivery omitted the compiled Terrain.hdf and its terrain-modification payloads, so the reconstruction is not source-equivalent."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",

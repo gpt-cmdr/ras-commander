@@ -20,7 +20,7 @@ made in the organized validation copy. The delivered source was not modified.
 | SG-004 | `999999_Terrain_metadata.xml` is malformed because `Doucet & Associates` is not XML-escaped. | Automated XML parsing fails without tolerant handling or a corrected copy. | **Open documentation defect.** It does not prevent reading the HDEM rasters. |
 | SG-005 | The Models archive includes a 282-character member name. A normal descriptive Windows extraction path exceeds common path limits, and an earlier non-atomic retry could mistake a partial destination for success. | Extraction may fail silently or leave an incomplete model tree. | **Mitigated in ras-commander.** The extractor is atomic, Windows long-path aware, timestamp preserving, and validates every member by path, size, and CRC32. The active workspace follows `H:\Testing\eBFE\<HUC8>\{raw,organized,runs,reports}`. |
 | SG-006 | `RasProcess.exe CreateTerrain` returned code 0 and produced a structurally valid HDF, but emitted a non-fatal stderr warning whose text was not retained because DEBUG logging was not enabled. | No observed build failure; the warning cannot be independently classified from the retained log. | **Monitor.** Retain the validated HDF/hash. Rebuild with DEBUG logging if exact warning provenance becomes necessary. |
-| SG-007 | The first isolated LBSG_503 `p04` reconstructed-terrain run completed geometry preprocessing, but HEC-RAS 6.3 could not execute the removed Windows `wmic` utility. `RasUnsteady.exe` reached end-of-file reading its empty `systemInfo.txt` and exited with code 24. | The attempt produced only a 13,369-byte summary HDF and no hydraulic result datasets. The failure was a host/runtime compatibility issue, not evidence that the reconstructed terrain failed preprocessing. | **Mitigated in ras-commander; hydraulic rerun pending.** HEC-RAS 6.3 launches with a process-local, CPU-query-only WMIC compatibility shim backed by Windows CIM. The library does not install a Windows feature, change the system PATH, or expose a new public parameter. The failed run remains preserved. |
+| SG-007 | The first isolated LBSG_503 `p04` reconstructed-terrain run completed geometry preprocessing, but HEC-RAS 6.3 could not execute the removed Windows `wmic` utility. `RasUnsteady.exe` reached end-of-file reading its empty `systemInfo.txt` and exited with code 24. | The attempt produced only a 13,369-byte summary HDF and no hydraulic result datasets. The failure was a host/runtime compatibility issue, not evidence that the reconstructed terrain failed preprocessing. | **Mitigated and verified in ras-commander.** HEC-RAS 6.3 launches with a process-local, CPU-query-only WMIC compatibility shim backed by Windows CIM. A fresh isolated two-core rerun finished successfully and passed RAS Commander completion verification. The library does not install a Windows feature, change the system PATH, or expose a new public parameter. The failed run remains preserved. |
 
 ## HDEM-only terrain reconstruction
 
@@ -80,11 +80,30 @@ hydraulic output began. Evidence is retained at:
 
 `H:\Testing\eBFE\12070205\runs\503_1pct_rebuilt_20260905`
 
-A fresh copy is being rerun after the scoped RAS Commander compatibility
-mitigation at:
+A fresh copy was rerun after the scoped RAS Commander compatibility mitigation
+at:
 
 `H:\Testing\eBFE\12070205\runs\503_1pct_rebuilt_wmicfix_20260905`
 
-The supplied FEMA `p04` result is preserved separately within each run folder
-before RAS Commander writes the run copy. Hydraulic reasonableness remains
-unassessed until that rerun produces verified hydraulic datasets.
+The rerun finished `Unsteady Finished Successfully` in 29 minutes 30 seconds,
+and RAS Commander verified completion. The supplied FEMA `p04` result is
+preserved separately within each run folder.
+
+The reconstructed-terrain run is **hydraulically reasonable for startup and QA
+screening**, but it is not numerically source-equivalent:
+
+- all 124,511 wet cells match the supplied result;
+- maximum WSE mean absolute difference is 0.205 ft, with 95 percent within
+  0.737 ft and 96.58 percent within 1 ft;
+- maximum depth mean absolute difference is 0.231 ft across 122,457 comparable
+  cells, with 95 percent within 0.927 ft and 95.39 percent within 1 ft;
+- volume-accounting error is 0.0236 percent versus 0.0193 percent supplied; and
+- localized maxima reach 43.761 ft for WSE and 32.141 ft for depth, while
+  boundary outflow is 1,429.734 acre-feet higher and ending storage is
+  1,427.807 acre-feet lower.
+
+The complete comparison and top spatial outliers are retained under the rerun
+folder as `hydraulic_comparison.md`, `hydraulic_comparison.json`,
+`hydraulic_comparison.csv`, and `hydraulic_outliers.csv`. The localized
+differences reinforce SG-002: the HDEM-only reconstruction is appropriate for
+this validation threshold, not FEMA numerical reproduction or calibration.

@@ -63,8 +63,8 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
     },
     "san-gabriel-ble-12070205": {
       modelType: "Five linked 2D unsteady models",
-      version: "HEC-RAS 6.3 source; unsteady-start validation",
-      summary: "A regional FEMA BLE system delivered as five adjoining projects. LBSG_503 covers Florence and LBSG_504 covers Round Rock. The dashboard footprint is available while terrain reconstruction and full hydraulic-result qualification remain explicitly tracked in the Record of Deficiencies.",
+      version: "HEC-RAS 6.3 source; LBSG_503 solver-validated",
+      summary: "A regional FEMA BLE system delivered as five adjoining projects. LBSG_503 covers Florence and LBSG_504 covers Round Rock. An HDEM-only reconstructed-terrain LBSG_503 run completed successfully and is hydraulically reasonable for QA screening, but localized differences and the missing terrain modifications keep the source in qualification-candidate status.",
     },
     "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab": {
       modelType: "1D/2D unsteady dam-break",

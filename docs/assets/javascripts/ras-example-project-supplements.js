@@ -14,7 +14,7 @@ window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = {
         "projectId": "san-gabriel-ble-12070205",
         "viewerType": "Qualification candidate",
         "recordOfDeficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
-        "notes": "Five linked 2D-unsteady projects. LBSG_503 covers Florence and LBSG_504 covers Round Rock. Unsteady-start validation uses one shared HDEM-only terrain reconstruction; the source delivery omitted the compiled Terrain.hdf and its terrain-modification payloads.",
+        "notes": "Five linked 2D-unsteady projects. LBSG_503 covers Florence and LBSG_504 covers Round Rock. A shared HDEM-only reconstructed-terrain LBSG_503 run completed successfully and is hydraulically reasonable for QA screening; the source delivery omitted the compiled Terrain.hdf and its terrain-modification payloads, so the reconstruction is not source-equivalent.",
         "extentSource": "Union of LBSG_501-LBSG_505 footprints from HdfProject.get_project_extent()",
         "landingExtentSource": "Five-project model-system bounding box",
         "fallbackGeometry": "bounding-box"

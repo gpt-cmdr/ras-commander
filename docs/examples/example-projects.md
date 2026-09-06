@@ -47,7 +47,7 @@ complete results publication passes the remaining qualification gates.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
-| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. A validated working copy uses one shared terrain rebuilt from the three HDEMs. | The original compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification payloads were not provided. The HDEM-only reconstruction resolves all 40 paths but is not source-equivalent. |
+| FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. A reconstructed-terrain LBSG_503 1% run also completed successfully with a 0.0236% volume error and 0.737-ft P95 maximum-WSE difference from the supplied result. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. | The original compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification payloads were not provided. The HDEM-only reconstruction resolves all 40 paths and is hydraulically reasonable for QA screening, but localized outliers show that it is not source-equivalent. |
 
 San Gabriel remains an `unsteady_start` source example until the original
 compiled terrain or its modification inputs are recovered and the full public
