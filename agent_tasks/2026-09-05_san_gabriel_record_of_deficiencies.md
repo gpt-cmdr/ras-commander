@@ -1,6 +1,7 @@
 # San Gabriel Record of Deficiencies (ROD)
 
 - **ROD date:** 2026-09-05
+- **Last updated:** 2026-09-06
 - **Study:** FEMA San Gabriel BLE (12070205)
 - **Qualification:** Accepted with limitations at `unsteady_start`
 - **Delivered source:** `H:\s\12070205_Models`
@@ -21,6 +22,7 @@ made in the organized validation copy. The delivered source was not modified.
 | SG-005 | The Models archive includes a 282-character member name. A normal descriptive Windows extraction path exceeds common path limits, and an earlier non-atomic retry could mistake a partial destination for success. | Extraction may fail silently or leave an incomplete model tree. | **Mitigated in ras-commander.** The extractor is atomic, Windows long-path aware, timestamp preserving, and validates every member by path, size, and CRC32. The active workspace follows `H:\Testing\eBFE\<HUC8>\{raw,organized,runs,reports}`. |
 | SG-006 | `RasProcess.exe CreateTerrain` returned code 0 and produced a structurally valid HDF, but emitted a non-fatal stderr warning whose text was not retained because DEBUG logging was not enabled. | No observed build failure; the warning cannot be independently classified from the retained log. | **Monitor.** Retain the validated HDF/hash. Rebuild with DEBUG logging if exact warning provenance becomes necessary. |
 | SG-007 | The first isolated LBSG_503 `p04` reconstructed-terrain run completed geometry preprocessing, but HEC-RAS 6.3 could not execute the removed Windows `wmic` utility. `RasUnsteady.exe` reached end-of-file reading its empty `systemInfo.txt` and exited with code 24. | The attempt produced only a 13,369-byte summary HDF and no hydraulic result datasets. The failure was a host/runtime compatibility issue, not evidence that the reconstructed terrain failed preprocessing. | **Mitigated and verified in ras-commander.** HEC-RAS 6.3 launches with a process-local, CPU-query-only WMIC compatibility shim backed by Windows CIM. A fresh isolated two-core rerun finished successfully and passed RAS Commander completion verification. The library does not install a Windows feature, change the system PATH, or expose a new public parameter. The failed run remains preserved. |
+| SG-008 | The supplied result HDF can be mapped, but the public delivery does not contain the source `Terrain.hdf` needed to reproduce FEMA's original RASMapper depth or inundation rasters. | A supplied-result map made from the available package must use the HDEM-only reconstructed terrain as its display/interpolation surface. Its WSE values remain authoritative to the supplied result HDF, but its raster wet mask is a common-grid proxy rather than the original FEMA mapped extent. | **Documented limitation.** The comparison package uses maximum WSE only, applies the same reconstructed terrain and mapping settings to both result HDFs, records footprint differences separately, and makes no original-depth or original-inundation-fidelity claim. |
 
 ## HDEM-only terrain reconstruction
 
@@ -107,3 +109,55 @@ folder as `hydraulic_comparison.md`, `hydraulic_comparison.json`,
 `hydraulic_comparison.csv`, and `hydraulic_outliers.csv`. The localized
 differences reinforce SG-002: the HDEM-only reconstruction is appropriate for
 this validation threshold, not FEMA numerical reproduction or calibration.
+
+## Maximum-WSE COG comparison package
+
+Raster evidence is retained with a copy of this ROD at:
+
+`H:\Testing\eBFE\12070205\reports\LBSG_503_p04_rebuilt_terrain_comparison`
+
+ras2cng generated both maximum-WSE source rasters through RAS Commander's
+stored-map API using HEC-RAS 6.3, the `sloping` render mode, and the shared
+HDEM-only terrain named `Terrain`. The supplied raster takes its water-surface
+values from the preserved supplied `p04` HDF; the rerun raster takes them from
+the completed two-core reconstructed-terrain `p04` HDF. Both are rendered on
+the same reconstructed terrain so that their 10-foot EPSG:2277 grids align
+exactly. This common-grid method supports a WSE comparison but does not replace
+the absent source terrain or reproduce FEMA's original depth/inundation map.
+
+The two result COGs are lossless DEFLATE outputs with explicit feet units and
+area-matched mean overviews. ras2cng's `compare_wse` recipe calculated the
+difference as **rebuilt-terrain rerun minus supplied FEMA result**. All three
+COGs passed the `rio-cogeo` layout gate and raster mask/CRS checks.
+
+| Raster metric | Result |
+|---|---:|
+| Grid | 40,599 x 12,365 pixels at 10 ft |
+| Comparable raster pixels | 9,138,470 |
+| Mean WSE difference | +0.101 ft |
+| Mean absolute WSE difference | 0.175 ft |
+| 95th percentile absolute WSE difference | 0.734 ft |
+| Raster WSE difference range | -6.654 to +16.344 ft |
+| Comparable pixels within 1 ft | 97.31% |
+| Supplied / rebuilt valid pixels | 9,352,768 / 10,009,578 |
+| Raster wet-mask Jaccard | 0.8938 |
+| Net rebuilt valid-area change | +1,507.8 acres |
+
+The mapped wet-mask change does not contradict the identical 124,511 wet mesh
+cells reported by the HDF comparison. A mesh cell can remain wet in both runs
+while a changed WSE intersects a different number of 10-foot terrain pixels.
+The mask statistic is also conditional on the reconstructed terrain used to
+render both results, so it is evidence of sensitivity, not a reconstruction of
+FEMA's original mapped inundation boundary. Likewise, the raster extrema differ
+from the cell-based 43.761-foot maximum because the COG statistic is evaluated
+on overlapping, interpolated raster pixels rather than mesh-cell maxima.
+
+The package contains:
+
+- `cogs/LBSG_503_p04_supplied_maximum_wse.tif`
+- `cogs/LBSG_503_p04_rebuilt_terrain_maximum_wse.tif`
+- `cogs/LBSG_503_p04_rebuilt_minus_supplied_maximum_wse.tif`
+- a PNG figure for each COG under `figures/`
+- `artifact_manifest.json` with paths, hashes, grid metadata, software and
+  validation details
+- ras2cng's difference-raster provenance JSON
