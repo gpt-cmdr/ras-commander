@@ -44,7 +44,7 @@ def test_san_gabriel_catalog_entry_unions_all_five_linked_projects() -> None:
     ]
 
 
-def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path) -> None:
+def test_write_javascript_catalog_preserves_exact_project_footprint(tmp_path: Path) -> None:
     output = tmp_path / "ras-example-projects-data.js"
     catalog = {
         "type": "FeatureCollection",
@@ -79,12 +79,13 @@ def test_write_javascript_catalog_assigns_a_compact_bbox_fallback(tmp_path: Path
     assert contents.endswith(";\n")
     fallback = json.loads(contents.removeprefix(prefix).removesuffix(";\n"))
     assert fallback["name"] == catalog["name"]
-    assert fallback["fallbackGeometry"] == "bounding-box"
-    assert fallback["features"][0]["properties"]["fallbackGeometry"] == "bounding-box"
-    assert fallback["features"][0]["geometry"] == {
-        "type": "Polygon",
-        "coordinates": [[[-85.0, 40.0], [-84.0, 40.0], [-84.0, 41.0], [-85.0, 41.0], [-85.0, 40.0]]],
-    }
+    assert fallback["fallbackSource"] == "embedded-api-derived-project-footprints"
+    assert "fallbackGeometry" not in fallback
+    assert "fallbackGeometry" not in fallback["features"][0]["properties"]
+    assert fallback["features"][0]["geometry"] == catalog["features"][0]["geometry"]
+    assert not shape(fallback["features"][0]["geometry"]).equals(
+        box(*fallback["features"][0]["bbox"])
+    )
 
 
 def test_write_javascript_catalog_derives_missing_bbox_from_geometry(tmp_path: Path) -> None:

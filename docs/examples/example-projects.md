@@ -34,8 +34,8 @@ available geometry, terrain, and results.
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260905Tsan-gabriel01"></script>
-<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260724Tlibrary-final03"></script>
-<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260905Tsan-gabriel01"></script>
+<script src="../../assets/javascripts/ras-example-projects-data.js?v=20260906Texact-extents01"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260906Texact-extents01"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260905Tsan-gabriel01"></script>
 
 ## Dashboard Qualification Status
