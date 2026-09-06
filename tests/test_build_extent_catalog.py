@@ -7,8 +7,15 @@ from pathlib import Path
 import geopandas as gpd
 from shapely.geometry import MultiPolygon, box, mapping, shape
 
-SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "example_library" / "build_extent_catalog.py"
-CATALOG_CONFIG_PATH = Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
+SCRIPT_PATH = (
+    Path(__file__).parents[1]
+    / "scripts"
+    / "example_library"
+    / "build_extent_catalog.py"
+)
+CATALOG_CONFIG_PATH = (
+    Path(__file__).parents[1] / "agent_tasks" / "rasexamples_extent_catalog.json"
+)
 SPEC = importlib.util.spec_from_file_location("build_extent_catalog", SCRIPT_PATH)
 assert SPEC and SPEC.loader
 builder = importlib.util.module_from_spec(SPEC)
@@ -24,18 +31,34 @@ def test_catalog_extent_outputs_do_not_overlap_viewer_artifacts() -> None:
         assert "/viewer/" not in project["extent_output"]
 
 
-def test_san_gabriel_catalog_entry_unions_all_five_linked_projects() -> None:
+def test_san_gabriel_catalog_has_five_linked_submodel_entries() -> None:
     config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
 
-    project = next(
-        item for item in config["projects"] if item["id"] == "san-gabriel-ble-12070205"
+    projects = [
+        item
+        for item in config["projects"]
+        if item["id"].startswith("san-gabriel-lbsg-")
+    ]
+    assert [project["id"] for project in projects] == [
+        "san-gabriel-lbsg-501-12070205",
+        "san-gabriel-lbsg-502-12070205",
+        "san-gabriel-lbsg-503-12070205",
+        "san-gabriel-lbsg-504-12070205",
+        "san-gabriel-lbsg-505-12070205",
+    ]
+    assert all(
+        project["status"] == "Source qualification candidate" for project in projects
     )
-    assert project["status"] == "Source qualification candidate"
-    assert project["viewer_type"] == "Qualification candidate"
-    assert project["record_of_deficiencies"].endswith(
-        "2026-09-05_san_gabriel_record_of_deficiencies.md"
+    assert all(
+        project["viewer_type"] == "Qualification candidate" for project in projects
     )
-    assert [Path(path).name for path in project["geometry_hdfs"]] == [
+    assert all(
+        project["record_of_deficiencies"].endswith(
+            "2026-09-05_san_gabriel_record_of_deficiencies.md"
+        )
+        for project in projects
+    )
+    assert [Path(project["geometry_hdf"]).name for project in projects] == [
         "BLE_LBSG_501.g02.hdf",
         "BLE_LBSG_502.g03.hdf",
         "BLE_LBSG_503.g04.hdf",
@@ -44,7 +67,9 @@ def test_san_gabriel_catalog_entry_unions_all_five_linked_projects() -> None:
     ]
 
 
-def test_write_javascript_catalog_preserves_exact_project_footprint(tmp_path: Path) -> None:
+def test_write_javascript_catalog_preserves_exact_project_footprint(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "ras-example-projects-data.js"
     catalog = {
         "type": "FeatureCollection",
@@ -88,7 +113,9 @@ def test_write_javascript_catalog_preserves_exact_project_footprint(tmp_path: Pa
     )
 
 
-def test_write_javascript_catalog_derives_missing_bbox_from_geometry(tmp_path: Path) -> None:
+def test_write_javascript_catalog_derives_missing_bbox_from_geometry(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "ras-example-projects-data.js"
     catalog = {
         "type": "FeatureCollection",
@@ -108,15 +135,15 @@ def test_write_javascript_catalog_derives_missing_bbox_from_geometry(tmp_path: P
 
     prefix = "window.RAS_EXAMPLE_PROJECTS = "
     fallback = json.loads(
-        output.read_text(encoding="utf-8")
-        .removeprefix(prefix)
-        .removesuffix(";\n")
+        output.read_text(encoding="utf-8").removeprefix(prefix).removesuffix(";\n")
     )
     assert fallback["features"][0]["id"] == "model-without-bbox"
     assert fallback["features"][0]["bbox"] == [-111.5, 40.1, -111.4, 40.2]
 
 
-def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch, tmp_path: Path) -> None:
+def test_project_feature_uses_display_crs_without_losing_definition(
+    monkeypatch, tmp_path: Path
+) -> None:
     hdf_path = tmp_path / "model.g01.hdf"
     hdf_path.touch()
     extent = gpd.GeoDataFrame(geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326")
@@ -157,14 +184,20 @@ def test_project_feature_uses_display_crs_without_losing_definition(monkeypatch,
     assert "fill_holes=True" in feature["properties"]["extentSource"]
 
 
-def test_project_feature_unions_configured_geometry_hdfs(monkeypatch, tmp_path: Path) -> None:
+def test_project_feature_unions_configured_geometry_hdfs(
+    monkeypatch, tmp_path: Path
+) -> None:
     first_hdf_path = tmp_path / "model.g01.hdf"
     second_hdf_path = tmp_path / "model.g02.hdf"
     first_hdf_path.touch()
     second_hdf_path.touch()
     extents = {
-        first_hdf_path: gpd.GeoDataFrame(geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326"),
-        second_hdf_path: gpd.GeoDataFrame(geometry=[box(-84.8, 40.0, -84.7, 40.1)], crs="EPSG:4326"),
+        first_hdf_path: gpd.GeoDataFrame(
+            geometry=[box(-85.0, 40.0, -84.9, 40.1)], crs="EPSG:4326"
+        ),
+        second_hdf_path: gpd.GeoDataFrame(
+            geometry=[box(-84.8, 40.0, -84.7, 40.1)], crs="EPSG:4326"
+        ),
     }
 
     def get_project_extent(path: Path, **_kwargs):
