@@ -29,12 +29,11 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _docs_fallback_catalog(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return a compact metadata fallback with bbox geometry only.
+    """Return an embedded fallback with the API-derived project footprints.
 
-    The full model footprints belong in the WebGIS GeoJSON. Shipping those
-    vertices in the docs JavaScript would make every docs-page load download a
-    second copy of the catalog. A bounding box keeps the fallback map and
-    project links useful when WebGIS is temporarily unavailable.
+    The fallback is loaded only by the Example Project Library page. Preserve
+    the catalog geometry verbatim so a WebGIS outage cannot silently degrade
+    model footprints into bounding boxes.
     """
     features: list[dict[str, Any]] = []
     for feature in payload["features"]:
@@ -42,51 +41,41 @@ def _docs_fallback_catalog(payload: dict[str, Any]) -> dict[str, Any]:
         feature_id = feature.get("id") or properties.get("projectId")
         if not feature_id:
             raise ValueError("Catalog feature has neither id nor properties.projectId")
-        bounds = feature.get("bbox")
-        if not isinstance(bounds, list) or len(bounds) != 4:
-            geometry = feature.get("geometry")
-            if not geometry:
-                raise ValueError(
-                    f"Catalog feature {feature_id!r} has neither bbox nor geometry"
-                )
-            bounds = list(shape(geometry).bounds)
-        min_x, min_y, max_x, max_y = bounds
-        properties["fallbackGeometry"] = "bounding-box"
+        geometry = feature.get("geometry")
+        if not geometry:
+            raise ValueError(f"Catalog feature {feature_id!r} has no geometry")
+        footprint = shape(geometry)
+        if footprint.is_empty or footprint.geom_type not in {"Polygon", "MultiPolygon"}:
+            raise ValueError(
+                f"Catalog feature {feature_id!r} must have polygon geometry"
+            )
+        if not footprint.is_valid:
+            raise ValueError(f"Catalog feature {feature_id!r} has invalid geometry")
+        properties.pop("fallbackGeometry", None)
         features.append(
             {
                 "type": "Feature",
                 "id": feature_id,
                 "properties": properties,
-                "bbox": bounds,
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [
-                        [
-                            [min_x, min_y],
-                            [max_x, min_y],
-                            [max_x, max_y],
-                            [min_x, max_y],
-                            [min_x, min_y],
-                        ]
-                    ],
-                },
+                "bbox": [float(value) for value in footprint.bounds],
+                "geometry": geometry,
             }
         )
     return {
         "type": "FeatureCollection",
         "name": payload.get("name", "ras-commander-example-projects"),
         "generatedAt": payload.get("generatedAt"),
-        "fallbackGeometry": "bounding-box",
+        "fallbackSource": "embedded-api-derived-project-footprints",
         "features": features,
     }
 
 
 def _write_javascript_catalog(path: Path, payload: dict[str, Any]) -> None:
-    """Write a compact docs fallback without making it the catalog authority."""
+    """Write an exact-geometry docs fallback without changing catalog authority."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "window.RAS_EXAMPLE_PROJECTS = "
-        + json.dumps(_docs_fallback_catalog(payload), indent=2)
+        + json.dumps(_docs_fallback_catalog(payload), separators=(",", ":"))
         + ";\n",
         encoding="utf-8",
     )

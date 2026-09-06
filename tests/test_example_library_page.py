@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from shapely.geometry import box, shape
+
 
 ROOT = Path(__file__).parents[1]
 
@@ -99,3 +101,22 @@ def test_san_gabriel_candidate_is_merged_into_the_dashboard() -> None:
         -97.00285606221672,
         30.918779935290782,
     ]
+    assert not shape(feature["geometry"]).equals(box(*feature["bbox"]))
+    assert feature["properties"]["landingExtentSource"] == "Exact model footprint"
+
+
+def test_embedded_catalog_retains_api_derived_project_footprints() -> None:
+    source = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-projects-data.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECTS = "
+    catalog = json.loads(source.removeprefix(prefix).removesuffix(";\n"))
+
+    assert catalog["fallbackSource"] == "embedded-api-derived-project-footprints"
+    assert len(catalog["features"]) == 18
+    for feature in catalog["features"]:
+        geometry = shape(feature["geometry"])
+        assert geometry.geom_type in {"Polygon", "MultiPolygon"}
+        assert geometry.is_valid
+        assert not geometry.equals(box(*feature["bbox"]))
+        assert "HdfProject.get_project_extent" in feature["properties"]["extentSource"]
