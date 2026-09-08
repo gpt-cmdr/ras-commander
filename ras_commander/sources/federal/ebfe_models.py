@@ -4399,6 +4399,10 @@ HEC-RAS version: 5.0.1 / 5.0.3
                 search_root,
                 max_depth=12,
                 return_project_info=True,
+                # eBFE deliveries nest real projects inside others (46 of 2,378 in
+                # HUC 12090301). Pruning at the first match silently skipped them
+                # in standardization while discovery still counted them.
+                include_nested=True,
             )
             return sorted({Path(item["folder"]) for item in projects})
         except Exception:

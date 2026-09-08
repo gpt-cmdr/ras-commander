@@ -1285,7 +1285,8 @@ class RasUtils:
     def find_valid_ras_folders(
         search_path: Union[str, Path],
         max_depth: Optional[int] = None,
-        return_project_info: bool = False
+        return_project_info: bool = False,
+        include_nested: bool = False
     ) -> Union[List[Path], List[Dict[str, Any]]]:
         """
         Recursively search for valid HEC-RAS project folders.
@@ -1303,6 +1304,19 @@ class RasUtils:
                 Depth 0 = search_path only, 1 = immediate subdirectories, etc.
             return_project_info (bool): If True, return list of dicts with folder path,
                 project name, prj file path, and plan count. If False, return list of Paths.
+            include_nested (bool): Whether to keep descending into a folder after a
+                valid project is found there. Default False (stop recursing).
+
+                The default exists because modelers commonly keep backup or archive
+                copies in subfolders of a working project ("Backup/", "Old/",
+                "2024-03-15/"). Descending into those would report each backup as a
+                separate project and inflate any inventory built from this function.
+
+                Set True when nesting is meaningful rather than incidental: parent
+                model / sub-model organization, or any delivered corpus where projects
+                are genuinely nested and pruning would silently drop them. FEMA eBFE
+                deliveries are the motivating case — 46 of 2,378 projects in HUC
+                12090301 sit inside another project and are invisible at the default.
 
         Returns:
             Union[List[Path], List[Dict[str, Any]]]:
@@ -1406,9 +1420,14 @@ class RasUtils:
             result = check_folder(current_path)
             if result:
                 valid_folders.append(result)
-                # Don't search subdirectories of a valid project folder
-                # (nested projects are uncommon and would cause confusion)
-                return
+                if not include_nested:
+                    # Default: stop here. Modelers routinely keep backup copies in
+                    # subfolders of a working project, and descending would count each
+                    # backup as its own project.
+                    return
+                # include_nested=True: nesting is meaningful here (parent/sub-model, or
+                # a delivered corpus). FEMA eBFE nests real projects inside others
+                # (measured: 46 of 2,378 in HUC 12090301).
 
             # Scan subdirectories
             try:
