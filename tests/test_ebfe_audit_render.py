@@ -360,6 +360,58 @@ def test_not_expected_elements_never_generate_actions():
     assert ("acquisition", "DSS boundary data") not in kinds
 
 
+# -- deficiency review: real vs gap in our own analysis ----------------------
+
+def _reviewed_gap(raw, verdict, evidence="", source="x.rasmap"):
+    return {"gap": "MISSING_REFERENCE", "source_file": source, "role": "rasmap_attribute",
+            "raw_value": raw, "review": {"verdict": verdict, "evidence": evidence,
+                                          "method": "archive_member_match"}}
+
+
+def test_analysis_gaps_leave_missing_and_must_obtain_but_are_reported_separately():
+    """A gap that review found in the delivery was ours. The engineer must not chase it."""
+    bundle = _minimal_bundle()
+    bundle.gaps = [
+        _reviewed_gap(r"..\Shp\real.shp", "real", "no member matches basename real.shp in 412 members"),
+        _reviewed_gap(r"..\Land_Cover\lc.tif", "analysis_gap", "found as Land Cover/lc.tif in Models.zip"),
+        _reviewed_gap(r"..\Land_Cover\lc.tif", "analysis_gap", "found as Land Cover/lc.tif in Models.zip"),
+    ]
+    markdown = render_audit_markdown(bundle)
+    section5 = markdown.split("## 5. What is still missing")[1].split("## 6.")[0]
+    section6 = markdown.split("## 6. What you must obtain")[1].split("## 7.")[0]
+
+    assert r"`..\Shp\real.shp` | 1 |" in section5             # real: still listed
+    assert "Reclassified during review" in section5
+    assert r"`..\Land_Cover\lc.tif` | 2 | found as Land Cover/lc.tif" in section5
+    # The reclassified file must not be counted among what is still missing.
+    assert "1 missing references, 1 distinct files" in section5
+    assert "lc.tif" not in section6
+
+
+def test_verdict_reports_reviewed_counts():
+    bundle = _minimal_bundle()
+    bundle.gaps = [
+        _reviewed_gap("a", "real"), _reviewed_gap("b", "analysis_gap"),
+        _reviewed_gap("c", "unverifiable"), _reviewed_gap("d", "analysis_gap"),
+    ]
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "4 reported: **1 real**, 2 were gaps in our analysis, 1 unverifiable" in verdict
+
+
+def test_unreviewed_gaps_are_marked_provisional():
+    bundle = _minimal_bundle()
+    bundle.gaps = [{"gap": "MISSING_REFERENCE", "source_file": "x", "role": "r", "raw_value": "a"}]
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "not yet independently reviewed" in verdict
+
+
+def test_unverifiable_gaps_are_flagged_not_counted_as_deficiencies():
+    bundle = _minimal_bundle()
+    bundle.gaps = [_reviewed_gap(r"..\x.dss", "unverifiable", "dss bridge unavailable", source="x.u01")]
+    section5 = render_audit_markdown(bundle).split("## 5. What is still missing")[1].split("## 6.")[0]
+    assert "could not be verified either way" in section5
+
+
 # -- real data, when the audit tree is reachable -----------------------------
 
 REAL = Path("F:/eBFE/audit/12040102")
