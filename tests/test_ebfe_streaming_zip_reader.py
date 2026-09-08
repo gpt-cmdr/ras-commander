@@ -11,6 +11,7 @@ These build the same shape at a size that fits in a test.
 
 from __future__ import annotations
 
+import io
 import os
 import zipfile
 from pathlib import Path
@@ -170,3 +171,70 @@ def test_projected_bytes_counts_only_recoverable_members(truncated_archive):
 def test_missing_archive_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         StreamingZipReader(tmp_path / "nope.zip")
+
+
+# -- data-descriptor members: the central directory must win -----------------
+
+class _NonSeekable(io.BytesIO):
+    """Force zipfile to defer sizes to data descriptors (flag bit 3).
+
+    zipfile decides by *attempting* a seek and catching the error, not by
+    asking ``seekable()`` -- so the seek itself has to fail.
+    """
+
+    def seekable(self) -> bool:
+        return False
+
+    def seek(self, *args, **kwargs):
+        raise io.UnsupportedOperation("non-seekable test stream")
+
+
+@pytest.fixture
+def descriptor_archive(tmp_path: Path) -> Path:
+    """Every member carries flag bit 3: sizes and CRC live after the data.
+
+    zipfile writes archives this way whenever its output is not seekable --
+    streamed uploads, pipes, some publisher tooling. A healthy archive, with a
+    central directory, that a forward header walk cannot get past.
+    """
+    buffer = _NonSeekable()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in PAYLOAD.items():
+            archive.writestr(name, data)
+    path = tmp_path / "descriptor.zip"
+    path.write_bytes(buffer.getvalue())
+    with zipfile.ZipFile(path) as check:
+        assert all(info.flag_bits & 0x08 for info in check.infolist()), "fixture must defer sizes"
+    return path
+
+
+def test_probe_uses_central_directory_past_deferred_size_members(descriptor_archive):
+    """Regression: two eBFE studies were scored against a one-member index.
+
+    The forward walk stops at the first deferred-size member. With a central
+    directory available that is the wrong tool -- the directory has every
+    member with authoritative sizes.
+    """
+    survey = StreamingZipReader(descriptor_archive).probe()
+    assert survey.has_central_directory
+    assert survey.stopped_reason == "central_directory"
+    assert len(survey.members) == len(PAYLOAD)
+    assert not survey.truncated
+    assert all(m.compress_size > 0 and m.file_size > 0 for m in survey.members if not m.is_dir)
+
+
+def test_walk_extracts_deferred_size_members_byte_identical(descriptor_archive, tmp_path):
+    out = tmp_path / "desc_out"
+    reader = StreamingZipReader(descriptor_archive)
+    list(reader.walk(sink_factory=sink_factory(out)))
+    assert reader.stats.extracted == len(PAYLOAD)
+    assert reader.stats.crc_fail == 0 and reader.stats.size_mismatch == 0
+    for name, data in PAYLOAD.items():
+        assert (out / name).read_bytes() == data
+
+
+def test_forward_walk_is_still_used_when_directory_is_absent(truncated_archive):
+    """The Medina path is untouched: no directory means the forward walk, with truncation detected."""
+    survey = StreamingZipReader(truncated_archive).probe()
+    assert not survey.has_central_directory
+    assert survey.stopped_reason == "truncated"
