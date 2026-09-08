@@ -142,6 +142,20 @@ class ExtractStats:
     already carries a CRC-32 per member, so checking it costs nothing beyond the
     decompression we are doing anyway and proves byte-correctness without a
     second full read of the data.
+
+    The counters do not overlap, and conflating them understates or overstates
+    integrity in opposite directions:
+
+    * ``crc_fail`` counts **only** CRC mismatches on members that were read.
+    * ``truncated`` counts members whose data lies past the end of the archive.
+      They are never read, so they can never fail a CRC. They are also listed in
+      :attr:`ArchiveSurvey.truncated_members` -- the same members seen from the
+      header side -- so counting both surfaces double-counts them.
+    * ``unreadable`` is the total that could not be extracted for any reason and
+      **includes** ``truncated``.
+
+    ``failures`` carries ``(name, kind, reason)``; filter on ``kind`` rather than
+    matching substrings in ``reason``.
     """
 
     extracted: int = 0
@@ -149,10 +163,26 @@ class ExtractStats:
     crc_ok: int = 0
     crc_fail: int = 0
     size_mismatch: int = 0
+    truncated: int = 0
     unreadable: int = 0
     bytes_read: int = 0
     bytes_written: int = 0
     failures: list = field(default_factory=list)
+
+    @property
+    def verified(self) -> int:
+        """Members whose stored CRC-32 matched what was read. Alias for ``crc_ok``.
+
+        Present deliberately: "verified" is the natural word for this number, and
+        a caller reaching for it via ``getattr(stats, "verified", 0)`` would
+        otherwise get a silent zero -- the worst possible failure for the one
+        counter that stands in for hashing.
+        """
+        return self.crc_ok
+
+    def failures_of(self, kind: str) -> list:
+        """Failures of one kind: ``truncated``, ``unsupported``, ``read``, ``crc``, ``size``."""
+        return [f for f in self.failures if f[1] == kind]
 
 
 def _read_zip64_extra(extra: bytes, need_sizes: bool) -> Tuple[Optional[int], Optional[int]]:
@@ -387,8 +417,11 @@ class StreamingZipReader:
                     continue
 
                 if id(member) not in recoverable:
+                    self.stats.truncated += 1
                     self.stats.unreadable += 1
-                    self.stats.failures.append((member.name, "truncated: data past end of archive"))
+                    self.stats.failures.append(
+                        (member.name, "truncated", "data lies past the end of the archive")
+                    )
                     yield member, False
                     continue
 
@@ -405,7 +438,7 @@ class StreamingZipReader:
                         else f"unsupported compression method {member.compress_type}"
                     )
                     self.stats.unreadable += 1
-                    self.stats.failures.append((member.name, reason))
+                    self.stats.failures.append((member.name, "unsupported", reason))
                     yield member, False
                     continue
 
@@ -420,7 +453,9 @@ class StreamingZipReader:
                         written, crc = self._inflate_member(handle, member, sink)
                 except (EOFError, zlib.error, OSError) as exc:
                     self.stats.unreadable += 1
-                    self.stats.failures.append((member.name, f"{type(exc).__name__}: {exc}"))
+                    self.stats.failures.append(
+                        (member.name, "read", f"{type(exc).__name__}: {exc}")
+                    )
                     yield member, False
                     continue
 
@@ -430,7 +465,8 @@ class StreamingZipReader:
                 if member.crc32 and crc != member.crc32:
                     self.stats.crc_fail += 1
                     self.stats.failures.append(
-                        (member.name, f"CRC mismatch: header {member.crc32:08x}, read {crc:08x}")
+                        (member.name, "crc",
+                         f"CRC mismatch: header {member.crc32:08x}, read {crc:08x}")
                     )
                 elif member.crc32:
                     self.stats.crc_ok += 1
@@ -438,7 +474,8 @@ class StreamingZipReader:
                 if member.file_size and written != member.file_size:
                     self.stats.size_mismatch += 1
                     self.stats.failures.append(
-                        (member.name, f"size mismatch: header {member.file_size}, wrote {written}")
+                        (member.name, "size",
+                         f"size mismatch: header {member.file_size}, wrote {written}")
                     )
 
                 yield member, True
