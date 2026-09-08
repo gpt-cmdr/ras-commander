@@ -280,14 +280,76 @@ class StreamingZipReader:
             is_dir=name.endswith("/"),
         )
 
+    def _members_from_central_directory(self) -> Optional[list]:
+        """Enumerate members from the central directory, when one exists.
+
+        The central directory carries authoritative sizes and CRCs even for
+        members whose local header deferred them to a data descriptor (flag
+        bit 3) -- which ``zipfile`` writes whenever its output was not
+        seekable. A forward walk cannot pass such a member without scanning
+        for the descriptor, so on a healthy archive it would stop at the first
+        one and report a one-member index. That happened: two eBFE studies
+        were scored against an index of one member, and every gap came out
+        "real". Prefer the directory whenever it is readable; fall back to the
+        forward walk only when it is not (the Medina case).
+
+        Returns None when no central directory can be read.
+        """
+        import zipfile
+
+        try:
+            archive = zipfile.ZipFile(self.archive_path)
+        except (zipfile.BadZipFile, OSError):
+            return None
+        members: list = []
+        with archive, open(self.archive_path, "rb") as handle:
+            for info in archive.infolist():
+                local = self._read_local_header(handle, info.header_offset)
+                if local is None:
+                    return None  # directory disagrees with the data; do not trust it
+                members.append(ZipMemberInfo(
+                    name=info.filename.replace("\\", "/"),
+                    header_offset=info.header_offset,
+                    data_offset=local.data_offset,
+                    compress_type=info.compress_type,
+                    compress_size=info.compress_size,
+                    file_size=info.file_size,
+                    crc32=info.CRC,
+                    flags=info.flag_bits,
+                    is_dir=info.is_dir(),
+                ))
+        return members
+
     @log_call
     def probe(self) -> ArchiveSurvey:
-        """Walk headers only. Reads no member data.
+        """Enumerate members. Reads headers only, never member data.
+
+        Uses the central directory when one is readable, else walks local
+        headers forward (the only option when the directory was never written).
 
         Returns:
             ArchiveSurvey: members found, plus whether the archive is truncated.
         """
         survey = ArchiveSurvey(file_size=self.file_size)
+
+        directory = self._members_from_central_directory()
+        if directory is not None:
+            survey.members = directory
+            survey.has_central_directory = True
+            survey.stopped_reason = "central_directory"
+            survey.declared_end = max(
+                (m.data_offset + m.compress_size for m in directory), default=0
+            )
+            if survey.truncated:
+                survey.stopped_reason = "truncated"
+                logger.warning(
+                    "%s: central directory present but member data extends %d bytes past "
+                    "the end of the file; %d of %d members are recoverable.",
+                    self.archive_path.name, survey.overrun_bytes,
+                    len(survey.complete_members), len(survey.members),
+                )
+            return survey
+
         offset = 0
 
         with open(self.archive_path, "rb") as handle:
