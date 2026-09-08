@@ -24,21 +24,28 @@ All methods are static; do not instantiate this class.
 
 from __future__ import annotations
 
+import math
 import platform
 import shutil
 import tempfile
 import threading
 import time
-import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional, Union
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import h5py
 
+if TYPE_CHECKING:
+    import geopandas as gpd
+
 from .LoggingConfig import get_logger
 from .Decorators import log_call
-from .ComputeResults import GeometryLayerResult, GeometryCompleteResult
+from .ComputeResults import (
+    FlowPathPolicyResult,
+    GeometryCompleteResult,
+    GeometryLayerResult,
+)
 
 logger = get_logger(__name__)
 
@@ -646,6 +653,7 @@ class RasGeometryCompute:
         tmp_root = Path(tempfile.mkdtemp(prefix="reach_audit_"))
         work_project = tmp_root / project_folder.name
         used_existing_flow_paths = False
+        audit_completed = False
         try:
             geom = None
             # Serialize the whole snapshot+compute so the copy is consistent with
@@ -703,10 +711,721 @@ class RasGeometryCompute:
             report.attrs["invalid_recompute_count"] = int(report["invalid_recompute"].sum())
             report.attrs["used_existing_flow_paths"] = used_existing_flow_paths
             report.attrs["working_copy"] = str(work) if keep_working_copy else None
+            audit_completed = True
             return report
         finally:
-            if not keep_working_copy:
+            if not keep_working_copy or not audit_completed:
                 shutil.rmtree(tmp_root, ignore_errors=True)
+
+    @staticmethod
+    @log_call
+    def assess_flow_path_policy(
+        geom_hdf_path: Union[str, Path],
+        tolerance_fraction: float = 0.01,
+        *,
+        join_upstream_xs: Optional[tuple[str, str, Union[str, float, int]]] = None,
+        join_downstream_xs: Optional[tuple[str, str, Union[str, float, int]]] = None,
+        review_segments_path: Optional[Union[str, Path]] = None,
+        keep_working_copy: bool = False,
+        rasmap_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
+        hecras_version: Optional[str] = None,
+    ) -> FlowPathPolicyResult:
+        """Recommend how a 1D join should handle overbank flow paths.
+
+        The original project is never modified.  This method copies the whole
+        project, regenerates RAS Mapper flow paths on the copy, recomputes every
+        XS LOB/channel/ROB reach length, and compares the regenerated values to
+        the stored source values.
+
+        ``regenerate_and_recompute`` is recommended only when every usable LOB
+        and ROB interval agrees with its stored value within
+        ``tolerance_fraction``.  Otherwise the conservative recommendation is
+        ``preserve_and_recompute_only_at_join_boundary``. The conservative policy is
+        also selected when the source has no flow-path layer but stored LOB or
+        ROB lengths differ from the stored channel length.
+
+        Pass both ``join_upstream_xs`` and ``join_downstream_xs`` as
+        ``(river, reach, river_station)`` tuples after a provisional joined
+        geometry exists.  The regenerated left/right flow paths are then clipped
+        between those adjacent cross sections and returned in
+        ``join_segments_gdf``.  The segments are review evidence for updating
+        only the new join interval; they do not modify the source or destination.
+
+        ``review_segments_path`` optionally writes those two segments as
+        GeoParquet.  Existing files are never overwritten.
+        """
+        tolerance_fraction = RasGeometryCompute._validate_tolerance_fraction(
+            tolerance_fraction
+        )
+        if (join_upstream_xs is None) != (join_downstream_xs is None):
+            raise ValueError(
+                "join_upstream_xs and join_downstream_xs must be supplied together"
+            )
+        if review_segments_path is not None and join_upstream_xs is None:
+            raise ValueError(
+                "review_segments_path requires join_upstream_xs and "
+                "join_downstream_xs"
+            )
+
+        geom_hdf_path = Path(geom_hdf_path)
+        if not geom_hdf_path.exists():
+            raise FileNotFoundError(f"Geometry HDF not found: {geom_hdf_path}")
+
+        from .hdf.HdfXsec import HdfXsec
+
+        source_flow_paths = HdfXsec.get_river_flow_paths(geom_hdf_path)
+        audit = RasGeometryCompute.audit_reach_lengths(
+            geom_hdf_path,
+            flow_paths="regenerate",
+            tolerance=0.0,
+            keep_working_copy=True,
+            rasmap_path=rasmap_path,
+            ras_object=ras_object,
+            hecras_version=hecras_version,
+        )
+        working_value = audit.attrs.get("working_copy")
+        if not working_value:
+            raise RuntimeError("Reach-length audit did not retain its working copy")
+        working_copy = Path(str(working_value))
+        cleanup_root = working_copy.parent.parent
+
+        try:
+            regenerated_flow_paths = HdfXsec.get_river_flow_paths(working_copy)
+            if regenerated_flow_paths.empty:
+                raise RuntimeError(
+                    "RAS Mapper regenerated no flow paths on the working copy"
+                )
+
+            xs_metrics = RasGeometryCompute._augment_reach_length_metrics(
+                audit, tolerance_fraction
+            )
+            source_flow_path_counts = (
+                RasGeometryCompute._count_flow_paths_by_reach(
+                    source_flow_paths, xs_metrics
+                )
+            )
+            reach_metrics = RasGeometryCompute._summarize_flow_path_policy(
+                xs_metrics,
+                tolerance_fraction=tolerance_fraction,
+                source_flow_path_counts=source_flow_path_counts,
+            )
+            if reach_metrics.empty:
+                raise RuntimeError("No usable river/reach policy evidence was produced")
+            preserve_policy = "preserve_and_recompute_only_at_join_boundary"
+            recommended_policy = (
+                preserve_policy
+                if (reach_metrics["recommended_policy"] == preserve_policy).any()
+                else "regenerate_and_recompute"
+            )
+
+            join_segments = RasGeometryCompute._empty_join_segments(
+                getattr(regenerated_flow_paths, "crs", None)
+            )
+            if join_upstream_xs is not None and join_downstream_xs is not None:
+                joined_xs = HdfXsec.get_cross_sections(working_copy)
+                centerlines = HdfXsec.get_river_centerlines(working_copy)
+                join_segments = RasGeometryCompute._clip_join_flow_path_segments(
+                    regenerated_flow_paths,
+                    joined_xs,
+                    centerlines,
+                    join_upstream_xs,
+                    join_downstream_xs,
+                )
+
+            saved_review_path = None
+            if review_segments_path is not None:
+                review_path = Path(review_segments_path)
+                if review_path.suffix.lower() not in {".parquet", ".geoparquet"}:
+                    raise ValueError(
+                        "review_segments_path must use .parquet or .geoparquet"
+                    )
+                if review_path.exists():
+                    raise FileExistsError(review_path)
+                review_path.parent.mkdir(parents=True, exist_ok=True)
+                join_segments.to_parquet(review_path, index=False)
+                saved_review_path = review_path
+
+            retained_copy = working_copy if keep_working_copy else None
+            return FlowPathPolicyResult(
+                geom_hdf_path=geom_hdf_path,
+                recommended_policy=recommended_policy,
+                tolerance_fraction=tolerance_fraction,
+                xs_metrics_df=xs_metrics,
+                reach_metrics_df=reach_metrics,
+                source_flow_paths_gdf=source_flow_paths,
+                regenerated_flow_paths_gdf=regenerated_flow_paths,
+                join_segments_gdf=join_segments,
+                review_segments_path=saved_review_path,
+                working_copy=retained_copy,
+            )
+        finally:
+            if not keep_working_copy:
+                RasGeometryCompute._remove_reach_audit_copy(cleanup_root)
+
+    @staticmethod
+    @log_call
+    def audit_main_channel_lengths(
+        geom_path: Union[str, Path],
+        tolerance_fraction: float = 0.01,
+        *,
+        ras_object=None,
+    ) -> "gpd.GeoDataFrame":
+        """Compare stored channel lengths to distances along the river line.
+
+        Accepts a plain-text ``.g##`` geometry or compiled ``.g##.hdf`` and does
+        not modify or clone it.  This is an informative, cross-platform QA
+        check. ``main_channel_flagged`` is true for a non-terminal XS whose
+        stored and centerline-measured channel lengths differ by more than the
+        relative tolerance, or whose river-line intersection is invalid.
+        """
+        tolerance_fraction = RasGeometryCompute._validate_tolerance_fraction(
+            tolerance_fraction
+        )
+        geom_path = Path(geom_path)
+        if not geom_path.is_file():
+            raise FileNotFoundError(geom_path)
+
+        if geom_path.name.lower().endswith(".hdf"):
+            from .hdf.HdfXsec import HdfXsec
+
+            xs = HdfXsec.get_cross_sections(geom_path, ras_object=ras_object)
+            centerlines = HdfXsec.get_river_centerlines(geom_path)
+            xs = xs.rename(columns={"Len Channel": "Length_Channel"})
+            centerlines = centerlines.rename(
+                columns={"River Name": "River", "Reach Name": "Reach"}
+            )
+        else:
+            from .geom.GeomCrossSection import GeomCrossSection
+            from .geom.GeomParser import GeomParser
+
+            xs = GeomCrossSection.get_cross_sections(geom_path)
+            cut_lines = GeomParser.get_xs_cut_lines(geom_path).rename(
+                columns={"river": "River", "reach": "Reach", "station": "RS"}
+            )
+            xs = xs.loc[xs["Type"] == 1].merge(
+                cut_lines[["River", "Reach", "RS", "geometry"]],
+                on=["River", "Reach", "RS"],
+                how="left",
+                validate="one_to_one",
+            )
+            centerlines = GeomParser.get_river_centerlines(geom_path).rename(
+                columns={"river": "River", "reach": "Reach"}
+            )
+
+        result = RasGeometryCompute._measure_main_channel_lengths(
+            xs, centerlines, tolerance_fraction
+        )
+        result.attrs["tolerance_fraction"] = tolerance_fraction
+        result.attrs["flagged_count"] = int(result["main_channel_flagged"].sum())
+        result.attrs["source_geometry"] = str(geom_path)
+        return result
+
+    @staticmethod
+    def _measure_main_channel_lengths(xs, centerlines, tolerance_fraction: float):
+        """Measure adjacent XS spacing along each matching river centerline."""
+        import re
+
+        import geopandas as gpd
+
+        required_xs = {"River", "Reach", "RS", "Length_Channel", "geometry"}
+        required_centerline = {"River", "Reach", "geometry"}
+        if not required_xs.issubset(xs.columns):
+            raise ValueError(
+                f"Cross-section data is missing {sorted(required_xs - set(xs.columns))}"
+            )
+        if not required_centerline.issubset(centerlines.columns):
+            raise ValueError(
+                "Centerline data is missing "
+                f"{sorted(required_centerline - set(centerlines.columns))}"
+            )
+        if xs.empty:
+            raise ValueError("Cross-section data is empty")
+        if centerlines.empty:
+            raise ValueError("River-centerline data is empty")
+
+        def station_number(value):
+            match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", str(value))
+            if match is None:
+                raise ValueError(f"River station is not numeric: {value!r}")
+            return float(match.group(0))
+
+        def intersection_points(first, second):
+            from shapely.geometry import Point
+
+            intersection = first.intersection(second)
+            if isinstance(intersection, Point):
+                return [intersection]
+            if hasattr(intersection, "geoms"):
+                return [geom for geom in intersection.geoms if isinstance(geom, Point)]
+            return []
+
+        rows = []
+        for (river, reach), group in xs.groupby(
+            ["River", "Reach"], sort=False, dropna=False
+        ):
+            matches = centerlines.loc[
+                (centerlines["River"].astype(str) == str(river))
+                & (centerlines["Reach"].astype(str) == str(reach))
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Centerline {river}/{reach} resolved {len(matches)} times"
+                )
+            centerline = RasGeometryCompute._line_geometry(
+                matches.iloc[0].geometry, f"centerline {river}/{reach}"
+            )
+            ordered = group.copy()
+            ordered["_station_number"] = ordered["RS"].map(station_number)
+            ordered = ordered.sort_values("_station_number", ascending=False)
+            if ordered["_station_number"].duplicated().any():
+                raise ValueError(f"Duplicate numeric river stations in {river}/{reach}")
+
+            records = []
+            for item in ordered.itertuples(index=False):
+                cut_line = RasGeometryCompute._line_geometry(
+                    item.geometry, f"cross section {river}/{reach}/{item.RS}"
+                )
+                points = intersection_points(cut_line, centerline)
+                records.append((item, cut_line, points))
+
+            for index, (item, cut_line, points) in enumerate(records):
+                reach_end = index == len(records) - 1
+                recomputed = float("nan")
+                if not reach_end and len(points) == 1 and len(records[index + 1][2]) == 1:
+                    recomputed = abs(
+                        centerline.project(points[0])
+                        - centerline.project(records[index + 1][2][0])
+                    )
+                stored = float(item.Length_Channel)
+                relative_error = RasGeometryCompute._relative_length_error(
+                    stored, recomputed
+                )
+                within = bool(
+                    not reach_end
+                    and math.isfinite(relative_error)
+                    and relative_error <= tolerance_fraction
+                )
+                flagged = bool(
+                    not reach_end
+                    and (
+                        not math.isfinite(relative_error)
+                        or relative_error > tolerance_fraction
+                    )
+                )
+                rows.append(
+                    {
+                        "River": str(river),
+                        "Reach": str(reach),
+                        "RS": str(item.RS),
+                        "len_channel_stored": stored,
+                        "len_channel_recomputed": recomputed,
+                        "delta_channel": (
+                            recomputed - stored
+                            if math.isfinite(recomputed)
+                            else float("nan")
+                        ),
+                        "relative_error_channel": relative_error,
+                        "channel_within_tolerance": within,
+                        "reach_end": reach_end,
+                        "intersection_count": len(points),
+                        "intersection_valid": len(points) == 1,
+                        "main_channel_flagged": flagged,
+                        "geometry": cut_line,
+                    }
+                )
+
+        return gpd.GeoDataFrame(
+            rows,
+            geometry="geometry",
+            crs=getattr(xs, "crs", None) or getattr(centerlines, "crs", None),
+        )
+
+    @staticmethod
+    def _validate_tolerance_fraction(value: float) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError("tolerance_fraction must be a finite number")
+        normalized = float(value)
+        if not math.isfinite(normalized):
+            raise ValueError("tolerance_fraction must be finite")
+        if not 0 <= normalized <= 1:
+            raise ValueError("tolerance_fraction must be between 0 and 1")
+        return normalized
+
+    @staticmethod
+    def _relative_length_error(stored: float, recomputed: float) -> float:
+        import numpy as np
+
+        if np.isnan(stored) or np.isnan(recomputed):
+            return float("nan")
+        if stored == 0.0:
+            return 0.0 if recomputed == 0.0 else float("inf")
+        return abs(recomputed - stored) / abs(stored)
+
+    @staticmethod
+    def _augment_reach_length_metrics(audit, tolerance_fraction: float):
+        """Add relative overbank-policy and main-channel QA evidence."""
+        import numpy as np
+
+        result = audit.copy()
+        for side in ("left", "channel", "right"):
+            result[f"relative_error_{side}"] = [
+                RasGeometryCompute._relative_length_error(stored, recomputed)
+                for stored, recomputed in zip(
+                    result[f"len_{side}_stored"].astype(float),
+                    result[f"len_{side}_recomputed"].astype(float),
+                )
+            ]
+            result[f"{side}_within_tolerance"] = (
+                result[f"relative_error_{side}"] <= tolerance_fraction
+            ) & ~result["reach_end"]
+
+        for side in ("left", "right"):
+            result[f"stored_{side}_vs_channel_relative_difference"] = [
+                RasGeometryCompute._relative_length_error(channel, overbank)
+                for channel, overbank in zip(
+                    result["len_channel_stored"].astype(float),
+                    result[f"len_{side}_stored"].astype(float),
+                )
+            ]
+
+        usable = ~result["reach_end"]
+        result["stored_overbanks_differ_from_channel"] = usable & (
+            (
+                result["stored_left_vs_channel_relative_difference"]
+                > tolerance_fraction
+            )
+            | (
+                result["stored_right_vs_channel_relative_difference"]
+                > tolerance_fraction
+            )
+        )
+        result["overbank_lengths_within_tolerance"] = usable & (
+            result["left_within_tolerance"] & result["right_within_tolerance"]
+        )
+        result["main_channel_flagged"] = usable & (
+            result["relative_error_channel"].isna()
+            | np.isinf(result["relative_error_channel"])
+            | (result["relative_error_channel"] > tolerance_fraction)
+        )
+        result.attrs.update(getattr(audit, "attrs", {}))
+        result.attrs["tolerance_fraction"] = tolerance_fraction
+        return result
+
+    @staticmethod
+    def _summarize_flow_path_policy(
+        xs_metrics,
+        *,
+        tolerance_fraction: float,
+        source_flow_path_counts: dict[tuple[str, str], int],
+    ):
+        """Return one conservative policy decision per source river/reach."""
+        import pandas as pd
+
+        rows = []
+        preserve_policy = "preserve_and_recompute_only_at_join_boundary"
+        for (river, reach), group in xs_metrics.groupby(
+            ["River", "Reach"], sort=False, dropna=False
+        ):
+            source_flow_path_count = int(
+                source_flow_path_counts.get((str(river), str(reach)), 0)
+            )
+            source_has_flow_paths = source_flow_path_count >= 2
+            usable = group.loc[~group["reach_end"]]
+            reasons: list[str] = []
+            if usable.empty:
+                reasons.append("NO_USABLE_REACH_INTERVALS")
+            if bool(usable.get("invalid_recompute", pd.Series(dtype=bool)).any()):
+                reasons.append("INVALID_REGENERATED_REACH_LENGTH")
+            overbank_match = bool(
+                not usable.empty
+                and usable["overbank_lengths_within_tolerance"].all()
+            )
+            if not overbank_match:
+                reasons.append("REGENERATED_OVERBANK_LENGTH_MISMATCH")
+            stored_overbanks_differ = bool(
+                not usable.empty
+                and usable["stored_overbanks_differ_from_channel"].any()
+            )
+            if not source_has_flow_paths and stored_overbanks_differ:
+                reasons.append(
+                    "MISSING_SOURCE_FLOW_PATHS_WITH_DISTINCT_OVERBANK_LENGTHS"
+                )
+            recommended = preserve_policy if reasons else "regenerate_and_recompute"
+
+            rows.append(
+                {
+                    "River": river,
+                    "Reach": reach,
+                    "source_flow_paths_present": source_has_flow_paths,
+                    "source_flow_path_count": int(source_flow_path_count),
+                    "interval_count": int(len(usable)),
+                    "overbank_match_count": int(
+                        usable["overbank_lengths_within_tolerance"].sum()
+                    ),
+                    "overbank_match_fraction": (
+                        float(usable["overbank_lengths_within_tolerance"].mean())
+                        if not usable.empty
+                        else float("nan")
+                    ),
+                    "max_relative_error_left": (
+                        float(usable["relative_error_left"].max())
+                        if not usable.empty
+                        else float("nan")
+                    ),
+                    "max_relative_error_right": (
+                        float(usable["relative_error_right"].max())
+                        if not usable.empty
+                        else float("nan")
+                    ),
+                    "stored_overbanks_differ_from_channel": (
+                        stored_overbanks_differ
+                    ),
+                    "main_channel_flagged_count": int(
+                        usable["main_channel_flagged"].sum()
+                    ),
+                    "max_relative_error_channel": (
+                        float(usable["relative_error_channel"].max())
+                        if not usable.empty
+                        else float("nan")
+                    ),
+                    "recommended_policy": recommended,
+                    "reason_codes": tuple(dict.fromkeys(reasons)),
+                    "tolerance_fraction": tolerance_fraction,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def _count_flow_paths_by_reach(flow_paths, xs_metrics) -> dict[tuple[str, str], int]:
+        """Associate attribute-free HDF flow paths to reaches spatially."""
+        counts: dict[tuple[str, str], int] = {}
+        for (river, reach), group in xs_metrics.groupby(
+            ["River", "Reach"], sort=False, dropna=False
+        ):
+            count = 0
+            cut_lines = list(group.geometry)
+            for path in flow_paths.geometry if not flow_paths.empty else ():
+                intersections = sum(path.intersects(cut_line) for cut_line in cut_lines)
+                if intersections >= 2:
+                    count += 1
+            counts[(str(river), str(reach))] = count
+        return counts
+
+    @staticmethod
+    def _normalize_xs_key(
+        value: tuple[str, str, Union[str, float, int]], name: str
+    ) -> tuple[str, str, str]:
+        if not isinstance(value, (tuple, list)) or len(value) != 3:
+            raise TypeError(f"{name} must be a (river, reach, river_station) tuple")
+        river, reach, station = value
+        return str(river), str(reach), str(station)
+
+    @staticmethod
+    def _select_xs_by_key(xs_gdf, key, name: str):
+        import re
+
+        river, reach, station = RasGeometryCompute._normalize_xs_key(key, name)
+        candidates = xs_gdf.loc[
+            (xs_gdf["River"].astype(str) == river)
+            & (xs_gdf["Reach"].astype(str) == reach)
+        ]
+        exact = candidates.loc[candidates["RS"].astype(str) == station]
+        if len(exact) == 1:
+            return exact.iloc[0]
+
+        def number(value):
+            match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", str(value))
+            return float(match.group(0)) if match else float("nan")
+
+        target = number(station)
+        numeric = candidates.loc[
+            candidates["RS"].map(number).map(
+                lambda item: math.isfinite(item)
+                and math.isfinite(target)
+                and abs(item - target) <= 1e-6
+            )
+        ]
+        if len(numeric) != 1:
+            raise ValueError(
+                f"{name} {river}/{reach}/{station} resolved {len(numeric)} times"
+            )
+        return numeric.iloc[0]
+
+    @staticmethod
+    def _single_intersection_point(first, second, label: str):
+        from shapely.geometry import Point
+
+        intersection = first.intersection(second)
+        if isinstance(intersection, Point):
+            return intersection
+        points = []
+        if hasattr(intersection, "geoms"):
+            points = [geom for geom in intersection.geoms if isinstance(geom, Point)]
+        if len(points) != 1:
+            raise ValueError(
+                f"{label} must have exactly one point intersection; found "
+                f"{intersection.geom_type} with {len(points)} point(s)"
+            )
+        return points[0]
+
+    @staticmethod
+    def _line_geometry(geometry, label: str):
+        from shapely.geometry import LineString
+        from shapely.ops import linemerge
+
+        if isinstance(geometry, LineString):
+            return geometry
+        merged = linemerge(geometry)
+        if not isinstance(merged, LineString):
+            raise ValueError(f"{label} must resolve to one continuous LineString")
+        return merged
+
+    @staticmethod
+    def _empty_join_segments(crs=None):
+        import geopandas as gpd
+
+        return gpd.GeoDataFrame(
+            columns=[
+                "River",
+                "Reach",
+                "upstream_rs",
+                "downstream_rs",
+                "side",
+                "flow_path_id",
+                "length",
+                "geometry",
+            ],
+            geometry="geometry",
+            crs=crs,
+        )
+
+    @staticmethod
+    def _clip_join_flow_path_segments(
+        flow_paths,
+        xs_gdf,
+        centerlines_gdf,
+        upstream_key,
+        downstream_key,
+    ):
+        """Clip regenerated LOB/ROB flow paths between adjacent join XSs."""
+        import geopandas as gpd
+        from shapely.ops import substring
+
+        upstream_key = RasGeometryCompute._normalize_xs_key(
+            upstream_key, "join_upstream_xs"
+        )
+        downstream_key = RasGeometryCompute._normalize_xs_key(
+            downstream_key, "join_downstream_xs"
+        )
+        if upstream_key[:2] != downstream_key[:2]:
+            raise ValueError("Join-adjacent cross sections must share river and reach")
+        river, reach = upstream_key[:2]
+        upstream = RasGeometryCompute._select_xs_by_key(
+            xs_gdf, upstream_key, "join_upstream_xs"
+        )
+        downstream = RasGeometryCompute._select_xs_by_key(
+            xs_gdf, downstream_key, "join_downstream_xs"
+        )
+        centerlines = centerlines_gdf.loc[
+            (centerlines_gdf["River Name"].astype(str) == river)
+            & (centerlines_gdf["Reach Name"].astype(str) == reach)
+        ]
+        if len(centerlines) != 1:
+            raise ValueError(
+                f"Join centerline {river}/{reach} resolved {len(centerlines)} times"
+            )
+        centerline = RasGeometryCompute._line_geometry(
+            centerlines.iloc[0].geometry, "join centerline"
+        )
+        upstream_cut = RasGeometryCompute._line_geometry(
+            upstream.geometry, "upstream join cross section"
+        )
+        downstream_cut = RasGeometryCompute._line_geometry(
+            downstream.geometry, "downstream join cross section"
+        )
+        upstream_center = RasGeometryCompute._single_intersection_point(
+            upstream_cut, centerline, "upstream XS/river"
+        )
+        downstream_center = RasGeometryCompute._single_intersection_point(
+            downstream_cut, centerline, "downstream XS/river"
+        )
+        upstream_center_measure = upstream_cut.project(upstream_center)
+        downstream_center_measure = downstream_cut.project(downstream_center)
+
+        rows = []
+        for flow_path in flow_paths.itertuples(index=False):
+            path = RasGeometryCompute._line_geometry(
+                flow_path.geometry, f"flow path {flow_path.flow_path_id}"
+            )
+            if not path.intersects(upstream_cut) or not path.intersects(downstream_cut):
+                continue
+            try:
+                upstream_point = RasGeometryCompute._single_intersection_point(
+                    path, upstream_cut, f"flow path {flow_path.flow_path_id}/upstream XS"
+                )
+                downstream_point = RasGeometryCompute._single_intersection_point(
+                    path,
+                    downstream_cut,
+                    f"flow path {flow_path.flow_path_id}/downstream XS",
+                )
+            except ValueError:
+                continue
+            upstream_side_measure = upstream_cut.project(upstream_point)
+            downstream_side_measure = downstream_cut.project(downstream_point)
+            upstream_side = (
+                "left"
+                if upstream_side_measure < upstream_center_measure
+                else "right"
+                if upstream_side_measure > upstream_center_measure
+                else "center"
+            )
+            downstream_side = (
+                "left"
+                if downstream_side_measure < downstream_center_measure
+                else "right"
+                if downstream_side_measure > downstream_center_measure
+                else "center"
+            )
+            if upstream_side not in {"left", "right"} or upstream_side != downstream_side:
+                continue
+            start = path.project(upstream_point)
+            end = path.project(downstream_point)
+            segment = substring(path, min(start, end), max(start, end))
+            rows.append(
+                {
+                    "River": river,
+                    "Reach": reach,
+                    "upstream_rs": upstream_key[2],
+                    "downstream_rs": downstream_key[2],
+                    "side": upstream_side,
+                    "flow_path_id": int(flow_path.flow_path_id),
+                    "length": float(segment.length),
+                    "geometry": segment,
+                }
+            )
+
+        result = gpd.GeoDataFrame(
+            rows,
+            geometry="geometry",
+            crs=getattr(flow_paths, "crs", None),
+        )
+        counts = result["side"].value_counts().to_dict() if not result.empty else {}
+        if counts != {"left": 1, "right": 1}:
+            raise ValueError(
+                "Regenerated join flow paths must resolve exactly one left and one "
+                f"right segment; found {counts}"
+            )
+        return result.sort_values("side").reset_index(drop=True)
+
+    @staticmethod
+    def _remove_reach_audit_copy(path: Path) -> None:
+        """Remove only a verified audit directory created by ``mkdtemp``."""
+        path = Path(path).resolve(strict=False)
+        temp_dir = Path(tempfile.gettempdir()).resolve(strict=False)
+        if path.parent != temp_dir or not path.name.startswith("reach_audit_"):
+            raise RuntimeError(f"Refusing to remove unverified audit directory: {path}")
+        shutil.rmtree(path, ignore_errors=True)
 
     @staticmethod
     def _reach_length_diff(stored, recomputed, tolerance: float):

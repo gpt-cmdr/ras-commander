@@ -104,6 +104,29 @@ intersection or documented nearest connection, remove duplicate/overlapping cut
 lines, preserve complete geometry blocks and flow-change locations, reconcile
 stations, and validate profile and units compatibility.
 
+The joined reach must also carry explicit reach-length evidence. Run
+`RasGeometryCompute.assess_flow_path_policy()` on the provisional destination
+geometry before changing overbank lengths. A 1% comparison against flow paths
+regenerated on an isolated copy selects one of two policies:
+
+- `regenerate_and_recompute` when every usable regenerated LOB/ROB interval
+  reproduces its stored source value within tolerance.
+- `preserve_and_recompute_only_at_join_boundary` when any interval fails, or when
+  stored overbank lengths differ from channel lengths but no source flow paths
+  span the reach.
+
+Under the preserve policy, only the new interval between the join-adjacent cross
+sections is recomputed. The audit returns regenerated left/right segments clipped
+to those two cut lines so their geometry and measured length can be reviewed and
+stored as GeoParquet. Existing source flow-path lengths remain unchanged.
+
+Run `RasGeometryCompute.audit_main_channel_lengths()` separately. Channel-length
+differences are informative centerline QA and do not by themselves authorize
+overwriting overbank routing evidence. After the final centerline is accepted,
+the geometry assembler must restation all retained nodes, apply the selected
+flow-path policy, recompute the join interval, and rewrite station-keyed flow and
+boundary references before validation and execution.
+
 ## Select a reach slice
 
 ```python

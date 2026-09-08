@@ -174,7 +174,8 @@ _LAZY_EXPORTS = {
         for name in (
             'RasControlResult', 'PreprocessResult',
             'GeometryPreprocessResult', 'GeometryLayerResult',
-            'GeometryCompleteResult', 'TerrainExportResult',
+            'GeometryCompleteResult', 'FlowPathPolicyResult',
+            'TerrainExportResult',
         )
     },
     **{
@@ -371,7 +372,8 @@ __all__ = [
     'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
-    'GeometryLayerResult', 'GeometryCompleteResult', 'TerrainExportResult',
+    'GeometryLayerResult', 'GeometryCompleteResult', 'FlowPathPolicyResult',
+    'TerrainExportResult',
     'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',

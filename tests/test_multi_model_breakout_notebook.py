@@ -35,6 +35,10 @@ def test_notebook_236_uses_real_multi_model_texas_workflow():
     assert 'TARGET_EDGE_ID = "5790954"' in source
     assert "RasBreakout1D.catalog_sources(" in source
     assert "RasBreakout1D.plan_network_edge(" in source
+    assert "RasGeometryCompute.audit_main_channel_lengths(" in source
+    assert "RasGeometryCompute.assess_flow_path_policy(" in source
+    assert "regenerate_and_recompute" in source
+    assert "preserve_and_recompute_only_at_join_boundary" in source
     assert "MAX_CENTERLINE_OFFSET_FT = 500.0" in source
     assert "MAX_CROSS_CENTERLINE_XS = 1" in source
     assert "handoff_diagnostics_df" in source
@@ -67,6 +71,7 @@ def test_notebook_236_retains_executed_visual_evidence():
         "01_extent_and_geometry_confirmation.png",
         "02_directed_coverage_chain.png",
         "03_cross_section_ownership.png",
+        "04_reach_length_policy_evidence.png",
     ):
         path = ASSET_ROOT / name
         assert path.is_file()
@@ -91,7 +96,7 @@ def test_notebook_236_code_cells_compile_and_gallery_entry_exists():
         for item in metadata["notebooks"]
         if item["id"] == "236_multi_model_1d_breakout_planning"
     )
-    assert entry["executed_cells"] == entry["code_cells"] == 6
+    assert entry["executed_cells"] == entry["code_cells"] == 7
     assert {"1d", "breakout", "ebfe", "nwm", "multi-model"} <= set(
         entry["tags"]
     )

@@ -29,9 +29,111 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.11"
+SCHEMA_VERSION = "1.12"
 
 DATAFRAME_SCHEMAS = {
+    "flow_path_policy_xs_metrics": {
+        "description": (
+            "Per-cross-section stored-versus-regenerated reach-length evidence "
+            "used for flow-path policy selection and channel QA."
+        ),
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).xs_metrics_df",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact source river-station identifier."},
+            {"name": "len_left_stored", "dtype": "float64", "description": "Stored downstream LOB length."},
+            {"name": "len_left_recomputed", "dtype": "float64", "description": "LOB length recomputed from regenerated flow paths."},
+            {"name": "delta_left", "dtype": "float64", "description": "Recomputed minus stored LOB length."},
+            {"name": "len_channel_stored", "dtype": "float64", "description": "Stored downstream channel length."},
+            {"name": "len_channel_recomputed", "dtype": "float64", "description": "Channel length recomputed along the river centerline."},
+            {"name": "delta_channel", "dtype": "float64", "description": "Recomputed minus stored channel length."},
+            {"name": "len_right_stored", "dtype": "float64", "description": "Stored downstream ROB length."},
+            {"name": "len_right_recomputed", "dtype": "float64", "description": "ROB length recomputed from regenerated flow paths."},
+            {"name": "delta_right", "dtype": "float64", "description": "Recomputed minus stored ROB length."},
+            {"name": "reach_end", "dtype": "bool", "description": "Whether the XS is the downstream reach terminus."},
+            {"name": "invalid_recompute", "dtype": "bool", "description": "Whether only some recomputed side lengths are missing."},
+            {"name": "changed", "dtype": "bool", "description": "Whether any recomputed length changed at the absolute audit tolerance."},
+            {"name": "geometry", "dtype": "geometry", "description": "Cross-section GIS cut line."},
+            {"name": "relative_error_left", "dtype": "float64", "description": "Absolute LOB delta divided by stored LOB length."},
+            {"name": "left_within_tolerance", "dtype": "bool", "description": "Whether usable LOB evidence is within the policy tolerance."},
+            {"name": "relative_error_channel", "dtype": "float64", "description": "Absolute channel delta divided by stored channel length."},
+            {"name": "channel_within_tolerance", "dtype": "bool", "description": "Whether usable channel evidence is within the QA tolerance."},
+            {"name": "relative_error_right", "dtype": "float64", "description": "Absolute ROB delta divided by stored ROB length."},
+            {"name": "right_within_tolerance", "dtype": "bool", "description": "Whether usable ROB evidence is within the policy tolerance."},
+            {"name": "stored_left_vs_channel_relative_difference", "dtype": "float64", "description": "Stored LOB difference relative to stored channel length."},
+            {"name": "stored_right_vs_channel_relative_difference", "dtype": "float64", "description": "Stored ROB difference relative to stored channel length."},
+            {"name": "stored_overbanks_differ_from_channel", "dtype": "bool", "description": "Whether either stored overbank length differs from channel beyond tolerance."},
+            {"name": "overbank_lengths_within_tolerance", "dtype": "bool", "description": "Whether regenerated LOB and ROB both reproduce stored values."},
+            {"name": "main_channel_flagged", "dtype": "bool", "description": "Informative channel-centerline QA flag."},
+        ],
+    },
+    "flow_path_policy_reach_metrics": {
+        "description": "One conservative flow-path policy decision and channel QA summary per river/reach.",
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).reach_metrics_df",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "source_flow_paths_present", "dtype": "bool", "description": "Whether at least two source flow paths span intervals on this reach."},
+            {"name": "source_flow_path_count", "dtype": "int64", "description": "Source flow paths spatially associated with this reach."},
+            {"name": "interval_count", "dtype": "int64", "description": "Non-terminal XS intervals evaluated."},
+            {"name": "overbank_match_count", "dtype": "int64", "description": "Intervals whose regenerated LOB and ROB both match."},
+            {"name": "overbank_match_fraction", "dtype": "float64", "description": "Fraction of intervals matching within tolerance."},
+            {"name": "max_relative_error_left", "dtype": "float64", "description": "Maximum LOB relative error."},
+            {"name": "max_relative_error_right", "dtype": "float64", "description": "Maximum ROB relative error."},
+            {"name": "stored_overbanks_differ_from_channel", "dtype": "bool", "description": "Whether stored overbank lengths contain evidence distinct from channel lengths."},
+            {"name": "main_channel_flagged_count", "dtype": "int64", "description": "Channel intervals outside the informative tolerance."},
+            {"name": "max_relative_error_channel", "dtype": "float64", "description": "Maximum channel relative error."},
+            {"name": "recommended_policy", "dtype": "str", "description": "regenerate_and_recompute or preserve_and_recompute_only_at_join_boundary."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable conservative-policy reasons."},
+            {"name": "tolerance_fraction", "dtype": "float64", "description": "Relative comparison tolerance."},
+        ],
+    },
+    "flow_path_join_segments": {
+        "description": "Regenerated LOB/ROB review segments clipped between the two cross sections adjacent to a proposed join.",
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).join_segments_gdf",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Destination river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Destination reach identifier."},
+            {"name": "upstream_rs", "dtype": "str", "description": "Join-adjacent upstream river station."},
+            {"name": "downstream_rs", "dtype": "str", "description": "Join-adjacent downstream river station."},
+            {"name": "side", "dtype": "str", "description": "left or right overbank."},
+            {"name": "flow_path_id", "dtype": "int64", "description": "Regenerated flow-path feature identifier."},
+            {"name": "length", "dtype": "float64", "description": "Clipped join-interval flow-path length."},
+            {"name": "geometry", "dtype": "geometry", "description": "Reviewable clipped flow-path segment."},
+        ],
+    },
+    "main_channel_length_audit": {
+        "description": "Informative stored-versus-centerline channel reach-length QA by cross section.",
+        "accessor": "RasGeometryCompute.audit_main_channel_lengths(...)",
+        "source": "RasGeometryCompute.audit_main_channel_lengths()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact river station."},
+            {"name": "len_channel_stored", "dtype": "float64", "description": "Stored channel reach length."},
+            {"name": "len_channel_recomputed", "dtype": "float64", "description": "River-centerline-derived channel length."},
+            {"name": "delta_channel", "dtype": "float64", "description": "Recomputed minus stored channel length."},
+            {"name": "relative_error_channel", "dtype": "float64", "description": "Absolute channel delta divided by stored length."},
+            {"name": "channel_within_tolerance", "dtype": "bool", "description": "Whether the usable interval is within tolerance."},
+            {"name": "reach_end", "dtype": "bool", "description": "Whether the XS is the downstream reach terminus."},
+            {"name": "intersection_count", "dtype": "int64", "description": "Number of point intersections between the XS cut line and river centerline."},
+            {"name": "intersection_valid", "dtype": "bool", "description": "Whether the XS intersects its river centerline at exactly one point."},
+            {"name": "main_channel_flagged", "dtype": "bool", "description": "Whether the usable channel interval needs review."},
+            {"name": "geometry", "dtype": "geometry", "description": "Cross-section GIS cut line."},
+        ],
+    },
     "ras_breakout_1d_validation": {
         "description": (
             "One row per structural validation check for a RasBreakout1D "
