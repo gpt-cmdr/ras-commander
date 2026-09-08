@@ -30,6 +30,7 @@ from .LoggingConfig import get_logger
 from .RasPrj import RasPrj, init_ras_project
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
+from ._rasmap_schema import expected_rasmap_path, rasmap_dataframe_is_usable
 from .schemas import DATAFRAME_SCHEMAS
 
 logger = get_logger(__name__)
@@ -1179,13 +1180,9 @@ def _inspect_project_assets_impl(
                     occurrence=occurrence * max(len(plan_numbers), 1) + scope_index,
                 )
 
-    rasmap_path = project_root / f"{project_file.stem}.rasmap"
+    rasmap_path = expected_rasmap_path(project_root, project_file.stem)
     rasmap_id: Optional[str] = None
-    if _path_exists(rasmap_path) or getattr(
-        ras_obj,
-        "rasmap_df",
-        pd.DataFrame(),
-    ).shape[0]:
+    if _path_exists(rasmap_path):
         rasmap_id = _add_asset(
             rows,
             inventory_id=inventory_id,
@@ -1203,8 +1200,12 @@ def _inspect_project_assets_impl(
         )
 
     rasmap_df = getattr(ras_obj, "rasmap_df", pd.DataFrame())
+    rasmap_usable = rasmap_dataframe_is_usable(rasmap_df)
     seen_map_paths: set[str] = set()
-    if _path_is_file(rasmap_path) and rasmap_df.empty:
+    if _path_is_file(rasmap_path) and not rasmap_usable:
+        summary = rasmap_df.iloc[0] if not rasmap_df.empty else {}
+        status = summary.get("rasmap_status") if hasattr(summary, "get") else None
+        error = summary.get("rasmap_error") if hasattr(summary, "get") else None
         _add_asset(
             rows,
             inventory_id=inventory_id,
@@ -1223,16 +1224,44 @@ def _inspect_project_assets_impl(
             readiness="unknown",
             reason_code="rasmap_structured_inventory_empty",
             detail=(
-                "RASMapper exists but the structured parser returned no rows; "
-                "raw XML references are inventoried separately"
+                "RASMapper exists but its structured summary is unusable "
+                f"(status={status!r}, error={error!r}); raw XML references "
+                "are inventoried separately"
             ),
             id_discriminator="rasmap_structured_inventory_empty",
         )
-    if not rasmap_df.empty:
+    if rasmap_usable:
+        summary = rasmap_df.iloc[0]
+        field_errors = summary.get("rasmap_field_errors", {})
+        if isinstance(field_errors, dict):
+            for occurrence, (column, error) in enumerate(
+                sorted(field_errors.items())
+            ):
+                _add_asset(
+                    rows,
+                    inventory_id=inventory_id,
+                    depth=depth,
+                    project_root=project_root,
+                    kind="unknown_reference",
+                    role="unknown",
+                    owner=rasmap_path,
+                    raw=None,
+                    path=None,
+                    required=None,
+                    source_api=f"RasPrj.rasmap_df.{column}",
+                    hash_files=hash_files,
+                    parent_asset_id=rasmap_id,
+                    state="not_inspected",
+                    readiness="unknown",
+                    reason_code="rasmap_field_parse_failed",
+                    detail=f"{column}: {error}"[:500],
+                    occurrence=occurrence,
+                    id_discriminator=f"rasmap_field_parse_failed:{column}",
+                )
         for column, kind in _RASMAP_KINDS.items():
             if column not in rasmap_df.columns:
                 continue
-            for occurrence, raw_path in enumerate(_as_values(rasmap_df.iloc[0].get(column))):
+            for occurrence, raw_path in enumerate(_as_values(summary.get(column))):
                 path = RasUtils.safe_resolve(Path(raw_path))
                 seen_map_paths.add(os.path.normcase(str(path)))
                 map_required = False if kind in {"stored_map", "projection"} else None

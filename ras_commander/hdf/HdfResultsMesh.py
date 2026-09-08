@@ -79,6 +79,8 @@ HdfUtils for common operations. Methods use @log_call decorator for logging and
 
 import numpy as np
 import pandas as pd
+
+from .._rasmap_schema import rasmap_dataframe_is_usable
 import xarray as xr
 from pathlib import Path
 import h5py
@@ -982,7 +984,7 @@ class HdfResultsMesh:
                     ras_obj = None
 
             rasmap_df = getattr(ras_obj, "rasmap_df", None)
-            if rasmap_df is not None and not rasmap_df.empty and "profile_lines_path" in rasmap_df.columns:
+            if rasmap_dataframe_is_usable(rasmap_df) and "profile_lines_path" in rasmap_df.columns:
                 for value in rasmap_df["profile_lines_path"].tolist():
                     if isinstance(value, (list, tuple, set)):
                         candidate_paths.extend(value)

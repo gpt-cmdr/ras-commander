@@ -17,6 +17,8 @@ from typing import Any, Optional, Union
 
 import pandas as pd
 
+from ..._rasmap_schema import rasmap_dataframe_is_usable
+
 from ras_commander import get_logger, log_call
 from ras_commander.RasCmdr import RasCmdr
 from ras_commander.RasMap import RasMap
@@ -534,6 +536,44 @@ class ScienceBaseValidation:
         project_root: Path,
     ) -> None:
         """Inspect terrain and land-classification references via RasMap APIs."""
+        rasmap_df = ras_obj.rasmap_df
+        summary = (
+            rasmap_df.iloc[0]
+            if isinstance(rasmap_df, pd.DataFrame) and not rasmap_df.empty
+            else {}
+        )
+        status = summary.get("rasmap_status") if hasattr(summary, "get") else None
+        rasmap_path = summary.get("rasmap_path") if hasattr(summary, "get") else None
+        owner = str(ras_obj.prj_file)
+
+        if status == "failed":
+            issues.append(
+                {
+                    "code": "rasmap_parse_failed",
+                    "kind": "rasmap",
+                    "owner": owner,
+                    "path": str(rasmap_path or ras_obj.prj_file),
+                    "detail": str(summary.get("rasmap_error") or "unknown parse error"),
+                }
+            )
+            return
+        if not rasmap_dataframe_is_usable(rasmap_df):
+            return
+
+        field_errors = summary.get("rasmap_field_errors", {})
+        if isinstance(field_errors, dict):
+            for field, error in sorted(field_errors.items()):
+                issues.append(
+                    {
+                        "code": "rasmap_field_parse_failed",
+                        "kind": "rasmap",
+                        "owner": owner,
+                        "path": str(rasmap_path or ras_obj.prj_file),
+                        "field": str(field),
+                        "detail": str(error),
+                    }
+                )
+
         for kind, layers in (
             (
                 "terrain",
@@ -559,10 +599,7 @@ class ScienceBaseValidation:
                     project_root=project_root,
                 )
 
-        rasmap_df = ras_obj.rasmap_df
-        if rasmap_df is None or rasmap_df.empty:
-            return
-        projection_path = rasmap_df.iloc[0].get("projection_path")
+        projection_path = summary.get("projection_path")
         if ScienceBaseValidation._has_value(projection_path):
             resolved = ScienceBaseValidation._lexical_absolute(projection_path)
             if not resolved.exists():

@@ -13,6 +13,7 @@ import pandas as pd
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from ._rasmap_schema import expected_rasmap_path, rasmap_dataframe_is_usable
 
 logger = get_logger(__name__)
 
@@ -346,6 +347,14 @@ class RasCrossSections:
     def _crs_units(crs: Any) -> str | None:
         if crs is None:
             return None
+        try:
+            from pyproj import CRS
+
+            parsed = CRS.from_user_input(crs)
+            return parsed.axis_info[0].unit_name if parsed.axis_info else None
+        except (TypeError, ValueError) as exc:
+            logger.debug("Could not determine CRS units from %r: %s", crs, exc)
+            return None
 
     @staticmethod
     def _project_mapper_crs(context: _ProjectContext) -> str | None:
@@ -353,7 +362,7 @@ class RasCrossSections:
         from .RasMap import RasMap
         from .hdf.HdfBase import HdfBase
 
-        preferred = context.folder / f"{context.model_id}.rasmap"
+        preferred = expected_rasmap_path(context.folder, context.model_id)
         if preferred.is_file():
             rasmap_path = preferred
         else:
@@ -366,7 +375,7 @@ class RasCrossSections:
             rasmap_path,
             ras_object=context.ras_object,
         )
-        if rasmap.empty or "projection_path" not in rasmap:
+        if not rasmap_dataframe_is_usable(rasmap) or "projection_path" not in rasmap:
             return None
         raw_path = rasmap.iloc[0]["projection_path"]
         if pd.isna(raw_path) or not str(raw_path).strip():
@@ -375,14 +384,6 @@ class RasCrossSections:
         if not projection_path.is_file():
             return None
         return HdfBase._get_projection_from_prj_file(projection_path)
-        try:
-            from pyproj import CRS
-
-            parsed = CRS.from_user_input(crs)
-            return parsed.axis_info[0].unit_name if parsed.axis_info else None
-        except (TypeError, ValueError) as exc:
-            logger.debug("Could not determine CRS units from %r: %s", crs, exc)
-            return None
 
     @staticmethod
     def _point_mannings(stations: np.ndarray, breakpoints: pd.DataFrame) -> np.ndarray:

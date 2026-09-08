@@ -241,25 +241,25 @@ if hasattr(ras, 'boundary_df') and ras.boundary_df is not None:
 
 # VALIDATION 3: Check rasmap_df (terrain files)
 print("\nValidating Terrain Files (.rasmap)...")
-if hasattr(ras, 'rasmap_df') and ras.rasmap_df is not None:
-    for idx, row in ras.rasmap_df.iterrows():
-        if 'terrain_file' in row and pd.notna(row['terrain_file']):
-            terrain_path = Path(row['terrain_file'])
-
-            # Check if path is relative
-            if terrain_path.is_absolute():
-                print(f"  ✗ ABSOLUTE PATH: {terrain_path}")
-                print(f"    This will cause errors - FIX REQUIRED")
-            # Check if file exists
-            elif not terrain_path.exists():
-                # Try relative to project
-                terrain_resolved = ras.prj_file.parent / terrain_path
-                if terrain_resolved.exists():
-                    print(f"  ✓ Terrain found (relative): {terrain_path}")
-                else:
-                    print(f"  ✗ TERRAIN NOT FOUND: {terrain_path}")
-            else:
-                print(f"  ✓ Terrain found: {terrain_path}")
+summary = ras.rasmap_df.iloc[0]
+status = summary.get('rasmap_status', 'parsed')  # legacy frames default to usable
+if status == 'absent':
+    print(f"  ⚠️ No .rasmap found at {summary.get('rasmap_path')}")
+elif status == 'failed':
+    print(f"  ✗ RASMAP PARSE FAILED: {summary.get('rasmap_error')}")
+else:
+    field_errors = summary.get('rasmap_field_errors', {})
+    if 'terrain_hdf_path' in field_errors:
+        print(f"  ✗ TERRAIN FIELD FAILED: {field_errors['terrain_hdf_path']}")
+    terrain_paths = summary.get('terrain_hdf_path', [])
+    if not terrain_paths:
+        print("  ⚠️ No terrain layer configured")
+    for raw_path in terrain_paths:
+        terrain_path = Path(raw_path)
+        if terrain_path.is_file():
+            print(f"  ✓ Terrain found: {terrain_path}")
+        else:
+            print(f"  ✗ TERRAIN NOT FOUND: {terrain_path}")
 
 # VALIDATION 4: Check land cover HDF if 2D model
 print("\nValidating Land Cover (if 2D)...")
@@ -450,31 +450,26 @@ if hasattr(ras, 'boundary_df'):
 
 ```python
 # Check terrain file references
-if hasattr(ras, 'rasmap_df'):
-    for idx, row in ras.rasmap_df.iterrows():
-        if 'terrain_file' in row and pd.notna(row['terrain_file']):
-            terrain_file = Path(row['terrain_file'])
+summary = ras.rasmap_df.iloc[0]
+status = summary.get('rasmap_status', 'parsed')  # legacy frames default to usable
+if status == 'absent':
+    print(f"WARN: No .rasmap found at {summary.get('rasmap_path')}")
+elif status == 'failed':
+    print(f"FAIL: RASMapper parse failed: {summary.get('rasmap_error')}")
+else:
+    field_errors = summary.get('rasmap_field_errors', {})
+    if 'terrain_hdf_path' in field_errors:
+        print(f"FAIL: Terrain field failed: {field_errors['terrain_hdf_path']}")
 
-            # CRITICAL CHECKS:
-            is_absolute = terrain_file.is_absolute()
-            exists = terrain_file.exists()
-
-            if is_absolute:
-                print(f"FAIL: Absolute terrain path")
-            elif not exists:
-                # Try relative to project
-                terrain_resolved = ras.prj_file.parent / terrain_file
-                if terrain_resolved.exists():
-                    print(f"PASS: Terrain found (relative)")
-                else:
-                    print(f"FAIL: Terrain not found")
-
-                    # Search for terrain file
-                    terrain_name = terrain_file.name
-                    found = list(ras.prj_file.parent.glob(f'**/{terrain_name}'))
-                    if found:
-                        print(f"  Found at: {found[0]}")
-                        print(f"  Should correct .rasmap to: {found[0].relative_to(ras.prj_file.parent)}")
+    terrain_paths = summary.get('terrain_hdf_path', [])
+    if not terrain_paths:
+        print("WARN: No terrain layer configured")
+    for raw_path in terrain_paths:
+        terrain_file = Path(raw_path)
+        if terrain_file.is_file():
+            print(f"PASS: Terrain found: {terrain_file}")
+        else:
+            print(f"FAIL: Terrain not found: {terrain_file}")
 ```
 
 **Goal**: Zero failures - all paths relative, all files exist, model runnable

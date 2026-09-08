@@ -305,8 +305,16 @@ Native infiltration authoring and read-only inspection.
 - `set_infiltration_sidecar_parameters(hdf_path, data, hecras_version=...)` - Set sidecar parameters through native RASMapper serialization
 - `scale_infiltration_sidecar_parameters(hdf_path, data, scale_factors, hecras_version=...)` - Scale and save sidecar parameters natively
 - `get_classification_polygons(hdf_path)` - Read infiltration sidecar classification polygon overrides
-- `get_infiltration_map(hdf_path)` - Read infiltration raster map
+- `get_infiltration_map(hdf_path=None, ras_object=None)` - Read the
+  infiltration raster map; without an explicit path, resolve the first usable
+  `rasmap_df["infiltration_hdf_path"]`
 - `calculate_soil_statistics(hdf_path)` - Process zonal statistics for soil analysis
+- `get_soils_raster_stats(geom_hdf_path, soil_hdf_path=None, ras_object=None)` -
+  Resolve the soil sidecar consistently; lookup failures retain the empty-frame
+  recovery contract
+- `get_soil_raster_stats(...)`, `get_infiltration_stats(...)`, and
+  `get_landcover_raster_stats(...)` - Use the same status-aware sidecar resolver
+  and empty-frame recovery contract
 
 The compatibility names `create_infiltration_group()`,
 `set_infiltration_baseoverrides()`, `set_infiltration_layer_data()`, and
@@ -323,7 +331,8 @@ Ras Commander never hand-authors or selectively deletes
 
 - `get_significant_mukeys(hdf_path, threshold)` - Identify mukeys above percentage threshold
 - `calculate_total_significant_percentage(hdf_path)` - Compute total coverage
-- `get_infiltration_parameters(hdf_path, mukey)` - Get parameters for specific mukey
+- `get_infiltration_parameters(hdf_path=None, mukey=None, ras_object=None)` - Get
+  parameters for a specific mukey, with the same optional `rasmap_df` lookup
 - `calculate_weighted_parameters(hdf_path)` - Compute weighted average parameters
 
 **Data Export:**
