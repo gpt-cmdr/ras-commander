@@ -18,6 +18,27 @@ from .types import Severity, FlowType, CheckMessage, CheckResults
 logger = get_logger(__name__)
 
 
+def _first_non_null(row, column: str) -> Optional[str]:
+    """
+    Read a path-like cell from a plan_df row, returning None when absent.
+
+    plan_df carries missing paths as None, NaN, or the empty string depending on
+    how the row was built. All three mean "not set" and must not reach Path().
+    """
+    if column not in row.index:
+        return None
+    value = row[column]
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return text or None
+
+
 def resolve_hdf_paths(
     plan: Union[str, Path],
     ras_obj
@@ -38,12 +59,35 @@ def resolve_hdf_paths(
         if matching.empty:
             raise ValueError(f"Plan '{plan}' not found. Available: {ras_obj.plan_df['plan_number'].tolist()}")
         plan_row = matching.iloc[0]
-        plan_hdf = Path(plan_row['HDF_Results_Path'])
-        geom_path = plan_row['Geom Path']
-        # Get geometry HDF from geometry file path
+
+        # A plan that has never been computed has no results HDF, and a plain-text
+        # 1D project may have no geometry HDF either. Both columns are legitimately
+        # null; treat them as absent rather than letting Path(None) raise TypeError.
+        results_path = _first_non_null(plan_row, 'HDF_Results_Path')
+        geom_path = _first_non_null(plan_row, 'Geom Path')
+
         # Pattern: Muncie.g01 -> Muncie.g01.hdf (append .hdf, don't replace suffix)
-        geom_base = Path(str(geom_path))
-        geom_hdf = geom_base.parent / f"{geom_base.name}.hdf"
+        geom_hdf = None
+        if geom_path is not None:
+            geom_base = Path(geom_path)
+            geom_hdf = geom_base.parent / f"{geom_base.name}.hdf"
+
+        if results_path is not None:
+            plan_hdf = Path(results_path)
+        elif geom_hdf is not None and geom_hdf.exists():
+            # No results, but geometry HDF exists: fall through to the geometry-only
+            # checks rather than failing. detect_flow_type() reports GEOMETRY_ONLY.
+            logger.debug(
+                f"Plan '{plan}' has no results HDF; using geometry HDF {geom_hdf} "
+                f"for geometry-only checks"
+            )
+            plan_hdf = geom_hdf
+        else:
+            raise FileNotFoundError(
+                f"Plan '{plan}' has no results HDF and no geometry HDF on disk "
+                f"(geometry file: {geom_path or 'not set'}). RasCheck requires at least "
+                f"one HDF; a plain-text-only project must be preprocessed or computed first."
+            )
     else:
         plan_hdf = Path(plan)
         # Derive geometry HDF from plan HDF name

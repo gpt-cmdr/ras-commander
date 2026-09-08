@@ -1087,6 +1087,17 @@ class RasEbfeModels:
         print("\n[2/4] Organizing Documentation...")
         docs_copied = 0
 
+        # Loose files at the models root (e.g. a delivered Readme.txt) belong to the
+        # delivery but sit outside every model subfolder, so the per-model loop above
+        # never sees them. Sweep them into Documentation rather than dropping them --
+        # nothing delivered may be silently discarded.
+        for loose in sorted(models_source.iterdir()):
+            if not loose.is_file() or loose == inventory:
+                continue
+            shutil.copy2(loose, folders['docs'] / loose.name)
+            docs_copied += 1
+            print(f"  ✓ Preserved delivered file: {loose.name}")
+
         if docs_source.exists():
             for doc in docs_source.rglob('*'):
                 if doc.is_file():

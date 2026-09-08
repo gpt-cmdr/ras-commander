@@ -7,5 +7,14 @@ if TYPE_CHECKING:
     from ras_commander.sources.federal.noaa_ras2fim import NoaaRas2fimModels
 
 from .ebfe_models import RasEbfeModels
+from .ebfe_extract import StreamingZipReader, ZipMemberInfo, ArchiveSurvey, ExtractStats
 
-__all__ = ['UsgsScienceBase', 'RasEbfeModels', 'NoaaRas2fimModels']
+__all__ = [
+    'UsgsScienceBase',
+    'RasEbfeModels',
+    'NoaaRas2fimModels',
+    'StreamingZipReader',
+    'ZipMemberInfo',
+    'ArchiveSurvey',
+    'ExtractStats',
+]

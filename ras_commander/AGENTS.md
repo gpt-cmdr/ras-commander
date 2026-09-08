@@ -19,12 +19,14 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - RasProcess.exe CLI wrapper: `RasProcess` (stored maps; geometry association; `compute_geometry()` runs HEC-RAS's headless `CompleteGeometry` pipeline via `RasProcess.exe`). `compute_geometry()` is the same pipeline as `RasGeometryCompute.compute_geometry()` but as a subprocess; it is the supported path for **Linux/Wine**. On Windows prefer `RasGeometryCompute`. (`RasProcess.complete_geometry()` is a deprecated alias for `compute_geometry()`.)
 - HDF access: `Hdf*` classes and `ras_commander/hdf/`
 - USGS IC generation: `usgs/initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, generate IC table from USGS snapshot)
+- Model sources: `sources/federal/` (`RasEbfeModels` for FEMA eBFE/BLE delivery organizers; `StreamingZipReader` for archives with no End Of Central Directory record — walks local file headers forward, reports truncation explicitly via `ArchiveSurvey.truncated`/`overrun_bytes`, and CRC-verifies every member as the substitute for hashing. Not a `zipfile.ZipFile` drop-in: random access is exactly what a missing central directory cannot provide.)
 - Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
 
 ## Coding Rules
 
 - Prefer the existing static-class pattern. Most `Ras*` and `Hdf*` classes should be called directly, not instantiated.
 - Use DataFrame-backed project metadata first. Prefer `ras.plan_df`, `ras.geom_df`, `ras.flow_df`, `ras.unsteady_df`, `ras.boundaries_df`, and related helpers over ad hoc filesystem scanning.
+- `ras.rasmap_df` is always a single-row summary. Preserve its legacy path columns and use `rasmap_status`, `rasmap_error`, and `rasmap_field_errors` to distinguish absent, failed, partial, and clean parses; row count and `.empty` are not health checks.
 - Use `pathlib.Path` consistently for file paths.
 - Keep imports ordered `stdlib -> third-party -> local`.
 - Public functions should use the repo logging pattern with `get_logger()` and `@log_call`.
