@@ -288,6 +288,12 @@ def test_organize_san_gabriel_preserves_bundle_and_repairs_exact_dss_paths(
         )
     )
     assert manifest["terrain_status"] == "Not Provided in Source"
+    assert manifest["delivery_readiness"] == "critical_source_gap"
+    assert manifest["terrain_required"] is True
+    assert manifest["terrain_source_complete"] is False
+    assert manifest["downstream_usable"] is False
+    assert manifest["reproducible"] is False
+    assert manifest["publishable_as_runnable_example"] is False
     assert manifest["terrain_path_normalization"] == {
         "rasmap_files": 5,
         "terrain_hdf_references": 40,
@@ -304,6 +310,8 @@ def test_organize_san_gabriel_preserves_bundle_and_repairs_exact_dss_paths(
     assert "SG-005" in rod_text
     assert "all 40 terrain references across 5 projects" in rod_text
     assert "No reconstruction is performed automatically" in rod_text
+    assert "CRITICAL / model-blocking" in rod_text
+    assert "unusable for downstream hydraulic computation" in rod_text
 
     # Reorganization must preserve subsequently recorded build provenance.
     rod_path.write_text(rod_text + "\nAuthorized build record.\n", encoding="utf-8")

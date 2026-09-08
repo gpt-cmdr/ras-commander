@@ -47,3 +47,18 @@ def test_parse_compute_messages_ignores_explicit_zero_error_summaries():
     assert parsed["has_errors"] is False
     assert parsed["error_count"] == 0
     assert parsed["first_error_line"] is None
+
+
+def test_edge_line_self_intersection_is_a_nonblocking_warning():
+    parsed = ResultsParser.parse_compute_messages(
+        "The generated edge lines have self intersections, the interpolation "
+        "surface may not generate correctly because of this. See the points "
+        "in the error layer.\n"
+        "Finished Steady Flow Simulation\n"
+        "Complete Process\t8\n"
+    )
+
+    assert parsed["completed"] is True
+    assert parsed["has_errors"] is False
+    assert parsed["has_warnings"] is True
+    assert parsed["warning_count"] == 1

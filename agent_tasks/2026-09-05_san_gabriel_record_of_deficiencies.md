@@ -2,7 +2,10 @@
 
 - **ROD date:** 2026-09-05
 - **Study:** FEMA San Gabriel BLE (12070205)
-- **Qualification:** Accepted with limitations at `unsteady_start`
+- **Compute evidence:** Accepted at `unsteady_start`
+- **Delivery readiness:** `critical_source_gap`
+- **Downstream usable:** no
+- **Reproducible:** no
 - **Delivered source:** `H:\s\12070205_Models`
 - **Organized validation copy:**
   `H:\Testing\eBFE\12070205\organized\SanGabriel_12070205`
@@ -14,8 +17,8 @@ made in the organized validation copy. The delivered source was not modified.
 
 | ID | Deficiency | Impact | Status / disposition |
 |---|---|---|---|
-| SG-001 | Every project and `2D_Model_Inventory_LBSG.xlsx` name one shared `Terrain\Terrain.hdf`, but the Models, SpatialData, Documents, and ReferenceGuide packages do not contain that compiled file. | Geometry preprocessing cannot faithfully regenerate terrain-derived tables from the public delivery alone. | **Mitigated for startup testing only.** One shared terrain was rebuilt from the three delivered HDEMs in the organized copy. The source-delivery deficiency remains open. |
-| SG-002 | The HDEMs omit the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`, and `Lake Georgetown` elevation-modification payloads named in all five RASMapper files. No inspected report or sidecar provides reconstructable control data for them. | The reconstructed terrain is not source-equivalent and can change cell-minimum elevations and hydraulic results. | **Open.** Do not use the HDEM-only reconstruction for FEMA numerical-reproduction, calibration, or geometry-elevation fidelity claims. Recover the original compiled terrain or modification inputs first. |
+| SG-001 | Every project and `2D_Model_Inventory_LBSG.xlsx` name one shared `Terrain\Terrain.hdf`, but the Models, SpatialData, Documents, and ReferenceGuide packages do not contain that compiled file. | For this 2D model, geometry preprocessing and hydraulic results cannot be faithfully reproduced from the public delivery. A supplied result HDF being viewable does not make the source usable downstream. | **CRITICAL / model-blocking.** The HDEM-only rebuild supports startup testing only. It does not cure the missing source or make the delivery publishable as a runnable, reproducible 2D example. |
+| SG-002 | The HDEMs omit the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`, and `Lake Georgetown` elevation-modification payloads named in all five RASMapper files. No inspected report or sidecar provides reconstructable control data for them. | The reconstructed terrain is not source-equivalent and can change cell-minimum elevations and hydraulic results. | **CRITICAL / model-blocking.** Do not use the HDEM-only reconstruction for downstream hydraulic modeling, FEMA numerical reproduction, calibration, or geometry-elevation fidelity claims. Recover the original compiled terrain or complete source-equivalent terrain/modification inputs first. |
 | SG-003 | LBSG_501, 503, 504, and 505 entered unsteady computation and then reported `READ_UN_HDF_XS_TAB` for a missing `Cross Sections` HDF group. LBSG_502 was stopped after positive owned-solver-start detection. | Full-plan completion and result equivalence remain unverified. | **Accepted limitation** for the user-approved `unsteady_start` threshold only. |
 | SG-004 | `999999_Terrain_metadata.xml` is malformed because `Doucet & Associates` is not XML-escaped. | Automated XML parsing fails without tolerant handling or a corrected copy. | **Open documentation defect.** It does not prevent reading the HDEM rasters. |
 | SG-005 | The Models archive includes a 282-character member name. A normal descriptive Windows extraction path exceeds common path limits, and an earlier non-atomic retry could mistake a partial destination for success. | Extraction may fail silently or leave an incomplete model tree. | **Mitigated in ras-commander.** The extractor is atomic, Windows long-path aware, timestamp preserving, and validates every member by path, size, and CRC32. The active workspace follows `H:\Testing\eBFE\<HUC8>\{raw,organized,runs,reports}`. |
@@ -70,7 +73,8 @@ unresolved. The certification calls the submitted files complete/final but
 does not identify an exception or an alternate location for `Terrain.hdf`.
 
 The derived terrain therefore resolves the runtime path deficiency for the
-organized validation copy, but it does not cure the source-fidelity deficiency.
+organized validation copy, but it does not cure the critical source-fidelity
+gap or make the public 2D delivery reproducible or usable downstream.
 
 ## LBSG_503 hydraulic comparison
 

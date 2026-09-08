@@ -130,7 +130,7 @@ Current built-in organizers include:
 | `san-gabriel` | 12070205 | Five-project DSS fan-in covering the Round Rock and Florence ras2fim-2d test area. Unsteady-start validated; shared compiled terrain was not provided. |
 | `eleven-point` | 11010011 | Small split-delivery 2D model archive; organized, path-audited, results-ready, and geometry-preprocessor validated with HEC-RAS 6.6. |
 | `spring-river` | 11010010 | Distinct Spring HUC model archive using `SpringRiver_11010010` naming to avoid confusion with `spring-creek` / `SpringCreek_12040102`. |
-| `lower-colorado-cummins` | 12090301 | 1D steady BLE reach-model collection. |
+| `lower-colorado-cummins` | 12090301 | 2,378 HEC-RAS 4.1.0 1D steady reach projects, each containing plan 01. There are 2,377 seven-profile projects and one delivered six-profile project. The delivery has 2,332 projects at the usual river/reach depth and 46 valid projects nested under intermediate reach groups; terrain is not required. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
@@ -169,6 +169,53 @@ runs the HEC-RAS geometry preprocessor through ras-commander, and reviews
 compute messages without requiring full unsteady calculations or floodplain
 mapping/post-processing as the delivery-format gate. For 1D steady BLE reach
 models, document terrain or land cover checks only when mapper layers exist.
+
+For Lower Colorado-Cummins, run exactly one plan per project from isolated
+copies. The study-aware runner automatically enables nested-project discovery,
+uses the organized source as immutable input, and records the run-copy path:
+
+```powershell
+.\.venv\Scripts\python scripts\ebfe_steady_plan_batch.py `
+  --study 12090301 `
+  --workspace "H:\Testing\eBFE\12090301" `
+  --plan 01 `
+  --ras-version 6.6 `
+  --num-cores 2 `
+  --force-geompre
+```
+
+The source metadata distinguishes the delivered HEC-RAS 4.1.0 version from the
+qualified 6.6 execution version and lists the separate public Models,
+SpatialData, and Documents packages. The SpatialData package contains published
+depth and water-surface-elevation results, not a terrain surface. Absence of a
+Terrain HDF or RASMapper file is therefore not a deficiency for these 1D steady
+projects. Study metadata also applies a 600-second per-plan timeout; a stalled
+owned process tree is cancelled through `RasCmdr.cancel_plan()` and recorded as
+a failed project, while legacy explicit-root runs retain their prior no-timeout
+default.
+
+Study mode also supplies the delivered profile-count contract: seven profiles
+for 2,377 projects and six for `WALNUT 0329`. The organizer repairs the missing
+`Flow File=f01` record in exactly `PINEY 062` and `PINEY 089` after validating
+their source fingerprints; it never modifies the downloaded source.
+
+The separate source packages use the same integrity-checked download and
+extraction path as the Models archive:
+
+```python
+from ras_commander.sources import RasEbfeModels
+
+documents = RasEbfeModels.download_source_asset(
+    "12090301",
+    "documents",
+    workspace / "raw",
+)
+spatial_data = RasEbfeModels.download_source_asset(
+    "12090301",
+    "spatial_data",
+    workspace / "raw",
+)
+```
 
 For repeatable end-to-end checks from the repository, use:
 
@@ -461,7 +508,7 @@ normalized to the one shared organized target,
 `RAS Model\Terrain\Terrain.hdf`. It does not use basename-based DSS repair
 because the delivery contains several unrelated files named `100.dss`.
 
-!!! warning "Original compiled terrain not provided"
+!!! danger "Critical 2D source gap: computational terrain not provided"
     The hydraulic inventory and all five `.rasmap` files name one shared
     `Terrain\Terrain.hdf`, but no public San Gabriel package contains it. The
     three HDEMs and the terrain spatial files are preserved under
@@ -472,9 +519,13 @@ because the delivery contains several unrelated files named `100.dss`.
     replacement. An explicitly authorized working copy can build one shared
     HDEM-only terrain through `RasTerrain.create_terrain_hdf(...)`; all five
     projects then point to that file, but it is not FEMA's original and cannot
-    support a numerical-equivalence claim. The generated Record of Deficiencies
-    preserves that distinction. The organized source is classified as
-    `unsteady_start`, not fully delivery-ready.
+    support a numerical-equivalence claim. For a 2D model this is a critical,
+    model-blocking deficiency: the public delivery is not reproducible or
+    usable for downstream hydraulic computation, and a viewable supplied
+    result HDF does not cure the gap. The generated Record of Deficiencies
+    preserves that distinction. `unsteady_start` is compute evidence only;
+    delivery readiness is `critical_source_gap` and the model must not be
+    presented as a runnable example until source-equivalent terrain is restored.
 
 Qualified 1% smoke plans:
 
@@ -852,15 +903,23 @@ Current validation is tracked in the repository-level
 `VALIDATION_MATRIX.md`, with generated audit reports under the H: workspace:
 `H:\Testing\eBFE Model Organization\Validation\ebfe_delivery`.
 
-- Lower Colorado-Cummins sample: geometry preprocessor passed.
+- Lower Colorado-Cummins: plan `01` was attempted for all 2,378 isolated
+  project copies with HEC-RAS 6.6. After two exact missing-flow-reference
+  repairs and recognition of the one delivered six-profile project, 2,375
+  passed with HDF results. Three remain model-blocked by delivered hydraulic
+  data defects: overlapping blocked obstructions in `ALUM CREEK`, and flow
+  boundaries assigned to nonexistent cross sections in `WALNUT 0613` and
+  `WILLBARGER 0185`.
 - Rio Hondo: 253 1D steady reach projects passed sequential geometry preprocessor validation, and 253/253 steady plans computed successfully in `steady_plan_validation_20260424_160022.json`.
 - Spring Creek: 2D geometry preprocessor passed.
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
 - San Gabriel: all five selected 1% plans reached the unsteady-computation
-  phase through ras-commander. This is an `unsteady_start` qualification only;
-  the shared compiled terrain is `Not Provided in Source`, so the study is not
-  classified as fully delivery-ready or source-equivalent after terrain rebuild.
+  phase through ras-commander. This is `unsteady_start` compute evidence only.
+  The required compiled terrain and terrain-modification payloads are `Not
+  Provided in Source`, a `critical_source_gap` that makes the public 2D model
+  non-reproducible and unusable for downstream computation. The HDEM-only
+  diagnostic rebuild does not promote its delivery-readiness status.
 - Eleven Point: organized from the split `Input.zip`, `Terrain.zip`, and `Land_Cover.zip` delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.
 - Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; downloaded, organized, path-audited with zero issues, preprocessor-valid in HEC-RAS 6.1, and results-ready with seven local plan HDFs. The validation notebook preserves the legacy `Land Classification` compatibility copy referenced by `Spring_BLE.g01.hdf`, archives fresh preprocessor evidence, and restores the delivered full-result plan HDF; see `examples/957_ebfe_spring_river_validation.ipynb`.
 - Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 61 local plan HDFs in the latest audit. LB_MA02 passed ras-commander geometry-preprocessor validation in 3846.3 seconds; LB_MA01 exceeded the 7200-second timeout with no compute messages, and LB_MA03 returned without producing compute messages, so Lower Brazos remains partially preprocessor-validated.

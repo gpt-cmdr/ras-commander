@@ -211,7 +211,20 @@ An organized eBFE project is delivery-ready only when:
 - Any missing archives, manual checks, or unsupported steady preprocessor gaps are
   explicitly documented.
 
-A project with `unsteady_start` evidence but a missing required terrain or
-other source asset is not delivery-ready. Preserve the evidence and classify
-the missing asset as `Not Provided in Source`; do not synthesize a replacement
-and promote the status without a separate fidelity review.
+A 2D or hybrid project with a missing computational terrain, or with missing
+terrain-modification inputs required to reproduce that terrain, has a
+**critical, model-blocking source gap**. Classify its delivery readiness as
+`critical_source_gap`, its terrain as `Not Provided in Source`, and its
+downstream usability and reproducibility as false. It must not be published or
+advertised as a runnable, reproducible example.
+
+`unsteady_start` evidence and a viewable supplied result HDF may be retained as
+diagnostic evidence, but neither cures the source gap. A terrain reconstructed
+from incomplete elevation inputs is suitable only for explicitly qualified
+startup or sensitivity testing. It cannot promote the delivery until the
+original compiled terrain, or the complete original terrain and modification
+inputs needed for a source-equivalent build, are recovered and verified.
+
+This terrain rule applies when terrain is a computational dependency of the
+model. It does not require terrain for a pure 1D steady model whose hydraulic
+elevations are embedded in its cross sections.
