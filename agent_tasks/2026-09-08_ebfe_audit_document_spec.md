@@ -140,6 +140,31 @@ count, not forty rows.
 Where a whole class is missing for one reason, say the reason once. Tranche 01's 177
 `MISSING_REFERENCE` entries in one study were a single undelivered `Shapefiles\` folder.
 
+#### Every reported deficiency is reviewed before it is called one
+
+Tranche 01 showed that a "missing" reference can be a gap in *our* analysis as easily as a
+gap in the delivery: a detector said "no infiltration layer referenced" for a study whose
+rasmap referenced `InfiltrationDC.hdf` twenty-two times. So every `MISSING_REFERENCE` and
+every `acquisition` element carries a review verdict before it is reported:
+
+| `review.verdict` | Meaning | Where it appears |
+|---|---|---|
+| `real` | Independently confirmed absent from the delivery | Sections 5 and 6 |
+| `analysis_gap` | Found in the delivery after all -- other path, other case, nested archive, or a detector disagreeing with the rows | Section 5 under *Reclassified during review*; **never** section 6; corrected recipe added to section 4 |
+| `unverifiable` | Cannot be settled in the audit environment (e.g. DSS pathname with no bridge) | Section 5, flagged as unconfirmed |
+| unreviewed | Not yet checked | Verdict says *provisional* |
+
+**The review must use a different code path than the scanner that produced the gap**, or it is
+circular. The primary method is an archive-member match: enumerate every member of every
+delivered archive (including nested ones) with the library `StreamingZipReader.probe()` and
+match the missing reference's basename, case-insensitively. Present anywhere means
+`analysis_gap`. Cross-detector consistency (`supporting_elements` vs the reference rows vs
+`terrain.projects[]`) is the second method.
+
+The verdict row reports `N reported: R real, A were gaps in our analysis, U unverifiable`.
+**R is the honest deficiency count** and the only one the webmap or downstream planning may
+use. A large A on tranche 01 is not a failure; it is why tranche 01 ran first.
+
 ### 6. What you must obtain
 
 The engineer's shopping list: the external data required, why, and — where known — where it
