@@ -139,8 +139,9 @@ _LAZY_EXPORTS = {
     **{
         name: ('.RasBreakout1D', name)
         for name in (
-            'RasBreakout1D', 'Breakout1DDomainSelection',
-            'Breakout1DResult', 'Breakout1DSelection', 'Breakout1DSourceCatalog',
+            'RasBreakout1D', 'Breakout1DAssemblyResult',
+            'Breakout1DDomainSelection', 'Breakout1DResult',
+            'Breakout1DSelection', 'Breakout1DSourceCatalog',
             'Breakout1DPlan',
             'Breakout1DValidationReport',
         )
@@ -378,8 +379,9 @@ __all__ = [
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
-    'RasBreakout1D', 'Breakout1DDomainSelection',
-    'Breakout1DResult', 'Breakout1DSelection', 'Breakout1DSourceCatalog',
+    'RasBreakout1D', 'Breakout1DAssemblyResult',
+    'Breakout1DDomainSelection', 'Breakout1DResult',
+    'Breakout1DSelection', 'Breakout1DSourceCatalog',
     'Breakout1DPlan',
     'Breakout1DValidationReport',
     'RasNetworkConflation', 'NetworkConflationResult',

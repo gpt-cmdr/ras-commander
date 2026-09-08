@@ -895,7 +895,7 @@ def test_public_exports_and_dataframe_schemas_are_registered():
     assert not hasattr(ras_commander, "RasHydrofabric")
     assert not hasattr(ras_commander, "HydrofabricConflationResult")
     assert not hasattr(ras_commander, "HydrofabricAdapter")
-    assert SCHEMA_VERSION == "1.12"
+    assert SCHEMA_VERSION == "1.13"
     assert {
         "network_edge_coverage",
         "network_edge_coverage_parts",

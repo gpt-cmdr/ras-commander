@@ -1,9 +1,10 @@
 # 1D Breakout Extraction
 
-`RasBreakout1D` creates an independent, steady-flow HEC-RAS project from a
-continuous slice of one 1D river reach. Selection and extraction are separate,
-so a station range, polygon, network edge, or explicit cross-section set can
-feed the same fail-closed writer and validation workflow.
+`RasBreakout1D` creates independent, steady-flow HEC-RAS projects from either a
+continuous slice of one 1D river reach or an accepted chain of adjacent source
+reaches. Selection and extraction are separate, so a station range, polygon,
+network edge, or explicit cross-section set can feed the fail-closed writers and
+validation workflow.
 
 ## Catalog multiple source models
 
@@ -98,11 +99,11 @@ former overlapping tributary/main-stem example before a writer can treat it as
 an adjacent source reach. Set `max_cross_centerline_xs` explicitly only when a
 different reviewed threshold is warranted.
 
-An overlap midpoint is only an extent-planning seam. Before a combined geometry
-is written, the next-stage geometry assembler must choose a centerline
-intersection or documented nearest connection, remove duplicate/overlapping cut
-lines, preserve complete geometry blocks and flow-change locations, reconcile
-stations, and validate profile and units compatibility.
+An overlap midpoint is only an extent-planning seam. The geometry assembler
+chooses a centerline intersection or documented nearest connection, rejects
+intersecting cross-source cut lines, preserves complete geometry blocks and
+flow-change locations, reconciles stations, and validates profile, CRS, and
+units compatibility.
 
 The joined reach must also carry explicit reach-length evidence. Run
 `RasGeometryCompute.assess_flow_path_policy()` on the provisional destination
@@ -123,9 +124,109 @@ stored as GeoParquet. Existing source flow-path lengths remain unchanged.
 Run `RasGeometryCompute.audit_main_channel_lengths()` separately. Channel-length
 differences are informative centerline QA and do not by themselves authorize
 overwriting overbank routing evidence. After the final centerline is accepted,
-the geometry assembler must restation all retained nodes, apply the selected
-flow-path policy, recompute the join interval, and rewrite station-keyed flow and
-boundary references before validation and execution.
+`assemble_network_edge()` restations all retained nodes, applies the selected
+flow-path evidence, recomputes channel and join intervals, and rewrites
+station-keyed flow and boundary references before validation and optional
+execution.
+
+## Assemble adjacent source reaches
+
+`assemble_network_edge()` consumes the exact catalog, plan, and initialized
+source-model mapping used during planning:
+
+```python
+provisional = RasBreakout1D.assemble_network_edge(
+    source_models,
+    catalog,
+    plan,
+    "working/nwm-5790954-provisional",
+    destination_river="NWM 5790954",
+    destination_reach="Main",
+)
+
+assert provisional.validation.is_valid
+display(provisional.station_map_gdf)
+display(provisional.seams_gdf)
+```
+
+The writer resolves every provisional footprint seam to the source river
+centerlines. An actual intersection is preferred; otherwise it records and
+writes the shortest straight connector. It then:
+
+- assigns intersecting cross sections to the source owning each directed edge
+  interval;
+- preserves each complete continuous source node slice, including intervening
+  inline structures and all cross-section payload data;
+- rejects any retained cut lines from different sources that intersect;
+- clips and joins the river centerlines;
+- restations every retained cross section and structure from the new downstream
+  terminus;
+- recomputes every main-channel interval along the joined centerline;
+- rewrites retained steady flow-change locations and endpoint boundary blocks
+  to the destination river/reach; and
+- verifies source SHA-256 values before and after writing.
+
+The public `station_map_gdf` is the authoritative block-level provenance table.
+It contains original and destination stations, written LOB/channel/ROB lengths,
+domain-membership flags, join-adjacent flags, and a hash of every unchanged node
+payload. `seams_gdf` records the actual join method, connector distance,
+source/destination join stations, and the three written join lengths. Both
+tables are suitable for direct map and QA figure generation.
+
+### Computation and raster-export buffers
+
+When the planned network edge is fully covered, omitted buffer distances default
+to 10% upstream and 25% downstream of the assembled main-channel length across
+the directly intersected target span. Explicit `upstream_buffer_distance` and
+`downstream_buffer_distance` values override those defaults. Expansion stops at
+the available source terminus.
+
+The geometry file contains the larger computational domain. In
+`station_map_gdf`, `in_direct_domain` identifies the strict target span and
+`in_inundation_domain` adds `inundation_overlap_xs=1` downstream when another
+cross section is available. Requested and applied distances/counts are retained
+in `station_map_gdf.attrs`, allowing a later raster export to use the smaller
+domain without removing the hydraulic transition length.
+
+### Two-pass overbank finalization
+
+A first call without `flow_path_policy_results` is intentionally provisional.
+It preserves source LOB/ROB lengths within each source and uses the newly
+computed channel distance for the cross-source interval. The validation report
+marks only `flow_path_lengths_finalized` as a warning; all structural checks must
+still pass.
+
+Compile the provisional geometry, audit each join, then write a separate final
+destination with the evidence keyed by seam index:
+
+```python
+policy = RasGeometryCompute.assess_flow_path_policy(
+    provisional_geom_hdf,
+    tolerance_fraction=0.01,
+    join_upstream_xs=(river, reach, upstream_join_rs),
+    join_downstream_xs=(river, reach, downstream_join_rs),
+    review_segments_path="working/join-0-flow-paths.parquet",
+)
+
+final = RasBreakout1D.assemble_network_edge(
+    source_models,
+    catalog,
+    plan,
+    "working/nwm-5790954-final",
+    destination_river=river,
+    destination_reach=reach,
+    flow_path_policy_results={0: policy},
+)
+
+assert final.reach_lengths_finalized
+```
+
+For `regenerate_and_recompute`, audited regenerated LOB/ROB values replace every
+usable destination interval. For
+`preserve_and_recompute_only_at_join_boundary`, source overbank values remain
+unchanged and each join receives the measured left/right lengths from its two
+clipped review segments. Inputs must cover every seam and carry one consistent
+recommendation.
 
 ## Select a reach slice
 
@@ -274,12 +375,13 @@ plans have completed.
 
 ## MVP boundaries
 
-The initial workflow intentionally fails closed for multi-reach or junction
-selections, non-contiguous cross sections, unsteady or sediment plans, lateral
-structures, and selections with fewer than two cross sections. The one-reach
-writer clips `Reach XY` only when both retained boundary cut lines intersect the
-source centerline; otherwise it preserves the source header. Multi-reach
-centerline clipping and reconnection remain outside the MVP.
+The workflow intentionally fails closed for branched/multi-reach or junction
+assemblies, repeated non-contiguous source ownership, unsteady or sediment
+plans, lateral structures, cross-source cut-line intersections, incompatible
+profiles/units/CRSs, and selections with fewer than two cross sections. The
+single-source writer preserves its legacy clipping fallback. The multi-source
+writer requires usable GIS cut lines and one monotonic adjacent main-stem source
+chain.
 
 ::: ras_commander.RasBreakout1D.RasBreakout1D
     options:
@@ -287,6 +389,7 @@ centerline clipping and reconnection remain outside the MVP.
       members:
         - catalog_sources
         - plan_network_edge
+        - assemble_network_edge
         - select_by_stations
         - select_by_cross_sections
         - select_by_polygon

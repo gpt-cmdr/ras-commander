@@ -524,4 +524,4 @@ def test_flow_path_policy_rejects_invalid_fraction(value):
 
 
 def test_reach_length_policy_schema_version():
-    assert SCHEMA_VERSION == "1.12"
+    assert SCHEMA_VERSION == "1.13"

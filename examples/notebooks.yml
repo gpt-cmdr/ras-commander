@@ -1661,12 +1661,12 @@ notebooks:
   executed_cells: 0
 - id: 236_multi_model_1d_breakout_planning
   filename: 236_multi_model_1d_breakout_planning.ipynb
-  title: Plan a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models
+  title: Build a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models
   series: 200
   series_name: Geometry & Calibration
-  summary: Catalog two adjacent Walnut Creek FEMA eBFE main-stem projects in GeoParquet, confirm both
-    source reaches against NOAA NWM feature 5790954, reject cross-centerline cross-section conflicts,
-    visualize the clean handoff, and audit stored channel and overbank reach-length evidence before joining.
+  summary: Catalog and join two adjacent Walnut Creek FEMA eBFE main-stem projects for NOAA NWM feature
+    5790954, write an independent restationed HEC-RAS project, retain source-block provenance, and visually
+    verify the centerline seam, computational/export domains, and two-pass flow-path finalization gate.
   tags:
   - 1d
   - steady
@@ -1682,6 +1682,8 @@ notebooks:
   data_project: null
   functions_used:
   - GeomCrossSection.get_cross_sections
+  - GeomParser.get_river_centerlines
+  - RasBreakout1D.assemble_network_edge
   - RasBreakout1D.catalog_sources
   - RasBreakout1D.plan_network_edge
   - RasGeometryCompute.audit_main_channel_lengths
@@ -1689,8 +1691,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 7
-  executed_cells: 7
+  code_cells: 9
+  executed_cells: 9
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations

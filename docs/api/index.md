@@ -37,7 +37,7 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 
 ## 1D Breakout Extraction
 
-- [`RasBreakout1D`](breakout-1d.md) - One-reach steady breakout selection, extraction, validation, execution, and comparison
+- [`RasBreakout1D`](breakout-1d.md) - Single- and multi-source steady 1D breakout selection, assembly, restationing, validation, execution, and comparison
 - [`Breakout1DSelection`](breakout-1d.md#select-a-reach-slice) - Resolved contiguous cross-section selection
 - [`Breakout1DSourceCatalog`](breakout-1d.md#catalog-multiple-source-models) - GeoParquet-ready source model, footprint, centerline, and cross-section catalog
 - [`Breakout1DPlan`](breakout-1d.md#plan-one-network-edge-across-multiple-models) - Confirmed source reaches, directed ownership slices, provisional seams, and fail-closed handoff diagnostics

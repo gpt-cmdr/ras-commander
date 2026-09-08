@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.12"
+SCHEMA_VERSION = "1.13"
 
 DATAFRAME_SCHEMAS = {
     "flow_path_policy_xs_metrics": {
@@ -725,6 +725,63 @@ DATAFRAME_SCHEMAS = {
             {"name": "handoff_eligible", "dtype": "bool", "description": "Whether the source pair passes the implemented handoff checks."},
             {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable handoff rejection reasons."},
             {"name": "geometry", "dtype": "geometry", "description": "Provisional footprint seam point on the network edge."},
+        ],
+    },
+    "breakout_1d_assembly_station_map": {
+        "description": "Source-to-destination node provenance and restationed reach lengths for a multi-source 1D assembly.",
+        "accessor": "RasBreakout1D.assemble_network_edge(...).station_map_gdf",
+        "source": "RasBreakout1D.assemble_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "node_index", "dtype": "int64", "description": "Zero-based upstream-to-downstream destination node order."},
+            {"name": "source_geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "source_reach_id", "dtype": "str", "description": "Composite source-model/river/reach identifier."},
+            {"name": "source_river", "dtype": "str", "description": "Original source river name."},
+            {"name": "source_reach", "dtype": "str", "description": "Original source reach name."},
+            {"name": "source_node_type", "dtype": "int64", "description": "HEC-RAS Type RM node code; 1 identifies a natural cross section."},
+            {"name": "source_station", "dtype": "str", "description": "Original source river station."},
+            {"name": "destination_river", "dtype": "str", "description": "Assembled river name."},
+            {"name": "destination_reach", "dtype": "str", "description": "Assembled reach name."},
+            {"name": "destination_station", "dtype": "str", "description": "River station recomputed from the assembled downstream terminus."},
+            {"name": "centerline_measure", "dtype": "float64", "description": "Distance downstream from the assembled centerline start."},
+            {"name": "left_length", "dtype": "float64 | None", "description": "Written LOB reach length; null for non-cross-section nodes."},
+            {"name": "channel_length", "dtype": "float64 | None", "description": "Written main-channel reach length; null for non-cross-section nodes."},
+            {"name": "right_length", "dtype": "float64 | None", "description": "Written ROB reach length; null for non-cross-section nodes."},
+            {"name": "length_policy", "dtype": "str", "description": "Source-preserved, regenerated, join-only, provisional, or terminal length treatment."},
+            {"name": "in_direct_domain", "dtype": "bool", "description": "Whether this natural cross section directly intersects the target network edge in its owned interval."},
+            {"name": "in_inundation_domain", "dtype": "bool", "description": "Whether this natural cross section belongs to the strict raster-export domain including requested overlap."},
+            {"name": "is_join_upstream", "dtype": "bool", "description": "Whether this is the upstream cross section adjacent to a source seam."},
+            {"name": "is_join_downstream", "dtype": "bool", "description": "Whether this is the downstream cross section adjacent to a source seam."},
+            {"name": "source_payload_sha256", "dtype": "str", "description": "SHA-256 of the complete source node payload after the Type RM line."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source cross-section cut line or interpolated structure point."},
+        ],
+    },
+    "breakout_1d_assembly_seams": {
+        "description": "Resolved centerline joins and join-adjacent reach-length evidence for a multi-source 1D assembly.",
+        "accessor": "RasBreakout1D.assemble_network_edge(...).seams_gdf",
+        "source": "RasBreakout1D.assemble_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized target network edge identifier."},
+            {"name": "seam_index", "dtype": "int64", "description": "Zero-based upstream-to-downstream seam order."},
+            {"name": "upstream_geometry_id", "dtype": "str", "description": "Source model upstream of the resolved seam."},
+            {"name": "downstream_geometry_id", "dtype": "str", "description": "Source model downstream of the resolved seam."},
+            {"name": "join_method", "dtype": "str", "description": "centerline_intersection or nearest_connector."},
+            {"name": "connector_length", "dtype": "float64", "description": "Length of the straight connection when source centerlines do not intersect."},
+            {"name": "edge_measure", "dtype": "float64", "description": "Resolved seam measure along the directed network edge."},
+            {"name": "upstream_source_measure", "dtype": "float64", "description": "Join measure on the upstream source centerline."},
+            {"name": "downstream_source_measure", "dtype": "float64", "description": "Join measure on the downstream source centerline."},
+            {"name": "upstream_source_station", "dtype": "str", "description": "Original upstream join-adjacent cross-section station."},
+            {"name": "downstream_source_station", "dtype": "str", "description": "Original downstream join-adjacent cross-section station."},
+            {"name": "upstream_destination_station", "dtype": "str", "description": "Restationed upstream join-adjacent cross section."},
+            {"name": "downstream_destination_station", "dtype": "str", "description": "Restationed downstream join-adjacent cross section."},
+            {"name": "join_left_length", "dtype": "float64", "description": "Written LOB length across the seam interval."},
+            {"name": "join_channel_length", "dtype": "float64", "description": "Centerline-derived main-channel length across the seam interval."},
+            {"name": "join_right_length", "dtype": "float64", "description": "Written ROB length across the seam interval."},
+            {"name": "length_policy", "dtype": "str", "description": "Flow-path treatment applied to the seam interval."},
+            {"name": "geometry", "dtype": "geometry", "description": "Resolved intersection point or nearest straight connector."},
         ],
     },
     "hydrofabric_matches": {
