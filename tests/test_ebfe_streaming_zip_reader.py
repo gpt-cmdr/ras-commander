@@ -129,7 +129,34 @@ def test_truncated_members_are_unreadable_not_silently_short(truncated_archive, 
     assert recovered, "complete members must still be recovered"
     assert reader.stats.unreadable >= 1
     assert reader.stats.crc_fail == 0, "recovered members must verify, or not count as recovered"
-    assert any("truncated" in reason for _, reason in reader.stats.failures)
+    assert reader.stats.failures_of("truncated"), "truncation must be reported by kind"
+    assert reader.stats.truncated >= 1
+
+
+def test_failure_kinds_do_not_conflate_truncation_with_crc(truncated_archive, tmp_path):
+    """Truncated members are never read, so they can never fail a CRC.
+
+    Counting them as CRC failures -- or counting both ``stats.truncated`` and
+    ``survey.truncated_members`` -- misstates integrity in opposite directions.
+    """
+    reader = StreamingZipReader(truncated_archive)
+    survey = reader.probe()
+    list(reader.walk(sink_factory=sink_factory(tmp_path / "kinds"), survey=survey))
+
+    assert reader.stats.crc_fail == 0
+    assert reader.stats.truncated == len(survey.truncated_members)
+    assert reader.stats.truncated <= reader.stats.unreadable
+    assert not reader.stats.failures_of("crc")
+    assert {f[1] for f in reader.stats.failures} <= {
+        "truncated", "unsupported", "read", "crc", "size",
+    }
+
+
+def test_verified_is_an_alias_for_crc_ok(intact_archive, tmp_path):
+    """A silent zero here would be the worst possible failure -- it stands in for hashing."""
+    reader = StreamingZipReader(intact_archive)
+    list(reader.walk(sink_factory=sink_factory(tmp_path / "alias")))
+    assert reader.stats.verified == reader.stats.crc_ok == len(PAYLOAD)
 
 
 def test_projected_bytes_counts_only_recoverable_members(truncated_archive):
