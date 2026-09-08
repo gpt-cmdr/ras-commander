@@ -478,11 +478,12 @@ notebooks:
   - RasMap.set_terrain_layer_visibility
   - RasMap.set_update_legend_with_view
   - RasMap.zoom_to_geometry_layer
+  - RasPrj.find_ras_prj
   hec_refs: []
   learning_paths: []
   excluded: false
   code_cells: 18
-  executed_cells: 17
+  executed_cells: 15
 - id: 123_rasmapper_geometry_layer_updates
   filename: 123_rasmapper_geometry_layer_updates.ipynb
   title: RASMapper Geometry Layer Updates
@@ -2769,7 +2770,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 25
-  executed_cells: 24
+  executed_cells: 23
 - id: 612_benefit_area_analysis
   filename: 612_benefit_area_analysis.ipynb
   title: Benefit-area mapping for storm-system alternatives

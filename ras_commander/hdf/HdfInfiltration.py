@@ -68,6 +68,7 @@ from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+from .._rasmap_schema import rasmap_dataframe_is_usable
 
 if TYPE_CHECKING:
     import geopandas as gpd
@@ -127,6 +128,70 @@ class HdfInfiltration:
         'Wetting Front Suction', 'Saturated Hydraulic Conductivity',
         'Initial Soil Water Content', 'Saturated Soil Water Content',
     ]
+
+    @staticmethod
+    def _resolve_rasmap_hdf_path(
+        explicit_path: Optional[Union[str, Path]],
+        column: str,
+        ras_object: Any = None,
+    ) -> Path:
+        """Resolve an explicit path or the first usable ``rasmap_df`` value."""
+        layer_label = {
+            "infiltration_hdf_path": "infiltration",
+            "soil_layer_path": "soil",
+            "landcover_hdf_path": "land cover",
+        }.get(column, column)
+        if explicit_path is not None:
+            return Path(explicit_path)
+
+        if ras_object is None:
+            from ..RasPrj import ras
+
+            ras_object = ras
+
+        rasmap_df = getattr(ras_object, "rasmap_df", None)
+        if rasmap_df is None or rasmap_df.empty:
+            raise ValueError(
+                f"No {column} was provided and rasmap_df has no summary row. "
+                "Pass the HDF path explicitly or initialize a project with a "
+                "usable RASMapper layer."
+            )
+
+        summary = rasmap_df.iloc[0]
+        status = summary.get("rasmap_status")
+        rasmap_path = summary.get("rasmap_path")
+        context = f"rasmap_status={status!r}"
+        if rasmap_path:
+            context += f", rasmap_path={rasmap_path!r}"
+
+        if not rasmap_dataframe_is_usable(rasmap_df):
+            detail = summary.get("rasmap_error")
+            if detail:
+                context += f", rasmap_error={detail!r}"
+            raise ValueError(
+                f"Cannot resolve {column} from rasmap_df ({context}). Pass "
+                "the HDF path explicitly or correct the RASMapper configuration."
+            )
+
+        candidates = summary.get(column)
+        if isinstance(candidates, (list, tuple, np.ndarray)) and len(candidates):
+            candidate = candidates[0]
+            if candidate not in (None, ""):
+                return Path(candidate)
+        elif isinstance(candidates, (str, Path)) and str(candidates):
+            return Path(candidates)
+
+        field_errors = summary.get("rasmap_field_errors", {})
+        if isinstance(field_errors, dict) and column in field_errors:
+            raise ValueError(
+                f"Cannot resolve {column} because that RASMapper field failed "
+                f"to parse ({context}): {field_errors[column]}"
+            )
+
+        raise ValueError(
+            f"No {layer_label} layer is configured in rasmap_df ({context}). Pass "
+            "the HDF path explicitly or add the corresponding layer in RASMapper."
+        )
 
     @staticmethod
     def _is_nodata_value(value: Any, no_data: Any) -> bool:
@@ -1134,21 +1199,21 @@ class HdfInfiltration:
         # Import here to avoid circular imports
         from .HdfMesh import HdfMesh
         
-        # Get the soil HDF path
-        if soil_hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            
-            # Try to get soil_layer_path from rasmap_df
-            try:
-                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
-                if not soil_hdf_path.exists():
-                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
-                    return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
+        try:
+            soil_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                soil_hdf_path,
+                "soil_layer_path",
+                ras_object,
+            )
+            if not soil_hdf_path.exists():
+                logger.warning(
+                    "Soil HDF path does not exist: %s",
+                    soil_hdf_path,
+                )
                 return pd.DataFrame()
+        except (ValueError, KeyError, IndexError, AttributeError, TypeError) as e:
+            logger.error("Error resolving soil_layer_path: %s", e)
+            return pd.DataFrame()
         
         # Get infiltration map - pass as hdf_path to ensure standardize_input works correctly
         try:
@@ -1336,27 +1401,27 @@ class HdfInfiltration:
             from ..RasPrj import ras
             ras_object = ras
         
-        # Get the landcover HDF path
-        if landcover_hdf_path is None:
-            try:
-                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
-                if not landcover_hdf_path.exists():
-                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
+        try:
+            landcover_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                landcover_hdf_path,
+                "landcover_hdf_path",
+                ras_object,
+            )
+            soil_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                soil_hdf_path,
+                "soil_layer_path",
+                ras_object,
+            )
+            for label, path in (
+                ("Land cover", landcover_hdf_path),
+                ("Soil", soil_hdf_path),
+            ):
+                if not path.exists():
+                    logger.warning("%s HDF path does not exist: %s", label, path)
                     return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
-                return pd.DataFrame()
-        
-        # Get the soil HDF path
-        if soil_hdf_path is None:
-            try:
-                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
-                if not soil_hdf_path.exists():
-                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
-                    return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
-                return pd.DataFrame()
+        except (ValueError, KeyError, IndexError, AttributeError, TypeError) as e:
+            logger.error("Error resolving RASMapper classification HDF paths: %s", e)
+            return pd.DataFrame()
         
         # Get land cover map (raster to ID mapping)
         try:
@@ -1604,27 +1669,27 @@ class HdfInfiltration:
             from ..RasPrj import ras
             ras_object = ras
         
-        # Get the landcover HDF path
-        if landcover_hdf_path is None:
-            try:
-                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
-                if not landcover_hdf_path.exists():
-                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
+        try:
+            landcover_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                landcover_hdf_path,
+                "landcover_hdf_path",
+                ras_object,
+            )
+            soil_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                soil_hdf_path,
+                "soil_layer_path",
+                ras_object,
+            )
+            for label, path in (
+                ("Land cover", landcover_hdf_path),
+                ("Soil", soil_hdf_path),
+            ):
+                if not path.exists():
+                    logger.warning("%s HDF path does not exist: %s", label, path)
                     return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
-                return pd.DataFrame()
-        
-        # Get the soil HDF path
-        if soil_hdf_path is None:
-            try:
-                soil_hdf_path = Path(ras_object.rasmap_df.loc[0, 'soil_layer_path'][0])
-                if not soil_hdf_path.exists():
-                    logger.warning(f"Soil HDF path from rasmap_df does not exist: {soil_hdf_path}")
-                    return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving soil_layer_path from rasmap_df: {str(e)}")
-                return pd.DataFrame()
+        except (ValueError, KeyError, IndexError, AttributeError, TypeError) as e:
+            logger.error("Error resolving RASMapper classification HDF paths: %s", e)
+            return pd.DataFrame()
         
         # Get land cover map (raster to ID mapping)
         try:
@@ -1832,12 +1897,16 @@ class HdfInfiltration:
             
         Returns:
             Dictionary mapping raster values to mukeys
+
+        Raises:
+            ValueError: If ``hdf_path`` is omitted and no usable infiltration
+                layer can be resolved from ``rasmap_df``.
         """
-        if hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
+        hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+            hdf_path,
+            "infiltration_hdf_path",
+            ras_object,
+        )
             
         with h5py.File(hdf_path, 'r') as hdf:
             raster_map_data = hdf['Raster Map'][:]
@@ -1952,7 +2021,7 @@ class HdfInfiltration:
 
     @staticmethod
     @log_call
-    @standardize_input
+    @standardize_input(file_type='geom_hdf')
     def get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> Optional[Dict[str, float]]:
         """Get infiltration parameters for a specific mukey from HDF file
 
@@ -1963,12 +2032,16 @@ class HdfInfiltration:
 
         Returns:
             Optional[Dict[str, float]]: Dictionary of infiltration parameters, or None if mukey not found
+
+        Raises:
+            ValueError: If ``hdf_path`` is omitted and no usable infiltration
+                layer can be resolved from ``rasmap_df``.
         """
-        if hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
+        hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+            hdf_path,
+            "infiltration_hdf_path",
+            ras_object,
+        )
             
         with h5py.File(hdf_path, 'r') as hdf:
             if 'Infiltration Parameters' not in hdf:
@@ -2101,21 +2174,21 @@ class HdfInfiltration:
         # Import here to avoid circular imports
         from .HdfMesh import HdfMesh
         
-        # Get the landcover HDF path
-        if landcover_hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            
-            # Try to get landcover_hdf_path from rasmap_df
-            try:
-                landcover_hdf_path = Path(ras_object.rasmap_df.loc[0, 'landcover_hdf_path'][0])
-                if not landcover_hdf_path.exists():
-                    logger.warning(f"Land cover HDF path from rasmap_df does not exist: {landcover_hdf_path}")
-                    return pd.DataFrame()
-            except (KeyError, IndexError, AttributeError, TypeError) as e:
-                logger.error(f"Error retrieving landcover_hdf_path from rasmap_df: {str(e)}")
+        try:
+            landcover_hdf_path = HdfInfiltration._resolve_rasmap_hdf_path(
+                landcover_hdf_path,
+                "landcover_hdf_path",
+                ras_object,
+            )
+            if not landcover_hdf_path.exists():
+                logger.warning(
+                    "Land cover HDF path does not exist: %s",
+                    landcover_hdf_path,
+                )
                 return pd.DataFrame()
+        except (ValueError, KeyError, IndexError, AttributeError, TypeError) as e:
+            logger.error("Error resolving landcover_hdf_path: %s", e)
+            return pd.DataFrame()
         
         # Get land cover map (raster to ID mapping)
         try:

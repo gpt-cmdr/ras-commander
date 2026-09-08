@@ -350,9 +350,10 @@ this window. Pass canonical inventory values explicitly, for example
 
 ## `rasmap_df`
 
-`rasmap_df` is a **single-row compact summary** of the project `.rasmap`.
-Several columns contain lists because the dataframe is optimized for project
-overview, not one-row-per-layer discovery.
+`rasmap_df` is a **single-row compact summary** of the project `.rasmap`. It has
+one row for every outcome, including a missing or unreadable file. Several
+columns contain lists because the dataframe is optimized for project overview,
+not one-row-per-layer discovery.
 
 Current default columns (each cell is one element because the DataFrame is a
 single row; "Dtype" describes the value inside that cell):
@@ -370,12 +371,31 @@ single row; "Dtype" describes the value inside that cell):
 | `basemap_layer_names` | list[str] | basemap layer names |
 | `basemap_layer_path` | list[str] | basemap layer paths |
 | `current_settings` | dict | compact `.rasmap` settings summary |
+| `rasmap_path` | str / None | requested or expected `.rasmap` path, including when absent |
+| `rasmap_status` | str | `absent`, `parsed`, `parsed_with_errors`, or `failed` |
+| `rasmap_error` | str / None | document-level read, parse, or initialization error |
+| `rasmap_field_errors` | dict | extraction errors keyed by affected data column |
 
 ```python
 summary = ras.rasmap_df.iloc[0]
-print(summary["terrain_hdf_path"])
-print(summary["landcover_hdf_path"])
+
+if summary["rasmap_status"] == "failed":
+    raise RuntimeError(summary["rasmap_error"])
+if summary["rasmap_status"] == "absent":
+    print(f"No RASMapper file at {summary['rasmap_path']}")
+else:
+    if summary["rasmap_field_errors"]:
+        print("Incomplete RASMapper fields:", summary["rasmap_field_errors"])
+    print(summary["terrain_hdf_path"])
+    print(summary["landcover_hdf_path"])
 ```
+
+Do not use `len(rasmap_df)`, `rasmap_df.empty`, or `rasmap_df is not None` as a
+parse-success check. Those values are deliberately constant so callers can
+safely use `.iloc[0]`; inspect `rasmap_status` instead. Missing optional
+sections and an empty projection filename are valid parsed states. Missing
+files referenced by otherwise valid XML are asset-validation findings, not
+parser failures.
 
 Use `rasmap_df` for quick project-level path inspection. When you need
 discoverable layer names and per-layer metadata, prefer:

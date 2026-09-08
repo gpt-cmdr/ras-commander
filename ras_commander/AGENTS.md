@@ -33,6 +33,9 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 
 - Prefer the existing static-class pattern. Most `Ras*` and `Hdf*` classes should be called directly, not instantiated.
 - Use DataFrame-backed project metadata first. Prefer `ras.plan_df`, `ras.geom_df`, `ras.flow_df`, `ras.unsteady_df`, `ras.boundaries_df`, and related helpers over ad hoc filesystem scanning.
+- `rasmap_df` is always one row; use `rasmap_status` (or the shared schema
+  health helper), never row count, `.empty`, or non-`None`, to decide whether
+  parsed values are usable.
 - Use `pathlib.Path` consistently for file paths.
 - Keep imports ordered `stdlib -> third-party -> local`.
 - Public functions should use the repo logging pattern with `get_logger()` and `@log_call`.

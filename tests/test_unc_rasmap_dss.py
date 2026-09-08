@@ -7,7 +7,6 @@ These tests verify that:
 3. Projects with DSS boundary conditions work correctly
 """
 
-import os
 import sys
 import shutil
 from pathlib import Path
@@ -51,8 +50,6 @@ class TestRasMapOnNetworkDrive:
     @pytest.mark.skipif(not is_network_drive_available(), reason="Network drive not available")
     def test_rasmap_paths_preserve_drive_letter(self, setup_network_test_dir):
         """RasMap should preserve drive letters in terrain layer paths."""
-        from ras_commander import RasMap
-
         output_path = setup_network_test_dir / "rasmap_test"
 
         # Extract project with terrain
@@ -64,14 +61,17 @@ class TestRasMapOnNetworkDrive:
         init_ras_project(project_path, "6.6")
 
         # Check that rasmap_df paths don't have UNC
-        if hasattr(ras, 'rasmap_df') and ras.rasmap_df is not None and not ras.rasmap_df.empty:
+        if ras.rasmap_df.iloc[0].get("rasmap_status") in {
+            "parsed",
+            "parsed_with_errors",
+        }:
             for col in ras.rasmap_df.columns:
                 if 'path' in col.lower() or 'file' in col.lower():
                     for idx, val in ras.rasmap_df[col].items():
                         if val and str(val).startswith("\\\\"):
                             pytest.fail(f"UNC path found in rasmap_df[{col}]: {val}")
 
-        print(f"[PASS] RasMap paths use drive letters")
+        print("[PASS] RasMap paths use drive letters")
 
 
 class TestDamBreachProjectOnNetworkDrive:
@@ -121,7 +121,7 @@ class TestDamBreachProjectOnNetworkDrive:
         if issues:
             pytest.fail(f"UNC paths found: {issues}")
 
-        print(f"[PASS] All Dam Breaching paths use drive letters")
+        print("[PASS] All Dam Breaching paths use drive letters")
 
 
 class TestMultipleProjectsOnNetworkDrive:
@@ -152,7 +152,7 @@ class TestMultipleProjectsOnNetworkDrive:
 
             print(f"[OK] {proj_name}: {prj_str}")
 
-        print(f"[PASS] Project switching maintains drive letters")
+        print("[PASS] Project switching maintains drive letters")
 
 
 class TestDSSOperationsOnNetworkDrive:

@@ -139,28 +139,33 @@ if hasattr(ras, 'boundary_df') and ras.boundary_df is not None:
 ```python
 print("\nValidating Terrain (rasmap_df)...")
 
-if hasattr(ras, 'rasmap_df') and ras.rasmap_df is not None:
-    for idx, row in ras.rasmap_df.iterrows():
-        if 'terrain_file' in row and pd.notna(row['terrain_file']):
-            terrain_path = Path(row['terrain_file'])
+summary = ras.rasmap_df.iloc[0]
+status = summary.get('rasmap_status', 'parsed')  # legacy frames default to usable
+if status == 'absent':
+    print(f"  ⚠️ No .rasmap found at {summary.get('rasmap_path')}")
+elif status == 'failed':
+    print(f"  ✗ FAIL: RASMapper parse failed: {summary.get('rasmap_error')}")
+else:
+    field_errors = summary.get('rasmap_field_errors', {})
+    if 'terrain_hdf_path' in field_errors:
+        print(f"  ✗ FAIL: Terrain field failed: {field_errors['terrain_hdf_path']}")
 
-            # CRITICAL: Check if absolute
-            if terrain_path.is_absolute():
-                print(f"  ✗ FAIL: Absolute terrain path: {terrain_path}")
-                print(f"    Will cause errors in RAS Mapper")
-                continue
+    terrain_paths = summary.get('terrain_hdf_path', [])
+    if not terrain_paths:
+        print("  ⚠️ No terrain layer configured")
+    for raw_path in terrain_paths:
+        terrain_path = Path(raw_path)
+        if not terrain_path.is_file():
+            print(f"  ✗ FAIL: Terrain not found: {terrain_path}")
+            continue
 
-            # Check if file exists
-            if terrain_path.exists():
-                print(f"  ✓ PASS: Terrain found: {terrain_path}")
-
-                # Validate using RasMap
-                from ras_commander import RasMap
-                is_valid = RasMap.is_valid_layer(terrain_path, layer_type='terrain')
-                if is_valid:
-                    print(f"    ✓ Terrain layer valid")
-                else:
-                    print(f"    ⚠️ Terrain layer validation failed")
+        print(f"  ✓ PASS: Terrain found: {terrain_path}")
+        from ras_commander import RasMap
+        is_valid = RasMap.is_valid_layer(terrain_path, layer_type='terrain')
+        if is_valid:
+            print("    ✓ Terrain layer valid")
+        else:
+            print("    ⚠️ Terrain layer validation failed")
             else:
                 # Try relative to project
                 terrain_resolved = ras.prj_file.parent / terrain_path

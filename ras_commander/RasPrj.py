@@ -75,15 +75,18 @@ Functions in RasPrj that are not part of the class:
         
         
 """
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple, Optional
-import logging
 from ras_commander.LoggingConfig import get_logger
 from ras_commander.Decorators import log_call
+from ras_commander._rasmap_schema import (
+    create_rasmap_dataframe,
+    expected_rasmap_path,
+    rasmap_dataframe_is_usable,
+)
 
 logger = get_logger(__name__)
 
@@ -235,24 +238,37 @@ class RasPrj:
         self.boundaries_df = self.get_boundary_conditions()
         
         # Load RASMapper data if available
+        # Import here to avoid circular imports. Keep import failure distinct
+        # from an ImportError raised while initializing a successfully imported
+        # RasMap implementation.
         try:
-            # Import here to avoid circular imports
             from .RasMap import RasMap
-            self.rasmap_df = RasMap.initialize_rasmap_df(self)
-        except ImportError:
-            logger.warning("RasMap module not available. RASMapper data will not be loaded.")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
-        except Exception as e:
-            logger.error(f"Error initializing RASMapper data: {e}")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path',
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
+        except ImportError as e:
+            logger.warning(
+                "RasMap module not available. RASMapper data will not be loaded: %s",
+                e,
+            )
+            self.rasmap_df = create_rasmap_dataframe(
+                rasmap_path=expected_rasmap_path(
+                    self.project_folder,
+                    self.project_name,
+                ),
+                rasmap_status="failed",
+                rasmap_error=f"ImportError: {e}",
+            )
+        else:
+            try:
+                self.rasmap_df = RasMap.initialize_rasmap_df(self)
+            except Exception as e:
+                logger.error(f"Error initializing RASMapper data: {e}")
+                self.rasmap_df = create_rasmap_dataframe(
+                    rasmap_path=expected_rasmap_path(
+                        self.project_folder,
+                        self.project_name,
+                    ),
+                    rasmap_status="failed",
+                    rasmap_error=f"{type(e).__name__}: {e}",
+                )
 
         if load_hdf_metadata:
             self.refresh_project_crs()
@@ -283,7 +299,10 @@ class RasPrj:
                 ).dropna()
             )
             logger.info(f"Geometry HDF files found: {geometry_hdf_count}")
-            logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
+            logger.info(
+                "RASMapper data loaded: %s",
+                rasmap_dataframe_is_usable(self.rasmap_df),
+            )
             logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
 
     @log_call
@@ -1257,7 +1276,7 @@ class RasPrj:
         return (self.project_folder / path_value).resolve(strict=False)
 
     def _get_rasmap_scalar_path(self, column: str) -> Optional[Path]:
-        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+        if not rasmap_dataframe_is_usable(getattr(self, 'rasmap_df', None)):
             return None
 
         if column not in self.rasmap_df.columns:
@@ -1270,7 +1289,7 @@ class RasPrj:
         return self._resolve_candidate_path(paths[0])
 
     def _get_rasmap_list_paths(self, column: str) -> List[Path]:
-        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+        if not rasmap_dataframe_is_usable(getattr(self, 'rasmap_df', None)):
             return []
 
         if column not in self.rasmap_df.columns:
@@ -2539,7 +2558,7 @@ def init_ras_project(
                 error_msg = f"The file does not appear to be a valid HEC-RAS project file (missing 'Proj Title='): {input_path}"
                 logger.error(error_msg)
                 raise ValueError(f"{error_msg}. Please provide a valid HEC-RAS .prj file.")
-            logger.debug(f"Validated .prj file contains 'Proj Title=' marker")
+            logger.debug("Validated .prj file contains 'Proj Title=' marker")
         except Exception as e:
             error_msg = f"Error validating .prj file: {e}"
             logger.error(error_msg)
@@ -2825,8 +2844,8 @@ def get_ras_exe(ras_version=None):
             return ras.ras_exe_path
         else:
             default_path = "Ras.exe"
-            logger.debug(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
-            logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
+            logger.debug("No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
+            logger.warning("HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
             return default_path
 
     discovered_versions = "not checked"

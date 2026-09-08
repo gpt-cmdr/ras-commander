@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RASMapper Version="2.0.0.0">
+  <RASProjectionFilename Filename=".\Terrain\Projection.prj" />
+  <Features>
+    <Layer Name="Profile Lines" Type="PolylineFeatureLayer" Filename=".\GISData\Profile Lines.shp" />
+  </Features>
+  <MapLayers Expanded="True">
+    <Layer Name="LandCover" Type="LandCoverLayer" Filename=".\Land Classification\LandCover.hdf" SelectedParameterForSurfaceFillLabel="ManningsN">
+      <Layer Name="Classification Polygons" Type="LandCoverClassificationLayer" Checked="True" Filename=".\Land Classification\LandCover.hdf" />
+    </Layer>
+    <Layer Name="Hydrologic Soil Groups" Type="LandCoverLayer" Filename=".\Soils Data\Hydrologic Soil Groups.hdf" SelectedParameterForSurfaceFillLabel="ID">
+      <Layer Name="Classification Polygons" Type="LandCoverClassificationLayer" Checked="True" Filename=".\Soils Data\Hydrologic Soil Groups.hdf" />
+    </Layer>
+    <Layer Name="Infiltration" Type="LandCoverLayer" Filename=".\Soils Data\Infiltration.hdf" SelectedParameterForSurfaceFillLabel="ID">
+      <Layer Name="Classification Polygons" Type="LandCoverClassificationLayer" Checked="True" Filename=".\Soils Data\Infiltration.hdf" />
+    </Layer>
+    <Layer Name="USGS Topo" Type="WMSLayer" Checked="True" Filename="%LocalAppData%\HEC\Mapping\5.1\XML\USGS Topo.xml" />
+    <Layer Name="Inspection Line" Type="PolylineFeatureLayer" Checked="True" Filename=".\GISData\Inspection Line.shp" />
+  </MapLayers>
+  <Terrains Checked="True" Expanded="True">
+    <Layer Name="Terrain50" Type="TerrainLayer" Checked="True" Filename=".\Terrain\Terrain50.hdf">
+      <ResampleMethod>near</ResampleMethod>
+      <Surface On="True" />
+    </Layer>
+  </Terrains>
+  <CurrentSettings>
+    <ProjectSettings>
+      <ProjectIsMetric>False</ProjectIsMetric>
+    </ProjectSettings>
+    <Folders>
+      <TerrainFolder>Terrain</TerrainFolder>
+    </Folders>
+  </CurrentSettings>
+</RASMapper>

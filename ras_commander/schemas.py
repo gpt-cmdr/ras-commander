@@ -13,7 +13,7 @@ resolve "what columns does ``plan_df`` have?" without scraping rendered HTML).
 
 Why a declarative file rather than re-deriving columns from construction code: the construction
 methods (``RasPrj.get_plan_entries`` / ``get_geom_entries`` / ``get_boundary_conditions``, and
-``_land_classification_helper.empty_rasmap_dataframe``) remain the **runtime authority** and may
+``_rasmap_schema.create_rasmap_dataframe``) remain the **runtime authority** and may
 add extra, project-specific columns beyond this stable core. Pinning the documented contract here
 gives agents a stable, reviewable schema and one place to update when a frame's columns change.
 Where a frame is built from a static shape (``rasmap_df``), the generator cross-checks this
@@ -329,12 +329,12 @@ DATAFRAME_SCHEMAS = {
         ],
     },
     "rasmap_df": {
-        "description": "Single-row frame of RASMapper layer/terrain/land-cover/infiltration paths and settings.",
+        "description": "Single-row frame of RASMapper paths, settings, and parse provenance.",
         "accessor": "ras.rasmap_df  (built by RasMap.initialize_rasmap_df())",
-        "source": "_land_classification_helper.empty_rasmap_dataframe() (shape) + RasMap.parse_rasmap() (.rasmap XML)",
+        "source": "_rasmap_schema.create_rasmap_dataframe() (shape) + RasMap.parse_rasmap() (.rasmap XML)",
         # shape_fn: zero-arg callable returning this frame's empty shape; the docs build's schema
         # validator (validate_api_schemas.py) calls it and fails the build if these columns drift.
-        "shape_fn": "ras_commander._land_classification_helper.empty_rasmap_dataframe",
+        "shape_fn": "ras_commander._rasmap_schema.create_rasmap_dataframe",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -349,6 +349,10 @@ DATAFRAME_SCHEMAS = {
             {"name": "basemap_layer_names", "dtype": "list", "description": "Names of basemap layers."},
             {"name": "basemap_layer_path", "dtype": "list", "description": "Paths of basemap layers."},
             {"name": "current_settings", "dtype": "dict", "description": "RASMapper current-settings map (rendering/units/etc.)."},
+            {"name": "rasmap_path", "dtype": "str | None", "description": "Expected or parsed .rasmap path."},
+            {"name": "rasmap_status", "dtype": "str", "description": "absent, parsed, parsed_with_errors, or failed."},
+            {"name": "rasmap_error", "dtype": "str | None", "description": "Document-level parse failure, when status is failed."},
+            {"name": "rasmap_field_errors", "dtype": "dict", "description": "Per-field extraction errors retained after partial parsing."},
         ],
     },
     "network_edge_coverage": {

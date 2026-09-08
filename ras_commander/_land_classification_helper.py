@@ -25,6 +25,7 @@ import pandas as pd
 
 from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
+from ._rasmap_schema import create_rasmap_dataframe, expected_rasmap_path
 from ._spatial_extent import _normalize_extent_bounds
 
 logger = get_logger(__name__)
@@ -282,22 +283,8 @@ class LandClassificationProjectPaths:
 
 
 def empty_rasmap_dataframe() -> pd.DataFrame:
-    """Return the default single-row RasMap dataframe shape."""
-    return pd.DataFrame(
-        {
-            "projection_path": [None],
-            "profile_lines_path": [[]],
-            "soil_layer_path": [[]],
-            "infiltration_hdf_path": [[]],
-            "landcover_hdf_path": [[]],
-            "terrain_hdf_path": [[]],
-            "reference_map_layer_names": [[]],
-            "reference_map_layer_path": [[]],
-            "basemap_layer_names": [[]],
-            "basemap_layer_path": [[]],
-            "current_settings": [{}],
-        }
-    )
+    """Return a fresh absent-state ``rasmap_df`` summary row."""
+    return create_rasmap_dataframe()
 
 
 def _find_hecras_dir() -> Path:
@@ -492,12 +479,12 @@ def resolve_project_paths(
                 f"No HEC-RAS .prj file found in project folder: {project_folder}"
             )
         project_name = prj_path.stem
-        rasmap_path = project_folder / f"{project_name}.rasmap"
+        rasmap_path = expected_rasmap_path(project_folder, project_name)
     elif project_path.suffix.lower() == ".prj":
         prj_path = RasUtils.safe_resolve(project_path)
         project_folder = prj_path.parent
         project_name = prj_path.stem
-        rasmap_path = project_folder / f"{project_name}.rasmap"
+        rasmap_path = expected_rasmap_path(project_folder, project_name)
     elif project_path.suffix.lower() == ".rasmap":
         rasmap_path = RasUtils.safe_resolve(project_path)
         project_folder = rasmap_path.parent
@@ -1345,7 +1332,9 @@ def _load_rasmap_tree(
 
 
 def _ensure_map_layers(root: ET.Element) -> ET.Element:
-    map_layers = root.find("MapLayers")
+    from . import _rasmap_layer_helper as _mlh
+
+    map_layers = _mlh.map_layers_element(root)
     if map_layers is None:
         map_layers = ET.SubElement(root, "MapLayers")
     return map_layers
@@ -1356,9 +1345,11 @@ def _remove_existing_landcover_layers(
     project_folder: Path,
     target_path: Path,
 ) -> None:
+    from . import _rasmap_layer_helper as _mlh
+
     target_path = RasUtils.safe_resolve(target_path)
-    for layer in list(map_layers.findall("Layer")):
-        if layer.attrib.get("Type") not in {"LandCover", "LandCoverLayer"}:
+    for layer in _mlh.map_layer_children(map_layers):
+        if layer.attrib.get("Type") not in _mlh.LAND_CLASSIFICATION_LAYER_TYPES:
             continue
         resolved = resolve_rasmap_relative_path(
             project_folder,
@@ -1462,6 +1453,8 @@ def upsert_land_classification_layer(
 def _list_land_classification_records(
     project_paths: LandClassificationProjectPaths,
 ) -> pd.DataFrame:
+    from . import _rasmap_layer_helper as _mlh
+
     columns = [
         "name",
         "type",
@@ -1478,13 +1471,9 @@ def _list_land_classification_records(
         return pd.DataFrame(columns=columns)
 
     root = ET.parse(project_paths.rasmap_path).getroot()
-    map_layers = root.find("MapLayers")
-    if map_layers is None:
-        return pd.DataFrame(columns=columns)
-
     records = []
-    for layer in map_layers.findall("Layer"):
-        if layer.attrib.get("Type") not in {"LandCover", "LandCoverLayer"}:
+    for layer in _mlh.top_level_map_layers(root):
+        if layer.attrib.get("Type") not in _mlh.LAND_CLASSIFICATION_LAYER_TYPES:
             continue
         records.append(
             build_land_classification_record(
