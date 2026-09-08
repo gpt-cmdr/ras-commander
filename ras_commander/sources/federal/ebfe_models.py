@@ -7850,6 +7850,10 @@ projects point to that single organized target. See
                 search_root,
                 max_depth=12,
                 return_project_info=True,
+                # eBFE deliveries nest real projects inside others (46 of 2,378 in
+                # HUC 12090301). Pruning at the first match silently skipped them
+                # in standardization while discovery still counted them.
+                include_nested_projects=True,
             )
             return sorted({Path(item["folder"]) for item in projects})
         except Exception:
