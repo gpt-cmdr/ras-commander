@@ -633,3 +633,43 @@ def test_captured_terrain_absent_entry_is_kept_when_the_hdf_really_is_absent():
                            "projects": ["SG/Input"], "evidence": "x"}],
     )
     assert "terrain hdf absent modifications referenced" in render_audit_markdown(bundle)
+
+
+# -- DSS element state follows the boundary verification (worker rev i) ------
+
+def test_dss_state_follows_verification_when_every_boundary_resolved():
+    """Tule (11120104): 42 of 42 boundaries verified against delivered DSS members,
+    yet the element capture said "no" because the file was not at the literal
+    post-assembly path. The verification is the authority."""
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "referenced_count": 86,
+                                     "note": "referenced 86 time(s) but the layer HEC-RAS opens is absent"}},
+        dss_verification={"bridge_available": True, "boundaries_checked": 42, "boundaries_resolved": 42,
+                          "boundaries_acquisition": 0, "boundaries_inferred": 0,
+                          "resolved_needing_path_correction": 42},
+    )
+    assert not any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    assert "Yes" in row and "42 of 42" in row
+
+
+def test_dss_state_partial_when_some_boundaries_need_data():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "referenced_count": 14, "note": ""}},
+        dss_verification={"bridge_available": True, "boundaries_checked": 14, "boundaries_resolved": 5,
+                          "boundaries_acquisition": 9, "boundaries_inferred": 0},
+    )
+    acq = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition" and a.target == "DSS boundary data"]
+    assert len(acq) == 1 and acq[0].reason == "partially_delivered"
+    assert "incomplete in the delivery" in render_audit_markdown(bundle)
+
+
+def test_dss_captured_yes_is_never_downgraded_by_verification():
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "yes", "location": "DSS/x.dss", "referenced": True, "note": ""}},
+        dss_verification={"bridge_available": True, "boundaries_checked": 3, "boundaries_resolved": 0,
+                          "boundaries_acquisition": 3, "boundaries_inferred": 0},
+    )
+    row = next(l for l in render_audit_markdown(bundle).splitlines() if l.startswith("| DSS boundary data |"))
+    assert "Yes" in row
