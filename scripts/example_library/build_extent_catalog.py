@@ -186,6 +186,7 @@ def _project_feature(project: dict[str, Any], source_root: Path) -> dict[str, An
         "manifest": project["manifest"],
         "projectManifest": project["project_manifest"],
         "viewerType": project.get("viewer_type", "MapLibre"),
+        "details": project.get("details", ""),
         "recordOfDeficiencies": project.get("record_of_deficiencies", ""),
         "notes": project["notes"],
         "extentSource": (

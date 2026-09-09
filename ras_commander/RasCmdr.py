@@ -749,15 +749,15 @@ class RasCmdr:
         ras_obj = ras_object if ras_object is not None else ras
         ras_obj.check_initialized()
         plan_num = RasUtils.normalize_ras_number(plan_number)
-        project_path = Path(ras_obj.prj_file).resolve(strict=False)
+        project_path = RasUtils.safe_resolve(Path(ras_obj.prj_file))
         resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_obj)
         if resolved_plan_path is None:
             raise FileNotFoundError(f"Plan file not found: {plan_num}")
-        plan_path = Path(resolved_plan_path).resolve(strict=False)
-        tmp_hdf_path = (
+        plan_path = RasUtils.safe_resolve(Path(resolved_plan_path))
+        tmp_hdf_path = RasUtils.safe_resolve(
             Path(ras_obj.project_folder)
             / f"{ras_obj.project_name}.p{plan_num}.tmp.hdf"
-        ).resolve(strict=False)
+        )
 
         def command_needle(path: Path) -> str:
             return str(path).replace("/", "\\").lower()

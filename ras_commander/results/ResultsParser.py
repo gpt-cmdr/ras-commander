@@ -62,6 +62,7 @@ class ResultsParser:
         r'iterations',                     # Lines with iteration counts
         r'\b0\s+errors?\b',               # Explicit zero-error summary
         r'\berrors?\s*[:=]\s*0\b',       # "Errors: 0" / "Error = 0"
+        r'generated\s+edge\s+lines\s+have\s+self\s+intersections.*error\s+layer',
     ]
 
     WARNING_KEYWORDS = [
@@ -70,7 +71,8 @@ class ResultsParser:
         'notice',
         'exceeded',
         'unstable',
-        'convergence'
+        'convergence',
+        'may not generate correctly',
     ]
 
     @staticmethod

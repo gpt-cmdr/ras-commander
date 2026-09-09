@@ -80,6 +80,9 @@ def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
     supplement_source = (
         ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-supplements.js"
     ).read_text(encoding="utf-8")
+    rod = (
+        ROOT / "agent_tasks" / "2026-09-05_san_gabriel_record_of_deficiencies.md"
+    ).read_text(encoding="utf-8")
     prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
     supplement = json.loads(supplement_source.removeprefix(prefix).removesuffix(";\n"))
 
@@ -93,6 +96,15 @@ def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
         feature["properties"]["status"] == "Source qualification candidate"
         for feature in features
     )
+    assert all(not feature["properties"]["webmap"] for feature in features)
+    details = [feature["properties"]["details"] for feature in features]
+    assert len(set(details)) == 5
+    assert details == [
+        "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/"
+        f"2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-{number}"
+        for number in range(501, 506)
+    ]
+    assert all(f"### LBSG {number}" in rod for number in range(501, 506))
     assert all(
         feature["properties"]["recordOfDeficiencies"].endswith(
             "2026-09-05_san_gabriel_record_of_deficiencies.md"
@@ -120,7 +132,11 @@ def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
     assert 'title: "San Gabriel Model Suite"' in profiles
     assert 'variantLabel: "LBSG_503 (Florence)"' in profiles
     assert 'variantLabel: "LBSG_504 (Round Rock)"' in profiles
-    assert 'document.createElement(webmap ? "a" : "span")' in library
+    assert "webmap || child.properties?.details" in library
+    assert 'document.createElement(projectHref ? "a" : "span")' in library
+    assert 'webmap ? "Open project map" : "Open project details"' in library
+    assert 'props.details ? resolveHref(props.details) : ""' in library
+    assert "!webmap && details" in library
 
 
 def test_embedded_catalog_retains_api_derived_project_footprints() -> None:

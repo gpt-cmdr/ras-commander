@@ -374,6 +374,79 @@ def test_cancel_plan_terminates_only_exact_project_process_tree(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
+def test_cancel_plan_matches_mapped_drive_command_paths(monkeypatch, tmp_path):
+    """Mapped-drive launch paths must not be converted to unmatched UNC paths."""
+    import psutil
+
+    project_path = tmp_path / "Fox.prj"
+    plan_path = tmp_path / "Fox.p01"
+    project_path.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="ascii")
+    mapped_root = Path("H:/Runs/Fox")
+
+    class FakeRas:
+        project_folder = tmp_path
+        project_name = "Fox"
+        prj_file = project_path
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+        @staticmethod
+        def get_plan_entries():
+            return pd.DataFrame(
+                [{"plan_number": "01", "full_path": str(plan_path)}]
+            )
+
+    class FakeProcess:
+        pid = 400
+        info = {
+            "pid": 400,
+            "name": "Ras.exe",
+            "cmdline": [
+                "Ras.exe",
+                "-c",
+                str(mapped_root / "Fox.prj"),
+                str(mapped_root / "Fox.p01"),
+            ],
+        }
+        terminated = False
+        killed = False
+
+        @staticmethod
+        def children(recursive=False):
+            return []
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+    process = FakeProcess()
+
+    def mapped_safe_resolve(path):
+        return mapped_root / Path(path).name
+
+    monkeypatch.setattr(
+        rascmdr_module.RasUtils,
+        "safe_resolve",
+        staticmethod(mapped_safe_resolve),
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: [process])
+    monkeypatch.setattr(
+        psutil,
+        "wait_procs",
+        lambda processes, timeout: (list(processes), []),
+    )
+
+    assert RasCmdr.cancel_plan("01", ras_object=FakeRas()) is True
+    assert process.terminated is True
+    assert process.killed is False
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
 def test_cancel_plan_matches_project_only_current_plan_launcher(
     monkeypatch,
     tmp_path,

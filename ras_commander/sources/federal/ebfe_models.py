@@ -89,6 +89,17 @@ class RasEbfeModels:
         "https://ebfedata.s3.amazonaws.com/12070205_SanGabriel/"
         "12070205_Models.zip"
     )
+    _LOWER_COLORADO_CUMMINS_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12090301_LowerColoradoCummins/"
+        "12090301_Models.zip"
+    )
+    _LOWER_COLORADO_CUMMINS_PLAN_FLOW_CORRECTIONS = {
+        "Piney Creek-Colorado River/PINEY 062": {"01": "01"},
+        "Piney Creek-Colorado River/PINEY 089": {"01": "01"},
+    }
+    _LOWER_COLORADO_CUMMINS_PROFILE_COUNT_EXCEPTIONS = {
+        "Walnut Creek-Colorado River/WALNUT 0329": 6,
+    }
     _SAN_GABRIEL_PROJECTS = {
         "LBSG_501": {"plan": "01", "geometry": "02", "unsteady": "01"},
         "LBSG_502": {"plan": "02", "geometry": "03", "unsteady": "01"},
@@ -100,13 +111,16 @@ class RasEbfeModels:
         (
             "The shared compiled RAS_Submittal/Terrain/Terrain.hdf is named "
             "by every project and by the delivery inventory but was not "
-            "provided in the source packages."
+            "provided in the source packages. For this 2D delivery, the "
+            "missing computational terrain is a critical, model-blocking "
+            "source gap."
         ),
         (
             "The three delivered HDEMs do not contain the road-crossing and "
             "Lake Georgetown elevation-modification layers recorded in the "
-            "missing compiled terrain and are not a numerically equivalent "
-            "replacement."
+            "missing compiled terrain. An HDEM-only rebuild is not a "
+            "source-equivalent replacement and cannot make the public model "
+            "reproducible or usable for downstream hydraulic work."
         ),
     ]
 
@@ -204,7 +218,8 @@ class RasEbfeModels:
             "notes": (
                 "Five-project chained 2D delivery covering the Round Rock "
                 "and Florence ras2fim-2d test area; shared compiled "
-                "Terrain.hdf not provided."
+                "Terrain.hdf and required modification payloads not provided. "
+                "This is a critical, model-blocking source gap."
             ),
             "extra": {
                 "project_count": 5,
@@ -237,6 +252,11 @@ class RasEbfeModels:
                     "downstream": "LBSG_505",
                 },
                 "validation_level": "unsteady_start",
+                "delivery_readiness": "critical_source_gap",
+                "terrain_required": True,
+                "terrain_source_complete": False,
+                "downstream_usable": False,
+                "reproducible": False,
                 "known_deficiencies": _SAN_GABRIEL_KNOWN_DEFICIENCIES,
                 "source_url": _SAN_GABRIEL_SOURCE_URL,
                 "delivered_hms_project": True,
@@ -267,10 +287,59 @@ class RasEbfeModels:
             "study_area": "LowerColoradoCummins_12090301",
             "huc8": "12090301",
             "organizer": "organize_lower_colorado_cummins",
-            "download_subdir": "12090301_LowerColoradoCummins",
+            "download_subdir": "12090301_Models_extracted",
             "output_name": "LowerColoradoCummins_12090301",
             "ras_version": "6.6",
+            "delivered_ras_version": "4.1.0",
+            "model_type": ModelType.STEADY_1D,
+            "source_url": _LOWER_COLORADO_CUMMINS_SOURCE_URL,
+            "file_size_bytes": 290_650_116,
             "notes": "1D steady BLE reach-model collection.",
+            "extra": {
+                "project_count": 2_378,
+                "top_level_project_count": 2_332,
+                "nested_project_count": 46,
+                "plan_number": "01",
+                "plan_timeout_seconds": 600,
+                "profiles_per_plan": 7,
+                "profiles_per_plan_exceptions": (
+                    _LOWER_COLORADO_CUMMINS_PROFILE_COUNT_EXCEPTIONS
+                ),
+                "plan_flow_corrections": (
+                    _LOWER_COLORADO_CUMMINS_PLAN_FLOW_CORRECTIONS
+                ),
+                "delivered_ras_version": "4.1.0",
+                "qualified_ras_version": "6.6",
+                "terrain_required": False,
+                "source_assets": [
+                    {
+                        "role": "models",
+                        "name": "12090301_Models.zip",
+                        "url": _LOWER_COLORADO_CUMMINS_SOURCE_URL,
+                        "size_bytes": 290_650_116,
+                    },
+                    {
+                        "role": "spatial_data",
+                        "name": "12090301_SpatialData.zip",
+                        "url": (
+                            "https://ebfedata.s3.amazonaws.com/"
+                            "12090301_LowerColoradoCummins/"
+                            "12090301_SpatialData.zip"
+                        ),
+                        "size_bytes": 588_930_728,
+                    },
+                    {
+                        "role": "documents",
+                        "name": "12090301_Documents.zip",
+                        "url": (
+                            "https://ebfedata.s3.amazonaws.com/"
+                            "12090301_LowerColoradoCummins/"
+                            "12090301_Documents.zip"
+                        ),
+                        "size_bytes": 7_534_908,
+                    },
+                ],
+            },
         },
         "rio-hondo": {
             "study_area": "RioHondo_13060008",
@@ -280,6 +349,7 @@ class RasEbfeModels:
             "documents_subdir": "13060008_RioHondo_Documents",
             "output_name": "RioHondo_13060008",
             "ras_version": "6.6",
+            "model_type": ModelType.STEADY_1D,
             "notes": "1D steady BLE reach-model collection.",
         },
         "lower-brazos": {
@@ -383,13 +453,19 @@ class RasEbfeModels:
 
     @staticmethod
     def available_models() -> Dict[str, Dict[str, str]]:
-        """List eBFE models with built-in ras-commander organizers."""
+        """List organizers and both delivered and qualified RAS versions."""
         models = {}
         for key, metadata in RasEbfeModels._MODEL_REGISTRY.items():
+            qualified_version = str(metadata["ras_version"])
+            delivered_version = str(
+                metadata.get("delivered_ras_version", qualified_version)
+            )
             models[key] = {
                 "study_area": str(metadata["study_area"]),
                 "huc8": str(metadata["huc8"]),
-                "ras_version": str(metadata["ras_version"]),
+                "ras_version": qualified_version,
+                "delivered_ras_version": delivered_version,
+                "qualified_ras_version": qualified_version,
                 "notes": str(metadata["notes"]),
             }
         return models
@@ -410,6 +486,83 @@ class RasEbfeModels:
         return SourceStatus.AVAILABLE
 
     @staticmethod
+    @log_call
+    def get_model_metadata(model_key: str) -> ModelMetadata:
+        """Return normalized source metadata for a registered eBFE study."""
+        key = RasEbfeModels.normalize_model_key(model_key)
+        meta = RasEbfeModels._MODEL_REGISTRY[key]
+        delivered_version = meta.get("delivered_ras_version", meta["ras_version"])
+        model_tags = ["ebfe", "ble", "fema", str(meta["huc8"])]
+        model_type = meta.get("model_type", ModelType.UNSTEADY_2D)
+        if model_type == ModelType.STEADY_1D:
+            model_tags.extend(["1d", "steady"])
+
+        extra = deepcopy(meta.get("extra", {}))
+        extra.setdefault("delivered_ras_version", delivered_version)
+        extra.setdefault("qualified_ras_version", meta["ras_version"])
+
+        file_size_bytes = meta.get("file_size_bytes")
+        file_size_mb = (
+            float(file_size_bytes) / (1024.0 * 1024.0)
+            if file_size_bytes is not None
+            else None
+        )
+        return ModelMetadata(
+            source_name="FEMA eBFE/BLE",
+            source_id=key,
+            name=str(meta["study_area"]),
+            description=str(meta["notes"]),
+            location=str(meta["huc8"]),
+            model_type=model_type,
+            hecras_version=str(delivered_version),
+            url=meta.get("source_url"),
+            file_size_mb=file_size_mb,
+            tags=model_tags,
+            extra=extra,
+        )
+
+    @staticmethod
+    @log_call
+    def download_source_asset(
+        model_key: str,
+        role: str,
+        output_folder: Union[str, Path],
+    ) -> Path:
+        """Download, verify, and extract one catalogued eBFE source asset."""
+        metadata = RasEbfeModels.get_model_metadata(model_key)
+        requested_role = str(role).strip().lower()
+        assets = metadata.extra.get("source_assets", [])
+        asset = next(
+            (
+                item
+                for item in assets
+                if str(item.get("role", "")).lower() == requested_role
+            ),
+            None,
+        )
+        if asset is None:
+            available = ", ".join(
+                sorted(str(item.get("role")) for item in assets)
+            )
+            raise ValueError(
+                f"Source asset role '{role}' is not catalogued for "
+                f"{metadata.source_id}. Available roles: {available or 'none'}"
+            )
+
+        size_bytes = asset.get("size_bytes")
+        size_label = (
+            f" ({float(size_bytes) / (1024 * 1024):.1f} MiB)"
+            if size_bytes is not None
+            else ""
+        )
+        return RasEbfeModels._download_and_extract(
+            url=str(asset["url"]),
+            output_folder=Path(output_folder),
+            description=f"{metadata.name} {requested_role}{size_label}",
+        )
+
+    @staticmethod
+    @log_call
     def list_models(
         location: Optional[str] = None,
         model_type: Optional[ModelType] = None,
@@ -420,26 +573,23 @@ class RasEbfeModels:
     ) -> List[ModelMetadata]:
         """Return ModelMetadata for all registered eBFE models, with optional filtering."""
         results: List[ModelMetadata] = []
-        for key, meta in RasEbfeModels._MODEL_REGISTRY.items():
-            if location and location.lower() not in meta["study_area"].lower():
+        requested_tags = {str(tag).lower() for tag in (tags or [])}
+        for key in RasEbfeModels._MODEL_REGISTRY:
+            metadata = RasEbfeModels.get_model_metadata(key)
+            if location and location.lower() not in (
+                f"{metadata.name} {metadata.location}".lower()
+            ):
                 continue
-            if hecras_version and meta["ras_version"] != hecras_version:
+            if model_type and metadata.model_type != model_type:
                 continue
-            results.append(
-                ModelMetadata(
-                    source_name="FEMA eBFE/BLE",
-                    source_id=key,
-                    name=meta["study_area"],
-                    description=meta["notes"],
-                    location=meta["huc8"],
-                    model_type=ModelType.UNSTEADY_2D,
-                    hecras_version=meta["ras_version"],
-                    url=meta.get("source_url"),
-                    tags=["ebfe", "ble", "fema", meta["huc8"]],
-                    extra=deepcopy(meta.get("extra", {})),
-                )
-            )
-            if limit and len(results) >= limit:
+            if hecras_version and metadata.hecras_version != hecras_version:
+                continue
+            if requested_tags and not requested_tags.issubset(
+                {tag.lower() for tag in metadata.tags}
+            ):
+                continue
+            results.append(metadata)
+            if limit is not None and len(results) >= limit:
                 break
         return results
 
@@ -455,30 +605,44 @@ class RasEbfeModels:
     ) -> DownloadResult:
         """Thin ModelSource-compatible wrapper around organize_model()."""
         try:
+            if not extract:
+                raise ValueError(
+                    "extract=False is not supported by the eBFE organizer; "
+                    "use get_model_metadata() to retrieve the source URL."
+                )
+            key = RasEbfeModels.normalize_model_key(model_id)
+            meta = RasEbfeModels._MODEL_REGISTRY[key]
+            organized_target = Path(output_folder) / str(meta["output_name"])
+            if organized_target.exists():
+                if overwrite:
+                    shutil.rmtree(organized_target)
+                elif RasEbfeModels._organized_model_is_reusable(
+                    organized_target,
+                    meta,
+                ):
+                    return DownloadResult(
+                        success=True,
+                        model_path=organized_target,
+                        message=f"Using existing organized model at {organized_target}",
+                        metadata=RasEbfeModels.get_model_metadata(key),
+                        extracted=True,
+                    )
+                else:
+                    raise FileExistsError(
+                        f"Existing organized target is incomplete or invalid: "
+                        f"{organized_target}. Preserve it for audit and use "
+                        "overwrite=True or choose a different output folder."
+                    )
             organized_path = RasEbfeModels.organize_model(
-                model_key=model_id,
+                model_key=key,
                 output_root=Path(output_folder),
                 **kwargs,
-            )
-            meta = RasEbfeModels._MODEL_REGISTRY.get(
-                RasEbfeModels.normalize_model_key(model_id), {}
             )
             return DownloadResult(
                 success=True,
                 model_path=organized_path,
-                message=f"Organized {model_id} to {organized_path}",
-                metadata=ModelMetadata(
-                    source_name="FEMA eBFE/BLE",
-                    source_id=model_id,
-                    name=meta.get("study_area", model_id),
-                    description=meta.get("notes", ""),
-                    location=meta.get("huc8", ""),
-                    model_type=ModelType.UNSTEADY_2D,
-                    hecras_version=meta.get("ras_version"),
-                    url=meta.get("source_url"),
-                    tags=["ebfe", "ble", "fema", meta.get("huc8", "")],
-                    extra=deepcopy(meta.get("extra", {})),
-                ),
+                message=f"Organized {key} to {organized_path}",
+                metadata=RasEbfeModels.get_model_metadata(key),
                 extracted=True,
             )
         except Exception as exc:
@@ -487,6 +651,29 @@ class RasEbfeModels:
                 model_path=None,
                 message=str(exc),
             )
+
+    @staticmethod
+    def _organized_model_is_reusable(
+        organized_target: Path,
+        metadata: Dict[str, Any],
+    ) -> bool:
+        """Return whether an existing organized target has complete evidence."""
+        model_log = organized_target / "agent" / "model_log.md"
+        ras_root = organized_target / "RAS Model"
+        if not model_log.is_file() or not ras_root.is_dir():
+            return False
+
+        from ras_commander.RasUtils import RasUtils
+
+        projects = RasUtils.find_valid_ras_folders(
+            ras_root,
+            return_project_info=True,
+            include_nested_projects=True,
+        )
+        expected_count = metadata.get("extra", {}).get("project_count")
+        if expected_count is not None:
+            return len(projects) == int(expected_count)
+        return bool(projects)
 
     @staticmethod
     @log_call
@@ -1459,7 +1646,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         output_folder: Optional[Path] = None,
         river: Optional[str] = None,
         reach: Optional[str] = None,
-        validate: bool = False
+        validate: bool = False,
+        validation_ras_version: str = "6.6",
     ) -> Path:
         """
         Organize Lower Colorado-Cummins (12090301) eBFE model with automatic download.
@@ -1471,7 +1659,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         interrupted downloads when the server supports byte-range requests.
 
         Model characteristics:
-        - 2,378 separate 1D steady-state reach models
+        - 2,378 separate 1D steady-state reach models, including 46 projects
+          nested below intermediate reach-group folders
         - Organized as Model/{River Name}/{Reach Name}/ inside the archive
         - Each reach is a standalone HEC-RAS project (.prj, .p01, .f01, .g01, etc.)
         - 7 steady flow profiles per reach: 10-year, 25-year, 50-year, 1pct_min,
@@ -1490,6 +1679,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 (e.g., "SHILOH BRANCH"). Requires river to also be specified.
             validate: If True, validate with init_ras_project() on the first
                 (or specified) reach
+            validation_ras_version: HEC-RAS version used for optional
+                initialization validation. The delivery itself is version 4.1.0.
 
         Returns:
             Path to organized output folder with structure:
@@ -1546,10 +1737,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         # Download source data if not present
         if not downloaded_folder.exists():
             RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
-            url = "https://ebfedata.s3.amazonaws.com/12090301_LowerColoradoCummins/12090301_Models.zip"
-
             downloaded_folder = RasEbfeModels._download_and_extract(
-                url=url,
+                url=RasEbfeModels._LOWER_COLORADO_CUMMINS_SOURCE_URL,
                 output_folder=downloaded_folder.parent,
                 description="Lower Colorado-Cummins Models (290.7 MB)"
             )
@@ -1595,23 +1784,39 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
 
         # [1/3] Scan reach models
         RasEbfeModels._emit("[1/3] Scanning reach models...")
+        from ras_commander.RasUtils import RasUtils
+
+        project_infos = RasUtils.find_valid_ras_folders(
+            model_dir,
+            return_project_info=True,
+            include_nested_projects=True,
+        )
         all_rivers = {}
-        for river_dir in sorted(model_dir.iterdir()):
-            if not river_dir.is_dir():
-                continue
-            reaches = []
-            for reach_dir in sorted(river_dir.iterdir()):
-                if not reach_dir.is_dir():
-                    continue
-                # Verify this is a HEC-RAS project (has .prj file)
-                prj_files = list(reach_dir.glob("*.prj"))
-                if prj_files:
-                    reaches.append(reach_dir)
-            if reaches:
-                all_rivers[river_dir.name] = reaches
+        for project_info in project_infos:
+            project_folder = Path(project_info["folder"])
+            relative_folder = project_folder.relative_to(model_dir)
+            if len(relative_folder.parts) < 2:
+                raise ValueError(
+                    "Lower Colorado-Cummins project is outside the expected "
+                    f"Model/{{River}}/{{Project}} hierarchy: {project_folder}"
+                )
+            all_rivers.setdefault(relative_folder.parts[0], []).append(
+                project_folder
+            )
+        for river_name in all_rivers:
+            all_rivers[river_name] = sorted(set(all_rivers[river_name]))
 
         total_reaches = sum(len(v) for v in all_rivers.values())
         RasEbfeModels._emit(f"  Found {total_reaches:,} reach models across {len(all_rivers)} rivers")
+
+        documentation_files = [
+            path
+            for path in sorted(model_dir.iterdir())
+            if path.is_file()
+            and path.suffix.lower() in {".pdf", ".txt", ".doc", ".docx"}
+        ]
+        for source_document in documentation_files:
+            shutil.copy2(source_document, folders['docs'] / source_document.name)
 
         # Apply river/reach filter
         if river is not None:
@@ -1655,11 +1860,12 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         RasEbfeModels._emit("\n[2/3] Organizing reach models...")
         total_files_copied = 0
         reaches_organized = 0
+        flow_reference_corrections = 0
 
         for river_name, reach_dirs in sorted(filtered.items()):
             for reach_dir in reach_dirs:
-                reach_name = reach_dir.name
-                dest_dir = folders['ras'] / river_name / reach_name
+                relative_project_folder = reach_dir.relative_to(model_dir)
+                dest_dir = folders['ras'] / relative_project_folder
                 dest_dir.mkdir(parents=True, exist_ok=True)
 
                 files_copied = 0
@@ -1667,6 +1873,21 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                     if src_file.is_file():
                         shutil.copy2(src_file, dest_dir / src_file.name)
                         files_copied += 1
+
+                correction_key = relative_project_folder.as_posix()
+                correction_plans = (
+                    RasEbfeModels
+                    ._LOWER_COLORADO_CUMMINS_PLAN_FLOW_CORRECTIONS
+                    .get(correction_key, {})
+                )
+                for plan_number, flow_number in correction_plans.items():
+                    if RasEbfeModels._insert_missing_steady_flow_reference(
+                        dest_dir,
+                        project_name=reach_dir.name,
+                        plan_number=plan_number,
+                        flow_number=flow_number,
+                    ):
+                        flow_reference_corrections += 1
 
                 total_files_copied += files_copied
                 reaches_organized += 1
@@ -1683,6 +1904,8 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             reaches_organized=reaches_organized,
             files_count=total_files_copied,
             river_count=len(all_rivers),
+            docs_count=len(documentation_files),
+            flow_reference_corrections=flow_reference_corrections,
             river_filter=river,
             reach_filter=reach
         )
@@ -1690,32 +1913,25 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         # Validate with init_ras_project if requested
         if validate:
             RasEbfeModels._emit("\n[Validation] Testing init_ras_project on first reach...")
-            try:
-                from ras_commander import init_ras_project
+            from ras_commander import init_ras_project
 
-                # Find first reach in organized output
-                first_reach = None
-                for river_dir in sorted(folders['ras'].iterdir()):
-                    if not river_dir.is_dir():
-                        continue
-                    for reach_dir in sorted(river_dir.iterdir()):
-                        if not reach_dir.is_dir():
-                            continue
-                        prj_files = list(reach_dir.glob("*.prj"))
-                        if prj_files:
-                            first_reach = reach_dir
-                            break
-                    if first_reach is not None:
-                        break
-
-                if first_reach is not None:
-                    init_ras_project(first_reach, "7.0", hide_intro=True)
-                    RasEbfeModels._emit(f"  ✓ init_ras_project succeeded for: {first_reach.name}")
-                else:
-                    RasEbfeModels._emit("  ⚠ No reach with .prj file found for validation")
-
-            except Exception as e:
-                RasEbfeModels._emit(f"  ⚠ Validation failed: {e}")
+            first_project_file = next(
+                iter(sorted(folders['ras'].rglob("*.prj"))),
+                None,
+            )
+            if first_project_file is None:
+                raise FileNotFoundError(
+                    "No organized HEC-RAS project was found for validation."
+                )
+            first_reach = first_project_file.parent
+            init_ras_project(
+                first_reach,
+                validation_ras_version,
+                hide_intro=True,
+            )
+            RasEbfeModels._emit(
+                f"  ✓ init_ras_project succeeded for: {first_reach.name}"
+            )
 
         # Create HMS Model README
         # Ensure directory exists (may be lost during large copy operations)
@@ -1739,6 +1955,123 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         RasEbfeModels._emit(f"  Files: {total_files_copied:,}")
 
         return output_folder
+
+    @staticmethod
+    def _insert_missing_steady_flow_reference(
+        project_folder: Path,
+        project_name: str,
+        plan_number: str,
+        flow_number: str,
+    ) -> bool:
+        """Insert one catalogued missing ``Flow File=`` plan reference.
+
+        The source delivery is never edited. This helper operates only on the
+        organized copy and refuses ambiguous or conflicting records.
+        """
+        plan_number = str(plan_number).zfill(2)
+        flow_number = str(flow_number).zfill(2)
+        project_folder = Path(project_folder)
+        prj_path = project_folder / f"{project_name}.prj"
+        plan_path = project_folder / f"{project_name}.p{plan_number}"
+        flow_path = project_folder / f"{project_name}.f{flow_number}"
+        if (
+            not prj_path.is_file()
+            or not plan_path.is_file()
+            or not flow_path.is_file()
+        ):
+            raise FileNotFoundError(
+                "Catalogued Lower Colorado plan-flow correction is missing "
+                f"an input: {prj_path} / {plan_path} / {flow_path}"
+            )
+
+        physical_flows = sorted(project_folder.glob(f"{project_name}.f[0-9][0-9]"))
+        if physical_flows != [flow_path]:
+            raise ValueError(
+                "Catalogued Lower Colorado correction expected exactly one "
+                f"physical flow file, {flow_path}; found {physical_flows}"
+            )
+        prj_flow_records = [
+            line.strip()
+            for line in prj_path.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ).splitlines()
+            if line.strip().lower().startswith("flow file=")
+        ]
+        expected_prj_record = f"Flow File=f{flow_number}"
+        if prj_flow_records != [expected_prj_record]:
+            raise ValueError(
+                "Catalogued Lower Colorado correction expected project "
+                f"record {expected_prj_record!r} in {prj_path}; found "
+                f"{prj_flow_records}"
+            )
+
+        with open(
+            plan_path,
+            "r",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as handle:
+            lines = handle.readlines()
+
+        flow_matches = []
+        geom_matches = []
+        in_description = False
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if re.match(r"^BEGIN DESCRIPTION:?$", stripped, re.IGNORECASE):
+                in_description = True
+                continue
+            if re.match(r"^END DESCRIPTION$", stripped, re.IGNORECASE):
+                in_description = False
+                continue
+            if in_description:
+                continue
+            if line.startswith("Flow File="):
+                flow_matches.append(index)
+            if line.startswith("Geom File="):
+                geom_matches.append(index)
+
+        expected = f"Flow File=f{flow_number}"
+        if len(flow_matches) == 1:
+            actual = lines[flow_matches[0]].rstrip("\r\n")
+            if actual == expected:
+                return False
+            raise ValueError(
+                f"Refusing to replace conflicting {actual!r} in {plan_path}"
+            )
+        if flow_matches:
+            raise ValueError(
+                f"Expected no top-level Flow File= record in {plan_path}; "
+                f"found {len(flow_matches)}"
+            )
+        if len(geom_matches) != 1:
+            raise ValueError(
+                f"Expected exactly one top-level Geom File= record in "
+                f"{plan_path}; found {len(geom_matches)}"
+            )
+
+        anchor = lines[geom_matches[0]]
+        if anchor.endswith("\r\n"):
+            newline = "\r\n"
+        elif anchor.endswith("\n"):
+            newline = "\n"
+        elif anchor.endswith("\r"):
+            newline = "\r"
+        else:
+            newline = "\n"
+        lines.insert(geom_matches[0] + 1, f"{expected}{newline}")
+
+        with open(
+            plan_path,
+            "w",
+            encoding="utf-8",
+            errors="replace",
+            newline="",
+        ) as handle:
+            handle.writelines(lines)
+        return True
 
     # =========================================================================
     # Rio Hondo (13060008) - Pattern 1D-BLE: Multi-project steady models
@@ -3842,11 +4175,16 @@ HEC-RAS version: 5.0.1 / 5.0.3
     @staticmethod
     def _san_gabriel_terrain_deficiency_text() -> str:
         """Return the source-provenance notice for the omitted terrain HDF."""
-        return """# San Gabriel compiled terrain not provided
+        return """# CRITICAL: San Gabriel computational terrain not provided
 
 The FEMA hydraulic inventory and all five RASMapper files identify the shared
 file `Terrain/Terrain.hdf`, but that compiled terrain was not present in the
 Models, SpatialData, Documents, or ReferenceGuide source packages.
+
+For a 2D model this is a critical, model-blocking delivery deficiency. The
+public delivery is not reproducible and must not be represented as usable for
+downstream hydraulic computation merely because its supplied result HDF can be
+opened or mapped.
 
 The three source HDEMs are preserved under `../Terrain Submittal/Final/hdem`.
 They do not include the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`,
@@ -3857,11 +4195,13 @@ If a derived `Terrain.hdf` is present beside this notice, it is a single shared
 HDEM-only reconstruction for all five projects. Consult
 `../../agent/record_of_deficiencies.md` for its provenance and limitations; it
 must not be represented as FEMA's original or as numerically equivalent.
+It is diagnostic evidence for startup and sensitivity testing only; it does
+not cure the source gap or make the delivery publishable as a runnable example.
 
 The documented smoke plans preserve the delivered geometry property tables
 and are qualified only to reach the unsteady-computation phase. Recover the
-original compiled terrain or its modification inputs before geometry
-recomputation or numerical-comparison work.
+original compiled terrain, or the complete original terrain and modification
+inputs needed for a source-equivalent build, before downstream use.
 """
 
     @staticmethod
@@ -3876,7 +4216,10 @@ recomputation or numerical-comparison work.
 - **Study:** FEMA San Gabriel BLE (12070205)
 - **Delivered source:** {source}
 - **Organized copy:** {destination}
-- **Qualification:** `unsteady_start`
+- **Compute evidence:** `unsteady_start`
+- **Delivery readiness:** `critical_source_gap`
+- **Downstream usable:** no
+- **Reproducible:** no
 
 This record distinguishes source-delivery deficiencies from mitigations made
 in a working copy. The delivered source is not modified. Add terrain-build
@@ -3884,8 +4227,8 @@ provenance here whenever an explicitly authorized reconstruction is created.
 
 | ID | Deficiency | Status / disposition |
 |---|---|---|
-| SG-001 | Every project and the hydraulic inventory name one shared `Terrain/Terrain.hdf`, but no public source package contains the compiled file. | Open source deficiency. The organizer creates the intended shared folder and normalizes all {terrain_path_stats['terrain_hdf_references']} terrain references across {terrain_path_stats['rasmap_files']} projects. |
-| SG-002 | The three delivered HDEMs omit the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`, and `Lake Georgetown` modification payloads named in the RASMapper files. | Open. An HDEM-only terrain is not source-equivalent and is unsuitable for FEMA numerical-reproduction claims. |
+| SG-001 | Every project and the hydraulic inventory name one shared `Terrain/Terrain.hdf`, but no public source package contains the compiled file. | **CRITICAL / model-blocking.** For this 2D delivery, missing computational terrain makes the public model non-reproducible and unusable for downstream hydraulic computation. The organizer normalizes all {terrain_path_stats['terrain_hdf_references']} terrain references across {terrain_path_stats['rasmap_files']} projects, which fixes paths only; it does not cure the missing source. |
+| SG-002 | The three delivered HDEMs omit the `Hwy-Road Crossings (Channel)`, `Hwy-Road Crossings`, and `Lake Georgetown` modification payloads named in the RASMapper files. | **CRITICAL / model-blocking.** An HDEM-only reconstruction is diagnostic evidence only. Do not publish or classify this delivery as a runnable, reproducible 2D example until the original compiled terrain or complete source-equivalent terrain/modification inputs are recovered and verified. |
 | SG-003 | Four smoke plans entered unsteady computation and then reported `READ_UN_HDF_XS_TAB` for a missing `Cross Sections` HDF group; LBSG_502 was stopped after owned solver-start detection. | Accepted only for the agreed `unsteady_start` qualification; full-plan completion remains unverified. |
 | SG-004 | `999999_Terrain_metadata.xml` is malformed because `Doucet & Associates` is not XML-escaped. | Open documentation defect; it does not block use of the HDEM rasters. |
 | SG-005 | The archive includes a 282-character member name and cannot be safely extracted under ordinary descriptive Windows paths. | Mitigated by concise workspaces and ras-commander's atomic, long-path-safe, size/CRC32-audited extraction. |
@@ -3922,6 +4265,12 @@ runtime warnings below before using it.
             "destination": str(destination),
             "ras_version": "6.3",
             "validation_level": "unsteady_start",
+            "delivery_readiness": "critical_source_gap",
+            "terrain_required": True,
+            "terrain_source_complete": False,
+            "downstream_usable": False,
+            "reproducible": False,
+            "publishable_as_runnable_example": False,
             "projects": projects,
             "dependencies": {
                 "upstream": [
@@ -3957,7 +4306,10 @@ runtime warnings below before using it.
 **HEC-RAS Version:** 6.3
 **Source:** {source}
 **Output:** {destination}
-**Validation Level:** Unsteady-start smoke test
+**Compute Evidence:** Unsteady-start smoke test
+**Delivery Readiness:** Critical source gap
+**Downstream Usable:** No
+**Reproducible:** No
 **Terrain Status:** Not Provided in Source
 
 ## Qualified 1% Plans
@@ -3972,7 +4324,10 @@ The organizer made {dss_rewrites} exact cross-project DSS path corrections.
 Every project and the hydraulic inventory name one shared
 `Terrain/Terrain.hdf`, but FEMA did not provide it. The three source HDEMs were
 preserved; the organizer does not automatically rebuild terrain or claim
-numerical equivalence. All {terrain_path_stats['terrain_hdf_references']}
+numerical equivalence. For this 2D model the omitted terrain and modification
+payloads are a critical, model-blocking source gap: a viewable supplied result
+HDF does not make the model reproducible or usable downstream. All
+{terrain_path_stats['terrain_hdf_references']}
 RASMapper terrain layer references in {terrain_path_stats['rasmap_files']}
 projects point to that single organized target. See
 `record_of_deficiencies.md` and `../RAS Model/Terrain/README.md`.
@@ -7448,6 +7803,8 @@ for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
         reaches_organized: int,
         files_count: int,
         river_count: int,
+        docs_count: int,
+        flow_reference_corrections: int = 0,
         river_filter: Optional[str] = None,
         reach_filter: Optional[str] = None
     ):
@@ -7476,19 +7833,20 @@ for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
 **Total Reaches Available**: {total_reaches:,} across {river_count} rivers
 **Reaches Organized**: {reaches_organized:,}
 **Files Organized**: {files_count:,}
+**Missing Plan-Flow References Corrected**: {flow_reference_corrections}
 {filter_section}
 ### Structure Created
 - HMS Model/ (README - no HMS for 1D steady models)
 - RAS Model/ ({reaches_organized:,} reach models, {files_count:,} files)
 - Spatial Data/ (empty - no terrain for 1D models)
-- Documentation/ (empty placeholder)
+- Documentation/ ({docs_count} root-level model-archive document(s))
 - agent/model_log.md (this file)
 
 ## Model Details
 
 **Type**: 1D steady-state reach models
 **HEC-RAS Version**: 4.x (needs re-run with 6.x for HDF output)
-**Flow Profiles**: 7 per reach (10-year, 25-year, 50-year, 1pct_min, 100-year, 1pct_plu, 500-year)
+**Flow Profiles**: 2,377 projects have 7 profiles; `WALNUT 0329` has 6
 **No DSS Files**: Steady flow uses .f## files
 **No Terrain**: 1D cross-section models
 **No Pre-Run Output**: Steady-state, no pre-run HDF results
@@ -7496,6 +7854,8 @@ for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
 ### Notes
 - Each reach is a standalone HEC-RAS project
 - Models are organized as RAS Model/{{River}}/{{Reach}}/
+- The organizer inserts the two catalogued missing `Flow File=f01` records in
+  `PINEY 062` and `PINEY 089`; the delivered source remains unchanged
 - To get HDF output, re-run with HEC-RAS 6.x using RasCmdr.compute_plan()
 - No DSS path correction or terrain integration needed
 
@@ -7507,7 +7867,7 @@ from pathlib import Path
 
 # Single reach
 project = Path(r"{dest / 'RAS Model'}") / "Rabbs Creek-Colorado River" / "SHILOH BRANCH"
-init_ras_project(project, "7.0")
+init_ras_project(project, "6.6")
 
 # View plan info
 from ras_commander import ras

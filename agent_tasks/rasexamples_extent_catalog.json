@@ -196,6 +196,7 @@
       "webmap": "",
       "manifest": "",
       "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-501",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
       "notes": "LBSG_501 is one of five linked FEMA BLE 2D-unsteady projects in the San Gabriel model system. Its 1% plan reached unsteady computation during source qualification."
     },
@@ -211,6 +212,7 @@
       "webmap": "",
       "manifest": "",
       "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-502",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
       "notes": "LBSG_502 is one of five linked FEMA BLE 2D-unsteady projects in the San Gabriel model system. Its 1% plan reached unsteady computation during source qualification."
     },
@@ -226,6 +228,7 @@
       "webmap": "",
       "manifest": "",
       "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-503",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
       "notes": "LBSG_503 covers the Florence area. Its 1% plan reached unsteady computation, and a separate HDEM-only reconstructed-terrain validation run completed successfully; the reconstruction is not source-equivalent."
     },
@@ -241,6 +244,7 @@
       "webmap": "",
       "manifest": "",
       "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-504",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
       "notes": "LBSG_504 covers the Round Rock area and is one of five linked FEMA BLE 2D-unsteady projects in the San Gabriel model system. Its 1% plan reached unsteady computation during source qualification."
     },
@@ -256,6 +260,7 @@
       "webmap": "",
       "manifest": "",
       "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-505",
       "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md",
       "notes": "LBSG_505 is one of five linked FEMA BLE 2D-unsteady projects in the San Gabriel model system. Its 1% plan reached unsteady computation during source qualification."
     },
