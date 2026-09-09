@@ -619,7 +619,8 @@ def test_captured_terrain_absent_entry_is_dropped_when_the_record_shows_the_hdf_
     assert "terrain hdf absent" not in markdown
     # the partial terrain is still an acquisition, so the verdict is unchanged
     assert "needs data not in the delivery" in markdown
-    assert "**Terrain** -- not in the delivery" in markdown
+    assert "**Terrain** -- incomplete in the delivery" in markdown
+    assert "**Terrain** -- not in the delivery" not in markdown
 
 
 def test_captured_terrain_absent_entry_is_kept_when_the_hdf_really_is_absent():
