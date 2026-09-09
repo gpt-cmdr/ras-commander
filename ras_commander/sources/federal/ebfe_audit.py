@@ -429,6 +429,30 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         else:
             out[key] = {"state": "not captured", "location": None, "note": "schema v1 did not record this"}
 
+    # DSS: the boundary verification (worker rev i) is the authority on whether
+    # the DSS a boundary was authored for is in the delivery. The element
+    # capture still says "no" when the file is not at the literal post-assembly
+    # path -- Tule (11120104) had all 42 boundaries verified against delivered
+    # members and the row read "absent". Verification counts win; a captured
+    # "yes" is never downgraded here.
+    verification = audit.get("dss_verification") or {}
+    checked = int(verification.get("boundaries_checked") or 0)
+    if checked and out.get("dss", {}).get("state") in ("no", "partial", None):
+        resolved = int(verification.get("boundaries_resolved") or 0)
+        acquisition = int(verification.get("boundaries_acquisition") or 0)
+        inferred = int(verification.get("boundaries_inferred") or 0)
+        entry = dict(out.get("dss") or {})
+        entry.setdefault("state_as_captured", entry.get("state"))
+        if resolved == checked:
+            entry["state"] = "yes"
+            entry["note"] = (f"{resolved} of {checked} boundaries verified against delivered DSS"
+                             + (" (path corrections required)" if verification.get("resolved_needing_path_correction") else ""))
+        elif resolved and (acquisition or inferred):
+            entry["state"] = "partial"
+            entry["note"] = (f"{resolved} of {checked} boundaries verified; {acquisition} need DSS not in the delivery"
+                             + (f"; {inferred} unverified" if inferred else ""))
+        out["dss"] = entry
+
     # "Delivered" terrain must mean the Terrain.hdf HEC-RAS opens, not merely the
     # rasters it could be built from. San Gabriel (12070205) ships DEM tiles for
     # all five projects and a Terrain.hdf for none of them; that is a
