@@ -4,6 +4,22 @@
 
 ### v0.99.2 (Current published release — August 2026)
 
+**Network-Aligned 1D Breakout Assembly**
+
+- Add `RasBreakout1D.assemble_network_edge()` to assemble adjacent main-stem
+  model slices into one independent, restationed steady-flow project while
+  preserving complete retained geometry blocks and source provenance.
+- Resolve provisional footprint handoffs against the actual source river
+  centerlines, reject intersecting cross-source cut lines, recompute main-channel
+  reach lengths, and rewrite station-keyed steady-flow changes and endpoint
+  boundaries for the assembled reach.
+- Expose GeoDataFrame evidence for source-to-destination stations and resolved
+  seams, plus automatic 10-percent upstream and 25-percent downstream hydraulic
+  buffers and a separate one-cross-section inundation-overlap domain.
+- Keep overbank reach lengths provisional until the caller supplies reviewed
+  flow-path policy evidence, supporting either complete regeneration or
+  join-boundary-only recomputation.
+
 **Native Registered-Terrain Export**
 
 - Add `RasTerrain.export_rasmapper_terrain()` for supervised, bounded RAS

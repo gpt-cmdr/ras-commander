@@ -1659,6 +1659,48 @@ notebooks:
   excluded: false
   code_cells: 9
   executed_cells: 0
+- id: 236_multi_model_1d_breakout_planning
+  filename: 236_multi_model_1d_breakout_planning.ipynb
+  title: Build a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Catalog and join two adjacent Walnut Creek FEMA eBFE main-stem projects for NOAA NWM feature
+    5790954, write an independent restationed HEC-RAS project, retain source-block provenance, and visually
+    verify the centerline seam, computational/export domains, two-pass flow-path finalization, inherited
+    geometry diagnostics, and retained-section hydraulic response against both original plans.
+  tags:
+  - 1d
+  - steady
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
+  - multi-model
+  - geoparquet
+  - validation
+  difficulty: advanced
+  est_runtime: 50 s
+  data_project: null
+  functions_used:
+  - GeomCrossSection.get_cross_sections
+  - GeomParser.get_river_centerlines
+  - HdfResultsPlan.get_compute_messages
+  - HdfResultsPlan.get_steady_results
+  - RasBreakout1D.assemble_network_edge
+  - RasBreakout1D.catalog_sources
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.plan_network_edge
+  - RasBreakout1D.run
+  - RasBreakout1D.select_by_stations
+  - RasCmdr.compute_plan
+  - RasGeometryCompute.assess_flow_path_policy
+  - RasGeometryCompute.audit_main_channel_lengths
+  - RasGeometryCompute.validate_geometry
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 14
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
@@ -3957,6 +3999,38 @@ notebooks:
   excluded: false
   code_cells: 11
   executed_cells: 9
+- id: 956_hydrofabric_conflation_visual_qa
+  filename: 956_hydrofabric_conflation_visual_qa.ipynb
+  title: NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
+  series: 950
+  series_name: eBFE Delivery Validation
+  summary: Visually audits generic HEC-RAS-to-network conflation with the NextGen v2.2 adapter on the
+    Texas Lower Colorado-Cummins SHILOH BRANCH model, including native flowpath and catchment IDs, candidate
+    ranks, score components, explicit resolution states, HUC intersections, and cross-section measures.
+  tags:
+  - 1d
+  - ebfe
+  - geometry
+  - hydrofabric
+  - nextgen
+  - qa
+  difficulty: advanced
+  est_runtime: 5 min
+  data_project: null
+  functions_used:
+  - HdfProject.get_project_extent
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_centerlines
+  - RasCmdr.compute_plan
+  - RasEbfeModels.organize_model
+  - RasNetworkConflation.conflate
+  - RasPlan.update_run_flags
+  - ras.project_name
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 13
+  executed_cells: 13
 - id: 957_ebfe_spring_river_validation
   filename: 957_ebfe_spring_river_validation.ipynb
   title: 'Using eBFE Models: Spring River Validation'

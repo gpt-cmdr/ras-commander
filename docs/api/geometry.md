@@ -64,6 +64,84 @@ An affine offset is shown only to make the explicit operation easy to inspect.
 For geodetic vertical transformations, use the project-approved PROJ pipeline
 or full compound CRS definitions and confirm required grid files are installed.
 
+## RAS Mapper Reach-Length QA
+
+`RasGeometryCompute.assess_flow_path_policy()` determines whether a joined 1D
+reach may safely regenerate its overbank flow paths. It copies the whole project,
+forces RAS Mapper to regenerate flow paths on the copy, recomputes LOB/channel/ROB
+reach lengths, and compares them with the stored values. The source project is
+never modified.
+
+```python
+from ras_commander import RasGeometryCompute
+
+policy = RasGeometryCompute.assess_flow_path_policy(
+    "JoinedModel.g01.hdf",
+    tolerance_fraction=0.01,
+)
+
+print(policy.recommended_policy)
+display(policy.reach_metrics_df)
+display(policy.xs_metrics_df)
+```
+
+The recommendation is `regenerate_and_recompute` only when every usable LOB and
+ROB interval reproduces its stored length within 1%. Otherwise it is
+`preserve_and_recompute_only_at_join_boundary`. The preserve policy is also selected
+when no source flow paths span a reach but its stored overbank lengths differ
+from the channel lengths. This prevents an automatically generated path from
+silently replacing evidence of intentionally different overbank routing.
+
+For a provisional joined reach, pass the two cross sections adjacent to the
+join. The method returns exactly one regenerated left and right segment clipped
+between those cut lines. Save the review evidence directly as GeoParquet when
+desired:
+
+```python
+policy = RasGeometryCompute.assess_flow_path_policy(
+    "JoinedModel.g01.hdf",
+    join_upstream_xs=("Walnut", "Main", "5304.8"),
+    join_downstream_xs=("Walnut", "Main", "4884.4"),
+    review_segments_path="working/walnut_join_flow_paths.parquet",
+)
+
+display(policy.join_segments_gdf[["side", "length", "geometry"]])
+```
+
+Join selectors may use the full-precision restationed values returned by
+`RasBreakout1D.assemble_network_edge().seams_gdf`. Compiled geometry HDF files
+can store those values at a shorter displayed precision; the selector accepts a
+unique match within one unit of that displayed precision and still fails closed
+when more than one cross section could match.
+
+The clipped segment lengths supply only the new join interval's LOB/ROB values;
+the remaining stored source lengths stay unchanged under the preserve policy.
+The returned geometries should be retained for visual review.
+
+`audit_main_channel_lengths()` is the independent, read-only informative QA
+check. It accepts either a plain-text `.g##` geometry or a compiled `.g##.hdf`,
+measures the distance between adjacent cross-section intersections along the
+river centerline, and compares that distance with the stored channel reach
+length. It flags non-terminal intervals outside the supplied relative tolerance
+or with an invalid centerline intersection.
+
+```python
+channel_audit = RasGeometryCompute.audit_main_channel_lengths(
+    "WALNUT 0229.g01",
+    tolerance_fraction=0.01,
+)
+display(channel_audit[channel_audit["main_channel_flagged"]])
+```
+
+These APIs follow HEC's documented distinction: channel length comes from the
+river line, while LOB/ROB lengths come from flow paths. Automatically generated
+flow paths are review starting points rather than reconstructions of engineering
+judgment. See the official HEC-RAS Mapper pages for
+[Cross Sections](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/cross-sections)
+[Rivers](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/rivers),
+[River Station Markers](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/river-station-markers),
+and [Flow Path Lines](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/flow-path-lines).
+
 ## GeomProjection
 
 Model geometry reprojection helpers for copied HEC-RAS projects and plain-text
