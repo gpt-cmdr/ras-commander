@@ -25,6 +25,43 @@ made in the organized validation copy. The delivered source was not modified.
 | SG-006 | `RasProcess.exe CreateTerrain` returned code 0 and produced a structurally valid HDF, but emitted a non-fatal stderr warning whose text was not retained because DEBUG logging was not enabled. | No observed build failure; the warning cannot be independently classified from the retained log. | **Monitor.** Retain the validated HDF/hash. Rebuild with DEBUG logging if exact warning provenance becomes necessary. |
 | SG-007 | The first isolated LBSG_503 `p04` reconstructed-terrain run completed geometry preprocessing, but HEC-RAS 6.3 could not execute the removed Windows `wmic` utility. `RasUnsteady.exe` reached end-of-file reading its empty `systemInfo.txt` and exited with code 24. | The attempt produced only a 13,369-byte summary HDF and no hydraulic result datasets. The failure was a host/runtime compatibility issue, not evidence that the reconstructed terrain failed preprocessing. | **Mitigated and verified in ras-commander.** HEC-RAS 6.3 launches with a process-local, CPU-query-only WMIC compatibility shim backed by Windows CIM. A fresh isolated two-core rerun finished successfully and passed RAS Commander completion verification. The library does not install a Windows feature, change the system PATH, or expose a new public parameter. The failed run remains preserved. |
 
+## Project-specific qualification records
+
+### LBSG 501
+
+LBSG_501 is an upstream project in the five-model San Gabriel system. Its 1%
+plan `p01` reached unsteady computation. The shared SG-001 and SG-002 critical
+terrain-source deficiencies apply, so this is startup evidence only and not a
+runnable or reproducible downstream example.
+
+### LBSG 502
+
+LBSG_502 is an upstream project in the five-model San Gabriel system. Its 1%
+plan `p02` produced positive owned-solver-start evidence before it was stopped.
+The shared SG-001 and SG-002 critical terrain-source deficiencies apply, so this
+is startup evidence only and not a runnable or reproducible downstream example.
+
+### LBSG 503
+
+LBSG_503 covers the Florence area. Its 1% plan `p04` reached unsteady
+computation, and the separate two-core HDEM-only reconstructed-terrain run
+completed. The comparison below supports diagnostic reasonableness only; the
+shared SG-001 and SG-002 critical deficiencies remain model-blocking.
+
+### LBSG 504
+
+LBSG_504 covers the Round Rock area. Its 1% plan `p05` reached unsteady
+computation. The shared SG-001 and SG-002 critical terrain-source deficiencies
+apply, so this is startup evidence only and not a runnable or reproducible
+downstream example.
+
+### LBSG 505
+
+LBSG_505 is the downstream project that receives DSS boundary records from
+LBSG_501 through LBSG_504. Its 1% plan `p06` reached unsteady computation. The
+shared SG-001 and SG-002 critical terrain-source deficiencies apply, so this is
+startup evidence only and not a runnable or reproducible downstream example.
+
 ## HDEM-only terrain reconstruction
 
 The three HDEMs form one watershed-wide source and were used to create one

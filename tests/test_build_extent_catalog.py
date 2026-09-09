@@ -52,6 +52,14 @@ def test_san_gabriel_catalog_has_five_linked_submodel_entries() -> None:
     assert all(
         project["viewer_type"] == "Qualification candidate" for project in projects
     )
+    assert all(not project["webmap"] for project in projects)
+    details = [project["details"] for project in projects]
+    assert len(set(details)) == 5
+    assert details == [
+        "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/"
+        f"2026-09-05_san_gabriel_record_of_deficiencies.md#lbsg-{number}"
+        for number in range(501, 506)
+    ]
     assert all(
         project["record_of_deficiencies"].endswith(
             "2026-09-05_san_gabriel_record_of_deficiencies.md"

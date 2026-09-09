@@ -259,20 +259,22 @@
     };
   }
 
-  function projectPopupSection(feature) {
-    const props = feature.properties || {};
-    const webmap = props.webmap ? resolveHref(props.webmap) : "";
-    const rod = props.recordOfDeficiencies
-      ? resolveHref(props.recordOfDeficiencies)
-      : "";
+    function projectPopupSection(feature) {
+      const props = feature.properties || {};
+      const webmap = props.webmap ? resolveHref(props.webmap) : "";
+      const details = props.details ? resolveHref(props.details) : "";
+      const rod = props.recordOfDeficiencies
+        ? resolveHref(props.recordOfDeficiencies)
+        : "";
     return [
       '<section class="ras-library-popup__project">',
       `<h3>${escapeHtml(props.title || feature.id || "Example Project")}</h3>`,
       props.modelType ? `<p class="ras-library-popup__type">${escapeHtml(props.modelType)}</p>` : "",
-      props.summary ? `<p>${escapeHtml(props.summary)}</p>` : "",
-      props.version ? `<p class="ras-library-popup__version">${escapeHtml(props.version)}</p>` : "",
-      webmap ? `<a href="${escapeHtml(webmap)}">Open project map</a>` : "",
-      rod ? `<p><a href="${escapeHtml(rod)}">Record of Deficiencies</a></p>` : "",
+        props.summary ? `<p>${escapeHtml(props.summary)}</p>` : "",
+        props.version ? `<p class="ras-library-popup__version">${escapeHtml(props.version)}</p>` : "",
+        webmap ? `<a href="${escapeHtml(webmap)}">Open project map</a>` : "",
+        !webmap && details ? `<a href="${escapeHtml(details)}">Open project details</a>` : "",
+        rod ? `<p><a href="${escapeHtml(rod)}">Record of Deficiencies</a></p>` : "",
       "</section>",
     ].join("");
   }
@@ -344,9 +346,11 @@
       for (const child of entry.features) {
         const childProfile = projectProfile(child);
         const webmap = child.properties?.webmap;
-        const label = document.createElement(webmap ? "a" : "span");
-        if (webmap) {
-          label.href = resolveHref(webmap);
+        const projectHref = webmap || child.properties?.details;
+        const label = document.createElement(projectHref ? "a" : "span");
+        if (projectHref) {
+          label.href = resolveHref(projectHref);
+          label.title = webmap ? "Open project map" : "Open project details";
         } else {
           label.className = "ras-library-project-link--disabled";
         }
@@ -355,12 +359,15 @@
       }
       project.append(links);
     } else {
-      const link = document.createElement("a");
-      link.href = props.webmap ? resolveHref(props.webmap) : "#";
-      link.textContent = props.title || feature.id || "Example Project";
-      if (!props.webmap) {
-        link.setAttribute("aria-disabled", "true");
+      const projectHref = props.webmap || props.details;
+      const link = document.createElement(projectHref ? "a" : "span");
+      if (projectHref) {
+        link.href = resolveHref(projectHref);
+        link.title = props.webmap ? "Open project map" : "Open project details";
+      } else {
+        link.className = "ras-library-project-link--disabled";
       }
+      link.textContent = props.title || feature.id || "Example Project";
       project.append(link);
     }
     const meta = document.createElement("span");

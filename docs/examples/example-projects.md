@@ -35,15 +35,16 @@ available geometry, terrain, and results.
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
 <script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260906Tsan-gabriel-submodels01"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260906Texact-extents01"></script>
-<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260906Tsan-gabriel-submodels01"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260906Tsan-gabriel-submodels01"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260909Tcandidate-detail-links01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260909Tcandidate-detail-links01"></script>
 
 ## Dashboard Qualification Status
 
 The San Gabriel model system appears in the dashboard only as a **deficient
 source candidate**. Its five sub-model footprints and technical profile are
-discoverable, but the card intentionally has no project-viewer link and must
-not imply that the public delivery is a runnable or reproducible 2D example.
+discoverable, and each sub-model name in the table links to its project-specific
+qualification record. These evidence links are not project-viewer links and
+must not imply that the public delivery is a runnable or reproducible 2D example.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
