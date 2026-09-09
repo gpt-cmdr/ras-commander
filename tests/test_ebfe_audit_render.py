@@ -377,6 +377,39 @@ def test_fallback_does_not_fire_when_terrain_is_not_expected():
     assert "| Critical data missing |" not in verdict
 
 
+def test_critical_row_names_every_acquisition_not_only_terrain():
+    """"Critical" is any data the model needs that the delivery lacks -- the same
+    definition the map hatches on -- so the row must name infiltration and soils
+    gaps, not only a missing Terrain.hdf."""
+    bundle = _two_d_unsteady(
+        critical_missing=[],
+        supporting_elements={
+            "infiltration": {"state": "no", "location": None, "referenced": True, "note": "referenced by rasmap"},
+            "soils": {"state": "no", "location": None, "referenced": True, "note": "referenced by rasmap"},
+        },
+    )
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    row = next(l for l in verdict.splitlines() if l.startswith("| Critical data missing |"))
+    assert "**Infiltration** -- not in the delivery" in row
+    assert "**Soils** -- not in the delivery" in row
+    assert "needs data not in the delivery" in verdict
+
+
+def test_terrain_entry_and_other_acquisitions_coexist_without_duplicating_terrain():
+    bundle = _two_d_unsteady(
+        critical_missing=[{"element": "terrain", "reason": "terrain_hdf_absent_modifications_referenced",
+                           "projects": ["P"], "evidence": ""}],
+        terrain={"delivered": 1, "gapped": 0, "rebuilt": 0,
+                 "projects": [{"project": "P", "terrain_hdf": [], "raster": ["DEM.tif"], "status": "delivered"}]},
+        supporting_elements={"soils": {"state": "no", "location": None, "referenced": True, "note": ""}},
+    )
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    row = next(l for l in verdict.splitlines() if l.startswith("| Critical data missing |"))
+    assert row.count("**terrain**") + row.count("**Terrain**") == 1     # once, with its specific reason
+    assert "modifications referenced" in row
+    assert "**Soils** -- not in the delivery" in row
+
+
 def test_referenced_modifications_are_named_in_the_acquisition_evidence():
     bundle = _minimal_bundle(
         study_findings={"interpretation": "2d unsteady", "projects_with_unsteady_flow_pct": 100.0},
