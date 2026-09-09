@@ -291,3 +291,4 @@ h 3 · i 5 · j 1 · k 2 — mixed by design, each record naming the code that p
 total on the NAS** including tranche 01. Roughly **265 eBFE studies untouched**, Alabama not started.
 
 \* `08080103` is the record CT220's mis-sized gate overwrote — resume item 1, run by hand.
+- **CT215 / CLB03 — down, idle.** Four units audited and verified: Middle Canadian-Trujillo 134 GB, Elephant Butte 363 GB (six archives, run whole), Pecos Headwaters 305 GB, North Concho 217 GB; `oom_kill` 0, `critical_missing []` throughout, `peak_anon` ≤ 1.32 GiB against 48 GiB. Installed rev `20260909h` + snapshot c; `/work` back to 1.0 M of 1.4 T. **Its resume card was written by the coordinator from live container state and the published records** — the host agent did not return before the pause; the next agent should re-check `WORKER_REVISION` and the snapshot provenance at its first boundary. CT215 and CT214 are the only hosts with the scratch to gate revision k's unverified fix (a).
