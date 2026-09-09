@@ -105,6 +105,7 @@ _ENGINEER_WORDS = {
     "broken_relative_reference": "the reference pointed outside the delivered files",
     "nested_archive": "the file was still packed inside another archive",
     "not_delivered": "the file was not shipped at all",
+    "partially_delivered": "part of the layer was not shipped",
 }
 
 
@@ -561,8 +562,12 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
                 blocking=True, confidence="resolved",
             ))
         else:  # "no" or "partial"
+            # A partial layer (Terrain.hdf delivered, two of its DEM source tiles
+            # not) is still an acquisition -- but "not in the delivery" would be
+            # false for it, and the sidebar prints these words.
             actions.append(RepairAction(
-                order=0, kind="acquisition", target=labels[ekey], reason="not_delivered",
+                order=0, kind="acquisition", target=labels[ekey],
+                reason="partially_delivered" if state == "partial" else "not_delivered",
                 evidence=f"supporting_elements.{ekey}" + (f" ({note})" if note else ""),
                 blocking=True, confidence="resolved",
             ))
@@ -644,7 +649,7 @@ def _yes_no(state: str) -> str:
     return {
         "yes": "Yes",
         "no": "**No**",
-        "partial": "Partial -- some tiles missing",
+        "partial": "**Partial** -- delivered, but incomplete (see note)",
         "source_only": "**Source rasters only** -- no Terrain.hdf; must be rebuilt",
         "rebuilt": "Rebuilt (stored with this audit)",
         "unknown": "Unknown",
@@ -779,7 +784,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         if base.lower() in named:
             continue
         named.add(base.lower())
-        parts.append(f"**{base}** -- not in the delivery")
+        wording = "incomplete in the delivery" if a.reason == "partially_delivered" else "not in the delivery"
+        parts.append(f"**{base}** -- {wording}")
     if parts:
         w(f"| Critical data missing | {'; '.join(parts)} |")
 
