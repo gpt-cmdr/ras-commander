@@ -437,13 +437,22 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     # "yes" is never downgraded here.
     verification = audit.get("dss_verification") or {}
     checked = int(verification.get("boundaries_checked") or 0)
-    if checked and out.get("dss", {}).get("state") in ("no", "partial", None):
+    captured_dss_state = out.get("dss", {}).get("state")
+    acquisition_count = int(verification.get("boundaries_acquisition") or 0)
+    # A captured "yes" is downgraded only by reviewed acquisitions (the file the
+    # boundary needs is in no archive); an unverified ("inferred") boundary
+    # never downgrades it.
+    if checked and (captured_dss_state in ("no", "partial", None)
+                    or (captured_dss_state == "yes" and acquisition_count)):
         resolved = int(verification.get("boundaries_resolved") or 0)
-        acquisition = int(verification.get("boundaries_acquisition") or 0)
+        acquisition = acquisition_count
         inferred = int(verification.get("boundaries_inferred") or 0)
         entry = dict(out.get("dss") or {})
         entry.setdefault("state_as_captured", entry.get("state"))
-        if resolved == checked:
+        if acquisition and not resolved:
+            entry["state"] = "no"
+            entry["note"] = f"{acquisition} of {checked} boundaries need DSS that is not in the delivery"
+        elif resolved == checked:
             entry["state"] = "yes"
             entry["note"] = (f"{resolved} of {checked} boundaries verified against delivered DSS"
                              + (" (path corrections required)" if verification.get("resolved_needing_path_correction") else ""))
@@ -520,11 +529,32 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     # one step; otherwise the blocking count doubles.
     seen_moves = {(a.kind, a.from_value, a.to_value) for a in actions}
 
+    acquired_files: set = set()
     for recipe in bundle.recipes:
         surface = recipe.get("surface", "")
         kind = _SURFACE_TO_KIND.get(surface, "path_correction")
         raw_from = recipe.get("from") or ""
         raw_to = recipe.get("to")
+        if recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition":
+            # Worker rev i: the DSS a boundary was authored for is in no
+            # delivered archive (reviewed "real" by the archive-member match).
+            # Spring Creek carries 24 of these and still rendered "after
+            # repair" because every dss_pathname recipe mapped to a path
+            # correction. One acquisition per missing file, named.
+            target_file = str(recipe.get("acquisition_target") or raw_from or recipe.get("file") or "")
+            base = Path(target_file.replace("\\", "/")).name or target_file
+            if base in acquired_files:
+                continue
+            acquired_files.add(base)
+            label = "DSS boundary data" if surface == "dss_pathname" else "Referenced file"
+            reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
+            actions.append(RepairAction(
+                order=0, kind="acquisition", target=f"{label} ({base})", reason="not_delivered",
+                evidence=(f"{recipe.get('locator', '')}: {reason_text}").strip(": "),
+                confidence="resolved", blocking=True, escape_depth=escape_depth(raw_from),
+                from_value=raw_from or None, project=recipe.get("project"),
+            ))
+            continue
         if raw_from and raw_to and str(raw_from) == str(raw_to):
             continue    # an identity rewrite is not an action
         if (kind, raw_from or None, raw_to) in seen_moves:
@@ -556,6 +586,8 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         state = (delivered.get(ekey) or {}).get("state")
         if state in ("yes", "rebuilt", "not captured", "unknown", None):
             continue
+        if ekey == "dss" and acquired_files:
+            continue    # the missing DSS files are already named one by one above
         location = (delivered.get(ekey) or {}).get("location")
         note = (delivered.get(ekey) or {}).get("note") or ""
         if state == "source_only":
@@ -698,7 +730,9 @@ def _describe_action(action: RepairAction) -> str:
                 f"-- {what}.{climb}")
     if action.kind == "reconstruction":
         return f"Rebuild `{action.target}` from `{action.source}` -- {what}."
-    return f"Obtain `{action.target}` from outside the delivery -- {what}."
+    climb = (f" The reference climbed {action.escape_depth} level(s) above the model folder."
+             if action.escape_depth and action.escape_depth > 0 else "")
+    return f"Obtain `{action.target}` from outside the delivery -- {what}.{climb}"
 
 
 @log_call

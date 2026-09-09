@@ -665,11 +665,45 @@ def test_dss_state_partial_when_some_boundaries_need_data():
     assert "incomplete in the delivery" in render_audit_markdown(bundle)
 
 
-def test_dss_captured_yes_is_never_downgraded_by_verification():
+def test_dss_captured_yes_is_not_downgraded_by_unverified_boundaries():
     bundle = _two_d_unsteady(
         supporting_elements={"dss": {"state": "yes", "location": "DSS/x.dss", "referenced": True, "note": ""}},
         dss_verification={"bridge_available": True, "boundaries_checked": 3, "boundaries_resolved": 0,
-                          "boundaries_acquisition": 3, "boundaries_inferred": 0},
+                          "boundaries_acquisition": 0, "boundaries_inferred": 3},
     )
     row = next(l for l in render_audit_markdown(bundle).splitlines() if l.startswith("| DSS boundary data |"))
     assert "Yes" in row
+
+
+def test_acquisition_recipes_become_acquisition_actions_and_the_verdict_needs_data():
+    """Spring Creek (12040102) under worker rev i: 24 dss_pathname recipes with
+    confidence "acquisition" (the HMS DSS is in no archive, reviewed real), yet
+    the document read "after repair" because every dss_pathname recipe mapped to
+    a path correction."""
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "yes", "location": "DSS Inputs/Spring.dss", "referenced": True, "note": ""}},
+        dss_verification={"bridge_available": True, "boundaries_checked": 14, "boundaries_resolved": 0,
+                          "boundaries_acquisition": 14, "boundaries_inferred": 0},
+    )
+    hms = "..\\..\\..\\..\\HEC-HMS_v43\\Spring\\"
+
+    def recipe(plan, dss):
+        return {"file": f"RAS Model/HECRAS_507/Spring.{plan}", "surface": "dss_pathname",
+                "locator": f"Spring.{plan}:23:DSS File", "from": hms + dss,
+                "to": None, "why": "missing_from_delivery", "confidence": "acquisition", "kind": "acquisition",
+                "acquisition_target": hms + dss,
+                "confidence_reason": "C-part PRECIP-EXCESS absent from every delivered candidate",
+                "blocking": True, "project": "RAS Model/HECRAS_507",
+                "review": {"verdict": "real", "method": "archive_member_match"}}
+
+    bundle.recipes = [recipe("u05", "50YR.dss"), recipe("u06", "50YR.dss"), recipe("u01", "100YR.dss")]
+    actions = actions_from_bundle(bundle)
+    acq = [a for a in actions if a.kind == "acquisition"]
+    assert sorted(a.target for a in acq) == ["DSS boundary data (100YR.dss)", "DSS boundary data (50YR.dss)"]
+    assert all(a.blocking and a.escape_depth == 4 for a in acq)
+    assert not any(a.kind == "path_correction" for a in actions)
+    markdown = render_audit_markdown(bundle)
+    assert "needs data not in the delivery" in markdown
+    assert "| Critical data missing | **DSS boundary data** -- not in the delivery |" in markdown
+    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    assert "**No**" in row and "14 of 14" in row
