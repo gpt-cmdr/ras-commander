@@ -125,6 +125,16 @@ Rendered for a human as numbered steps in plain language, with the machine field
 per step. An engineer should be able to follow it by hand; a ras-commander helper should be
 able to execute it without re-deriving anything.
 
+**A missing `Terrain.hdf` is critical data missing, not a reconstruction.** Terrain
+modifications (channel cuts, levees, polygon overrides) are stored inside that HDF and
+referenced from the `.rasmap`, and it is unlikely any of these models was produced without at
+least one. Rebuilding from delivered DEM rasters therefore yields a terrain that runs but is
+not the one the model was calibrated against. The audit records `terrain.modifications` (every
+modification element under each `.rasmap` terrain layer, and the `/Modifications/` group of any
+delivered HDF) and emits **two** actions when the HDF is absent -- `reconstruction` (to run)
+and a blocking `acquisition` (for fidelity) -- plus a `critical_missing` entry that the verdict
+shows and the webmap hatches distinctly.
+
 **Recursive extraction deserves its own treatment.** Tranche 01 measured 21 nested archives in
 a single study, and nesting that collapses a duplicated directory prefix. Record depth, the
 containing archive, and the collapse, because a naive extractor produces a doubled path and a

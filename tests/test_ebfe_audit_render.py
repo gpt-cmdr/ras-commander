@@ -326,13 +326,41 @@ def test_source_only_terrain_is_a_blocking_reconstruction_not_delivered():
     )
     actions = actions_from_bundle(bundle)
     recon = [a for a in actions if a.kind == "reconstruction"]
-    assert len(recon) == 1
-    assert recon[0].target == "Terrain"
-    assert recon[0].blocking
+    assert len(recon) == 1 and recon[0].target == "Terrain" and recon[0].blocking
+    # Terrain modifications live inside the missing HDF: rebuilding from rasters
+    # runs but is not faithful, so the modified terrain is also an acquisition.
+    acq = [a for a in actions if a.kind == "acquisition" and a.target.startswith("Terrain")]
+    assert len(acq) == 1 and acq[0].blocking
     markdown = render_audit_markdown(bundle)
     assert "Source rasters only" in markdown
     assert "| Runnable as delivered | **yes** |" not in markdown
-    assert "after repair" in markdown
+    assert "needs data not in the delivery" in markdown
+    assert "| Critical data missing |" in markdown
+    assert "terrain hdf absent modifications unknown" in markdown
+
+
+def test_captured_critical_missing_is_rendered_with_scope():
+    bundle = _minimal_bundle(critical_missing=[{
+        "element": "terrain", "reason": "terrain_hdf_absent_modifications_referenced",
+        "projects": ["LBSG_501", "LBSG_502"], "evidence": "rasmap: 3 modification elements",
+    }])
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "| Critical data missing | **terrain** (2 projects) -- terrain hdf absent modifications referenced |" in verdict
+
+
+def test_referenced_modifications_are_named_in_the_acquisition_evidence():
+    bundle = _minimal_bundle(
+        study_findings={"interpretation": "2d unsteady", "projects_with_unsteady_flow_pct": 100.0},
+        g7_rascheck={"outcome": "RAN", "flow_type_families": {"UNSTEADY": 1}},
+        terrain={"delivered": 1, "gapped": 0, "rebuilt": 0,
+                 "projects": [{"project": "P", "terrain_hdf": [], "raster": ["DEM.tif"], "status": "delivered"}],
+                 "modifications": {"referenced_in_rasmap": True,
+                                   "rasmap_layers": [{"name": "Terrain", "filename": "Terrain.hdf",
+                                                      "modifications": [{"element": "Channel", "name": "cut1"},
+                                                                        {"element": "Levee", "name": "lv1"}]}]}},
+    )
+    acq = next(a for a in actions_from_bundle(bundle) if a.kind == "acquisition" and a.target.startswith("Terrain"))
+    assert "2 terrain modification(s) referenced" in acq.evidence
 
 
 def test_absent_expected_element_is_acquisition_and_needs_external_data():
