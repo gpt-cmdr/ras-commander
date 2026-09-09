@@ -695,9 +695,17 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # Critical data missing: delivered-but-unusable-for-fidelity. Captured as
     # audit["critical_missing"]; derived from the terrain state when absent, so a
     # missing Terrain.hdf is never quietly folded into "needs data".
-    critical = list(audit.get("critical_missing") or [])
-    if not critical and delivered.get("terrain", {}).get("state") in ("source_only", "no"):
+    # Present-but-empty means the capture looked and found nothing critical --
+    # e.g. 2,378 HEC-RAS 4.10 1D steady projects with no .rasmap, where terrain
+    # is not applicable. Only an *absent* field (a v1 capture) gets the derived
+    # fallback, and only when the model type expects terrain at all.
+    captured_critical = audit.get("critical_missing")
+    if captured_critical is not None:
+        critical = list(captured_critical)
+    elif expected.get("terrain") and delivered.get("terrain", {}).get("state") in ("source_only", "no"):
         critical = [{"element": "terrain", "reason": "terrain_hdf_absent_modifications_unknown"}]
+    else:
+        critical = []
     if critical:
         parts = []
         for item in critical:
