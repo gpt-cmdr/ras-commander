@@ -544,3 +544,91 @@ def test_renders_real_tranche01_study_with_all_sections():
     assert "2D unsteady" in markdown
     assert "climbed 4 level(s)" in markdown              # the signature defect, measured
     assert "Spring Creek" in markdown or "12040102" in markdown
+
+
+# -- the independent review overrides an element the capture called absent ---
+
+def _reviewed_absent_layer(verdict: str):
+    return _two_d_unsteady(supporting_elements={
+        "land_cover": {
+            "state": "no", "location": None, "referenced": True, "referenced_count": 4,
+            "note": "referenced 4 time(s), but the layer HEC-RAS opens is absent",
+            "review": {"verdict": verdict, "method": "archive_member_match",
+                       "evidence": "land_cover referenced and delivered as X.zip::Models/NB_1/Landcover/Manning_N.hdf"},
+        },
+    })
+
+
+def test_review_analysis_gap_on_a_layer_is_not_an_acquisition():
+    """North Bosque (12060204): the capture said Manning's n was absent, the review found it
+    at exactly the referenced path. The document must not call that "needs data"."""
+    bundle = _reviewed_absent_layer("analysis_gap")
+    actions = actions_from_bundle(bundle)
+    assert not any(a.kind == "acquisition" for a in actions)
+    markdown = render_audit_markdown(bundle)
+    assert "needs data not in the delivery" not in markdown
+    assert "Critical data missing" not in markdown
+    row = next(l for l in markdown.splitlines() if l.startswith("| Land cover / Manning's n |"))
+    assert "Yes" in row and "**No**" not in row
+    assert "Landcover/Manning_N.hdf" in row
+    # and the reclassification is visible in section 5
+    assert "Land cover / Manning's n (layer)" in markdown
+    assert "Reclassified during review" in markdown
+
+
+def test_review_real_on_a_layer_keeps_the_acquisition():
+    bundle = _reviewed_absent_layer("real")
+    acq = [a for a in actions_from_bundle(bundle) if a.kind == "acquisition"]
+    assert [a.target for a in acq] == ["Land cover / Manning's n"]
+    assert "needs data not in the delivery" in render_audit_markdown(bundle)
+
+
+def test_relocation_recorded_twice_renders_as_one_step():
+    """The worker writes each relocation into asset_relocation AND as a recipe."""
+    move = {"from": "RAS Model/A/Output/x.IC.O01", "to": "RAS Model/A/Input/x.IC.O01"}
+    bundle = _two_d_unsteady(asset_relocation={"assets_relocated": 1, "relocated": [dict(move, archive="k", evidence="e")]})
+    bundle.recipes = [dict(move, file=move["to"], surface="asset_relocation", locator="A/Output/x.IC.O01",
+                           why="separately_delivered", confidence="resolved")]
+    moves = [a for a in actions_from_bundle(bundle) if a.kind == "file_movement"]
+    assert len(moves) == 1
+
+
+def test_identity_recipe_is_not_an_action():
+    bundle = _two_d_unsteady()
+    bundle.recipes = [{"file": "x.rasmap", "surface": "rasmap_attribute", "locator": "L",
+                       "from": r"..\Terrain\Terrain.hdf", "to": r"..\Terrain\Terrain.hdf",
+                       "why": "relocated_by_assembly", "confidence": "resolved", "origin": "deficiency_review"}]
+    assert actions_from_bundle(bundle) == []
+
+
+def test_captured_terrain_absent_entry_is_dropped_when_the_record_shows_the_hdf_delivered():
+    """Middle Guadalupe (12100202): the capture wrote terrain_hdf_absent_modifications_referenced
+    for MIDG01/MIDG02, yet terrain.projects shows Terrain.hdf delivered for both -- only DEM
+    source tiles are missing (state partial). The document must not say the HDF is absent."""
+    bundle = _two_d_unsteady(
+        supporting_elements={"terrain": {"state": "partial", "location": None, "referenced": True,
+                                         "note": "2 source tiles missing"}},
+        terrain={"delivered": 2, "gapped": 0, "rebuilt": 0,
+                 "projects": [{"project": "MIDG01/Input", "terrain_hdf": ["Terrain.hdf"], "raster": ["a.tif"]},
+                              {"project": "MIDG02/Input", "terrain_hdf": ["Terrain (1).hdf"], "raster": ["b.tif"]}],
+                 "modifications": {"referenced_in_rasmap": True, "rasmap_layers": []}},
+        critical_missing=[{"element": "terrain", "reason": "terrain_hdf_absent_modifications_referenced",
+                           "projects": ["MIDG01/Input", "MIDG02/Input"], "evidence": "x"}],
+    )
+    markdown = render_audit_markdown(bundle)
+    assert "terrain hdf absent" not in markdown
+    # the partial terrain is still an acquisition, so the verdict is unchanged
+    assert "needs data not in the delivery" in markdown
+    assert "**Terrain** -- not in the delivery" in markdown
+
+
+def test_captured_terrain_absent_entry_is_kept_when_the_hdf_really_is_absent():
+    bundle = _two_d_unsteady(
+        supporting_elements={"terrain": {"state": "source_only", "location": None, "referenced": True, "note": ""}},
+        terrain={"delivered": 0, "gapped": 1, "rebuilt": 0,
+                 "projects": [{"project": "SG/Input", "terrain_hdf": [], "raster": ["dem.tif"]}],
+                 "modifications": {"referenced_in_rasmap": True, "rasmap_layers": []}},
+        critical_missing=[{"element": "terrain", "reason": "terrain_hdf_absent_modifications_referenced",
+                           "projects": ["SG/Input"], "evidence": "x"}],
+    )
+    assert "terrain hdf absent modifications referenced" in render_audit_markdown(bundle)

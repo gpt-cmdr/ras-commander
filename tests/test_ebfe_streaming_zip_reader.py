@@ -238,3 +238,21 @@ def test_forward_walk_is_still_used_when_directory_is_absent(truncated_archive):
     survey = StreamingZipReader(truncated_archive).probe()
     assert not survey.has_central_directory
     assert survey.stopped_reason == "truncated"
+
+
+# -- deflate64 decompressors have no flush() ---------------------------------
+
+def test_finish_decompressor_tolerates_a_decompressor_without_flush():
+    """``zipfile_deflate64.Deflate64`` returns everything from ``decompress()`` and
+    has no ``flush``. Middle Guadalupe (12100202) ships 343 of 386 members as
+    deflate64; on an EOCD-less archive the forward walk would have aborted on
+    the first of them with an ``AttributeError`` the walk does not catch."""
+
+    class NoFlush:
+        def decompress(self, block):
+            return block
+
+    assert StreamingZipReader._finish_decompressor(NoFlush()) == b""
+
+    import zlib
+    assert StreamingZipReader._finish_decompressor(zlib.decompressobj(-zlib.MAX_WBITS)) == b""

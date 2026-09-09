@@ -397,7 +397,22 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     out = {}
     for key, _label in SUPPORTING_ELEMENTS:
         if key in explicit:
-            out[key] = dict(explicit[key])
+            entry = dict(explicit[key])
+            # The independent review checks every referenced-but-absent element
+            # against the archive members. An ``analysis_gap`` verdict means the
+            # layer *is* in the delivery -- the capture looked in the wrong place.
+            # Reporting it as an acquisition would hatch the study on the map for
+            # data FEMA shipped (North Bosque's Manning's n, Lower Brazos's land
+            # cover). The review is the later, independent word; it wins.
+            review = entry.get("review") or {}
+            if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+                evidence = str(review.get("evidence") or "")
+                member = evidence.split("::", 1)[1] if "::" in evidence else None
+                entry["state_as_captured"] = entry.get("state")
+                entry["state"] = "yes"
+                entry["location"] = member or entry.get("location")
+                entry["note"] = f"found by independent review: {evidence}" if evidence else "found by independent review"
+            out[key] = entry
             continue
         # v1 fallbacks -- aggregate only, no location
         if key == "terrain":
@@ -475,10 +490,21 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             archive=entry.get("archive"), blocking=True,
         ))
 
+    # A relocation is recorded twice by the worker -- once in the audit's
+    # asset_relocation block and once as an asset_relocation recipe. One move,
+    # one step; otherwise the blocking count doubles.
+    seen_moves = {(a.kind, a.from_value, a.to_value) for a in actions}
+
     for recipe in bundle.recipes:
         surface = recipe.get("surface", "")
         kind = _SURFACE_TO_KIND.get(surface, "path_correction")
         raw_from = recipe.get("from") or ""
+        raw_to = recipe.get("to")
+        if raw_from and raw_to and str(raw_from) == str(raw_to):
+            continue    # an identity rewrite is not an action
+        if (kind, raw_from or None, raw_to) in seen_moves:
+            continue
+        seen_moves.add((kind, raw_from or None, raw_to))
         depth = escape_depth(raw_from)
         reason = recipe.get("why") or ("broken_relative_reference" if depth > 0 else "separately_delivered")
         if depth > 0 and reason == "missing_from_delivery":
@@ -589,6 +615,16 @@ def _group_gaps(bundle: AuditBundle) -> dict:
             group = f"Other ({ext or 'no extension'})"
         grouped[group][raw] += 1
         example_source.setdefault((group, raw), gap.get("source_file", ""))
+    # Element-level reclassifications: a supporting layer the capture called
+    # absent that the review found among the archive members. Listed with the
+    # reference gaps so the engineer sees why the layer is not in section 6.
+    labels = dict(SUPPORTING_ELEMENTS)
+    for ekey, entry in (bundle.audit.get("supporting_elements") or {}).items():
+        review = (entry or {}).get("review") or {}
+        if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+            label = labels.get(ekey, ekey)
+            analysis_counts[f"{label} (layer)"] += int(entry.get("referenced_count") or 1)
+            analysis_evidence.setdefault(f"{label} (layer)", str(review.get("evidence", "")))
     return {
         "groups": grouped,
         "sources": example_source,
@@ -702,6 +738,24 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     captured_critical = audit.get("critical_missing")
     if captured_critical is not None:
         critical = list(captured_critical)
+        # The capture's terrain rule fired on a *partial* terrain -- Terrain.hdf
+        # delivered with its modifications, two DEM source tiles not (Middle
+        # Guadalupe MIDG01/02). "Terrain.hdf absent" is then false, and the
+        # sidebar prints it. Where the record itself shows the HDF delivered for
+        # every project the entry names, the entry is dropped; the partial
+        # terrain still surfaces as an acquisition with the capture's note.
+        terrain_projects = {
+            str(p.get("project") or p.get("name") or ""): p
+            for p in ((audit.get("terrain") or {}).get("projects") or []) if isinstance(p, dict)
+        }
+        kept = []
+        for item in critical:
+            if str(item.get("element")) == "terrain" and str(item.get("reason", "")).startswith("terrain_hdf_absent"):
+                named = [str(p) for p in (item.get("projects") or [])]
+                if named and all(terrain_projects.get(p, {}).get("terrain_hdf") for p in named):
+                    continue
+            kept.append(item)
+        critical = kept
     elif expected.get("terrain") and delivered.get("terrain", {}).get("state") in ("source_only", "no"):
         critical = [{"element": "terrain", "reason": "terrain_hdf_absent_modifications_unknown"}]
     else:
