@@ -267,3 +267,27 @@ STATE/handoff precedent instead; Track 2 (execution proof under HEC-RAS) has not
 5. CT214 runs `rerender_all.py` over unclaimed audited units at snapshot d; then the webmap release and empty `RULES_AHEAD_OF_FLEET` (webmap `f11db3c`+).
 6. Pending user items: CLB02 SSH key (`C:\Users\billk_clb\.ssh\id_rsa.pub`); VM160 reclaim on CLB04 (no backup exists — back up first); fleet `AGENTS.md`/`fleet.v1.json` corrections (CLB03 ConnectX-3, CT191 8 GiB, CT216/CT220/CT215 registration).
 7. Alabama contract still undecided (survey + proposal was assigned to CT215 and never started).
+
+### Wind-down detail (added as hosts reported)
+
+- **CT220 / CLB07 — down, idle.** 25 units: 17 audited, 5 `DISK_INSUFFICIENT`, 1 `EXTRACTION_INCOMPLETE`, 1 `PROBE_BLOCKED`. Pool 67.78% all day, `oom_kill` 0, `peak_anon` high-water **1.99 GiB** (layer 9 is what lifts it). **Published rev k** (224,901 B; j retired) — Blackwater Draw verified fix (b) in both directions (a delivered terrain emits no critical row; a genuinely `source_only` one still does); **(a), (c), (d) unverified — gate (a) on CT215/CT214** with Vermilion / `08040301` / `12100303`, all of which exceed CT220's scratch. **Copied snapshot `build-20260909d` into `_worker/` (cmp-verified, not adopted).** Two self-reported errors, both in its card: choosing a gate study without a capacity check (see Vermilion below), and `gate_k.sh` keying publication on the control alone — **the next patcher must make every gate AND together before applying l.**
+- **CT214 / CLB04 — down, idle.** 16 hostlog lines, 16/16 verified, ~2.15 TB across 7 studies incl. Monument-Seminole 389 GB and Middle Nueces 331 GB. Throughput fell 410 → 160–180 MB/s with four hosts extracting (contention, not regression). Persisted `loop2.sh` and `wu_probe.py` from container `/tmp` into `_worker/tranche2/` so they survive the pause. Warnings in its card: the incoming `pick_next.py` must be checked for the `model_areas` rule or Rio Chama re-enters the queue and spins; **any zero-bytes guard must exempt records carrying `model_areas`**; the five-file gate passes a whole-file CRLF→LF rewrite, so the retired-copy diff is the check that catches it.
+- **CT216 / CLB04b — down, idle.** 14 studies carried to `audited` (12 still audited on disk), 5 deferred, 0 stops, ~1,297 GB. `peak_anon` 220 MiB–1.89 GiB against 16 GiB.
+- **`08080103` Vermilion recovery is resume item 1.** CT216 has ~198 GB free against a 116.2 GB need, but `pick_next` will not offer it at `--max-gb 110` (the test is `max_gb * 1e9 <= need_bytes`), so **run it by hand**: `run_unit.sh 08080103 model 4` on CT216, or on CT215 uncapped.
+- **Harness lessons for the next agents:** `pgrep -f <pattern>` self-matches any shell whose command string contains the pattern — use a self-match-safe `ps | awk`; Python's `write_text` on Windows rewrites CRLF and will corrupt a shell script or a worker patch (write bytes, or `newline=""`); and **the session scratchpad is shared across agents** — two containers' agents overwrote each other's file mid-write, briefly landing one host's resume card in another's report. Use per-host filenames and a content guard.
+- **Webmap `ebfe-20260909T174535Z` live, agent stood down** (webmap HEAD `3479546` before the documentation move; 70 contract tests): **52 studies audited / 63 work units / 63 pages, 35 hatched, 17 after-repair, 12 held**; `coverage.pmtiles` byte-identical across the whole round. Shipped with `RULES_AHEAD_OF_FLEET` armed, and the three known divergences are published in the manifest under `verdict_divergences` so the product admits the disagreement. **Spring Creek `12040102` is the first study whose verdict comes from the boundary verification rather than its document** — hatched on eight named DSS files no archive contains while the document still reads "after repair"; the fleet re-render at snapshot d closes that. Emptying `RULES_AHEAD_OF_FLEET` needs: fleet re-render at d → a dry run reporting `verdict_divergences: {}` → set it to `()` and re-run the tests. **A fourth divergence is drift, not lag.** Standing recommendation repeated: have `ebfe_audit` emit `_actions.json` beside each document so the map reads data instead of replicating five rules twice. Side effect of the documentation move: campaign `test_*.py` files under `agent_tasks/` aborted collection, so `pytest.ini` now scopes pytest to `tests/`.
+
+### Verified fleet state at the pause (coordinator, independent check)
+
+`_claims` **empty**, no `*.v2tmp` anywhere under `F:\eBFE\audit\`, and all five containers
+**running idle with zero `ebfe_worker.py` processes** (CT214 + CT216 on CLB04, CT215 on CLB03,
+CT220 on CLB07, CT191 on CLB09). Nothing was left mid-flight.
+
+**Tranche 2 final:** 63 units — **51 audited (44 studies, 5.94 TB written)**, 11 deferred with a
+reason (9 `DISK_INSUFFICIENT`: `08080103`* `11040001 11120101 11140201 11140206 12040204 12100304
+12100405 13020209`; 1 `EXTRACTION_INCOMPLETE`: `11140204`, corrupt at source; 1 `PROBE_BLOCKED`:
+`11010014`, needs snapshot d). Audited records carry worker revisions b 8 · c 4 · d 16 · f 5 · g 7 ·
+h 3 · i 5 · j 1 · k 2 — mixed by design, each record naming the code that produced it. **75 units
+total on the NAS** including tranche 01. Roughly **265 eBFE studies untouched**, Alabama not started.
+
+\* `08080103` is the record CT220's mis-sized gate overwrote — resume item 1, run by hand.
