@@ -1666,7 +1666,8 @@ notebooks:
   series_name: Geometry & Calibration
   summary: Catalog and join two adjacent Walnut Creek FEMA eBFE main-stem projects for NOAA NWM feature
     5790954, write an independent restationed HEC-RAS project, retain source-block provenance, and visually
-    verify the centerline seam, computational/export domains, and two-pass flow-path finalization gate.
+    verify the centerline seam, computational/export domains, two-pass flow-path finalization, inherited
+    geometry diagnostics, and retained-section hydraulic response against both original plans.
   tags:
   - 1d
   - steady
@@ -1678,21 +1679,28 @@ notebooks:
   - geoparquet
   - validation
   difficulty: advanced
-  est_runtime: 5 s
+  est_runtime: 50 s
   data_project: null
   functions_used:
   - GeomCrossSection.get_cross_sections
   - GeomParser.get_river_centerlines
+  - HdfResultsPlan.get_compute_messages
+  - HdfResultsPlan.get_steady_results
   - RasBreakout1D.assemble_network_edge
   - RasBreakout1D.catalog_sources
+  - RasBreakout1D.extract_selection
   - RasBreakout1D.plan_network_edge
+  - RasBreakout1D.run
+  - RasBreakout1D.select_by_stations
+  - RasCmdr.compute_plan
+  - RasGeometryCompute.assess_flow_path_policy
   - RasGeometryCompute.audit_main_channel_lengths
-  - ras.initialize
+  - RasGeometryCompute.validate_geometry
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
-  executed_cells: 9
+  code_cells: 14
+  executed_cells: 14
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations

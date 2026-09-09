@@ -1246,11 +1246,39 @@ class RasGeometryCompute:
                 and abs(item - target) <= 1e-6
             )
         ]
-        if len(numeric) != 1:
-            raise ValueError(
-                f"{name} {river}/{reach}/{station} resolved {len(numeric)} times"
+        if len(numeric) == 1:
+            return numeric.iloc[0]
+
+        def serialized_match(value):
+            """Match a full-precision text RS to HDF's displayed precision."""
+            text = str(value).strip()
+            match = re.search(
+                r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?",
+                text,
             )
-        return numeric.iloc[0]
+            if match is None or not math.isfinite(target):
+                return False
+            token = match.group(0)
+            mantissa = re.split(r"[Ee]", token, maxsplit=1)[0]
+            if "." not in mantissa:
+                return False
+            precision = len(mantissa.rsplit(".", 1)[1])
+            if precision <= 0:
+                return False
+            serialized = float(token)
+            # Compiled geometry HDF attributes can truncate text-geometry river
+            # stations to their displayed decimal precision.  Accept at most
+            # one display unit, then retain the exact-one fail-closed rule.
+            tolerance = 10.0 ** (-precision) + 1e-12
+            return abs(serialized - target) <= tolerance
+
+        serialized = candidates.loc[candidates["RS"].map(serialized_match)]
+        if len(serialized) != 1:
+            raise ValueError(
+                f"{name} {river}/{reach}/{station} resolved "
+                f"{len(serialized)} times"
+            )
+        return serialized.iloc[0]
 
     @staticmethod
     def _single_intersection_point(first, second, label: str):

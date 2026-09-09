@@ -486,6 +486,45 @@ def test_clip_join_flow_path_segments_returns_review_geometry():
     ]
 
 
+def test_select_xs_by_key_accepts_unique_hdf_station_truncation():
+    import pandas as pd
+
+    cross_sections = pd.DataFrame(
+        {
+            "River": ["NWM 5790954", "NWM 5790954"],
+            "Reach": ["Main", "Main"],
+            "RS": ["36579.17", "36038.50"],
+        }
+    )
+
+    selected = RasGeometryCompute._select_xs_by_key(
+        cross_sections,
+        ("NWM 5790954", "Main", "36579.172"),
+        "join_upstream_xs",
+    )
+
+    assert selected["RS"] == "36579.17"
+
+
+def test_select_xs_by_key_rejects_ambiguous_hdf_station_truncation():
+    import pandas as pd
+
+    cross_sections = pd.DataFrame(
+        {
+            "River": ["R", "R"],
+            "Reach": ["Main", "Main"],
+            "RS": ["100.00", "100.01"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="resolved 2 times"):
+        RasGeometryCompute._select_xs_by_key(
+            cross_sections,
+            ("R", "Main", "100.009"),
+            "join_upstream_xs",
+        )
+
+
 def test_count_flow_paths_by_reach_requires_two_xs_intersections():
     import geopandas as gpd
     from shapely.geometry import LineString

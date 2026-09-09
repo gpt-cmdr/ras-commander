@@ -38,6 +38,13 @@ def test_notebook_236_uses_real_multi_model_texas_workflow():
     assert "RasBreakout1D.assemble_network_edge(" in source
     assert "RasGeometryCompute.audit_main_channel_lengths(" in source
     assert "RasGeometryCompute.assess_flow_path_policy(" in source
+    assert "RasCmdr.compute_plan(" in source
+    assert "HdfResultsPlan.get_steady_results(" in source
+    assert "diagnostic_provenance" in source
+    assert '"pre_existing_retained"' in source
+    assert '"join_or_assembly_introduced"' in source
+    assert 'hydraulic_comparison["wse_delta"]' in source
+    assert 'hydraulic_comparison["flow_delta"]' in source
     assert "regenerate_and_recompute" in source
     assert "preserve_and_recompute_only_at_join_boundary" in source
     assert "MAX_CENTERLINE_OFFSET_FT = 500.0" in source
@@ -74,6 +81,9 @@ def test_notebook_236_retains_executed_visual_evidence():
         "03_cross_section_ownership.png",
         "04_reach_length_policy_evidence.png",
         "05_written_geometry_and_restationing.png",
+        "06_geometry_diagnostic_provenance.png",
+        "07_join_flow_path_evidence.png",
+        "08_source_vs_final_hydraulics.png",
     ):
         path = ASSET_ROOT / name
         assert path.is_file()
@@ -98,7 +108,7 @@ def test_notebook_236_code_cells_compile_and_gallery_entry_exists():
         for item in metadata["notebooks"]
         if item["id"] == "236_multi_model_1d_breakout_planning"
     )
-    assert entry["executed_cells"] == entry["code_cells"] == 9
+    assert entry["executed_cells"] == entry["code_cells"] == 14
     assert {"1d", "breakout", "ebfe", "nwm", "multi-model"} <= set(
         entry["tags"]
     )

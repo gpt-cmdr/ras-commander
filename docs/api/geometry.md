@@ -108,6 +108,12 @@ policy = RasGeometryCompute.assess_flow_path_policy(
 display(policy.join_segments_gdf[["side", "length", "geometry"]])
 ```
 
+Join selectors may use the full-precision restationed values returned by
+`RasBreakout1D.assemble_network_edge().seams_gdf`. Compiled geometry HDF files
+can store those values at a shorter displayed precision; the selector accepts a
+unique match within one unit of that displayed precision and still fails closed
+when more than one cross section could match.
+
 The clipped segment lengths supply only the new join interval's LOB/ROB values;
 the remaining stored source lengths stay unchanged under the preserve policy.
 The returned geometries should be retained for visual review.

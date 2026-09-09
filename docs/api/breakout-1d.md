@@ -228,6 +228,29 @@ unchanged and each join receives the measured left/right lengths from its two
 clipped review segments. Inputs must cover every seam and carry one consistent
 recommendation.
 
+### Distinguish inherited diagnostics from join defects
+
+Compile the complete original source plans before interpreting diagnostics from
+the joined model. Compute into isolated destination folders with
+`RasCmdr.compute_plan(..., dest_folder=...)` so the source projects remain
+unchanged. For station-specific diagnostics, use `station_map_gdf` to map each
+destination river station back to `source_geometry_id` and `source_station`.
+
+Non-station diagnostics such as an edge-line self-intersection require one more
+control: extract and compute each exact retained source slice independently,
+without a cross-model join. A diagnostic is pre-existing only when it reproduces
+in the corresponding complete source plan and retained slice. An unmatched
+diagnostic, or any diagnostic on either join-adjacent cross section, is treated
+as join/assembly-introduced and should be remediated before accepting the
+breakout.
+
+Example 236 demonstrates this isolation on the Texas/FEMA Walnut Creek pair. It
+maps all six final cross-section diagnostics to the same original source
+stations and reproduces the edge-line diagnostic in the retained downstream
+slice. None is join-adjacent. The notebook therefore records those findings as
+inherited source QA while failing closed if the provenance assertions ever
+change.
+
 ## Select a reach slice
 
 ```python
