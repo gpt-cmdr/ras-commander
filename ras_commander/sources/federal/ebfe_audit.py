@@ -508,9 +508,30 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         location = (delivered.get(ekey) or {}).get("location")
         note = (delivered.get(ekey) or {}).get("note") or ""
         if state == "source_only":
+            # Rebuilding from the delivered rasters yields a runnable terrain -- but
+            # terrain modifications (channel cuts, levees, polygon overrides) live
+            # inside the missing Terrain.hdf, and it is unlikely any of these models
+            # was built without one. So this is two actions: reconstruct to run, and
+            # obtain the original modified terrain for fidelity. The second is the
+            # critical one, and it cannot be satisfied from the delivery.
+            mods = ((bundle.audit.get("terrain") or {}).get("modifications") or {})
+            referenced = mods.get("referenced_in_rasmap")
+            layers = mods.get("rasmap_layers") or []
+            mod_count = sum(len(l.get("modifications") or []) for l in layers if isinstance(l, dict))
+            if referenced:
+                why_mods = f"{mod_count} terrain modification(s) referenced in the .rasmap"
+            elif referenced is False:
+                why_mods = "no modification references survive in the .rasmap, but they lived in the missing file"
+            else:
+                why_mods = "modification references not captured"
             actions.append(RepairAction(
                 order=0, kind="reconstruction", target=labels[ekey], reason="not_delivered",
-                evidence=f"supporting_elements.{ekey}", source=location or "delivered rasters",
+                evidence=f"supporting_elements.{ekey} (runnable but without the original modifications)",
+                source=location or "delivered rasters", blocking=True, confidence="resolved",
+            ))
+            actions.append(RepairAction(
+                order=0, kind="acquisition", target=f"{labels[ekey]} (as modified -- Terrain.hdf)",
+                reason="not_delivered", evidence=f"supporting_elements.{ekey}: {why_mods}",
                 blocking=True, confidence="resolved",
             ))
         else:  # "no" or "partial"
@@ -671,6 +692,22 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w(f"| Projects | {loaded} of {total} open |")
     w(f"| Runnable as delivered | **{runnable}** |")
     w(f"| Actions required | {len(actions)} ({len(blocking)} blocking) |")
+    # Critical data missing: delivered-but-unusable-for-fidelity. Captured as
+    # audit["critical_missing"]; derived from the terrain state when absent, so a
+    # missing Terrain.hdf is never quietly folded into "needs data".
+    critical = list(audit.get("critical_missing") or [])
+    if not critical and delivered.get("terrain", {}).get("state") in ("source_only", "no"):
+        critical = [{"element": "terrain", "reason": "terrain_hdf_absent_modifications_unknown"}]
+    if critical:
+        parts = []
+        for item in critical:
+            element = str(item.get("element", "")).replace("_", " ")
+            reason = str(item.get("reason", "")).replace("_", " ")
+            projects = item.get("projects") or []
+            scope = f" ({len(projects)} project{'s' if len(projects) != 1 else ''})" if projects else ""
+            parts.append(f"**{element}**{scope} -- {reason}")
+        w(f"| Critical data missing | {'; '.join(parts)} |")
+
     grouped = _group_gaps(bundle)
     bv = grouped["by_verdict"]
     # deficiency_review (schema v2) is the authoritative tally: it covers every
