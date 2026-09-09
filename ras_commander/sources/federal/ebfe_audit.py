@@ -706,14 +706,27 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         critical = [{"element": "terrain", "reason": "terrain_hdf_absent_modifications_unknown"}]
     else:
         critical = []
-    if critical:
-        parts = []
-        for item in critical:
-            element = str(item.get("element", "")).replace("_", " ")
-            reason = str(item.get("reason", "")).replace("_", " ")
-            projects = item.get("projects") or []
-            scope = f" ({len(projects)} project{'s' if len(projects) != 1 else ''})" if projects else ""
-            parts.append(f"**{element}**{scope} -- {reason}")
+    # "Critical" is any data the model needs that the delivery does not contain --
+    # every acquisition action, not only terrain. The terrain-modification entries
+    # add their specific reason. This is the same definition the webmap hatches on
+    # (verdict: needs data not in the delivery), so document and map agree.
+    parts = []
+    for item in critical:
+        element = str(item.get("element", "")).replace("_", " ")
+        reason = str(item.get("reason", "")).replace("_", " ")
+        projects = item.get("projects") or []
+        scope = f" ({len(projects)} project{'s' if len(projects) != 1 else ''})" if projects else ""
+        parts.append(f"**{element}**{scope} -- {reason}")
+    named = {str(item.get("element", "")).lower() for item in critical}
+    for a in actions:
+        if a.kind != "acquisition":
+            continue
+        base = a.target.split(" (")[0]
+        if base.lower() in named:
+            continue
+        named.add(base.lower())
+        parts.append(f"**{base}** -- not in the delivery")
+    if parts:
         w(f"| Critical data missing | {'; '.join(parts)} |")
 
     grouped = _group_gaps(bundle)

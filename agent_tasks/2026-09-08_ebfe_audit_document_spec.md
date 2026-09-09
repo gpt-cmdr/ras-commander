@@ -125,6 +125,13 @@ Rendered for a human as numbered steps in plain language, with the machine field
 per step. An engineer should be able to follow it by hand; a ras-commander helper should be
 able to execute it without re-deriving anything.
 
+**"Critical" is any data the model needs that the delivery does not contain** -- every
+`acquisition` action, not only terrain. That is the verdict *needs data not in the delivery*, the
+webmap hatches exactly that set, and the document's "Critical data missing" row names every
+acquisition target so map and audit agree. `critical_missing[]` stays as the terrain-modification
+specifics (why a missing `Terrain.hdf` cannot be rebuilt faithfully), a subset of the gaps, not
+the definition of the hatch.
+
 **A missing `Terrain.hdf` is critical data missing, not a reconstruction.** Terrain
 modifications (channel cuts, levees, polygon overrides) are stored inside that HDF and
 referenced from the `.rasmap`, and it is unlikely any of these models was produced without at
