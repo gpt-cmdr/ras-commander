@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import os
 import zipfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -256,3 +257,61 @@ def test_finish_decompressor_tolerates_a_decompressor_without_flush():
 
     import zlib
     assert StreamingZipReader._finish_decompressor(zlib.decompressobj(-zlib.MAX_WBITS)) == b""
+
+
+# -- streamed archives with no central directory (Little Red) ------------------
+
+def _strip_central_directory(path: Path) -> Path:
+    """Cut the archive at the start of its central directory: a streamed zip
+    truncated at the publisher, exactly Little Red (11010014)."""
+    with zipfile.ZipFile(path) as archive:
+        start = archive.start_dir
+    raw = path.read_bytes()[:start]
+    out = path.with_name("streamed_no_cd.zip")
+    out.write_bytes(raw)
+    with pytest.raises(zipfile.BadZipFile):
+        zipfile.ZipFile(out)
+    return out
+
+
+def test_deferred_size_members_are_walked_without_a_central_directory(descriptor_archive):
+    """Little Red: 37 GB, every member deferred, no directory, no EOCD. The
+    walk must recover every member by inflating to end-of-stream, not stop at
+    the first one and audit zero bytes."""
+    streamed = _strip_central_directory(descriptor_archive)
+    survey = StreamingZipReader(streamed).probe()
+    assert not survey.has_central_directory
+    assert survey.stopped_reason in ("eof", "clean")   # the walk ends exactly at EOF
+    assert [m.name for m in survey.members] == list(PAYLOAD)
+    assert not survey.truncated
+    for m in survey.members:
+        assert m.file_size == len(PAYLOAD[m.name])
+        assert m.compress_size > 0
+        assert m.crc32 == zlib.crc32(PAYLOAD[m.name]) & 0xFFFFFFFF
+
+
+def test_deferred_size_members_extract_byte_identical_without_a_central_directory(descriptor_archive, tmp_path):
+    streamed = _strip_central_directory(descriptor_archive)
+    out = tmp_path / "streamed_out"
+    reader = StreamingZipReader(streamed)
+    list(reader.walk(sink_factory=sink_factory(out)))
+    assert reader.stats.extracted == len(PAYLOAD)
+    assert reader.stats.crc_fail == 0 and reader.stats.size_mismatch == 0
+    for name, data in PAYLOAD.items():
+        assert (out / name).read_bytes() == data
+
+
+def test_streamed_archive_truncated_mid_member_reports_truncation(descriptor_archive, tmp_path):
+    streamed = _strip_central_directory(descriptor_archive)
+    raw = streamed.read_bytes()
+    cut = streamed.with_name("streamed_truncated.zip")
+    cut.write_bytes(raw[: int(len(raw) * 0.6)])
+    survey = StreamingZipReader(cut).probe()
+    assert survey.truncated
+    assert survey.stopped_reason == "truncated"
+    assert survey.complete_members, "leading members must still be recovered"
+    assert len(survey.complete_members) < len(PAYLOAD)
+    reader = StreamingZipReader(cut)
+    results = list(reader.walk(sink_factory=sink_factory(tmp_path / "cut_out"), survey=survey))
+    assert reader.stats.truncated >= 1 and reader.stats.crc_fail == 0
+    assert [m.name for m, took in results if took] == [m.name for m in survey.complete_members if not m.is_dir]

@@ -280,6 +280,102 @@ class StreamingZipReader:
             is_dir=name.endswith("/"),
         )
 
+    def _resolve_deferred_member(
+        self, handle: BinaryIO, member: ZipMemberInfo
+    ) -> Tuple[Optional[ZipMemberInfo], int]:
+        """Recover the sizes of a deferred-size member without a central directory.
+
+        Deflate streams are self-delimiting: inflating until the decompressor
+        reports end-of-stream tells us exactly how many compressed bytes the
+        member occupies. The data descriptor that follows is then read in
+        each of its four layouts (with or without the ``PK\\x07\\x08`` signature,
+        32- or 64-bit sizes) and accepted only when its compressed size equals
+        the count just measured -- a false match would need the same number by
+        coincidence, and the next local header must also parse.
+
+        Stored members with deferred sizes are not self-delimiting; they are
+        refused, as before, rather than guessed.
+
+        Returns ``(member_with_sizes, next_header_offset)``. When the stream
+        runs off the end of the file the member is returned with a size that
+        places it past EOF, so the survey reports it truncated.
+        """
+        if member.compress_type not in (_DEFLATED, _DEFLATED64):
+            return None, member.data_offset
+        if member.compress_type == _DEFLATED:
+            decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
+        else:
+            if deflate64 is None:
+                return None, member.data_offset
+            decompressor = deflate64.Deflate64()
+
+        handle.seek(member.data_offset)
+        consumed = 0
+        written = 0
+        crc = 0
+        eof = False
+        while True:
+            block = handle.read(self.chunk_size)
+            if not block:
+                break
+            chunk = decompressor.decompress(block)
+            if chunk:
+                crc = zlib.crc32(chunk, crc)
+                written += len(chunk)
+            unused = getattr(decompressor, "unused_data", b"")
+            if getattr(decompressor, "eof", False) or unused:
+                consumed += len(block) - len(unused)
+                eof = True
+                break
+            consumed += len(block)
+
+        if not eof:
+            # Ran off the end of the file mid-stream: report it as truncated by
+            # declaring one byte more than the file holds.
+            truncated = ZipMemberInfo(
+                name=member.name, header_offset=member.header_offset,
+                data_offset=member.data_offset, compress_type=member.compress_type,
+                compress_size=(self.file_size - member.data_offset) + 1,
+                file_size=written, crc32=member.crc32, flags=member.flags,
+                is_dir=member.is_dir,
+            )
+            return truncated, self.file_size + 1
+
+        descriptor_at = member.data_offset + consumed
+        handle.seek(descriptor_at)
+        raw = handle.read(24)
+        layouts = (
+            (True, "<4sIII", 16), (True, "<4sIQQ", 24),
+            (False, "<III", 12), (False, "<IQQ", 20),
+        )
+        for signed, fmt, size in layouts:
+            if len(raw) < size:
+                continue
+            fields = struct.unpack_from(fmt, raw, 0)
+            if signed:
+                if fields[0] != _DATA_DESCRIPTOR_SIG:
+                    continue
+                d_crc, d_csize, d_usize = fields[1], fields[2], fields[3]
+            else:
+                d_crc, d_csize, d_usize = fields[0], fields[1], fields[2]
+            if d_csize != consumed or d_usize != written:
+                continue
+            if d_crc != (crc & 0xFFFFFFFF):
+                continue
+            next_offset = descriptor_at + size
+            handle.seek(next_offset)
+            following = handle.read(4)
+            if following and following not in (_LOCAL_HEADER_SIG, _CENTRAL_DIR_SIG, _EOCD_SIG):
+                continue
+            resolved = ZipMemberInfo(
+                name=member.name, header_offset=member.header_offset,
+                data_offset=member.data_offset, compress_type=member.compress_type,
+                compress_size=consumed, file_size=written, crc32=d_crc,
+                flags=member.flags, is_dir=member.is_dir,
+            )
+            return resolved, next_offset
+        return None, member.data_offset
+
     def _members_from_central_directory(self) -> Optional[list]:
         """Enumerate members from the central directory, when one exists.
 
@@ -369,19 +465,31 @@ class StreamingZipReader:
                         survey.stopped_reason = f"unrecognized_signature:{signature!r}"
                     break
 
-                if member.sizes_deferred and member.compress_size == 0:
-                    # Size lives in a trailing data descriptor, so the next header's
-                    # offset is unknown without scanning for it. Rare in publisher
-                    # archives; unproven against real data, so refuse rather than
-                    # guess and silently mis-walk the remainder.
-                    survey.members.append(member)
-                    survey.stopped_reason = "deferred_sizes_unsupported"
-                    logger.warning(
-                        "Member %s defers its sizes to a data descriptor; forward walk "
-                        "cannot determine the next header offset. Stopping.",
-                        member.name,
-                    )
-                    break
+                if member.sizes_deferred and member.compress_size == 0 and not member.is_dir:
+                    # Sizes live in a trailing data descriptor (flag bit 3): the
+                    # archive was written as a stream. Little Red (11010014) is
+                    # one -- 37 GB, no central directory, truncated at the
+                    # publisher -- and refusing here audited zero bytes of it as
+                    # a clean study. The boundary is recoverable: inflate to the
+                    # end of the deflate stream, then validate the descriptor
+                    # that follows against the bytes actually consumed.
+                    resolved, next_offset = self._resolve_deferred_member(handle, member)
+                    if resolved is None:
+                        survey.members.append(member)
+                        survey.stopped_reason = "deferred_sizes_unsupported"
+                        logger.warning(
+                            "Member %s defers its sizes to a data descriptor and its "
+                            "boundary could not be recovered (method %d). Stopping.",
+                            member.name, member.compress_type,
+                        )
+                        break
+                    survey.members.append(resolved)
+                    survey.declared_end = next_offset
+                    if next_offset > self.file_size:
+                        survey.stopped_reason = "truncated"
+                        break
+                    offset = next_offset
+                    continue
 
                 survey.members.append(member)
                 offset = member.data_offset + member.compress_size
