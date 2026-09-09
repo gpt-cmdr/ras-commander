@@ -360,6 +360,34 @@ def test_not_expected_elements_never_generate_actions():
     assert ("acquisition", "DSS boundary data") not in kinds
 
 
+# -- schema v2 captured fields win over v1 inference -------------------------
+
+def test_captured_model_type_is_preferred_over_prose_inference():
+    """The prose-derived fallback produced 'unknown' for one unit; a captured field must win."""
+    bundle = _minimal_bundle(model_type="2D", flow_regime="unsteady",
+                             study_findings={"interpretation": "1d steady", "projects_with_unsteady_flow_pct": 0.0})
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "**2D unsteady**" in verdict
+
+
+def test_mixed_study_expects_what_2d_expects():
+    expected = expected_elements("mixed", "unsteady")
+    assert expected["terrain"] and expected["rasmap"] and expected["projection"]
+
+
+def test_verdict_uses_deficiency_review_totals_when_present():
+    """deficiency_review counts every reviewed gap kind, not only MISSING_REFERENCE rows."""
+    bundle = _minimal_bundle(deficiency_review={"reported": 2, "real": 2, "analysis_gap": 0, "unverifiable": 0})
+    bundle.gaps = [  # only ONE of the two reviewed gaps is a MISSING_REFERENCE row
+        {"gap": "MISSING_REFERENCE", "source_file": "x", "role": "r", "raw_value": "a",
+         "review": {"verdict": "real", "evidence": ""}},
+        {"gap": "TERRAIN_ABSENT_STUDY_WIDE", "source_file": "", "role": "terrain", "raw_value": "",
+         "review": {"verdict": "real", "evidence": ""}},
+    ]
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "2 reported: **2 real**" in verdict
+
+
 # -- deficiency review: real vs gap in our own analysis ----------------------
 
 def _reviewed_gap(raw, verdict, evidence="", source="x.rasmap"):

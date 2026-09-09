@@ -260,7 +260,19 @@ def load_audit_bundle(folder: Union[str, Path]) -> AuditBundle:
 # ---------------------------------------------------------------------------
 
 def _model_type(bundle: AuditBundle) -> tuple[str, str]:
-    """(dimensionality, flow regime) from the audit, engineer's vocabulary."""
+    """(dimensionality, flow regime) from the audit, engineer's vocabulary.
+
+    Schema v2 captures ``model_type`` and ``flow_regime`` from the loaded
+    projects; those are authoritative and are used when present. The
+    inference below is the schema v1 fallback only -- deriving from prose
+    produced "unknown" for one unit and must not override a captured value.
+    """
+    captured_type = str(bundle.audit.get("model_type") or "").strip()
+    captured_regime = str(bundle.audit.get("flow_regime") or "").strip().lower()
+    if captured_type and captured_regime in ("steady", "unsteady"):
+        dims = {"1d": "1D", "2d": "2D", "mixed": "mixed"}.get(captured_type.lower(), captured_type)
+        return dims, captured_regime
+
     findings = bundle.audit.get("study_findings", {}) or {}
     families = (bundle.audit.get("g7_rascheck", {}) or {}).get("flow_type_families", {}) or {}
     unsteady_pct = findings.get("projects_with_unsteady_flow_pct")
@@ -302,7 +314,8 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     ``referenced`` maps optional-layer keys to booleans. Keys absent from it
     fall back to a conservative default (infiltration and soils: not expected).
     """
-    is_2d = dims == "2D"
+    # A "mixed" study has at least one 2D project, so it expects what 2D expects.
+    is_2d = dims in ("2D", "mixed")
     unsteady = regime == "unsteady"
     ref = referenced or {}
 
@@ -660,14 +673,24 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w(f"| Actions required | {len(actions)} ({len(blocking)} blocking) |")
     grouped = _group_gaps(bundle)
     bv = grouped["by_verdict"]
-    reported = sum(bv.values())
-    if reported and any(k != "unreviewed" for k in bv):
-        w(f"| Reported gaps | {reported} reported: **{bv.get('real', 0)} real**, "
-          f"{bv.get('analysis_gap', 0)} were gaps in our analysis, "
-          f"{bv.get('unverifiable', 0)} unverifiable"
-          + (f", {bv['unreviewed']} not yet reviewed" if bv.get("unreviewed") else "") + " |")
-    elif reported:
-        w(f"| Reported gaps | {reported} -- *not yet independently reviewed; treat as provisional* |")
+    # deficiency_review (schema v2) is the authoritative tally: it covers every
+    # reviewed gap kind, not only MISSING_REFERENCE rows. The row-derived count
+    # is the fallback for captures that predate the review.
+    review = audit.get("deficiency_review") or {}
+    if review.get("reported") is not None:
+        w(f"| Reported gaps | {review.get('reported', 0)} reported: "
+          f"**{review.get('real', 0)} real**, "
+          f"{review.get('analysis_gap', 0)} were gaps in our analysis, "
+          f"{review.get('unverifiable', 0)} unverifiable |")
+    else:
+        reported = sum(bv.values())
+        if reported and any(k != "unreviewed" for k in bv):
+            w(f"| Reported gaps | {reported} reported: **{bv.get('real', 0)} real**, "
+              f"{bv.get('analysis_gap', 0)} were gaps in our analysis, "
+              f"{bv.get('unverifiable', 0)} unverifiable"
+              + (f", {bv['unreviewed']} not yet reviewed" if bv.get("unreviewed") else "") + " |")
+        elif reported:
+            w(f"| Reported gaps | {reported} -- *not yet independently reviewed; treat as provisional* |")
     if blocking:
         first = blocking[0]
         w(f"| Most important | {_describe_action(first)} |")
