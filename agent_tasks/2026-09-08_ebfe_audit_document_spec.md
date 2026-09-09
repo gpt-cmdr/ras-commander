@@ -135,6 +135,25 @@ delivered HDF) and emits **two** actions when the HDF is absent -- `reconstructi
 and a blocking `acquisition` (for fidelity) -- plus a `critical_missing` entry that the verdict
 shows and the webmap hatches distinctly.
 
+**What RASMapper actually writes (observed on tranche 01, 2026-09-09).** Terrain modifications
+are `<Layer>` elements nested under the terrain layer and distinguished by `Type`:
+`TerrainLayer` → `<Layer Type="ElevationModificationGroup" Name="Modifications">` →
+`<Layer Type="GroundLineModificationLayer">` (with `<DefaultModificationType Value="1|2"/>`) or
+`<Layer Type="PolygonElevationModificationLayer">`, each holding a
+`<Layer Type="ElevationControlPointLayer" Name="Control Points">`. The words *Channel*, *Levee*,
+*Override* never appear in the XML; every layer's `Filename` is the terrain HDF. Inside the HDF,
+`/Modifications/<name>` groups carry attributes `Type` (`Levee`, `Polygon`), `Subtype` (`Channel`),
+`Priority`, with `Attributes`, `Polyline Info/Parts/Points` and `Profile Info/Values` datasets;
+names seen: `Channels`, `CutThrough`, `Polygons`, `Fill Sinks`. In 9 of 11 units the terrain HDF is
+not at the `.rasmap`'s relative path but beside the project (FEMA's `Input/` relocation) — the
+capture searches up two levels, as `check_terrain` does.
+
+**Empirical rate: 6 of 11 RASMapper units carry modifications** (`12070205` 15 elements,
+`12100201` 5, `12100302` 5, `12030102` 5, `13070007` 5), 5 carry none. The prior "unlikely any
+model was produced without one" is about half right — but **both units with an absent
+`Terrain.hdf` are in the modified half, and the `.rasmap` proves it.** So criticality is decided
+by *referenced* modifications; `_unknown` stays an honest unknown rather than "likely lost".
+
 **Recursive extraction deserves its own treatment.** Tranche 01 measured 21 nested archives in
 a single study, and nesting that collapses a duplicated directory prefix. Record depth, the
 containing archive, and the collapse, because a naive extractor produces a doubled path and a

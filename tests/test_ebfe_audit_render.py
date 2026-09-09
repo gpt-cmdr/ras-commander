@@ -348,6 +348,35 @@ def test_captured_critical_missing_is_rendered_with_scope():
     assert "| Critical data missing | **terrain** (2 projects) -- terrain hdf absent modifications referenced |" in verdict
 
 
+def test_captured_empty_critical_missing_suppresses_the_fallback():
+    """The capture looked and found nothing critical; the renderer must not second-guess it.
+
+    12090301: 2,378 HEC-RAS 4.10 1D steady projects, no .rasmap, terrain not
+    applicable -- the worker wrote critical_missing: [] and the fallback still
+    emitted a "terrain hdf absent" row from the terrain state.
+    """
+    bundle = _minimal_bundle(
+        critical_missing=[],
+        terrain={"delivered": 0, "gapped": 1, "rebuilt": 0, "projects": [
+            {"project": "P", "terrain_hdf": [], "raster": [], "status": "gapped"}]},
+        supporting_elements={"terrain": {"state": "no", "location": None, "note": "not applicable"}},
+    )
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "| Critical data missing |" not in verdict
+
+
+def test_fallback_does_not_fire_when_terrain_is_not_expected():
+    """A v1 capture (field absent) on a 1D steady model that references no terrain."""
+    bundle = _minimal_bundle(
+        terrain={"delivered": 0, "gapped": 1, "rebuilt": 0, "projects": [
+            {"project": "P", "terrain_hdf": [], "raster": [], "status": "gapped"}]},
+        supporting_elements={"terrain": {"state": "no", "location": None, "note": ""}},
+    )
+    assert "critical_missing" not in bundle.audit
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "| Critical data missing |" not in verdict
+
+
 def test_referenced_modifications_are_named_in_the_acquisition_evidence():
     bundle = _minimal_bundle(
         study_findings={"interpretation": "2d unsteady", "projects_with_unsteady_flow_pct": 100.0},
