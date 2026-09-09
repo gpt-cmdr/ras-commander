@@ -409,6 +409,19 @@ class StreamingZipReader:
 
     # -- extraction --------------------------------------------------------
 
+    @staticmethod
+    def _finish_decompressor(decompressor) -> bytes:
+        """Drain a decompressor's tail, if it has one.
+
+        ``zlib.decompressobj`` exposes ``flush()``; ``zipfile_deflate64``'s
+        ``Deflate64`` does not -- it returns every byte from ``decompress()``.
+        Calling ``flush()`` unconditionally raised ``AttributeError`` on the first
+        deflate64 member of an EOCD-less archive, which the walk's ``except``
+        clause does not catch, so one such member aborted the whole extraction.
+        """
+        flush = getattr(decompressor, "flush", None)
+        return flush() if callable(flush) else b""
+
     def _inflate_member(self, handle: BinaryIO, member: ZipMemberInfo, sink: BinaryIO) -> Tuple[int, int]:
         """Stream one member into ``sink``. Returns (bytes_written, crc)."""
         handle.seek(member.data_offset)
@@ -439,7 +452,7 @@ class StreamingZipReader:
                 written += len(chunk)
 
         if decompressor:
-            tail = decompressor.flush()
+            tail = self._finish_decompressor(decompressor)
             if tail:
                 crc = zlib.crc32(tail, crc)
                 sink.write(tail)
