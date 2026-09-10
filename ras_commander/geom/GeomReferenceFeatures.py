@@ -16,14 +16,215 @@ All methods are static. Do not instantiate.
 import math
 import shutil
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from .GeomParser import GeomParser
+from .GeomStorage import GeomStorage
 
 logger = get_logger(__name__)
+
+
+_REFERENCE_LINE_NAME_BYTES = 40
+_REFERENCE_LINE_STORAGE_AREA_BYTES = 16
+_REFERENCE_LINE_HEADER_PREFIXES = (
+    "Reference Line Name=",
+    "Reference Line Storage Area=",
+    "Reference Line Start Position=",
+    "Reference Line Middle Position=",
+    "Reference Line End Position=",
+    "Reference Line Arc=",
+)
+
+
+def _validate_reference_line_field(value: Any, field_name: str, max_bytes: int) -> str:
+    """Normalize a fixed-width reference-line field without truncating it."""
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError(f"{field_name} must be non-empty")
+    invalid = {char for char in normalized if char in ",=\r\n" or ord(char) < 32}
+    if invalid:
+        raise ValueError(
+            f"{field_name} contains invalid characters {invalid!r}: {normalized!r}"
+        )
+    encoded_length = len(normalized.encode("utf-8"))
+    if encoded_length > max_bytes:
+        raise ValueError(
+            f"{field_name} must be at most {max_bytes} UTF-8 bytes; "
+            f"got {encoded_length}"
+        )
+    return normalized
+
+
+def _parse_reference_line_coordinates(
+    file_lines: List[str],
+    start: int,
+    point_count: int,
+    block_start: int,
+) -> tuple[List[tuple[float, float]], int]:
+    """Parse the exact fixed-width coordinate payload for one reference line."""
+    coordinates: List[tuple[float, float]] = []
+    coordinate_line_count = (point_count + 1) // 2
+    for offset in range(coordinate_line_count):
+        line_index = start + offset
+        if line_index >= len(file_lines):
+            raise ValueError(
+                f"Reference line at line {block_start + 1} has truncated coordinates"
+            )
+        raw_line = file_lines[line_index].rstrip("\r\n")
+        points_on_line = min(2, point_count - len(coordinates))
+        scalar_count = points_on_line * 2
+        expected_width = scalar_count * 16
+        if len(raw_line) < expected_width or raw_line[expected_width:].strip():
+            raise ValueError(
+                f"Reference line at line {block_start + 1} has a malformed "
+                f"fixed-width coordinate line at line {line_index + 1}"
+            )
+
+        values: List[float] = []
+        for field_index in range(scalar_count):
+            field_start = field_index * 16
+            raw_value = raw_line[field_start : field_start + 16].strip()
+            try:
+                value = float(raw_value)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Reference line at line {block_start + 1} has an invalid "
+                    f"coordinate at line {line_index + 1}"
+                ) from exc
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"Reference line at line {block_start + 1} has a non-finite "
+                    f"coordinate at line {line_index + 1}"
+                )
+            values.append(value)
+
+        coordinates.extend(
+            (values[index], values[index + 1])
+            for index in range(0, len(values), 2)
+        )
+    return coordinates, start + coordinate_line_count
+
+
+def _reference_line_blocks(file_lines: List[str]) -> List[dict]:
+    """Strictly parse reference-line blocks and return their exact extents."""
+    blocks: List[dict] = []
+    idx = 0
+    while idx < len(file_lines):
+        stripped = file_lines[idx].rstrip("\r\n")
+        if not stripped.startswith("Reference Line Name="):
+            idx += 1
+            continue
+
+        start = idx
+        if start + len(_REFERENCE_LINE_HEADER_PREFIXES) > len(file_lines):
+            raise ValueError(f"Reference line at line {start + 1} has a truncated header")
+
+        header_values: List[str] = []
+        for offset, prefix in enumerate(_REFERENCE_LINE_HEADER_PREFIXES):
+            line_index = start + offset
+            current = file_lines[line_index].rstrip("\r\n")
+            if not current.startswith(prefix):
+                raise ValueError(
+                    f"Reference line at line {start + 1} is missing "
+                    f"{prefix[:-1]!r} at line {line_index + 1}"
+                )
+            header_values.append(current.split("=", 1)[1].strip())
+
+        name = _validate_reference_line_field(
+            header_values[0], "reference line name", _REFERENCE_LINE_NAME_BYTES
+        )
+        storage_area = _validate_reference_line_field(
+            header_values[1],
+            "reference line storage area",
+            _REFERENCE_LINE_STORAGE_AREA_BYTES,
+        )
+        try:
+            point_count = int(header_values[5])
+        except ValueError as exc:
+            raise ValueError(
+                f"Reference line at line {start + 1} has an invalid arc count"
+            ) from exc
+        if point_count < 2:
+            raise ValueError(
+                f"Reference line at line {start + 1} must contain at least two points"
+            )
+
+        coordinates, terminator_index = _parse_reference_line_coordinates(
+            file_lines,
+            start + len(_REFERENCE_LINE_HEADER_PREFIXES),
+            point_count,
+            start,
+        )
+        if terminator_index >= len(file_lines) or not file_lines[
+            terminator_index
+        ].rstrip("\r\n").startswith("Reference Line Text Position="):
+            raise ValueError(
+                f"Reference line at line {start + 1} is missing its text-position "
+                "terminator"
+            )
+        idx = terminator_index + 1
+        blocks.append(
+            {
+                "name": name,
+                "storage_area": storage_area,
+                "coordinates": coordinates,
+                "start": start,
+                "end": idx,
+            }
+        )
+    return blocks
+
+
+def _require_unique_2d_storage_area(file_lines: List[str], storage_area: str) -> None:
+    """Require exactly one existing storage-area block marked as a 2D flow area."""
+    matches = [
+        block
+        for block in GeomStorage._iter_storage_area_blocks(file_lines)
+        if GeomStorage._extract_storage_area_name(block[2][0]) == storage_area
+    ]
+    if not matches:
+        raise ValueError(f"2D flow area not found: {storage_area}")
+    if len(matches) > 1:
+        raise ValueError(
+            f"2D flow area {storage_area!r} is declared {len(matches)} times"
+        )
+    if not GeomStorage._inspect_storage_area_block(matches[0][2])["is_2d"]:
+        raise ValueError(f"{storage_area!r} is not a 2D flow area")
+
+
+def _reference_line_insert_index(file_lines: List[str]) -> int:
+    """Choose the canonical reference-line insertion point."""
+    last_bc_line_idx = -1
+    first_existing_refline_idx = -1
+    first_ic_point_idx = -1
+    first_lcmann_idx = -1
+    for idx, line in enumerate(file_lines):
+        stripped = line.rstrip("\r\n")
+        if stripped.startswith("BC Line Text Position="):
+            last_bc_line_idx = idx
+        if (
+            stripped.startswith("Reference Line Name=")
+            and first_existing_refline_idx == -1
+        ):
+            first_existing_refline_idx = idx
+        if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
+            first_ic_point_idx = idx
+        if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
+            first_lcmann_idx = idx
+
+    if first_existing_refline_idx >= 0:
+        return first_existing_refline_idx
+    if last_bc_line_idx >= 0:
+        return last_bc_line_idx + 1
+    if first_ic_point_idx >= 0:
+        return first_ic_point_idx
+    if first_lcmann_idx >= 0:
+        return first_lcmann_idx
+    return len(file_lines)
 
 
 def _format_coord_line(values: List[float], width: int = 16) -> str:
@@ -800,11 +1001,6 @@ class GeomReferenceFeatures:
         if not lines:
             raise ValueError("lines must contain at least one reference line")
 
-        # Create backup
-        backup_path = Path(str(geom_file) + ".bak")
-        shutil.copy2(geom_file, backup_path)
-        logger.debug(f"Created backup: {backup_path}")
-
         # Read file with CRLF preservation
         with open(geom_file, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
@@ -858,15 +1054,165 @@ class GeomReferenceFeatures:
         insert_lines = [block_line + line_ending for block_line in new_blocks]
         file_lines[insert_idx:insert_idx] = insert_lines
 
-        # Write back
-        with open(geom_file, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        GeomParser.safe_write_geometry(
+            geom_file,
+            file_lines,
+            create_backup=True,
+        )
 
         logger.debug(
             f"Inserted {len(lines)} reference line(s) into {geom_file.name} "
             f"(storage area: {storage_area}) at line {insert_idx + 1}"
         )
         return len(lines)
+
+    @staticmethod
+    @log_call
+    def replace_reference_lines(
+        geom_file: Union[str, Path],
+        storage_area: str,
+        reference_lines: Sequence[Mapping[str, Any]],
+        *,
+        expected_existing_names: Optional[Sequence[str]] = None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Atomically replace one 2D area's complete reference-line collection.
+
+        This is the safe mutation for reduced 2D domains: callers can remove
+        parent reference lines that no longer intersect the retained mesh and
+        optionally clip the survivors before replacing them. Reference lines
+        belonging to other 2D areas are preserved byte-for-byte.
+
+        ``expected_existing_names`` is an optional ordered optimistic-
+        concurrency guard. An empty ``reference_lines`` sequence removes all
+        reference lines associated with ``storage_area``. Returns the backup
+        path when ``create_backup`` is true, otherwise ``None``.
+        """
+        geom_path = Path(geom_file)
+        if not geom_path.is_file():
+            raise FileNotFoundError(f"Geometry file not found: {geom_path}")
+        area = _validate_reference_line_field(
+            storage_area,
+            "storage_area",
+            _REFERENCE_LINE_STORAGE_AREA_BYTES,
+        )
+
+        prepared: List[tuple[str, List[str]]] = []
+        seen: set[str] = set()
+        for index, item in enumerate(reference_lines):
+            if not isinstance(item, Mapping):
+                raise TypeError(f"reference_lines[{index}] must be a mapping")
+            name = _validate_reference_line_field(
+                item.get("name", ""),
+                f"reference_lines[{index}] name",
+                _REFERENCE_LINE_NAME_BYTES,
+            )
+            name_key = name.casefold()
+            if name_key in seen:
+                raise ValueError(f"duplicate reference line name: {name!r}")
+            seen.add(name_key)
+            if "coordinates" not in item:
+                raise ValueError(
+                    f"Reference line {name!r} is missing coordinates"
+                )
+            coords = np.asarray(item["coordinates"], dtype=np.float64)
+            if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2:
+                raise ValueError(
+                    f"Reference line {name!r} needs at least 2 points as "
+                    "an (N, 2) array"
+                )
+            if not np.isfinite(coords).all():
+                raise ValueError(
+                    f"Reference line {name!r} coordinates must be finite"
+                )
+            prepared.append((name, _build_reference_line_block(name, area, coords)))
+
+        with open(
+            geom_path,
+            "r",
+            encoding="utf-8",
+            errors="strict",
+            newline="",
+        ) as handle:
+            file_lines = handle.readlines()
+        _require_unique_2d_storage_area(file_lines, area)
+        blocks = _reference_line_blocks(file_lines)
+        original_file_lines = list(file_lines)
+        original_blocks = list(blocks)
+        target_blocks = [block for block in blocks if block["storage_area"] == area]
+        existing_names = [str(block["name"]) for block in target_blocks]
+        if expected_existing_names is not None:
+            expected_existing = [
+                str(name).strip() for name in expected_existing_names
+            ]
+            if existing_names != expected_existing:
+                raise ValueError(
+                    f"Reference-line population changed for {area!r}: expected "
+                    f"{expected_existing!r}, observed {existing_names!r}"
+                )
+
+        for block in sorted(target_blocks, key=lambda value: value["start"], reverse=True):
+            del file_lines[int(block["start"]):int(block["end"])]
+
+        insert_idx = _reference_line_insert_index(file_lines)
+        line_ending = "\r\n" if any(
+            line.endswith("\r\n") for line in file_lines
+        ) else "\n"
+        replacement_lines = [
+            block_line + line_ending
+            for _, block in prepared
+            for block_line in block
+        ]
+        file_lines[insert_idx:insert_idx] = replacement_lines
+
+        written_blocks = _reference_line_blocks(file_lines)
+        written_names = [
+            str(block["name"])
+            for block in written_blocks
+            if block["storage_area"] == area
+        ]
+        expected_names = [name for name, _ in prepared]
+        if written_names != expected_names:
+            raise RuntimeError(
+                f"Reference-line replacement validation failed: {written_names!r}"
+            )
+
+        original_other_blocks = [
+            (
+                block["name"],
+                block["storage_area"],
+                "".join(
+                    original_file_lines[int(block["start"]):int(block["end"])]
+                ),
+            )
+            for block in original_blocks
+            if block["storage_area"] != area
+        ]
+        written_other_blocks = [
+            (
+                block["name"],
+                block["storage_area"],
+                "".join(file_lines[int(block["start"]):int(block["end"])]),
+            )
+            for block in written_blocks
+            if block["storage_area"] != area
+        ]
+        if written_other_blocks != original_other_blocks:
+            raise RuntimeError("Reference-line replacement changed another 2D area's data")
+
+        backup_path = GeomParser.safe_write_geometry(
+            geom_path,
+            file_lines,
+            create_backup=create_backup,
+        )
+        logger.info(
+            "Replaced %d reference line(s) with %d for %s in %s",
+            len(existing_names),
+            len(expected_names),
+            area,
+            geom_path.name,
+        )
+        return backup_path
 
     @staticmethod
     @log_call

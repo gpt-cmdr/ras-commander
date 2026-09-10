@@ -32,7 +32,7 @@ Note:
     All methods are static and designed to be used without class instantiation.
 """
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import h5py
 import pandas as pd
@@ -41,7 +41,6 @@ from .HdfUtils import HdfUtils
 from ..LoggingConfig import get_logger
 import numpy as np
 from datetime import datetime
-from ..RasPrj import ras
 
 logger = get_logger(__name__)
 
@@ -211,7 +210,7 @@ class HdfResultsPlan:
         """
         try:
             if hdf_path is None:
-                logger.error(f"Could not find HDF file for input")
+                logger.error("Could not find HDF file for input")
                 return None
 
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -325,7 +324,14 @@ class HdfResultsPlan:
     @standardize_input(file_type='plan_hdf')
     def get_reference_timeseries(hdf_path: Path, reftype: str) -> pd.DataFrame:
         """
-        Get reference line or point timeseries output from HDF file.
+        Get reference-line or reference-point time series as a tidy DataFrame.
+
+        Modern HEC-RAS HDF files store a ``Name`` vector plus shared
+        ``(time, feature)`` matrices such as Flow, Velocity, and Water Surface.
+        This compatibility method delegates schema handling to
+        :class:`HdfResultsXsec` and converts its native xarray Dataset to one
+        row per time/feature pair. It therefore supports all numeric variables
+        present in the HDF instead of assuming one dataset per feature.
 
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
@@ -333,31 +339,29 @@ class HdfResultsPlan:
             ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
-            pd.DataFrame: DataFrame containing reference timeseries data
+            pd.DataFrame: Tidy frame containing time, reference ID/name, mesh
+                name, and every numeric native result variable. Returns an
+                empty frame when the requested reference output is absent.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                base_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
-                ref_path = f"{base_path}/Reference {reftype.capitalize()}"
-                
-                if ref_path not in hdf_file:
-                    logger.debug(f"Reference {reftype} data not found in HDF file")
-                    return pd.DataFrame()
+            from .HdfResultsXsec import HdfResultsXsec
 
-                ref_group = hdf_file[ref_path]
-                time_data = hdf_file[f"{base_path}/Time"][:]
-                
-                dfs = []
-                for ref_name in ref_group.keys():
-                    ref_data = ref_group[ref_name][:]
-                    df = pd.DataFrame(ref_data, columns=[ref_name])
-                    df['Time'] = time_data
-                    dfs.append(df)
+            normalized = str(reftype).strip().lower()
+            if normalized == "lines":
+                dataset = HdfResultsXsec.get_ref_lines_timeseries(hdf_path)
+            elif normalized == "points":
+                dataset = HdfResultsXsec.get_ref_points_timeseries(hdf_path)
+            else:
+                raise ValueError("reftype must be 'lines' or 'points'")
 
-                if not dfs:
-                    return pd.DataFrame()
-
-                return pd.concat(dfs, axis=1)
+            if not dataset.data_vars:
+                logger.debug(
+                    "Reference %s data not found in %s",
+                    normalized,
+                    Path(hdf_path).name,
+                )
+                return pd.DataFrame()
+            return dataset.to_dataframe().reset_index()
 
         except Exception as e:
             logger.error(f"Error reading reference {reftype} timeseries: {str(e)}")
@@ -958,7 +962,7 @@ class HdfResultsPlan:
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.debug(
-                        f"HDF file not found, successfully retrieved computation messages from .txt file"
+                        "HDF file not found, successfully retrieved computation messages from .txt file"
                     )
                     return txt_contents
             except Exception as e:
@@ -976,7 +980,7 @@ class HdfResultsPlan:
                 txt_contents = RasControl.get_comp_msgs(hdf_path)
                 if txt_contents:
                     logger.debug(
-                        f"HDF extraction failed, successfully retrieved computation messages from .txt file"
+                        "HDF extraction failed, successfully retrieved computation messages from .txt file"
                     )
                     return txt_contents
             except Exception as fallback_error:

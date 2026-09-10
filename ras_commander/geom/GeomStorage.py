@@ -17,6 +17,7 @@ List of Functions:
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
 - set_breaklines() - Write breakline blocks into a 2D flow area geometry file
+- replace_breaklines() - Atomically replace the geometry-wide breakline collection
 
 Example Usage:
     >>> from ras_commander import GeomStorage
@@ -39,6 +40,7 @@ Example Usage:
     ... )
 """
 
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Union, Optional, List, Sequence
@@ -1688,6 +1690,8 @@ class GeomStorage:
         coords: List[tuple],
         cell_size_near: Optional[float] = None,
         cell_size_far: Optional[float] = None,
+        near_repeats: int = 0,
+        protection_radius: int = 0,
     ) -> List[str]:
         """Build a complete breakline text block as a list of lines."""
         block = [f"BreakLine Name={name}\n"]
@@ -1701,11 +1705,232 @@ class GeomStorage:
             if cell_size_far is not None
             else "BreakLine CellSize Max=\n"
         )
-        block.append("BreakLine Near Repeats=0\n")
-        block.append("BreakLine Protection Radius=0\n")
+        block.append(f"BreakLine Near Repeats={near_repeats}\n")
+        block.append(f"BreakLine Protection Radius={protection_radius}\n")
         block.append(f"BreakLine Polyline= {len(coords)} \n")
         block.extend(GeomStorage._format_breakline_coord_lines(coords))
         return block
+
+    @staticmethod
+    def _breakline_block_ranges(lines: List[str]) -> List[tuple[int, int]]:
+        """Return exact ``[start, end)`` ranges for breakline text blocks."""
+        ranges: List[tuple[int, int]] = []
+        for start_idx, line in enumerate(lines):
+            if not line.startswith("BreakLine Name="):
+                continue
+
+            polyline_idx = None
+            point_count = None
+            for idx in range(start_idx + 1, len(lines)):
+                candidate = lines[idx]
+                if candidate.startswith("BreakLine Name="):
+                    break
+                if candidate.startswith("BreakLine Polyline="):
+                    try:
+                        point_count = int(candidate.split("=", 1)[1].strip())
+                    except (IndexError, ValueError) as exc:
+                        raise ValueError(
+                            f"Malformed breakline point count at line {idx + 1}"
+                        ) from exc
+                    polyline_idx = idx
+                    break
+
+            if polyline_idx is None or point_count is None:
+                raise ValueError(
+                    f"Breakline at line {start_idx + 1} has no polyline record"
+                )
+            coordinate_lines = (point_count + 1) // 2
+            end_idx = polyline_idx + 1 + coordinate_lines
+            if end_idx > len(lines):
+                raise ValueError(
+                    f"Breakline at line {start_idx + 1} has truncated coordinates"
+                )
+            ranges.append((start_idx, end_idx))
+        return ranges
+
+    @staticmethod
+    def _normalize_breakline_specs(breaklines: Sequence[dict]) -> List[dict]:
+        """Validate and normalize a complete replacement collection."""
+        normalized: List[dict] = []
+        names: set[str] = set()
+        for index, raw in enumerate(breaklines):
+            if not isinstance(raw, dict):
+                raise TypeError(f"breaklines[{index}] must be a dict")
+            name = str(raw.get("name", "")).strip()
+            GeomStorage._validate_flow_area_name(name)
+            key = name.casefold()
+            if key in names:
+                raise ValueError(f"Duplicate breakline name: {name!r}")
+            names.add(key)
+
+            raw_coords = raw.get("coords")
+            if raw_coords is None:
+                raise ValueError(f"Breakline {name!r} is missing coords")
+            coords = []
+            for point in raw_coords:
+                if len(point) < 2:
+                    raise ValueError(f"Breakline {name!r} has an invalid coordinate")
+                x_coord, y_coord = float(point[0]), float(point[1])
+                if not math.isfinite(x_coord) or not math.isfinite(y_coord):
+                    raise ValueError(f"Breakline {name!r} has a non-finite coordinate")
+                coords.append((x_coord, y_coord))
+            if len(coords) < 2:
+                raise ValueError(f"Breakline {name!r} must contain at least two points")
+
+            cell_sizes = {}
+            for field_name in ("cell_size_near", "cell_size_far"):
+                raw_value = raw.get(field_name)
+                if raw_value is None:
+                    cell_sizes[field_name] = None
+                    continue
+                value = float(raw_value)
+                if not math.isfinite(value) or value <= 0:
+                    raise ValueError(
+                        f"Breakline {name!r} {field_name} must be finite and positive"
+                    )
+                cell_sizes[field_name] = value
+
+            def bounded_integer(field_name: str, maximum: int) -> int:
+                raw_value = raw.get(field_name, 0)
+                value = int(raw_value)
+                if isinstance(raw_value, float) and not raw_value.is_integer():
+                    raise ValueError(
+                        f"Breakline {name!r} {field_name} must be an integer"
+                    )
+                if value < 0 or value > maximum:
+                    raise ValueError(
+                        f"Breakline {name!r} {field_name} must be between 0 and {maximum}"
+                    )
+                return value
+
+            near_repeats = bounded_integer("near_repeats", 255)
+            protection_radius = bounded_integer("protection_radius", 1)
+
+            normalized.append(
+                {
+                    "name": name,
+                    "coords": coords,
+                    **cell_sizes,
+                    "near_repeats": near_repeats,
+                    "protection_radius": protection_radius,
+                }
+            )
+        return normalized
+
+    @staticmethod
+    @log_call
+    def replace_breaklines(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        breaklines: Sequence[dict],
+        *,
+        expected_existing_names: Optional[Sequence[str]] = None,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Atomically replace every breakline block in a geometry text file.
+
+        HEC-RAS stores ``BreakLine`` blocks as a geometry-wide collection; the
+        text format does not carry a 2D-area identifier on each block.
+        ``flow_area_name`` therefore selects the insertion anchor, while this
+        method intentionally replaces the complete collection. Callers working
+        with multiple 2D areas must supply the complete retained collection.
+
+        ``expected_existing_names`` is an optimistic-concurrency guard. When
+        supplied, the existing names and order must match before any write.
+        Passing an empty ``breaklines`` sequence removes the collection.
+        """
+        geom_file = Path(geom_file)
+        if not geom_file.exists():
+            raise FileNotFoundError(f"Geometry file not found: {geom_file}")
+        GeomStorage._validate_flow_area_name(flow_area_name)
+        normalized = GeomStorage._normalize_breakline_specs(breaklines)
+
+        with open(geom_file, "r", encoding="utf-8", errors="replace") as stream:
+            lines = stream.readlines()
+        existing_block = GeomStorage._find_storage_area_block(lines, flow_area_name)
+        if existing_block is None:
+            raise ValueError(f"Flow area not found: {flow_area_name}")
+
+        ranges = GeomStorage._breakline_block_ranges(lines)
+        existing_names = [
+            lines[start].split("=", 1)[1].strip() for start, _end in ranges
+        ]
+        if expected_existing_names is not None:
+            expected_existing = [str(name).strip() for name in expected_existing_names]
+            if existing_names != expected_existing:
+                raise ValueError(
+                    "Existing breakline collection changed before replacement: "
+                    f"expected {expected_existing!r}, found {existing_names!r}"
+                )
+
+        new_blocks: List[str] = []
+        for breakline in normalized:
+            new_blocks.extend(
+                GeomStorage._format_breakline_block(
+                    name=breakline["name"],
+                    coords=breakline["coords"],
+                    cell_size_near=breakline["cell_size_near"],
+                    cell_size_far=breakline["cell_size_far"],
+                    near_repeats=breakline["near_repeats"],
+                    protection_radius=breakline["protection_radius"],
+                )
+            )
+
+        if ranges:
+            range_by_start = {start: end for start, end in ranges}
+            replacement_lines: List[str] = []
+            index = 0
+            inserted = False
+            while index < len(lines):
+                end = range_by_start.get(index)
+                if end is not None:
+                    if not inserted:
+                        replacement_lines.extend(new_blocks)
+                        inserted = True
+                    index = end
+                    continue
+                replacement_lines.append(lines[index])
+                index += 1
+        else:
+            _start, end_idx, _block = existing_block
+            insert_idx = end_idx
+            for idx in range(end_idx, len(lines)):
+                if lines[idx].startswith(
+                    (
+                        "BC Line Name=",
+                        "Connection=",
+                        "LCMann Time=",
+                        "Storage Area=",
+                        "River Reach=",
+                    )
+                ):
+                    insert_idx = idx
+                    break
+            replacement_lines = lines[:insert_idx] + new_blocks + lines[insert_idx:]
+
+        written_ranges = GeomStorage._breakline_block_ranges(replacement_lines)
+        written_names = [
+            replacement_lines[start].split("=", 1)[1].strip()
+            for start, _end in written_ranges
+        ]
+        expected_names = [breakline["name"] for breakline in normalized]
+        if written_names != expected_names:
+            raise RuntimeError(
+                f"Breakline replacement validation failed: {written_names!r}"
+            )
+
+        backup_path = GeomParser.safe_write_geometry(
+            geom_file,
+            replacement_lines,
+            create_backup=create_backup,
+        )
+        logger.info(
+            "Replaced %d breaklines with %d in %s",
+            len(existing_names),
+            len(expected_names),
+            geom_file.name,
+        )
+        return backup_path
 
     @staticmethod
     @log_call

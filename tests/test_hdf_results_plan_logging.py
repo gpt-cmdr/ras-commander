@@ -62,6 +62,45 @@ def test_reference_output_absence_is_debug_only(tmp_path, caplog):
     ]
 
 
+def test_reference_timeseries_reads_modern_matrix_schema(tmp_path):
+    hdf_path = tmp_path / "reference_lines.p01.hdf"
+    base = (
+        "Results/Unsteady/Output/Output Blocks/Base Output/"
+        "Unsteady Time Series"
+    )
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.create_dataset(
+            f"{base}/Time Date Stamp (ms)",
+            data=np.array(
+                [b"01JAN2020 00:00:00:000", b"01JAN2020 01:00:00:000"]
+            ),
+        )
+        group = hdf.create_group(f"{base}/Reference Lines")
+        group.create_dataset(
+            "Name",
+            data=np.array([b"Line A|Mesh 1", b"Line B|Mesh 1"]),
+        )
+        flow = group.create_dataset(
+            "Flow",
+            data=np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+        )
+        flow.attrs["Units"] = b"cfs"
+        group.create_dataset(
+            "Water Surface",
+            data=np.array([[10.0, 20.0], [11.0, 21.0]], dtype=np.float32),
+        )
+
+    result = HdfResultsPlan.get_reference_timeseries(hdf_path, "lines")
+
+    assert len(result) == 4
+    assert {"time", "refln_id", "refln_name", "mesh_name"}.issubset(
+        result.columns
+    )
+    assert {"Flow", "Water Surface"}.issubset(result.columns)
+    assert result["refln_name"].tolist() == ["Line A", "Line B"] * 2
+    assert result["Flow"].tolist() == [1.0, 2.0, 3.0, 4.0]
+
+
 def test_compute_messages_txt_fallback_success_is_debug_only(
     tmp_path,
     caplog,
