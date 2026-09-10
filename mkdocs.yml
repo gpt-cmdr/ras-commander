@@ -80,6 +80,7 @@ plugins:
           - api/core.md
           - api/hydrofabric.md
           - api/breakout-1d.md
+          - api/breakout-2d.md
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
@@ -214,6 +215,7 @@ nav:
     - Core Classes: api/core.md
     - Hydrofabric Conflation: api/hydrofabric.md
     - 1D Breakout Extraction: api/breakout-1d.md
+    - 2D Breakout Geometry Preparation: api/breakout-2d.md
     - Benefits Analysis: api/benefits.md
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md

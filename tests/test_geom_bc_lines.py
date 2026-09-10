@@ -19,7 +19,6 @@ import logging
 import re
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 
@@ -96,6 +95,24 @@ class TestAddBcLines:
         )
         # Existing block survives unchanged.
         assert "BC Line Name=Existing" in text
+
+    def test_add_preserves_existing_backup_and_uses_next_number(self, skeleton_geom):
+        from ras_commander import GeomBcLines
+
+        original_backup = skeleton_geom.with_suffix(".g01.bak")
+        original_backup.write_text("parent geometry backup", encoding="utf-8")
+
+        result = GeomBcLines.add_bc_lines(
+            skeleton_geom,
+            lines=[{
+                "name": "NewBC",
+                "storage_area": "Perimeter 1",
+                "coordinates": [(0, 0), (10, 0)],
+            }],
+        )
+
+        assert original_backup.read_text(encoding="utf-8") == "parent geometry backup"
+        assert Path(result["backup_path"]).name == "project.g01.bak1"
 
     def test_added_block_groups_with_existing_bc_lines(self, skeleton_geom):
         """New BC line is inserted after the LAST `BC Line Text Position=`

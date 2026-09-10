@@ -128,7 +128,11 @@ setup(
             'azure-mgmt-compute>=30.0',
         ],
         # GUI automation and screenshot capture (Windows only)
-        'gui': ['Pillow>=9.0', 'comtypes>=1.4.0; sys_platform == "win32"'],
+        'gui': [
+            'Pillow>=9.0',
+            'psutil>=5.6.6',
+            'comtypes>=1.4.0; sys_platform == "win32"',
+        ],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # Precipitation enhancements
