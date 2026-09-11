@@ -13,15 +13,27 @@ require Wine or a host HEC-RAS installation.
 
 ## Image status
 
-| HEC-RAS | Matching published preprocessing image | Published native image |
+| HEC-RAS | Preprocessing image | Native unsteady image |
 |---|---|---|
 | 6.5 | [`rascommander/hec-ras-wine-precompute_6.5:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_6.5) | [`rascommander/hec-ras-linux-unsteady_6.5:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.5) |
 | 6.6 | [`rascommander/hec-ras-wine-precompute_6.6:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_6.6) | [`rascommander/hec-ras-linux-unsteady_6.6:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.6) |
+| 7.0.1 | [`rascommander/hec-ras-wine-precompute_7.0.1:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_7.0.1) | [`rascommander/hec-ras-linux-unsteady_7.0.1:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_7.0.1) |
 
-Both native images are published on Docker Hub as `v1` and `latest` for
+The HEC-RAS 6.5 and 6.6 native images are published on Docker Hub as `v1` and `latest` for
 `linux/amd64`. They include HEC-RAS and were tested on Linux and Windows
 Docker Desktop. The [release record][release] records the exact source,
 image identities, full Linux runs, Windows notebook runs, and failure tests.
+
+The HEC-RAS 7.0.1 images are also public: Wine preprocessing as `v4` and
+`latest`, and native computation as `v1` and `latest`. Both were pulled back
+from Docker Hub after publication. The full 266-hour Linux sample produced
+267 output times with 6,548 finite water-surface values per time. All ten
+notebook code cells passed a one-hour sample on Windows Docker Desktop
+(Engine 29.7.2), including a host folder containing spaces. Both runs
+preserved the prepared temporary HDF and reported HEC-RAS 7.0.1, June 2026.
+The [7.0.1 release record][release-701] retains the exact image identities
+and test evidence. Windows qualification covers the one-hour sample, not
+the full 266-hour calculation.
 
 The v1 worker requires populated 2D meshes and validates their complete
 water-surface output. Qualification covers the supplied 2D sample.
@@ -29,6 +41,11 @@ water-surface output. Qualification covers the supplied 2D sample.
 Use matching HEC-RAS versions in both phases. The published preprocessing
 image contains its own pinned library build. The native image installs the
 source checkout used for its build and records that checkout's revision.
+The published 6.5/6.6 native images contain source revision
+[`e5380db`](https://github.com/gpt-cmdr/ras-commander/tree/e5380db6d37e2c62c763bf6221c3ab3219fddf80).
+The published 7.0.1 native image contains source revision
+[`aa003b1`](https://github.com/gpt-cmdr/ras-commander/tree/aa003b179e9d0f89ba23da0607ffab9bfee74a60).
+Its qualification and publication are recorded separately.
 
 ## Run through the Python API
 
@@ -130,6 +147,8 @@ The exact image source revision is recorded in its OCI revision label.
 | [RasPrj.py][project-api] | Initializes the selected project and resolves its model metadata. |
 | [RasDocker.py][docker-api] | Host API that constructs Docker invocations and verifies their receipts; also present in the installed package. |
 | [bundle_runtime.py][bundler] | Build preparation utility; selects the native solver, libraries and notices into an external context. It is not the runtime entrypoint. |
+| [extract_installer.py][extractor-701] | Extracts the verified 7.0.1 combined installer without launching it; used before selecting native runtime files. |
+| [RUNTIME-7.0.1.md][runtime-701] | Re-creation instructions for the 7.0.1 installer, native engine, libraries, and retained notices. |
 | Official Linux HEC-RAS runtime | `/opt/hecras-runtime/engine/RasUnsteady` plus `/opt/hecras-runtime/engine/libs/`; supplied outside Git. |
 | Vendor terms and notices | `/opt/hecras-runtime/notices/`; copied from the controlled external runtime input. |
 | Generated `runtime.json` | `/opt/hecras-runtime/runtime.json`; declares native runtime type, matching HEC-RAS version, and installed artifacts. Generated from external files, not a vendor binary stored in Git. |
@@ -152,9 +171,12 @@ compute image.
 ### 1. Gather source and vendor inputs
 
 Use source commit `e5380db6d37e2c62c763bf6221c3ab3219fddf80` to reproduce
-these images. It contains the linked Dockerfile, lock file, bundler, and
-library worker. Record the checkout commit as `RAS_COMMANDER_COMMIT`.
-Obtain the matching official HEC-RAS 6.5 or 6.6 Linux distribution and retain
+the published 6.5/6.6 native images. It contains their Dockerfile, lock file,
+bundler, and library worker. For the 7.0.1 build, use source commit
+`aa003b179e9d0f89ba23da0607ffab9bfee74a60` and consult its separate
+[release record][release-701] for qualification status. Record the selected
+checkout commit as `RAS_COMMANDER_COMMIT`.
+Obtain the matching official HEC-RAS 6.5, 6.6, or 7.0.1 Linux distribution and retain
 its vendor terms and notices outside Git. Keep the original distribution
 and run evidence separate from the clean build context.
 
@@ -164,6 +186,16 @@ The official archives and selected directories are:
 |---|---|---|---|
 | 6.5 | [Linux_RAS_v65.zip](https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v65.zip) | `Linux_RAS_v65/RAS_v65/Release` | `Linux_RAS_v65/libs` |
 | 6.6 | [Linux_RAS_v66.zip](https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v66.zip) | `Linux_RAS_v66/bin` | `Linux_RAS_v66/libs` |
+| 7.0.1 | [HEC-RAS_701_with_Linux_Setup.exe](https://github.com/HydrologicEngineeringCenter/hec-downloads/releases/download/1.0.46/HEC-RAS_701_with_Linux_Setup.exe) | `INSTALLDIR/Linux/Linux` | `INSTALLDIR/Linux/Linux/libs` |
+
+HEC-RAS 7.0.1 is distributed in a combined installer that includes Linux
+components. `INSTALLDIR` denotes its installation root; the verified native
+executable is `INSTALLDIR/Linux/Linux/RasUnsteady`, and its libraries are
+under `INSTALLDIR/Linux/Linux/libs`. The executable identifies itself as
+HEC-RAS 7.0.1, June 2026. Follow the [7.0.1 runtime reconstruction guide][runtime-701]
+and its linked [extract_installer.py][extractor-701] to recover the native
+components. Select those components for the bundler; do not pass the Windows
+installer itself as the runtime context.
 
 Retain the distribution's notices in a separate selected notice directory.
 The engine input passed to the bundler is the directory containing
@@ -222,7 +254,9 @@ docker buildx build --load --platform linux/amd64 \
   --tag rascommander/hec-ras-linux-unsteady_6.5:v1 .
 ```
 
-For 6.6, change the version, tag, and external context together. The image copies the selected external runtime, validates it, and sets its
+For 6.6 or 7.0.1, change the version, tag, and external context together.
+A 7.0.1 build also requires the source revision that adds 7.0.1 runtime
+support, as recorded in its separate release record. The image copies the selected external runtime, validates it, and sets its
 permissions in one build step to avoid duplicating the runtime in image
 layers. The build checks the manifest against the requested HEC-RAS version, checks the
 installed Python dependencies, and makes the bundled runtime read-only to
@@ -262,3 +296,8 @@ with the actual publication record.
 [guide]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/docs/user-guide/container-execution.md
 
 [release]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RELEASE-20260911.md
+
+[release-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RELEASE-7.0.1-20260911.md
+
+[runtime-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RUNTIME-7.0.1.md
+[extractor-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/extract_installer.py
