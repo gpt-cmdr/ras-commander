@@ -21,7 +21,7 @@ from .LoggingConfig import get_logger
 
 
 logger = get_logger(__name__)
-_VERSIONS = {"6.5", "6.6"}
+_VERSIONS = {"6.5", "6.6", "7.0.1"}
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _OWNER_LABEL = "info.rascommander.docker-run-owner"
 _RESERVED_MOUNTS = {
@@ -80,7 +80,7 @@ class RasDocker:
         Args:
             project_path: Explicit host ``.prj`` file in a working model copy.
             plan_number: Plan number, such as ``"01"`` or ``1``.
-            version: Matching HEC-RAS image version: ``"6.5"`` or ``"6.6"``.
+            version: Matching HEC-RAS image version: ``"6.5"``, ``"6.6"`` or ``"7.0.1"``.
             image: Image override. Defaults to the published version's ``v4``.
             mounts: Container absolute destination to host source mapping, for
                 example ``{"/source_terrain": terrain, "/projection": crs}``.
@@ -187,7 +187,7 @@ class RasDocker:
                  timeout, num_cores, replace_generated, docker_executable, pull,
                  run_id, user, prepare_receipt):
         if version not in _VERSIONS:
-            raise ValueError("version must be '6.5' or '6.6'")
+            raise ValueError("version must be '6.5', '6.6' or '7.0.1'")
         for name, value in (("timeout", timeout), ("num_cores", num_cores)):
             if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")

@@ -90,13 +90,20 @@ def _fake_success(project, engine, plan, timeout, num_cores):
     return True
 
 
-def test_success_preserves_prepared_inputs_and_publishes_validated_result(packet, monkeypatch):
+@pytest.mark.parametrize("version", ["6.5", "6.6", "7.0.1"])
+def test_success_preserves_prepared_inputs_and_publishes_validated_result(packet, monkeypatch, version):
+    manifest = json.loads(packet["manifest"].read_text())
+    manifest["hec_ras_version"] = version
+    worker._atomic_json(packet["manifest"], manifest)
+    packet["payload"]["runtime"]["hec_ras_version"] = version
+    worker._atomic_json(packet["prep"], packet["payload"])
+    monkeypatch.setenv("HEC_RAS_VERSION", version)
     monkeypatch.setattr(worker, "_call_compute", _fake_success)
     before = worker._sha256(packet["temporary"])
     success, receipt = _run(packet, prepare_receipt=packet["prep"])
     payload = json.loads(receipt.read_text())
     assert success and payload["status"] == "succeeded"
-    assert payload["runtime"]["hec_ras_version"] == "6.5"
+    assert payload["runtime"]["hec_ras_version"] == version
     assert payload["result"]["hdf_validation"]["meshes"]["Mesh"]["water_surface_shape"] == [2, 2]
     assert worker._sha256(packet["temporary"]) == before
     assert packet["project"].with_suffix(".g01").read_bytes() == b"Geom Title=Mesh\r\n"
@@ -281,7 +288,8 @@ def _bundler_module():
     return module
 
 
-def test_bundle_contains_only_native_unsteady_libraries_and_notices(tmp_path):
+@pytest.mark.parametrize("version", ["6.5", "6.6", "7.0.1"])
+def test_bundle_contains_only_native_unsteady_libraries_and_notices(tmp_path, version):
     bundler = _bundler_module()
     source, libraries, notices = (tmp_path / n for n in ("source", "libraries", "notices"))
     for folder in (source, libraries, notices):
@@ -295,12 +303,14 @@ def test_bundle_contains_only_native_unsteady_libraries_and_notices(tmp_path):
     (libraries / "libiomp5.so").write_bytes(b"vendor library")
     (notices / "TERMS.txt").write_text("Retained vendor terms")
     output = bundler.bundle_runtime(engine_source=source, libraries_source=libraries,
-                                    notices_source=notices, hec_ras_version="6.5", output=tmp_path / "bundle")
+                                    notices_source=notices, hec_ras_version=version, output=tmp_path / "bundle")
     manifest = json.loads((output / "runtime.json").read_text())
-    assert manifest["hec_ras_version"] == "6.5"
+    assert manifest["hec_ras_version"] == version
     names = {row["path"] for row in manifest["artifacts"]}
     assert names == {"engine/RasUnsteady", "engine/libs/libiomp5.so", "notices/TERMS.txt"}
     assert not (output / "engine" / "RasGeomPreprocess").exists()
+    engine, identity = worker._runtime(output / "runtime.json", version)
+    assert engine == output / "engine" and identity["hec_ras_version"] == version
 
 
 def test_bundle_rejects_windows_executable_and_missing_notices(tmp_path):
@@ -312,3 +322,49 @@ def test_bundle_rejects_windows_executable_and_missing_notices(tmp_path):
         bundler.bundle_runtime(engine_source=source, libraries_source=source,
                                notices_source=source, hec_ras_version="6.5", output=tmp_path / "bundle")
     assert not (tmp_path / "bundle").exists()
+
+
+@pytest.mark.parametrize("native_version, other_version", [
+    ("7.0.1", "6.5"), ("7.0.1", "6.6"), ("6.5", "7.0.1"), ("6.6", "7.0.1"),
+])
+def test_701_runtime_rejects_image_and_preparation_version_mismatches(packet, monkeypatch, native_version, other_version):
+    manifest = json.loads(packet["manifest"].read_text())
+    manifest["hec_ras_version"] = native_version
+    worker._atomic_json(packet["manifest"], manifest)
+    with pytest.raises(ValueError, match="does not match the image"):
+        worker._runtime(packet["manifest"], other_version)
+    packet["payload"]["runtime"]["hec_ras_version"] = other_version
+    worker._atomic_json(packet["prep"], packet["payload"])
+    def forbidden(*args):
+        pytest.fail("A mismatched preparation must be rejected before solver execution")
+    monkeypatch.setattr(worker, "_call_compute", forbidden)
+    success, receipt = _run(packet, prepare_receipt=packet["prep"])
+    assert not success
+    assert "versions do not match" in json.loads(receipt.read_text())["error"]["message"]
+
+
+def test_native_runtime_and_bundler_reject_unsupported_70(packet, tmp_path):
+    manifest = json.loads(packet["manifest"].read_text())
+    manifest["hec_ras_version"] = "7.0"
+    worker._atomic_json(packet["manifest"], manifest)
+    with pytest.raises(ValueError, match="must declare"):
+        worker._runtime(packet["manifest"])
+    with pytest.raises(ValueError, match="currently supports"):
+        _bundler_module().bundle_runtime(engine_source=tmp_path, libraries_source=tmp_path,
+                                        notices_source=tmp_path, hec_ras_version="7.0",
+                                        output=tmp_path / "unsupported")
+
+
+def test_bundle_cli_accepts_701(monkeypatch, tmp_path):
+    import sys
+    bundler = _bundler_module()
+    recorded = {}
+    def bundle(**kwargs):
+        recorded.update(kwargs)
+        return kwargs["output"]
+    monkeypatch.setattr(bundler, "bundle_runtime", bundle)
+    monkeypatch.setattr(sys, "argv", ["bundle_runtime.py", "--engine-source", str(tmp_path),
+                                    "--libraries-source", str(tmp_path), "--notices-source", str(tmp_path),
+                                    "--hec-ras-version", "7.0.1", "--output", str(tmp_path / "bundle")])
+    bundler.main()
+    assert recorded["hec_ras_version"] == "7.0.1"

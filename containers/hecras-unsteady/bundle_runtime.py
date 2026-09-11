@@ -40,8 +40,8 @@ def _copy_tree(source, destination):
 
 
 def bundle_runtime(*, engine_source, libraries_source, notices_source, hec_ras_version, output):
-    if hec_ras_version not in {"6.5", "6.6"}:
-        raise ValueError("This image currently supports native HEC-RAS 6.5 and 6.6")
+    if hec_ras_version not in {"6.5", "6.6", "7.0.1"}:
+        raise ValueError("This image currently supports native HEC-RAS 6.5, 6.6 and 7.0.1")
     engine_source = Path(engine_source).resolve(strict=True)
     executable = engine_source / "RasUnsteady"
     if not executable.is_file() or executable.stat().st_size == 0:
@@ -87,7 +87,7 @@ def main():
     parser.add_argument("--engine-source", type=Path, required=True)
     parser.add_argument("--libraries-source", type=Path, required=True)
     parser.add_argument("--notices-source", type=Path, required=True)
-    parser.add_argument("--hec-ras-version", choices=("6.5", "6.6"), required=True)
+    parser.add_argument("--hec-ras-version", choices=("6.5", "6.6", "7.0.1"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     print(bundle_runtime(**vars(parser.parse_args())))
 

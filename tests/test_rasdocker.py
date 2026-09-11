@@ -104,7 +104,7 @@ def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, proj
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"version": "7.0.1"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
+    {"version": "7.0"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
     {"num_cores": 0}, {"num_cores": True}, {"pull": "sometimes"},
     {"replace_generated": "yes"}, {"run_id": "../escape"}, {"run_id": ".hidden"},
     {"run_id": "a" * 65}, {"image": "--privileged"}, {"image": "image extra"},
@@ -273,3 +273,29 @@ def test_version_evidence_is_checked_for_custom_image(monkeypatch, project):
     _fake_run(monkeypatch, project, changes={"runtime": {"hec_ras_version": "6.6"}})
     result = RasDocker.preprocess_plan(project, 1, image="local-test-image:custom")
     assert not result and "version" in result.error
+
+
+@pytest.mark.parametrize("version", ["6.5", "6.6", "7.0.1"])
+def test_run_plan_selects_matching_published_version_images(monkeypatch, project, version):
+    calls = _fake_run(monkeypatch, project, changes={"runtime": {"hec_ras_version": version}})
+    prepared, computed = RasDocker.run_plan(project, 1, version=version)
+    assert prepared and computed
+    assert f"rascommander/hec-ras-wine-precompute_{version}:v4" in calls[0][0]
+    assert f"rascommander/hec-ras-linux-unsteady_{version}:v1" in calls[1][0]
+    assert prepared.receipt["runtime"]["hec_ras_version"] == version
+    assert computed.receipt["runtime"]["hec_ras_version"] == version
+
+
+@pytest.mark.parametrize("requested, actual", [
+    ("7.0.1", "6.5"), ("7.0.1", "6.6"), ("6.5", "7.0.1"), ("6.6", "7.0.1"),
+])
+@pytest.mark.parametrize("stage", ["prepare", "compute"])
+def test_701_cannot_use_a_different_version_image_or_receipt(monkeypatch, project, requested, actual, stage):
+    calls = _fake_run(monkeypatch, project, changes={"runtime": {"hec_ras_version": actual}})
+    method = RasDocker.preprocess_plan if stage == "prepare" else RasDocker.compute_plan
+    family, tag = ("wine-precompute", "v4") if stage == "prepare" else ("linux-unsteady", "v1")
+    with pytest.raises(ValueError, match="stage/version"):
+        method(project, 1, version=requested, image=f"rascommander/hec-ras-{family}_{actual}:{tag}")
+    assert not calls
+    result = method(project, 1, version=requested, image="local-qualification:custom")
+    assert not result and "version does not match" in result.error

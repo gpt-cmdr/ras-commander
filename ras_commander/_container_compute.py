@@ -119,8 +119,8 @@ def _runtime(manifest_path, expected_version=None):
     if data.get("schema") not in {"ras-commander-native-runtime/v1", "ras-commander-runtime/v1"}:
         raise ValueError("Unsupported native runtime manifest schema")
     version = data.get("hec_ras_version")
-    if data.get("kind") != "native" or version not in {"6.5", "6.6"}:
-        raise ValueError("Native runtime must declare HEC-RAS 6.5 or 6.6")
+    if data.get("kind") != "native" or version not in {"6.5", "6.6", "7.0.1"}:
+        raise ValueError("Native runtime must declare HEC-RAS 6.5, 6.6 or 7.0.1")
     if expected_version and version != expected_version:
         raise ValueError("Bundled native runtime does not match the image HEC-RAS version")
     root = manifest_path.parent.resolve()
