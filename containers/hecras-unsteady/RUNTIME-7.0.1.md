@@ -15,10 +15,13 @@ Image qualification and publication are recorded separately in the
 
 ## 1. Gather the source and extraction tools
 
-Use a checkout containing [extract_installer.py](extract_installer.py) and
-[bundle_runtime.py](bundle_runtime.py). The former is reconstruction tooling;
-it is not installed in the compute image. Use Python 3.11 or later for this
-recipe.
+Use the native image's source checkout at
+`aa003b179e9d0f89ba23da0607ffab9bfee74a60`, which contains
+[bundle_runtime.py](bundle_runtime.py). The [extractor](extract_installer.py)
+was added later as reconstruction tooling and is not installed in the image.
+The command below downloads that utility from its immutable documentation
+revision into the external work directory, so the image-source checkout
+need not change. Use Python 3.11 or later for this recipe.
 
 | Tool | Use and source | Tested version and license |
 |---|---|---|
@@ -50,6 +53,9 @@ export HEC701_WORK=/path/to/external/hecras-701-rebuild
 test ! -e "$HEC701_WORK"
 mkdir -p "$HEC701_WORK/downloads" "$HEC701_WORK/notices" "$HEC701_WORK/evidence"
 git rev-parse HEAD > "$HEC701_WORK/evidence/reconstruction-source-commit.txt"
+curl --fail --location \
+  'https://raw.githubusercontent.com/gpt-cmdr/ras-commander/fdde90229a30fe259fbcb1c1679e8de720a25d8f/containers/hecras-unsteady/extract_installer.py' \
+  --output "$HEC701_WORK/extract_installer.py"
 ```
 
 ## 2. Download the official combined installer
@@ -89,7 +95,7 @@ then makes the completed directory available. Existing output directories
 are rejected.
 
 ```bash
-python3 containers/hecras-unsteady/extract_installer.py \
+python3 "$HEC701_WORK/extract_installer.py" \
   --installer "$HEC701_WORK/downloads/HEC-RAS_701_with_Linux_Setup.exe" \
   --output "$HEC701_WORK/setup"
 
