@@ -2900,7 +2900,10 @@ def get_ras_exe(ras_version=None):
 
     # Check if input is a direct path to an executable
     hecras_path = Path(ras_version)
-    if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
+    if hecras_path.is_file() and (
+        hecras_path.suffix.lower() == '.exe'
+        or hecras_path.name in {'RasUnsteady', 'rasUnsteady', 'rasUnsteady64'}
+    ):
         logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
 
