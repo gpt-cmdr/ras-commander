@@ -199,6 +199,7 @@ nav:
       - Profiles Check: user-guide/quality-assurance/profiles-check.md
     - Legacy COM Interface: user-guide/legacy-com-interface.md
     - Remote Execution: user-guide/remote-execution.md
+    - Docker Preprocessing and Linux Compute: user-guide/container-execution.md
     - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
   - Example Notebooks:
     - Overview: examples/index.md

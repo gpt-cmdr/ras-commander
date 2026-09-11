@@ -2667,6 +2667,42 @@ notebooks:
   excluded: false
   code_cells: 4
   executed_cells: 0
+- id: 512_docker_precompute_and_linux_compute
+  filename: 512_docker_precompute_and_linux_compute.ipynb
+  title: Docker Precompute and Native Linux Compute
+  series: 500
+  series_name: Remote Execution
+  summary: Prepare a real 2D model through the published Wine image, run its native Linux solver, and
+    inspect complete water-surface results using one Python API.
+  tags:
+  - execution
+  - remote
+  - docker
+  - linux
+  - 2d
+  difficulty: advanced
+  est_runtime: null
+  data_project: RAS2FIM-2D public 50-cfs sample
+  functions_used:
+  - HdfBase.get_2d_flow_area_names_and_counts
+  - HdfMesh.get_mesh_cell_property_tables
+  - HdfMesh.get_mesh_face_property_tables
+  - HdfMesh.get_mesh_sloped_topology
+  - HdfPlan.get_plan_end_time
+  - HdfPlan.get_plan_start_time
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_unsteady_summary
+  - HdfUtils.parse_ras_window_datetime
+  - RasDocker.compute_plan
+  - RasDocker.preprocess_plan
+  - RasPlan.get_plan_path
+  - RasPlan.get_plan_value
+  - RasPlan.update_simulation_date
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 10
+  executed_cells: 0
 - id: 560_modpuls_routing_extraction
   filename: 560_modpuls_routing_extraction.ipynb
   title: Modified Puls Routing Extraction from HEC-RAS 2D Models

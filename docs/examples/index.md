@@ -117,6 +117,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [500 - Remote Parallel Execution with PsExec](../notebooks/500_remote_execution_psexec.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/500_remote_execution_psexec.ipynb) | 8.7 min |
 | [510 - Linux HEC-RAS Execution](../notebooks/510_linux_execution.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/510_linux_execution.ipynb) | N/A |
 | [511 - Headless Linux/Wine/Ras2Cng Setup and Qualification](../notebooks/511_headless_linux_wine_ras2cng.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/511_headless_linux_wine_ras2cng.ipynb) | N/A |
+| [512 - Docker Preprocessing and Native Linux Compute](../notebooks/512_docker_precompute_and_linux_compute.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/examples/512_docker_precompute_and_linux_compute.ipynb) | See the configurable simulation window |
 | [560 - Modified Puls Routing Extraction from HEC-RAS 2D Models](../notebooks/560_modpuls_routing_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/560_modpuls_routing_extraction.ipynb) | 3.5 min |
 
 ## 600s - Floodplain Mapping
