@@ -225,14 +225,12 @@ class GeomMetadata:
 
     @staticmethod
     def _get_xs_count_hdf(hdf: h5py.File) -> int:
-        """Get 1D cross section count from geometry HDF."""
-        path = '/Geometry/Cross Sections/Attributes'
-        if path not in hdf:
-            return 0
-        dataset = hdf[path]
-        if not isinstance(dataset, h5py.Dataset) or not dataset.shape:
-            raise ValueError(f"Unreadable cross-section attributes dataset: {path}")
-        return int(dataset.shape[0])
+        """Get the validated 1D cross-section count for modern or legacy HDF."""
+        # Lazy import keeps the geometry metadata module independent during
+        # package initialization while sharing one schema-recognition contract.
+        from ..hdf.HdfXsec import HdfXsec
+
+        return HdfXsec._get_cross_section_count(hdf)
 
     @staticmethod
     def _get_structure_counts_hdf(hdf: h5py.File) -> Dict[str, int]:
