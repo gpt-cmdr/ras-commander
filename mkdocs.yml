@@ -200,6 +200,7 @@ nav:
     - Legacy COM Interface: user-guide/legacy-com-interface.md
     - Remote Execution: user-guide/remote-execution.md
     - Docker Preprocessing and Linux Compute: user-guide/container-execution.md
+    - Container Comparison and TACC Design: user-guide/container-hpc-design.md
     - Cloud-Native Export (ras2cng): user-guide/cloud-native-export.md
   - Example Notebooks:
     - Overview: examples/index.md

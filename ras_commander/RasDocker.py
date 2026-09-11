@@ -13,11 +13,14 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import tempfile
-from typing import Any, Dict, Mapping, Optional, Tuple, Union
+import time
+from typing import Any, Dict, Iterable, Mapping, Optional, Tuple, Union
 import uuid
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from ._container_process import run_streaming
+from ._container_resume import find_resume, record_resume
 
 
 logger = get_logger(__name__)
@@ -51,9 +54,58 @@ class ContainerResult:
     stderr: str = ""
     returncode: Optional[int] = None
     error: Optional[str] = None
+    resumed: bool = False
+    duration_seconds: float = 0.0
 
     def __bool__(self) -> bool:
         return self.success
+
+
+@dataclass(frozen=True)
+class ContainerEvent:
+    """A host lifecycle or live output event, scoped to one project and stage.
+
+    ``kind`` is ``start``, ``message``, ``complete`` or ``resumed``. Messages
+    preserve the source stream. Completion success includes receipt validation.
+    No estimated simulation percentage is inferred from elapsed time.
+    """
+
+    kind: str
+    stage: str
+    project_path: Path
+    plan_number: str
+    run_id: str
+    message: str = ""
+    stream: Optional[str] = None
+    success: Optional[bool] = None
+
+
+@dataclass
+class ContainerBatchResult:
+    """Ordered per-job stage results and a stable, exportable ``summary_df``.
+
+    Failed jobs remain in the summary. ``success`` is true only if every job
+    succeeded; an empty batch is successful. Batch execution is on the host.
+    """
+
+    results: list = field(default_factory=list)
+    rows: list = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return all(row["success"] for row in self.rows)
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    @property
+    def summary_df(self):
+        """One row per submitted job, including skipped stages and failures."""
+        import pandas as pd
+        from .schemas import DATAFRAME_SCHEMAS
+
+        columns = [item["name"] for item in DATAFRAME_SCHEMAS["container_batch_summary"]["columns"]]
+        return pd.DataFrame(self.rows, columns=columns)
 
 
 class RasDocker:
@@ -74,6 +126,7 @@ class RasDocker:
         timeout: int = 900, num_cores: int = 2,
         replace_generated: bool = False, docker_executable: str = "docker",
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
+        stream_callback: Optional[Any] = None, resume: bool = False,
     ) -> ContainerResult:
         """Create ``.tmp.hdf``, ``.b##`` and ``.x##`` in the Wine image.
 
@@ -88,8 +141,9 @@ class RasDocker:
             timeout: In-container timeout in seconds. Docker startup, pulling
                 and shutdown receive an additional 120 seconds on the host.
                 Pull a large image separately if the initial download is slow.
-            num_cores: Validated for the shared API, but not passed to the
-                published preprocessing CLI, which has no core-count option.
+            num_cores: Integer from 1 through 8 (default 2). Sets Docker's CPU
+                quota for either stage. Native computation also passes this
+                count to HEC-RAS. The published Wine CLI has no thread option.
             replace_generated: Explicit permission to replace existing outputs.
                 Defaults to False; use a fresh model copy when enabling it.
             docker_executable: Docker CLI executable path, not a shell command.
@@ -98,6 +152,13 @@ class RasDocker:
             run_id: Optional unique 1–64 character run ID. IDs cannot be reused,
                 including after failed launches; omitted IDs are generated.
             user: Container user; ``"root"`` supports Windows bind mounts.
+            stream_callback: Partial ExecutionCallback object. An optional
+                ``on_container_event(event)`` receives project/stage identity,
+                live stdout/stderr, validated completion and resume events.
+                Ordinary callback exceptions are logged; interrupts propagate.
+            resume: Reuse an unchanged successful stage recorded by this host
+                API. Checks model, dependencies, options and output contents.
+                A miss executes normally; it does not authorize replacement.
 
         Returns:
             ContainerResult: Receipt and process diagnostics; failed receipts
@@ -108,6 +169,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=None,
+            stream_callback=stream_callback, resume=resume,
         )
 
     @staticmethod
@@ -120,6 +182,7 @@ class RasDocker:
         replace_generated: bool = False, docker_executable: str = "docker",
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
         prepare_receipt: Optional[Union[str, Path]] = None,
+        stream_callback: Optional[Any] = None, resume: bool = False,
     ) -> ContainerResult:
         """Run preprocessed inputs with the native Linux unsteady solver image.
 
@@ -137,6 +200,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=prepare_receipt,
+            stream_callback=stream_callback, resume=resume,
         )
 
     @staticmethod
@@ -150,6 +214,7 @@ class RasDocker:
         num_cores: int = 2, replace_generated: bool = False,
         docker_executable: str = "docker", pull: str = "missing",
         run_id: Optional[str] = None, user: str = "root",
+        stream_callback: Optional[Any] = None, resume: bool = False,
     ) -> Tuple[ContainerResult, Optional[ContainerResult]]:
         """Prepare then compute, stopping if preparation fails.
 
@@ -166,6 +231,7 @@ class RasDocker:
             version=version, mounts=mounts, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, user=user,
+            stream_callback=stream_callback, resume=resume,
         )
         prepared = RasDocker.preprocess_plan(
             project_path, plan_number, image=preprocess_image,
@@ -183,14 +249,90 @@ class RasDocker:
         return prepared, computed
 
     @staticmethod
+    @log_call
+    def run_batch(jobs: Iterable[Mapping[str, Any]], *, stage: str = "run", **options) -> ContainerBatchResult:
+        """Run independent working copies sequentially and collect every outcome.
+
+        Each job maps ``project_path`` and ``plan_number`` plus optional overrides
+        accepted by :meth:`run_plan` (``stage='run'``), :meth:`preprocess_plan`
+        (``'prepare'``), or :meth:`compute_plan` (``'compute'``). Shared options,
+        including ``resume`` and ``stream_callback``, are keyword arguments.
+        Job overrides win. A failed job does not prevent later jobs from running.
+        KeyboardInterrupt stops the batch and cleans up the active container.
+
+        No pool runs inside a container. For concurrent jobs, an external
+        scheduler can call the single-plan APIs on separate working folders.
+        Summary rows identify success, reuse, durations, receipts and errors.
+        """
+        methods = {"run": RasDocker.run_plan, "prepare": RasDocker.preprocess_plan,
+                   "compute": RasDocker.compute_plan}
+        if stage not in methods:
+            raise ValueError("stage must be 'run', 'prepare' or 'compute'")
+        batch = ContainerBatchResult()
+        for index, job in enumerate(jobs):
+            prepared = computed = None
+            started = time.monotonic()
+            row = {"job_index": index, "project_path": None, "plan_number": None,
+                   "stage": stage, "success": False, "resumed": False,
+                   "status": "failed", "duration_seconds": 0.0,
+                   "prepare_receipt": None, "compute_receipt": None, "error": None}
+            try:
+                if not isinstance(job, Mapping):
+                    raise TypeError("Each batch job must be a mapping")
+                kwargs = {**options, **job}
+                row["project_path"] = str(Path(kwargs["project_path"]).expanduser().resolve())
+                row["plan_number"] = RasDocker._normalize_plan(kwargs["plan_number"])
+                value = methods[stage](**kwargs)
+                if stage == "run":
+                    prepared, computed = value
+                elif stage == "prepare":
+                    prepared = value
+                else:
+                    computed = value
+                stages = [item for item in (prepared, computed) if item is not None]
+                row["success"] = all(item.success for item in stages)
+                if stage == "run" and computed is None:
+                    row["success"] = False
+                row["resumed"] = row["success"] and all(item.resumed for item in stages)
+                row["status"] = "resumed" if row["resumed"] else ("succeeded" if row["success"] else "failed")
+                row["error"] = "; ".join(item.error or str(item.receipt.get("error", "Container stage failed"))
+                                            for item in stages if not item.success) or None
+            except Exception as exc:
+                row["error"] = f"{type(exc).__name__}: {exc}"
+            row["duration_seconds"] = time.monotonic() - started
+            if prepared is not None:
+                row["prepare_receipt"] = str(prepared.receipt_path)
+            if computed is not None:
+                row["compute_receipt"] = str(computed.receipt_path)
+            batch.results.append((prepared, computed))
+            batch.rows.append(row)
+        return batch
+
+    @staticmethod
+    def _notify(callback, method, *args):
+        if callback is None:
+            return
+        try:
+            function = getattr(callback, method, None)
+            if function is not None:
+                function(*args)
+        except Exception:
+            logger.warning("Container callback %s failed", method, exc_info=True)
+
+    @staticmethod
     def _execute(stage, project_path, plan_number, *, version, image, mounts,
                  timeout, num_cores, replace_generated, docker_executable, pull,
-                 run_id, user, prepare_receipt):
+                 run_id, user, prepare_receipt, stream_callback=None, resume=False):
+        started = time.monotonic()
         if version not in _VERSIONS:
             raise ValueError("version must be '6.5', '6.6' or '7.0.1'")
         for name, value in (("timeout", timeout), ("num_cores", num_cores)):
             if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
+        if num_cores > 8:
+            raise ValueError("num_cores must be between 1 and 8")
+        if not isinstance(resume, bool):
+            raise ValueError("resume must be a bool")
         if not isinstance(replace_generated, bool):
             raise ValueError("replace_generated must be a bool")
         if pull not in {"always", "missing", "never"}:
@@ -222,6 +364,19 @@ class RasDocker:
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid.uuid4().hex[:16]
         if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
             raise ValueError("run_id must use 1–64 letters, digits, periods, underscores or hyphens, starting with a letter or digit")
+        identity = {"version": version, "image": image, "num_cores": int(num_cores),
+                    "mounts": {str(dest): str(Path(source).expanduser().resolve())
+                               for dest, source in (mounts or {}).items()},
+                    "prepare_receipt": str(selected) if prepare_receipt is not None else None}
+        if resume:
+            cached = find_resume(project, plan, stage, identity)
+            if cached is not None:
+                result = ContainerResult(True, stage, project, plan, Path(cached["receipt_path"]),
+                                         receipt=cached["receipt"], resumed=True,
+                                         duration_seconds=time.monotonic() - started)
+                RasDocker._notify(stream_callback, "on_container_event", ContainerEvent(
+                    "resumed", stage, project, plan, result.receipt["run_id"], success=True))
+                return result
         runs = project.parent / ".ras-commander" / "runs"
         # An exclusive claim prevents concurrent calls from crediting each
         # other's receipt. Keep it after launch failures to prohibit ID reuse.
@@ -243,7 +398,8 @@ class RasDocker:
             cid_file = Path(control_dir) / "container.id"
             command = [docker_executable, "run", "--rm", "--pull", pull,
                        "--name", name, "--label", f"{_OWNER_LABEL}={owner}",
-                       "--cidfile", str(cid_file), "--user", user, *mount_args,
+                       "--cidfile", str(cid_file), "--user", user,
+                       "--cpus", str(num_cores), *mount_args,
                        image, stage, "--project", f"/job/{project.name}", "--plan", plan,
                        "--timeout", str(timeout), "--run-id", run_id]
             if stage == "compute":
@@ -253,10 +409,17 @@ class RasDocker:
             if replace_generated:
                 command.append("--replace-generated")
             try:
-                completed = subprocess.run(
-                    command, capture_output=True, text=True, encoding="utf-8",
-                    errors="replace", shell=False, timeout=int(timeout) + 120,
-                )
+                RasDocker._notify(stream_callback, "on_container_event", ContainerEvent(
+                    "start", stage, project, plan, run_id))
+                if stage == "prepare":
+                    RasDocker._notify(stream_callback, "on_prep_start", plan)
+                else:
+                    RasDocker._notify(stream_callback, "on_exec_start", plan, subprocess.list2cmdline(command))
+                def on_line(stream, message):
+                    RasDocker._notify(stream_callback, "on_container_event", ContainerEvent(
+                        "message", stage, project, plan, run_id, message=message, stream=stream))
+                    RasDocker._notify(stream_callback, "on_exec_message", plan, message)
+                completed = run_streaming(command, timeout=int(timeout) + 120, on_line=on_line)
                 result.stdout = completed.stdout or ""
                 result.stderr = completed.stderr or ""
                 result.returncode = completed.returncode
@@ -268,11 +431,29 @@ class RasDocker:
                 if cleanup_error:
                     result.error += f"; {cleanup_error}"
             except OSError as exc:
-                result.error = f"Could not launch Docker: {exc}"
+                if getattr(exc, "_ras_container_cli_started", False):
+                    result.error = f"Docker output transport failed: {exc}"
+                    cleanup_error = RasDocker._cleanup_owned(docker_executable, name, owner, cid_file)
+                    if cleanup_error:
+                        result.error += f"; {cleanup_error}"
+                else:
+                    result.error = f"Could not launch Docker: {exc}"
             except BaseException:
                 RasDocker._cleanup_owned(docker_executable, name, owner, cid_file)
                 raise
         RasDocker._read_receipt(result, run_id, version)
+        result.duration_seconds = time.monotonic() - started
+        if result.success and resume:
+            record_resume(project, plan, stage, identity, result.receipt_path)
+        if stage == "prepare":
+            if result.success:
+                RasDocker._notify(stream_callback, "on_prep_complete", plan)
+        else:
+            RasDocker._notify(stream_callback, "on_exec_complete", plan, result.success, result.duration_seconds)
+            RasDocker._notify(stream_callback, "on_verify_result", plan, result.success)
+        RasDocker._notify(stream_callback, "on_container_event", ContainerEvent(
+            "complete", stage, project, plan, run_id, success=result.success,
+            message=result.error or ""))
         logger.info("Docker %s for plan %s: %s", stage, plan, "succeeded" if result else "failed")
         return result
 

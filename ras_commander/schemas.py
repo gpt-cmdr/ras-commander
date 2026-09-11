@@ -29,9 +29,29 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.14"
+SCHEMA_VERSION = "1.15"
 
 DATAFRAME_SCHEMAS = {
+    "container_batch_summary": {
+        "description": "Ordered outcomes of host-side container jobs, including failures and reused stages.",
+        "accessor": "RasDocker.run_batch(...).summary_df",
+        "source": "ContainerBatchResult.summary_df",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "job_index", "dtype": "int64", "description": "Zero-based submitted job position."},
+            {"name": "project_path", "dtype": "str", "description": "Absolute host project path, or None if invalid."},
+            {"name": "plan_number", "dtype": "str", "description": "Two-digit plan, or None if invalid."},
+            {"name": "stage", "dtype": "str", "description": "Requested run, prepare or compute workflow."},
+            {"name": "success", "dtype": "bool", "description": "Every requested stage succeeded or was safely reused."},
+            {"name": "resumed", "dtype": "bool", "description": "Every requested stage reused validated existing evidence."},
+            {"name": "status", "dtype": "str", "description": "succeeded, resumed or failed."},
+            {"name": "duration_seconds", "dtype": "float64", "description": "Host elapsed time for this call, including resume checks."},
+            {"name": "prepare_receipt", "dtype": "str", "description": "Expected preparation receipt path, or None if not invoked."},
+            {"name": "compute_receipt", "dtype": "str", "description": "Expected computation receipt path, or None if not invoked."},
+            {"name": "error", "dtype": "str", "description": "Failure diagnostic, or None on success."},
+        ],
+    },
     "flow_path_policy_xs_metrics": {
         "description": (
             "Per-cross-section stored-versus-regenerated reach-length evidence "

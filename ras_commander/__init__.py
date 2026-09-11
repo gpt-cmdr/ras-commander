@@ -103,6 +103,8 @@ from .RasBco import BcoMonitor
 _LAZY_EXPORTS = {
     'RasDocker': ('.RasDocker', 'RasDocker'),
     'ContainerResult': ('.RasDocker', 'ContainerResult'),
+    'ContainerEvent': ('.RasDocker', 'ContainerEvent'),
+    'ContainerBatchResult': ('.RasDocker', 'ContainerBatchResult'),
     # Core feature modules outside the lean compute surface.
     'RasGeometry': ('.RasGeometry', 'RasGeometry'),
     'RasGeometryUtils': ('.RasGeometryUtils', 'RasGeometryUtils'),
@@ -371,7 +373,7 @@ sys.modules[__name__].__class__ = _LazyRasCommanderModule
 
 # Define __all__ to specify what should be imported when using "from ras_commander import *"
 __all__ = [
-    'RasDocker', 'ContainerResult',
+    'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',

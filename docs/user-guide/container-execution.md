@@ -153,6 +153,127 @@ the solver. Each call returns a result with `success`, `receipt_path`,
 The `error` field explains host-side failures, such as a failed image pull;
 `receipt` contains the container diagnostics when a receipt was produced.
 
+## CPU limits, progress, resume, and batch summaries
+
+These additions are on the [container API development branch][docker-source].
+The pinned installation revision above reproduces the published-image tests;
+install the development checkout to use these newer host features:
+
+```bash
+uv pip install -e ".[compute]"
+```
+
+### Match solver cores to container resources
+
+`num_cores` defaults to **2** and accepts integers from **1 through 8**.
+[RasDocker][docker-source] passes it as Docker's `--cpus` for both stages and
+as `--num-cores` for native computation. The native worker passes the count
+to [RasCmdr.compute_plan_linux()][cmdr-source], which sets the plan/HDF core
+settings and `OMP_NUM_THREADS`/`MKL_NUM_THREADS`.
+
+Docker's CPU limit controls aggregate CPU time. It does not reserve exclusive
+physical cores or pin the process; CPU affinity is a separate setting.
+Resource limits belong in the launch command, while the Dockerfile defines
+the installed environment. See [Docker CPU constraints](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
+The published Wine preprocessing CLI has no solver-thread argument: that
+stage receives the Docker CPU quota, but not a new Wine CLI option.
+
+Each container runs one selected plan. Running several model containers is
+the host or scheduler's responsibility. For example, four simultaneous jobs
+at two cores each need eight CPU equivalents plus sufficient memory and
+scratch storage for all four models.
+
+### Receive live output and lifecycle callbacks
+
+Use the same partial `ExecutionCallback` pattern as
+[RasCmdr][cmdr-source], or implement `on_container_event` to distinguish
+projects, plans, stages and output streams:
+
+```python
+class Progress:
+    def on_container_event(self, event):
+        label = f"{event.project_path.stem} / {event.plan_number} / {event.stage}"
+        print(f"[{label}] {event.kind}: {event.message}", flush=True)
+
+computed = RasDocker.compute_plan(
+    project, "01", version=version, num_cores=2,
+    stream_callback=Progress(), resume=True,
+)
+```
+
+Events are `start`, `message`, `complete`, or `resumed`. Messages preserve
+their `stdout`/`stderr` source and arrive as the container emits them.
+`complete.success` includes the container receipt check. A resumed stage
+emits `resumed` and does not pretend that a new process ran.
+
+The compatible methods are `on_prep_start`, `on_prep_complete`,
+`on_exec_start`, `on_exec_message`, `on_exec_complete`, and `on_verify_result`.
+Preparation completion is emitted only on success; native completion includes
+the success flag. For this API, verification means the container's validation
+receipt passed. An ordinary callback exception is logged without failing the
+model; `KeyboardInterrupt` propagates after owned-container cleanup. Keep
+callbacks quick, and use project-aware events when different models share a
+plan number.
+
+The revised native worker forwards its solver log while computation is
+running, with CRLF, LF and lone-CR support. This image-side addition requires
+an image rebuilt from this revision; the previously published image inventory
+above does not claim that addition. Older installed workers expose only the
+output they already emit. Progress timing depends on when HEC-RAS flushes
+its output; the API does not fabricate percentages during silent periods.
+
+### Resume completed stages
+
+Enable `resume=True` on the first and subsequent calls. After a successful
+stage, the host saves a resume record under `.ras-commander/resume/`. A later
+call reuses it only if the model inputs, read-only dependency contents,
+version, image reference, core count, receipt, and output artifacts match.
+Model/dependency contents are read to check this, which can be expensive for
+large terrain datasets. The default `resume=False` does not build that extra
+inventory. Use an immutable image reference when reproducibility must include
+the exact image contents; resume compares the requested image reference and
+does not contact the registry to resolve a mutable tag.
+
+This resumes the workflow at completed-stage boundaries; it is not a HEC-RAS
+restart from a partially computed simulation. A failed or changed stage runs
+normally, and `replace_generated` still controls whether existing outputs
+can be replaced. Existing receipts created before resume was enabled are
+insufficient by themselves. A cache hit returns `resumed=True`, the original
+receipt, and `returncode=None` because no Docker process ran. It also skips
+pulling an image, even if `pull="always"` was supplied.
+
+### Collect a batch summary
+
+[RasDocker.run_batch()][docker-source] processes working copies sequentially
+on the host, records each outcome, and continues after ordinary job failures:
+
+```python
+jobs = [
+    {"project_path": models / "model-a" / "model-a.prj", "plan_number": "01"},
+    {"project_path": models / "model-b" / "model-b.prj", "plan_number": "01"},
+]
+batch = RasDocker.run_batch(
+    jobs, stage="run", version=version, num_cores=2,
+    mounts={"/source_terrain": models / "source_terrain",
+            "/projection": models / "projection"},
+    resume=True, stream_callback=Progress(),
+)
+display(batch.summary_df)
+batch.summary_df.to_csv(models / "batch-summary.csv", index=False)
+```
+
+Use `stage="prepare"` or `stage="compute"` for a single phase. Each job can
+override shared options. `batch.results` retains the per-job preparation and
+computation results; `summary_df` includes status, reuse, elapsed time,
+receipt paths and errors, including invalid jobs. A failed preparation skips
+that job's computation. An interrupt stops the batch and cleans up the active
+container. Resume records remain available for a later invocation.
+
+For TACC, use an external scheduler to distribute independent runs. The
+[implementation comparison and TACC design notes](container-hpc-design.md)
+describe the proposed Apptainer/Slurm integration and the staging changes
+needed in ras2fim. That backend has not yet been implemented or qualified.
+
 ## What runs inside each container
 
 ```mermaid

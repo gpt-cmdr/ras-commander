@@ -2695,13 +2695,14 @@ notebooks:
   - HdfUtils.parse_ras_window_datetime
   - RasDocker.compute_plan
   - RasDocker.preprocess_plan
+  - RasDocker.run_batch
   - RasPlan.get_plan_path
   - RasPlan.get_plan_value
   - RasPlan.update_simulation_date
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
+  code_cells: 12
   executed_cells: 0
 - id: 560_modpuls_routing_extraction
   filename: 560_modpuls_routing_extraction.ipynb

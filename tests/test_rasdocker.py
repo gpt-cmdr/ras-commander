@@ -17,6 +17,17 @@ from ras_commander.RasDocker import ContainerResult, RasDocker
 module = importlib.import_module("ras_commander.RasDocker")
 
 
+@pytest.fixture(autouse=True)
+def transport_boundary(monkeypatch):
+    # Keep these argument/receipt tests independent of process I/O. The real
+    # streaming helper is exercised with live subprocesses in its own suite.
+    def transport(command, timeout, on_line):
+        return module.subprocess.run(command, capture_output=True, text=True,
+                                     encoding="utf-8", errors="replace",
+                                     shell=False, timeout=timeout)
+    monkeypatch.setattr(module, "run_streaming", transport)
+
+
 @pytest.fixture
 def project(tmp_path):
     folder = tmp_path / "model folder with spaces"
@@ -74,6 +85,7 @@ def test_prepare_command_preserves_spaces_and_readonly_sibling_mounts(monkeypatc
     assert command[command.index("--project") + 1] == "/job/Example Model.prj"
     assert command[command.index("--plan") + 1] == "01"
     assert "--num-cores" not in command
+    assert command[command.index("--cpus") + 1] == "4"
     assert "--replace-generated" not in command
     assert kwargs["shell"] is False and kwargs["timeout"] == 1020
     assert result.stage == "prepare" and result.plan_number == "01"
@@ -97,6 +109,7 @@ def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, proj
     assert command[0] == "C:/Program Files/Docker/docker.exe"
     assert "rascommander/hec-ras-linux-unsteady_6.6:v1" in command
     assert command[command.index("--num-cores") + 1] == "3"
+    assert command[command.index("--cpus") + 1] == "3"
     assert command[command.index("--prepare-receipt") + 1] == "/job/.ras-commander/runs/prior/prepare.json"
     assert command[command.index("--user") + 1] == "1000:1000"
     assert command[-1] == "--replace-generated"
@@ -105,7 +118,8 @@ def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, proj
 
 @pytest.mark.parametrize("kwargs", [
     {"version": "7.0"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
-    {"num_cores": 0}, {"num_cores": True}, {"pull": "sometimes"},
+    {"num_cores": 0}, {"num_cores": True}, {"num_cores": 9}, {"num_cores": 2.5},
+    {"resume": "yes"}, {"pull": "sometimes"},
     {"replace_generated": "yes"}, {"run_id": "../escape"}, {"run_id": ".hidden"},
     {"run_id": "a" * 65}, {"image": "--privileged"}, {"image": "image extra"},
     {"image": "rascommander/hec-ras-wine-precompute_6.6:v4"},

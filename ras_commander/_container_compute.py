@@ -7,6 +7,8 @@ copy so its Fortran ``io.*`` links never depend on Windows bind-mount semantics.
 from __future__ import annotations
 
 import argparse
+import codecs
+from contextlib import contextmanager
 import hashlib
 import importlib.metadata
 import json
@@ -16,6 +18,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -329,6 +332,90 @@ def _call_compute(ras_object, engine, plan, timeout, num_cores):
                                       timeout_sec=timeout, num_cores=num_cores, retry=False)
 
 
+class _ProgressText:
+    """Forward log text without retaining a complete log or an unbounded line."""
+
+    fragment_size = 8192
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        self.pending = []
+        self.after_cr = False
+
+    def _flush(self, newline=False):
+        text = "".join(self.pending) + ("\n" if newline else "")
+        self.pending.clear()
+        if text:
+            self.stream.write(text)
+            self.stream.flush()
+
+    def feed(self, data, *, final=False):
+        for char in self.decoder.decode(data, final=final):
+            if self.after_cr and char == "\n":
+                self.after_cr = False
+                continue
+            self.after_cr = False
+            if char in "\r\n":
+                self._flush(newline=True)
+                self.after_cr = char == "\r"
+            else:
+                self.pending.append(char)
+                if len(self.pending) >= self.fragment_size:
+                    # Preserve long lines, but do not wait indefinitely for their newline.
+                    self._flush()
+        if final:
+            self._flush()
+
+
+@contextmanager
+def _forward_native_progress(log, *, stream=None, poll_interval=0.1):
+    """Tail the current attempt's log to flushed stderr while RasCmdr is running.
+
+    The solver owns its file and buffering. Only bytes it has already written
+    are forwarded; no percentage or heartbeat is fabricated. LF, CRLF and lone
+    CR delimiters become LF, including delimiters split between reads. The final
+    unterminated fragment is drained before leaving this context on either a
+    successful return or an exception. This never changes the retained log.
+    """
+    stop = threading.Event()
+    output = _ProgressText(sys.stderr if stream is None else stream)
+
+    def follow():
+        source = None
+        try:
+            while True:
+                finishing = stop.is_set()
+                if source is None:
+                    try:
+                        source = Path(log).open("rb")
+                    except FileNotFoundError:
+                        pass  # RasCmdr creates the file when it launches the solver.
+                if source is not None:
+                    block = source.read(65536)
+                    if block:
+                        output.feed(block)
+                        continue
+                if finishing:
+                    break
+                stop.wait(poll_interval)
+            output.feed(b"", final=True)
+        except (OSError, ValueError) as exc:
+            # Progress transport must not replace the solver's result or error.
+            logger.warning("Native progress forwarding stopped: %s", exc)
+        finally:
+            if source is not None:
+                source.close()
+
+    thread = threading.Thread(target=follow, name="ras-native-progress", daemon=True)
+    thread.start()
+    try:
+        yield thread
+    finally:
+        stop.set()
+        thread.join()
+
+
 def _validate_result(path, log, plan, meshes, window):
     from .RasCmdr import RasCmdr
     from .hdf.HdfUtils import HdfUtils
@@ -376,8 +463,8 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
         raise ValueError("Plan must be a two-digit plan number")
     if isinstance(timeout, bool) or int(timeout) != timeout or timeout <= 0:
         raise ValueError("Timeout must be a positive integer")
-    if isinstance(num_cores, bool) or int(num_cores) != num_cores or num_cores <= 0:
-        raise ValueError("num_cores must be a positive integer")
+    if isinstance(num_cores, bool) or int(num_cores) != num_cores or not 1 <= num_cores <= 8:
+        raise ValueError("num_cores must be an integer between 1 and 8")
     run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex[:8]
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", run_id):
         raise ValueError("Run ID contains unsupported characters or is too long")
@@ -438,9 +525,10 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
             raise ValueError("Prepared model changed while copying inputs to native scratch")
         ras_object = _initialize(staged_project, engine / "RasUnsteady")
         _validate_selected_plan(ras_object, plan, geometry, window)
-        result = _call_compute(ras_object, engine, plan, timeout, num_cores)
-        staged_final = staged_project.with_suffix(f".p{plan}.hdf")
         log = staged_project.parent / f"compute_linux_{plan}.log"
+        with _forward_native_progress(log):
+            result = _call_compute(ras_object, engine, plan, timeout, num_cores)
+        staged_final = staged_project.with_suffix(f".p{plan}.hdf")
         if not result:
             raise RuntimeError("RasCmdr.compute_plan_linux reported failure; inspect compute_linux log")
         _file(staged_final)
@@ -511,7 +599,8 @@ def main(argv=None):
     compute.add_argument("--project", required=True, type=Path)
     compute.add_argument("--plan", required=True)
     compute.add_argument("--timeout", type=int, default=14400)
-    compute.add_argument("--num-cores", type=int, default=2)
+    compute.add_argument("--num-cores", type=int, default=2,
+                         help="solver threads (1-8; default: 2)")
     compute.add_argument("--run-id")
     compute.add_argument("--replace-generated", action="store_true")
     compute.add_argument("--prepare-receipt", type=Path)
