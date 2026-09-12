@@ -73,7 +73,53 @@ machine credentials belong in this repository.
 
 ## Fresh qualification and merge status
 
-Pending final source pin, deterministic review, fresh captured replay, and
-bounded representative live regression runs. The historical 58-lane matrix,
-all transports, and broad hydraulic-model coverage must not be represented as
-fully requalified by this merge.
+The initial implementation candidate is
+`c326a1bfc38ec3f090399e7b7fe4df17991207fc`. Notebook inventory/index ordering
+corrections preserve its runtime and qualification source. A subsequent
+Windows inventory correction is described below and requires a new source
+pin for live qualification.
+
+- Affected API, ownership, Controller, message and TCU suite: 611 passed,
+  2 skipped.
+- Complete qualification-harness suite: 441 passed, 1 skipped.
+- Remote/native/PsExec suite: 103 passed, 1 platform skip; WSL ownership checks
+  passed separately. Overlapping tests are not added to the first total.
+- A real Python-only watchdog worker completed identity verification and
+  cleanup. This test did not invoke HEC-RAS.
+- Fresh captured replay: 13 attempts, 10 passed and 3 expected ambiguity
+  failures; all 36 independently reconstructed invariants passed. Every
+  request and receipt pins the implementation candidate and records no HEC-RAS
+  invocation.
+- Independent review rehashed all 133 fixture files, verified their preserved
+  identities, and checked the conversion from historical framed fingerprints
+  to the current canonical JSON fingerprint format. Added Controller binary
+  pins identify the available binaries; they do not establish retrospective
+  historical-engine provenance.
+
+The first live dispatch was refused before launching a worker because another
+HEC-RAS job was active; the existing process was left untouched. An idle CLB
+qualification host has matching installed binaries, but psutil reports an
+empty name for its protected Windows `Secure System` process. The strict
+inventory correctly refused to treat that incomplete scan as quiescence.
+
+The correction recovers only empty string names through a read-only Windows
+Tool Help snapshot. It verifies the original creation time against two fresh
+process identities around the lookup. Unknown names, access failures and
+identity changes still fail the scan; recovered HEC-RAS names still require
+the ordinary metadata checks. There is no process-name or PID allowlist.
+The actual host probe returned `Secure System` with identical creation times
+before and after the query. Independent review cleared the implementation;
+137 focused tests and 637 affected regression tests (2 skipped) passed. The
+complete qualification-harness suite also passed again: 441 tests, 1 skipped.
+
+The maintainer explicitly authorized TCU acceptance for all HEC-RAS versions.
+The selected legacy installations now verify accepted through `RasTcu.accept`;
+before/after status, donor preservation, binary identities and the actual API
+acceptance audit are retained externally. No GUI interaction was claimed.
+
+Representative live regression remains pending the corrected source pin and
+normal process-inventory gates. This PR remains a draft until those runs and
+the final documentation CI are reviewed.
+
+The historical 58-lane matrix, all transports, and broad hydraulic-model
+coverage must not be represented as fully requalified by this merge.

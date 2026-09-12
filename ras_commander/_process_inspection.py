@@ -73,6 +73,102 @@ _PLAN_MATCHABLE_PROCESS_NAMES = frozenset(
     }
 )
 
+_WINDOWS_PROCESS_NAMES = os.name == "nt"
+
+
+def _windows_process_snapshot_name(pid: int) -> str:
+    """Read a PID's name from a fresh, read-only Windows Tool Help snapshot.
+
+    Tool Help supplies a name even for some protected Windows processes whose
+    psutil name is empty. It does not supply creation time; callers must bind
+    this observation to a stable process identity on both sides of this call.
+    No process is opened for signalling, and the snapshot handle is closed.
+
+    API/structure: https://learn.microsoft.com/windows/win32/api/tlhelp32/
+    nf-tlhelp32-createtoolhelp32snapshot and ns-tlhelp32-processentry32w.
+    """
+    if not _WINDOWS_PROCESS_NAMES:
+        raise ValueError("process name is empty; Windows snapshot unavailable")
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessEntry32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    snapshot = kernel32.CreateToolhelp32Snapshot
+    snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    snapshot.restype = wintypes.HANDLE
+    first = kernel32.Process32FirstW
+    next_process = kernel32.Process32NextW
+    for function in (first, next_process):
+        function.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry32W)]
+        function.restype = wintypes.BOOL
+    close = kernel32.CloseHandle
+    close.argtypes = [wintypes.HANDLE]
+    close.restype = wintypes.BOOL
+
+    handle = snapshot(0x00000002, 0)  # TH32CS_SNAPPROCESS, no heaps/modules.
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        entry = ProcessEntry32W()
+        entry.dwSize = ctypes.sizeof(entry)
+        available = first(handle, ctypes.byref(entry))
+        # A malformed/unbounded enumeration must not become a clear inventory.
+        for _ in range(100_000):
+            if not available:
+                error = ctypes.get_last_error()
+                if error != 18:  # ERROR_NO_MORE_FILES is the sole normal end.
+                    raise ctypes.WinError(error)
+                raise ValueError(f"PID {pid} absent from Windows process snapshot")
+            if entry.th32ProcessID == pid:
+                name = entry.szExeFile.strip()
+                if not name:
+                    raise ValueError("Windows process snapshot name is empty")
+                return name
+            available = next_process(handle, ctypes.byref(entry))
+        raise ValueError("Windows process snapshot enumeration exceeded its bound")
+    finally:
+        close(handle)
+
+
+def _recover_empty_process_name(
+    process: Any, pid: int, psutil_module: Any
+) -> Tuple[str, float]:
+    """Bind a recovered OS name to the original and two fresh PID identities."""
+    if not _WINDOWS_PROCESS_NAMES or pid <= 0:
+        raise ValueError("process name is empty")
+    expected = float(_read_process_value(process, "create_time"))
+    if not math.isfinite(expected) or expected <= 0:
+        raise ValueError("nameless process create_time must be finite and positive")
+
+    def check_identity() -> None:
+        # Process.create_time() can cache its result. Construct a new Process
+        # on each side of the snapshot, bypassing process_iter's reused objects.
+        fresh = psutil_module.Process(pid)
+        observed = float(fresh.create_time())
+        if fresh.pid != pid or observed != expected:
+            raise ValueError("nameless process identity changed during name query")
+
+    check_identity()
+    name = _windows_process_snapshot_name(pid)
+    check_identity()
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Windows process snapshot name is empty or malformed")
+    return name.strip(), expected
+
 
 @dataclass(frozen=True)
 class _ProcessScan:
@@ -139,11 +235,17 @@ def _scan_ras_process_handles(
         for process in process_iterator:
             pid: Optional[int] = None
             name: Optional[str] = None
+            recovered_create_time: Optional[float] = None
             try:
                 pid = int(_read_process_value(process, "pid"))
-                name = str(_read_process_value(process, "name")).strip()
+                raw_name = _read_process_value(process, "name")
+                if not isinstance(raw_name, str):
+                    raise ValueError("process name is missing or malformed")
+                name = raw_name.strip()
                 if not name:
-                    raise ValueError("process name is empty")
+                    name, recovered_create_time = _recover_empty_process_name(
+                        process, pid, psutil_module
+                    )
             except Exception as error:
                 errors.append(
                     _query_error(
@@ -187,6 +289,11 @@ def _scan_ras_process_handles(
                 create_time = float(values["create_time"])
                 if not math.isfinite(create_time) or create_time <= 0:
                     raise ValueError("process create_time must be finite and positive")
+                if (
+                    recovered_create_time is not None
+                    and create_time != recovered_create_time
+                ):
+                    raise ValueError("recovered process identity changed during metadata query")
                 raw_cmdline = values["cmdline"]
                 if not isinstance(raw_cmdline, (list, tuple)) or not raw_cmdline:
                     raise ValueError("process command line is missing or malformed")
