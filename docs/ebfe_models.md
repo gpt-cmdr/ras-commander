@@ -137,6 +137,81 @@ Current built-in organizers include:
 | `lake-maurepas` | 08070204 | Louisiana 2D model archive. |
 | `lower-brazos` | 12070104 | Very large component delivery; manifest-only by default. |
 
+### Alabama BLE watershed corpora
+
+Alabama's statewide BLE catalog is exposed through the separate
+`AlabamaBleModels` source adapter. It joins the public ArcGIS model layer to
+the public model-link table by publisher `ModelID` and downloads only the
+table's `WebPath`. The publisher's bare object-store prefixes are not
+browsable directory endpoints, so callers must not scrape or construct URLs
+from those prefixes.
+
+The qualified `AL03130002` study key identifies the Middle
+Chattahoochee-Lake Harding HUC8 corpus: 197 1D steady projects grouped into
+eight source basins. The adapter preserves all of them in one movable delivery
+folder for FIM Commander and writes a relative-path inventory of each
+project's registered plan, geometry, flow, geometry HDF, and source archive.
+
+```python
+from pathlib import Path
+
+from ras_commander.sources import AlabamaBleModels
+
+workspace = Path("D:/ble/AL03130002")
+
+# Dynamic ArcGIS/WebPath inventory: all 197 models, or one named source basin.
+all_models = AlabamaBleModels.list_watershed_models("AL03130002")
+halawakee = AlabamaBleModels.list_watershed_models(
+    "03130002",
+    basin="Halawakee Creek",
+)
+
+# Reuse a separately retained raw corpus when it contains every verified ZIP
+# and source-identity sidecar; extracted folders alone are not trusted.
+# Otherwise download, verify, extract, and organize the complete HUC8 directly.
+raw_source = workspace / "raw"
+if raw_source.exists():
+    delivery = AlabamaBleModels.organize_watershed(
+        "03130002",
+        raw_source,
+        workspace / "organized",
+    )
+else:
+    delivery = AlabamaBleModels.download_watershed(
+        "03130002",
+        workspace / "organized",
+    )
+if not delivery.success:
+    raise RuntimeError(delivery.message)
+
+inventory = AlabamaBleModels.build_watershed_delivery_inventory(
+    delivery.model_path
+)
+```
+
+The organized root contains `Source Archives/`, `RAS Models/`, and
+`Documentation/`. Basin grouping is retained below the first two folders;
+paths in `Documentation/watershed_delivery_inventory.json` are relative to the
+delivery root. The retained source manifest uses
+`ras_commander.watershed_source_manifest` contract `1.0.0`; its `download`
+mode retains the downloader's archive provenance block, while `staged-copy`
+retains the verified staging provenance block. Both modes share the same
+source identity and extraction keys and require source ZIPs, strong-ETag
+sidecars, and archive-bound extraction receipts. The inventory contract is identified by
+`ras_commander.watershed_delivery_inventory` version `1.0.0`; it is the
+canonical FIM intake. The Example Project
+Library's four-layer combined PMTiles is a display derivative and must not
+replace it.
+
+Current source qualification found 197 registered steady plans, 197 geometry
+HDFs, and 5,365 cross sections. Delivered plan metadata identifies 135 plans
+as 6.20 and two as 6.31; 60 omit `Program Version`, so the source adapter does
+not apply a blanket version. No plan computation has yet been run across this
+corpus. One extra physical file, `OSANIPPA CREEK.p02`, is preserved but is not
+registered by its project and is excluded from the canonical plan inventory.
+Because these are pure 1D geometry models, absence of a terrain HDF is not a
+source deficiency for this corpus product.
+
 ## Delivery Validation Gate
 
 An organized eBFE model is not considered fully delivery-ready until it passes

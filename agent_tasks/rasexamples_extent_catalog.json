@@ -329,6 +329,28 @@
       "notes": "DMF4 is the downstream project in the cascade and consumes DMF_3.dss. Its two-core 1% AEP plan reached unsteady computation after a native geometry association refresh."
     },
     {
+      "id": "middle-chattahoochee-lake-harding-al03130002",
+      "title": "Middle Chattahoochee–Lake Harding 1D BLE Corpus",
+      "source_family": "Alabama Base Level Engineering delivery",
+      "crs": "ESRI:102629",
+      "crs_display": "NAD83 / Alabama East (ftUS)",
+      "extent_geojson": "F:\\BLE_State\\AL\\organized\\AL03130002\\Derived\\AL03130002_model_footprints.geojson",
+      "extent_geojson_crs": "EPSG:4326",
+      "extent_source": "Union of 197 HdfProject.get_project_extent(geometry_type='footprint', fill_holes=True) model footprints",
+      "landing_extent_source": "Exact union of 197 model footprints",
+      "extent_output": "project-extents/middle-chattahoochee-lake-harding-al03130002.geojson",
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "landing_geometry_pmtiles": "",
+      "landing_geometry_profile": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-12_middle_chattahoochee_lake_harding_alabama_ble_record_of_deficiencies.md",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-12_middle_chattahoochee_lake_harding_alabama_ble_record_of_deficiencies.md",
+      "notes": "One HUC8-level discovery entry represents 197 Alabama BLE 1D steady projects in eight source basins. The exact landing outline is the union of all 197 model footprints; the staged combined geometry contains 197 centerlines and model extents, 5,365 cross sections, and 394 bank lines. No hydraulic computation has been run, so this is source and geometry evidence only."
+    },
+    {
       "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
       "title": "Upper Guadalupe UPGU1",
       "source_family": "FEMA eBFE/BLE delivery",

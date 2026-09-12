@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
+import pytest
 from shapely.geometry import MultiPolygon, box, mapping, shape
 
 SCRIPT_PATH = (
@@ -84,16 +85,13 @@ def test_double_mountain_fork_brazos_catalog_has_four_linked_candidates() -> Non
         if item["id"].startswith("double-mountain-fork-brazos-dmf")
     ]
     assert [project["id"] for project in projects] == [
-        f"double-mountain-fork-brazos-dmf{number}-12050004"
-        for number in range(1, 5)
+        f"double-mountain-fork-brazos-dmf{number}-12050004" for number in range(1, 5)
     ]
     assert all(
-        project["status"] == "Source qualification candidate"
-        for project in projects
+        project["status"] == "Source qualification candidate" for project in projects
     )
     assert all(
-        project["viewer_type"] == "Qualification candidate"
-        for project in projects
+        project["viewer_type"] == "Qualification candidate" for project in projects
     )
     assert all(
         not project[field]
@@ -119,6 +117,31 @@ def test_double_mountain_fork_brazos_catalog_has_four_linked_candidates() -> Non
         "reached unsteady computation" in project["notes"] for project in projects
     )
     assert all("pending" not in project["notes"].lower() for project in projects)
+
+
+def test_alabama_ble_catalog_has_one_corpus_candidate() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+    project_id = "middle-chattahoochee-lake-harding-al03130002"
+    projects = [item for item in config["projects"] if item["id"] == project_id]
+
+    assert len(projects) == 1
+    project = projects[0]
+    assert project["status"] == "Source qualification candidate"
+    assert project["viewer_type"] == "Qualification candidate"
+    assert project["extent_geojson"].endswith("AL03130002_model_footprints.geojson")
+    assert project["extent_source"].startswith("Union of 197")
+    assert project["landing_extent_source"] == "Exact union of 197 model footprints"
+    assert all(
+        not project[field]
+        for field in (
+            "webmap",
+            "manifest",
+            "project_manifest",
+            "landing_geometry_pmtiles",
+            "landing_geometry_profile",
+        )
+    )
+    assert "197 Alabama BLE 1D steady projects" in project["notes"]
 
 
 def test_write_javascript_catalog_preserves_exact_project_footprint(
@@ -195,6 +218,83 @@ def test_write_javascript_catalog_derives_missing_bbox_from_geometry(
     assert fallback["features"][0]["bbox"] == [-111.5, 40.1, -111.4, 40.2]
 
 
+def test_merge_javascript_catalog_replaces_and_appends_exact_features(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "ras-example-project-supplements.js"
+    existing = {
+        "type": "FeatureCollection",
+        "name": "supplements",
+        "generatedAt": "old",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "retained",
+                "properties": {"title": "Retained"},
+                "geometry": mapping(box(-86.0, 32.0, -85.9, 32.1)),
+            },
+            {
+                "type": "Feature",
+                "id": "replaced",
+                "properties": {"title": "Old"},
+                "geometry": mapping(box(-85.8, 32.0, -85.7, 32.1)),
+            },
+        ],
+    }
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    output.write_text(prefix + json.dumps(existing) + ";\n", encoding="utf-8")
+    replacement_geometry = mapping(box(-85.7, 32.1, -85.6, 32.2))
+    appended_geometry = mapping(box(-85.6, 32.2, -85.5, 32.3))
+    generated = {
+        "type": "FeatureCollection",
+        "generatedAt": "new",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "replaced",
+                "properties": {"title": "New"},
+                "geometry": replacement_geometry,
+            },
+            {
+                "type": "Feature",
+                "id": "appended",
+                "properties": {"title": "Appended"},
+                "geometry": appended_geometry,
+            },
+        ],
+    }
+
+    builder._merge_javascript_catalog(
+        output,
+        generated,
+        "RAS_EXAMPLE_PROJECT_SUPPLEMENTS",
+    )
+
+    merged = json.loads(
+        output.read_text(encoding="utf-8").removeprefix(prefix).removesuffix(";\n")
+    )
+    assert merged["generatedAt"] == "new"
+    assert [feature["id"] for feature in merged["features"]] == [
+        "retained",
+        "replaced",
+        "appended",
+    ]
+    assert shape(merged["features"][1]["geometry"]).equals(shape(replacement_geometry))
+    assert shape(merged["features"][2]["geometry"]).equals(shape(appended_geometry))
+    assert all(
+        "fallbackGeometry" not in item["properties"] for item in merged["features"]
+    )
+
+
+def test_javascript_catalog_rejects_invalid_variable_name(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Invalid JavaScript variable"):
+        builder._write_javascript_catalog(
+            tmp_path / "catalog.js",
+            {"type": "FeatureCollection", "features": []},
+            "BAD;alert(1)",
+        )
+
+
 def test_project_feature_uses_display_crs_without_losing_definition(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -218,6 +318,8 @@ def test_project_feature_uses_display_crs_without_losing_definition(
         "webmap": "../viewer/",
         "manifest": "https://example.test/manifest.json",
         "project_manifest": "https://example.test/project.json",
+        "landing_geometry_pmtiles": "https://example.test/corpus.pmtiles",
+        "landing_geometry_profile": "ras-1d-corpus-v1",
         "notes": "Test model",
     }
 
@@ -236,6 +338,11 @@ def test_project_feature_uses_display_crs_without_losing_definition(
         )
     ]
     assert "fill_holes=True" in feature["properties"]["extentSource"]
+    assert (
+        feature["properties"]["landingGeometryPmtiles"]
+        == "https://example.test/corpus.pmtiles"
+    )
+    assert feature["properties"]["landingGeometryProfile"] == "ras-1d-corpus-v1"
 
 
 def test_project_feature_unions_configured_geometry_hdfs(
