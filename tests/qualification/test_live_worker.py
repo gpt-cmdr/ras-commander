@@ -923,7 +923,7 @@ def _install_public_api_fakes(
         )
         return SimpleNamespace(
             accepted=True,
-            version=ras_version,
+            version=request["engine"]["version_requested"],
             install_dir=install_dir,
             registry_key=f"test-registry/{install_dir}",
             reason="accepted",
@@ -1146,7 +1146,7 @@ def test_modern_live_attempt_uses_only_public_apis_and_publishes_worker_receipt(
         "registry_key": (
             "test-registry/" + str(Path(request["engine"]["executable"]).parent)
         ),
-        "version": request["engine"]["executable"],
+        "version": request["engine"]["version_requested"],
     }
     tcu_events = [
         row
@@ -1377,7 +1377,7 @@ def test_controller_live_attempt_uses_exact_controller_route_and_externalizes_me
     assert kwargs["controller_version"] == "4.1.0"
     assert kwargs["strict_close"] is True
     assert kwargs["observe_dialogs"] is True
-    assert calls["tcu_status"] == ["4.1.0"]
+    assert calls["tcu_status"] == [request["engine"]["controller_executable"]]
     attempt = context.run_root / "attempts" / "lane-1" / "attempt-1"
     receipt, _ = read_json_with_digest(attempt / "worker_receipt.json")
     assert (attempt / "messages.txt").read_text(encoding="utf-8").find(
@@ -1388,6 +1388,110 @@ def test_controller_live_attempt_uses_exact_controller_route_and_externalizes_me
     assert receipt["tables"]["lanes"][0]["controller_progid"] == (
         "RAS41.HECRASController"
     )
+
+
+@pytest.mark.parametrize(
+    ("version", "execution_api"),
+    [
+        ("6.6", "ras_cmdr"),
+        ("7.0.1", "ras_cmdr"),
+        ("4.0", "ras_control"),
+        ("4.1.0", "ras_control"),
+        ("5.0.7", "ras_control"),
+    ],
+)
+def test_tcu_preflight_uses_real_status_version_label_and_exact_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    version: str,
+    execution_api: str,
+) -> None:
+    """Exercise the real public status contract; isolate only registry reads."""
+    executable = tmp_path / version / "Ras.exe"
+    executable.parent.mkdir()
+    executable.write_bytes(b"TCU path identity only; never executed")
+    field = "executable" if execution_api == "ras_cmdr" else "controller_executable"
+    engine = {
+        "execution_api": execution_api,
+        "version_requested": version,
+        field: str(executable),
+    }
+    calls = []
+    node_versions = []
+
+    def resolve(ras_object=None, ras_version=None):
+        calls.append(ras_version)
+        return ras_version
+
+    def accepted_node(hive, subkey, version_label=None):
+        node_versions.append(version_label)
+        return True
+
+    monkeypatch.setattr(
+        sys.modules["ras_commander.RasTcu"], "os", SimpleNamespace(name="nt")
+    )
+    monkeypatch.setitem(sys.modules, "winreg", SimpleNamespace(HKEY_CURRENT_USER=1))
+    monkeypatch.setattr(ras_commander.RasTcu, "_resolve_exe", staticmethod(resolve))
+    monkeypatch.setattr(
+        ras_commander.RasTcu, "_node_has_acceptance_state", staticmethod(accepted_node)
+    )
+    payload = live_worker._read_tcu_status(ras_commander.RasTcu, engine)
+
+    assert calls == [str(executable)]
+    assert node_versions == [version]
+    assert payload["accepted"] is True
+    assert payload["version"] == version
+    assert payload["install_dir"] == str(executable.parent)
+    assert payload["ras_version_argument"] == str(executable)
+
+
+@pytest.mark.parametrize("execution_api", ["ras_cmdr", "ras_control"])
+@pytest.mark.parametrize(
+    ("mismatch", "message"),
+    [
+        ("version", "resolved version"),
+        ("path_as_version", "resolved version"),
+        ("missing_version", "resolved version"),
+        ("installation", "install directory"),
+    ],
+)
+def test_tcu_preflight_rejects_version_and_installation_mismatch_independently(
+    tmp_path: Path,
+    execution_api: str,
+    mismatch: str,
+    message: str,
+) -> None:
+    executable = tmp_path / "7.0.1" / "Ras.exe"
+    executable.parent.mkdir()
+    executable.write_bytes(b"TCU path identity only; never executed")
+    other_install = tmp_path / "other-install"
+    other_install.mkdir()
+    field = "executable" if execution_api == "ras_cmdr" else "controller_executable"
+    engine = {"version_requested": "7.0.1", field: str(executable)}
+    status = SimpleNamespace(
+        accepted=True,
+        version="7.0.1",
+        install_dir=str(executable.parent),
+        registry_key="test-registry/tcu",
+        reason="accepted",
+    )
+    if mismatch == "version":
+        status.version = "7.0"
+    elif mismatch == "path_as_version":
+        status.version = str(executable)
+    elif mismatch == "missing_version":
+        status.version = None
+    else:
+        status.install_dir = str(other_install)
+    calls = []
+
+    def read_status(*, ras_version):
+        calls.append(ras_version)
+        return status
+
+    with pytest.raises(live_worker.LiveTcuGateError, match=message):
+        live_worker._read_tcu_status(SimpleNamespace(status=read_status), engine)
+    assert calls == [str(executable)]
 
 
 @pytest.mark.parametrize(
@@ -1411,7 +1515,7 @@ def test_tcu_acceptance_not_confirmed_stops_before_staging_or_cleanup(
         calls["tcu_status"].append(ras_version)
         return SimpleNamespace(
             accepted=accepted,
-            version=ras_version,
+            version=request["engine"]["version_requested"],
             install_dir=str(Path(request["engine"]["executable"]).parent),
             registry_key="test-registry/tcu",
             reason=reason,

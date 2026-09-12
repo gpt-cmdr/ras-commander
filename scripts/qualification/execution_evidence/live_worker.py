@@ -1259,7 +1259,11 @@ def _read_tcu_status(RasTcu: Any, engine: Mapping[str, Any]) -> dict[str, Any]:
     status_method = getattr(RasTcu, "status", None)
     if not callable(status_method):
         raise LiveCapabilityError("RasTcu.status is unavailable")
-    ras_version = engine.get("executable") or engine.get("version_requested")
+    ras_version = (
+        engine.get("executable")
+        or engine.get("controller_executable")
+        or engine.get("version_requested")
+    )
     if not isinstance(ras_version, str) or not ras_version:
         raise LiveCapabilityError("live engine lacks an exact TCU version/path pin")
     try:
@@ -1288,9 +1292,14 @@ def _read_tcu_status(RasTcu: Any, engine: Mapping[str, Any]) -> dict[str, Any]:
         value = getattr(status, field)
         if value is not None and not isinstance(value, str):
             raise LiveCapabilityError(f"RasTcu.status {field} must be a string or null")
-    if status.version != ras_version:
+    # TcuStatus.version is the resolved version label, not an echo of the
+    # executable-path argument. Bind that label and the installation separately.
+    expected_version = engine.get("version_requested")
+    if not isinstance(expected_version, str) or not expected_version:
+        raise LiveCapabilityError("live engine lacks its declared TCU version")
+    if status.version != expected_version:
         raise LiveTcuGateError(
-            "RasTcu.status did not preserve the exact requested engine version/path"
+            "RasTcu.status resolved version does not match the declared engine version"
         )
     executable = engine.get("executable") or engine.get("controller_executable")
     if isinstance(executable, str) and executable:

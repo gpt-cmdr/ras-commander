@@ -605,7 +605,7 @@ def _publish_passing_worker_record(
         "hec_ras_invoked": True,
         "tcu_status": {
             "accepted": True,
-            "version": request["engine"]["executable"],
+            "version": request["engine"]["version_requested"],
             "install_dir": str(Path(request["engine"]["executable"]).parent),
             "registry_key": "test-registry/tcu",
             "reason": "accepted",
@@ -1995,6 +1995,10 @@ def _publish_duplicate_invariant_worker(
     [
         ("missing_tcu", "TCU proof"),
         ("truncated_tcu", "TCU proof"),
+        ("wrong_tcu_version", "TCU proof"),
+        ("path_as_tcu_version", "TCU proof"),
+        ("version_as_tcu_argument", "TCU proof"),
+        ("wrong_tcu_executable_argument", "TCU proof"),
         ("wrong_tcu_install", "TCU install directory"),
         ("forged_execution", "calculation/provenance/finalization"),
         ("zero_create_time", "executable provenance"),
@@ -2032,6 +2036,14 @@ def test_parent_rejects_minimal_or_forged_worker_execution_proof(
             worker.pop("tcu_status")
         elif forgery == "truncated_tcu":
             worker["tcu_status"].pop("reason")
+        elif forgery == "wrong_tcu_version":
+            worker["tcu_status"]["version"] = "6.6"
+        elif forgery == "path_as_tcu_version":
+            worker["tcu_status"]["version"] = request["engine"]["executable"]
+        elif forgery == "version_as_tcu_argument":
+            worker["tcu_status"]["ras_version_argument"] = request["engine"]["version_requested"]
+        elif forgery == "wrong_tcu_executable_argument":
+            worker["tcu_status"]["ras_version_argument"] = str(tmp_path / "other" / "Ras.exe")
         elif forgery == "wrong_tcu_install":
             worker["tcu_status"]["install_dir"] = str(tmp_path / "source")
         elif forgery == "forged_execution":
@@ -2260,7 +2272,7 @@ def test_parent_controller_proof_requires_exact_binary_identity(
             "install_dir": str(controller.parent),
             "registry_key": "test-registry/tcu",
             "reason": "accepted",
-            "ras_version_argument": "4.1.0",
+            "ras_version_argument": str(controller),
         },
         "process_evidence": {
             "pre_stage_global": global_inventory,
@@ -2387,7 +2399,6 @@ def test_parent_controller_proof_requires_exact_binary_identity(
     )
     worker["tcu_status"].update(
         version="4.0.0",
-        ras_version_argument="4.0.0",
     )
     details.update(
         requested_controller_version="4.0.0",
@@ -2416,7 +2427,6 @@ def test_parent_controller_proof_requires_exact_binary_identity(
     )
     worker["tcu_status"].update(
         version="5.0.7",
-        ras_version_argument="5.0.7",
     )
     details.update(
         selected_result_format="hdf",

@@ -3002,8 +3002,10 @@ def _verify_worker_execution_proof(
 ) -> tuple[str, ...]:
     """Revalidate the worker's underlying preflight and execution records."""
     tcu = worker.get("tcu_status")
-    ras_version_argument = engine.get("executable") or engine.get(
-        "version_requested"
+    ras_version_argument = (
+        engine.get("executable")
+        or engine.get("controller_executable")
+        or engine.get("version_requested")
     )
     expected_tcu_fields = {
         "accepted",
@@ -3016,7 +3018,9 @@ def _verify_worker_execution_proof(
     if not isinstance(tcu, Mapping) or set(tcu) != expected_tcu_fields or any(
         (
             tcu.get("accepted") is not True,
-            tcu.get("version") != ras_version_argument,
+            not isinstance(engine.get("version_requested"), str),
+            not bool(engine.get("version_requested")),
+            tcu.get("version") != engine.get("version_requested"),
             tcu.get("ras_version_argument") != ras_version_argument,
             not isinstance(tcu.get("reason"), str),
             not bool(tcu.get("reason")),
