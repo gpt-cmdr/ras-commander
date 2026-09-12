@@ -73,7 +73,31 @@ machine credentials belong in this repository.
 
 ## Fresh qualification and merge status
 
-Pending final source pin, deterministic review, fresh captured replay, and
-bounded representative live regression runs. The historical 58-lane matrix,
-all transports, and broad hydraulic-model coverage must not be represented as
-fully requalified by this merge.
+The implementation candidate is
+`c326a1bfc38ec3f090399e7b7fe4df17991207fc`. Subsequent notebook inventory/index
+ordering corrections do not change its runtime or qualification source.
+
+- Affected API, ownership, Controller, message and TCU suite: 611 passed,
+  2 skipped.
+- Complete qualification-harness suite: 441 passed, 1 skipped.
+- Remote/native/PsExec suite: 103 passed, 1 platform skip; WSL ownership checks
+  passed separately. Overlapping tests are not added to the first total.
+- A real Python-only watchdog worker completed identity verification and
+  cleanup. This test did not invoke HEC-RAS.
+- Fresh captured replay: 13 attempts, 10 passed and 3 expected ambiguity
+  failures; all 36 independently reconstructed invariants passed. Every
+  request and receipt pins the implementation candidate and records no HEC-RAS
+  invocation.
+- Independent review rehashed all 133 fixture files, verified their preserved
+  identities, and checked the conversion from historical framed fingerprints
+  to the current canonical JSON fingerprint format. Added Controller binary
+  pins identify the available binaries; they do not establish retrospective
+  historical-engine provenance.
+
+Bounded representative live regression remains pending. Its first dispatch
+was refused before launching a worker because another HEC-RAS job was active;
+the existing process was left untouched. This PR remains a draft while those
+live runs and documentation CI are reviewed.
+
+The historical 58-lane matrix, all transports, and broad hydraulic-model
+coverage must not be represented as fully requalified by this merge.
