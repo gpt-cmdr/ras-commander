@@ -1,0 +1,577 @@
+{
+  "schema": "ras-commander-container-qualification/v1",
+  "qualification_date_utc": "2026-09-12",
+  "publication_status": "published_and_verified",
+  "published_images": [
+    {
+      "config_digest": "sha256:7f70141c556618cfb8d93927dacbd88489f51a293567425eed48061d607b9ac4",
+      "digest": "sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99",
+      "target": "rascommander/hec-ras-wine-precompute_6.5:v4"
+    },
+    {
+      "config_digest": "sha256:7f70141c556618cfb8d93927dacbd88489f51a293567425eed48061d607b9ac4",
+      "digest": "sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99",
+      "target": "rascommander/hec-ras-wine-precompute_6.5:latest"
+    },
+    {
+      "config_digest": "sha256:568b0a8f2854baf2ba2159e83eb4b6489e069bab996153acb3f8aa63cf39467e",
+      "digest": "sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8",
+      "target": "rascommander/hec-ras-linux-unsteady_6.5:v1"
+    },
+    {
+      "config_digest": "sha256:568b0a8f2854baf2ba2159e83eb4b6489e069bab996153acb3f8aa63cf39467e",
+      "digest": "sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8",
+      "target": "rascommander/hec-ras-linux-unsteady_6.5:latest"
+    },
+    {
+      "config_digest": "sha256:4b8032eb8e2307245281f5f99fcc186c2374c7433c4d61a42604eae712877ad1",
+      "digest": "sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318",
+      "target": "rascommander/hec-ras-wine-precompute_6.6:v4"
+    },
+    {
+      "config_digest": "sha256:4b8032eb8e2307245281f5f99fcc186c2374c7433c4d61a42604eae712877ad1",
+      "digest": "sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318",
+      "target": "rascommander/hec-ras-wine-precompute_6.6:latest"
+    },
+    {
+      "config_digest": "sha256:7b6ff681681ddd67a641a48953e82a23b592b28f66ec5106a4b24b23d7c4b497",
+      "digest": "sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c",
+      "target": "rascommander/hec-ras-linux-unsteady_6.6:v1"
+    },
+    {
+      "config_digest": "sha256:7b6ff681681ddd67a641a48953e82a23b592b28f66ec5106a4b24b23d7c4b497",
+      "digest": "sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c",
+      "target": "rascommander/hec-ras-linux-unsteady_6.6:latest"
+    },
+    {
+      "config_digest": "sha256:eb2b96901cf87dbc685e732b1d0799827067fff97ee2eb2c9ae693910f5cfc6b",
+      "digest": "sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d",
+      "target": "rascommander/hec-ras-wine-precompute_7.0.1:v4"
+    },
+    {
+      "config_digest": "sha256:eb2b96901cf87dbc685e732b1d0799827067fff97ee2eb2c9ae693910f5cfc6b",
+      "digest": "sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d",
+      "target": "rascommander/hec-ras-wine-precompute_7.0.1:latest"
+    },
+    {
+      "config_digest": "sha256:a9d2ae8f18b34f2266d0217c63bd900e3a1885190405dd0da032d3414805e684",
+      "digest": "sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9",
+      "target": "rascommander/hec-ras-linux-unsteady_7.0.1:v1"
+    },
+    {
+      "config_digest": "sha256:a9d2ae8f18b34f2266d0217c63bd900e3a1885190405dd0da032d3414805e684",
+      "digest": "sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9",
+      "target": "rascommander/hec-ras-linux-unsteady_7.0.1:latest"
+    }
+  ],
+  "source_commits": {
+    "wine_controller": "dc60b219091e85bcb4564eca45313475c39ce58a",
+    "wine_installed_library": "9e4217713e954236b0c16023e1815c6f2b7a5309",
+    "native_installed_library_and_linux_host": "604704d440c49a39d6f6e8bae262e2233d895dd0",
+    "windows_host_api_and_notebook": "15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5"
+  },
+  "sample": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs",
+  "plan": "01",
+  "platform": "linux/amd64",
+  "versions": [
+    {
+      "hec_ras_version": "6.5",
+      "wine": {
+        "candidate_image": "hecras-wine-candidate-6.5:cpu-dc60b21",
+        "image_id": "sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99",
+        "line_ending_cases": [
+          {
+            "input_line_endings": "lf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 2680668,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          },
+          {
+            "input_line_endings": "crlf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 2680668,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          }
+        ]
+      },
+      "native_linux": {
+        "candidate_image": "rascommander/hec-ras-linux-unsteady_6.5:cpu-604704d",
+        "image_id": "sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8",
+        "hdf_validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "water_surface_shape": [
+                267,
+                6548
+              ],
+              "finite": true
+            }
+          },
+          "output_times": 267,
+          "simulation_start": "2000-01-01T00:00:00",
+          "simulation_end": "2000-01-12T02:00:00"
+        },
+        "cpu_quota": "200000 100000",
+        "omp_threads": "2",
+        "mkl_threads": "2",
+        "ordered_log_callback_lines": 255508,
+        "resume_without_docker": true
+      },
+      "windows_docker_desktop": {
+        "success": true,
+        "simulation_hours": 1,
+        "source_notebook_code_cells": 12,
+        "external_qualification_cells": 1,
+        "qualification_adaptations": "Disclosed resume/batch switches, callback wrapper and prepared-state capture; external notebook-adjustments.json retains exact changes.",
+        "result_rows": [
+          {
+            "mesh": "Perimeter 1",
+            "reported_cells": "6201",
+            "water_surface_columns": 6548,
+            "timesteps": 2,
+            "first_output": "2000-01-01 00:00:00",
+            "last_output": "2000-01-01 01:00:00",
+            "finite_fraction": 1.0,
+            "finite_wse_min": 500.3701171875,
+            "finite_wse_max": 611.36669921875
+          }
+        ],
+        "final_hdf_size_bytes": 3052376,
+        "final_hdf_sha256": "1050ad392205b3d96c676328b93bc191b9a2fd921afeca0556a1aeafe98785ba",
+        "num_cores": 2,
+        "live_timestep_before_completion_seconds": 0.9101806999969995,
+        "prepare_resume_without_executable": true,
+        "compute_resume_without_executable": true,
+        "failed_batch_row_continued": true,
+        "fixture_preserved": true,
+        "prepared_tmp_preserved": true,
+        "live_containers": {
+          "prepare": {
+            "image_id": "sha256:7f70141c556618cfb8d93927dacbd88489f51a293567425eed48061d607b9ac4",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          },
+          "compute": {
+            "image_id": "sha256:568b0a8f2854baf2ba2159e83eb4b6489e069bab996153acb3f8aa63cf39467e",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          }
+        }
+      }
+    },
+    {
+      "hec_ras_version": "6.6",
+      "wine": {
+        "candidate_image": "hecras-wine-candidate-6.6:cpu-dc60b21",
+        "image_id": "sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318",
+        "line_ending_cases": [
+          {
+            "input_line_endings": "lf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 2681108,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          },
+          {
+            "input_line_endings": "crlf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 2681108,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          }
+        ]
+      },
+      "native_linux": {
+        "candidate_image": "rascommander/hec-ras-linux-unsteady_6.6:cpu-604704d",
+        "image_id": "sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c",
+        "hdf_validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "water_surface_shape": [
+                267,
+                6548
+              ],
+              "finite": true
+            }
+          },
+          "output_times": 267,
+          "simulation_start": "2000-01-01T00:00:00",
+          "simulation_end": "2000-01-12T02:00:00"
+        },
+        "cpu_quota": "200000 100000",
+        "omp_threads": "2",
+        "mkl_threads": "2",
+        "ordered_log_callback_lines": 255508,
+        "resume_without_docker": true
+      },
+      "windows_docker_desktop": {
+        "success": true,
+        "simulation_hours": 1,
+        "source_notebook_code_cells": 12,
+        "external_qualification_cells": 1,
+        "qualification_adaptations": "Disclosed resume/batch switches, callback wrapper and prepared-state capture; external notebook-adjustments.json retains exact changes.",
+        "result_rows": [
+          {
+            "mesh": "Perimeter 1",
+            "reported_cells": "6201",
+            "water_surface_columns": 6548,
+            "timesteps": 2,
+            "first_output": "2000-01-01 00:00:00",
+            "last_output": "2000-01-01 01:00:00",
+            "finite_fraction": 1.0,
+            "finite_wse_min": 500.3701171875,
+            "finite_wse_max": 611.36669921875
+          }
+        ],
+        "final_hdf_size_bytes": 3060415,
+        "final_hdf_sha256": "6b7be8b2ae306d8603646d216fc073afd521b585b96fe3700da7c863cc2800a3",
+        "num_cores": 2,
+        "live_timestep_before_completion_seconds": 0.9439587999950163,
+        "prepare_resume_without_executable": true,
+        "compute_resume_without_executable": true,
+        "failed_batch_row_continued": true,
+        "fixture_preserved": true,
+        "prepared_tmp_preserved": true,
+        "live_containers": {
+          "prepare": {
+            "image_id": "sha256:4b8032eb8e2307245281f5f99fcc186c2374c7433c4d61a42604eae712877ad1",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          },
+          "compute": {
+            "image_id": "sha256:7b6ff681681ddd67a641a48953e82a23b592b28f66ec5106a4b24b23d7c4b497",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          }
+        }
+      }
+    },
+    {
+      "hec_ras_version": "7.0.1",
+      "wine": {
+        "candidate_image": "hecras-wine-candidate-7.0.1:cpu-dc60b21",
+        "image_id": "sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d",
+        "line_ending_cases": [
+          {
+            "input_line_endings": "lf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 4676101,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          },
+          {
+            "input_line_endings": "crlf",
+            "passed": true,
+            "tmp_hdf_size_bytes": 4676101,
+            "geometry_validation": {
+              "geometry": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              },
+              "temporary_plan": {
+                "Perimeter 1": {
+                  "cells": 6548,
+                  "Cells Volume Elevation": {
+                    "entries": 6548,
+                    "values": 118002
+                  },
+                  "Faces Area Elevation": {
+                    "entries": 12642,
+                    "values": 104633
+                  }
+                }
+              }
+            },
+            "num_cores": 2,
+            "docker_cpu_quota_verified": true,
+            "all_plan_core_values": {
+              "UNET D1 Cores": 2,
+              "UNET D2 Cores": 2,
+              "PS Cores": 2
+            },
+            "default_2d_cores": 2,
+            "named_2d_core_overrides": {}
+          }
+        ]
+      },
+      "native_linux": {
+        "candidate_image": "rascommander/hec-ras-linux-unsteady_7.0.1:cpu-604704d",
+        "image_id": "sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9",
+        "hdf_validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "water_surface_shape": [
+                267,
+                6548
+              ],
+              "finite": true
+            }
+          },
+          "output_times": 267,
+          "simulation_start": "2000-01-01T00:00:00",
+          "simulation_end": "2000-01-12T02:00:00"
+        },
+        "cpu_quota": "200000 100000",
+        "omp_threads": "2",
+        "mkl_threads": "2",
+        "ordered_log_callback_lines": 7702,
+        "resume_without_docker": true
+      },
+      "windows_docker_desktop": {
+        "success": true,
+        "simulation_hours": 1,
+        "source_notebook_code_cells": 12,
+        "external_qualification_cells": 1,
+        "qualification_adaptations": "Disclosed resume/batch switches, callback wrapper and prepared-state capture; external notebook-adjustments.json retains exact changes.",
+        "result_rows": [
+          {
+            "mesh": "Perimeter 1",
+            "reported_cells": "6201",
+            "water_surface_columns": 6548,
+            "timesteps": 2,
+            "first_output": "2000-01-01 00:00:00",
+            "last_output": "2000-01-01 01:00:00",
+            "finite_fraction": 1.0,
+            "finite_wse_min": 500.3701171875,
+            "finite_wse_max": 611.36669921875
+          }
+        ],
+        "final_hdf_size_bytes": 5053201,
+        "final_hdf_sha256": "67b860223c1c01a377cc9364b9d99f6190eacaff860142454ea72c997f682e56",
+        "num_cores": 2,
+        "live_timestep_before_completion_seconds": 0.8640641999954823,
+        "prepare_resume_without_executable": true,
+        "compute_resume_without_executable": true,
+        "failed_batch_row_continued": true,
+        "fixture_preserved": true,
+        "prepared_tmp_preserved": true,
+        "live_containers": {
+          "prepare": {
+            "image_id": "sha256:eb2b96901cf87dbc685e732b1d0799827067fff97ee2eb2c9ae693910f5cfc6b",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          },
+          "compute": {
+            "image_id": "sha256:a9d2ae8f18b34f2266d0217c63bd900e3a1885190405dd0da032d3414805e684",
+            "nano_cpus": 2000000000,
+            "worker_num_cores": "2"
+          }
+        }
+      }
+    }
+  ],
+  "limits": [
+    "One real 2D sample per version: 266-hour Linux run and one-hour Windows Docker Desktop run.",
+    "Live engine tests used the default two cores. API validation accepts integer counts 1 through 8; other counts were not hydraulically qualified.",
+    "Docker CPU quota does not provide exclusive physical-core affinity; no TACC scheduler execution is claimed.",
+    "Wine LF and CRLF sample inputs and the paired native route passed. Arbitrary imported CRLF .x files and standalone mixed/bare-CR model text were not independently qualified.",
+    "Structured observations supplement native full-window, finite-array and solver-log validation; a generic HDF completion attribute alone is insufficient."
+  ],
+  "external_evidence": [
+    {
+      "record": "completion.json",
+      "sha256": "e1c95a1fc78a75f913abf6d3f42cfe02774b772905c82b2f8d9fcb86d1f17026"
+    },
+    {
+      "record": "qualification-summary.json",
+      "sha256": "03d5b45de1f70b6671328233b6221cf758ea6b2295a065d449c712e6e404f42d"
+    },
+    {
+      "record": "desktop-v2-local-verification.json",
+      "sha256": "b2cc571400b531e6f4f0516b137aedf591033cb6f3e0a5d8bc3af92f57c63f02"
+    }
+  ],
+  "execution_evidence_stored_outside_git": true,
+  "publication_verified_at_utc": "2026-09-12T02:46:04.488696+00:00",
+  "public_digest_pulls_verified": 6,
+  "publication_receipt_sha256": "26ae380970b48d263866636bff1008a39eefe95d8d5f5050d9f0e60a677524df"
+}

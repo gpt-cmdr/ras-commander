@@ -1,0 +1,283 @@
+{
+  "python_distributions": {
+    "pip": "26.2.1",
+    "ras-commander": "0.99.2",
+    "psutil": "7.0.0",
+    "numpy": "2.3.2",
+    "pandas": "2.3.1",
+    "six": "1.17.0",
+    "python-dateutil": "2.9.0.post0",
+    "tzdata": "2025.2",
+    "h5py": "3.14.0",
+    "pytz": "2025.2",
+    "setuptools": "80.9.0",
+    "wheel": "0.45.1"
+  },
+  "runtime": {
+    "schema": "ras-commander-native-runtime/v1",
+    "kind": "native",
+    "hec_ras_version": "7.0.1",
+    "native": {
+      "engine_directory": "engine"
+    },
+    "artifacts": [
+      {
+        "path": "engine/RasUnsteady",
+        "size_bytes": 72179496,
+        "sha256": "caae44088b52fb66cbfd7eeca92d0ec8a3f5d7abff2c03eea05e7fca344c250f"
+      },
+      {
+        "path": "engine/libs/libifcore.so.5",
+        "size_bytes": 1395584,
+        "sha256": "f95bc3d2f0a38f1599620263025548bdc2a60cec0cf4c9af03f70a3693c6a27a"
+      },
+      {
+        "path": "engine/libs/libifcoremt.so.5",
+        "size_bytes": 1408584,
+        "sha256": "fcf95ab2a59c02fd39c3fa3085b3a101ba301cd0d93008be22333eb8bd28d548"
+      },
+      {
+        "path": "engine/libs/libifport.so.5",
+        "size_bytes": 209960,
+        "sha256": "e09af0d6957a59246c38d0333c682888fcec272a39f79c23e31099ed1cbeaed1"
+      },
+      {
+        "path": "engine/libs/libimf.so",
+        "size_bytes": 5116008,
+        "sha256": "5a80a3b3be2d8273b8334f77bfa4ffa3c3dd3e76ff42d9d0d7c5935cbeda171e"
+      },
+      {
+        "path": "engine/libs/libintlc.so.5",
+        "size_bytes": 519456,
+        "sha256": "4d66d2a1793eda037a001eb42869939e3b93c62bf29ba696498a5fa1bc534fc8"
+      },
+      {
+        "path": "engine/libs/libiomp5.so",
+        "size_bytes": 2472833,
+        "sha256": "1b715c7feba2dbd327b4cb73ab138039629f657bfc57451d16628a0961d02828"
+      },
+      {
+        "path": "engine/libs/libiomp5_db.so",
+        "size_bytes": 623861,
+        "sha256": "e94f8b5d924fe1e5a72cc7845715b57524aa62aed167f4889367ebe18122db9c"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_avx.so.1",
+        "size_bytes": 53034328,
+        "sha256": "bcfb7efd64ee6f2062fd3b71cf6be9a496c9bb35cf0cbb1f870e49d945ce9f31"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_avx2.so.1",
+        "size_bytes": 50137384,
+        "sha256": "74c9ed34437d02fa204306fca394a3be0935b5bef0584bf2cf0562ad44e9aa3d"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_avx512.so.1",
+        "size_bytes": 66658392,
+        "sha256": "836fe6f8bf1c3ffacc57602322bbe2d088cc540985e0d9aab26fb511de721007"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_core.so.1",
+        "size_bytes": 74757224,
+        "sha256": "a1f8e95a2a06b64188efaf6da64c13c02bc50488d72eb31f0b5a8c63f0cf70f3"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_def.so.1",
+        "size_bytes": 42420592,
+        "sha256": "50cf997a5a25632a0bbdb76bdad55eba06fd6412b5912ff4fe36182b87e35f5d"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_intel_ilp64.so.1",
+        "size_bytes": 12914912,
+        "sha256": "26a314ab35953e894f61e469ed623d2af9d5c2e70af6b169c90cf5f241c6b103"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_intel_lp64.so.1",
+        "size_bytes": 13560968,
+        "sha256": "eeafede967fadc9f6d20c796c1d1b975c50b3cfcaf3f2b824a517950b8bb6364"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_intel_thread.so.1",
+        "size_bytes": 64778624,
+        "sha256": "6fb3ae5d0ef55e0de79d0cae33d9bf9f4d4c2ebed9eed9c92d21bab6f8b5933e"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_mc.so.1",
+        "size_bytes": 48746808,
+        "sha256": "a9e7e7af8ed94c246e911e820ad97fa351d8215c0ae0840065898f9a48272911"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_mc3.so.1",
+        "size_bytes": 50321448,
+        "sha256": "201b1b4c6e7f0914e049648f59fa71ad88cccd717d5d64e525862458a5cf6584"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_pgi_thread.so.1",
+        "size_bytes": 38032808,
+        "sha256": "1537289c0fa5f64906800f07fe22368be1ba75d6db8f4df34720ffb776297b94"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_rt.so.1",
+        "size_bytes": 7177832,
+        "sha256": "7861cbaad330a99ac2545304a277a32a824faef08b94e3f36b6c07835aa49966"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_vml_avx.so.1",
+        "size_bytes": 15887632,
+        "sha256": "ecdb21c8e92e2f8ce9c8eccc9317029025d9f6b1fe91bbbaa3902960dc8e54c3"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_vml_avx2.so.1",
+        "size_bytes": 15038944,
+        "sha256": "aa212c64de48eca1e8285b7b0bed5f6bc19704ca285ab5792d44fd1f9850f4f3"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_vml_avx512.so.1",
+        "size_bytes": 14364224,
+        "sha256": "3250f3a0ad08aa812a07bcd444933be0f7e4c4aff3106b1b5485a01c523903f0"
+      },
+      {
+        "path": "engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+        "size_bytes": 16210632,
+        "sha256": "a596cb3608ec0c9ba1b13bea8532a232bb0a70c7a672a7e9d7f072a8ab78342a"
+      },
+      {
+        "path": "engine/libs/rhel_8/libgfortran.so.5",
+        "size_bytes": 2626536,
+        "sha256": "6081ee1065d636a7898d9fd7aec77420f76f93bbf5e0519dd15c6b36b04c16d8"
+      },
+      {
+        "path": "engine/libs/rhel_8/libquadmath.so.0",
+        "size_bytes": 267512,
+        "sha256": "a56f60c706e2dc6d6d8aa55c606be2234e7eab228b06be9ede2bd22fe20e6435"
+      },
+      {
+        "path": "notices/HEC-RAS-7.0.1-Installer-TCU.rtf",
+        "size_bytes": 12244,
+        "sha256": "cbfaefaae3fb7ca96fbfa76fa86c85f2b7bfcbe11a2c237f68a6c3c42b50d6bf"
+      },
+      {
+        "path": "notices/HEC-RAS-7.0.1-release-notes.html",
+        "size_bytes": 99138,
+        "sha256": "76d2ec37841a411e5d2554cd0a5a60c8e0c09d207ee2ab1078b03b80d86c5127"
+      },
+      {
+        "path": "notices/HEC-RAS-7.0.1-resolved-issues.html",
+        "size_bytes": 103571,
+        "sha256": "ebc2ecff9b92e156ef79c76abc1eabee1a38e020a3b88876a342d7f2ecf47405"
+      },
+      {
+        "path": "notices/HEC-RAS-downloads.html",
+        "size_bytes": 41871,
+        "sha256": "b4a835972b3c9c5c1c5b4f09f5b6138ef04505cfe5fd4d1126d67e0db80600e9"
+      },
+      {
+        "path": "notices/HEC-RAS-linux-computation-engines.html",
+        "size_bytes": 90537,
+        "sha256": "49ad774512e754e60267b3f6b73d6044bc508ae002254b9829b8c24f551ab73f"
+      },
+      {
+        "path": "notices/USACE-Distribution-Policy.html",
+        "size_bytes": 32913,
+        "sha256": "6b123ade5fa66b083db59b52b9f2cb7683dd3a109ef30f2a54660665e58841e7"
+      },
+      {
+        "path": "notices/USACE-Terms-and-Conditions.html",
+        "size_bytes": 36488,
+        "sha256": "0c5c8bdfa6e871dad883287b07ca49f44c3a3a511278757680dc756c5c3d17ff"
+      }
+    ]
+  },
+  "linux_packages": [
+    "adduser\t3.152",
+    "apt\t3.0.3",
+    "base-files\t13.8+deb13u6",
+    "base-passwd\t3.6.7",
+    "bash\t5.2.37-2+b9",
+    "bsdutils\t1:2.41.5-0+deb13u1",
+    "ca-certificates\t20250419",
+    "coreutils\t9.7-3",
+    "dash\t0.5.12-12",
+    "debconf\t1.5.91",
+    "debian-archive-keyring\t2025.1",
+    "debianutils\t5.23.2",
+    "diffutils\t1:3.10-4",
+    "dpkg\t1.22.22",
+    "findutils\t4.10.0-3",
+    "gcc-14-base\t14.2.0-19",
+    "grep\t3.11-4",
+    "gzip\t1.13-1",
+    "hostname\t3.25",
+    "init-system-helpers\t1.69~deb13u1",
+    "libacl1\t2.3.2-2+b1",
+    "libapt-pkg7.0\t3.0.3",
+    "libattr1\t1:2.5.2-3",
+    "libaudit-common\t1:4.0.2-2",
+    "libaudit1\t1:4.0.2-2+b2",
+    "libblkid1\t2.41.5-0+deb13u1",
+    "libbsd0\t0.12.2-2",
+    "libbz2-1.0\t1.0.8-6",
+    "libc-bin\t2.41-12+deb13u3",
+    "libc6\t2.41-12+deb13u3",
+    "libcap-ng0\t0.8.5-4+b1",
+    "libcap2\t1:2.75-10+deb13u1+b1",
+    "libcrypt1\t1:4.4.38-1",
+    "libdb5.3t64\t5.3.28+dfsg2-9",
+    "libdebconfclient0\t0.280",
+    "libffi8\t3.4.8-2",
+    "libgcc-s1\t14.2.0-19",
+    "libgdbm6t64\t1.24-2",
+    "libgfortran5\t14.2.0-19",
+    "libgmp10\t2:6.3.0+dfsg-3",
+    "libgomp1\t14.2.0-19",
+    "libhogweed6t64\t3.10.1-1",
+    "liblastlog2-2\t2.41.5-0+deb13u1",
+    "liblz4-1\t1.10.0-4",
+    "liblzma5\t5.8.1-1+deb13u1",
+    "libmd0\t1.1.0-2+b1",
+    "libmount1\t2.41.5-0+deb13u1",
+    "libncursesw6\t6.5+20250216-2",
+    "libnettle8t64\t3.10.1-1",
+    "libpam-modules\t1.7.0-5",
+    "libpam-modules-bin\t1.7.0-5",
+    "libpam-runtime\t1.7.0-5",
+    "libpam0g\t1.7.0-5",
+    "libpcre2-8-0\t10.46-1~deb13u1",
+    "libreadline8t64\t8.2-6",
+    "libseccomp2\t2.6.0-2",
+    "libselinux1\t3.8.1-1",
+    "libsemanage-common\t3.8.1-1",
+    "libsemanage2\t3.8.1-1",
+    "libsepol2\t3.8.1-1",
+    "libsmartcols1\t2.41.5-0+deb13u1",
+    "libsqlite3-0\t3.46.1-7+deb13u1",
+    "libssl3t64\t3.5.7-1~deb13u2",
+    "libstdc++6\t14.2.0-19",
+    "libsystemd0\t257.13-1~deb13u1",
+    "libtinfo6\t6.5+20250216-2",
+    "libudev1\t257.13-1~deb13u1",
+    "libuuid1\t2.41.5-0+deb13u1",
+    "libxxhash0\t0.8.3-2",
+    "libzstd1\t1.5.7+dfsg-1",
+    "login\t1:4.16.0-2+really2.41.5-0+deb13u1",
+    "login.defs\t1:4.17.4-2",
+    "mawk\t1.3.4.20250131-1",
+    "mount\t2.41.5-0+deb13u1",
+    "ncurses-base\t6.5+20250216-2",
+    "ncurses-bin\t6.5+20250216-2",
+    "netbase\t6.5",
+    "openssl\t3.5.7-1~deb13u2",
+    "openssl-provider-legacy\t3.5.7-1~deb13u2",
+    "passwd\t1:4.17.4-2",
+    "perl-base\t5.40.1-6",
+    "readline-common\t8.2-6",
+    "sed\t4.9-2+deb13u1",
+    "sqv\t1.3.0-3+b2",
+    "sysvinit-utils\t3.14-4",
+    "tar\t1.35+dfsg-3.1",
+    "tini\t0.19.0-3+b7",
+    "tzdata\t2026b-0+deb13u1",
+    "util-linux\t2.41.5-0+deb13u1",
+    "zlib1g\t1:1.3.dfsg+really1.3.1-1+b1"
+  ]
+}

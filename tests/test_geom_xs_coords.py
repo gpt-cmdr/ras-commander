@@ -123,6 +123,9 @@ class TestGeomXsCoords:
 
         print(f"[OK] Single XS extraction: {len(xyz_single)} points for RS {first_xs['RS']}")
 
+    @pytest.mark.integration
+    @pytest.mark.real_ras
+    @pytest.mark.destructive_copy
     def test_compare_to_hdf(self):
         """Compare plain text extraction to HDF extraction (when HDF available)"""
         project_path = RasExamples.extract_project("Muncie", suffix="test_hdf_compare")

@@ -278,6 +278,9 @@ class TestBenefitAreaLoggingAndPolygons:
 
 # Integration test - requires HEC-RAS execution
 # Marked to skip by default, run manually when testing with real projects
+@pytest.mark.integration
+@pytest.mark.real_ras
+@pytest.mark.destructive_copy
 @pytest.mark.skip(reason="Requires HEC-RAS execution - run manually")
 class TestIntegrationWithExecution:
     """Integration tests requiring HEC-RAS plan execution."""

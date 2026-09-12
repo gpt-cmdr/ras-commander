@@ -1,0 +1,916 @@
+{
+  "schema": "ras-commander-container-release/v1",
+  "date": "2026-09-11",
+  "source_commit": "e5380db6d37e2c62c763bf6221c3ab3219fddf80",
+  "platform": "linux/amd64",
+  "qualified_model": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs",
+  "plan": "01",
+  "versions": {
+    "6.5": {
+      "image": "rascommander/hec-ras-linux-unsteady_6.5:v1",
+      "publication": {
+        "public": true,
+        "tags": {
+          "v1": {
+            "digest": "sha256:d634f3ebff8cde7148968f75626e30eafba69058f40ef0995fb4334cad17ece3",
+            "full_size": 329118755,
+            "images": [
+              {
+                "architecture": "amd64",
+                "os": "linux",
+                "digest": "sha256:ac69e7852fd9726b6e890e5afe42c3a30dca42fc48aa0ab3e9a2183edcf20aab"
+              }
+            ]
+          },
+          "latest": {
+            "digest": "sha256:d634f3ebff8cde7148968f75626e30eafba69058f40ef0995fb4334cad17ece3",
+            "full_size": 329118755,
+            "images": [
+              {
+                "architecture": "amd64",
+                "os": "linux",
+                "digest": "sha256:ac69e7852fd9726b6e890e5afe42c3a30dca42fc48aa0ab3e9a2183edcf20aab"
+              }
+            ]
+          }
+        }
+      },
+      "preprocessing_image": "rascommander/hec-ras-wine-precompute_6.5:v4",
+      "runtime_source_url": "https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v65.zip",
+      "vendor_libraries_verification": {
+        "runtime_files": 25,
+        "official_files": 25,
+        "missing": [],
+        "mismatches": [],
+        "archive_sha256": "3b0a3428c33c6e6aa2938b9c72681bac852937dee41adeaf2943488331b4b6c1"
+      },
+      "installed_runtime_files": [
+        {
+          "path": "engine/RasUnsteady",
+          "size_bytes": 70856456
+        },
+        {
+          "path": "engine/libs/libifcore.so.5",
+          "size_bytes": 1395584
+        },
+        {
+          "path": "engine/libs/libifcoremt.so.5",
+          "size_bytes": 1408584
+        },
+        {
+          "path": "engine/libs/libifport.so.5",
+          "size_bytes": 209960
+        },
+        {
+          "path": "engine/libs/libimf.so",
+          "size_bytes": 5116008
+        },
+        {
+          "path": "engine/libs/libintlc.so.5",
+          "size_bytes": 519456
+        },
+        {
+          "path": "engine/libs/libiomp5.so",
+          "size_bytes": 2472833
+        },
+        {
+          "path": "engine/libs/libiomp5_db.so",
+          "size_bytes": 623861
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx.so.1",
+          "size_bytes": 53034328
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx2.so.1",
+          "size_bytes": 50137384
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx512.so.1",
+          "size_bytes": 66658392
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_core.so.1",
+          "size_bytes": 74757224
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_def.so.1",
+          "size_bytes": 42420592
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_ilp64.so.1",
+          "size_bytes": 12914912
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_lp64.so.1",
+          "size_bytes": 13560968
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_thread.so.1",
+          "size_bytes": 64778624
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_mc.so.1",
+          "size_bytes": 48746808
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_mc3.so.1",
+          "size_bytes": 50321448
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_pgi_thread.so.1",
+          "size_bytes": 38032808
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_rt.so.1",
+          "size_bytes": 7177832
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx.so.1",
+          "size_bytes": 15887632
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx2.so.1",
+          "size_bytes": 15038944
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx512.so.1",
+          "size_bytes": 14364224
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+          "size_bytes": 16210632
+        },
+        {
+          "path": "engine/libs/rhel_8/libgfortran.so.5",
+          "size_bytes": 2626536
+        },
+        {
+          "path": "engine/libs/rhel_8/libquadmath.so.0",
+          "size_bytes": 267512
+        },
+        {
+          "path": "notices/HEC-RAS-Terms-and-Conditions-of-Use.html",
+          "size_bytes": 92774
+        },
+        {
+          "path": "notices/Linux-Release-Notes.pdf",
+          "size_bytes": 235853
+        },
+        {
+          "path": "notices/SOURCE.txt",
+          "size_bytes": 257
+        }
+      ],
+      "full_linux": {
+        "status": "passed",
+        "num_cores": 4,
+        "hours": 266,
+        "validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "finite": true,
+              "water_surface_shape": [
+                267,
+                6548
+              ]
+            }
+          },
+          "output_times": 267,
+          "simulation_end": "2000-01-12T02:00:00",
+          "simulation_start": "2000-01-01T00:00:00"
+        },
+        "output_artifact": {
+          "path": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.hdf",
+          "sha256": "5434c7ea0d2b0f5e53bc1fcd1c7e8c057c265151a58dd7128868aa93b8ee457d",
+          "size_bytes": 7400731
+        },
+        "file_version": "HEC-RAS 6.5 February 2024",
+        "prepared_inputs_preserved": true,
+        "after_forced_kill": true
+      },
+      "windows_notebook": {
+        "status": "passed",
+        "code_cells": 10,
+        "demo_hours": 1,
+        "num_cores": 2,
+        "docker_server": "29.7.2",
+        "linux_kernel": "6.6.87.2-microsoft-standard-WSL2",
+        "host_python": "3.14",
+        "host_path_contained_spaces": true,
+        "validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "finite": true,
+              "water_surface_shape": [
+                2,
+                6548
+              ]
+            }
+          },
+          "output_times": 2,
+          "simulation_end": "2000-01-01T01:00:00",
+          "simulation_start": "2000-01-01T00:00:00"
+        },
+        "output_artifact": {
+          "path": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.hdf",
+          "sha256": "2a2738e7c3333a470dea6bdf89c784112ed18201ef3a55795dba4ff7a08f6b0f",
+          "size_bytes": 3052376
+        },
+        "prepared_inputs_preserved": true,
+        "source_commit": "e5380db6d37e2c62c763bf6221c3ab3219fddf80"
+      }
+    },
+    "6.6": {
+      "image": "rascommander/hec-ras-linux-unsteady_6.6:v1",
+      "publication": {
+        "public": true,
+        "tags": {
+          "v1": {
+            "digest": "sha256:1a11348bd6a96a580959b846133214f4b058ece6c8b4382b7210e3a74fc80066",
+            "full_size": 330117656,
+            "images": [
+              {
+                "architecture": "amd64",
+                "os": "linux",
+                "digest": "sha256:ee8b85ade0cabe232b2a5ee40a76f8081d41bd93bcd4c29c6fe6e17f9d78b804"
+              }
+            ]
+          },
+          "latest": {
+            "digest": "sha256:1a11348bd6a96a580959b846133214f4b058ece6c8b4382b7210e3a74fc80066",
+            "full_size": 330117656,
+            "images": [
+              {
+                "architecture": "amd64",
+                "os": "linux",
+                "digest": "sha256:ee8b85ade0cabe232b2a5ee40a76f8081d41bd93bcd4c29c6fe6e17f9d78b804"
+              }
+            ]
+          }
+        }
+      },
+      "preprocessing_image": "rascommander/hec-ras-wine-precompute_6.6:v4",
+      "runtime_source_url": "https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v66.zip",
+      "vendor_libraries_verification": {
+        "runtime_files": 25,
+        "official_files": 25,
+        "missing": [],
+        "mismatches": [],
+        "archive_sha256": "e77271a473da5da28b5a95ebf019f77ba3d32fb6341ad43be3ad4a6004c60e4a"
+      },
+      "installed_runtime_files": [
+        {
+          "path": "engine/RasUnsteady",
+          "size_bytes": 70978696
+        },
+        {
+          "path": "engine/libs/libifcore.so.5",
+          "size_bytes": 1395584
+        },
+        {
+          "path": "engine/libs/libifcoremt.so.5",
+          "size_bytes": 1408584
+        },
+        {
+          "path": "engine/libs/libifport.so.5",
+          "size_bytes": 209960
+        },
+        {
+          "path": "engine/libs/libimf.so",
+          "size_bytes": 5116008
+        },
+        {
+          "path": "engine/libs/libintlc.so.5",
+          "size_bytes": 519456
+        },
+        {
+          "path": "engine/libs/libiomp5.so",
+          "size_bytes": 2472833
+        },
+        {
+          "path": "engine/libs/libiomp5_db.so",
+          "size_bytes": 623861
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx.so.1",
+          "size_bytes": 53034328
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx2.so.1",
+          "size_bytes": 50137384
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_avx512.so.1",
+          "size_bytes": 66658392
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_core.so.1",
+          "size_bytes": 74757224
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_def.so.1",
+          "size_bytes": 42420592
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_ilp64.so.1",
+          "size_bytes": 12914912
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_lp64.so.1",
+          "size_bytes": 13560968
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_intel_thread.so.1",
+          "size_bytes": 64778624
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_mc.so.1",
+          "size_bytes": 48746808
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_mc3.so.1",
+          "size_bytes": 50321448
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_pgi_thread.so.1",
+          "size_bytes": 38032808
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_rt.so.1",
+          "size_bytes": 7177832
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx.so.1",
+          "size_bytes": 15887632
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx2.so.1",
+          "size_bytes": 15038944
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx512.so.1",
+          "size_bytes": 14364224
+        },
+        {
+          "path": "engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+          "size_bytes": 16210632
+        },
+        {
+          "path": "engine/libs/rhel_8/libgfortran.so.5",
+          "size_bytes": 2626536
+        },
+        {
+          "path": "engine/libs/rhel_8/libquadmath.so.0",
+          "size_bytes": 267512
+        },
+        {
+          "path": "notices/HEC-RAS-Terms-and-Conditions-of-Use.html",
+          "size_bytes": 92765
+        },
+        {
+          "path": "notices/Linux-Release-Notes.pdf",
+          "size_bytes": 954650
+        },
+        {
+          "path": "notices/SOURCE.txt",
+          "size_bytes": 256
+        }
+      ],
+      "full_linux": {
+        "status": "passed",
+        "num_cores": 4,
+        "hours": 266,
+        "validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "finite": true,
+              "water_surface_shape": [
+                267,
+                6548
+              ]
+            }
+          },
+          "output_times": 267,
+          "simulation_end": "2000-01-12T02:00:00",
+          "simulation_start": "2000-01-01T00:00:00"
+        },
+        "output_artifact": {
+          "path": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.hdf",
+          "sha256": "7dc707fa875c1c784c7144e51866a9299fe1e3dba5eba154527ab23e50564e16",
+          "size_bytes": 7409346
+        },
+        "file_version": "HEC-RAS 6.6 September 2024",
+        "prepared_inputs_preserved": true,
+        "after_forced_kill": false
+      },
+      "windows_notebook": {
+        "status": "passed",
+        "code_cells": 10,
+        "demo_hours": 1,
+        "num_cores": 2,
+        "docker_server": "29.7.2",
+        "linux_kernel": "6.6.87.2-microsoft-standard-WSL2",
+        "host_python": "3.14",
+        "host_path_contained_spaces": true,
+        "validation": {
+          "completion_verified": true,
+          "meshes": {
+            "Perimeter 1": {
+              "finite": true,
+              "water_surface_shape": [
+                2,
+                6548
+              ]
+            }
+          },
+          "output_times": 2,
+          "simulation_end": "2000-01-01T01:00:00",
+          "simulation_start": "2000-01-01T00:00:00"
+        },
+        "output_artifact": {
+          "path": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.hdf",
+          "sha256": "531cc9d95a43dd098a61784be5ba14ae105c4eb76be90d277880b6408975e7ec",
+          "size_bytes": 3060415
+        },
+        "prepared_inputs_preserved": true,
+        "source_commit": "e5380db6d37e2c62c763bf6221c3ab3219fddf80"
+      }
+    }
+  },
+  "guards": [
+    {
+      "name": "existing-final",
+      "passed": true,
+      "returncode": 1,
+      "observed_error": "Final plan HDF already exists; use --replace-generated on a disposable copy"
+    },
+    {
+      "name": "solver-timeout",
+      "passed": true,
+      "returncode": 1,
+      "observed_error": "RasCmdr.compute_plan_linux reported failure; inspect compute_linux log"
+    },
+    {
+      "name": "force-kill-release",
+      "passed": true,
+      "returncode": 137,
+      "active_lock_blocked": true,
+      "postkill_lock_reacquired": true,
+      "solver_observed": true
+    },
+    {
+      "name": "version-mismatch",
+      "passed": true,
+      "returncode": 1,
+      "assertions": {
+        "existing_final_unchanged": true,
+        "no_native_solver_log": true,
+        "target_guard_exercised": true
+      },
+      "observed_error": "Preparation and native HEC-RAS versions do not match"
+    },
+    {
+      "name": "missing-tmp",
+      "passed": true,
+      "returncode": 1,
+      "assertions": {
+        "existing_final_unchanged": true,
+        "no_native_solver_log": true,
+        "target_guard_exercised": true
+      }
+    },
+    {
+      "name": "tampered-tmp",
+      "passed": true,
+      "returncode": 1,
+      "assertions": {
+        "existing_final_unchanged": true,
+        "no_native_solver_log": true,
+        "target_guard_exercised": true
+      },
+      "observed_error": "Prepared artifact changed: 1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.tmp.hdf"
+    }
+  ],
+  "automated_checks": {
+    "passed": 109,
+    "skipped": 2,
+    "new_documentation_warnings": 0,
+    "preexisting_strict_documentation_warnings": 34
+  },
+  "python_packages": [
+    {
+      "name": "h5py",
+      "version": "3.14.0"
+    },
+    {
+      "name": "numpy",
+      "version": "2.3.2"
+    },
+    {
+      "name": "pandas",
+      "version": "2.3.1"
+    },
+    {
+      "name": "pip",
+      "version": "26.2.1"
+    },
+    {
+      "name": "psutil",
+      "version": "7.0.0"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0"
+    },
+    {
+      "name": "pytz",
+      "version": "2025.2"
+    },
+    {
+      "name": "ras-commander",
+      "version": "0.99.2"
+    },
+    {
+      "name": "setuptools",
+      "version": "80.9.0"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0"
+    },
+    {
+      "name": "tzdata",
+      "version": "2025.2"
+    },
+    {
+      "name": "wheel",
+      "version": "0.45.1"
+    }
+  ],
+  "linux_packages": [
+    {
+      "name": "adduser",
+      "version": "3.152"
+    },
+    {
+      "name": "apt",
+      "version": "3.0.3"
+    },
+    {
+      "name": "base-files",
+      "version": "13.8+deb13u6"
+    },
+    {
+      "name": "base-passwd",
+      "version": "3.6.7"
+    },
+    {
+      "name": "bash",
+      "version": "5.2.37-2+b9"
+    },
+    {
+      "name": "bsdutils",
+      "version": "1:2.41.5-0+deb13u1"
+    },
+    {
+      "name": "ca-certificates",
+      "version": "20250419"
+    },
+    {
+      "name": "coreutils",
+      "version": "9.7-3"
+    },
+    {
+      "name": "dash",
+      "version": "0.5.12-12"
+    },
+    {
+      "name": "debconf",
+      "version": "1.5.91"
+    },
+    {
+      "name": "debian-archive-keyring",
+      "version": "2025.1"
+    },
+    {
+      "name": "debianutils",
+      "version": "5.23.2"
+    },
+    {
+      "name": "diffutils",
+      "version": "1:3.10-4"
+    },
+    {
+      "name": "dpkg",
+      "version": "1.22.22"
+    },
+    {
+      "name": "findutils",
+      "version": "4.10.0-3"
+    },
+    {
+      "name": "gcc-14-base:amd64",
+      "version": "14.2.0-19"
+    },
+    {
+      "name": "grep",
+      "version": "3.11-4"
+    },
+    {
+      "name": "gzip",
+      "version": "1.13-1"
+    },
+    {
+      "name": "hostname",
+      "version": "3.25"
+    },
+    {
+      "name": "init-system-helpers",
+      "version": "1.69~deb13u1"
+    },
+    {
+      "name": "libacl1:amd64",
+      "version": "2.3.2-2+b1"
+    },
+    {
+      "name": "libapt-pkg7.0:amd64",
+      "version": "3.0.3"
+    },
+    {
+      "name": "libattr1:amd64",
+      "version": "1:2.5.2-3"
+    },
+    {
+      "name": "libaudit-common",
+      "version": "1:4.0.2-2"
+    },
+    {
+      "name": "libaudit1:amd64",
+      "version": "1:4.0.2-2+b2"
+    },
+    {
+      "name": "libblkid1:amd64",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "libbsd0:amd64",
+      "version": "0.12.2-2"
+    },
+    {
+      "name": "libbz2-1.0:amd64",
+      "version": "1.0.8-6"
+    },
+    {
+      "name": "libc-bin",
+      "version": "2.41-12+deb13u3"
+    },
+    {
+      "name": "libc6:amd64",
+      "version": "2.41-12+deb13u3"
+    },
+    {
+      "name": "libcap-ng0:amd64",
+      "version": "0.8.5-4+b1"
+    },
+    {
+      "name": "libcap2:amd64",
+      "version": "1:2.75-10+deb13u1+b1"
+    },
+    {
+      "name": "libcrypt1:amd64",
+      "version": "1:4.4.38-1"
+    },
+    {
+      "name": "libdb5.3t64:amd64",
+      "version": "5.3.28+dfsg2-9"
+    },
+    {
+      "name": "libdebconfclient0:amd64",
+      "version": "0.280"
+    },
+    {
+      "name": "libffi8:amd64",
+      "version": "3.4.8-2"
+    },
+    {
+      "name": "libgcc-s1:amd64",
+      "version": "14.2.0-19"
+    },
+    {
+      "name": "libgdbm6t64:amd64",
+      "version": "1.24-2"
+    },
+    {
+      "name": "libgfortran5:amd64",
+      "version": "14.2.0-19"
+    },
+    {
+      "name": "libgmp10:amd64",
+      "version": "2:6.3.0+dfsg-3"
+    },
+    {
+      "name": "libgomp1:amd64",
+      "version": "14.2.0-19"
+    },
+    {
+      "name": "libhogweed6t64:amd64",
+      "version": "3.10.1-1"
+    },
+    {
+      "name": "liblastlog2-2:amd64",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "liblz4-1:amd64",
+      "version": "1.10.0-4"
+    },
+    {
+      "name": "liblzma5:amd64",
+      "version": "5.8.1-1+deb13u1"
+    },
+    {
+      "name": "libmd0:amd64",
+      "version": "1.1.0-2+b1"
+    },
+    {
+      "name": "libmount1:amd64",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "libncursesw6:amd64",
+      "version": "6.5+20250216-2"
+    },
+    {
+      "name": "libnettle8t64:amd64",
+      "version": "3.10.1-1"
+    },
+    {
+      "name": "libpam-modules:amd64",
+      "version": "1.7.0-5"
+    },
+    {
+      "name": "libpam-modules-bin",
+      "version": "1.7.0-5"
+    },
+    {
+      "name": "libpam-runtime",
+      "version": "1.7.0-5"
+    },
+    {
+      "name": "libpam0g:amd64",
+      "version": "1.7.0-5"
+    },
+    {
+      "name": "libpcre2-8-0:amd64",
+      "version": "10.46-1~deb13u1"
+    },
+    {
+      "name": "libreadline8t64:amd64",
+      "version": "8.2-6"
+    },
+    {
+      "name": "libseccomp2:amd64",
+      "version": "2.6.0-2"
+    },
+    {
+      "name": "libselinux1:amd64",
+      "version": "3.8.1-1"
+    },
+    {
+      "name": "libsemanage-common",
+      "version": "3.8.1-1"
+    },
+    {
+      "name": "libsemanage2:amd64",
+      "version": "3.8.1-1"
+    },
+    {
+      "name": "libsepol2:amd64",
+      "version": "3.8.1-1"
+    },
+    {
+      "name": "libsmartcols1:amd64",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "libsqlite3-0:amd64",
+      "version": "3.46.1-7+deb13u1"
+    },
+    {
+      "name": "libssl3t64:amd64",
+      "version": "3.5.7-1~deb13u2"
+    },
+    {
+      "name": "libstdc++6:amd64",
+      "version": "14.2.0-19"
+    },
+    {
+      "name": "libsystemd0:amd64",
+      "version": "257.13-1~deb13u1"
+    },
+    {
+      "name": "libtinfo6:amd64",
+      "version": "6.5+20250216-2"
+    },
+    {
+      "name": "libudev1:amd64",
+      "version": "257.13-1~deb13u1"
+    },
+    {
+      "name": "libuuid1:amd64",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "libxxhash0:amd64",
+      "version": "0.8.3-2"
+    },
+    {
+      "name": "libzstd1:amd64",
+      "version": "1.5.7+dfsg-1"
+    },
+    {
+      "name": "login",
+      "version": "1:4.16.0-2+really2.41.5-0+deb13u1"
+    },
+    {
+      "name": "login.defs",
+      "version": "1:4.17.4-2"
+    },
+    {
+      "name": "mawk",
+      "version": "1.3.4.20250131-1"
+    },
+    {
+      "name": "mount",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "ncurses-base",
+      "version": "6.5+20250216-2"
+    },
+    {
+      "name": "ncurses-bin",
+      "version": "6.5+20250216-2"
+    },
+    {
+      "name": "netbase",
+      "version": "6.5"
+    },
+    {
+      "name": "openssl",
+      "version": "3.5.7-1~deb13u2"
+    },
+    {
+      "name": "openssl-provider-legacy",
+      "version": "3.5.7-1~deb13u2"
+    },
+    {
+      "name": "passwd",
+      "version": "1:4.17.4-2"
+    },
+    {
+      "name": "perl-base",
+      "version": "5.40.1-6"
+    },
+    {
+      "name": "readline-common",
+      "version": "8.2-6"
+    },
+    {
+      "name": "sed",
+      "version": "4.9-2+deb13u1"
+    },
+    {
+      "name": "sqv",
+      "version": "1.3.0-3+b2"
+    },
+    {
+      "name": "sysvinit-utils",
+      "version": "3.14-4"
+    },
+    {
+      "name": "tar",
+      "version": "1.35+dfsg-3.1"
+    },
+    {
+      "name": "tini",
+      "version": "0.19.0-3+b7"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026b-0+deb13u1"
+    },
+    {
+      "name": "util-linux",
+      "version": "2.41.5-0+deb13u1"
+    },
+    {
+      "name": "zlib1g:amd64",
+      "version": "1:1.3.dfsg+really1.3.1-1+b1"
+    }
+  ]
+}

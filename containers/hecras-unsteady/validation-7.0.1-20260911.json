@@ -1,0 +1,106 @@
+{
+  "hec_ras_version": "7.0.1",
+  "published_on": "2026-09-11",
+  "platform": "linux/amd64",
+  "native_source_commit": "aa003b179e9d0f89ba23da0607ffab9bfee74a60",
+  "wine_controller_source_commit": "3c5011dbe150d8311e45598401b16645c6e61932",
+  "wine_library_source_commit": "9e4217713e954236b0c16023e1815c6f2b7a5309",
+  "images": {
+    "wine-precompute": {
+      "repository": "rascommander/hec-ras-wine-precompute_7.0.1",
+      "digest": "sha256:05bd9a0a272381857e0267734fa8ff287659535181ed4ce0c8e259642b65840d",
+      "tags": [
+        "v4",
+        "latest"
+      ],
+      "public": true
+    },
+    "linux-unsteady": {
+      "repository": "rascommander/hec-ras-linux-unsteady_7.0.1",
+      "digest": "sha256:8c74c0b7450a13830d3424a599670d5cedf0309afc3f08e1515489a20f2ed964",
+      "tags": [
+        "v1",
+        "latest"
+      ],
+      "public": true
+    }
+  },
+  "linux": {
+    "simulation_hours": 266,
+    "prepare": {
+      "geometry": {
+        "Perimeter 1": {
+          "Cells Volume Elevation": {
+            "entries": 6548,
+            "values": 118002
+          },
+          "Faces Area Elevation": {
+            "entries": 12642,
+            "values": 104633
+          },
+          "cells": 6548
+        }
+      },
+      "temporary_plan": {
+        "Perimeter 1": {
+          "Cells Volume Elevation": {
+            "entries": 6548,
+            "values": 118002
+          },
+          "Faces Area Elevation": {
+            "entries": 12642,
+            "values": 104633
+          },
+          "cells": 6548
+        }
+      }
+    },
+    "compute": {
+      "completion_verified": true,
+      "geometry_preprocessing_invoked": false,
+      "hdf_validation": {
+        "completion_verified": true,
+        "meshes": {
+          "Perimeter 1": {
+            "finite": true,
+            "water_surface_shape": [
+              267,
+              6548
+            ]
+          }
+        },
+        "output_times": 267,
+        "simulation_end": "2000-01-12T02:00:00",
+        "simulation_start": "2000-01-01T00:00:00"
+      },
+      "prepared_inputs_preserved": true,
+      "success": true
+    },
+    "artifacts": [
+      {
+        "path": "1919912_wb-2427466_wb-2427467_14-hr_50-cfs_to_11609-cfs.p01.hdf",
+        "sha256": "00608c26d678c4ede86c6b994c78e4120150acdebb0c5e6c73c9f8352f8f1b78",
+        "size_bytes": 9404306
+      }
+    ],
+    "prepared_tmp_preserved": true
+  },
+  "windows": {
+    "hec_ras_file_version": "HEC-RAS 7.0.1 June 2026",
+    "shape": [
+      2,
+      6548
+    ],
+    "finite": true,
+    "first": "01JAN2000 00:00:00",
+    "last": "01JAN2000 01:00:00",
+    "final_size_bytes": 5053201,
+    "prepared_tmp_preserved": true,
+    "prepared_tmp_size_bytes": 4674075,
+    "executed_code_cells": 10
+  },
+  "tests": {
+    "passed": 130,
+    "skipped": 2
+  }
+}

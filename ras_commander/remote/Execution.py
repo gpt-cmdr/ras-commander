@@ -33,6 +33,8 @@ class ExecutionResult:
         worker_id: ID of worker that executed the plan
         success: True if execution completed successfully
         hdf_path: Path to output HDF file (if successful)
+        result_path: Path to the selected HDF or legacy output artifact
+        result_format: ``"hdf"`` or ``"legacy"`` when one family exists
         error_message: Error message (if failed)
         execution_time: Time in seconds for execution
     """
@@ -42,6 +44,8 @@ class ExecutionResult:
     hdf_path: Optional[str] = None
     error_message: Optional[str] = None
     execution_time: float = 0.0
+    result_path: Optional[str] = None
+    result_format: Optional[str] = None
 
 
 def _effective_worker_capacity(worker: RasWorker, num_cores: int) -> int:
@@ -508,11 +512,6 @@ def _execute_single_plan(
                 hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
-                else:
-                    # Check for .tmp.hdf (Linux container output)
-                    tmp_hdf = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.tmp.hdf"
-                    if tmp_hdf.exists():
-                        result.hdf_path = str(tmp_hdf)
 
         elif worker.worker_type == "slurm":
             result.error_message = "Slurm worker not yet implemented"
@@ -525,6 +524,19 @@ def _execute_single_plan(
 
         else:
             result.error_message = f"Unknown worker type: {worker.worker_type}"
+
+        if result.success:
+            project_name = ras_object.project_name
+            project_folder = Path(ras_object.project_folder)
+            hdf_file = project_folder / f"{project_name}.p{plan_number}.hdf"
+            legacy_file = project_folder / f"{project_name}.O{plan_number}"
+            if hdf_file.is_file() and not legacy_file.is_file():
+                result.result_path = str(hdf_file)
+                result.result_format = "hdf"
+                result.hdf_path = str(hdf_file)
+            elif legacy_file.is_file() and not hdf_file.is_file():
+                result.result_path = str(legacy_file)
+                result.result_format = "legacy"
 
     except NotImplementedError as e:
         result.error_message = str(e)

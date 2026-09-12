@@ -2345,6 +2345,9 @@ class RasPrj:
             >>> ras.update_results_df()  # Update all plans
             >>> print(ras.results_df[['plan_number', 'completed', 'has_errors']])
         """
+        from ras_commander.ExecutionArtifacts import (
+            resolve_plan_result_artifact,
+        )
         from ras_commander.results.ResultsSummary import ResultsSummary
 
         if self.plan_df is None or len(self.plan_df) == 0:
@@ -2361,9 +2364,27 @@ class RasPrj:
             logger.warning(f"No matching plans found for: {plan_numbers}")
             return self.results_df
 
-        # Build list of plan entries for summarization
+        requested_plan_numbers = plans_to_update["plan_number"].tolist()
+
+        # Build HDF-authoritative plan entries for summarization. Legacy .O##
+        # results are intentionally not summarized through the HDF-only path.
         plan_entries = []
         for _, row in plans_to_update.iterrows():
+            resolution = resolve_plan_result_artifact(
+                row["plan_number"],
+                ras_object=self,
+            )
+            if (
+                resolution.selected_format != "hdf"
+                or not resolution.selected_exists
+            ):
+                logger.warning(
+                    "Skipping HDF results summary for plan %s because %s is "
+                    "the selected result format",
+                    row["plan_number"],
+                    resolution.selected_format,
+                )
+                continue
             entry = {
                 'plan_number': row['plan_number'],
                 'plan_title': row.get('Plan Title', row.get('plan_title', '')),
@@ -2373,15 +2394,31 @@ class RasPrj:
                 'quasi_unsteady_number': row.get('quasi_unsteady_number'),
                 'Flow File': row.get('Flow File'),
                 'Flow Path': row.get('Flow Path'),
-                'HDF_Results_Path': row.get('HDF_Results_Path'),
+                'HDF_Results_Path': resolution.selected_path,
                 'Program Version': row.get('Program Version'),
             }
             plan_entries.append(entry)
+
+        if not plan_entries:
+            if self.results_df is not None and len(self.results_df) > 0:
+                self.results_df = self.results_df[
+                    ~self.results_df["plan_number"].isin(
+                        requested_plan_numbers
+                    )
+                ].reset_index(drop=True)
+            logger.debug("No HDF-authoritative results available for summarization")
+            return self.results_df
 
         # Generate summaries
         new_results = ResultsSummary.summarize_plans(plan_entries, self.project_folder)
 
         if new_results is None or len(new_results) == 0:
+            if self.results_df is not None and len(self.results_df) > 0:
+                self.results_df = self.results_df[
+                    ~self.results_df["plan_number"].isin(
+                        requested_plan_numbers
+                    )
+                ].reset_index(drop=True)
             logger.debug("No results generated from summarization")
             return self.results_df
 
@@ -2901,7 +2938,10 @@ def get_ras_exe(ras_version=None):
 
     # Check if input is a direct path to an executable
     hecras_path = Path(ras_version)
-    if hecras_path.is_file() and hecras_path.suffix.lower() == '.exe':
+    if hecras_path.is_file() and (
+        hecras_path.suffix.lower() == '.exe'
+        or hecras_path.name in {'RasUnsteady', 'rasUnsteady', 'rasUnsteady64'}
+    ):
         logger.debug(f"HEC-RAS executable found at specified path: {hecras_path}")
         return str(hecras_path)
 

@@ -54,9 +54,42 @@ ras = init_ras_project(project, "6.6")
 print(ras.plan_df[["plan_number", "Plan Title"]])     # inspect plans
 RasCmdr.compute_plan("01", ras_object=ras)            # run a plan
 
+# Read existing completion evidence without running HEC-RAS or COM.
+evidence = RasCmdr.inspect_execution_evidence("01", ras_object=ras)
+print(evidence.mechanical_completion.state)
+print(evidence.observations["message_error_count"].value)
+
 hdf = ras.plan_df.loc[ras.plan_df["plan_number"] == "01", "HDF_Results_Path"].iloc[0]
 wse = HdfResultsPlan.get_wse(hdf, time_index=-1)       # extract results
 ```
+
+`mechanical_completion=True` means an accepted completion source was observed;
+it does not mean the messages are error-free or that the hydraulics are
+acceptable. Check the independent evidence observations.
+
+Result-artifact selection reads `Program Version=` from the current plan-file
+bytes. A sole HDF or `.O##` is readable even when the declaration differs, with
+`unexpected_result_format` recorded. If both exist, the declared family is
+selected only when its filesystem timestamp is equal to or later than the
+opposing family; otherwise `ResultArtifactAmbiguityError` is raised. This
+timestamp is a conservative ambiguity trigger, not proof of chronology.
+
+Rerunning through ras-commander ignores artifact timestamps for cleanup and
+normalizes outputs according to the actual selected engine. Modern runs
+preserve HDF and remove `.O##`; legacy runs do the reverse. Cleanup occurs
+at the launch boundary and after every launched attempt whose solver completion
+or termination is confirmed, because modern 1D engines recreate `.O##`. An
+unconfirmed active solver fails without final normalization. Skipped runs do
+not change plan bytes or delete result artifacts. A versioned command-line
+executable is authoritative; a
+metadata/executable result-family mismatch fails closed. Existing ambiguity can
+also be resolved explicitly with
+`RasCmdr.remove_plan_execution_artifacts(..., result_format="legacy")` (or
+`"hdf"`); removal is permanent and exactly plan-scoped.
+Automatic cleanup requires an explicitly resolvable engine version and fails
+without deleting either family when given only an unversioned `Ras.exe` path.
+Preprocessing-only APIs do not delete final result families and are not an
+ambiguity-normalization workflow.
 
 ## In-package helpers
 

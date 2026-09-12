@@ -12,6 +12,13 @@ from ras_commander.RasExamples import RasExamples
 from ras_commander.geom.GeomStorage import GeomStorage
 
 
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.destructive_copy,
+]
+
+
 @pytest.fixture(scope="module")
 def bald_eagle_project():
     """Extract BaldEagleCrkMulti2D to a temp folder for modification."""

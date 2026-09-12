@@ -181,6 +181,9 @@ def test_reads_genuine_hecras_edge_lines():
     assert bool(gdf.geometry.is_valid.all())
 
 
+@pytest.mark.integration
+@pytest.mark.real_ras
+@pytest.mark.destructive_copy
 def test_complete_geometry_headless_edge_lines():
     """RasProcess.exe CompleteGeometry authors genuine edge lines + interpolation
     surface with no GUI. Skipped when HEC-RAS / RasProcess.exe is unavailable."""
