@@ -117,9 +117,29 @@ The selected legacy installations now verify accepted through `RasTcu.accept`;
 before/after status, donor preservation, binary identities and the actual API
 acceptance audit are retained externally. No GUI interaction was claimed.
 
-Representative live regression remains pending the corrected source pin and
-normal process-inventory gates. This PR remains a draft until those runs and
-the final documentation CI are reviewed.
+The corrected `9a254c43b071` candidate passed hosted documentation CI and a
+fresh captured replay: 13 attempts, 10 passes, three expected ambiguity
+failures and 36 passing invariants. Independent review found no classification
+or observation drift. Its public process inventory on CLB08 was complete and
+empty, with all five selected runtime TCU states accepted.
+
+The first CLB08 steady 6.6 attempt exposed a qualification-harness contract
+error before staging: it compared `TcuStatus.version`, a resolved version
+label, with the full executable path passed to `RasTcu.status`. Both worker
+and supervisor now compare the label with the declared version and separately
+bind the exact executable argument and installation directory. Controller
+checks also use the pinned executable path. The public TCU API and acceptance
+behavior are unchanged. The failed attempt remains `worker_crashed` with an
+unknown invocation field and verified safe process cleanup; no pass was
+inferred from its empty postflight inventory.
+
+The two live-harness test files and the public TCU suite passed 350 tests,
+including the real public version-label behavior and independent rejection
+of wrong versions, executable arguments and installation directories.
+The remaining qualification files passed 158 tests, with one skip; those
+files exclude the two live-harness files already counted above.
+Representative live regression remains pending the corrected harness source
+pin. This PR remains a draft until those runs and final CI are reviewed.
 
 The historical 58-lane matrix, all transports, and broad hydraulic-model
 coverage must not be represented as fully requalified by this merge.
