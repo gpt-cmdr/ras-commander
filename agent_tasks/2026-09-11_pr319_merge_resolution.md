@@ -163,5 +163,24 @@ complete and empty, the observer stopped, and all locks were released. The
 conservative terminal receipt remains `worker_crashed` with unknown invocation;
 safe cleanup does not establish solver success.
 
+Fresh steady 6.6 qualification at `da1c2e27c20a` passed: the API returned
+`success=True` and `completion_verified=True` for the newly produced HDF.
+Independent inspection confirmed freshness, both completion sources, zero
+message errors/warnings, all eight required invariants, complete empty
+process inventories and released locks. The offline inspector still records
+the old plan's unresolved declared version; exact runtime selection and
+observed producer evidence remain separately recorded.
+
+The subsequent 1D attempt stopped before computation because the harness
+treated six inline boundary descriptions as unresolved file dependencies.
+The original fixture and staged files were intact. The public asset API emits
+those descriptive rows separately from actual file/DSS dependencies. The
+harness now recognizes only their canonical shape and requires an available,
+required, ready unsteady-flow owner physically inside the stage. Unknown
+rows, failed parsing and external, missing or uninspected DSS dependencies
+still fail. Twenty-one new public staging regressions and the existing live
+worker suite passed together: 174 tests. The failed attempt remains retained
+as `worker_crashed` with unknown invocation and verified safe cleanup.
+
 The historical 58-lane matrix, all transports, and broad hydraulic-model
 coverage must not be represented as fully requalified by this merge.

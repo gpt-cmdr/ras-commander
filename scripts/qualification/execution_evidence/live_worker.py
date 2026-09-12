@@ -1339,6 +1339,8 @@ _LIVE_ASSET_GATE_COLUMNS = {
     "inspection_state": pyarrow.string(),
     "readiness": pyarrow.string(),
     "reason_code": pyarrow.string(),
+    "owner_file": pyarrow.string(),
+    "source_api": pyarrow.string(),
 }
 _EXECUTION_ASSET_ROLES = frozenset(
     {"declared_input", "derived_prerequisite", "unknown"}
@@ -1415,9 +1417,59 @@ def _require_live_stage_assets_safe(
     required = assets["required"].eq(True).fillna(False)  # noqa: E712
     explicitly_optional = assets["required"].eq(False).fillna(False)  # noqa: E712
     execution_role = assets["asset_role"].isin(_EXECUTION_ASSET_ROLES).fillna(False)
-    execution_candidate = required | (~explicitly_optional & execution_role)
     external = assets["path_scope"].eq("external").fillna(False)
     internal = assets["path_scope"].eq("internal").fillna(False)
+
+    # RasProject emits one descriptive row for each inline/structured boundary
+    # before separately inventorying any DSS/file dependencies.  That row is
+    # data inside an unsteady file, not an unresolved filesystem reference.
+    # Recognize only its canonical shape and a proved internal owning file;
+    # failed boundary parsing and all child dependency rows still face the gate.
+    owner_rows = assets.loc[
+        assets["asset_kind"].eq("unsteady_flow").fillna(False)
+        & required
+        & internal
+        & assets["portable"].eq(True).fillna(False)  # noqa: E712
+        & assets["inspection_state"].eq("available").fillna(False)
+        & assets["readiness"].eq("ready").fillna(False)
+    ]
+    boundary_owners: set[str] = set()
+    for value in owner_rows["resolved_path"]:
+        if not _path_is_within(stage_root, value):
+            continue
+        try:
+            if Path(value).is_file():
+                boundary_owners.add(os.path.normcase(os.path.realpath(value)))
+        except (OSError, TypeError, ValueError):
+            continue
+
+    def has_boundary_owner(value: Any) -> bool:
+        if value is None or pd.isna(value):
+            return False
+        try:
+            return os.path.normcase(os.path.realpath(value)) in boundary_owners
+        except (OSError, TypeError, ValueError):
+            return False
+
+    descriptive_boundary = (
+        assets["asset_kind"].eq("boundary")
+        & assets["asset_role"].eq("declared_input")
+        & assets["required"].isna()
+        & assets["resolved_path"].isna()
+        & assets["portable"].isna()
+        & assets["path_scope"].eq("ambiguous")
+        & assets["inspection_state"].eq("available")
+        & assets["readiness"].eq("unknown")
+        & assets["reason_code"].eq("inline_or_structured_boundary")
+        & assets["source_api"].eq(
+            "RasPrj.boundaries_df + RasUnsteady raw block inventory"
+        )
+        & assets["reference_raw"].str.startswith("Boundary Location=")
+        & assets["owner_file"].map(has_boundary_owner)
+    ).fillna(False)
+    execution_candidate = (
+        required | (~explicitly_optional & execution_role)
+    ) & ~descriptive_boundary
 
     external_rows = assets.loc[execution_candidate & external]
     if not external_rows.empty:
@@ -1483,6 +1535,7 @@ def _require_live_stage_assets_safe(
         "asset_count": len(assets),
         "required_asset_count": int(required.sum()),
         "execution_candidate_count": int(execution_candidate.sum()),
+        "descriptive_boundary_count": int(descriptive_boundary.sum()),
         "external_execution_asset_count": 0,
     }
 
