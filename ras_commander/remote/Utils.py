@@ -4,8 +4,10 @@ Utils - Shared utilities for remote execution operations.
 This module contains helper functions used across multiple worker implementations.
 """
 
+import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -62,29 +64,75 @@ def copy_plan_hdf_back(
     """
     Copy the plan result HDF for *plan_number* back from a worker.
     """
-    from ..RasCurrency import RasCurrency
+    return copy_plan_result_back(
+        worker_project_path,
+        plan_number,
+        ras_obj,
+        output_format="hdf",
+    )
+
+
+def copy_plan_result_back(
+    worker_project_path: Union[str, Path],
+    plan_number: str,
+    ras_obj,
+    *,
+    output_format: str,
+) -> Optional[Path]:
+    """Atomically publish one worker result family and remove its opposite."""
+    if output_format not in {"hdf", "legacy"}:
+        raise ValueError("output_format must be 'hdf' or 'legacy'")
+    from ..ExecutionArtifacts import (
+        finalize_plan_execution_artifacts,
+        get_plan_result_artifact_paths,
+    )
 
     worker_project_path = Path(worker_project_path)
-    dest_hdf = RasCurrency.get_plan_hdf_path(plan_number, ras_obj)
-    worker_hdf = worker_project_path / dest_hdf.name
-
-    if not worker_hdf.exists():
-        logger.error(f"Worker plan HDF not found: {worker_hdf}")
+    source_paths = get_plan_result_artifact_paths(
+        plan_number,
+        ras_object=ras_obj,
+        project_folder=worker_project_path,
+        project_name=ras_obj.project_name,
+    )
+    dest_paths = get_plan_result_artifact_paths(plan_number, ras_object=ras_obj)
+    worker_result = (
+        source_paths.hdf if output_format == "hdf" else source_paths.legacy_output
+    )
+    dest_result = (
+        dest_paths.hdf if output_format == "hdf" else dest_paths.legacy_output
+    )
+    if not worker_result.is_file():
+        logger.error("Worker plan %s result not found: %s", output_format, worker_result)
         return None
 
-    shutil.copy2(worker_hdf, dest_hdf)
+    temp_dest = dest_result.with_name(
+        f".{dest_result.name}.{uuid.uuid4().hex}.ras-commander.tmp"
+    )
+    try:
+        shutil.copy2(worker_result, temp_dest)
+        os.replace(temp_dest, dest_result)
+    finally:
+        if temp_dest.exists():
+            temp_dest.unlink()
+    finalize_plan_execution_artifacts(
+        plan_number,
+        output_format=output_format,
+        ras_object=ras_obj,
+    )
     logger.info(
-        "Copied plan result HDF for plan %s: %s",
+        "Copied plan %s result for plan %s: %s",
+        output_format,
         str(plan_number).zfill(2),
-        dest_hdf.name,
+        dest_result.name,
     )
     logger.debug(
-        "Copied plan result HDF for plan %s: %s -> %s",
+        "Copied plan %s result for plan %s: %s -> %s",
+        output_format,
         str(plan_number).zfill(2),
-        worker_hdf,
-        dest_hdf,
+        worker_result,
+        dest_result,
     )
-    return dest_hdf
+    return dest_result
 
 
 def clear_worker_plan_hdf_artifacts(
@@ -99,12 +147,22 @@ def clear_worker_plan_hdf_artifacts(
     source project already has a plan HDF, the staged copy can otherwise look
     like a successful worker output even when the remote execution failed.
     """
+    from ..ExecutionArtifacts import remove_plan_execution_artifacts
     from ..RasCurrency import RasCurrency
 
     worker_project_path = Path(worker_project_path)
+    removed = list(
+        remove_plan_execution_artifacts(
+            plan_number,
+            result_format="both",
+            include_message_sidecars=True,
+            ras_object=ras_obj,
+            project_folder=worker_project_path,
+            project_name=ras_obj.project_name,
+        ).removed_paths
+    )
     plan_hdf = RasCurrency.get_plan_hdf_path(plan_number, ras_obj)
     candidate_names = {plan_hdf.name, f"{plan_hdf.stem}.tmp.hdf"}
-    removed: List[Path] = []
 
     for file_name in candidate_names:
         worker_hdf = worker_project_path / file_name
@@ -114,6 +172,30 @@ def clear_worker_plan_hdf_artifacts(
             logger.debug(f"Removed stale worker result artifact: {worker_hdf}")
 
     return removed
+
+
+def clear_staged_plan_execution_artifacts(
+    worker_project_path: Union[str, Path],
+    plan_number: str,
+    ras_obj,
+) -> List[Path]:
+    """Remove copied final results/messages while preserving ``.tmp.hdf``.
+
+    Docker's Linux solver may require a preprocessing ``.tmp.hdf`` as input,
+    but a copied final plan HDF must never be mistaken for output from the
+    requested container run.
+    """
+    from ..ExecutionArtifacts import remove_plan_execution_artifacts
+
+    cleanup = remove_plan_execution_artifacts(
+        plan_number,
+        result_format="both",
+        include_message_sidecars=True,
+        ras_object=ras_obj,
+        project_folder=Path(worker_project_path),
+        project_name=ras_obj.project_name,
+    )
+    return list(cleanup.removed_paths)
 
 
 def _resolve_geompre_path(
