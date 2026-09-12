@@ -66,7 +66,9 @@ def test_example_library_consumes_only_the_atomic_current_release() -> None:
     assert expected in javascript
 
 
-def test_example_library_does_not_expose_stale_viewer_links_during_catalog_outage() -> None:
+def test_example_library_does_not_expose_stale_viewer_links_during_catalog_outage() -> (
+    None
+):
     javascript = (
         ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
     ).read_text(encoding="utf-8")
@@ -91,8 +93,35 @@ def test_example_library_only_makes_http_links_clickable() -> None:
     assert "function resolveHttpHref" in javascript
     assert 'typeof href !== "string" || !href.trim()' in javascript
     assert '["http:", "https:"].includes(url.protocol)' in javascript
-    assert 'catch (_error)' in javascript
+    assert "catch (_error)" in javascript
     assert "resolveHref" not in javascript
+
+
+def test_example_library_supports_direct_1d_corpus_geometry_overlay() -> None:
+    javascript = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+
+    assert '"ras-1d-corpus-v1"' in javascript
+    assert 'sourceLayer: "ras_model_extent"' in javascript
+    assert 'sourceLayer: "ras_river_centerlines"' in javascript
+    assert 'sourceLayer: "ras_cross_sections"' in javascript
+    assert 'sourceLayer: "ras_bank_lines"' in javascript
+    assert "nativeMinzoom: 7" in javascript
+    assert "nativeMaxzoom: 11" in javascript
+    assert "nativeMinzoom: 8" in javascript
+    assert "nativeMinzoom: 10" in javascript
+    assert "nativeMaxzoom: 14" in javascript
+    assert "properties.landingGeometryPmtiles" in javascript
+    assert "properties.landingGeometryProfile" in javascript
+    assert "addSelectedGeometryTileset" in javascript
+    assert 'map.getLayer("selected-project-extent-halo")' in javascript
+    overlay_builder = javascript.split("function addSelectedGeometryTileset", 1)[
+        1
+    ].split("async function showSelectedProjectGeometry", 1)[0]
+    assert "maxzoom: Number(" not in overlay_builder
+    assert "should overzoom beyond" in overlay_builder
+    assert 'map.getSource("selected-project").setData' in javascript
 
 
 def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
@@ -185,8 +214,7 @@ def test_double_mountain_fork_brazos_candidate_profile_and_rod_are_validated() -
     ).read_text(encoding="utf-8")
 
     expected_ids = {
-        f"double-mountain-fork-brazos-dmf{number}-12050004"
-        for number in range(1, 5)
+        f"double-mountain-fork-brazos-dmf{number}-12050004" for number in range(1, 5)
     }
     assert all(project_id in profiles for project_id in expected_ids)
     assert profiles.count('groupId: "double-mountain-fork-brazos"') == 4
@@ -194,7 +222,7 @@ def test_double_mountain_fork_brazos_candidate_profile_and_rod_are_validated() -
     assert "HEC-RAS 6.10 source (6.1 family)" in profiles
     assert "double-mountain-fork-brazos" in page
     assert "Terrain.Clone (1).hdf" in page
-    assert "20260911Tdmfb-candidate02" in page
+    assert "20260912Talabama-ble-corpus01" in page
     assert all(f"### DMF{number}" in rod for number in range(1, 5))
     assert "compiled terrain is **not missing**" in rod
     assert "Polygons (1)" in rod
@@ -203,7 +231,9 @@ def test_double_mountain_fork_brazos_candidate_profile_and_rod_are_validated() -
     assert "qualification pending" not in profiles.lower()
 
 
-def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable() -> None:
+def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable() -> (
+    None
+):
     supplement_source = (
         ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-supplements.js"
     ).read_text(encoding="utf-8")
@@ -216,8 +246,7 @@ def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable
     ]
 
     assert [feature["id"] for feature in features] == [
-        f"double-mountain-fork-brazos-dmf{number}-12050004"
-        for number in range(1, 5)
+        f"double-mountain-fork-brazos-dmf{number}-12050004" for number in range(1, 5)
     ]
     assert all(
         feature["properties"]["status"] == "Source qualification candidate"
@@ -233,8 +262,7 @@ def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable
         for field in ("webmap", "manifest", "projectManifest")
     )
     assert [
-        feature["properties"]["details"].rsplit("#", 1)[-1]
-        for feature in features
+        feature["properties"]["details"].rsplit("#", 1)[-1] for feature in features
     ] == [f"dmf{number}" for number in range(1, 5)]
     assert all(
         feature["properties"]["recordOfDeficiencies"].endswith(
@@ -257,8 +285,7 @@ def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable
         for feature in features
     )
     assert all(
-        "pending" not in feature["properties"]["notes"].lower()
-        for feature in features
+        "pending" not in feature["properties"]["notes"].lower() for feature in features
     )
     geometries = [shape(feature["geometry"]) for feature in features]
     assert all(geometry.geom_type == "Polygon" for geometry in geometries)
@@ -277,6 +304,53 @@ def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable
         -99.89819835922083,
         33.68199246862984,
     ]
+
+
+def test_alabama_ble_corpus_is_one_exact_discovery_entry() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    profiles = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-profiles.js"
+    ).read_text(encoding="utf-8")
+    supplement_source = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-supplements.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    supplement = json.loads(supplement_source.removeprefix(prefix).removesuffix(";\n"))
+    project_id = "middle-chattahoochee-lake-harding-al03130002"
+    features = [item for item in supplement["features"] if item["id"] == project_id]
+
+    assert len(features) == 1
+    feature = features[0]
+    geometry = shape(feature["geometry"])
+    assert geometry.geom_type == "MultiPolygon"
+    assert geometry.is_valid
+    assert not geometry.equals(box(*feature["bbox"]))
+    assert list(geometry.bounds) == feature["bbox"]
+    assert feature["properties"]["status"] == "Source qualification candidate"
+    assert feature["properties"]["viewerType"] == "Qualification candidate"
+    assert all(
+        not feature["properties"][field]
+        for field in (
+            "webmap",
+            "manifest",
+            "projectManifest",
+            "landingGeometryPmtiles",
+            "landingGeometryProfile",
+        )
+    )
+    assert (
+        feature["properties"]["landingExtentSource"]
+        == "Exact union of 197 model footprints"
+    )
+    assert feature["properties"]["extentSource"].startswith("Union of 197")
+    assert "197-model 1D steady BLE corpus" in profiles
+    assert profiles.count(f'"{project_id}"') == 1
+    assert "groupId" not in profiles.split(f'"{project_id}"', 1)[1].split("},", 1)[0]
+    assert "AL03130002" in page
+    assert page.count("Alabama Middle Chattahoochee–Lake Harding BLE") == 1
+    assert "20260912Talabama-ble-corpus01" in page
 
 
 def test_embedded_catalog_retains_api_derived_project_footprints() -> None:

@@ -242,6 +242,7 @@ ras_commander/sources/*
 !ras_commander/sources/base.py
 !ras_commander/sources/county/
 !ras_commander/sources/federal/
+!ras_commander/sources/state/
 
 # Claude Code workspace directories
 examples/.claude/

@@ -28,6 +28,53 @@
     "storage_areas",
     "structures",
   ]);
+  const LANDING_GEOMETRY_PROFILES = {
+    "ras-1d-corpus-v1": {
+      layers: [
+        {
+          id: "model-extents",
+          sourceLayer: "ras_model_extent",
+          kind: "model_extents",
+          geometryTypes: ["Polygon", "MultiPolygon"],
+          nativeMinzoom: 7,
+          nativeMaxzoom: 11,
+          style: {
+            fill: "#38bdf8",
+            fillOpacity: 0.08,
+            line: "#0369a1",
+            lineWidth: 1.2,
+          },
+        },
+        {
+          id: "river-centerlines",
+          sourceLayer: "ras_river_centerlines",
+          kind: "river_reaches",
+          geometryTypes: ["LineString", "MultiLineString"],
+          nativeMinzoom: 8,
+          nativeMaxzoom: 14,
+          style: { line: "#0369a1", lineWidth: 2.2 },
+        },
+        {
+          id: "cross-sections",
+          sourceLayer: "ras_cross_sections",
+          kind: "cross_sections",
+          geometryTypes: ["LineString", "MultiLineString"],
+          nativeMinzoom: 10,
+          nativeMaxzoom: 14,
+          style: { line: "#f97316", lineWidth: 1.0 },
+        },
+        {
+          id: "bank-lines",
+          sourceLayer: "ras_bank_lines",
+          kind: "bank_lines",
+          geometryTypes: ["LineString", "MultiLineString"],
+          nativeMinzoom: 10,
+          nativeMaxzoom: 14,
+          style: { line: "#16a34a", lineWidth: 1.1 },
+        },
+      ],
+    },
+  };
 
   function registerPmtilesProtocol() {
     if (!window.pmtiles || window.RAS_EXAMPLE_LIBRARY_PMTILES_PROTOCOL) {
@@ -719,16 +766,79 @@
     map.on("moveend", updateProjectDisplay);
     map.on("resize", updateProjectDisplay);
 
+    function addSelectedGeometryTileset(feature, tileset, layers, baseUrl) {
+      const projectId = safeId(feature.id || feature.properties?.projectId);
+      const beforeId = map.getLayer("selected-project-extent-halo")
+        ? "selected-project-extent-halo"
+        : undefined;
+      const sourceId = `selected-model-${projectId}-${safeId(tileset.id)}`;
+      const tileUrl = resolveHttpHref(tileset.href, baseUrl);
+      if (!tileUrl || !layers.length) {
+        return;
+      }
+      map.addSource(sourceId, {
+        type: "vector",
+        url: `pmtiles://${tileUrl}`,
+      });
+      selectedGeometry.sources.push(sourceId);
+      for (const layer of layers) {
+        const family = geometryFamily(layer);
+        const paint = geometryPaint(layer, family);
+        const baseId = `${sourceId}-${safeId(layer.id)}`;
+        // nativeMaxzoom documents the archive, but is intentionally not a
+        // MapLibre layer maxzoom: selected geometry should overzoom beyond the
+        // last native tile level and remain visible at the zoom-15 review view.
+        const common = {
+          source: sourceId,
+          "source-layer": layer.sourceLayer,
+          minzoom: Number(layer.minzoom ?? layer.nativeMinzoom ?? tileset.minzoom ?? 0),
+        };
+        if (family === "polygon") {
+          const fillId = `${baseId}-fill`;
+          const lineId = `${baseId}-line`;
+          map.addLayer({ id: fillId, type: "fill", ...common, paint: paint.fill }, beforeId);
+          map.addLayer({ id: lineId, type: "line", ...common, paint: paint.line }, beforeId);
+          selectedGeometry.layers.push(fillId, lineId);
+        } else {
+          const layerId = `${baseId}-${family}`;
+          map.addLayer({ id: layerId, type: family === "point" ? "circle" : "line", ...common, paint: paint[family === "point" ? "circle" : "line"] }, beforeId);
+          selectedGeometry.layers.push(layerId);
+        }
+      }
+    }
+
     async function showSelectedProjectGeometry(feature) {
-      const manifestHref = feature.properties?.manifest;
+      const properties = feature.properties || {};
+      const directPmtiles = resolveHttpHref(properties.landingGeometryPmtiles);
+      const directProfile = LANDING_GEOMETRY_PROFILES[properties.landingGeometryProfile];
+      const manifestHref = properties.manifest;
       const request = ++selectedGeometryRequest;
       clearSelectedGeometry();
-      if (!manifestHref || !window.pmtiles) {
+      if (!window.pmtiles || (!directPmtiles && !manifestHref)) {
         return;
       }
       if (!map.isStyleLoaded()) {
         await new Promise((resolve) => map.once("load", resolve));
       }
+      if (request !== selectedGeometryRequest) {
+        return;
+      }
+      if (directPmtiles || properties.landingGeometryProfile) {
+        if (!directPmtiles || !directProfile) {
+          return;
+        }
+        addSelectedGeometryTileset(
+          feature,
+          {
+            id: properties.landingGeometryProfile,
+            href: directPmtiles,
+          },
+          directProfile.layers,
+          window.location.href
+        );
+        return;
+      }
+
       const manifestUrl = resolveHttpHref(manifestHref);
       if (!manifestUrl) {
         return;
@@ -741,10 +851,6 @@
       if (request !== selectedGeometryRequest) {
         return;
       }
-      const projectId = safeId(feature.id || feature.properties?.projectId);
-      const beforeId = map.getLayer("selected-project-extent-fill")
-        ? "selected-project-extent-fill"
-        : undefined;
       for (const tileset of manifest.tilesets || []) {
         if (tileset.type !== "vector" || tileset.id === "geometry-detail") {
           continue;
@@ -758,37 +864,7 @@
         if (!layers.length || !tileset.href) {
           continue;
         }
-        const sourceId = `selected-model-${projectId}-${safeId(tileset.id)}`;
-        const tileUrl = resolveHttpHref(tileset.href, manifestUrl);
-        if (!tileUrl) {
-          continue;
-        }
-        map.addSource(sourceId, {
-          type: "vector",
-          url: `pmtiles://${tileUrl}`,
-        });
-        selectedGeometry.sources.push(sourceId);
-        for (const layer of layers) {
-          const family = geometryFamily(layer);
-          const paint = geometryPaint(layer, family);
-          const baseId = `${sourceId}-${safeId(layer.id)}`;
-          const common = {
-            source: sourceId,
-            "source-layer": layer.sourceLayer,
-            minzoom: Number(tileset.minzoom || 0),
-          };
-          if (family === "polygon") {
-            const fillId = `${baseId}-fill`;
-            const lineId = `${baseId}-line`;
-            map.addLayer({ id: fillId, type: "fill", ...common, paint: paint.fill }, beforeId);
-            map.addLayer({ id: lineId, type: "line", ...common, paint: paint.line }, beforeId);
-            selectedGeometry.layers.push(fillId, lineId);
-          } else {
-            const layerId = `${baseId}-${family}`;
-            map.addLayer({ id: layerId, type: family === "point" ? "circle" : "line", ...common, paint: paint[family === "point" ? "circle" : "line"] }, beforeId);
-            selectedGeometry.layers.push(layerId);
-          }
-        }
+        addSelectedGeometryTileset(feature, tileset, layers, manifestUrl);
       }
     }
 
@@ -821,6 +897,7 @@
       );
       showSelectedProjectGeometry(feature).catch(() => {
         clearSelectedGeometry();
+        status.textContent = "The selected project's detail geometry is temporarily unavailable.";
       });
     }
 

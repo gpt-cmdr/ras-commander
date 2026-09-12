@@ -9,8 +9,11 @@ successful HTML response cannot hide missing project data.
 from __future__ import annotations
 
 import argparse
+import gzip
+import io
 import json
 import socket
+import struct
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -40,13 +43,21 @@ DEFAULT_CATALOG_URL = (
 USER_AGENT = "rascommander-example-library-validator/1.0"
 MAX_CATALOG_BYTES = 20 * 1024 * 1024
 JSON_ENDPOINT_TARGETS = {"manifest", "projectManifest", "webmap-manifest"}
+PMTILES_HEADER_BYTES = 127
+MAX_PMTILES_METADATA_BYTES = 2 * 1024 * 1024
+MAX_PMTILES_ROOT_BYTES = 16 * 1024 * 1024
+MAX_PMTILES_DECOMPRESSED_BYTES = 64 * 1024 * 1024
+LANDING_GEOMETRY_PROFILES = {
+    "ras-1d-corpus-v1": {
+        "ras_model_extent": (7, 11),
+        "ras_river_centerlines": (8, 14),
+        "ras_cross_sections": (10, 14),
+        "ras_bank_lines": (10, 14),
+    }
+}
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FALLBACK_CATALOG = (
-    REPOSITORY_ROOT
-    / "docs"
-    / "assets"
-    / "javascripts"
-    / "ras-example-projects-data.js"
+    REPOSITORY_ROOT / "docs" / "assets" / "javascripts" / "ras-example-projects-data.js"
 )
 DEFAULT_SUPPLEMENTS_CATALOG = (
     REPOSITORY_ROOT
@@ -90,6 +101,7 @@ class _Endpoint:
     project_id: str
     target: str
     url: str
+    profile: str = ""
 
 
 @dataclass(frozen=True)
@@ -98,6 +110,15 @@ class _HttpResult:
     status: int | None
     message: str
     body: bytes = b""
+    headers: Mapping[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class _PmtilesInfo:
+    metadata: Mapping[str, Any]
+    minzoom: int
+    maxzoom: int
+    root_entries: int
 
 
 class _IdCollector(HTMLParser):
@@ -107,9 +128,7 @@ class _IdCollector(HTMLParser):
         super().__init__()
         self.ids: set[str] = set()
 
-    def handle_starttag(
-        self, _tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
         for name, value in attrs:
             if name.casefold() == "id" and value:
                 self.ids.add(value)
@@ -180,6 +199,349 @@ def _request(
     return last_result or _HttpResult(False, None, "request failed")
 
 
+def _request_byte_range(
+    url: str,
+    *,
+    start: int,
+    end: int,
+    timeout: float,
+    retries: int,
+) -> _HttpResult:
+    """Read one exact HTTP byte range and reject full-body fallbacks."""
+
+    expected_length = end - start + 1
+    if start < 0 or end < start:
+        return _HttpResult(False, None, f"invalid byte range {start}-{end}")
+    last_result: _HttpResult | None = None
+    for attempt in range(retries + 1):
+        try:
+            request = Request(
+                url,
+                headers={
+                    "Accept": "application/vnd.pmtiles, application/octet-stream",
+                    "Accept-Encoding": "identity",
+                    "Range": f"bytes={start}-{end}",
+                    "User-Agent": USER_AGENT,
+                },
+            )
+            with urlopen(request, timeout=timeout) as response:  # noqa: S310
+                status = response.getcode()
+                headers = {
+                    name.lower(): value for name, value in response.headers.items()
+                }
+                if status != 206:
+                    response.read(min(expected_length + 1, 65536))
+                    return _HttpResult(
+                        False,
+                        status,
+                        "server did not honor the byte-range request with HTTP 206",
+                        headers=headers,
+                    )
+                content_range = headers.get("content-range", "")
+                expected_prefix = f"bytes {start}-{end}/"
+                if not content_range.startswith(expected_prefix):
+                    return _HttpResult(
+                        False,
+                        status,
+                        f"unexpected Content-Range {content_range!r}",
+                        headers=headers,
+                    )
+                body = response.read(expected_length + 1)
+                if len(body) != expected_length:
+                    return _HttpResult(
+                        False,
+                        status,
+                        f"byte range returned {len(body)} bytes; expected {expected_length}",
+                        body,
+                        headers,
+                    )
+                return _HttpResult(True, status, "", body, headers)
+        except HTTPError as exc:
+            cache_control = exc.headers.get("Cache-Control", "")
+            cache_note = ""
+            if not _cache_control_has_no_store(cache_control):
+                shown = cache_control or "<missing>"
+                cache_note = f"; Cache-Control lacks no-store ({shown})"
+            last_result = _HttpResult(
+                False,
+                exc.code,
+                f"HTTP {exc.code}{cache_note}",
+            )
+            if exc.code < 500 or attempt == retries:
+                return last_result
+        except (TimeoutError, socket.timeout, URLError, OSError) as exc:
+            reason = getattr(exc, "reason", exc)
+            last_result = _HttpResult(False, None, f"request failed: {reason}")
+            if attempt == retries:
+                return last_result
+
+        time.sleep(min(0.25 * (2**attempt), 2.0))
+
+    return last_result or _HttpResult(False, None, "request failed")
+
+
+def _decompress_pmtiles_block(
+    body: bytes,
+    compression: int,
+    *,
+    label: str,
+    limit: int,
+) -> bytes:
+    if compression == 1:
+        decoded = body
+    elif compression == 2:
+        with gzip.GzipFile(fileobj=io.BytesIO(body)) as stream:
+            decoded = stream.read(limit + 1)
+    else:
+        raise ValueError(
+            f"unsupported PMTiles {label} compression {compression}; "
+            "expected none or gzip"
+        )
+    if len(decoded) > limit:
+        raise ValueError(f"PMTiles {label} exceeds the decoded validation limit")
+    return decoded
+
+
+def _read_varint(data: bytes, position: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    while position < len(data) and shift <= 63:
+        byte = data[position]
+        position += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, position
+        shift += 7
+    raise ValueError("invalid PMTiles directory varint")
+
+
+def _directory_entry_count(data: bytes) -> int:
+    """Decode enough of a PMTiles v3 directory to prove structural validity."""
+    count, position = _read_varint(data, 0)
+    if count <= 0 or count > 10_000_000:
+        raise ValueError(f"invalid PMTiles root directory entry count {count}")
+    arrays: list[list[int]] = []
+    for _ in range(4):
+        values = []
+        for _entry in range(count):
+            value, position = _read_varint(data, position)
+            values.append(value)
+        arrays.append(values)
+    if position != len(data):
+        raise ValueError("PMTiles root directory has trailing or malformed bytes")
+    lengths = arrays[2]
+    if any(length <= 0 for length in lengths):
+        raise ValueError("PMTiles root directory contains an empty entry")
+    return count
+
+
+def _pmtiles_metadata(
+    url: str,
+    *,
+    timeout: float,
+    retries: int,
+) -> tuple[_PmtilesInfo | None, _HttpResult]:
+    """Read and validate a PMTiles v3 header, root directory, and metadata."""
+
+    header_result = _request_byte_range(
+        url,
+        start=0,
+        end=PMTILES_HEADER_BYTES - 1,
+        timeout=timeout,
+        retries=retries,
+    )
+    if not header_result.ok:
+        return None, header_result
+    header = header_result.body
+    if header[:7] != b"PMTiles" or header[7] != 3:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            "response is not a PMTiles v3 archive",
+        )
+    root_offset, root_length = struct.unpack_from("<QQ", header, 8)
+    metadata_offset, metadata_length = struct.unpack_from("<QQ", header, 24)
+    tile_data_offset, tile_data_length = struct.unpack_from("<QQ", header, 56)
+    internal_compression = header[97]
+    tile_type = header[99]
+    minzoom = header[100]
+    maxzoom = header[101]
+    if tile_type != 1:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            f"PMTiles archive is not vector MVT data (tile type {tile_type})",
+        )
+    if not 0 < metadata_length <= MAX_PMTILES_METADATA_BYTES:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            "PMTiles metadata length is missing or exceeds the validation limit",
+        )
+    if not 0 < root_length <= MAX_PMTILES_ROOT_BYTES:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            "PMTiles root directory length is missing or exceeds the validation limit",
+        )
+    if tile_data_length <= 0:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            "PMTiles tile-data section is empty",
+        )
+    if minzoom > maxzoom:
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            f"PMTiles header has invalid zoom range {minzoom}-{maxzoom}",
+        )
+    content_range = (header_result.headers or {}).get("content-range", "")
+    try:
+        archive_length = int(content_range.rsplit("/", 1)[1])
+    except (IndexError, ValueError):
+        return None, _HttpResult(
+            False,
+            header_result.status,
+            f"PMTiles header response has invalid Content-Range {content_range!r}",
+        )
+    for label, offset, length in (
+        ("root directory", root_offset, root_length),
+        ("metadata", metadata_offset, metadata_length),
+        ("tile data", tile_data_offset, tile_data_length),
+    ):
+        if offset < PMTILES_HEADER_BYTES or offset + length > archive_length:
+            return None, _HttpResult(
+                False,
+                header_result.status,
+                f"PMTiles {label} range falls outside the archive",
+            )
+
+    metadata_result = _request_byte_range(
+        url,
+        start=metadata_offset,
+        end=metadata_offset + metadata_length - 1,
+        timeout=timeout,
+        retries=retries,
+    )
+    if not metadata_result.ok:
+        return None, metadata_result
+    root_result = _request_byte_range(
+        url,
+        start=root_offset,
+        end=root_offset + root_length - 1,
+        timeout=timeout,
+        retries=retries,
+    )
+    if not root_result.ok:
+        return None, root_result
+    try:
+        metadata_bytes = _decompress_pmtiles_block(
+            metadata_result.body,
+            internal_compression,
+            label="metadata",
+            limit=MAX_PMTILES_METADATA_BYTES,
+        )
+        metadata = json.loads(metadata_bytes)
+        root_bytes = _decompress_pmtiles_block(
+            root_result.body,
+            internal_compression,
+            label="root directory",
+            limit=MAX_PMTILES_DECOMPRESSED_BYTES,
+        )
+        root_entries = _directory_entry_count(root_bytes)
+    except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, _HttpResult(
+            False,
+            metadata_result.status,
+            f"PMTiles structure is invalid: {exc}",
+        )
+    if not isinstance(metadata, Mapping):
+        return None, _HttpResult(
+            False,
+            metadata_result.status,
+            "PMTiles metadata JSON is not an object",
+        )
+    return _PmtilesInfo(metadata, minzoom, maxzoom, root_entries), root_result
+
+
+def _check_pmtiles_endpoint(
+    endpoint: _Endpoint,
+    *,
+    timeout: float,
+    retries: int,
+) -> Finding:
+    expected_layers = LANDING_GEOMETRY_PROFILES[endpoint.profile]
+    info, result = _pmtiles_metadata(
+        endpoint.url,
+        timeout=timeout,
+        retries=retries,
+    )
+    if info is None:
+        return Finding(
+            endpoint.project_id,
+            endpoint.target,
+            False,
+            url=endpoint.url,
+            status=result.status,
+            message=result.message,
+        )
+    layers = info.metadata.get("vector_layers")
+    if not isinstance(layers, list) or not all(
+        isinstance(layer, Mapping) for layer in layers
+    ):
+        message = "PMTiles metadata has no valid vector_layers array"
+    elif not all(isinstance(layer.get("id"), str) for layer in layers):
+        message = "PMTiles vector_layers IDs must all be strings"
+    elif len({layer["id"] for layer in layers}) != len(layers):
+        message = "PMTiles vector_layers IDs must be unique"
+    else:
+        layers_by_id = {layer["id"]: layer for layer in layers}
+        actual_ids = set(layers_by_id)
+        expected_ids = set(expected_layers)
+        if actual_ids != expected_ids:
+            missing = sorted(expected_ids - actual_ids)
+            unexpected = sorted(actual_ids - expected_ids)
+            message = f"PMTiles layers do not match profile; missing={missing}, unexpected={unexpected}"
+        else:
+            zoom_mismatches = []
+            for layer_id, (minimum, maximum) in expected_layers.items():
+                layer = layers_by_id[layer_id]
+                if layer.get("minzoom") != minimum or layer.get("maxzoom") != maximum:
+                    zoom_mismatches.append(
+                        f"{layer_id}={layer.get('minzoom')}-{layer.get('maxzoom')}"
+                    )
+            message = (
+                "PMTiles layer zooms do not match profile: "
+                + ", ".join(zoom_mismatches)
+                if zoom_mismatches
+                else ""
+            )
+            if not message:
+                expected_minzoom = min(value[0] for value in expected_layers.values())
+                expected_maxzoom = max(value[1] for value in expected_layers.values())
+                if (info.minzoom, info.maxzoom) != (
+                    expected_minzoom,
+                    expected_maxzoom,
+                ):
+                    message = (
+                        "PMTiles header zooms do not match profile: "
+                        f"{info.minzoom}-{info.maxzoom}"
+                    )
+    return Finding(
+        endpoint.project_id,
+        endpoint.target,
+        not message,
+        url=endpoint.url,
+        status=result.status,
+        message=message
+        or (
+            f"validated {endpoint.profile} with {len(expected_layers)} vector layers "
+            f"and {info.root_entries} root directory entries"
+        ),
+    )
+
+
 def _resolved_url(base_url: str, value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         return ""
@@ -202,7 +564,9 @@ def _canonical_url(url: str) -> str:
         or (parts.scheme.lower() == "https" and port == 443)
     ):
         host = f"{host}:{port}"
-    query = urlencode(sorted(parse_qsl(parts.query, keep_blank_values=True)), doseq=True)
+    query = urlencode(
+        sorted(parse_qsl(parts.query, keep_blank_values=True)), doseq=True
+    )
     return urlunsplit((parts.scheme.lower(), host, parts.path or "/", query, ""))
 
 
@@ -298,7 +662,9 @@ def _project_endpoints(
     properties_value = feature.get("properties")
     if not isinstance(properties_value, Mapping):
         project_id = str(feature.get("id") or f"feature-{ordinal}")
-        return [], [_local_finding(project_id, "catalog", "properties is not an object")]
+        return [], [
+            _local_finding(project_id, "catalog", "properties is not an object")
+        ]
 
     properties = properties_value
     project_id = str(
@@ -314,6 +680,12 @@ def _project_endpoints(
     webmap = _resolved_url(library_url, properties.get("webmap"))
     manifest = _resolved_url(library_url, properties.get("manifest"))
     project_manifest = _resolved_url(library_url, properties.get("projectManifest"))
+    landing_pmtiles_value = properties.get("landingGeometryPmtiles")
+    landing_profile_value = properties.get("landingGeometryProfile")
+    landing_pmtiles = _resolved_url(library_url, landing_pmtiles_value)
+    landing_profile = (
+        landing_profile_value.strip() if isinstance(landing_profile_value, str) else ""
+    )
 
     if webmap:
         endpoints.append(_Endpoint(project_id, "webmap", webmap))
@@ -340,7 +712,9 @@ def _project_endpoints(
                 endpoints.append(
                     _Endpoint(project_id, "webmap-manifest", nested_manifest)
                 )
-                if manifest and _canonical_url(nested_manifest) != _canonical_url(manifest):
+                if manifest and _canonical_url(nested_manifest) != _canonical_url(
+                    manifest
+                ):
                     findings.append(
                         _local_finding(
                             project_id,
@@ -358,7 +732,9 @@ def _project_endpoints(
         endpoints.append(_Endpoint(project_id, "manifest", manifest))
     elif not candidate:
         findings.append(
-            _local_finding(project_id, "manifest", "published project has no manifest URL")
+            _local_finding(
+                project_id, "manifest", "published project has no manifest URL"
+            )
         )
 
     if project_manifest:
@@ -371,6 +747,33 @@ def _project_endpoints(
                 "published project has no projectManifest URL",
             )
         )
+
+    if landing_pmtiles_value or landing_profile_value:
+        if not landing_pmtiles:
+            findings.append(
+                _local_finding(
+                    project_id,
+                    "landingGeometryPmtiles",
+                    "landing geometry PMTiles must be an HTTP(S) URL",
+                )
+            )
+        if landing_profile not in LANDING_GEOMETRY_PROFILES:
+            findings.append(
+                _local_finding(
+                    project_id,
+                    "landingGeometryProfile",
+                    f"unsupported landing geometry profile {landing_profile!r}",
+                )
+            )
+        if landing_pmtiles and landing_profile in LANDING_GEOMETRY_PROFILES:
+            endpoints.append(
+                _Endpoint(
+                    project_id,
+                    "landingGeometryPmtiles",
+                    landing_pmtiles,
+                    landing_profile,
+                )
+            )
 
     for field, target in (
         ("details", "details"),
@@ -398,7 +801,17 @@ def _check_endpoints(
     retries: int,
     workers: int,
 ) -> list[Finding]:
-    endpoint_list = list(endpoints)
+    all_endpoints = list(endpoints)
+    pmtiles_endpoints = [
+        endpoint
+        for endpoint in all_endpoints
+        if endpoint.target == "landingGeometryPmtiles"
+    ]
+    endpoint_list = [
+        endpoint
+        for endpoint in all_endpoints
+        if endpoint.target != "landingGeometryPmtiles"
+    ]
     request_urls = {
         endpoint.url: urldefrag(endpoint.url)[0] for endpoint in endpoint_list
     }
@@ -465,8 +878,10 @@ def _check_endpoints(
         result = results[request_url]
         fragment = unquote(urlsplit(endpoint.url).fragment)
         accepted_ids = {fragment, f"user-content-{fragment}"}
-        if result.ok and fragment and accepted_ids.isdisjoint(
-            html_ids.get(request_url, set())
+        if (
+            result.ok
+            and fragment
+            and accepted_ids.isdisjoint(html_ids.get(request_url, set()))
         ):
             result = _HttpResult(
                 False,
@@ -484,6 +899,19 @@ def _check_endpoints(
                 message=result.message,
             )
         )
+    if pmtiles_endpoints:
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
+            futures = {
+                executor.submit(
+                    _check_pmtiles_endpoint,
+                    endpoint,
+                    timeout=timeout,
+                    retries=retries,
+                ): endpoint
+                for endpoint in pmtiles_endpoints
+            }
+            for future in as_completed(futures):
+                findings.append(future.result())
     return findings
 
 

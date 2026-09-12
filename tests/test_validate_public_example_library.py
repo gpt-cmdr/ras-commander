@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import gzip
 import json
+import struct
 import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +27,24 @@ class _FixtureHandler(BaseHTTPRequestHandler):
             path,
             (404, {"Cache-Control": "no-store"}, b"not found"),
         )
+        request_range = self.headers.get("Range")
+        if (
+            status == 200
+            and request_range
+            and headers.get("Content-Type") == "application/vnd.pmtiles"
+        ):
+            unit, requested = request_range.split("=", 1)
+            start_text, end_text = requested.split("-", 1)
+            assert unit == "bytes"
+            start = int(start_text)
+            end = min(int(end_text), len(body) - 1)
+            status = 206
+            headers = {
+                **headers,
+                "Accept-Ranges": "bytes",
+                "Content-Range": f"bytes {start}-{end}/{len(body)}",
+            }
+            body = body[start : end + 1]
         self.send_response(status)
         for name, value in headers.items():
             self.send_header(name, value)
@@ -61,6 +81,52 @@ def _response(
     content_type: str = "text/plain",
 ) -> tuple[int, dict[str, str], bytes]:
     return 200, {"Content-Type": content_type}, body
+
+
+def _pmtiles_archive(
+    *,
+    layers: dict[str, tuple[int, int]] | None = None,
+    vector_layers: list[dict[str, object]] | None = None,
+    header_zooms: tuple[int, int] = (7, 14),
+) -> bytes:
+    layer_zooms = layers or {
+        "ras_model_extent": (7, 11),
+        "ras_river_centerlines": (8, 14),
+        "ras_cross_sections": (10, 14),
+        "ras_bank_lines": (10, 14),
+    }
+    layer_metadata = vector_layers or [
+        {"id": layer_id, "minzoom": zooms[0], "maxzoom": zooms[1]}
+        for layer_id, zooms in layer_zooms.items()
+    ]
+    metadata = gzip.compress(
+        json.dumps(
+            {
+                "format": "pbf",
+                "vector_layers": layer_metadata,
+            }
+        ).encode()
+    )
+    # One root entry covering one one-byte MVT payload. Directory values are:
+    # count, tile-id delta, run length, byte length, and offset-plus-one.
+    root = gzip.compress(bytes([1, 0, 1, 1, 1]))
+    tile_data = b"\x00"
+    header = bytearray(127)
+    header[:7] = b"PMTiles"
+    header[7] = 3
+    root_offset = len(header)
+    metadata_offset = root_offset + len(root)
+    tile_data_offset = metadata_offset + len(metadata)
+    struct.pack_into("<QQ", header, 8, root_offset, len(root))
+    struct.pack_into("<QQ", header, 24, metadata_offset, len(metadata))
+    struct.pack_into("<QQ", header, 56, tile_data_offset, len(tile_data))
+    struct.pack_into("<QQQ", header, 72, 1, 1, 1)
+    header[96] = 1
+    header[97] = 2
+    header[98] = 2
+    header[99] = 1
+    header[100], header[101] = header_zooms
+    return bytes(header) + root + metadata + tile_data
 
 
 def _catalog(base_url: str, *, nested_manifest: str | None = None) -> bytes:
@@ -185,8 +251,7 @@ def test_viewer_200_does_not_hide_nested_manifest_404() -> None:
     nested = [
         finding
         for finding in report.findings
-        if finding.project_id == "published"
-        and finding.target == "webmap-manifest"
+        if finding.project_id == "published" and finding.target == "webmap-manifest"
     ]
     assert len(nested) == 1
     assert nested[0].status == 404
@@ -309,6 +374,186 @@ def test_candidate_detail_fragment_must_exist() -> None:
     assert details.status == 200
     assert "no element with id 'candidate'" in details.message
     assert rod.ok
+
+
+def test_candidate_can_publish_validated_direct_corpus_geometry() -> None:
+    with _server({}) as (base_url, handler):
+        payload = json.loads(_catalog(base_url))
+        candidate = payload["features"][1]["properties"]
+        candidate["landingGeometryPmtiles"] = f"{base_url}/corpus.pmtiles"
+        candidate["landingGeometryProfile"] = "ras-1d-corpus-v1"
+        handler.routes = _healthy_routes(base_url)
+        handler.routes["/catalog.json"] = _response(
+            json.dumps(payload).encode(), content_type="application/geo+json"
+        )
+        handler.routes["/corpus.pmtiles"] = _response(
+            _pmtiles_archive(), content_type="application/vnd.pmtiles"
+        )
+        report = validate_public_example_library(
+            library_url=f"{base_url}/library/",
+            catalog_url=f"{base_url}/catalog.json",
+            timeout=2,
+            retries=0,
+            supplements_catalog=None,
+        )
+
+    assert report.ok
+    geometry = next(
+        finding
+        for finding in report.findings
+        if finding.project_id == "candidate"
+        and finding.target == "landingGeometryPmtiles"
+    )
+    assert geometry.ok
+    assert geometry.status == 206
+    assert "4 vector layers" in geometry.message
+    ranges = [
+        request_range
+        for path, request_range in handler.requests
+        if path == "/corpus.pmtiles"
+    ]
+    assert len(ranges) == 3
+    assert ranges[0] == "bytes=0-126"
+
+
+def test_direct_corpus_geometry_requires_ranges_and_expected_layers() -> None:
+    with _server({}) as (base_url, handler):
+        payload = json.loads(_catalog(base_url))
+        candidate = payload["features"][1]["properties"]
+        candidate["landingGeometryPmtiles"] = f"{base_url}/corpus.pmtiles"
+        candidate["landingGeometryProfile"] = "ras-1d-corpus-v1"
+        handler.routes = _healthy_routes(base_url)
+        handler.routes["/catalog.json"] = _response(
+            json.dumps(payload).encode(), content_type="application/geo+json"
+        )
+        handler.routes["/corpus.pmtiles"] = _response(
+            _pmtiles_archive(
+                layers={
+                    "ras_model_extent": (7, 11),
+                    "ras_river_centerlines": (8, 14),
+                    "ras_cross_sections": (10, 14),
+                }
+            ),
+            content_type="application/vnd.pmtiles",
+        )
+        report = validate_public_example_library(
+            library_url=f"{base_url}/library/",
+            catalog_url=f"{base_url}/catalog.json",
+            timeout=2,
+            retries=0,
+            supplements_catalog=None,
+        )
+
+    geometry = next(
+        finding
+        for finding in report.findings
+        if finding.project_id == "candidate"
+        and finding.target == "landingGeometryPmtiles"
+    )
+    assert not geometry.ok
+    assert "ras_bank_lines" in geometry.message
+
+    with _server({}) as (base_url, handler):
+        payload = json.loads(_catalog(base_url))
+        candidate = payload["features"][1]["properties"]
+        candidate["landingGeometryPmtiles"] = f"{base_url}/corpus.pmtiles"
+        candidate["landingGeometryProfile"] = "ras-1d-corpus-v1"
+        handler.routes = _healthy_routes(base_url)
+        handler.routes["/catalog.json"] = _response(
+            json.dumps(payload).encode(), content_type="application/geo+json"
+        )
+        handler.routes["/corpus.pmtiles"] = _response(_pmtiles_archive())
+        report = validate_public_example_library(
+            library_url=f"{base_url}/library/",
+            catalog_url=f"{base_url}/catalog.json",
+            timeout=2,
+            retries=0,
+            supplements_catalog=None,
+        )
+
+    geometry = next(
+        finding
+        for finding in report.findings
+        if finding.project_id == "candidate"
+        and finding.target == "landingGeometryPmtiles"
+    )
+    assert not geometry.ok
+    assert geometry.status == 200
+    assert "did not honor" in geometry.message
+
+
+def test_direct_corpus_geometry_rejects_truncated_duplicate_and_bad_zoom_archives() -> (
+    None
+):
+    expected = [
+        {"id": "ras_model_extent", "minzoom": 7, "maxzoom": 11},
+        {"id": "ras_river_centerlines", "minzoom": 8, "maxzoom": 14},
+        {"id": "ras_cross_sections", "minzoom": 10, "maxzoom": 14},
+        {"id": "ras_bank_lines", "minzoom": 10, "maxzoom": 14},
+    ]
+    archives = {
+        "truncated": _pmtiles_archive()[:-1],
+        "duplicate": _pmtiles_archive(vector_layers=[*expected[:-1], expected[0]]),
+        "non-string": _pmtiles_archive(
+            vector_layers=[*expected[:-1], {"id": 7, "minzoom": 10, "maxzoom": 14}]
+        ),
+        "bad-header-zoom": _pmtiles_archive(header_zooms=(8, 14)),
+    }
+
+    for label, archive in archives.items():
+        with _server({}) as (base_url, handler):
+            payload = json.loads(_catalog(base_url))
+            candidate = payload["features"][1]["properties"]
+            candidate["landingGeometryPmtiles"] = f"{base_url}/corpus.pmtiles"
+            candidate["landingGeometryProfile"] = "ras-1d-corpus-v1"
+            handler.routes = _healthy_routes(base_url)
+            handler.routes["/catalog.json"] = _response(
+                json.dumps(payload).encode(), content_type="application/geo+json"
+            )
+            handler.routes["/corpus.pmtiles"] = _response(
+                archive, content_type="application/vnd.pmtiles"
+            )
+            report = validate_public_example_library(
+                library_url=f"{base_url}/library/",
+                catalog_url=f"{base_url}/catalog.json",
+                timeout=2,
+                retries=0,
+                supplements_catalog=None,
+            )
+
+        geometry = next(
+            finding
+            for finding in report.findings
+            if finding.project_id == "candidate"
+            and finding.target == "landingGeometryPmtiles"
+        )
+        assert not geometry.ok, label
+
+
+def test_direct_corpus_geometry_rejects_non_http_url_and_unknown_profile() -> None:
+    with _server({}) as (base_url, handler):
+        payload = json.loads(_catalog(base_url))
+        candidate = payload["features"][1]["properties"]
+        candidate["landingGeometryPmtiles"] = "file:///tmp/corpus.pmtiles"
+        candidate["landingGeometryProfile"] = "unknown-profile"
+        handler.routes = _healthy_routes(base_url)
+        handler.routes["/catalog.json"] = _response(
+            json.dumps(payload).encode(), content_type="application/geo+json"
+        )
+        report = validate_public_example_library(
+            library_url=f"{base_url}/library/",
+            catalog_url=f"{base_url}/catalog.json",
+            timeout=2,
+            retries=0,
+            supplements_catalog=None,
+        )
+
+    failures = {
+        finding.target
+        for finding in report.findings
+        if finding.project_id == "candidate" and not finding.ok
+    }
+    assert failures == {"landingGeometryPmtiles", "landingGeometryProfile"}
 
 
 def test_cli_returns_nonzero_and_prints_project_diagnostics(capsys, tmp_path) -> None:
