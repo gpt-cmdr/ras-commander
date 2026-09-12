@@ -5,6 +5,7 @@
   }
 
   const DEFAULT_BOUNDS = [-125, 24, -66, 50];
+  const MANIFEST_REQUEST_TIMEOUT_MS = 10000;
   const PIN_REPLACEMENT_PIXEL_SIZE = 44;
   const PROJECT_PIN_IMAGE_ID = "ras-project-pin";
   const PROFILE_CONFIG = window.RAS_EXAMPLE_PROJECT_PROFILES || { projects: {}, groups: {} };
@@ -46,8 +47,16 @@
       .replace(/'/g, "&#39;");
   }
 
-  function resolveHref(href) {
-    return new URL(href, window.location.href).toString();
+  function resolveHttpHref(href, base = window.location.href) {
+    if (typeof href !== "string" || !href.trim()) {
+      return "";
+    }
+    try {
+      const url = new URL(href.trim(), base);
+      return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
+    } catch (_error) {
+      return "";
+    }
   }
 
   function normalizeBounds(bounds) {
@@ -259,13 +268,11 @@
     };
   }
 
-    function projectPopupSection(feature) {
-      const props = feature.properties || {};
-      const webmap = props.webmap ? resolveHref(props.webmap) : "";
-      const details = props.details ? resolveHref(props.details) : "";
-      const rod = props.recordOfDeficiencies
-        ? resolveHref(props.recordOfDeficiencies)
-        : "";
+  function projectPopupSection(feature) {
+    const props = feature.properties || {};
+    const webmap = resolveHttpHref(props.webmap);
+    const details = resolveHttpHref(props.details);
+    const rod = resolveHttpHref(props.recordOfDeficiencies);
     return [
       '<section class="ras-library-popup__project">',
       `<h3>${escapeHtml(props.title || feature.id || "Example Project")}</h3>`,
@@ -345,27 +352,34 @@
       links.className = "ras-library-project-links";
       for (const child of entry.features) {
         const childProfile = projectProfile(child);
-        const webmap = child.properties?.webmap;
-        const projectHref = webmap || child.properties?.details;
+        const webmap = resolveHttpHref(child.properties?.webmap);
+        const projectHref = webmap || resolveHttpHref(child.properties?.details);
         const label = document.createElement(projectHref ? "a" : "span");
         if (projectHref) {
-          label.href = resolveHref(projectHref);
+          label.href = projectHref;
           label.title = webmap ? "Open project map" : "Open project details";
         } else {
           label.className = "ras-library-project-link--disabled";
+          if (child.properties?.linkUnavailableReason) {
+            label.title = child.properties.linkUnavailableReason;
+          }
         }
         label.textContent = childProfile.variantLabel || child.properties?.title || child.id;
         links.append(label);
       }
       project.append(links);
     } else {
-      const projectHref = props.webmap || props.details;
+      const webmap = resolveHttpHref(props.webmap);
+      const projectHref = webmap || resolveHttpHref(props.details);
       const link = document.createElement(projectHref ? "a" : "span");
       if (projectHref) {
-        link.href = resolveHref(projectHref);
-        link.title = props.webmap ? "Open project map" : "Open project details";
+        link.href = projectHref;
+        link.title = webmap ? "Open project map" : "Open project details";
       } else {
         link.className = "ras-library-project-link--disabled";
+        if (props.linkUnavailableReason) {
+          link.title = props.linkUnavailableReason;
+        }
       }
       link.textContent = props.title || feature.id || "Example Project";
       project.append(link);
@@ -381,10 +395,12 @@
     const information = document.createElement("td");
     information.className = "ras-library-project-information";
     information.textContent = profile.summary || props.summary || props.notes || "";
-    const recordOfDeficiencies = profile.recordOfDeficiencies || props.recordOfDeficiencies;
+    const recordOfDeficiencies = resolveHttpHref(
+      profile.recordOfDeficiencies || props.recordOfDeficiencies
+    );
     if (recordOfDeficiencies) {
       const details = document.createElement("a");
-      details.href = resolveHref(recordOfDeficiencies);
+      details.href = recordOfDeficiencies;
       details.textContent = "Record of Deficiencies";
       information.append(document.createElement("br"), details);
     }
@@ -422,16 +438,89 @@
     };
   }
 
+  function disableViewerLink(feature, reason) {
+    return {
+      ...feature,
+      properties: {
+        ...(feature.properties || {}),
+        webmap: "",
+        manifest: "",
+        projectManifest: "",
+        linkUnavailableReason: reason,
+      },
+    };
+  }
+
+  async function qualifyViewerLinks(collection) {
+    const checks = (collection.features || []).map(async (feature) => {
+      const properties = feature.properties || {};
+      if (!properties.webmap) {
+        return { feature, unavailable: false };
+      }
+      const manifestUrl = resolveHttpHref(properties.manifest);
+      if (!manifestUrl) {
+        return {
+          feature: disableViewerLink(feature, "Published project map manifest is unavailable."),
+          unavailable: true,
+        };
+      }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        MANIFEST_REQUEST_TIMEOUT_MS
+      );
+      try {
+        const response = await fetch(manifestUrl, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`status ${response.status}`);
+        }
+        const manifest = await response.json();
+        if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+          throw new Error("invalid manifest");
+        }
+        return { feature, unavailable: false };
+      } catch (_error) {
+        return {
+          feature: disableViewerLink(
+            feature,
+            "Published project map is temporarily unavailable because its manifest could not be loaded."
+          ),
+          unavailable: true,
+        };
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    });
+    const results = await Promise.all(checks);
+    return {
+      collection: {
+        ...collection,
+        features: results.map((result) => result.feature),
+      },
+      unavailableCount: results.filter((result) => result.unavailable).length,
+    };
+  }
+
   async function loadProjectIndex(dataUrl) {
     try {
       const response = await fetch(dataUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Example project index request failed: ${response.status}`);
       }
-      return mergeProjectCollections(await response.json());
+      return {
+        collection: mergeProjectCollections(await response.json()),
+        usedFallback: false,
+      };
     } catch (error) {
       if (window.RAS_EXAMPLE_PROJECTS) {
-        return mergeProjectCollections(window.RAS_EXAMPLE_PROJECTS);
+        return {
+          collection: mergeProjectCollections(window.RAS_EXAMPLE_PROJECTS),
+          usedFallback: true,
+          error,
+        };
       }
       throw error;
     }
@@ -446,10 +535,15 @@
     registerPmtilesProtocol();
     const dataUrl = root.dataset.index ||
       "https://rascommander.info/data/rasexamples/hec-ras-7.0/current/example-projects.geojson";
-    const sourceCollection = await loadProjectIndex(dataUrl);
+    const indexResult = await loadProjectIndex(dataUrl);
+    const enrichedCollection = {
+      ...indexResult.collection,
+      features: (indexResult.collection.features || []).map(enrichFeature),
+    };
+    const linkResult = await qualifyViewerLinks(enrichedCollection);
+    const sourceCollection = linkResult.collection;
     const features = (sourceCollection.features || [])
-      .filter((feature) => feature.geometry)
-      .map(enrichFeature);
+      .filter((feature) => feature.geometry);
     const emptyCollection = { type: "FeatureCollection", features: [] };
     const initialPins = {
       type: "FeatureCollection",
@@ -464,7 +558,16 @@
     renderProjectTable(root, features);
     const status = root.querySelector("[data-library-status]");
     if (status) {
-      status.textContent = "Select a project pin or model extent.";
+      if (linkResult.unavailableCount) {
+        status.textContent = (
+          `${linkResult.unavailableCount} published project maps are temporarily unavailable; ` +
+          "source-candidate details remain available."
+        );
+      } else if (indexResult.usedFallback) {
+        status.textContent = "Using the bundled project catalog. Select a project pin or model extent.";
+      } else {
+        status.textContent = "Select a project pin or model extent.";
+      }
     }
 
     const bounds = mergeBounds(features);
@@ -626,7 +729,10 @@
       if (!map.isStyleLoaded()) {
         await new Promise((resolve) => map.once("load", resolve));
       }
-      const manifestUrl = resolveHref(manifestHref);
+      const manifestUrl = resolveHttpHref(manifestHref);
+      if (!manifestUrl) {
+        return;
+      }
       const response = await fetch(manifestUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Project manifest request failed: ${response.status}`);
@@ -653,7 +759,10 @@
           continue;
         }
         const sourceId = `selected-model-${projectId}-${safeId(tileset.id)}`;
-        const tileUrl = new URL(tileset.href, manifestUrl).toString();
+        const tileUrl = resolveHttpHref(tileset.href, manifestUrl);
+        if (!tileUrl) {
+          continue;
+        }
         map.addSource(sourceId, {
           type: "vector",
           url: `pmtiles://${tileUrl}`,
