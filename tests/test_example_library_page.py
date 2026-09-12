@@ -66,6 +66,35 @@ def test_example_library_consumes_only_the_atomic_current_release() -> None:
     assert expected in javascript
 
 
+def test_example_library_does_not_expose_stale_viewer_links_during_catalog_outage() -> None:
+    javascript = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+
+    assert "qualifyViewerLinks" in javascript
+    assert "MANIFEST_REQUEST_TIMEOUT_MS" in javascript
+    assert "controller.abort()" in javascript
+    assert "await response.json()" in javascript
+    assert 'webmap: ""' in javascript
+    assert 'manifest: ""' in javascript
+    assert 'projectManifest: ""' in javascript
+    assert "props.linkUnavailableReason" in javascript
+    assert "published project maps are temporarily unavailable" in javascript
+    assert "source-candidate details remain available" in javascript
+
+
+def test_example_library_only_makes_http_links_clickable() -> None:
+    javascript = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-library.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function resolveHttpHref" in javascript
+    assert 'typeof href !== "string" || !href.trim()' in javascript
+    assert '["http:", "https:"].includes(url.protocol)' in javascript
+    assert 'catch (_error)' in javascript
+    assert "resolveHref" not in javascript
+
+
 def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
     page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
         encoding="utf-8"
@@ -135,10 +164,10 @@ def test_san_gabriel_submodels_are_grouped_in_the_dashboard() -> None:
     assert 'title: "San Gabriel Model Suite"' in profiles
     assert 'variantLabel: "LBSG_503 (Florence)"' in profiles
     assert 'variantLabel: "LBSG_504 (Round Rock)"' in profiles
-    assert "webmap || child.properties?.details" in library
+    assert "webmap || resolveHttpHref(child.properties?.details)" in library
     assert 'document.createElement(projectHref ? "a" : "span")' in library
     assert 'webmap ? "Open project map" : "Open project details"' in library
-    assert 'props.details ? resolveHref(props.details) : ""' in library
+    assert "const details = resolveHttpHref(props.details)" in library
     assert "!webmap && details" in library
 
 

@@ -36,7 +36,7 @@ available geometry, terrain, and results.
 <script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260911Tdmfb-candidate02"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260906Texact-extents01"></script>
 <script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260911Tdmfb-candidate02"></script>
-<script src="../../assets/javascripts/ras-example-library.js?v=20260909Tcandidate-detail-links01"></script>
+<script src="../../assets/javascripts/ras-example-library.js?v=20260912Tcatalog-outage-guard01"></script>
 
 ## Dashboard Qualification Status
 
