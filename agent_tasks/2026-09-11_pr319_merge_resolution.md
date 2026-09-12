@@ -138,8 +138,30 @@ including the real public version-label behavior and independent rejection
 of wrong versions, executable arguments and installation directories.
 The remaining qualification files passed 158 tests, with one skip; those
 files exclude the two live-harness files already counted above.
-Representative live regression remains pending the corrected harness source
-pin. This PR remains a draft until those runs and final CI are reviewed.
+The corrected harness then completed a real steady 6.6 solver invocation.
+The new result passed HDF completion and freshness checks, but the API still
+returned failure: the asynchronous wait used a second raw psutil scan that
+treated the protected `Secure System` process as unidentified. Read-only
+inspection reproduced the disagreement between that scan and the complete
+public process inventory on the same host.
+
+The asynchronous Windows check now uses the canonical inventory and retains
+its existing plan-specific matching. Incomplete inventories, changed process
+identities, inaccessible metadata and malformed command tokens still prevent
+success. The focused regression suite passed 245 tests; the broader affected
+suite passed 654 tests with two skips. These suites overlap and are not added.
+Fresh modern live regression remains pending this final source pin. This PR
+remains a draft until those runs and final CI are reviewed.
+
+A separate steady 4.1 attempt entered the Controller calculation and failed
+with an RPC error approximately 120 seconds later. It produced no completion
+artifact and remains unqualified. Its timing is consistent with the configured
+watchdog deadline, but terminal watchdog diagnostics were not retained, so the
+actor and reason for the blocked calculation are unproven. The observer made
+78 exact identity checks and no dialog actions. The final public inventory was
+complete and empty, the observer stopped, and all locks were released. The
+conservative terminal receipt remains `worker_crashed` with unknown invocation;
+safe cleanup does not establish solver success.
 
 The historical 58-lane matrix, all transports, and broad hydraulic-model
 coverage must not be represented as fully requalified by this merge.

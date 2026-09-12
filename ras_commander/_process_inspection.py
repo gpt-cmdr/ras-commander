@@ -297,7 +297,11 @@ def _scan_ras_process_handles(
                 raw_cmdline = values["cmdline"]
                 if not isinstance(raw_cmdline, (list, tuple)) or not raw_cmdline:
                     raise ValueError("process command line is missing or malformed")
-                cmdline = tuple(str(token) for token in raw_cmdline)
+                if any(not isinstance(token, (str, os.PathLike)) for token in raw_cmdline):
+                    raise ValueError("process command line contains a non-text token")
+                cmdline = tuple(os.fspath(token) for token in raw_cmdline)
+                if any(not isinstance(token, str) for token in cmdline):
+                    raise ValueError("process command line contains a non-text path token")
                 exe = None if values["exe"] is None else str(values["exe"])
                 cwd = None if values["cwd"] is None else str(values["cwd"])
             except (TypeError, ValueError) as error:

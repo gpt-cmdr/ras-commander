@@ -53,6 +53,7 @@ from datetime import datetime
 from itertools import cycle
 from numbers import Number
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
@@ -1818,8 +1819,27 @@ class RasCmdr:
         try:
             import psutil
 
-            processes = psutil.process_iter(
-                ["pid", "name", "cmdline", "cwd"]
+            from ._process_inspection import scan_ras_processes
+
+            # Share the strict public inventory's OS-name recovery and stable
+            # identity checks. A second raw psutil name scan can otherwise
+            # mistake an identified Windows system process for an unknown RAS
+            # solver and reject an already complete result.
+            inventory = scan_ras_processes(psutil_module=psutil)
+            if not inventory.complete:
+                logger.debug(
+                    "Incomplete process inventory while checking %s: %s",
+                    tmp_hdf_path.name,
+                    [error.reason_code for error in inventory.query_errors],
+                )
+                return None
+            processes = (
+                SimpleNamespace(info={
+                    "name": process.name,
+                    "cmdline": process.command_line,
+                    "cwd": process.working_directory,
+                })
+                for process in inventory.processes
             )
             return RasCmdr._rasunsteady_processes_reference_tmp_hdf(
                 tmp_hdf_path,
