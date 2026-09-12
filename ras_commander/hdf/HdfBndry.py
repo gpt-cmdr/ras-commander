@@ -25,7 +25,7 @@ List of Functions in HdfBndry:
 
 """
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Optional
 import h5py
 import numpy as np
 import pandas as pd
@@ -33,9 +33,8 @@ import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon, Point
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from .HdfMesh import HdfMesh
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import setup_logging, get_logger
+from ..Decorators import standardize_input
+from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
 
@@ -156,6 +155,10 @@ class HdfBndry:
                 # Initialize lists to store valid breakline data
                 valid_ids = []
                 valid_names = []
+                valid_spacing_near = []
+                valid_spacing_far = []
+                valid_near_repeats = []
+                valid_protection_radius = []
                 valid_geoms = []
 
                 # Track invalid breaklines for summary
@@ -205,6 +208,27 @@ class HdfBndry:
 
                         valid_ids.append(idx)
                         valid_names.append(name)
+                        fields = attributes.dtype.names or ()
+                        valid_spacing_near.append(
+                            float(attributes["Cell Spacing Near"][idx])
+                            if "Cell Spacing Near" in fields
+                            else None
+                        )
+                        valid_spacing_far.append(
+                            float(attributes["Cell Spacing Far"][idx])
+                            if "Cell Spacing Far" in fields
+                            else None
+                        )
+                        valid_near_repeats.append(
+                            int(attributes["Near Repeats"][idx])
+                            if "Near Repeats" in fields
+                            else 0
+                        )
+                        valid_protection_radius.append(
+                            int(attributes["Protection Radius"][idx])
+                            if "Protection Radius" in fields
+                            else 0
+                        )
                         valid_geoms.append(geom)
 
                     except Exception as e:
@@ -240,6 +264,10 @@ class HdfBndry:
                     {
                         "bl_id": valid_ids,
                         "Name": valid_names,
+                        "cell_spacing_near": valid_spacing_near,
+                        "cell_spacing_far": valid_spacing_far,
+                        "near_repeats": valid_near_repeats,
+                        "protection_radius": valid_protection_radius,
                         "geometry": valid_geoms
                     },
                     geometry="geometry",

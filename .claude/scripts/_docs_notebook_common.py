@@ -72,6 +72,7 @@ TERRAIN_AND_SURFACES = {
     "920_terrain_creation",
     "925_xs_interpolation_surface",
     "930_terrain_modification_analysis",
+    "931_native_rasmapper_terrain_export",
 }
 
 

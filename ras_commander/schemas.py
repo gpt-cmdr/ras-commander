@@ -1,10 +1,11 @@
 """
 schemas.py -- canonical, declarative column contracts for ras-commander's public DataFrames.
 
-This module is the **single source of truth** for the *stable* column surface of the project
-DataFrames that ras-commander attaches to a :class:`RasPrj` instance
-(``plan_df`` / ``geom_df`` / ``boundaries_df`` / ``rasmap_df``), plus a documented note for the
-HDF result frames whose columns are only known at runtime.
+This module is the **single source of truth** for stable public DataFrame columns,
+including project frames attached to a :class:`RasPrj` instance
+(``plan_df`` / ``geom_df`` / ``boundaries_df`` / ``rasmap_df``), fixed-schema
+exports such as cross-section points, and a documented note for HDF result
+frames whose columns are only known at runtime.
 
 It is consumed by ``.claude/scripts/generate_api_surface.py`` to emit the machine-readable
 agent surface published at ``/ras/llms/api/dataframes.json`` (so LLMs and ras-commander-mcp can
@@ -12,7 +13,7 @@ resolve "what columns does ``plan_df`` have?" without scraping rendered HTML).
 
 Why a declarative file rather than re-deriving columns from construction code: the construction
 methods (``RasPrj.get_plan_entries`` / ``get_geom_entries`` / ``get_boundary_conditions``, and
-``_land_classification_helper.empty_rasmap_dataframe``) remain the **runtime authority** and may
+``_rasmap_schema.create_rasmap_dataframe``) remain the **runtime authority** and may
 add extra, project-specific columns beyond this stable core. Pinning the documented contract here
 gives agents a stable, reviewable schema and one place to update when a frame's columns change.
 Where a frame is built from a static shape (``rasmap_df``), the generator cross-checks this
@@ -20,7 +21,7 @@ contract against the live construction and flags drift.
 
 Each entry of :data:`DATAFRAME_SCHEMAS`:
     description   -- one-line summary of the frame
-    accessor      -- how a caller obtains the frame from a RasPrj instance
+    accessor      -- how a caller obtains the frame
     source        -- the construction site (for maintainers)
     columns       -- list of {name, dtype, description} for the STABLE core columns
     extra_columns -- True if additional project-parsed columns may appear at runtime
@@ -28,9 +29,377 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.5"
+SCHEMA_VERSION = "1.14"
 
 DATAFRAME_SCHEMAS = {
+    "flow_path_policy_xs_metrics": {
+        "description": (
+            "Per-cross-section stored-versus-regenerated reach-length evidence "
+            "used for flow-path policy selection and channel QA."
+        ),
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).xs_metrics_df",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact source river-station identifier."},
+            {"name": "len_left_stored", "dtype": "float64", "description": "Stored downstream LOB length."},
+            {"name": "len_left_recomputed", "dtype": "float64", "description": "LOB length recomputed from regenerated flow paths."},
+            {"name": "delta_left", "dtype": "float64", "description": "Recomputed minus stored LOB length."},
+            {"name": "len_channel_stored", "dtype": "float64", "description": "Stored downstream channel length."},
+            {"name": "len_channel_recomputed", "dtype": "float64", "description": "Channel length recomputed along the river centerline."},
+            {"name": "delta_channel", "dtype": "float64", "description": "Recomputed minus stored channel length."},
+            {"name": "len_right_stored", "dtype": "float64", "description": "Stored downstream ROB length."},
+            {"name": "len_right_recomputed", "dtype": "float64", "description": "ROB length recomputed from regenerated flow paths."},
+            {"name": "delta_right", "dtype": "float64", "description": "Recomputed minus stored ROB length."},
+            {"name": "reach_end", "dtype": "bool", "description": "Whether the XS is the downstream reach terminus."},
+            {"name": "invalid_recompute", "dtype": "bool", "description": "Whether only some recomputed side lengths are missing."},
+            {"name": "changed", "dtype": "bool", "description": "Whether any recomputed length changed at the absolute audit tolerance."},
+            {"name": "geometry", "dtype": "geometry", "description": "Cross-section GIS cut line."},
+            {"name": "relative_error_left", "dtype": "float64", "description": "Absolute LOB delta divided by stored LOB length."},
+            {"name": "left_within_tolerance", "dtype": "bool", "description": "Whether usable LOB evidence is within the policy tolerance."},
+            {"name": "relative_error_channel", "dtype": "float64", "description": "Absolute channel delta divided by stored channel length."},
+            {"name": "channel_within_tolerance", "dtype": "bool", "description": "Whether usable channel evidence is within the QA tolerance."},
+            {"name": "relative_error_right", "dtype": "float64", "description": "Absolute ROB delta divided by stored ROB length."},
+            {"name": "right_within_tolerance", "dtype": "bool", "description": "Whether usable ROB evidence is within the policy tolerance."},
+            {"name": "stored_left_vs_channel_relative_difference", "dtype": "float64", "description": "Stored LOB difference relative to stored channel length."},
+            {"name": "stored_right_vs_channel_relative_difference", "dtype": "float64", "description": "Stored ROB difference relative to stored channel length."},
+            {"name": "stored_overbanks_differ_from_channel", "dtype": "bool", "description": "Whether either stored overbank length differs from channel beyond tolerance."},
+            {"name": "overbank_lengths_within_tolerance", "dtype": "bool", "description": "Whether regenerated LOB and ROB both reproduce stored values."},
+            {"name": "main_channel_flagged", "dtype": "bool", "description": "Informative channel-centerline QA flag."},
+        ],
+    },
+    "flow_path_policy_reach_metrics": {
+        "description": "One conservative flow-path policy decision and channel QA summary per river/reach.",
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).reach_metrics_df",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "source_flow_paths_present", "dtype": "bool", "description": "Whether at least two source flow paths span intervals on this reach."},
+            {"name": "source_flow_path_count", "dtype": "int64", "description": "Source flow paths spatially associated with this reach."},
+            {"name": "interval_count", "dtype": "int64", "description": "Non-terminal XS intervals evaluated."},
+            {"name": "overbank_match_count", "dtype": "int64", "description": "Intervals whose regenerated LOB and ROB both match."},
+            {"name": "overbank_match_fraction", "dtype": "float64", "description": "Fraction of intervals matching within tolerance."},
+            {"name": "max_relative_error_left", "dtype": "float64", "description": "Maximum LOB relative error."},
+            {"name": "max_relative_error_right", "dtype": "float64", "description": "Maximum ROB relative error."},
+            {"name": "stored_overbanks_differ_from_channel", "dtype": "bool", "description": "Whether stored overbank lengths contain evidence distinct from channel lengths."},
+            {"name": "main_channel_flagged_count", "dtype": "int64", "description": "Channel intervals outside the informative tolerance."},
+            {"name": "max_relative_error_channel", "dtype": "float64", "description": "Maximum channel relative error."},
+            {"name": "recommended_policy", "dtype": "str", "description": "regenerate_and_recompute or preserve_and_recompute_only_at_join_boundary."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable conservative-policy reasons."},
+            {"name": "tolerance_fraction", "dtype": "float64", "description": "Relative comparison tolerance."},
+        ],
+    },
+    "flow_path_join_segments": {
+        "description": "Regenerated LOB/ROB review segments clipped between the two cross sections adjacent to a proposed join.",
+        "accessor": "RasGeometryCompute.assess_flow_path_policy(...).join_segments_gdf",
+        "source": "RasGeometryCompute.assess_flow_path_policy()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Destination river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Destination reach identifier."},
+            {"name": "upstream_rs", "dtype": "str", "description": "Join-adjacent upstream river station."},
+            {"name": "downstream_rs", "dtype": "str", "description": "Join-adjacent downstream river station."},
+            {"name": "side", "dtype": "str", "description": "left or right overbank."},
+            {"name": "flow_path_id", "dtype": "int64", "description": "Regenerated flow-path feature identifier."},
+            {"name": "length", "dtype": "float64", "description": "Clipped join-interval flow-path length."},
+            {"name": "geometry", "dtype": "geometry", "description": "Reviewable clipped flow-path segment."},
+        ],
+    },
+    "main_channel_length_audit": {
+        "description": "Informative stored-versus-centerline channel reach-length QA by cross section.",
+        "accessor": "RasGeometryCompute.audit_main_channel_lengths(...)",
+        "source": "RasGeometryCompute.audit_main_channel_lengths()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact river station."},
+            {"name": "len_channel_stored", "dtype": "float64", "description": "Stored channel reach length."},
+            {"name": "len_channel_recomputed", "dtype": "float64", "description": "River-centerline-derived channel length."},
+            {"name": "delta_channel", "dtype": "float64", "description": "Recomputed minus stored channel length."},
+            {"name": "relative_error_channel", "dtype": "float64", "description": "Absolute channel delta divided by stored length."},
+            {"name": "channel_within_tolerance", "dtype": "bool", "description": "Whether the usable interval is within tolerance."},
+            {"name": "reach_end", "dtype": "bool", "description": "Whether the XS is the downstream reach terminus."},
+            {"name": "intersection_count", "dtype": "int64", "description": "Number of point intersections between the XS cut line and river centerline."},
+            {"name": "intersection_valid", "dtype": "bool", "description": "Whether the XS intersects its river centerline at exactly one point."},
+            {"name": "main_channel_flagged", "dtype": "bool", "description": "Whether the usable channel interval needs review."},
+            {"name": "geometry", "dtype": "geometry", "description": "Cross-section GIS cut line."},
+        ],
+    },
+    "ras_breakout_2d_boundaries": {
+        "description": (
+            "Parent and normalized child polygon evidence used by a contained "
+            "RasBreakout2D preflight."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.parent_boundary / child_boundary or "
+            "RasBreakout2D.normalize_child_boundary(...)"
+        ),
+        "source": "RasBreakout2D.preflight() and normalize_child_boundary()",
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry", "dtype": "geometry", "description": "Parent or child polygon in the parent mesh CRS."},
+        ],
+        "note": (
+            "Parent rows add mesh_name. Child rows add breakout_id, "
+            "topology_repaired, and hole_count."
+        ),
+    },
+    "ras_breakout_2d_boundary_segments": {
+        "description": (
+            "Ordered child-perimeter segments classified as inherited parent "
+            "boundary or artificial cut."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.boundary_segments or "
+            "RasBreakout2D.classify_boundary_segments(...)"
+        ),
+        "source": "RasBreakout2D.classify_boundary_segments()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "segment_type", "dtype": "str", "description": "inherited or artificial_cut."},
+            {"name": "station", "dtype": "float64", "description": "Distance along the child exterior to the segment midpoint."},
+            {"name": "length", "dtype": "float64", "description": "Segment length in project horizontal units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Classified child-perimeter line geometry."},
+            {"name": "segment_id", "dtype": "str", "description": "Stable display identifier within the classified perimeter."},
+        ],
+    },
+    "ras_breakout_2d_feature_actions": {
+        "description": (
+            "One auditable keep, clip, drop, replace, or preserve decision per "
+            "2D geometry or unsteady-boundary feature."
+        ),
+        "accessor": (
+            "Breakout2DPreflight.feature_actions or "
+            "Breakout2DPreparationResult.feature_actions"
+        ),
+        "source": "RasBreakout2D.preflight()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "feature_type", "dtype": "str", "description": "Mesh area, breakline, refinement, reference, BC-line, or unsteady-boundary category."},
+            {"name": "feature_id", "dtype": "str", "description": "Source feature identifier."},
+            {"name": "name", "dtype": "str", "description": "Source feature name."},
+            {"name": "action", "dtype": "str", "description": "keep, clip, drop, replace, or preserve."},
+            {"name": "reason", "dtype": "str", "description": "Machine-readable rationale for the disposition."},
+            {"name": "source_measure", "dtype": "float64", "description": "Source area or length in project units."},
+            {"name": "retained_measure", "dtype": "float64", "description": "Retained area or length after the proposed action."},
+            {"name": "retained_fraction", "dtype": "float64", "description": "Retained measure divided by source measure."},
+            {"name": "geometry", "dtype": "geometry | None", "description": "Retained geometry when the feature has a spatial representation."},
+        ],
+    },
+    "ras_breakout_2d_checks": {
+        "description": "One pass/fail qualification check for a proposed pure-2D breakout.",
+        "accessor": "Breakout2DPreflight.checks",
+        "source": "RasBreakout2D.preflight()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "check_id", "dtype": "str", "description": "Stable qualification-check identifier."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "blocking", "dtype": "bool", "description": "Whether failure prevents preparation."},
+            {"name": "message", "dtype": "str", "description": "Human-readable requirement."},
+            {"name": "details", "dtype": "dict", "description": "Structured check evidence."},
+        ],
+    },
+    "ras_breakout_2d_boundary_faces": {
+        "description": (
+            "Parent mesh faces separating retained and discarded cell centers, "
+            "or those faces augmented with flux-review metrics."
+        ),
+        "accessor": (
+            "RasBreakout2D.select_parent_boundary_faces(...) or "
+            "Breakout2DFluxReview.faces"
+        ),
+        "source": (
+            "RasBreakout2D.select_parent_boundary_faces() and "
+            "review_parent_boundary_flux()"
+        ),
+        "extra_columns": True,
+        "dynamic": False,
+        "columns": [
+            {"name": "mesh_name", "dtype": "str", "description": "Parent 2D flow-area name."},
+            {"name": "face_id", "dtype": "int64", "description": "Zero-based parent mesh face index."},
+            {"name": "cell_0", "dtype": "int64", "description": "First native adjacent cell index."},
+            {"name": "cell_1", "dtype": "int64", "description": "Second native adjacent cell index."},
+            {"name": "inside_cell", "dtype": "int64", "description": "Adjacent cell retained by the child polygon."},
+            {"name": "outside_cell", "dtype": "int64", "description": "Adjacent cell discarded by the child polygon."},
+            {"name": "normal_x", "dtype": "float64", "description": "Native face-normal X component."},
+            {"name": "normal_y", "dtype": "float64", "description": "Native face-normal Y component."},
+            {"name": "face_length", "dtype": "float64", "description": "Face length in project horizontal units."},
+            {"name": "orientation_multiplier", "dtype": "float64", "description": "Multiplier orienting native flux positive outward from the child."},
+            {"name": "boundary_station", "dtype": "float64", "description": "Face-midpoint distance along the child exterior."},
+            {"name": "geometry", "dtype": "geometry", "description": "Parent mesh-face line geometry."},
+        ],
+        "note": (
+            "Flux-review faces additionally expose peak/volume metrics, "
+            "dominant_direction, significant, and arrow_dx/arrow_dy."
+        ),
+    },
+    "ras_breakout_2d_flux_zones": {
+        "description": (
+            "Adjacent significant parent faces combined by perimeter gap and "
+            "dominant flow direction for engineering review only."
+        ),
+        "accessor": "Breakout2DFluxReview.zones",
+        "source": "RasBreakout2D.review_parent_boundary_flux()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "zone_id", "dtype": "str", "description": "Review-only combined-zone identifier."},
+            {"name": "dominant_direction", "dtype": "str", "description": "inflow or outflow by integrated parent flux."},
+            {"name": "face_count", "dtype": "int64", "description": "Number of significant adjacent faces in the zone."},
+            {"name": "face_ids", "dtype": "str", "description": "JSON array of parent face indexes."},
+            {"name": "peak_flow", "dtype": "float64", "description": "Signed peak simultaneous zone flow; positive leaves the child."},
+            {"name": "peak_abs_flow", "dtype": "float64", "description": "Absolute value of peak_flow."},
+            {"name": "absolute_volume_fraction", "dtype": "float64", "description": "Zone absolute-flow volume divided by all cut-face absolute-flow volume."},
+            {"name": "arrow_dx", "dtype": "float64", "description": "Unit X component of dominant flow direction."},
+            {"name": "arrow_dy", "dtype": "float64", "description": "Unit Y component of dominant flow direction."},
+            {"name": "geometry", "dtype": "geometry", "description": "Merged parent face-line geometry."},
+        ],
+    },
+    "ras_breakout_2d_face_flow": {
+        "description": (
+            "Parent cut-face flow time series oriented positive outward from "
+            "the proposed child domain."
+        ),
+        "accessor": "Breakout2DFluxReview.face_flow_outward",
+        "source": "RasBreakout2D.review_parent_boundary_flux()",
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [],
+        "note": (
+            "The index is parent-result time and each integer column is a "
+            "parent face_id selected at the child partition."
+        ),
+    },
+    "ras_breakout_1d_validation": {
+        "description": (
+            "One row per structural validation check for a RasBreakout1D "
+            "extraction."
+        ),
+        "accessor": "Breakout1DResult.validation.checks_df",
+        "source": "RasBreakout1D.validate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "check", "dtype": "str", "description": "Stable structural check identifier."},
+            {"name": "severity", "dtype": "str", "description": "ERROR or WARNING."},
+            {"name": "passed", "dtype": "bool", "description": "Whether the check passed."},
+            {"name": "detail", "dtype": "str", "description": "Human-readable evidence for the check."},
+        ],
+    },
+    "ras_breakout_1d_geometry_comparison": {
+        "description": (
+            "One row per retained cross section comparing complete source and "
+            "destination geometry payloads."
+        ),
+        "accessor": "RasBreakout1D.compare_geometry(...)",
+        "source": "RasBreakout1D.compare_geometry()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "River", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "Reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "RS", "dtype": "str", "description": "Exact retained river station."},
+            {"name": "content_equal", "dtype": "bool", "description": "Whether the full node payload after the reach-length header matches."},
+            {"name": "source_block_sha256", "dtype": "str", "description": "Source node-payload SHA-256."},
+            {"name": "destination_block_sha256", "dtype": "str", "description": "Destination node-payload SHA-256."},
+        ],
+    },
+    "ras_breakout_1d_results_comparison": {
+        "description": (
+            "Retained-section steady results joined by river, reach, station, "
+            "and profile with source/destination values and numeric deltas."
+        ),
+        "accessor": "RasBreakout1D.compare_results(...)",
+        "source": "RasBreakout1D.compare_results()",
+        "extra_columns": True,
+        "dynamic": True,
+        "columns": [
+            {"name": "river", "dtype": "str", "description": "Exact river identifier."},
+            {"name": "reach", "dtype": "str", "description": "Exact reach identifier."},
+            {"name": "node_id", "dtype": "str", "description": "Retained cross-section station."},
+            {"name": "profile", "dtype": "str", "description": "Steady profile name."},
+            {"name": "_merge", "dtype": "category", "description": "Source/destination join presence."},
+        ],
+    },
+    "cross_section_points": {
+        "description": (
+            "One row per native cross-section station/elevation point from a "
+            "text geometry or geometry HDF, with spatial and vertical provenance."
+        ),
+        "accessor": "RasCrossSections.get_points(project, geometry, ...)",
+        "source": (
+            "RasCrossSections.get_points() using GeomCrossSection.get_xs_coords() "
+            "or HdfXsec.get_xs_coords()"
+        ),
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "model_id", "dtype": "str", "description": "HEC-RAS project/model identifier."},
+            {"name": "geometry_id", "dtype": "str", "description": "Geometry number or explicit geometry identifier."},
+            {"name": "geometry_title", "dtype": "str | None", "description": "Geometry title from the text geometry when available."},
+            {"name": "reach_id", "dtype": "str", "description": "Stable River|Reach identifier."},
+            {"name": "xs_id", "dtype": "str", "description": "Stable River|Reach|river-station identifier."},
+            {"name": "river", "dtype": "str", "description": "Exact HEC-RAS river name."},
+            {"name": "reach", "dtype": "str", "description": "Exact HEC-RAS reach name."},
+            {"name": "river_station", "dtype": "str", "description": "Exact HEC-RAS river-station string."},
+            {"name": "point_order", "dtype": "int", "description": "Zero-based point order in the native station/elevation block."},
+            {"name": "station_order", "dtype": "int", "description": "Zero-based stable rank after ordering by station."},
+            {"name": "station", "dtype": "float", "description": "Native cross-section station value."},
+            {"name": "relative_distance", "dtype": "float", "description": "Distance from the GIS cut-line start in horizontal coordinate units."},
+            {"name": "x", "dtype": "float", "description": "Point X coordinate."},
+            {"name": "y", "dtype": "float", "description": "Point Y coordinate."},
+            {"name": "z", "dtype": "float", "description": "Native or explicitly transformed elevation."},
+            {"name": "mannings_n", "dtype": "float", "description": "Manning's n active at this station."},
+            {"name": "bank_region", "dtype": "str", "description": "left_overbank, channel, right_overbank, or unknown."},
+            {"name": "is_bank_station", "dtype": "bool", "description": "Whether the point coincides with a stored bank station."},
+            {"name": "bank_side", "dtype": "str | None", "description": "left or right when the point is a bank station."},
+            {"name": "left_bank_station", "dtype": "float", "description": "Stored left-bank station for the cross section."},
+            {"name": "right_bank_station", "dtype": "float", "description": "Stored right-bank station for the cross section."},
+            {"name": "horizontal_crs", "dtype": "str | None", "description": "Horizontal or compound CRS definition/code associated with XYZ."},
+            {"name": "horizontal_units", "dtype": "str | None", "description": "Horizontal CRS axis units or project text units for text extraction when CRS is unavailable."},
+            {"name": "vertical_units", "dtype": "str | None", "description": "Native or target vertical units."},
+            {"name": "vertical_units_source", "dtype": "str", "description": "Unit provenance: explicit, project_text, geometry_hdf_explicit, or unknown."},
+            {"name": "vertical_datum", "dtype": "str | None", "description": "Explicit native or target vertical datum; never inferred from horizontal location."},
+            {"name": "source_file", "dtype": "str", "description": "Absolute source geometry or geometry-HDF path."},
+            {"name": "extraction_method", "dtype": "str", "description": "text_geometry or geometry_hdf."},
+            {"name": "vertical_transform_applied", "dtype": "bool", "description": "Whether an explicit per-point XYZ transform changed coordinates."},
+            {"name": "vertical_transform_provenance", "dtype": "str", "description": "Deterministic JSON operation provenance, including explicit no-transform state."},
+        ],
+    },
+    "steady_profile_stored_maps": {
+        "description": (
+            "One row per logical steady-profile stored-map product generated "
+            "by one aggregate StoreAllMaps launch."
+        ),
+        "accessor": "RasProcess.store_maps_at_steady_profiles(plan_number, ...)",
+        "source": "RasProcess.store_maps_at_steady_profiles()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "plan_number", "dtype": "str", "description": "Normalized two-digit plan number."},
+            {"name": "result_hdf_path", "dtype": "str", "description": "Absolute source plan-result HDF path."},
+            {"name": "profile_index", "dtype": "int64", "description": "Zero-based profile index in the steady result HDF."},
+            {"name": "profile_name", "dtype": "str", "description": "Exact steady profile name stored in the result HDF."},
+            {"name": "map_type", "dtype": "str", "description": "Canonical ras-commander product key."},
+            {"name": "output_mode", "dtype": "str", "description": "Logical raster or polygon output mode."},
+            {"name": "primary_path", "dtype": "str", "description": "VRT for rasters or SHP for polygons."},
+            {"name": "files", "dtype": "list[str]", "description": "All physical product files, including tiles or sidecars."},
+            {"name": "file_count", "dtype": "int64", "description": "Number of physical files in files."},
+        ],
+    },
     "project_asset_inventory": {
         "description": (
             "One row per HEC-RAS project asset reference or linked dataset, "
@@ -211,12 +580,12 @@ DATAFRAME_SCHEMAS = {
         ],
     },
     "rasmap_df": {
-        "description": "Single-row frame of RASMapper layer/terrain/land-cover/infiltration paths and settings.",
+        "description": "Single-row frame of RASMapper paths, settings, and parse provenance.",
         "accessor": "ras.rasmap_df  (built by RasMap.initialize_rasmap_df())",
-        "source": "_land_classification_helper.empty_rasmap_dataframe() (shape) + RasMap.parse_rasmap() (.rasmap XML)",
+        "source": "_rasmap_schema.create_rasmap_dataframe() (shape) + RasMap.parse_rasmap() (.rasmap XML)",
         # shape_fn: zero-arg callable returning this frame's empty shape; the docs build's schema
         # validator (validate_api_schemas.py) calls it and fails the build if these columns drift.
-        "shape_fn": "ras_commander._land_classification_helper.empty_rasmap_dataframe",
+        "shape_fn": "ras_commander._rasmap_schema.create_rasmap_dataframe",
         "extra_columns": False,
         "dynamic": False,
         "columns": [
@@ -231,6 +600,471 @@ DATAFRAME_SCHEMAS = {
             {"name": "basemap_layer_names", "dtype": "list", "description": "Names of basemap layers."},
             {"name": "basemap_layer_path", "dtype": "list", "description": "Paths of basemap layers."},
             {"name": "current_settings", "dtype": "dict", "description": "RASMapper current-settings map (rendering/units/etc.)."},
+            {"name": "rasmap_path", "dtype": "str | None", "description": "Expected or parsed .rasmap path."},
+            {"name": "rasmap_status", "dtype": "str", "description": "absent, parsed, parsed_with_errors, or failed."},
+            {"name": "rasmap_error", "dtype": "str | None", "description": "Document-level parse failure, when status is failed."},
+            {"name": "rasmap_field_errors", "dtype": "dict", "description": "Per-field extraction errors retained after partial parsing."},
+        ],
+    },
+    "network_edge_coverage": {
+        "description": (
+            "One extent-first row per retained HEC-RAS model footprint and "
+            "network edge."
+        ),
+        "accessor": "RasNetworkConflation.classify_edges(...).coverage_df",
+        "source": "RasNetworkConflation.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "inside_length", "dtype": "float64", "description": "Edge length inside the model footprint in analysis-CRS units."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full edge length in analysis-CRS units."},
+            {"name": "inside_fraction", "dtype": "float64", "description": "inside_length divided by edge_length."},
+            {"name": "extent_status", "dtype": "str", "description": "inside, partial, or optionally outside."},
+            {"name": "to_edge_id", "dtype": "str | None", "description": "Adapter-normalized downstream edge identifier."},
+            {"name": "from_node", "dtype": "str | None", "description": "Adapter-normalized upstream node or nexus identifier."},
+            {"name": "to_node", "dtype": "str | None", "description": "Adapter-normalized downstream node or nexus identifier."},
+            {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized stream order."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized drainage area; total upstream area is preferred when available."},
+            {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence."},
+            {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
+            {"name": "geometry", "dtype": "geometry", "description": "Full network edge geometry."},
+        ],
+    },
+    "network_edge_coverage_parts": {
+        "description": (
+            "Directed contiguous portions of network edges inside individual "
+            "HEC-RAS model footprints."
+        ),
+        "accessor": "RasNetworkConflation.classify_edges(...).coverage_parts_df",
+        "source": "RasNetworkConflation.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "part_index", "dtype": "int64", "description": "Zero-based contiguous coverage-part index for the model/edge pair."},
+            {"name": "part_length", "dtype": "float64", "description": "Length of this covered edge part."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full directed edge length."},
+            {"name": "coverage_start", "dtype": "float64", "description": "Part start measure from the edge's first coordinate."},
+            {"name": "coverage_end", "dtype": "float64", "description": "Part end measure from the edge's first coordinate."},
+            {"name": "coverage_start_fraction", "dtype": "float64", "description": "Normalized start measure in [0, 1]."},
+            {"name": "coverage_end_fraction", "dtype": "float64", "description": "Normalized end measure in [0, 1]."},
+            {"name": "extent_status", "dtype": "str", "description": "Overall model/edge relationship: inside or partial."},
+            {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
+            {"name": "geometry", "dtype": "geometry", "description": "Contiguous covered portion of the network edge."},
+        ],
+    },
+    "network_edge_coverage_summary": {
+        "description": "Combined multi-model footprint coverage for each directed network edge.",
+        "accessor": "RasNetworkConflation.classify_edges(...).edge_summary_df",
+        "source": "RasNetworkConflation.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "model_count", "dtype": "int64", "description": "Distinct models with positive edge coverage."},
+            {"name": "coverage_part_count", "dtype": "int64", "description": "Total contiguous model coverage parts."},
+            {"name": "inside_length_sum", "dtype": "float64", "description": "Sum of model-covered lengths, including overlap multiplicity."},
+            {"name": "union_length", "dtype": "float64", "description": "Length covered by at least one model."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full directed edge length."},
+            {"name": "union_fraction", "dtype": "float64", "description": "Fraction covered by the union of model footprints."},
+            {"name": "overlap_length", "dtype": "float64", "description": "Coverage length counted by more than one model, including multiplicity."},
+            {"name": "overlap_fraction", "dtype": "float64", "description": "Overlap length divided by edge length."},
+            {"name": "gap_length", "dtype": "float64", "description": "Edge length not covered by any model."},
+            {"name": "gap_fraction", "dtype": "float64", "description": "Gap length divided by edge length."},
+            {"name": "fully_covered", "dtype": "bool", "description": "Whether union coverage reaches the entire edge within tolerance."},
+            {"name": "has_overlap", "dtype": "bool", "description": "Whether material multi-model coverage overlap exists."},
+            {"name": "has_gap", "dtype": "bool", "description": "Whether material uncovered edge length exists."},
+            {"name": "source_geometry_ids", "dtype": "tuple[str, ...]", "description": "Sorted covering model identifiers."},
+            {"name": "adapter", "dtype": "str", "description": "Network schema adapter used for normalization."},
+            {"name": "geometry", "dtype": "geometry", "description": "Full directed network edge."},
+        ],
+    },
+    "network_model_overlap": {
+        "description": "Pairwise contiguous overlap zones between model footprints on one network edge.",
+        "accessor": "RasNetworkConflation.classify_edges(...).model_overlap_df",
+        "source": "RasNetworkConflation.classify_edges()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "geometry_id_a", "dtype": "str", "description": "First model identifier in deterministic lexical order."},
+            {"name": "geometry_id_b", "dtype": "str", "description": "Second model identifier in deterministic lexical order."},
+            {"name": "overlap_part_index", "dtype": "int64", "description": "Zero-based contiguous pair-overlap index."},
+            {"name": "overlap_start", "dtype": "float64", "description": "Directed start measure of the overlap."},
+            {"name": "overlap_end", "dtype": "float64", "description": "Directed end measure of the overlap."},
+            {"name": "overlap_length", "dtype": "float64", "description": "Length of this overlap part."},
+            {"name": "overlap_fraction", "dtype": "float64", "description": "Overlap-part length divided by edge length."},
+            {"name": "geometry", "dtype": "geometry", "description": "Contiguous pairwise overlap geometry."},
+        ],
+    },
+    "network_edge_coverage_plans": {
+        "description": "One selected source-model coverage chain per directed network edge.",
+        "accessor": "RasNetworkConflation.plan_edge_coverage(...).plans_df",
+        "source": "RasNetworkConflation.plan_edge_coverage()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "status", "dtype": "str", "description": "single_source_ready, multi_source_ready, coverage_gap, or uncovered."},
+            {"name": "edge_length", "dtype": "float64", "description": "Full directed edge length."},
+            {"name": "selected_model_count", "dtype": "int64", "description": "Number of distinct source models selected for the chain."},
+            {"name": "selected_slice_count", "dtype": "int64", "description": "Number of contiguous source coverage slices selected for the chain."},
+            {"name": "source_geometry_ids", "dtype": "tuple[str, ...]", "description": "Distinct selected source identifiers in first-use order."},
+            {"name": "source_slice_geometry_ids", "dtype": "tuple[str, ...]", "description": "Source identifier for each upstream-to-downstream coverage slice; identifiers may repeat."},
+            {"name": "covered_length", "dtype": "float64", "description": "Target length covered by the selected chain."},
+            {"name": "coverage_fraction", "dtype": "float64", "description": "Covered length divided by edge length."},
+            {"name": "total_gap_length", "dtype": "float64", "description": "Sum of uncovered intervals in the selected chain."},
+            {"name": "maximum_gap_length", "dtype": "float64", "description": "Largest uncovered interval."},
+            {"name": "fully_covered", "dtype": "bool", "description": "Whether all gaps are within the configured tolerance."},
+            {"name": "orientation_source", "dtype": "str", "description": "Source used to define upstream-to-downstream measures."},
+            {"name": "geometry", "dtype": "geometry", "description": "Full directed network edge."},
+        ],
+    },
+    "network_edge_source_slices": {
+        "description": "Selected source ownership intervals for a network-edge coverage plan.",
+        "accessor": "RasNetworkConflation.plan_edge_coverage(...).source_slices_df",
+        "source": "RasNetworkConflation.plan_edge_coverage()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "source_order", "dtype": "int64", "description": "Zero-based upstream-to-downstream source order."},
+            {"name": "geometry_id", "dtype": "str", "description": "Selected HEC-RAS source model identifier."},
+            {"name": "coverage_start", "dtype": "float64", "description": "Available source coverage start measure."},
+            {"name": "coverage_end", "dtype": "float64", "description": "Available source coverage end measure."},
+            {"name": "retained_start", "dtype": "float64", "description": "Planned start of source ownership."},
+            {"name": "retained_end", "dtype": "float64", "description": "Planned end of source ownership."},
+            {"name": "retained_length", "dtype": "float64", "description": "Length assigned to the source."},
+            {"name": "geometry", "dtype": "geometry", "description": "Assigned directed network-edge portion."},
+        ],
+    },
+    "network_edge_seams": {
+        "description": "Planned transitions between consecutive source coverage slices on a network edge.",
+        "accessor": "RasNetworkConflation.plan_edge_coverage(...).seams_df",
+        "source": "RasNetworkConflation.plan_edge_coverage()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "seam_index", "dtype": "int64", "description": "Zero-based seam order."},
+            {"name": "upstream_geometry_id", "dtype": "str", "description": "Source model upstream of the seam."},
+            {"name": "downstream_geometry_id", "dtype": "str", "description": "Source model downstream of the seam."},
+            {"name": "relationship", "dtype": "str", "description": "overlap, touching, or gap."},
+            {"name": "overlap_start", "dtype": "float64 | None", "description": "Start measure of the shared coverage zone."},
+            {"name": "overlap_end", "dtype": "float64 | None", "description": "End measure of the shared coverage zone."},
+            {"name": "overlap_length", "dtype": "float64", "description": "Shared coverage length."},
+            {"name": "gap_length", "dtype": "float64", "description": "Uncovered distance between sources."},
+            {"name": "seam_measure", "dtype": "float64", "description": "Provisional directed handoff measure."},
+            {"name": "seam_fraction", "dtype": "float64", "description": "Provisional handoff measure divided by edge length."},
+            {"name": "geometry", "dtype": "geometry", "description": "Provisional handoff point on the network edge."},
+        ],
+    },
+    "breakout_1d_source_models": {
+        "description": "Normalized steady 1D source model metadata for network breakout planning.",
+        "accessor": "RasBreakout1D.catalog_sources(...).models_df",
+        "source": "RasBreakout1D.catalog_sources()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Stable caller-defined source geometry/model identifier."},
+            {"name": "project_path", "dtype": "str", "description": "Absolute HEC-RAS project path."},
+            {"name": "project_name", "dtype": "str", "description": "HEC-RAS project basename."},
+            {"name": "plan_number", "dtype": "str", "description": "Selected steady plan number."},
+            {"name": "geometry_path", "dtype": "str", "description": "Selected geometry text-file path."},
+            {"name": "flow_path", "dtype": "str", "description": "Selected steady-flow file path."},
+            {"name": "geometry_sha256", "dtype": "str", "description": "Exact source geometry SHA-256."},
+            {"name": "duplicate_of", "dtype": "str | None", "description": "Canonical model ID for an exact geometry duplicate."},
+            {"name": "included", "dtype": "bool", "description": "Whether the source participates in spatial planning."},
+            {"name": "project_crs", "dtype": "str | None", "description": "Source project CRS when available."},
+            {"name": "units_system", "dtype": "str | None", "description": "English or SI project units declaration."},
+            {"name": "ras_version", "dtype": "str | None", "description": "Selected plan's HEC-RAS program version."},
+            {"name": "profile_count", "dtype": "int64", "description": "Steady profile count."},
+            {"name": "profile_names", "dtype": "tuple[str, ...]", "description": "Steady profile names in source order."},
+        ],
+    },
+    "breakout_1d_source_footprints": {
+        "description": "Deduplicated source model footprints used for network coverage classification.",
+        "accessor": "RasBreakout1D.catalog_sources(...).footprints_gdf",
+        "source": "RasBreakout1D.catalog_sources()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "footprint_source", "dtype": "str", "description": "supplied, geometry_hdf, or geometry_text_convex_hull."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source model footprint in the catalog analysis CRS."},
+        ],
+    },
+    "breakout_1d_source_centerlines": {
+        "description": "Source river centerlines keyed by globally unique model/reach identifiers.",
+        "accessor": "RasBreakout1D.catalog_sources(...).centerlines_gdf",
+        "source": "RasBreakout1D.catalog_sources()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "reach_id", "dtype": "str", "description": "Composite source-model/river/reach identifier."},
+            {"name": "river", "dtype": "str", "description": "Source HEC-RAS river name."},
+            {"name": "reach", "dtype": "str", "description": "Source HEC-RAS reach name."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source river centerline."},
+        ],
+    },
+    "breakout_1d_source_cross_sections": {
+        "description": "Source cross-section cut lines keyed by globally unique identifiers.",
+        "accessor": "RasBreakout1D.catalog_sources(...).cross_sections_gdf",
+        "source": "RasBreakout1D.catalog_sources()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "reach_id", "dtype": "str", "description": "Composite source-model/river/reach identifier."},
+            {"name": "xs_id", "dtype": "str", "description": "Composite source reach and station identifier."},
+            {"name": "river", "dtype": "str", "description": "Source HEC-RAS river name."},
+            {"name": "reach", "dtype": "str", "description": "Source HEC-RAS reach name."},
+            {"name": "station", "dtype": "str", "description": "Source HEC-RAS river station."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source cross-section GIS cut line."},
+        ],
+    },
+    "breakout_1d_reach_assignments": {
+        "description": "Best source-reach assignment for every extent candidate on one network edge.",
+        "accessor": "RasBreakout1D.plan_network_edge(...).reach_assignments_df",
+        "source": "RasBreakout1D.plan_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "reach_id", "dtype": "str | None", "description": "Best matching composite source-reach identifier."},
+            {"name": "river", "dtype": "str | None", "description": "Source HEC-RAS river name."},
+            {"name": "reach", "dtype": "str | None", "description": "Source HEC-RAS reach name."},
+            {"name": "xs_intersection_count", "dtype": "int64", "description": "Cross-section cut lines from the selected reach intersecting the edge or its tolerance buffer."},
+            {"name": "xs_measure_start", "dtype": "float64 | None", "description": "First directed edge measure represented by an intersecting cross section."},
+            {"name": "xs_measure_end", "dtype": "float64 | None", "description": "Last directed edge measure represented by an intersecting cross section."},
+            {"name": "xs_sequence", "dtype": "str", "description": "with_edge, against_edge, ambiguous, insufficient, or unavailable."},
+            {"name": "centerline_offset_mean", "dtype": "float64 | None", "description": "Mean sampled edge-to-source-centerline offset in analysis-CRS units."},
+            {"name": "status", "dtype": "str", "description": "confirmed, ambiguous, or unmatched."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable rejection or ambiguity reasons."},
+            {"name": "geometry", "dtype": "geometry | None", "description": "Selected source river centerline."},
+        ],
+    },
+    "breakout_1d_handoff_diagnostics": {
+        "description": "Cross-model centerline and cross-section eligibility checks at each planned handoff.",
+        "accessor": "RasBreakout1D.plan_network_edge(...).handoff_diagnostics_df",
+        "source": "RasBreakout1D.plan_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized network edge identifier."},
+            {"name": "seam_index", "dtype": "int64", "description": "Zero-based handoff order along the directed network edge."},
+            {"name": "upstream_geometry_id", "dtype": "str", "description": "Planned upstream source model."},
+            {"name": "downstream_geometry_id", "dtype": "str", "description": "Planned downstream source model."},
+            {"name": "upstream_reach_id", "dtype": "str | None", "description": "Confirmed upstream source reach."},
+            {"name": "downstream_reach_id", "dtype": "str | None", "description": "Confirmed downstream source reach."},
+            {"name": "centerline_distance", "dtype": "float64 | None", "description": "Minimum distance between the two selected source centerlines."},
+            {"name": "centerline_intersects", "dtype": "bool", "description": "Whether the selected source centerlines intersect."},
+            {"name": "upstream_xs_intersect_both_count", "dtype": "int64", "description": "Upstream-source cross sections intersecting both selected centerlines."},
+            {"name": "downstream_xs_intersect_both_count", "dtype": "int64", "description": "Downstream-source cross sections intersecting both selected centerlines."},
+            {"name": "upstream_xs_intersect_both_ids", "dtype": "tuple[str, ...]", "description": "Upstream-source cross-section IDs intersecting both selected centerlines."},
+            {"name": "downstream_xs_intersect_both_ids", "dtype": "tuple[str, ...]", "description": "Downstream-source cross-section IDs intersecting both selected centerlines."},
+            {"name": "cross_centerline_xs_count", "dtype": "int64", "description": "Total source cross sections intersecting both selected centerlines."},
+            {"name": "cross_centerline_xs_ids", "dtype": "tuple[str, ...]", "description": "All source cross-section IDs intersecting both selected centerlines."},
+            {"name": "max_cross_centerline_xs", "dtype": "int64", "description": "Maximum permitted count before the handoff fails closed."},
+            {"name": "handoff_eligible", "dtype": "bool", "description": "Whether the source pair passes the implemented handoff checks."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable handoff rejection reasons."},
+            {"name": "geometry", "dtype": "geometry", "description": "Provisional footprint seam point on the network edge."},
+        ],
+    },
+    "breakout_1d_assembly_station_map": {
+        "description": "Source-to-destination node provenance and restationed reach lengths for a multi-source 1D assembly.",
+        "accessor": "RasBreakout1D.assemble_network_edge(...).station_map_gdf",
+        "source": "RasBreakout1D.assemble_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "node_index", "dtype": "int64", "description": "Zero-based upstream-to-downstream destination node order."},
+            {"name": "source_geometry_id", "dtype": "str", "description": "Stable source model identifier."},
+            {"name": "source_reach_id", "dtype": "str", "description": "Composite source-model/river/reach identifier."},
+            {"name": "source_river", "dtype": "str", "description": "Original source river name."},
+            {"name": "source_reach", "dtype": "str", "description": "Original source reach name."},
+            {"name": "source_node_type", "dtype": "int64", "description": "HEC-RAS Type RM node code; 1 identifies a natural cross section."},
+            {"name": "source_station", "dtype": "str", "description": "Original source river station."},
+            {"name": "destination_river", "dtype": "str", "description": "Assembled river name."},
+            {"name": "destination_reach", "dtype": "str", "description": "Assembled reach name."},
+            {"name": "destination_station", "dtype": "str", "description": "River station recomputed from the assembled downstream terminus."},
+            {"name": "centerline_measure", "dtype": "float64", "description": "Distance downstream from the assembled centerline start."},
+            {"name": "left_length", "dtype": "float64 | None", "description": "Written LOB reach length; null for non-cross-section nodes."},
+            {"name": "channel_length", "dtype": "float64 | None", "description": "Written main-channel reach length; null for non-cross-section nodes."},
+            {"name": "right_length", "dtype": "float64 | None", "description": "Written ROB reach length; null for non-cross-section nodes."},
+            {"name": "length_policy", "dtype": "str", "description": "Source-preserved, regenerated, join-only, provisional, or terminal length treatment."},
+            {"name": "in_direct_domain", "dtype": "bool", "description": "Whether this natural cross section directly intersects the target network edge in its owned interval."},
+            {"name": "in_inundation_domain", "dtype": "bool", "description": "Whether this natural cross section belongs to the strict raster-export domain including requested overlap."},
+            {"name": "is_join_upstream", "dtype": "bool", "description": "Whether this is the upstream cross section adjacent to a source seam."},
+            {"name": "is_join_downstream", "dtype": "bool", "description": "Whether this is the downstream cross section adjacent to a source seam."},
+            {"name": "source_payload_sha256", "dtype": "str", "description": "SHA-256 of the complete source node payload after the Type RM line."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source cross-section cut line or interpolated structure point."},
+        ],
+    },
+    "breakout_1d_assembly_seams": {
+        "description": "Resolved centerline joins and join-adjacent reach-length evidence for a multi-source 1D assembly.",
+        "accessor": "RasBreakout1D.assemble_network_edge(...).seams_gdf",
+        "source": "RasBreakout1D.assemble_network_edge()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "edge_id", "dtype": "str", "description": "Adapter-normalized target network edge identifier."},
+            {"name": "seam_index", "dtype": "int64", "description": "Zero-based upstream-to-downstream seam order."},
+            {"name": "upstream_geometry_id", "dtype": "str", "description": "Source model upstream of the resolved seam."},
+            {"name": "downstream_geometry_id", "dtype": "str", "description": "Source model downstream of the resolved seam."},
+            {"name": "join_method", "dtype": "str", "description": "centerline_intersection or nearest_connector."},
+            {"name": "connector_length", "dtype": "float64", "description": "Length of the straight connection when source centerlines do not intersect."},
+            {"name": "edge_measure", "dtype": "float64", "description": "Resolved seam measure along the directed network edge."},
+            {"name": "upstream_source_measure", "dtype": "float64", "description": "Join measure on the upstream source centerline."},
+            {"name": "downstream_source_measure", "dtype": "float64", "description": "Join measure on the downstream source centerline."},
+            {"name": "upstream_source_station", "dtype": "str", "description": "Original upstream join-adjacent cross-section station."},
+            {"name": "downstream_source_station", "dtype": "str", "description": "Original downstream join-adjacent cross-section station."},
+            {"name": "upstream_destination_station", "dtype": "str", "description": "Restationed upstream join-adjacent cross section."},
+            {"name": "downstream_destination_station", "dtype": "str", "description": "Restationed downstream join-adjacent cross section."},
+            {"name": "join_left_length", "dtype": "float64", "description": "Written LOB length across the seam interval."},
+            {"name": "join_channel_length", "dtype": "float64", "description": "Centerline-derived main-channel length across the seam interval."},
+            {"name": "join_right_length", "dtype": "float64", "description": "Written ROB length across the seam interval."},
+            {"name": "length_policy", "dtype": "str", "description": "Flow-path treatment applied to the seam interval."},
+            {"name": "geometry", "dtype": "geometry", "description": "Resolved intersection point or nearest straight connector."},
+        ],
+    },
+    "hydrofabric_matches": {
+        "description": (
+            "One explicit matched, ambiguous, or unmatched row per HEC-RAS "
+            "geometry, reach, and cross section."
+        ),
+        "accessor": "RasNetworkConflation.conflate(...).matches",
+        "source": "RasNetworkConflation.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "element_type", "dtype": "str", "description": "Model element granularity: geometry, reach, or cross_section."},
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str | None", "description": "Reach identifier for reach and cross-section rows."},
+            {"name": "xs_id", "dtype": "str | None", "description": "Cross-section identifier for cross-section rows."},
+            {"name": "feature_id", "dtype": "str | None", "description": "Accepted hydrofabric identifier; null for ambiguous and unmatched rows."},
+            {"name": "best_candidate_feature_id", "dtype": "str | None", "description": "Highest-scoring candidate retained for audit even when no match is accepted."},
+            {"name": "status", "dtype": "str", "description": "Explicit matched, ambiguous, or unmatched status."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Top normalized multi-criteria score in [0, 1]."},
+            {"name": "score_margin", "dtype": "float64 | None", "description": "Top score minus runner-up score."},
+            {"name": "candidate_count", "dtype": "int64", "description": "Number of candidates evaluated for the element."},
+            {"name": "match_method", "dtype": "str", "description": "Multi-criteria resolution or explicit no-candidate method."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable supporting and status reason codes."},
+            {"name": "adapter", "dtype": "str", "description": "Hydrofabric adapter used for schema normalization."},
+            {"name": "flowpath_measure", "dtype": "float64 | None", "description": "Cross-section measure from the flowpath geometry start in analysis-CRS units."},
+            {"name": "flowpath_measure_fraction", "dtype": "float64 | None", "description": "Normalized cross-section measure from 0 at flowpath start to 1 at its end."},
+            {"name": "flowpath_measure_from_end", "dtype": "float64 | None", "description": "Cross-section measure from the flowpath geometry end in analysis-CRS units."},
+            {"name": "measure_method", "dtype": "str | None", "description": "intersection or nearest method used for an accepted cross-section measure."},
+            {"name": "offset_distance", "dtype": "float64 | None", "description": "Cross-section-to-flowpath offset in analysis-CRS units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Source HEC-RAS model-element geometry."},
+        ],
+    },
+    "hydrofabric_candidates": {
+        "description": (
+            "Ranked hydrofabric candidates with all spatial, topological, and "
+            "hydrologic score evidence."
+        ),
+        "accessor": "RasNetworkConflation.conflate(...).candidates",
+        "source": "RasNetworkConflation.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "element_type", "dtype": "str", "description": "Model element granularity: geometry, reach, or cross_section."},
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str | None", "description": "Reach identifier when applicable."},
+            {"name": "xs_id", "dtype": "str | None", "description": "Cross-section identifier when applicable."},
+            {"name": "feature_id", "dtype": "str", "description": "Candidate hydrofabric feature identifier normalized as text."},
+            {"name": "candidate_rank", "dtype": "int64", "description": "One-based score rank within the model element."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Normalized multi-criteria score in [0, 1]."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable evidence reason codes."},
+            {"name": "adapter", "dtype": "str", "description": "Hydrofabric adapter used for schema normalization."},
+            {"name": "footprint_overlap_score", "dtype": "float64", "description": "Flowpath length fraction inside the model footprint."},
+            {"name": "footprint_overlap_ratio", "dtype": "float64", "description": "Raw flowpath/model-footprint overlap ratio."},
+            {"name": "centerline_distance_score", "dtype": "float64", "description": "Normalized symmetric centerline-proximity score."},
+            {"name": "centerline_mean_distance", "dtype": "float64", "description": "Sampled symmetric mean distance in analysis-CRS units."},
+            {"name": "direction_agreement_score", "dtype": "float64 | None", "description": "Directed angular agreement score."},
+            {"name": "angular_difference_deg", "dtype": "float64 | None", "description": "Directed angular difference in degrees."},
+            {"name": "xs_intersection_score", "dtype": "float64 | None", "description": "Fraction of reach cross sections intersected by the candidate."},
+            {"name": "xs_intersection_count", "dtype": "int64", "description": "Reach cross sections intersected by the candidate."},
+            {"name": "xs_total_count", "dtype": "int64", "description": "Cross sections associated with the reach."},
+            {"name": "topological_continuity_score", "dtype": "float64 | None", "description": "Connectivity support across adjacent model reaches."},
+            {"name": "hydrologic_score", "dtype": "float64 | None", "description": "Stream-order and drainage-area support score."},
+            {"name": "stream_order", "dtype": "float64 | None", "description": "Adapter-normalized candidate stream order."},
+            {"name": "drainage_area", "dtype": "float64 | None", "description": "Adapter-normalized candidate drainage area; total upstream area is preferred when available."},
+            {"name": "sequence_consistency_score", "dtype": "float64 | None", "description": "Reach/cross-section ordering agreement along the flowpath."},
+            {"name": "to_feature_id", "dtype": "str | None", "description": "Adapter-normalized downstream edge identifier; raw nexus identity remains in to_node."},
+            {"name": "hydrosequence", "dtype": "float64 | None", "description": "Adapter-normalized hydrosequence value."},
+            {"name": "flowpath_measure", "dtype": "float64 | None", "description": "Candidate cross-section measure from flowpath start."},
+            {"name": "flowpath_measure_fraction", "dtype": "float64 | None", "description": "Candidate normalized flowpath measure."},
+            {"name": "flowpath_measure_from_end", "dtype": "float64 | None", "description": "Candidate cross-section measure from flowpath end."},
+            {"name": "measure_method", "dtype": "str | None", "description": "intersection or nearest measure method."},
+            {"name": "offset_distance", "dtype": "float64 | None", "description": "Cross-section-to-candidate offset in analysis-CRS units."},
+            {"name": "geometry", "dtype": "geometry", "description": "Candidate hydrofabric flowpath geometry."},
+        ],
+    },
+    "hydrofabric_reach_metrics": {
+        "description": (
+            "One row per HEC-RAS reach with its network-edge association, "
+            "cross-section limits, alignment metrics, coverage, and flags."
+        ),
+        "accessor": "RasNetworkConflation.conflate(...).reach_metrics",
+        "source": "RasNetworkConflation._build_reach_metrics()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "Owning HEC-RAS geometry/model identifier."},
+            {"name": "reach_id", "dtype": "str", "description": "HEC-RAS reach identifier."},
+            {"name": "feature_id", "dtype": "str | None", "description": "Accepted network-edge identifier; null unless matched."},
+            {"name": "best_candidate_feature_id", "dtype": "str | None", "description": "Best network-edge candidate retained for review."},
+            {"name": "status", "dtype": "str", "description": "Matched, ambiguous, or unmatched association state."},
+            {"name": "confidence_score", "dtype": "float64", "description": "Top multi-criteria association score."},
+            {"name": "upstream_xs_id", "dtype": "str | None", "description": "First intersecting cross section from the directed network geometry start."},
+            {"name": "downstream_xs_id", "dtype": "str | None", "description": "Last intersecting cross section from the directed network geometry start."},
+            {"name": "xs_intersection_count", "dtype": "int64", "description": "Distinct RAS cross sections intersecting the selected network edge."},
+            {"name": "coverage_start", "dtype": "float64 | None", "description": "Upstream cross-section measure divided by network-edge length."},
+            {"name": "coverage_end", "dtype": "float64 | None", "description": "Downstream cross-section measure divided by network-edge length."},
+            {"name": "coverage_ratio", "dtype": "float64 | None", "description": "Network-edge fraction between the selected XS limits."},
+            {"name": "ras_length", "dtype": "float64 | None", "description": "RAS centerline length between selected XS limits."},
+            {"name": "network_length", "dtype": "float64 | None", "description": "Network length between selected XS limits."},
+            {"name": "network_to_ras_ratio", "dtype": "float64 | None", "description": "Network length divided by RAS centerline length."},
+            {"name": "centerline_offset_count", "dtype": "int64", "description": "Cross sections contributing centerline offsets."},
+            {"name": "centerline_offset_mean", "dtype": "float64 | None", "description": "Mean RAS-centerline to network crossing offset."},
+            {"name": "centerline_offset_std", "dtype": "float64 | None", "description": "Population standard deviation of centerline offsets."},
+            {"name": "centerline_offset_min", "dtype": "float64 | None", "description": "Minimum centerline offset."},
+            {"name": "centerline_offset_max", "dtype": "float64 | None", "description": "Maximum centerline offset."},
+            {"name": "thalweg_offset_count", "dtype": "int64", "description": "Cross sections contributing thalweg offsets."},
+            {"name": "thalweg_offset_mean", "dtype": "float64 | None", "description": "Mean thalweg-point to network crossing offset."},
+            {"name": "thalweg_offset_std", "dtype": "float64 | None", "description": "Population standard deviation of thalweg offsets."},
+            {"name": "thalweg_offset_min", "dtype": "float64 | None", "description": "Minimum thalweg offset."},
+            {"name": "thalweg_offset_max", "dtype": "float64 | None", "description": "Maximum thalweg offset."},
+            {"name": "ambiguous", "dtype": "bool", "description": "Whether candidate scores are too close to resolve."},
+            {"name": "eclipsed", "dtype": "bool", "description": "Whether no two distinct XS limits intersect the selected edge."},
+            {"name": "connectivity_evaluable", "dtype": "bool", "description": "Whether normalized network node fields permit divergence review."},
+            {"name": "divergent", "dtype": "bool", "description": "Whether the selected edge belongs to or terminates at a network split."},
+            {"name": "insufficient_coverage", "dtype": "bool", "description": "Whether XS limits span less than the configured minimum edge fraction."},
+            {"name": "flagged", "dtype": "bool", "description": "Any ambiguous, unmatched, eclipsed, divergent, or insufficient-coverage condition."},
+            {"name": "reason_codes", "dtype": "tuple[str, ...]", "description": "Machine-readable review reasons."},
+            {"name": "geometry", "dtype": "geometry", "description": "HEC-RAS reach centerline geometry."},
+        ],
+    },
+    "hydrofabric_huc_intersections": {
+        "description": "Model-footprint intersections with an optional HUC polygon layer.",
+        "accessor": "RasNetworkConflation.conflate(...).huc_intersections",
+        "source": "RasNetworkConflation.conflate()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "geometry_id", "dtype": "str", "description": "HEC-RAS geometry/model identifier."},
+            {"name": "huc_id", "dtype": "str", "description": "HUC identifier preserved as text."},
+            {"name": "intersection_area", "dtype": "float64", "description": "Intersection area in squared analysis-CRS units."},
+            {"name": "geometry_area_fraction", "dtype": "float64 | None", "description": "Fraction of the model footprint within the HUC."},
+            {"name": "huc_area_fraction", "dtype": "float64 | None", "description": "Fraction of the HUC within the model footprint."},
+            {"name": "geometry", "dtype": "geometry", "description": "Footprint/HUC intersection geometry."},
         ],
     },
     "hdf_result_frames": {

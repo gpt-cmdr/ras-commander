@@ -7,6 +7,7 @@ import pytest
 
 from ras_commander import RasDss
 from ras_commander.RasExamples import RasExamples
+from ras_commander._rasmap_schema import create_rasmap_dataframe
 from ras_commander.sources.federal.sciencebase_validation import (
     ScienceBaseValidation,
 )
@@ -1046,6 +1047,97 @@ def test_dependency_inspection_rejects_absolute_and_external_paths(tmp_path):
         "absolute_reference",
         "external_reference",
     }
+
+
+def test_rasmap_dependency_inspection_reports_document_failure(
+    monkeypatch,
+    tmp_path,
+):
+    rasmap_path = tmp_path / "Model.rasmap"
+    ras_object = SimpleNamespace(
+        prj_file=tmp_path / "Model.prj",
+        rasmap_df=create_rasmap_dataframe(
+            rasmap_path=rasmap_path,
+            rasmap_status="failed",
+            rasmap_error="ParseError: malformed XML",
+        ),
+    )
+
+    def fail_layer_lookup(*args, **kwargs):
+        raise AssertionError("failed rasmap must be gated before layer lookup")
+
+    monkeypatch.setattr(
+        "ras_commander.sources.federal.sciencebase_validation."
+        "RasMap.list_terrain_layers",
+        fail_layer_lookup,
+    )
+    monkeypatch.setattr(
+        "ras_commander.sources.federal.sciencebase_validation."
+        "RasMap.list_land_classification_layers",
+        fail_layer_lookup,
+    )
+    issues = []
+
+    ScienceBaseValidation._inspect_rasmap_dependencies(
+        ras_object,
+        issues,
+        tmp_path,
+    )
+
+    assert issues == [
+        {
+            "code": "rasmap_parse_failed",
+            "kind": "rasmap",
+            "owner": str(ras_object.prj_file),
+            "path": str(rasmap_path),
+            "detail": "ParseError: malformed XML",
+        }
+    ]
+
+
+def test_rasmap_dependency_inspection_reports_partial_field_errors(
+    monkeypatch,
+    tmp_path,
+):
+    rasmap_path = tmp_path / "Model.rasmap"
+    ras_object = SimpleNamespace(
+        prj_file=tmp_path / "Model.prj",
+        rasmap_df=create_rasmap_dataframe(
+            rasmap_path=rasmap_path,
+            rasmap_status="parsed_with_errors",
+            rasmap_field_errors={
+                "terrain_hdf_path": "ValueError: malformed terrain"
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        "ras_commander.sources.federal.sciencebase_validation."
+        "RasMap.list_terrain_layers",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        "ras_commander.sources.federal.sciencebase_validation."
+        "RasMap.list_land_classification_layers",
+        lambda *args, **kwargs: pd.DataFrame(),
+    )
+    issues = []
+
+    ScienceBaseValidation._inspect_rasmap_dependencies(
+        ras_object,
+        issues,
+        tmp_path,
+    )
+
+    assert issues == [
+        {
+            "code": "rasmap_field_parse_failed",
+            "kind": "rasmap",
+            "owner": str(ras_object.prj_file),
+            "path": str(rasmap_path),
+            "field": "terrain_hdf_path",
+            "detail": "ValueError: malformed terrain",
+        }
+    ]
 
 
 def test_validation_containment_does_not_resolve_mapped_paths(monkeypatch, tmp_path):

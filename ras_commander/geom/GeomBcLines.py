@@ -47,7 +47,6 @@ ras_commander.geom.GeomReferenceFeatures.add_reference_lines : Sibling
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -55,6 +54,7 @@ import numpy as np
 
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
+from .GeomParser import GeomParser
 from .GeomReferenceFeatures import _format_coord_line
 
 logger = get_logger(__name__)
@@ -285,11 +285,6 @@ class GeomBcLines:
         if not lines:
             raise ValueError("lines must contain at least one BC line spec")
 
-        # Backup
-        backup_path = Path(str(geom_path) + ".bak")
-        shutil.copy2(geom_path, backup_path)
-        logger.debug(f"Created backup: {backup_path}")
-
         with open(geom_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
         line_ending = _detect_line_ending(file_lines)
@@ -372,8 +367,12 @@ class GeomBcLines:
 
         file_lines[insert_idx:insert_idx] = new_text_lines
 
-        with open(geom_path, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        backup_path = GeomParser.safe_write_geometry(
+            geom_path,
+            file_lines,
+            create_backup=True,
+        )
+        logger.debug("Created backup: %s", backup_path)
 
         inserted = [name for name, _, _ in prepared if name not in replaced]
         logger.info(
@@ -433,9 +432,6 @@ class GeomBcLines:
         if not clean_name:
             raise ValueError("name is required")
 
-        backup_path = Path(str(geom_path) + ".bak")
-        shutil.copy2(geom_path, backup_path)
-
         with open(geom_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
 
@@ -448,8 +444,12 @@ class GeomBcLines:
         lines_removed = end - start
         del file_lines[start:end]
 
-        with open(geom_path, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        backup_path = GeomParser.safe_write_geometry(
+            geom_path,
+            file_lines,
+            create_backup=True,
+        )
+        logger.debug("Created backup: %s", backup_path)
 
         logger.info(
             "Deleted BC line %s from %s (%d lines)",
@@ -508,9 +508,6 @@ class GeomBcLines:
         if clean_old == clean_new:
             raise ValueError("old_name and new_name are identical")
 
-        backup_path = Path(str(geom_path) + ".bak")
-        shutil.copy2(geom_path, backup_path)
-
         with open(geom_path, "r", encoding="utf-8", errors="ignore", newline="") as f:
             file_lines = f.readlines()
         line_ending = _detect_line_ending(file_lines)
@@ -531,8 +528,12 @@ class GeomBcLines:
         # ending.
         file_lines[start] = f"{_BC_NAME_KEY}{clean_new:<40s}{line_ending}"
 
-        with open(geom_path, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        backup_path = GeomParser.safe_write_geometry(
+            geom_path,
+            file_lines,
+            create_backup=True,
+        )
+        logger.debug("Created backup: %s", backup_path)
 
         logger.info(
             "Renamed BC line %s -> %s in %s",

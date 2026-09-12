@@ -180,6 +180,7 @@ check_*.py
 !ras_commander/check/check_*.py
 fix_*.py
 run_*.py
+!scripts/qualification/execution_evidence/run_io.py
 !scripts/benchmarks/run_raster_profile_matrix.py
 test_*.py
 !tests/test_*.py

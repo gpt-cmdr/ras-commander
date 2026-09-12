@@ -75,15 +75,18 @@ Functions in RasPrj that are not part of the class:
         
         
 """
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple, Optional
-import logging
 from ras_commander.LoggingConfig import get_logger
 from ras_commander.Decorators import log_call
+from ras_commander._rasmap_schema import (
+    create_rasmap_dataframe,
+    expected_rasmap_path,
+    rasmap_dataframe_is_usable,
+)
 
 logger = get_logger(__name__)
 
@@ -129,6 +132,35 @@ class RasPrj:
         self.project_crs = None
         self.project_crs_source = None
         self._plan_flow_prefixes = {}
+
+    @staticmethod
+    @log_call
+    def get_project_units(project_file: Union[str, Path]) -> Optional[str]:
+        """Return the HEC-RAS project length units as ``"ft"`` or ``"m"``.
+
+        HEC-RAS project files normally use a bare ``English Units`` or
+        ``SI Units`` marker. Some generated projects instead use the legacy
+        boolean form ``SI Units=<bool>``. Both representations are parsed
+        case-insensitively; unreadable files or unknown values return ``None``.
+        """
+        path = Path(project_file)
+        try:
+            with open(path, encoding='utf-8', errors='replace') as stream:
+                for raw_line in stream:
+                    line = raw_line.strip().casefold()
+                    if line == 'english units':
+                        return 'ft'
+                    if line == 'si units':
+                        return 'm'
+                    if line.startswith('si units='):
+                        value = line.split('=', 1)[1].strip()
+                        if value in {'1', 'true', 'yes', 'on'}:
+                            return 'm'
+                        if value in {'0', 'false', 'no', 'off'}:
+                            return 'ft'
+        except OSError as exc:
+            logger.debug("Could not read project units from %s: %s", path, exc)
+        return None
 
     @log_call
     def initialize(
@@ -206,24 +238,37 @@ class RasPrj:
         self.boundaries_df = self.get_boundary_conditions()
         
         # Load RASMapper data if available
+        # Import here to avoid circular imports. Keep import failure distinct
+        # from an ImportError raised while initializing a successfully imported
+        # RasMap implementation.
         try:
-            # Import here to avoid circular imports
             from .RasMap import RasMap
-            self.rasmap_df = RasMap.initialize_rasmap_df(self)
-        except ImportError:
-            logger.warning("RasMap module not available. RASMapper data will not be loaded.")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
-        except Exception as e:
-            logger.error(f"Error initializing RASMapper data: {e}")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path',
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
+        except ImportError as e:
+            logger.warning(
+                "RasMap module not available. RASMapper data will not be loaded: %s",
+                e,
+            )
+            self.rasmap_df = create_rasmap_dataframe(
+                rasmap_path=expected_rasmap_path(
+                    self.project_folder,
+                    self.project_name,
+                ),
+                rasmap_status="failed",
+                rasmap_error=f"ImportError: {e}",
+            )
+        else:
+            try:
+                self.rasmap_df = RasMap.initialize_rasmap_df(self)
+            except Exception as e:
+                logger.error(f"Error initializing RASMapper data: {e}")
+                self.rasmap_df = create_rasmap_dataframe(
+                    rasmap_path=expected_rasmap_path(
+                        self.project_folder,
+                        self.project_name,
+                    ),
+                    rasmap_status="failed",
+                    rasmap_error=f"{type(e).__name__}: {e}",
+                )
 
         if load_hdf_metadata:
             self.refresh_project_crs()
@@ -254,7 +299,10 @@ class RasPrj:
                 ).dropna()
             )
             logger.info(f"Geometry HDF files found: {geometry_hdf_count}")
-            logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
+            logger.info(
+                "RASMapper data loaded: %s",
+                rasmap_dataframe_is_usable(self.rasmap_df),
+            )
             logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
 
     @log_call
@@ -1228,7 +1276,7 @@ class RasPrj:
         return (self.project_folder / path_value).resolve(strict=False)
 
     def _get_rasmap_scalar_path(self, column: str) -> Optional[Path]:
-        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+        if not rasmap_dataframe_is_usable(getattr(self, 'rasmap_df', None)):
             return None
 
         if column not in self.rasmap_df.columns:
@@ -1241,7 +1289,7 @@ class RasPrj:
         return self._resolve_candidate_path(paths[0])
 
     def _get_rasmap_list_paths(self, column: str) -> List[Path]:
-        if getattr(self, 'rasmap_df', None) is None or self.rasmap_df.empty:
+        if not rasmap_dataframe_is_usable(getattr(self, 'rasmap_df', None)):
             return []
 
         if column not in self.rasmap_df.columns:
@@ -2493,10 +2541,11 @@ def init_ras_project(
                                           Use" dialog the first time it runs for a Windows
                                           user+version, which blocks headless/COM launches.
                                           When False (default), init only WARNS if the TCU
-                                          has not been accepted. When True, acceptance is
-                                          recorded now for the current user (opt-in registry
-                                          write) so unattended runs do not block. See
-                                          ras_commander.RasTcu.
+                                          has not been accepted. When True, ras-commander
+                                          explicitly attempts to seed an accepted registry
+                                          subtree and verifies the release-specific sentinel.
+                                          If verification fails, interactive acceptance is
+                                          still required. See ras_commander.RasTcu.
         load_hdf_metadata (bool, default=True): If False, initialize project
                                                 tables without opening HDF or
                                                 raster datasets for geometry
@@ -2546,7 +2595,7 @@ def init_ras_project(
                 error_msg = f"The file does not appear to be a valid HEC-RAS project file (missing 'Proj Title='): {input_path}"
                 logger.error(error_msg)
                 raise ValueError(f"{error_msg}. Please provide a valid HEC-RAS .prj file.")
-            logger.debug(f"Validated .prj file contains 'Proj Title=' marker")
+            logger.debug("Validated .prj file contains 'Proj Title=' marker")
         except Exception as e:
             error_msg = f"Error validating .prj file: {e}"
             logger.error(error_msg)
@@ -2721,22 +2770,20 @@ def init_ras_project(
     # HEC-RAS Terms & Conditions for Use (TCU) check. By default this is read-only:
     # it warns (once) when the TCU has not been accepted for this Windows user+version,
     # because the first headless/COM launch would otherwise block on a modal VB6 dialog.
-    # When accept_tcu=True, acceptance is recorded now (opt-in registry write) so the
-    # project is ready for unattended runs. Never raises; never writes unless asked.
+    # When accept_tcu=True, registry seeding is attempted (opt-in write) and then
+    # revalidated for the exact release. Never raises; never writes unless asked.
     try:
         from .RasTcu import RasTcu
         _tcu = RasTcu.status(ras_object=ras_object)
         if _tcu.accepted is False:
             if accept_tcu:
-                RasTcu.accept(ras_object=ras_object)
-            else:
+                _tcu = RasTcu.accept(ras_object=ras_object)
+            if _tcu.accepted is not True:
                 logger.warning(
                     "HEC-RAS %s Terms & Conditions for Use have NOT been accepted for the "
                     "current Windows user. The first headless/COM launch will block on a modal "
-                    "\"Terms and Conditions for Use\" dialog. Resolve it once by either: "
-                    "(a) opening HEC-RAS %s in the GUI and clicking \"I Agree\", "
-                    "(b) calling ras_commander.RasTcu.accept(), or "
-                    "(c) passing accept_tcu=True to init_ras_project(). "
+                    "\"Terms and Conditions for Use\" dialog. Open HEC-RAS %s in the GUI "
+                    "and click \"I Agree\" for that exact installed release. "
                     "Terms: https://www.hec.usace.army.mil/software/hec-ras/",
                     _tcu.version or "", _tcu.version or "",
                 )
@@ -2814,15 +2861,15 @@ def get_ras_exe(ras_version=None):
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number (e.g., "7.0") or 
-                                     a full path to the HEC-RAS executable 
+        ras_version (str, optional): Either a version number (e.g., "7.0.1") or
+                                     a full path to the HEC-RAS executable
                                      (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
     Returns:
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
-        - HEC-RAS version numbers include: "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
+        - HEC-RAS version numbers include: "7.1", "7.0.1", "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
         - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
@@ -2834,17 +2881,17 @@ def get_ras_exe(ras_version=None):
             return ras.ras_exe_path
         else:
             default_path = "Ras.exe"
-            logger.debug(f"No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
-            logger.warning(f"HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
+            logger.debug("No HEC-RAS version specified and global 'ras' object not initialized or missing ras_exe_path.")
+            logger.warning("HEC-RAS is not installed or version not specified. Running HEC-RAS will fail unless a valid installed version is specified.")
             return default_path
 
     discovered_versions = "not checked"
     candidate_paths = []
     
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
-    # This list matches the exact folder names on disk (verified 2026-04-19)
+    # This list matches the exact folder names on disk (verified 2026-08-29)
     ras_version_folders = [
-        "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "7.1", "7.1.0", "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1.0", "4.0"
     ]
@@ -2883,6 +2930,9 @@ def get_ras_exe(ras_version=None):
         "6.7.0": "6.7 Beta 5", # Legacy dotted normalization rewrites 6.70 to 6.7.0
         "67": "6.7 Beta 5",
         "70": "7.0",
+        "701": "7.0.1",
+        "7.1.0": "7.1",
+        "71": "7.1",
     }
 
     # Check if input is a direct path to an executable

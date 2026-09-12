@@ -66,7 +66,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.99.1",
+    version="0.99.2",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
@@ -80,6 +80,9 @@ setup(
             "InvokeRas5LandCover.ps1",
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.cs",
+            "RasMapperTerrainExportHelper.exe",
+            "RasMapperTerrainExportHelper.cs",
+            "BuildRasMapperTerrainExportHelper.ps1",
         ],
     },
     python_requires='>=3.10',
@@ -125,7 +128,11 @@ setup(
             'azure-mgmt-compute>=30.0',
         ],
         # GUI automation and screenshot capture (Windows only)
-        'gui': ['Pillow>=9.0', 'comtypes>=1.4.0; sys_platform == "win32"'],
+        'gui': [
+            'Pillow>=9.0',
+            'psutil>=5.6.6',
+            'comtypes>=1.4.0; sys_platform == "win32"',
+        ],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
         # Precipitation enhancements

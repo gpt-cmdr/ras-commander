@@ -10,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from ras_commander import RasMap  # noqa: E402
 from ras_commander._geometry_association import (  # noqa: E402
+    list_registered_rasmap_layers,
     validate_geometry_extents_for_2d_classification,
 )
 
@@ -34,6 +35,29 @@ def _make_geometry_hdf(path: Path) -> Path:
     with h5py.File(path, "w") as hdf_file:
         hdf_file.create_group("Geometry")
     return path
+
+
+def test_registered_rasmap_layers_include_legacy_landcover(tmp_path):
+    project_dir = _make_project(tmp_path)
+    legacy_landcover = _touch(project_dir / "Land" / "LegacyLandCover.tif")
+    (project_dir / "AssocProject.rasmap").write_text(
+        (
+            "<RASMapper>\n"
+            "  <MapLayers>\n"
+            '    <Layer Name="Legacy Land" Type="LandCover" '
+            'Filename=".\\Land\\LegacyLandCover.tif" />\n'
+            "  </MapLayers>\n"
+            "</RASMapper>\n"
+        ),
+        encoding="utf-8",
+    )
+
+    layers = list_registered_rasmap_layers(project_dir)
+
+    assert len(layers) == 1
+    assert layers[0]["type"] == "LandCover"
+    assert layers[0]["layer_kind"] == "landcover"
+    assert Path(layers[0]["resolved_path"]) == legacy_landcover
 
 
 def test_rasmap_associate_geometry_layers_writes_hdf_attrs_with_layer_names(tmp_path):

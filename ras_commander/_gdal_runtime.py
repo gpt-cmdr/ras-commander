@@ -215,9 +215,22 @@ def ensure_python_gdal_junction(
             continue
 
         if result.returncode == 0:
-            logger.info("Created GDAL junction for HEC-RAS GDAL bridge")
-            logger.debug("Created GDAL junction: %s -> %s", gdal_junction, paths.gdal_root)
-            ok = python_gdal_bridge_is_usable(target_python_dir) and ok
+            usable = python_gdal_bridge_is_usable(target_python_dir)
+            if usable:
+                logger.info("Created GDAL junction for HEC-RAS GDAL bridge")
+                logger.debug(
+                    "Created GDAL junction: %s -> %s",
+                    gdal_junction,
+                    paths.gdal_root,
+                )
+            else:
+                logger.warning(
+                    "GDAL junction command reported success but %s is not "
+                    "usable; Wine-hosted callers should prepare this "
+                    "task-local bridge from the native Linux host",
+                    gdal_junction,
+                )
+            ok = usable and ok
             continue
 
         logger.error(

@@ -2,6 +2,146 @@
 
 Classes for parsing and modifying HEC-RAS geometry files.
 
+## Unified Cross-Section Points
+
+`RasCrossSections.get_points(project, geometry)` exports the same stable point
+schema from a plain-text `.g##` geometry or compiled `.g##.hdf`. Pass a
+`RasPrj`, project folder, or `.prj` file for `project`; pass a geometry number,
+title, text path, or HDF path for `geometry`. `source="auto"` prefers an
+available HDF for project geometry selectors, while an explicit source path
+keeps its source type.
+
+```python
+from ras_commander import RasCrossSections
+
+points = RasCrossSections.get_points("Muncie.prj", "01")
+points.to_csv("muncie-xs-points.csv", index=False)
+```
+
+The frame includes model/geometry/reach/XS identifiers; exact river, reach, and
+river-station strings; native and station order; cut-line relative distance;
+XYZ; Manning's n and bank fields; horizontal CRS/units; vertical units/datum;
+`vertical_units_source`; and source/extraction provenance. Native elevations are preserved by default.
+A vertical datum is never inferred from a horizontal CRS or a model centroid.
+When the source does not store a datum, pass `vertical_datum=` explicitly;
+`vertical_units=` is the highest-priority override, followed by the full
+project's text `.prj` marker. A direct `HdfXsec.get_xs_coords()` call uses only
+genuinely explicit HDF vertical-unit metadata and does not infer units from
+generic HDF unit-system flags. The source column reports `explicit`,
+`project_text`, `geometry_hdf_explicit`, or `unknown`.
+
+The identifiers are deterministic within one export; collection-wide model
+identity remains the responsibility of the consuming catalog. Prefer Parquet
+for large exports because the complete transform-provenance JSON is repeated
+per point and can make CSV files unnecessarily large.
+
+Vertical conversion is opt-in through `VerticalTransform`. Use either an exact
+PROJ pipeline or explicit source and target 3D/compound CRSs. The operation is
+run against every point's own X/Y/Z coordinate, and the requested operation,
+resolved PROJ definition, datum/unit labels, and PROJ/pyproj versions are
+stored in `vertical_transform_provenance` and `DataFrame.attrs`.
+
+```python
+from ras_commander import RasCrossSections, VerticalTransform
+
+transform = VerticalTransform(
+    source_vertical_datum="NAVD88",
+    target_vertical_datum="Local project datum",
+    source_vertical_units="ft",
+    target_vertical_units="ft",
+    pipeline="+proj=pipeline +step +proj=affine +zoff=1.25",
+)
+
+adjusted = RasCrossSections.get_points(
+    "Muncie.prj",
+    "01",
+    vertical_datum="NAVD88",
+    vertical_transform=transform,
+)
+```
+
+An affine offset is shown only to make the explicit operation easy to inspect.
+For geodetic vertical transformations, use the project-approved PROJ pipeline
+or full compound CRS definitions and confirm required grid files are installed.
+
+## RAS Mapper Reach-Length QA
+
+`RasGeometryCompute.assess_flow_path_policy()` determines whether a joined 1D
+reach may safely regenerate its overbank flow paths. It copies the whole project,
+forces RAS Mapper to regenerate flow paths on the copy, recomputes LOB/channel/ROB
+reach lengths, and compares them with the stored values. The source project is
+never modified.
+
+```python
+from ras_commander import RasGeometryCompute
+
+policy = RasGeometryCompute.assess_flow_path_policy(
+    "JoinedModel.g01.hdf",
+    tolerance_fraction=0.01,
+)
+
+print(policy.recommended_policy)
+display(policy.reach_metrics_df)
+display(policy.xs_metrics_df)
+```
+
+The recommendation is `regenerate_and_recompute` only when every usable LOB and
+ROB interval reproduces its stored length within 1%. Otherwise it is
+`preserve_and_recompute_only_at_join_boundary`. The preserve policy is also selected
+when no source flow paths span a reach but its stored overbank lengths differ
+from the channel lengths. This prevents an automatically generated path from
+silently replacing evidence of intentionally different overbank routing.
+
+For a provisional joined reach, pass the two cross sections adjacent to the
+join. The method returns exactly one regenerated left and right segment clipped
+between those cut lines. Save the review evidence directly as GeoParquet when
+desired:
+
+```python
+policy = RasGeometryCompute.assess_flow_path_policy(
+    "JoinedModel.g01.hdf",
+    join_upstream_xs=("Walnut", "Main", "5304.8"),
+    join_downstream_xs=("Walnut", "Main", "4884.4"),
+    review_segments_path="working/walnut_join_flow_paths.parquet",
+)
+
+display(policy.join_segments_gdf[["side", "length", "geometry"]])
+```
+
+Join selectors may use the full-precision restationed values returned by
+`RasBreakout1D.assemble_network_edge().seams_gdf`. Compiled geometry HDF files
+can store those values at a shorter displayed precision; the selector accepts a
+unique match within one unit of that displayed precision and still fails closed
+when more than one cross section could match.
+
+The clipped segment lengths supply only the new join interval's LOB/ROB values;
+the remaining stored source lengths stay unchanged under the preserve policy.
+The returned geometries should be retained for visual review.
+
+`audit_main_channel_lengths()` is the independent, read-only informative QA
+check. It accepts either a plain-text `.g##` geometry or a compiled `.g##.hdf`,
+measures the distance between adjacent cross-section intersections along the
+river centerline, and compares that distance with the stored channel reach
+length. It flags non-terminal intervals outside the supplied relative tolerance
+or with an invalid centerline intersection.
+
+```python
+channel_audit = RasGeometryCompute.audit_main_channel_lengths(
+    "WALNUT 0229.g01",
+    tolerance_fraction=0.01,
+)
+display(channel_audit[channel_audit["main_channel_flagged"]])
+```
+
+These APIs follow HEC's documented distinction: channel length comes from the
+river line, while LOB/ROB lengths come from flow paths. Automatically generated
+flow paths are review starting points rather than reconstructions of engineering
+judgment. See the official HEC-RAS Mapper pages for
+[Cross Sections](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/cross-sections)
+[Rivers](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/rivers),
+[River Station Markers](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/river-station-markers),
+and [Flow Path Lines](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/flow-path-lines).
+
 ## GeomProjection
 
 Model geometry reprojection helpers for copied HEC-RAS projects and plain-text
@@ -163,6 +303,7 @@ reference-line output.
 
 - `add_reference_lines(geom_file, lines, storage_area)` - Insert manually
   supplied reference lines into a `.g##` file
+- `replace_reference_lines(geom_file, storage_area, reference_lines, *, expected_existing_names=..., create_backup=True)` - Atomically replace or remove one existing 2D area's complete reference-line collection while preserving other areas; returns the backup path, or `None` when backups are disabled
 - `generate_reference_lines_from_longitudinal_line(...)` - Generate
   transverse reference-line dictionaries at regular station intervals along a
   named longitudinal line
@@ -199,10 +340,17 @@ back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
 Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
 utilities.
 
+### Domain and Mesh Methods
+
+- `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
+- `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
+- `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations.
+
 ### Refinement Region Methods
 
 - `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
 - `add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)` - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through `add_refinement_region()`, and return FID/name/spacing mappings.
+- `replace_refinement_regions(geom_number, regions, expected_existing_names=..., ...)` - Atomically replace or remove the complete HDF refinement-region collection, with an optional optimistic-concurrency guard.
 - `get_refinement_regions(geom_number)` - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.
 - `set_refinement_region_spacing(geom_number, spacing_dx, ...)` - Update spacing for one or more existing refinement regions.
 - `set_refinement_region_name(geom_number, new_name, ...)` - Rename an existing refinement region.
@@ -359,6 +507,17 @@ Storage area and 2D flow area geometry parsing and writing.
 - `get_2d_flow_area_settings(geom_file)` - Read 2D flow area computation settings
 - `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
 - `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
+- `replace_breaklines(geom_file, flow_area_name, breaklines, expected_existing_names=..., ...)` - Atomically replace the geometry-global breakline collection while preserving supplied near/far spacing, near-repeat, and protection-radius values.
+
+## MeshRegenerationWorkflow
+
+Exact RAS Mapper geometry import and legacy mesh-regeneration GUI workflows.
+
+### Methods
+
+- `refresh_geometry_hdf_from_text(geom_number=..., geometry_name=..., flow_area_name=..., ras_object=..., ...)` - Transactionally displace one exact geometry HDF, let the explicitly initialized HEC-RAS version rebuild it from task-local `.g##` text, validate the exact 2D perimeter and sibling-HDF isolation, and roll back on failure. This imports geometry features but does not create computation cells.
+- `regenerate_mesh(geom_number=..., geometry_name=..., flow_area_name=..., ras_object=..., ...)` - Open/save and validate an already-current exact geometry and compiled mesh.
+- `regenerate_mesh_iterative(...)` - Legacy retry workflow; exact geometry selectors are supported and no first-registration fallback is used.
 
 ## GeomLevee
 

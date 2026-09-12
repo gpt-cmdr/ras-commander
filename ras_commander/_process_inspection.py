@@ -394,6 +394,53 @@ def match_plan_processes(
                 plan_path,
                 process.working_directory,
             )
+            # HEC-RAS 5.x accepts only ``Ras.exe project.prj -c`` and reads
+            # Current Plan from that project. Require the entire three-token
+            # signature: a different explicit plan or a project-name prefix
+            # must never fall through to this form.
+            project_only = (
+                len(process.command_line) == 3
+                and _command_has_exact_path(
+                    process.command_line[1:2],
+                    project_path,
+                    process.working_directory,
+                )
+                and _command_has_exact_marker(process.command_line[2:], "-c")
+            )
+            if project_only and not matched:
+                try:
+                    before = project_path.stat()
+                    project_bytes = project_path.read_bytes()
+                    after = project_path.stat()
+                    if (before.st_size, before.st_mtime_ns) != (
+                        after.st_size, after.st_mtime_ns
+                    ):
+                        raise ValueError("Project changed while reading Current Plan")
+                    declarations = [
+                        line.split(b"=", 1)[1].strip().lower()
+                        for line in project_bytes.splitlines()
+                        if re.match(rb"^[ \t]*Current Plan[ \t]*=", line, re.I)
+                    ]
+                    if declarations != [f"p{plan_number}".encode("ascii")]:
+                        raise ValueError(
+                            "Project-only launcher has a missing, conflicting, "
+                            "or different Current Plan declaration"
+                        )
+                except (OSError, ValueError) as error:
+                    # A launcher for this exact project still exists. Do not
+                    # signal it without a positive plan binding, or claim the
+                    # project is quiescent and rewrite Current Plan underneath it.
+                    identity_errors.append(
+                        RasProcessQueryError(
+                            pid=process.pid,
+                            operation="resolve_project_current_plan",
+                            reason_code="project_current_plan_identity_unavailable",
+                            exception_type=type(error).__name__,
+                            detail=str(error),
+                        )
+                    )
+                else:
+                    matched = True
         elif name in {"rassteady.exe", "steady.exe"}:
             # Both legacy and modern steady solvers receive the exact .rNN
             # run file.  A basename or partial token is never sufficient.

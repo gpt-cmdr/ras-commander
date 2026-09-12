@@ -11,6 +11,7 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 ## Core Module Groups
 
 - Project management: `RasPrj`, `init_ras_project()`
+- Network conflation: `RasNetworkConflation`, `NetworkConflationResult`, and `NetworkAdapter` are the generic network-to-RAS API; keep NWM/NextGen behavior in their adapters rather than the core workflow.
 - Plan execution: `RasCmdr`
 - Plan and model files: `RasPlan`, `RasMap`, `RasControl` (legacy COM execution, including exact Controller identity, blocking batch compute, and owned-process cleanup), `RasUnsteady` (includes BC CRUD: `delete_boundary()`; IC method selection: `get_initial_flow_method()`, `set_initial_flow_method()`, `get_prior_ws_filename()`, `set_prior_ws_filename()`; IC table: `get_initial_conditions()`, `set_initial_conditions()`, `validate_initial_flow_stations()`; Storage Area IC: `get_initial_storage_elevations()`, `set_initial_storage_elevation()`, `get_min_storage_elevations()`; IC from Output: `set_ic_from_output_profile()`; Non-Newtonian: `get_non_newtonian_method()`, `set_non_newtonian_method()`, `get_non_newtonian_concentration()`, `set_non_newtonian_concentration()`, `get_non_newtonian_shear()`, `set_non_newtonian_shear()`, `get_non_newtonian_herschel_bulkley()`, `set_non_newtonian_herschel_bulkley()`, `get_non_newtonian_clastic()`, `set_non_newtonian_clastic()`; Gate Openings: `get_gate_openings()`, `set_gate_openings()`; Groundwater Interflow: `get_groundwater_interflow()`, `set_groundwater_interflow()`; Navigation Dam: `get_navigation_dam()`, `set_navigation_dam()`; Rule Operations: `get_rules_bc()`, `set_rules_bc()`; Sediment Output: `get_sediment_output_variables()`, `set_sediment_output_variables()` — request optional per-cell 2D sediment outputs such as active-layer gradation, read back via `HdfResultsSediment`)
 - Validation framework: `RasValidation`
@@ -20,11 +21,22 @@ This file is the canonical local instruction file for the `ras_commander/` packa
 - HDF access: `Hdf*` classes and `ras_commander/hdf/`
 - USGS IC generation: `usgs/initial_conditions.py` (`generate_ic_from_usgs()`: auto-discover gauges, match to XS, generate IC table from USGS snapshot)
 - Domain subpackages: `geom/`, `remote/`, `usgs/`, `check/`, `dss/`, `fixit/`, `precip/`, `gui/`, `terrain/`
+- Terrain derivatives: `RasTerrain.export_rasmapper_terrain()` is the production
+  path for a bounded, single-GeoTIFF export of an exact registered RAS Mapper
+  terrain. It preserves native source order, stitches, masks, and optional
+  vector modifications, returns a `TerrainExportResult`, and is qualified on
+  Windows and Wine for HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1. Keep
+  `RasTerrainMod.compute_modified_terrain_raster()` is a deprecated row-sampled
+  compatibility path scheduled for removal in 1.1; do not use it for new work
+  or as the production consolidation fallback.
 
 ## Coding Rules
 
 - Prefer the existing static-class pattern. Most `Ras*` and `Hdf*` classes should be called directly, not instantiated.
 - Use DataFrame-backed project metadata first. Prefer `ras.plan_df`, `ras.geom_df`, `ras.flow_df`, `ras.unsteady_df`, `ras.boundaries_df`, and related helpers over ad hoc filesystem scanning.
+- `rasmap_df` is always one row; use `rasmap_status` (or the shared schema
+  health helper), never row count, `.empty`, or non-`None`, to decide whether
+  parsed values are usable.
 - Use `pathlib.Path` consistently for file paths.
 - Keep imports ordered `stdlib -> third-party -> local`.
 - Public functions should use the repo logging pattern with `get_logger()` and `@log_call`.

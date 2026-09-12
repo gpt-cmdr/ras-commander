@@ -23,7 +23,7 @@ Create HEC-RAS terrain files (`.hdf`) programmatically. These files store multi-
 
 | Class | Purpose |
 |-------|---------|
-| `RasTerrain` | Terrain HDF creation, VRT conversion via RasProcess.exe CLI |
+| `RasTerrain` | Terrain HDF creation plus native registered-terrain export |
 | `Usgs3depAws` | USGS 3DEP elevation tile download from AWS S3 |
 | `RasTerrainMod` | Terrain modification analysis via pythonnet (cut/fill, no-net-fill) |
 
@@ -129,6 +129,19 @@ RasMap.add_terrain_layer(
     rasmap_path=Path("Project.rasmap"),
     layer_name="MyTerrain"
 )
+
+# Export one exact registered terrain through RAS Mapper itself
+export = RasTerrain.export_rasmapper_terrain(
+    "Project.prj",
+    Path("exports/terrain-window-2x.tif"),
+    terrain_name="MyTerrain",
+    extent=(100000.0, 200000.0, 101000.0, 201000.0),
+    downsample_factor=2,
+    rasterize_modifications=True,
+    hecras_version="6.6",
+)
+if not export:
+    raise RuntimeError(export.error)
 ```
 
 ## Troubleshooting
@@ -210,4 +223,13 @@ ev = RasTerrainMod.get_terrain_volume_elevation(
 
 ---
 
-**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` for terrain creation, `RasTerrainMod.get_terrain_profile()` for sampling terrain with modifications. Register terrains with `RasMap.add_terrain_layer()`. For cut/fill: use `RasTerrainMod.compare_terrain_volumes()`.
+**Key Takeaway**: Use `RasTerrain.create_terrain_hdf()` for terrain creation and
+`RasTerrain.export_rasmapper_terrain()` for a production single-raster derivative
+of a registered terrain. The native export is qualified on Windows and Wine for
+HEC-RAS 6.4.1, 6.5, 6.6, and 7.0.1 and preserves native source order, stitches,
+masks, and optional vector modifications. Use `RasTerrainMod.get_terrain_profile()`
+for analytical sampling. `compute_modified_terrain_raster()` is deprecated and
+must not be used for new work or as a fallback for production consolidation.
+Register terrains with
+`RasMap.add_terrain_layer()`; for cut/fill, use
+`RasTerrainMod.compare_terrain_volumes()`.

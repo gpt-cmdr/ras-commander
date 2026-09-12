@@ -6,6 +6,7 @@ import inspect
 import logging
 import math
 import os
+import subprocess
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,9 +21,18 @@ from ras_commander.ExecutionArtifacts import (
     get_plan_result_artifact_paths,
 )
 from ras_commander.RasCmdr import RasCmdr
+from ras_commander.RasTcu import RasTcu, TcuStatus
 
 
 rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
+
+
+@pytest.fixture(autouse=True)
+def simulated_engine_tcu(monkeypatch):
+    # These launchers are test doubles, not installed engines. Dedicated TCU
+    # tests below override this status explicitly; never read or change HKCU.
+    monkeypatch.setattr(RasTcu, "status", staticmethod(
+        lambda **kwargs: TcuStatus(True, "test", None, None, "simulated-accepted")))
 
 
 def _missing_cleanup_record(
@@ -234,6 +244,197 @@ def test_compute_plan_does_not_swallow_keyboard_interrupt():
     assert ras_obj.refresh_calls == ["plan", "geom", "flow", "unsteady"]
 
 
+@pytest.mark.parametrize("version", ["5.0", "5.0.1", "5.0.7"])
+def test_build_compute_command_uses_project_first_legacy_layout(version, tmp_path):
+    ras_exe = Path(rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe")
+    ras_obj = SimpleNamespace(ras_exe_path=ras_exe, ras_version=version)
+    project_path = tmp_path / "Test Project.prj"
+    plan_path = tmp_path / "Test Project.p03"
+
+    command = RasCmdr._build_compute_command(ras_obj, project_path, plan_path)
+
+    assert command == f'"{ras_exe}" "{project_path}" -c'
+    assert str(plan_path) not in command
+
+
+@pytest.mark.parametrize("version", ["6.0", "6.1", "6.6", "7.0.1"])
+def test_build_compute_command_preserves_modern_layout(version, tmp_path):
+    ras_exe = Path(rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe")
+    ras_obj = SimpleNamespace(ras_exe_path=ras_exe, ras_version=version)
+    project_path = tmp_path / "Test Project.prj"
+    plan_path = tmp_path / "Test Project.p03"
+
+    command = RasCmdr._build_compute_command(ras_obj, project_path, plan_path)
+
+    assert command == f'"{ras_exe}" -c "{project_path}" "{plan_path}"'
+
+
+def test_legacy_wmic_subprocess_env_is_scoped_to_hec_ras_63(
+    monkeypatch,
+):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"),
+        ras_version="6.3",
+    )
+    monkeypatch.setattr(RasCmdr, "_is_windows", staticmethod(lambda: True))
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+
+    env, owner = RasCmdr._legacy_wmic_subprocess_env(ras_obj)
+
+    assert env is not None
+    assert owner is not None
+    shim_dir = Path(owner.name)
+    assert env["PATH"].split(os.pathsep)[0] == str(shim_dir)
+    assert (shim_dir / "wmic.cmd").is_file()
+    script = (shim_dir / "wmic.ps1").read_text(encoding="ascii")
+    assert "Get-CimInstance -ClassName Win32_Processor" in script
+    assert "NumberOfLogicalProcessors" in script
+    owner.cleanup()
+
+
+@pytest.mark.parametrize("version", ["6.2", "6.4", "7.0"])
+def test_legacy_wmic_subprocess_env_does_not_change_other_versions(
+    monkeypatch,
+    version,
+):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(rf"C:\HEC-RAS\{version}\Ras.exe"),
+        ras_version=version,
+    )
+    monkeypatch.setattr(RasCmdr, "_is_windows", staticmethod(lambda: True))
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+
+    assert RasCmdr._legacy_wmic_subprocess_env(ras_obj) == (None, None)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows CIM compatibility shim")
+def test_legacy_wmic_subprocess_env_answers_solver_cpu_queries(monkeypatch):
+    ras_obj = SimpleNamespace(
+        ras_exe_path=Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"),
+        ras_version="6.3",
+    )
+    monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
+    env, owner = RasCmdr._legacy_wmic_subprocess_env(ras_obj)
+    assert env is not None
+    assert owner is not None
+
+    try:
+        for field in (
+            "NumberOfCores",
+            "NumberOfLogicalProcessors",
+            "SocketDesignation",
+            "DeviceID",
+            "Name",
+        ):
+            result = subprocess.run(
+                ["cmd", "/d", "/c", "wmic", "CPU", "get", field],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+            assert lines[0].lower() == field.lower()
+            assert len(lines) >= 2
+    finally:
+        owner.cleanup()
+
+
+def test_compute_plan_sets_current_plan_for_legacy_project_only_launch(
+    monkeypatch,
+    tmp_path,
+):
+    project_path = tmp_path / "TestProject.prj"
+    plan_path = tmp_path / "TestProject.p03"
+    project_path.write_text(
+        "Proj Title=TestProject\nCurrent Plan=p01\nPlan File=p03\n",
+        encoding="ascii",
+    )
+    plan_path.write_text("Plan Title=Plan 03\n", encoding="ascii")
+
+    ras_obj = _DummyRas()
+    ras_obj.project_folder = tmp_path
+    ras_obj.project_name = "TestProject"
+    ras_obj.prj_file = project_path
+    ras_obj.ras_exe_path = Path(r"C:\HEC-RAS\5.0\Ras.exe")
+    ras_obj.ras_version = "5.0"
+    selected_plans = []
+    ras_obj.set_current_plan = selected_plans.append
+    commands = []
+    _patch_compute_launcher(monkeypatch, tmp_path, ras_obj)
+    launcher = rascmdr_module.subprocess.Popen
+
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda plan_number, ras_object: plan_path),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.BcoMonitor,
+        "enable_detailed_logging",
+        staticmethod(lambda _plan_path: None),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "Popen",
+        lambda command, **kwargs: (commands.append(command) or launcher(command, **kwargs)),
+    )
+    monkeypatch.setattr(
+        RasCmdr,
+        "_wait_for_async_plan_completion",
+        staticmethod(lambda *args, **kwargs: None),
+    )
+
+    result = RasCmdr.compute_plan(
+        "03",
+        ras_object=ras_obj,
+        force_rerun=True,
+        dialog_watchdog=False,
+    )
+
+    assert result.success is True
+    assert selected_plans == ["03"]
+    assert commands == [f'"{ras_obj.ras_exe_path}" "{project_path}" -c']
+
+
+def test_compute_plan_fails_before_launch_when_installed_tcu_is_unaccepted(
+    monkeypatch,
+    tmp_path,
+    caplog,
+):
+    ras_exe = tmp_path / "6.0" / "Ras.exe"
+    ras_exe.parent.mkdir()
+    ras_exe.write_bytes(b"")
+    ras_obj = _DummyRas()
+    ras_obj.ras_exe_path = ras_exe
+    ras_obj.ras_version = "6.0"
+
+    monkeypatch.setattr(
+        rascmdr_module.RasTcu,
+        "status",
+        staticmethod(
+            lambda ras_object=None: TcuStatus(
+                False,
+                "6.0",
+                str(ras_exe.parent),
+                "registry-key",
+                "unaccepted-vb6-subtree",
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        rascmdr_module.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("Ras.exe must not launch"),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="ras_commander.RasCmdr"):
+        result = RasCmdr.compute_plan("01", ras_object=ras_obj)
+
+    assert result.success is False
+    assert "Terms & Conditions for Use have not been accepted" in caplog.text
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
 def test_cancel_plan_terminates_only_exact_project_process_tree(
     monkeypatch,
@@ -341,6 +542,187 @@ def test_cancel_plan_terminates_only_exact_project_process_tree(
     assert unrelated.killed is False
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
+def test_cancel_plan_matches_mapped_drive_command_paths(monkeypatch, tmp_path):
+    """Mapped-drive launch paths must not be converted to unmatched UNC paths."""
+    import psutil
+
+    project_path = tmp_path / "Fox.prj"
+    plan_path = tmp_path / "Fox.p01"
+    project_path.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="ascii")
+    mapped_root = Path("H:/Runs/Fox")
+
+    class FakeRas:
+        project_folder = tmp_path
+        project_name = "Fox"
+        prj_file = project_path
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+        @staticmethod
+        def get_plan_entries():
+            return pd.DataFrame(
+                [{"plan_number": "01", "full_path": str(plan_path)}]
+            )
+
+    class FakeProcess:
+        pid = 400
+        info = {
+            "pid": 400,
+            "name": "Ras.exe",
+            "create_time": 400.0,
+            "cwd": str(mapped_root),
+            "exe": str(mapped_root / "Ras.exe"),
+            "cmdline": [
+                "Ras.exe",
+                "-c",
+                str(mapped_root / "Fox.prj"),
+                str(mapped_root / "Fox.p01"),
+            ],
+        }
+        terminated = False
+        killed = False
+        running = True
+
+        def create_time(self):
+            if not self.running:
+                raise psutil.NoSuchProcess(self.pid)
+            return self.info["create_time"]
+
+        def is_running(self):
+            return self.running
+
+        @staticmethod
+        def children(recursive=False):
+            return []
+
+        def terminate(self):
+            self.terminated = True
+            self.running = False
+
+        def kill(self):
+            self.killed = True
+            self.running = False
+
+    process = FakeProcess()
+
+    def alias_identity(path):
+        value = str(path).replace("/", "\\").casefold()
+        mapped = str(mapped_root).replace("/", "\\").casefold()
+        actual = str(tmp_path).replace("/", "\\").casefold()
+        return actual + value[len(mapped):] if value.startswith(mapped + "\\") else value
+
+    monkeypatch.setattr(
+        os.path, "samefile",
+        lambda left, right: alias_identity(left) == alias_identity(right),
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: [process] if process.running else [])
+    monkeypatch.setattr(
+        psutil,
+        "wait_procs",
+        lambda processes, timeout: (list(processes), []),
+    )
+
+    assert RasCmdr.cancel_plan("01", ras_object=FakeRas()) is True
+    assert process.terminated is True
+    assert process.killed is False
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows HEC-RAS process matching")
+def test_cancel_plan_matches_project_only_current_plan_launcher(
+    monkeypatch,
+    tmp_path,
+):
+    """Legacy project-only ``-c`` launches remain safely cancellable."""
+    import psutil
+
+    project_path = tmp_path / "Fox.prj"
+    plan_path = tmp_path / "Fox.p01"
+    project_path.write_text(
+        "Proj Title=Fox\nCurrent Plan=p01\nPlan File=p01\n",
+        encoding="ascii",
+    )
+    plan_path.write_text("Plan Title=Plan 01\n", encoding="ascii")
+
+    class FakeRas:
+        project_folder = tmp_path
+        project_name = "Fox"
+        prj_file = project_path
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+        @staticmethod
+        def get_plan_entries():
+            return pd.DataFrame(
+                [{"plan_number": "01", "full_path": str(plan_path)}]
+            )
+
+    class FakeProcess:
+        def __init__(self, pid, command_line):
+            self.pid = pid
+            self.running = True
+            self.info = {
+                "pid": pid,
+                "name": "Ras.exe",
+                "cmdline": command_line,
+                "create_time": float(pid),
+                "cwd": str(tmp_path),
+                "exe": str(tmp_path / "Ras.exe"),
+            }
+            self.terminated = False
+            self.killed = False
+
+        def create_time(self):
+            if not self.running:
+                raise psutil.NoSuchProcess(self.pid)
+            return self.info["create_time"]
+
+        def is_running(self):
+            return self.running
+
+        @staticmethod
+        def children(recursive=False):
+            return []
+
+        def terminate(self):
+            self.terminated = True
+            self.running = False
+
+        def kill(self):
+            self.killed = True
+            self.running = False
+
+    project_only = FakeProcess(
+        300,
+        ["Ras.exe", str(project_path), "-c"],
+    )
+    wrong_flag = FakeProcess(
+        301,
+        ["Ras.exe", str(project_path), "-a"],
+    )
+
+    monkeypatch.setattr(
+        psutil,
+        "process_iter",
+        lambda _attrs: [process for process in (project_only, wrong_flag) if process.running],
+    )
+    monkeypatch.setattr(
+        psutil,
+        "wait_procs",
+        lambda processes, timeout: (list(processes), []),
+    )
+
+    assert RasCmdr.cancel_plan("01", ras_object=FakeRas()) is True
+    assert project_only.terminated is True
+    assert wrong_flag.terminated is False
+    assert wrong_flag.killed is False
+
+
 def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
     monkeypatch, tmp_path
 ):
@@ -422,6 +804,7 @@ def test_compute_plan_uses_cached_plan_entries_when_prj_refresh_fails(
         "01",
         force_rerun=True,
         ras_object=ras_obj,
+        dialog_watchdog=False,
     )
 
     assert result.success is True
@@ -2981,7 +3364,7 @@ def test_wsl_linux_positive_process_group_proof_allows_finalize_and_promotion(
 
     tmp_hdf = tmp_path / "Demo.p01.tmp.hdf"
     with h5py.File(tmp_hdf, "w") as hdf_file:
-        hdf_file.create_group("Results/Unsteady")
+        hdf_file.create_dataset("Results/Unsteady/Water Surface", data=[1.0])
     (tmp_path / "compute_linux_01.log").write_text(
         "Finished Unsteady Flow Simulation\n",
         encoding="utf-8",

@@ -19,6 +19,7 @@ This is run during ReadTheDocs pre_build step.
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -65,6 +66,18 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
     # Count results
     md_files = list(output_dir.glob("*.md"))
     print(f"Created {len(md_files)} markdown files")
+
+    # Preserve committed notebook figures referenced from Markdown cells.
+    # nbconvert moves notebooks from examples/ to docs/notebooks/, so their
+    # relative assets/ paths must move with them.
+    assets_dir = examples_dir / "assets"
+    if assets_dir.is_dir():
+        shutil.copytree(
+            assets_dir,
+            output_dir / "assets",
+            dirs_exist_ok=True,
+        )
+        print("Copied notebook assets")
 
     return len(md_files)
 

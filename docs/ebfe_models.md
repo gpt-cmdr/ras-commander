@@ -51,15 +51,21 @@ normalization that transforms broken eBFE archives into runnable HEC-RAS models.
 ### Quick Start
 
 ```python
+import os
 from ras_commander.sources import RasEbfeModels
 from ras_commander import init_ras_project
 from pathlib import Path
 
+workspace = (
+    Path(os.environ.get("RAS_COMMANDER_EBFE_ROOT", r"H:\Testing\eBFE"))
+    / "12100201"
+)
+
 # Download/cache, extract, and organize by model slug
 organized = RasEbfeModels.organize_model(
     "upper-guadalupe",
-    download_root=Path(r"H:/Testing/eBFE Model Organization/Downloads"),
-    output_root=Path(r"H:/Testing/eBFE Model Organization/Organized"),
+    download_root=workspace / "raw",
+    output_root=workspace / "organized",
     validate_dss=True
 )
 
@@ -74,6 +80,31 @@ init_ras_project(organized / "RAS Model/UPGU1", "6.5")
 ```
 
 **Time**: 15 minutes vs 60-120 minutes manual fixes
+
+### Workspace and Path-Length Rule
+
+FEMA archives can contain deeply nested members that exceed limits still used
+by HEC-RAS and older Windows utilities. Preflight the maximum expanded path
+before extraction. The raw cache uses long-path-safe I/O when a source member
+is inherently too long; HEC-RAS-active organized project and run paths must
+remain at or below 240 characters. Configure a concise workspace with
+`RAS_COMMANDER_EBFE_ROOT`; new work on the shared Windows host uses:
+
+```text
+H:\Testing\eBFE\<HUC8>\
+├── raw\
+├── organized\
+├── runs\
+└── reports\
+```
+
+Do not create improvised folders at the drive root. ras-commander extraction
+uses long-path-safe I/O, restores archive timestamps, audits member sizes and
+CRC32 values, then writes a completion receipt. A non-empty legacy folder is
+audited before reuse;
+an incomplete cache is preserved and reported rather than silently accepted or
+deleted. Older validation records under `H:\Testing\eBFE Model Organization`
+remain historical evidence, but new work should use the concise layout.
 
 To inspect the built-in model catalog:
 
@@ -96,9 +127,10 @@ Current built-in organizers include:
 | `spring-creek` | 12040102 | Single 2D model with nested final archive. |
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
 | `upper-guadalupe` | 12100201 | Four cascaded 2D watershed models. |
+| `san-gabriel` | 12070205 | Five-project DSS fan-in covering the Round Rock and Florence ras2fim-2d test area. Unsteady-start validated; shared compiled terrain was not provided. |
 | `eleven-point` | 11010011 | Small split-delivery 2D model archive; organized, path-audited, results-ready, and geometry-preprocessor validated with HEC-RAS 6.6. |
 | `spring-river` | 11010010 | Distinct Spring HUC model archive using `SpringRiver_11010010` naming to avoid confusion with `spring-creek` / `SpringCreek_12040102`. |
-| `lower-colorado-cummins` | 12090301 | 1D steady BLE reach-model collection. |
+| `lower-colorado-cummins` | 12090301 | 2,378 HEC-RAS 4.1.0 1D steady reach projects, each containing plan 01. There are 2,377 seven-profile projects and one delivered six-profile project. The delivery has 2,332 projects at the usual river/reach depth and 46 valid projects nested under intermediate reach groups; terrain is not required. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
@@ -137,6 +169,53 @@ runs the HEC-RAS geometry preprocessor through ras-commander, and reviews
 compute messages without requiring full unsteady calculations or floodplain
 mapping/post-processing as the delivery-format gate. For 1D steady BLE reach
 models, document terrain or land cover checks only when mapper layers exist.
+
+For Lower Colorado-Cummins, run exactly one plan per project from isolated
+copies. The study-aware runner automatically enables nested-project discovery,
+uses the organized source as immutable input, and records the run-copy path:
+
+```powershell
+.\.venv\Scripts\python scripts\ebfe_steady_plan_batch.py `
+  --study 12090301 `
+  --workspace "H:\Testing\eBFE\12090301" `
+  --plan 01 `
+  --ras-version 6.6 `
+  --num-cores 2 `
+  --force-geompre
+```
+
+The source metadata distinguishes the delivered HEC-RAS 4.1.0 version from the
+qualified 6.6 execution version and lists the separate public Models,
+SpatialData, and Documents packages. The SpatialData package contains published
+depth and water-surface-elevation results, not a terrain surface. Absence of a
+Terrain HDF or RASMapper file is therefore not a deficiency for these 1D steady
+projects. Study metadata also applies a 600-second per-plan timeout; a stalled
+owned process tree is cancelled through `RasCmdr.cancel_plan()` and recorded as
+a failed project, while legacy explicit-root runs retain their prior no-timeout
+default.
+
+Study mode also supplies the delivered profile-count contract: seven profiles
+for 2,377 projects and six for `WALNUT 0329`. The organizer repairs the missing
+`Flow File=f01` record in exactly `PINEY 062` and `PINEY 089` after validating
+their source fingerprints; it never modifies the downloaded source.
+
+The separate source packages use the same integrity-checked download and
+extraction path as the Models archive:
+
+```python
+from ras_commander.sources import RasEbfeModels
+
+documents = RasEbfeModels.download_source_asset(
+    "12090301",
+    "documents",
+    workspace / "raw",
+)
+spatial_data = RasEbfeModels.download_source_asset(
+    "12090301",
+    "spatial_data",
+    workspace / "raw",
+)
+```
 
 For repeatable end-to-end checks from the repository, use:
 
@@ -391,6 +470,73 @@ with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
 
 **Example Notebook**: `examples/952_ebfe_upper_guadalupe_cascade.ipynb`
 
+### San Gabriel (12070205) - Pattern 3b
+
+**Model Type**: Five linked 2D unsteady projects
+
+**HEC-RAS**: 6.3
+
+**Dependency**: LBSG_501, LBSG_502, LBSG_503, and LBSG_504 feed LBSG_505
+
+**Test use**: Round Rock is in LBSG_504; Florence is nearest LBSG_503
+
+**Validation**: One 1% plan per model reached unsteady computation
+
+```python
+import os
+from pathlib import Path
+
+from ras_commander.sources import RasEbfeModels
+
+workspace = (
+    Path(os.environ.get("RAS_COMMANDER_EBFE_ROOT", r"H:\Testing\eBFE"))
+    / "12070205"
+)
+organized = RasEbfeModels.organize_model(
+    "san-gabriel",
+    download_root=workspace / "raw",
+    output_root=workspace / "organized",
+    validate_dss=True,
+)
+```
+
+The organizer preserves each `LBSG_50#\Input` project and its sibling land
+cover folder, stages delivered plan-result HDFs beside their plan files, copies
+the delivered HEC-HMS 4.10 project, and rewrites only the known LBSG_505
+cross-project DSS prefixes. Every terrain layer in all five `.rasmap` files is
+normalized to the one shared organized target,
+`RAS Model\Terrain\Terrain.hdf`. It does not use basename-based DSS repair
+because the delivery contains several unrelated files named `100.dss`.
+
+!!! danger "Critical 2D source gap: computational terrain not provided"
+    The hydraulic inventory and all five `.rasmap` files name one shared
+    `Terrain\Terrain.hdf`, but no public San Gabriel package contains it. The
+    three HDEMs and the terrain spatial files are preserved under
+    `RAS Model\Terrain Submittal`; deeply nested supplemental reports remain in
+    the audited raw cache, outside the active RAS tree. The HDEMs omit the two
+    road-crossing ground-line layers and Lake Georgetown polygon named as
+    terrain modifications. The organizer does not automatically synthesize a
+    replacement. An explicitly authorized working copy can build one shared
+    HDEM-only terrain through `RasTerrain.create_terrain_hdf(...)`; all five
+    projects then point to that file, but it is not FEMA's original and cannot
+    support a numerical-equivalence claim. For a 2D model this is a critical,
+    model-blocking deficiency: the public delivery is not reproducible or
+    usable for downstream hydraulic computation, and a viewable supplied
+    result HDF does not cure the gap. The generated Record of Deficiencies
+    preserves that distinction. `unsteady_start` is compute evidence only;
+    delivery readiness is `critical_source_gap` and the model must not be
+    presented as a runnable example until source-equivalent terrain is restored.
+
+Qualified 1% smoke plans:
+
+| Project | Plan | Geometry | Unsteady file |
+|---|---:|---:|---:|
+| LBSG_501 | 01 | 02 | 01 |
+| LBSG_502 | 02 | 03 | 01 |
+| LBSG_503 | 04 | 04 | 01 |
+| LBSG_504 | 05 | 05 | 01 |
+| LBSG_505 | 06 | 06 | 02 |
+
 ## API Reference
 
 ### RasEbfeModels.organize_spring_creek()
@@ -522,6 +668,25 @@ for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
     RasCmdr.compute_plan("01", ras_object=ras_obj, num_cores=4)
     # Upstream results feed downstream via DSS
 ```
+
+### RasEbfeModels.organize_san_gabriel()
+
+```python
+@staticmethod
+@log_call
+def organize_san_gabriel(
+    downloaded_folder: Optional[str | Path] = None,
+    output_folder: Optional[str | Path] = None,
+    validate_dss: bool = True,
+) -> Path
+```
+
+This additive organizer retains the five-project folder relationships, applies
+the documented 1% smoke-plan table flags, restores classification timestamps
+recorded in each selected geometry HDF, and writes
+`agent/san_gabriel_manifest.json`. The existing `organize_model()` return type
+and compact `available_models()` schema are unchanged; detailed dependency and
+deficiency metadata is exposed through `ModelMetadata.extra`.
 
 ## Standardized 4-Folder Structure
 
@@ -670,6 +835,15 @@ Complete working examples demonstrating each model:
 - Reusing saved ras-commander geometry-preprocessor evidence for plan 13.
 - Verifying that all seven plan result HDF paths resolve inside the organized RAS project folder.
 
+### 956_hydrofabric_conflation_visual_qa.ipynb
+
+**Demonstrates**:
+- Conflating the Texas Lower Colorado-Cummins SHILOH BRANCH footprint, reach, and 40 cross sections to NextGen v2.2 VPU 12 flowpaths.
+- Mapping native NextGen `wb-*` flowpaths, `cat-*` catchments, WBD HUC12 boundaries, ranked candidates, and direct cross-section intersections for visual QA.
+- Auditing candidate score components and the confidence margin while resolving native `nex-*` links and preferring total upstream drainage area.
+- Comparing default and deliberately strict thresholds to expose matched, ambiguous, and unmatched states without fake accepted identifiers.
+- Verifying along-flowpath cross-section measures and a two-feature NextGen reach sequence.
+
 ### 957_ebfe_spring_river_validation.ipynb
 
 **Demonstrates**:
@@ -738,11 +912,23 @@ Current validation is tracked in the repository-level
 `VALIDATION_MATRIX.md`, with generated audit reports under the H: workspace:
 `H:\Testing\eBFE Model Organization\Validation\ebfe_delivery`.
 
-- Lower Colorado-Cummins sample: geometry preprocessor passed.
+- Lower Colorado-Cummins: plan `01` was attempted for all 2,378 isolated
+  project copies with HEC-RAS 6.6. After two exact missing-flow-reference
+  repairs and recognition of the one delivered six-profile project, 2,375
+  passed with HDF results. Three remain model-blocked by delivered hydraulic
+  data defects: overlapping blocked obstructions in `ALUM CREEK`, and flow
+  boundaries assigned to nonexistent cross sections in `WALNUT 0613` and
+  `WILLBARGER 0185`.
 - Rio Hondo: 253 1D steady reach projects passed sequential geometry preprocessor validation, and 253/253 steady plans computed successfully in `steady_plan_validation_20260424_160022.json`.
 - Spring Creek: 2D geometry preprocessor passed.
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
 - Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
+- San Gabriel: all five selected 1% plans reached the unsteady-computation
+  phase through ras-commander. This is `unsteady_start` compute evidence only.
+  The required compiled terrain and terrain-modification payloads are `Not
+  Provided in Source`, a `critical_source_gap` that makes the public 2D model
+  non-reproducible and unusable for downstream computation. The HDEM-only
+  diagnostic rebuild does not promote its delivery-readiness status.
 - Eleven Point: organized from the split `Input.zip`, `Terrain.zip`, and `Land_Cover.zip` delivery; path-audited with zero issues, seven local plan HDFs, and a passing ras-commander geometry-preprocessor run using HEC-RAS 6.6.
 - Spring River: cataloged separately from Spring Creek as `spring-river` / `SpringRiver_11010010`; downloaded, organized, path-audited with zero issues, preprocessor-valid in HEC-RAS 6.1, and results-ready with seven local plan HDFs. The validation notebook preserves the legacy `Land Classification` compatibility copy referenced by `Spring_BLE.g01.hdf`, archives fresh preprocessor evidence, and restores the delivered full-result plan HDF; see `examples/957_ebfe_spring_river_validation.ipynb`.
 - Lower Brazos: LB_MA01, LB_MA02, and LB_MA03 are downloaded, extracted, organized, path-audited with zero issues, and results-ready with 61 local plan HDFs in the latest audit. LB_MA02 passed ras-commander geometry-preprocessor validation in 3846.3 seconds; LB_MA01 exceeded the 7200-second timeout with no compute messages, and LB_MA03 returned without producing compute messages, so Lower Brazos remains partially preprocessor-validated.

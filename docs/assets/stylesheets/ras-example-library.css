@@ -101,6 +101,11 @@
   margin-top: 0.35rem;
 }
 
+.ras-library-project-link--disabled {
+  color: var(--ras-library-muted);
+  font-weight: 700;
+}
+
 .ras-library-project-version {
   color: var(--ras-library-muted);
 }

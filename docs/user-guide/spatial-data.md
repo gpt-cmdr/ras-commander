@@ -4,7 +4,10 @@ RAS Commander provides comprehensive tools for working with HEC-RAS spatial data
 
 ## Overview
 
-When you initialize a RAS project, the library automatically parses the RASMapper file (`.rasmap`) and populates the `rasmap_df` DataFrame with paths to all spatial datasets. This provides programmatic access to terrain models, land cover layers, soil data, and more.
+When you initialize a RAS project, the library looks for the RASMapper file
+(`.rasmap`) and populates the single-row `rasmap_df` DataFrame. The row contains
+spatial paths when parsing succeeds and explicit provenance when the file is
+missing, malformed, or only partly readable.
 
 ## Authoritative Extents for Raster Inputs
 
@@ -115,8 +118,15 @@ The `rasmap_df` typically contains paths to:
 ### Accessing Specific Data Paths
 
 ```python
-# rasmap_df is a compact project summary. Several columns contain lists.
+# rasmap_df is always one row. Check provenance before reading path values.
 summary = ras.rasmap_df.iloc[0]
+
+if summary["rasmap_status"] == "failed":
+    raise RuntimeError(summary["rasmap_error"])
+if summary["rasmap_status"] == "absent":
+    raise FileNotFoundError(summary["rasmap_path"])
+if summary["rasmap_field_errors"]:
+    print("Some fields could not be extracted:", summary["rasmap_field_errors"])
 
 terrain_paths = summary["terrain_hdf_path"]
 landcover_paths = summary["landcover_hdf_path"]
@@ -642,7 +652,10 @@ HEC-RAS can generate stored maps (raster outputs like depth and water surface el
 
 ### Headless Generation with RasProcess (Recommended)
 
-The `RasProcess` class uses the undocumented RasProcess.exe CLI tool bundled with HEC-RAS to generate stored maps without opening the GUI. This is faster and more reliable for batch processing.
+The canonical `RasMap.store_all_maps()` facade and its `RasProcess` engine use
+ras-commander's packaged RAS Mapper helper and the mapping libraries installed
+with HEC-RAS. They generate stored maps without opening the GUI and support the
+same aggregate path on Windows and Wine.
 
 ```python
 from ras_commander import RasCmdr, RasProcess
@@ -691,6 +704,39 @@ results = RasProcess.store_maps(plan_number="01", profile="Min")
 timestamps = RasProcess.get_plan_timestamps("01")
 results = RasProcess.store_maps(plan_number="01", profile=timestamps[10])
 ```
+
+#### All Steady Profiles in One Launch
+
+For a steady plan, use the canonical `steady_profiles` mode. It resolves names
+and zero-based indexes from the result HDF, writes every selected layer to the
+temporary `.rasmap` in one transaction, and launches aggregate `StoreAllMaps`
+once for the plan. `map_types` accepts `wse`, `depth`, `velocity`, `froude`,
+`shear_stress`, `depth_x_velocity`, `depth_x_velocity_sq`, and `flow`.
+
+```python
+from ras_commander import RasMap
+
+summary = RasMap.store_all_maps(
+    "01",
+    mode="steady_profiles",
+    profiles=None,                 # every HDF profile, in HDF order
+    map_types=("depth",),
+    inundation_boundary=True,      # one polygon for the final selected profile
+    output_path="steady_maps",
+)
+```
+
+The final selected profile is not assumed to be hydraulically highest for an
+arbitrary model. ras2fim constructs ascending discharge ladders, so its final
+profile is the highest ladder step. Exact names and zero-based indexes can be
+mixed when a subset or custom order is needed.
+
+The lower-level
+`RasProcess.store_maps_at_steady_profiles()` returns one DataFrame row per
+logical profile/product. It records the VRT or SHP primary path, all TIFF tiles
+or shapefile sidecars, and performance metadata including configuration time,
+helper time, helper launch count, and generated file count. The original
+`.rasmap` is restored after success or failure.
 
 #### Batch Processing All Plans
 
@@ -1083,10 +1129,42 @@ hole-free polygons instead.
 
 ### Infiltration Sidecar
 
+The map and parameter readers accept an explicit sidecar path or resolve the
+first configured infiltration sidecar from an initialized project:
+
+```python
+raster_map = HdfInfiltration.get_infiltration_map(ras_object=ras)
+parameters = HdfInfiltration.get_infiltration_parameters(
+    mukey="100",
+    ras_object=ras,
+)
+```
+
+The implicit lookup checks `rasmap_status` and `rasmap_field_errors`. It raises
+`ValueError` with map/path context when the map is absent or failed, the target
+field could not be extracted, or no matching layer is configured. A valid
+sibling path remains usable after another declaration fails. Supplying the HDF
+path explicitly bypasses the project lookup.
+
+The four raster-statistics helpers use the same resolver but retain their
+legacy recovery contract: a lookup problem is logged and returned as an empty
+DataFrame. This applies to `get_soils_raster_stats()`,
+`get_soil_raster_stats()`, `get_infiltration_stats()`, and
+`get_landcover_raster_stats()`.
+
 Edit a sidecar explicitly when the geometry has no active Base Overrides:
 
 ```python
-infiltration_path = ras.rasmap_df['infiltration_hdf_path'][0][0]
+summary = ras.rasmap_df.iloc[0]
+if summary["rasmap_status"] not in {"parsed", "parsed_with_errors"}:
+    raise ValueError(
+        f"Cannot select infiltration sidecar: {summary['rasmap_status']} - "
+        f"{summary['rasmap_error']}"
+    )
+infiltration_paths = summary["infiltration_hdf_path"]
+if not infiltration_paths:
+    raise ValueError("No infiltration layer is configured in RASMapper")
+infiltration_path = infiltration_paths[0]
 sidecar_df = HdfInfiltration.get_infiltration_layer_data(infiltration_path)
 
 updated_sidecar = HdfInfiltration.scale_infiltration_sidecar_parameters(

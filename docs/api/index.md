@@ -28,6 +28,29 @@ Rasterized depth-comparison benefits and mesh-based WSE comparison:
 - [`BenefitAreaResult`](benefits.md#calculate-from-existing-depth-rasters) - Raster paths, thresholds, and class-area statistics
 - [`HdfBenefitAreas`](benefits.md#raster-benefitarea-versus-hdfbenefitareas) - Separate 2D mesh/WSE benefit and rise analysis
 
+## Hydrofabric Conflation
+
+- [`RasNetworkConflation`](hydrofabric.md) - Extent-first network-edge classification with optional multi-criteria QA
+- [`NetworkEdgeCoverageResult`](hydrofabric.md#extent-first-edge-classification) - One model–edge row with inside length and fraction
+- [`NetworkConflationResult`](hydrofabric.md#advanced-reach-edge-candidate-audit) - Resolved matches, ranked candidates, reach metrics, and HUC intersections
+- [`NetworkAdapter`](hydrofabric.md#hydrofabric-adapters) - Generic directed-network schema normalization used by NHDPlus, NWM, NextGen, and custom adapters
+
+## 1D Breakout Extraction
+
+- [`RasBreakout1D`](breakout-1d.md) - Single- and multi-source steady 1D breakout selection, assembly, restationing, validation, execution, and comparison
+- [`Breakout1DSelection`](breakout-1d.md#select-a-reach-slice) - Resolved contiguous cross-section selection
+- [`Breakout1DSourceCatalog`](breakout-1d.md#catalog-multiple-source-models) - GeoParquet-ready source model, footprint, centerline, and cross-section catalog
+- [`Breakout1DPlan`](breakout-1d.md#plan-one-network-edge-across-multiple-models) - Confirmed source reaches, directed ownership slices, provisional seams, and fail-closed handoff diagnostics
+- [`Breakout1DResult`](breakout-1d.md#extract-and-validate) - Independent project artifacts, validation, and boundary provenance
+
+## 2D Breakout Geometry Preparation
+
+- [`RasBreakout2D`](breakout-2d.md) - Pure-2D qualification, component cloning, geometry trimming/remeshing, and parent-flux review without boundary authoring or plan execution
+- [`Breakout2DSpec`](breakout-2d.md#qualify-the-proposed-child-domain) - Source plan, 2D area, and contained child-boundary contract
+- [`Breakout2DPreflight`](breakout-2d.md#qualify-the-proposed-child-domain) - Spatial checks, feature dispositions, and existing-boundary inventory
+- [`Breakout2DPreparationResult`](breakout-2d.md#clone-associations-and-prepare-geometry) - Clone associations, mesh audit, and byte-identical unsteady-file evidence
+- [`Breakout2DFluxReview`](breakout-2d.md#review-parent-face-flux-locations) - Oriented parent-face series and unassigned candidate flux zones
+
 ## HDF Modules
 
 Classes for reading HDF result files:
@@ -69,7 +92,7 @@ Classes for parsing and authoring geometry files:
 Classes for terrain creation, modification writing, and terrain-modification
 analysis:
 
-- [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation from rasters
+- [`RasTerrain`](terrain.md#rasterrain) - Terrain HDF creation and native registered-terrain GeoTIFF export
 - [`RasTerrainModWriter`](terrain.md#rasterrainmodwriter) / `RasTerrainModification` - Line and polygon terrain modification HDF/.rasmap writing
 - [`RasTerrainMod`](terrain.md#rasterrainmod) - Terrain profile and volume comparison with modifications applied
 

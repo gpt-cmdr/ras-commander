@@ -22,6 +22,7 @@ pytest.importorskip("geopandas")
 pytest.importorskip("h5py")
 
 from ras_commander import RasGeometryCompute, RasProcess
+from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
 
 
 @pytest.fixture
@@ -219,6 +220,104 @@ def test_rasprocess_compute_geometry_rejects_stderr_error(monkeypatch, tmp_path)
     assert result["success"] is False
 
 
+def _write_complete_2d_geometry(path, include_face_values=True):
+    import h5py
+
+    with h5py.File(path, "w") as hdf:
+        collection = hdf.create_group("Geometry/2D Flow Areas")
+        collection.create_dataset("Attributes", data=[1])
+        area = collection.create_group("Area")
+        area.create_dataset(
+            "Cells Center Coordinate",
+            data=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        area.create_dataset("Faces FacePoint Indexes", data=[[0, 1]])
+        area.create_dataset("Cells Volume Elevation Info", data=[[0, 1], [1, 1]])
+        area.create_dataset(
+            "Cells Volume Elevation Values",
+            data=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        area.create_dataset("Faces Area Elevation Info", data=[[0, 1]])
+        if include_face_values:
+            area.create_dataset(
+                "Faces Area Elevation Values",
+                data=[[0.0, 1.0, 1.0, 0.04]],
+            )
+    return path
+
+
+def test_geometry_completion_semantics_accepts_complete_2d_tables(tmp_path):
+    geom = _write_complete_2d_geometry(tmp_path / "model.g01.hdf")
+
+    evidence = RasProcess._geometry_completion_semantics(geom)
+
+    assert evidence["success"] is True
+    assert evidence["has_2d_geometry"] is True
+    assert evidence["has_1d_geometry"] is False
+    assert evidence["two_d_flow_areas"]["Area"]["ready"] is True
+
+
+def test_geometry_completion_semantics_rejects_incomplete_2d_tables(tmp_path):
+    geom = _write_complete_2d_geometry(
+        tmp_path / "model.g01.hdf",
+        include_face_values=False,
+    )
+
+    evidence = RasProcess._geometry_completion_semantics(geom)
+
+    assert evidence["success"] is False
+    assert evidence["two_d_flow_areas"]["Area"]["ready"] is False
+
+
+def test_compute_geometry_accepts_supervised_wine_semantic_completion(
+    monkeypatch,
+    tmp_path,
+):
+    geom = _write_complete_2d_geometry(tmp_path / "model.g01.hdf")
+    rasprocess_exe = tmp_path / "RasProcess.exe"
+    rasprocess_exe.touch()
+    cleanup = {
+        "root_pid": 42,
+        "observed_pids": [42],
+        "terminated_pids": [42],
+        "killed_pids": [],
+        "survivor_pids": [],
+    }
+
+    monkeypatch.setattr(
+        RasProcess,
+        "find_rasprocess",
+        staticmethod(lambda version=None: rasprocess_exe),
+    )
+    rasprocess_module = __import__(
+        "ras_commander.RasProcess",
+        fromlist=["_is_wine_helper_runtime"],
+    )
+    monkeypatch.setattr(
+        rasprocess_module,
+        "_is_wine_helper_runtime",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        RasProcess,
+        "_run_complete_geometry_supervised",
+        staticmethod(
+            lambda *args, **kwargs: (
+                SimpleNamespace(returncode=15, stdout="", stderr=""),
+                "semantic_hdf_stable",
+                cleanup,
+            )
+        ),
+    )
+
+    result = RasProcess.compute_geometry(geom, ras_version="6.6")
+
+    assert result["success"] is True
+    assert result["completion_mode"] == "semantic_hdf_stable"
+    assert result["semantic_validation"]["success"] is True
+    assert result["owned_process_cleanup"] == cleanup
+
+
 def _diff_frames(left, channel, right):
     import geopandas as gpd
     from shapely.geometry import LineString
@@ -281,3 +380,285 @@ def test_audit_reach_lengths_rejects_bad_flow_paths_mode(geom_file):
 def test_audit_reach_lengths_rejects_negative_tolerance(geom_file):
     with pytest.raises(ValueError, match="tolerance"):
         RasGeometryCompute.audit_reach_lengths(geom_file, tolerance=-1.0)
+
+
+def test_flow_path_policy_regenerate_when_overbanks_match():
+    nan = float("nan")
+    stored, recomputed = _diff_frames(
+        left=[100.5, 199.0, 301.5, nan],
+        channel=[100.0, 200.0, 300.0, nan],
+        right=[99.5, 201.0, 298.5, nan],
+    )
+    audit = RasGeometryCompute._reach_length_diff(
+        stored, recomputed, tolerance=0.0
+    )
+    metrics = RasGeometryCompute._augment_reach_length_metrics(audit, 0.01)
+    summary = RasGeometryCompute._summarize_flow_path_policy(
+        metrics,
+        tolerance_fraction=0.01,
+        source_flow_path_counts={("R", "A"): 0},
+    )
+
+    assert summary.iloc[0]["recommended_policy"] == "regenerate_and_recompute"
+    assert summary.iloc[0]["overbank_match_fraction"] == 1.0
+    assert summary.iloc[0]["reason_codes"] == ()
+    assert list(metrics.columns) == [
+        item["name"] for item in DATAFRAME_SCHEMAS["flow_path_policy_xs_metrics"]["columns"]
+    ]
+    assert list(summary.columns) == [
+        item["name"]
+        for item in DATAFRAME_SCHEMAS["flow_path_policy_reach_metrics"]["columns"]
+    ]
+
+
+def test_flow_path_policy_preserves_when_regeneration_does_not_match():
+    nan = float("nan")
+    stored, recomputed = _diff_frames(
+        left=[102.0, 200.0, 300.0, nan],
+        channel=[100.0, 200.0, 300.0, nan],
+        right=[100.0, 200.0, 300.0, nan],
+    )
+    audit = RasGeometryCompute._reach_length_diff(
+        stored, recomputed, tolerance=0.0
+    )
+    metrics = RasGeometryCompute._augment_reach_length_metrics(audit, 0.01)
+    summary = RasGeometryCompute._summarize_flow_path_policy(
+        metrics,
+        tolerance_fraction=0.01,
+        source_flow_path_counts={("R", "A"): 2},
+    )
+
+    assert (
+        summary.iloc[0]["recommended_policy"]
+        == "preserve_and_recompute_only_at_join_boundary"
+    )
+    assert "REGENERATED_OVERBANK_LENGTH_MISMATCH" in summary.iloc[0][
+        "reason_codes"
+    ]
+
+
+def test_flow_path_policy_preserves_distinct_overbanks_without_source_paths():
+    nan = float("nan")
+    stored, recomputed = _diff_frames(
+        left=[100.0, 200.0, 300.0, nan],
+        channel=[100.0, 200.0, 300.0, nan],
+        right=[100.0, 200.0, 300.0, nan],
+    )
+    stored.loc[0, "Len Left"] = 110.0
+    recomputed.loc[0, "Len Left"] = 110.0
+    audit = RasGeometryCompute._reach_length_diff(
+        stored, recomputed, tolerance=0.0
+    )
+    metrics = RasGeometryCompute._augment_reach_length_metrics(audit, 0.01)
+    summary = RasGeometryCompute._summarize_flow_path_policy(
+        metrics,
+        tolerance_fraction=0.01,
+        source_flow_path_counts={("R", "A"): 0},
+    )
+
+    assert (
+        summary.iloc[0]["recommended_policy"]
+        == "preserve_and_recompute_only_at_join_boundary"
+    )
+    assert (
+        "MISSING_SOURCE_FLOW_PATHS_WITH_DISTINCT_OVERBANK_LENGTHS"
+        in summary.iloc[0]["reason_codes"]
+    )
+
+
+def test_main_channel_relative_error_is_informative():
+    nan = float("nan")
+    stored, recomputed = _diff_frames(
+        left=[100.0, 200.0, 300.0, nan],
+        channel=[102.0, 200.0, 300.0, nan],
+        right=[100.0, 200.0, 300.0, nan],
+    )
+    audit = RasGeometryCompute._reach_length_diff(
+        stored, recomputed, tolerance=0.0
+    )
+    metrics = RasGeometryCompute._augment_reach_length_metrics(audit, 0.01)
+
+    first = metrics.set_index("RS").loc["4"]
+    assert first["relative_error_channel"] == pytest.approx(0.02)
+    assert bool(first["main_channel_flagged"])
+    assert bool(first["overbank_lengths_within_tolerance"])
+
+
+def test_measure_main_channel_lengths_uses_river_polyline_distance():
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    xs = gpd.GeoDataFrame(
+        {
+            "River": ["R", "R", "R"],
+            "Reach": ["A", "A", "A"],
+            "RS": ["30", "20", "10"],
+            "Length_Channel": [2.0, 2.2, 0.0],
+            "geometry": [
+                LineString([(0, 4), (10, 4)]),
+                LineString([(0, 2), (10, 2)]),
+                LineString([(0, 0), (10, 0)]),
+            ],
+        },
+        geometry="geometry",
+        crs="EPSG:2277",
+    )
+    centerlines = gpd.GeoDataFrame(
+        {
+            "River": ["R"],
+            "Reach": ["A"],
+            "geometry": [LineString([(5, 5), (5, -1)])],
+        },
+        geometry="geometry",
+        crs=xs.crs,
+    )
+
+    result = RasGeometryCompute._measure_main_channel_lengths(
+        xs, centerlines, tolerance_fraction=0.01
+    )
+    indexed = result.set_index("RS")
+
+    assert indexed.loc["30", "len_channel_recomputed"] == pytest.approx(2.0)
+    assert bool(indexed.loc["30", "main_channel_flagged"]) is False
+    assert indexed.loc["20", "relative_error_channel"] == pytest.approx(0.2 / 2.2)
+    assert bool(indexed.loc["20", "main_channel_flagged"]) is True
+    assert bool(indexed.loc["10", "reach_end"]) is True
+    assert bool(indexed.loc["10", "main_channel_flagged"]) is False
+    assert list(result.columns) == [
+        item["name"]
+        for item in DATAFRAME_SCHEMAS["main_channel_length_audit"]["columns"]
+    ]
+
+
+def test_clip_join_flow_path_segments_returns_review_geometry():
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    cross_sections = gpd.GeoDataFrame(
+        {
+            "River": ["River", "River"],
+            "Reach": ["Main", "Main"],
+            "RS": ["100", "90"],
+            "geometry": [
+                LineString([(0, 8), (10, 8)]),
+                LineString([(0, 6), (10, 6)]),
+            ],
+        },
+        geometry="geometry",
+        crs="EPSG:2277",
+    )
+    centerlines = gpd.GeoDataFrame(
+        {
+            "River Name": ["River"],
+            "Reach Name": ["Main"],
+            "geometry": [LineString([(5, 10), (5, 0)])],
+        },
+        geometry="geometry",
+        crs=cross_sections.crs,
+    )
+    flow_paths = gpd.GeoDataFrame(
+        {
+            "flow_path_id": [0, 1],
+            "geometry": [
+                LineString([(2, 10), (2, 0)]),
+                LineString([(8, 10), (8, 0)]),
+            ],
+        },
+        geometry="geometry",
+        crs=cross_sections.crs,
+    )
+
+    segments = RasGeometryCompute._clip_join_flow_path_segments(
+        flow_paths,
+        cross_sections,
+        centerlines,
+        ("River", "Main", "100"),
+        ("River", "Main", "90"),
+    )
+
+    assert list(segments["side"]) == ["left", "right"]
+    assert list(segments["length"]) == pytest.approx([2.0, 2.0])
+    assert bool(segments.geometry.is_valid.all())
+    assert list(segments.columns) == [
+        item["name"] for item in DATAFRAME_SCHEMAS["flow_path_join_segments"]["columns"]
+    ]
+
+
+def test_select_xs_by_key_accepts_unique_hdf_station_truncation():
+    import pandas as pd
+
+    cross_sections = pd.DataFrame(
+        {
+            "River": ["NWM 5790954", "NWM 5790954"],
+            "Reach": ["Main", "Main"],
+            "RS": ["36579.17", "36038.50"],
+        }
+    )
+
+    selected = RasGeometryCompute._select_xs_by_key(
+        cross_sections,
+        ("NWM 5790954", "Main", "36579.172"),
+        "join_upstream_xs",
+    )
+
+    assert selected["RS"] == "36579.17"
+
+
+def test_select_xs_by_key_rejects_ambiguous_hdf_station_truncation():
+    import pandas as pd
+
+    cross_sections = pd.DataFrame(
+        {
+            "River": ["R", "R"],
+            "Reach": ["Main", "Main"],
+            "RS": ["100.00", "100.01"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="resolved 2 times"):
+        RasGeometryCompute._select_xs_by_key(
+            cross_sections,
+            ("R", "Main", "100.009"),
+            "join_upstream_xs",
+        )
+
+
+def test_count_flow_paths_by_reach_requires_two_xs_intersections():
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    metrics = gpd.GeoDataFrame(
+        {
+            "River": ["R", "R", "R"],
+            "Reach": ["A", "A", "A"],
+            "geometry": [
+                LineString([(0, 3), (10, 3)]),
+                LineString([(0, 2), (10, 2)]),
+                LineString([(0, 1), (10, 1)]),
+            ],
+        },
+        geometry="geometry",
+    )
+    flow_paths = gpd.GeoDataFrame(
+        {
+            "geometry": [
+                LineString([(2, 4), (2, 0)]),
+                LineString([(8, 4), (8, 2.5)]),
+            ]
+        },
+        geometry="geometry",
+    )
+
+    counts = RasGeometryCompute._count_flow_paths_by_reach(flow_paths, metrics)
+
+    assert counts == {("R", "A"): 1}
+
+
+@pytest.mark.parametrize("value", [-0.01, 1.01, float("inf")])
+def test_flow_path_policy_rejects_invalid_fraction(value):
+    with pytest.raises(ValueError, match="tolerance_fraction"):
+        RasGeometryCompute._validate_tolerance_fraction(value)
+
+
+def test_reach_length_policy_schema_version():
+    assert SCHEMA_VERSION == "1.14"

@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 import ras_commander.RasProject as project_module
+from ras_commander._rasmap_schema import create_rasmap_dataframe
 from ras_commander.schemas import DATAFRAME_SCHEMAS
 from ras_commander import (
     ProjectPathAmbiguityError,
@@ -518,6 +519,57 @@ def test_empty_structured_rasmap_inventory_remains_explicit(
     ].iloc[0]
     assert row["inspection_state"] == "not_inspected"
     assert row["readiness"] == "unknown"
+
+
+def test_absent_single_row_rasmap_summary_does_not_create_phantom_asset(
+    tmp_path: Path,
+) -> None:
+    project = _write_project(tmp_path / "source")
+
+    assets = inspect_project_assets(project, depth="project")
+
+    assert not (assets["asset_kind"] == "rasmap").any()
+    assert not (
+        assets["reason_code"] == "rasmap_structured_inventory_empty"
+    ).any()
+
+
+def test_partial_rasmap_inventory_reports_errors_and_keeps_valid_siblings(
+    tmp_path: Path,
+) -> None:
+    project = _write_project(tmp_path / "source")
+    rasmap_path = project.parent / "Model.rasmap"
+    rasmap_path.write_text("<RASMapper />", encoding="utf-8")
+    terrain_path = project.parent / "Terrain" / "Terrain.hdf"
+    terrain_path.parent.mkdir()
+    terrain_path.write_bytes(b"terrain")
+    ras_object = project_module._explicit_ras(project, None)
+    ras_object.rasmap_df = create_rasmap_dataframe(
+        rasmap_path=rasmap_path,
+        rasmap_status="parsed_with_errors",
+        rasmap_field_errors={
+            "infiltration_hdf_path": "ValueError: malformed declaration"
+        },
+    )
+    ras_object.rasmap_df.at[0, "terrain_hdf_path"] = [str(terrain_path)]
+
+    assets = inspect_project_assets(
+        project,
+        ras_object=ras_object,
+        depth="project",
+    )
+
+    error_row = assets.loc[
+        assets["reason_code"] == "rasmap_field_parse_failed"
+    ].iloc[0]
+    assert error_row["inspection_state"] == "not_inspected"
+    assert error_row["readiness"] == "unknown"
+    assert error_row["source_api"] == (
+        "RasPrj.rasmap_df.infiltration_hdf_path"
+    )
+    assert "malformed declaration" in error_row["detail"]
+    terrain_rows = assets.loc[assets["asset_kind"] == "terrain"]
+    assert terrain_rows["resolved_path"].tolist() == [str(terrain_path)]
 
 
 def test_stage_project_publishes_verified_copy_without_source_drift(tmp_path: Path) -> None:

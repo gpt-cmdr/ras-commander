@@ -1293,7 +1293,8 @@ class RasUtils:
     def find_valid_ras_folders(
         search_path: Union[str, Path],
         max_depth: Optional[int] = None,
-        return_project_info: bool = False
+        return_project_info: bool = False,
+        include_nested_projects: bool = False,
     ) -> Union[List[Path], List[Dict[str, Any]]]:
         """
         Recursively search for valid HEC-RAS project folders.
@@ -1311,6 +1312,9 @@ class RasUtils:
                 Depth 0 = search_path only, 1 = immediate subdirectories, etc.
             return_project_info (bool): If True, return list of dicts with folder path,
                 project name, prj file path, and plan count. If False, return list of Paths.
+            include_nested_projects (bool): Continue scanning below a valid project
+                folder. Defaults to False for backward compatibility. Enable this for
+                delivered collections that intentionally nest independent projects.
 
         Returns:
             Union[List[Path], List[Dict[str, Any]]]:
@@ -1365,12 +1369,14 @@ class RasUtils:
         def get_plan_files(folder: Path) -> List[Tuple[str, Path]]:
             """Get all valid plan files (.p01 to .p99) in a folder."""
             plan_files = []
-            for i in range(1, 100):
-                plan_num = f"{i:02d}"
-                # Look for files matching *.pXX pattern
-                for pfile in folder.glob(f"*.p{plan_num}"):
-                    plan_files.append((plan_num, pfile))
-            return plan_files
+            plan_pattern = re.compile(r"\.p(\d{2})$", re.IGNORECASE)
+            for pfile in folder.iterdir():
+                if not pfile.is_file():
+                    continue
+                match = plan_pattern.search(pfile.name)
+                if match and 1 <= int(match.group(1)) <= 99:
+                    plan_files.append((match.group(1), pfile))
+            return sorted(plan_files, key=lambda item: (item[0], item[1].name.lower()))
 
         def check_folder(folder: Path) -> Optional[Dict[str, Any]]:
             """Check if a folder is a valid HEC-RAS project folder."""
@@ -1414,9 +1420,10 @@ class RasUtils:
             result = check_folder(current_path)
             if result:
                 valid_folders.append(result)
-                # Don't search subdirectories of a valid project folder
-                # (nested projects are uncommon and would cause confusion)
-                return
+                if not include_nested_projects:
+                    # Nested projects are uncommon, so preserve the historical
+                    # stop-at-project behavior unless the caller opts in.
+                    return
 
             # Scan subdirectories
             try:
@@ -2018,7 +2025,7 @@ class RasUtils:
 
         # Version folder names matching RasPrj.get_ras_exe()
         ras_version_folders = [
-            "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
+            "7.1", "7.1.0", "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2",
             "6.1", "6.0", "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3",
             "5.0.1", "5.0", "4.1.0", "4.0"
         ]
@@ -2030,7 +2037,7 @@ class RasUtils:
             "60": "6.0", "61": "6.1", "62": "6.2", "63": "6.3",
             "631": "6.3.1", "6.4": "6.4.1", "64": "6.4.1", "641": "6.4.1",
             "65": "6.5", "66": "6.6", "6.7": "6.7 Beta 5", "67": "6.7 Beta 5",
-            "70": "7.0",
+            "70": "7.0", "701": "7.0.1", "7.1.0": "7.1", "71": "7.1",
         }
 
         def _normalize_version(raw: str, install_dir: Optional[Path] = None) -> str:

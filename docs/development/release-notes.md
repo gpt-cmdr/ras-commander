@@ -2,7 +2,33 @@
 
 ## Version History
 
-### Unreleased
+### v0.99.2 (Current published release — August 2026)
+
+**Network-Aligned 1D Breakout Assembly**
+
+- Add `RasBreakout1D.assemble_network_edge()` to assemble adjacent main-stem
+  model slices into one independent, restationed steady-flow project while
+  preserving complete retained geometry blocks and source provenance.
+- Resolve provisional footprint handoffs against the actual source river
+  centerlines, reject intersecting cross-source cut lines, recompute main-channel
+  reach lengths, and rewrite station-keyed steady-flow changes and endpoint
+  boundaries for the assembled reach.
+- Expose GeoDataFrame evidence for source-to-destination stations and resolved
+  seams, plus automatic 10-percent upstream and 25-percent downstream hydraulic
+  buffers and a separate one-cross-section inundation-overlap domain.
+- Keep overbank reach lengths provisional until the caller supplies reviewed
+  flow-path policy evidence, supporting either complete regeneration or
+  join-boundary-only recomputation.
+
+**Native Registered-Terrain Export**
+
+- Add `RasTerrain.export_rasmapper_terrain()` for supervised, bounded RAS
+  Mapper single-raster export with native source ordering, stitches, masks,
+  optional vector modifications, semantic validation, and Windows/Wine support.
+- Deprecate the row-sampled
+  `RasTerrainMod.compute_modified_terrain_raster()` compatibility method in
+  0.99.2. New callers should use the native registered-terrain export; removal
+  is scheduled for 1.1.
 
 **Structured Execution Evidence**
 
@@ -93,7 +119,7 @@
 - Normalize relative components in mapped-drive fallbacks without converting
   HEC-RAS-compatible drive-letter paths to UNC paths.
 
-### v0.99.1 (Current published release — July 2026)
+### v0.99.1 (July 2026)
 
 **Qualified Raster Processing on Linux/Wine**
 

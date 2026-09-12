@@ -24,6 +24,15 @@ from ras_commander.ExecutionArtifacts import (
     infer_execution_result_format,
 )
 from ras_commander.remote.Utils import clear_staged_plan_execution_artifacts
+from ras_commander.RasTcu import RasTcu, TcuStatus
+
+
+@pytest.fixture(autouse=True)
+def simulated_engine_tcu(monkeypatch):
+    # Artifact tests use synthetic executable bytes and simulated processes.
+    # Their success must not depend on the host user's actual TCU registry.
+    monkeypatch.setattr(RasTcu, "status", staticmethod(
+        lambda **kwargs: TcuStatus(True, "test", None, None, "simulated-accepted")))
 
 
 class _ComputeRas:

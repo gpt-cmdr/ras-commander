@@ -478,11 +478,12 @@ notebooks:
   - RasMap.set_terrain_layer_visibility
   - RasMap.set_update_legend_with_view
   - RasMap.zoom_to_geometry_layer
+  - RasPrj.find_ras_prj
   hec_refs: []
   learning_paths: []
   excluded: false
   code_cells: 18
-  executed_cells: 17
+  executed_cells: 15
 - id: 123_rasmapper_geometry_layer_updates
   filename: 123_rasmapper_geometry_layer_updates.ipynb
   title: RASMapper Geometry Layer Updates
@@ -1618,6 +1619,88 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 8
+- id: 235_1d_breakout_model
+  filename: 235_1d_breakout_model.ipynb
+  title: Clip a Texas FEMA eBFE Model to One NWM Reach
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Classify real NOAA NWM v3 reaches against the Shiloh Branch eBFE footprint, retain 10% upstream
+    and 25% downstream hydraulic buffers around feature 5790868, rasterize a stricter one-cross-section-overlap
+    export domain, and compare the independent breakout to the source model.
+  tags:
+  - 1d
+  - steady
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
+  - raster
+  - boundary-effects
+  - validation
+  difficulty: advanced
+  est_runtime: 1 min
+  data_project: null
+  functions_used:
+  - GeomParser.get_river_centerlines
+  - GeomParser.get_xs_cut_lines
+  - HdfProject.get_project_extent
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_xs_interpolation_surface
+  - RasBreakout1D.compare_geometry
+  - RasBreakout1D.compare_results
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.run
+  - RasBreakout1D.select_domains_by_network_edge
+  - RasCmdr.compute_plan
+  - RasNetworkConflation.classify_edges
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
+- id: 236_multi_model_1d_breakout_planning
+  filename: 236_multi_model_1d_breakout_planning.ipynb
+  title: Build a Texas FEMA eBFE Breakout from Adjacent Main-Stem Models
+  series: 200
+  series_name: Geometry & Calibration
+  summary: Catalog and join two adjacent Walnut Creek FEMA eBFE main-stem projects for NOAA NWM feature
+    5790954, write an independent restationed HEC-RAS project, retain source-block provenance, and visually
+    verify the centerline seam, computational/export domains, two-pass flow-path finalization, inherited
+    geometry diagnostics, and retained-section hydraulic response against both original plans.
+  tags:
+  - 1d
+  - steady
+  - breakout
+  - ebfe
+  - nwm
+  - conflation
+  - multi-model
+  - geoparquet
+  - validation
+  difficulty: advanced
+  est_runtime: 50 s
+  data_project: null
+  functions_used:
+  - GeomCrossSection.get_cross_sections
+  - GeomParser.get_river_centerlines
+  - HdfResultsPlan.get_compute_messages
+  - HdfResultsPlan.get_steady_results
+  - RasBreakout1D.assemble_network_edge
+  - RasBreakout1D.catalog_sources
+  - RasBreakout1D.extract_selection
+  - RasBreakout1D.plan_network_edge
+  - RasBreakout1D.run
+  - RasBreakout1D.select_by_stations
+  - RasCmdr.compute_plan
+  - RasGeometryCompute.assess_flow_path_policy
+  - RasGeometryCompute.audit_main_channel_lengths
+  - RasGeometryCompute.validate_geometry
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 14
+  executed_cells: 14
 - id: 300_unsteady_flow_operations
   filename: 300_unsteady_flow_operations.ipynb
   title: Unsteady Flow Operations
@@ -1933,6 +2016,8 @@ notebooks:
   - HdfResultsMesh.get_mesh_max_ws
   - RasCmdr.compute_plan
   - RasExamples.extract_project
+  - RasMap.list_terrain_layers
+  - RasTerrain.export_rasmapper_terrain
   - RasTerrainMod.get_terrain_profile
   - RasTerrainMod.setup_gdal_bridge
   - RasTerrainModWriter.add_high_ground_modification
@@ -1943,8 +2028,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
-  executed_cells: 12
+  code_cells: 14
+  executed_cells: 14
 - id: 317_restart_file_settings
   filename: 317_restart_file_settings.ipynb
   title: Restart File Output and Warm-Start Settings
@@ -2112,6 +2197,7 @@ notebooks:
   - HdfXsec.get_river_centerlines
   - HdfXsec.get_river_edge_lines
   - RasCmdr.compute_plan
+  - RasCrossSections.get_points
   - RasExamples.extract_project
   - ras.boundaries_df
   - ras.geom_df
@@ -2123,7 +2209,7 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 70
+  code_cells: 73
   executed_cells: 52
 - id: 401_steady_flow_analysis
   filename: 401_steady_flow_analysis.ipynb
@@ -2726,7 +2812,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 25
-  executed_cells: 24
+  executed_cells: 23
 - id: 612_benefit_area_analysis
   filename: 612_benefit_area_analysis.ipynb
   title: Benefit-area mapping for storm-system alternatives
@@ -2796,10 +2882,10 @@ notebooks:
   executed_cells: 7
 - id: 701_benchmarking_versions_6.1_to_6.6
   filename: 701_benchmarking_versions_6.1_to_6.6.ipynb
-  title: Version Benchmarking and Core Scaling (HEC-RAS 6.0, 6.3.1, 6.6, 7.0)
+  title: Version Benchmarking and Core Scaling (HEC-RAS 5.0.5, 6.0, 6.3.1, 6.6, 7.0)
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: 'This notebook benchmarks the same 2D plan across four HEC-RAS versions and an explicit set
+  summary: 'This notebook benchmarks the same 2D plan across five HEC-RAS versions and an explicit set
     of processor core counts. The goal is to separate:'
   tags: []
   difficulty: intermediate
@@ -2813,6 +2899,7 @@ notebooks:
   - RasPlan.get_results_path
   - RasPlan.set_num_cores
   - RasPlan.update_run_flags
+  - RasTcu.status
   - RasUtils.discover_ras_versions
   hec_refs: []
   learning_paths: []
@@ -3559,14 +3646,15 @@ notebooks:
   - RasProcess.validate_geometry_association_cli
   - RasTerrain.create_terrain_from_rasters
   - RasTerrain.create_terrain_hdf
+  - RasTerrain.export_rasmapper_terrain
   - RasTerrain.vrt_to_tiff
   - ras.geom_df
   - ras.project_name
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 25
-  executed_cells: 25
+  code_cells: 26
+  executed_cells: 26
 - id: 921_usgs_study_package_from_primitives
   filename: 921_usgs_study_package_from_primitives.ipynb
   title: USGS Study Package From Primitives
@@ -3738,6 +3826,31 @@ notebooks:
   excluded: false
   code_cells: 10
   executed_cells: 10
+- id: 931_native_rasmapper_terrain_export
+  filename: 931_native_rasmapper_terrain_export.ipynb
+  title: Native RAS Mapper Terrain Export
+  series: 900
+  series_name: Data Integration
+  summary: export a registered, stitched RAS Mapper terrain to one bounded and semantically validated
+    GeoTIFF, then inspect its typed result, source inventory, receipt, grid alignment, and visual evidence
+  tags:
+  - rasmapper
+  - terrain
+  difficulty: advanced
+  est_runtime: null
+  data_project: Muncie
+  functions_used:
+  - RasExamples.extract_project
+  - RasMap.list_terrain_layers
+  - RasTerrain.export_rasmapper_terrain
+  - ras.project_folder
+  - ras.project_name
+  - ras.ras_version
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 9
 - id: 950_ebfe_spring_creek
   filename: 950_ebfe_spring_creek.ipynb
   title: 'Using eBFE Models: Spring Creek 2D Analysis'
@@ -3885,6 +3998,67 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
+  executed_cells: 9
+- id: 956_hydrofabric_conflation_visual_qa
+  filename: 956_hydrofabric_conflation_visual_qa.ipynb
+  title: NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
+  series: 950
+  series_name: eBFE Delivery Validation
+  summary: Visually audits generic HEC-RAS-to-network conflation with the NextGen v2.2 adapter on the
+    Texas Lower Colorado-Cummins SHILOH BRANCH model, including native flowpath and catchment IDs, candidate
+    ranks, score components, explicit resolution states, HUC intersections, and cross-section measures.
+  tags:
+  - 1d
+  - ebfe
+  - geometry
+  - hydrofabric
+  - nextgen
+  - qa
+  difficulty: advanced
+  est_runtime: 5 min
+  data_project: null
+  functions_used:
+  - HdfProject.get_project_extent
+  - HdfXsec.get_cross_sections
+  - HdfXsec.get_river_centerlines
+  - RasCmdr.compute_plan
+  - RasEbfeModels.organize_model
+  - RasNetworkConflation.conflate
+  - RasPlan.update_run_flags
+  - ras.project_name
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 13
+  executed_cells: 13
+- id: 959_ebfe_2d_breakout_geometry_preparation
+  filename: 959_ebfe_2d_breakout_geometry_preparation.ipynb
+  title: eBFE 2D Breakout Geometry Preparation
+  series: 950
+  series_name: eBFE Delivery Validation
+  summary: Qualify and prepare a contained pure-2D HUC12 breakout from Upper Guadalupe 3 plan 08, with
+    byte-identical unsteady cloning, geometry trimming/remeshing, parent terrain and inundation context,
+    and unassigned parent-face flux review.
+  tags:
+  - 2d
+  - breakout
+  - ebfe
+  - geometry
+  - mesh
+  difficulty: advanced
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - HdfMesh.get_mesh_sloped_topology
+  - HdfResultsMesh.get_mesh_max_ws
+  - RasBreakout2D.clone_plan_components
+  - RasBreakout2D.preflight
+  - RasBreakout2D.prepare_cloned_geometry
+  - RasBreakout2D.review_parent_boundary_flux
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
   executed_cells: 9
 - id: 957_ebfe_spring_river_validation
   filename: 957_ebfe_spring_river_validation.ipynb

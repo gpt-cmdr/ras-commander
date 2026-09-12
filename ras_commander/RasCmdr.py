@@ -40,9 +40,11 @@ import hashlib
 import math
 import ntpath
 import os
+import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import time
 import uuid
 from collections import defaultdict
@@ -82,6 +84,7 @@ from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj, init_ras_project, ras
+from .RasTcu import RasTcu
 from .RasUtils import RasUtils
 
 logger = get_logger(__name__)
@@ -108,6 +111,147 @@ class RasCmdr:
         compute_parallel(): Execute multiple plans in parallel using worker folders
         compute_test_mode(): Execute multiple plans sequentially in a test folder
     """
+
+    _RAS_VERSION_PATTERN = re.compile(
+        r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?"
+    )
+
+    @staticmethod
+    def _is_windows() -> bool:
+        """Return whether the current host uses Windows process semantics."""
+        return os.name == "nt"
+
+    @staticmethod
+    def _ras_version_tuple(ras_object: 'RasPrj') -> Optional[tuple[int, int, int]]:
+        """Resolve a numeric release from an initialized RAS object."""
+        candidates = []
+        ras_exe_path = getattr(ras_object, "ras_exe_path", None)
+        if ras_exe_path:
+            candidates.append(Path(str(ras_exe_path)).parent.name)
+        ras_version = getattr(ras_object, "ras_version", None)
+        if ras_version:
+            candidates.append(str(ras_version))
+
+        for candidate in candidates:
+            match = RasCmdr._RAS_VERSION_PATTERN.search(candidate)
+            if match is None:
+                continue
+            major, minor, patch = match.groups()
+            return int(major), int(minor), int(patch or 0)
+        return None
+
+    @staticmethod
+    def _uses_legacy_project_cli(ras_object: 'RasPrj') -> bool:
+        """Return whether Ras.exe expects ``project.prj -c`` syntax.
+
+        Installed-version probes establish this layout for HEC-RAS 5.x. Live
+        6.0 probes accept the modern full project/plan layout, so the boundary
+        is the major release rather than the help text's visual grouping.
+        """
+        version = RasCmdr._ras_version_tuple(ras_object)
+        return version is not None and version[0] == 5
+
+    @staticmethod
+    def _build_compute_command(
+        ras_object: 'RasPrj',
+        project_path: Union[str, Path],
+        plan_path: Union[str, Path],
+    ) -> str:
+        """Build the version-compatible Windows Ras.exe batch command."""
+        ras_exe_path = getattr(ras_object, "ras_exe_path")
+        return RasCmdr._direct_windows_compute_command(
+            ras_exe_path, project_path, plan_path,
+            project_only=RasCmdr._uses_legacy_project_cli(ras_object),
+        )
+
+    @staticmethod
+    def _legacy_wmic_subprocess_env(
+        ras_object: 'RasPrj',
+    ) -> tuple[Optional[dict[str, str]], Optional[tempfile.TemporaryDirectory]]:
+        """Supply the CPU-only WMIC surface required by HEC-RAS 6.3.
+
+        Current Windows releases can omit ``wmic.exe``.  The HEC-RAS 6.3
+        unsteady solver nevertheless invokes five read-only ``wmic CPU get``
+        queries before starting its numerical work and aborts when the
+        resulting ``systemInfo.txt`` is empty.  Provide those fields from CIM
+        through a process-local PATH shim; do not install a system component or
+        mutate the caller's environment.
+
+        Returns:
+            A subprocess environment and its temporary-directory owner.  The
+            caller must keep the owner alive for the complete solver run and
+            call ``cleanup()`` afterwards.  ``(None, None)`` means no shim is
+            required.
+        """
+        version = RasCmdr._ras_version_tuple(ras_object)
+        if (
+            not RasCmdr._is_windows()
+            or version is None
+            or version[:2] != (6, 3)
+            or shutil.which("wmic") is not None
+        ):
+            return None, None
+
+        shim_dir = tempfile.TemporaryDirectory(prefix="ras_commander_wmic_")
+        shim_path = Path(shim_dir.name)
+        (shim_path / "wmic.cmd").write_text(
+            "@echo off\n"
+            'if /I not "%~1"=="CPU" exit /b 1\n'
+            'if /I not "%~2"=="get" exit /b 1\n'
+            'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass '
+            '-File "%~dp0wmic.ps1" "%~3"\n'
+            "exit /b %ERRORLEVEL%\n",
+            encoding="ascii",
+        )
+        (shim_path / "wmic.ps1").write_text(
+            "param([string]$Property)\n"
+            "$names = @{\n"
+            "  'numberofcores' = 'NumberOfCores'\n"
+            "  'numberoflogicalprocessors' = 'NumberOfLogicalProcessors'\n"
+            "  'socketdesignation' = 'SocketDesignation'\n"
+            "  'deviceid' = 'DeviceID'\n"
+            "  'name' = 'Name'\n"
+            "}\n"
+            "$canonical = $names[$Property.ToLowerInvariant()]\n"
+            "if (-not $canonical) { exit 1 }\n"
+            "try {\n"
+            "  $processors = @(Get-CimInstance -ClassName Win32_Processor "
+            "-ErrorAction Stop)\n"
+            "} catch { exit 1 }\n"
+            "if (-not $processors) { exit 1 }\n"
+            "Write-Output $canonical\n"
+            "foreach ($processor in $processors) {\n"
+            "  $value = $processor.$canonical\n"
+            "  if ($null -ne $value) { Write-Output ([string]$value) }\n"
+            "}\n",
+            encoding="ascii",
+        )
+
+        env = os.environ.copy()
+        env["PATH"] = f"{shim_path}{os.pathsep}{env.get('PATH', '')}"
+        logger.warning(
+            "HEC-RAS 6.3 requires WMIC CPU queries, but wmic.exe is unavailable; "
+            "using a process-local CIM compatibility shim."
+        )
+        return env, shim_dir
+
+    @staticmethod
+    def _tcu_blocks_launch(ras_object: 'RasPrj') -> bool:
+        """Fail closed only when a real installed Ras.exe has a negative TCU state."""
+        ras_exe_path = Path(str(getattr(ras_object, "ras_exe_path", "")))
+        if not ras_exe_path.is_file():
+            return False
+        status = RasTcu.status(ras_object=ras_object)
+        if status.accepted is not False:
+            return False
+        logger.error(
+            "HEC-RAS %s cannot be launched because its Terms & Conditions for "
+            "Use have not been accepted for this Windows user (state: %s). "
+            "Open that installed version once and accept the TCU, then retry.",
+            status.version or ras_exe_path.parent.name,
+            status.reason,
+        )
+        return True
 
     @staticmethod
     def _resolve_executable_provenance(
@@ -208,12 +352,15 @@ class RasCmdr:
         executable: Union[str, Path],
         project_path: Union[str, Path],
         plan_path: Union[str, Path],
+        *,
+        project_only: bool = False,
     ) -> str:
         """Build the direct raw Windows command line expected by ``Ras.exe``.
 
-        The three filesystem arguments are quoted unconditionally.  Windows
-        paths cannot contain a literal double quote, so accepting one here
-        would make the command ambiguous and is rejected before launch.
+        Filesystem arguments are quoted unconditionally, including the two
+        paths in the legacy project-only form. Windows paths cannot contain a
+        literal double quote, so accepting one here would make the command
+        ambiguous and is rejected before launch.
         """
         arguments = tuple(
             str(value) for value in (executable, project_path, plan_path)
@@ -221,6 +368,8 @@ class RasCmdr:
         if any('"' in value for value in arguments):
             raise ValueError("HEC-RAS execution paths cannot contain a double quote")
         executable_text, project_text, plan_text = arguments
+        if project_only:
+            return f'"{executable_text}" "{project_text}" -c'
         return (
             f'"{executable_text}" -c "{project_text}" "{plan_text}"'
         )
@@ -2595,8 +2744,10 @@ class RasCmdr:
         """Stop only the active Windows process tree for one project plan.
 
         Process matching is deliberately strict: a ``Ras.exe`` launcher must
-        contain both the initialized project path and resolved plan path. A
-        steady solver must contain the exact project ``.rNN`` file. An
+        contain both the initialized project path and resolved plan path, or
+        the exact project-only ``project.prj -c`` signature with an unambiguous
+        matching Current Plan declaration. A steady solver must contain the
+        exact project ``.rNN`` file. An
         unsteady solver must contain either the exact plan ``.tmp.hdf`` path or
         the jointly exact project directory, ``.cNN`` computation file, and
         complete ``bNN`` plan marker used by native launches. Unrelated RAS
@@ -2855,11 +3006,16 @@ class RasCmdr:
             "artifact_finalization_cleanup": None,
             "artifact_finalization_failure": None,
         }
+        _compute_env = None
+        _wmic_compat_dir = None
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
             logger.debug(f"Using ras_object with project folder: {ras_obj.project_folder}")
             ras_obj.check_initialized()
+
+            if RasCmdr._tcu_blocks_launch(ras_obj):
+                return ComputeResult(success=False, results_df_row=None)
 
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
@@ -3097,9 +3253,14 @@ class RasCmdr:
                 _callback_executable,
                 Path(compute_prj_path).resolve(),
                 Path(compute_plan_path).resolve(),
+                project_only=RasCmdr._uses_legacy_project_cli(compute_ras),
             )
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
             logger.debug(f"Running command: {cmd}")
+
+            _compute_env, _wmic_compat_dir = RasCmdr._legacy_wmic_subprocess_env(
+                compute_ras
+            )
 
             # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
             # rather than a PIPE to avoid an inherited-pipe deadlock (CLB-880): with
@@ -3156,6 +3317,19 @@ class RasCmdr:
                             "before execution; result artifacts were preserved"
                         )
 
+                    # Legacy 5.x reads Current Plan from the project instead of
+                    # accepting a plan argument. Do not change that declaration
+                    # until prior project-only launchers have been ruled out.
+                    if RasCmdr._uses_legacy_project_cli(compute_ras):
+                        legacy_plan_number = RasUtils.normalize_ras_number(
+                            compute_plan_path.suffix.lstrip(".pP")
+                        )
+                        compute_ras.set_current_plan(legacy_plan_number)
+                        logger.debug(
+                            "Set Current Plan=p%s for legacy project-only Ras.exe launch",
+                            legacy_plan_number,
+                        )
+
                     # Re-prove the selected executable after process preflight
                     # so the digest-to-launch interval contains only the
                     # targeted result cleanup and immediate Popen call.
@@ -3170,6 +3344,7 @@ class RasCmdr:
                         selected_executable,
                         resolved_project_path,
                         resolved_plan_path,
+                        project_only=RasCmdr._uses_legacy_project_cli(compute_ras),
                     )
                     launch_working_directory = str(compute_ras.project_folder)
                     _execution_details.update(
@@ -3210,6 +3385,7 @@ class RasCmdr:
                         stdout=_run_log_fh,
                         stderr=subprocess.STDOUT,
                         cwd=launch_working_directory,
+                        env=_compute_env,
                         shell=False,
                     )
                     _launch_observed = True
@@ -3635,6 +3811,22 @@ class RasCmdr:
         finally:
             if _watchdog:
                 _watchdog.stop()
+            if _wmic_compat_dir is not None:
+                try:
+                    _wmic_compat_dir.cleanup()
+                except Exception as compatibility_cleanup_error:
+                    # A transient Windows file lock must not bypass result
+                    # finalization or mask an original execution exception.
+                    _execution_details["compatibility_cleanup_error"] = {
+                        "error_type": type(compatibility_cleanup_error).__name__,
+                        "error_detail": str(compatibility_cleanup_error),
+                    }
+                    logger.warning(
+                        "Could not remove the temporary WMIC compatibility "
+                        "directory after plan %s: %s",
+                        plan_number,
+                        compatibility_cleanup_error,
+                    )
 
             if (
                 _did_execute
@@ -5463,13 +5655,40 @@ class RasCmdr:
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
             )
 
-        # Set num_cores if specified
+        effective_num_cores = None
+        # Set num_cores in both the text plan and the compiled execution HDF.
+        # Native RasUnsteady reads the latter; changing only .p## leaves the
+        # Phase-1 core count in force.
         if num_cores is not None:
             try:
-                RasPlan.set_num_cores(plan_path, num_cores=num_cores, ras_object=ras_obj)
-                logger.info(f"Set number of cores to {num_cores} for plan: {plan_num_str}")
+                effective_num_cores = RasCmdr._effective_linux_core_count(num_cores)
+                RasPlan.set_num_cores(
+                    plan_path,
+                    num_cores=effective_num_cores,
+                    ras_object=ras_obj,
+                )
+                hdf_core_evidence = None
+                if not layout["needs_c_file"]:
+                    hdf_core_evidence = RasCmdr._set_linux_hdf_num_cores(
+                        tmp_hdf,
+                        effective_num_cores,
+                    )
+                logger.info(
+                    "Configured %d native solver core(s) for plan %s%s",
+                    effective_num_cores,
+                    plan_num_str,
+                    (
+                        f" in {len(hdf_core_evidence['updated_attributes'])} "
+                        "compiled-HDF attribute(s)"
+                        if hdf_core_evidence is not None
+                        else ""
+                    ),
+                )
             except Exception as e:
-                logger.error(f"Error setting number of cores: {e}")
+                raise RuntimeError(
+                    f"Could not configure native solver cores for plan "
+                    f"{plan_num_str}: {e}"
+                ) from e
 
         if run_via_wsl:
             return RasCmdr._compute_plan_linux_via_wsl(
@@ -5542,6 +5761,9 @@ class RasCmdr:
 
             env = os.environ.copy()
             env["LD_LIBRARY_PATH"] = ld_path
+            if effective_num_cores is not None:
+                env["OMP_NUM_THREADS"] = str(effective_num_cores)
+                env["MKL_NUM_THREADS"] = str(effective_num_cores)
 
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"
             success = False
@@ -5723,6 +5945,87 @@ class RasCmdr:
         }
 
     @staticmethod
+    def _effective_linux_core_count(requested_cores: int) -> int:
+        """Cap a requested solver core count to the process affinity envelope."""
+        if (
+            isinstance(requested_cores, bool)
+            or not isinstance(requested_cores, Number)
+            or int(requested_cores) != requested_cores
+            or int(requested_cores) < 1
+        ):
+            raise ValueError("num_cores must be a positive integer")
+        requested = int(requested_cores)
+
+        available = None
+        affinity_reader = getattr(os, "sched_getaffinity", None)
+        if callable(affinity_reader):
+            try:
+                available = len(affinity_reader(0))
+            except (OSError, TypeError):
+                available = None
+        if not available:
+            cpu_reader = getattr(os, "cpu_count", None)
+            if callable(cpu_reader):
+                available = cpu_reader()
+        if not available:
+            return requested
+
+        effective = min(requested, int(available))
+        if effective < requested:
+            logger.warning(
+                "Capped requested native solver cores from %d to %d based on "
+                "the process affinity envelope",
+                requested,
+                effective,
+            )
+        return effective
+
+    @staticmethod
+    def _set_linux_hdf_num_cores(tmp_hdf: Path, num_cores: int) -> dict:
+        """Write the effective core count into a canonical plan ``*.tmp.hdf``."""
+        import h5py
+        import numpy as np
+
+        tmp_hdf = Path(tmp_hdf)
+        if not tmp_hdf.name.casefold().endswith(".tmp.hdf"):
+            raise ValueError("Core control target must be a '*.tmp.hdf' file")
+        if not tmp_hdf.is_file():
+            raise FileNotFoundError(f"Compiled plan HDF not found: {tmp_hdf}")
+
+        updated_attributes = []
+        with h5py.File(tmp_hdf, "r+") as hdf_file:
+            parameters = hdf_file.get("Plan Data/Plan Parameters")
+            if parameters is None:
+                raise ValueError("Compiled plan HDF lacks /Plan Data/Plan Parameters")
+            for attribute_name in ("1D Cores", "2D Cores (per mesh)"):
+                if attribute_name not in parameters.attrs:
+                    continue
+                prior = np.asarray(parameters.attrs[attribute_name])
+                replacement = np.full(prior.shape, num_cores, dtype=prior.dtype)
+                if prior.shape == ():
+                    replacement = replacement[()]
+                parameters.attrs.modify(attribute_name, replacement)
+                updated_attributes.append(
+                    {
+                        "attribute": attribute_name,
+                        "before": prior.tolist(),
+                        "after": np.asarray(
+                            parameters.attrs[attribute_name]
+                        ).tolist(),
+                    }
+                )
+            if not updated_attributes:
+                raise ValueError(
+                    "Compiled plan HDF contains no supported solver-core attributes"
+                )
+            hdf_file.flush()
+        return {
+            "path": str(tmp_hdf),
+            "effective_cores": num_cores,
+            "updated_attributes": updated_attributes,
+        }
+
+    @staticmethod
     def _build_linux_ld_path(ras_exe_dir: Path, layout: dict) -> str:
         """Build LD_LIBRARY_PATH for a Linux RasUnsteady run, per layout (CLB-886)."""
         ras_exe_dir = Path(ras_exe_dir)
@@ -5777,14 +6080,38 @@ class RasCmdr:
         for marker in error_markers:
             if marker in low:
                 return False, f"solver log reports failure ('{marker}')"
+        import re
+
+        explicit_error = re.search(
+            r"(?im)^\s*(?:error\s*:|hdf_error\b)",
+            log_text,
+        )
+        if explicit_error:
+            return False, (
+                "solver log reports failure "
+                f"('{explicit_error.group(0).strip()}')"
+            )
+        if "finished unsteady flow simulation" not in low:
+            return False, "solver log missing 'Finished Unsteady Flow Simulation' banner"
         try:
             import h5py
             with h5py.File(str(result_hdf), "r") as hf:
                 results = hf.get("Results")
                 if results is None:
                     return False, "result HDF missing /Results group"
-                if results.get("Unsteady") is None:
+                unsteady = results.get("Unsteady")
+                if unsteady is None:
                     return False, "result HDF missing /Results/Unsteady group"
+                populated_datasets = 0
+
+                def _count_populated(_name, item):
+                    nonlocal populated_datasets
+                    if isinstance(item, h5py.Dataset) and item.size > 0:
+                        populated_datasets += 1
+
+                unsteady.visititems(_count_populated)
+                if populated_datasets == 0:
+                    return False, "result HDF has no populated /Results/Unsteady datasets"
         except Exception as e:
             return False, f"result HDF unreadable or invalid: {e}"
         return True, "ok"

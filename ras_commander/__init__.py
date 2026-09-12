@@ -17,7 +17,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.99.1"
+    __version__ = "0.99.2"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -140,9 +140,36 @@ _LAZY_EXPORTS = {
     'RasBreach': ('.RasBreach', 'RasBreach'),
     'RasFloodway': ('.RasFloodway', 'RasFloodway'),
     'RasHydroCompare': ('.RasHydroCompare', 'RasHydroCompare'),
+    **{
+        name: ('.RasNetworkConflation', name)
+        for name in (
+            'RasNetworkConflation', 'NetworkConflationResult',
+            'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
+            'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
+            'NWMHydrofabricAdapter', 'NextGenFlowpathAdapter',
+        )
+    },
     'RasModPuls': ('.RasModPuls', 'RasModPuls'),
     'RasMonteCarlo': ('.RasMonteCarlo', 'RasMonteCarlo'),
     'RasFlowOptimization': ('.RasFlowOptimization', 'RasFlowOptimization'),
+    **{
+        name: ('.RasBreakout1D', name)
+        for name in (
+            'RasBreakout1D', 'Breakout1DAssemblyResult',
+            'Breakout1DDomainSelection', 'Breakout1DResult',
+            'Breakout1DSelection', 'Breakout1DSourceCatalog',
+            'Breakout1DPlan',
+            'Breakout1DValidationReport',
+        )
+    },
+    **{
+        name: ('.RasBreakout2D', name)
+        for name in (
+            'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
+            'Breakout2DCloneResult', 'Breakout2DPreparationResult',
+            'Breakout2DFluxReview',
+        )
+    },
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
@@ -176,6 +203,7 @@ _LAZY_EXPORTS = {
             'GeometryCompleteResult', 'RasProcessRecord',
             'RasProcessQueryError', 'RasProcessInventory',
             'PlanProcessInventory', 'PlanCancellationResult',
+            'FlowPathPolicyResult', 'TerrainExportResult',
         )
     },
     **{
@@ -184,6 +212,10 @@ _LAZY_EXPORTS = {
             'BenefitAreaResult',
             'BenefitCategory', 'RasBenefits',
         )
+    },
+    **{
+        name: ('.RasCrossSections', name)
+        for name in ('RasCrossSections', 'VerticalTransform')
     },
     'BenefitAreaConfig': ('._execution_types', 'BenefitAreaConfig'),
     **{
@@ -226,7 +258,8 @@ _LAZY_EXPORTS = {
             'GeomLateral', 'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
             'GeomCulvertGIS', 'GeomReferenceFeatures', 'GeomBcLines',
             'GeomMesh', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
-            'BCFixResult',
+            'BCFixResult', 'DomainContainmentResult',
+            'DomainContainmentViolation',
         )
     },
     **{
@@ -270,7 +303,9 @@ _FIXIT_EXPORTS = {
 }
 
 # Terrain module - HEC-RAS terrain creation and manipulation
-_TERRAIN_EXPORTS = {'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter'}
+_TERRAIN_EXPORTS = {
+    'RasTerrain', 'RasTerrainModification', 'RasTerrainModWriter',
+}
 
 # Results module - Compute message parsing and execution summary
 _RESULTS_EXPORTS = {'ResultsParser', 'ResultsSummary'}
@@ -374,11 +409,26 @@ __all__ = [
     'PlanExecutionCleanup', 'PlanExecutionCleanupError',
     'ResultArtifactAmbiguityError',
     'PreprocessResult', 'GeometryPreprocessResult',
-    'GeometryLayerResult', 'GeometryCompleteResult',
+    'GeometryLayerResult', 'GeometryCompleteResult', 'FlowPathPolicyResult',
+    'TerrainExportResult',
     'RasGeometryCompute',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
+    'RasBreakout1D', 'Breakout1DAssemblyResult',
+    'Breakout1DDomainSelection', 'Breakout1DResult',
+    'Breakout1DSelection', 'Breakout1DSourceCatalog',
+    'Breakout1DPlan',
+    'Breakout1DValidationReport',
+    'RasBreakout2D', 'Breakout2DSpec', 'Breakout2DPreflight',
+    'Breakout2DCloneResult', 'Breakout2DPreparationResult',
+    'Breakout2DFluxReview',
+    'RasNetworkConflation', 'NetworkConflationResult',
+    'NetworkEdgeCoverageResult', 'NetworkEdgeCoveragePlanResult',
+    'ConflationStatus', 'NetworkAdapter', 'NHDPlusAdapter',
+    'NWMHydrofabricAdapter',
+    'NextGenFlowpathAdapter',
+    'RasCrossSections', 'VerticalTransform',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
@@ -395,7 +445,8 @@ __all__ = [
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
     'GeomPipeNetwork',
-    'MeshResult', 'BCConflict', 'BCFixResult',
+    'MeshResult', 'BCConflict', 'BCFixResult', 'DomainContainmentResult',
+    'DomainContainmentViolation',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',

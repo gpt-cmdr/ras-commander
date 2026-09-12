@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial import KDTree
 
+from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfPlan import HdfPlan
 from .HdfResultsMesh import HdfResultsMesh
@@ -1170,30 +1171,17 @@ def _decode_hdf_attr(value: Any) -> Any:
     return value
 
 
-def _read_unit_metadata(geom_hdf_path: Path) -> Dict[str, str]:
-    """Read project unit metadata from a geometry HDF."""
-    raw_si_units = None
-    raw_unit_system = None
-    with h5py.File(geom_hdf_path, "r") as hdf_file:
-        geometry_group = hdf_file.get("Geometry")
-        if geometry_group is not None:
-            raw_si_units = _decode_hdf_attr(geometry_group.attrs.get("SI Units"))
-        raw_unit_system = _decode_hdf_attr(hdf_file.attrs.get("Units System"))
-
-    unit_text = str(raw_unit_system or "").strip().lower()
-    si_units = str(raw_si_units).strip().lower() in {
-        "true",
-        "1",
-        "yes",
-        "si",
-    } or unit_text.startswith("si")
-
-    length_units = "m" if si_units else "ft"
+def _read_unit_metadata(plan_hdf_path: Path) -> Dict[str, str]:
+    """Read strict unit metadata from a standalone plan-result HDF."""
+    metadata = HdfBase.get_result_unit_metadata(plan_hdf_path)
     return {
-        "unit_system": "SI" if si_units else "US Customary",
-        "length_units": length_units,
-        "velocity_units": "m/s" if si_units else "ft/s",
-        "depth_units": length_units,
+        key: str(metadata[key])
+        for key in (
+            "unit_system",
+            "length_units",
+            "velocity_units",
+            "depth_units",
+        )
     }
 
 
@@ -1322,7 +1310,7 @@ def _profile_dataframe(
 ) -> pd.DataFrame:
     """Build a profile DataFrame with standard RAS metadata attrs."""
     result_df = pd.DataFrame({column: profile_data[column] for column in columns})
-    result_df.attrs.update(_read_unit_metadata(geom_hdf_path))
+    result_df.attrs.update(_read_unit_metadata(hdf_path))
     result_df.attrs["sample_spacing"] = float(sample_spacing)
     result_df.attrs[source_key] = [source_value]
     result_df.attrs["ras_version"] = _read_ras_version(hdf_path)

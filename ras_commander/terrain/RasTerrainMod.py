@@ -57,6 +57,7 @@ Example:
 
 import platform
 import threading
+import warnings
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -659,6 +660,13 @@ class RasTerrainMod:
         """
         Compute a full-resolution raster of terrain with modifications applied.
 
+        .. deprecated:: 0.99.2
+            Use :meth:`RasTerrain.export_rasmapper_terrain` with
+            ``downsample_factor=1`` and ``rasterize_modifications=True``.
+            This compatibility method samples one horizontal terrain profile
+            per row and is not equivalent to RAS Mapper's native registered-
+            terrain consolidation.
+
         Reads the original terrain GeoTIFF to determine the output grid (CRS,
         resolution, extent), then samples the modified terrain (with channels,
         levees, polygon overrides, etc.) at each cell center row-by-row via
@@ -690,6 +698,18 @@ class RasTerrainMod:
             ... )
             >>> print(f"Shape: {arr.shape}, range: {arr.min():.1f} to {arr.max():.1f}")
         """
+        warnings.warn(
+            "RasTerrainMod.compute_modified_terrain_raster() is deprecated and "
+            "will be removed in ras-commander 1.1. Use "
+            "RasTerrain.export_rasmapper_terrain(..., downsample_factor=1, "
+            "rasterize_modifications=True). The replacement selects a "
+            "registered project terrain and does not require geom_hdf_path or "
+            "a caller-supplied terrain GeoTIFF.",
+            DeprecationWarning,
+            # Account for the public ``@log_call`` wrapper so the warning
+            # points at the caller rather than the decorator implementation.
+            stacklevel=3,
+        )
         import rasterio
 
         terrain_tif_path = Path(terrain_tif_path)

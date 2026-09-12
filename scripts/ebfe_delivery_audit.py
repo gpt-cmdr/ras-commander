@@ -16,7 +16,8 @@ from typing import Any, Optional
 
 from pyproj import CRS
 
-from ras_commander import RasPrj, RasUtils, init_ras_project
+from ras_commander import RasMap, RasPrj, RasUtils, init_ras_project
+from ras_commander._rasmap_schema import rasmap_dataframe_is_usable
 from ras_commander.hdf import HdfBase
 
 
@@ -69,6 +70,9 @@ class ProjectAudit:
     plan_count: int
     flow_types: list[str] = field(default_factory=list)
     has_rasmap: bool = False
+    rasmap_status: Optional[str] = None
+    rasmap_error: Optional[str] = None
+    rasmap_field_errors: dict[str, str] = field(default_factory=dict)
     project_crs: Optional[str] = None
     projection_file: Optional[str] = None
     output_hdf_count: int = 0
@@ -637,35 +641,53 @@ def audit_loaded_project(project_folder: Path, ras_obj: RasPrj) -> ProjectAudit:
                 audit.dss_missing_references.append(ref)
 
     rasmap_df = getattr(ras_obj, "rasmap_df", None)
+    rasmap_can_supply_fields = True
     if rasmap_df is not None and not rasmap_df.empty:
         row = rasmap_df.iloc[0]
-        projection_path = scalar_from_rasmap(row.get("projection_path"))
-        if projection_path:
-            audit.projection_file = rel_path(Path(projection_path))
+        if row.get("rasmap_status") == "absent" and rasmap_path is not None:
+            # Delivery discovery accepts a differently named map, while RasPrj
+            # initializes only the canonical <project-name>.rasmap path.
+            rasmap_df = RasMap.parse_rasmap(rasmap_path)
+            row = rasmap_df.iloc[0]
+        audit.rasmap_status = row.get("rasmap_status")
+        audit.rasmap_error = row.get("rasmap_error")
+        raw_field_errors = row.get("rasmap_field_errors", {})
+        if isinstance(raw_field_errors, dict):
+            audit.rasmap_field_errors = raw_field_errors
 
-        terrain_paths = string_list(row.get("terrain_hdf_path"))
-        land_cover_paths = string_list(row.get("landcover_hdf_path"))
-        audit.terrain_layers = [rel_path(Path(path)) for path in terrain_paths]
-        audit.land_cover_layers = [rel_path(Path(path)) for path in land_cover_paths]
+        rasmap_can_supply_fields = rasmap_dataframe_is_usable(rasmap_df)
+        if rasmap_can_supply_fields:
+            projection_path = scalar_from_rasmap(row.get("projection_path"))
+            if projection_path:
+                audit.projection_file = rel_path(Path(projection_path))
 
-        for terrain_path in terrain_paths:
-            actual = get_asset_crs(Path(terrain_path))
-            if not compare_crs(project_crs, actual):
-                audit.terrain_crs_mismatches.append(f"{rel_path(Path(terrain_path))}: {actual}")
+            terrain_paths = string_list(row.get("terrain_hdf_path"))
+            land_cover_paths = string_list(row.get("landcover_hdf_path"))
+            audit.terrain_layers = [rel_path(Path(path)) for path in terrain_paths]
+            audit.land_cover_layers = [rel_path(Path(path)) for path in land_cover_paths]
 
-        for land_cover_path in land_cover_paths:
-            actual = get_asset_crs(Path(land_cover_path))
-            if not compare_crs(project_crs, actual):
-                audit.land_cover_crs_mismatches.append(f"{rel_path(Path(land_cover_path))}: {actual}")
+            for terrain_path in terrain_paths:
+                actual = get_asset_crs(Path(terrain_path))
+                if not compare_crs(project_crs, actual):
+                    audit.terrain_crs_mismatches.append(
+                        f"{rel_path(Path(terrain_path))}: {actual}"
+                    )
 
-    if rasmap_path is not None and not audit.terrain_layers:
+            for land_cover_path in land_cover_paths:
+                actual = get_asset_crs(Path(land_cover_path))
+                if not compare_crs(project_crs, actual):
+                    audit.land_cover_crs_mismatches.append(
+                        f"{rel_path(Path(land_cover_path))}: {actual}"
+                    )
+
+    if rasmap_path is not None and rasmap_can_supply_fields and not audit.terrain_layers:
         for terrain_path in rasmap_layer_paths(project_folder, rasmap_path, "TerrainLayer"):
             audit.terrain_layers.append(rel_path(terrain_path))
             actual = get_asset_crs(terrain_path)
             if not compare_crs(project_crs, actual):
                 audit.terrain_crs_mismatches.append(f"{rel_path(terrain_path)}: {actual}")
 
-    if rasmap_path is not None and not audit.land_cover_layers:
+    if rasmap_path is not None and rasmap_can_supply_fields and not audit.land_cover_layers:
         for land_cover_path in rasmap_layer_paths(project_folder, rasmap_path, "LandCoverLayer"):
             audit.land_cover_layers.append(rel_path(land_cover_path))
             actual = get_asset_crs(land_cover_path)
@@ -676,7 +698,12 @@ def audit_loaded_project(project_folder: Path, ras_obj: RasPrj) -> ProjectAudit:
         audit.issues.append("Pre-computed HDF results are not fully inside the project folder.")
     if audit.dss_missing_references:
         audit.issues.append("One or more DSS references are broken.")
-    if audit.has_rasmap and not audit.projection_file:
+    if audit.rasmap_status == "failed":
+        audit.issues.append(f"RAS Mapper parse failed: {audit.rasmap_error}")
+    elif audit.rasmap_status == "parsed_with_errors":
+        failed_fields = ", ".join(sorted(audit.rasmap_field_errors))
+        audit.issues.append(f"RAS Mapper field extraction failed: {failed_fields}")
+    if audit.has_rasmap and audit.rasmap_status != "failed" and not audit.projection_file:
         audit.issues.append("RAS Mapper projection file is missing.")
     if audit.terrain_crs_mismatches:
         audit.issues.append("Terrain CRS mismatch detected.")

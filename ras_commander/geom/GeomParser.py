@@ -36,7 +36,7 @@ Example Usage:
 
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any, Union
+from typing import List, Optional, Tuple, Union
 from datetime import datetime
 
 from ..LoggingConfig import get_logger
@@ -508,7 +508,7 @@ class GeomParser:
 
     @staticmethod
     @log_call
-    def safe_write_geometry(geom_file: Path,
+    def safe_write_geometry(geom_file: Union[str, Path],
                             modified_lines: List[str],
                             create_backup: bool = True) -> Optional[Path]:
         """
@@ -526,7 +526,7 @@ class GeomParser:
             5. Return backup path for potential rollback
 
         Parameters:
-            geom_file (Path): Path to geometry file to write
+            geom_file (str | Path): Path to geometry file to write
             modified_lines (List[str]): Lines to write to file
             create_backup (bool): Create .bak file before modifying (default True)
 
@@ -566,9 +566,19 @@ class GeomParser:
                 backup_path = GeomParser.create_backup(geom_file)
                 logger.debug(f"Created backup: {backup_path}")
 
-            # Step 2: Write to temp file
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
+            # Step 2: Preserve the source file's line-ending convention.
+            # Python universal-newline reads normalize CRLF to ``\n``; writing
+            # those lines verbatim makes legacy HEC-RAS/VB6 treat a cloned
+            # geometry as one giant record. Native geometry files are normally
+            # CRLF, so recover that convention from the pre-edit bytes.
+            source_bytes = geom_file.read_bytes()
+            line_ending = "\r\n" if b"\r\n" in source_bytes else "\n"
+            text = "".join(modified_lines)
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
+            if line_ending != "\n":
+                text = text.replace("\n", line_ending)
+            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
+                f.write(text)
 
             # Step 3: Basic validation - check temp file has content
             if temp_path.stat().st_size == 0:
@@ -576,14 +586,7 @@ class GeomParser:
 
             # Step 4: Atomic rename temp -> original
             import os
-            if os.name == 'nt':  # Windows
-                # Windows doesn't support atomic rename over existing file
-                # Remove original first, then rename
-                geom_file.unlink()
-                temp_path.rename(geom_file)
-            else:  # Unix-like
-                # Atomic rename
-                temp_path.rename(geom_file)
+            os.replace(temp_path, geom_file)
 
             logger.debug(f"Successfully wrote geometry file: {geom_file}")
             return backup_path

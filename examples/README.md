@@ -5,7 +5,7 @@ The notebooks are reference workflows for hydraulic modelers and developers;
 use them to understand API patterns, then move repeatable production logic into
 library code or scripts.
 
-The current git inventory contains **127 canonical notebooks** under
+The current git inventory contains **137 canonical notebooks** under
 `examples/`. Executed copies, temporary test notebooks, extracted HEC-RAS
 projects, and generated artifacts are intentionally excluded from this README.
 
@@ -36,7 +36,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 - [720_precipitation_methods_comprehensive.ipynb](720_precipitation_methods_comprehensive.ipynb), [721_precipitation_hyetograph_comparison.ipynb](721_precipitation_hyetograph_comparison.ipynb), and [725_atlas14_spatial_variance.ipynb](725_atlas14_spatial_variance.ipynb) - precipitation methods.
 - [910_usgs_gauge_catalog.ipynb](910_usgs_gauge_catalog.ipynb) through [923_stofs3d_coastal_boundary.ipynb](923_stofs3d_coastal_boundary.ipynb) - gauge, validation, forecast, and coastal boundary workflows.
 - [917_mrms_precipitation_qpe.ipynb](917_mrms_precipitation_qpe.ipynb) and [924_mrms_netcdf_rain_on_grid.ipynb](924_mrms_netcdf_rain_on_grid.ipynb) - MRMS QPE workflows, including direct NetCDF rain-on-grid validation.
-- [920_terrain_creation.ipynb](920_terrain_creation.ipynb), [925_xs_interpolation_surface.ipynb](925_xs_interpolation_surface.ipynb), and [930_terrain_modification_analysis.ipynb](930_terrain_modification_analysis.ipynb) - terrain and geometry surface workflows.
+- [920_terrain_creation.ipynb](920_terrain_creation.ipynb), [925_xs_interpolation_surface.ipynb](925_xs_interpolation_surface.ipynb), [930_terrain_modification_analysis.ipynb](930_terrain_modification_analysis.ipynb), and [931_native_rasmapper_terrain_export.ipynb](931_native_rasmapper_terrain_export.ipynb) - terrain creation, analysis, and native registered-terrain export workflows.
 - [950_ebfe_spring_creek.ipynb](950_ebfe_spring_creek.ipynb) through [958_model_sources_showcase.ipynb](958_model_sources_showcase.ipynb) - FEMA eBFE/BLE organization and validation.
 - [960_cloud_native_geometry_export.ipynb](960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](962_cloud_native_cog_results_export.ipynb) - cloud-native export with `ras2cng`.
 
@@ -147,13 +147,15 @@ projects, and generated artifacts are intentionally excluded from this README.
 ### 920s - Terrain & Surfaces
 
 `920_terrain_creation.ipynb`, `925_xs_interpolation_surface.ipynb`,
-`930_terrain_modification_analysis.ipynb`
+`930_terrain_modification_analysis.ipynb`,
+`931_native_rasmapper_terrain_export.ipynb`
 
 ### 950s - eBFE Delivery
 
 `950_ebfe_spring_creek.ipynb`, `951_ebfe_north_galveston_bay.ipynb`,
 `952_ebfe_upper_guadalupe_cascade.ipynb`, `953_ebfe_rio_hondo_steady_collection.ipynb`,
 `954_ebfe_lake_maurepas_validation.ipynb`, `955_ebfe_tickfaw_validation.ipynb`,
+`956_hydrofabric_conflation_visual_qa.ipynb`,
 `957_ebfe_spring_river_validation.ipynb`, `958_model_sources_showcase.ipynb`
 
 ### 960s - Cloud-Native Export

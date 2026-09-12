@@ -4,5 +4,8 @@ include ras_commander/native/InvokeRas5GeometryLandCover.ps1
 include ras_commander/native/InvokeRas5LandCover.ps1
 include ras_commander/native/RasStoreMapHelper.exe
 include ras_commander/native/RasStoreMapHelper.cs
+include ras_commander/native/RasMapperTerrainExportHelper.exe
+include ras_commander/native/RasMapperTerrainExportHelper.cs
+include ras_commander/native/BuildRasMapperTerrainExportHelper.ps1
 recursive-include ras_commander/resources/templates *
 

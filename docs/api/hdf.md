@@ -11,8 +11,17 @@ Base functionality for HDF file operations.
 - `get_dataset_info(hdf_path, group_path=None)` - Print HDF structure
 - `get_attrs(hdf_path, path)` - Get attributes at path
 - `get_projection(hdf_path)` - Get coordinate system
+- `get_result_unit_metadata(hdf_path, strict=True)` - Read normalized unit
+  metadata and source evidence from a standalone plan-result HDF
 - `parse_ras_datetime(datetime_str)` - Parse HEC-RAS datetime string
 - `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
+
+`get_result_unit_metadata()` is deliberately a result-HDF fallback. When the
+full project is available, use `RasPrj.get_project_units()` and treat the text
+`.prj` marker as authoritative. The HDF reader never defaults missing metadata
+to English units. It raises on missing, unrecognized, geometry-only, or
+contradictory metadata unless `strict=False`, which returns the raw evidence
+and an unresolved status for audit workflows.
 
 ### HdfPlan
 
@@ -185,6 +194,9 @@ Plan-level results.
 Cross-section and river geometry extraction from HDF.
 
 - `get_cross_sections(hdf_path)` - Extract cross-section geometries as GeoDataFrame
+- `get_xs_coords(hdf_path, river=None, reach=None, rs=None)` - Extract native
+  station/elevation points as XYZ with point/station order, cut-line distance,
+  Manning's n, bank classification, coordinate metadata, and source provenance
 - `get_river_centerlines(hdf_path)` - Extract river centerlines
 - `get_river_stationing(hdf_path)` - Calculate river stationing along centerlines
 - `get_river_reaches(hdf_path)` - Return model 1D river reach lines
@@ -293,8 +305,16 @@ Native infiltration authoring and read-only inspection.
 - `set_infiltration_sidecar_parameters(hdf_path, data, hecras_version=...)` - Set sidecar parameters through native RASMapper serialization
 - `scale_infiltration_sidecar_parameters(hdf_path, data, scale_factors, hecras_version=...)` - Scale and save sidecar parameters natively
 - `get_classification_polygons(hdf_path)` - Read infiltration sidecar classification polygon overrides
-- `get_infiltration_map(hdf_path)` - Read infiltration raster map
+- `get_infiltration_map(hdf_path=None, ras_object=None)` - Read the
+  infiltration raster map; without an explicit path, resolve the first usable
+  `rasmap_df["infiltration_hdf_path"]`
 - `calculate_soil_statistics(hdf_path)` - Process zonal statistics for soil analysis
+- `get_soils_raster_stats(geom_hdf_path, soil_hdf_path=None, ras_object=None)` -
+  Resolve the soil sidecar consistently; lookup failures retain the empty-frame
+  recovery contract
+- `get_soil_raster_stats(...)`, `get_infiltration_stats(...)`, and
+  `get_landcover_raster_stats(...)` - Use the same status-aware sidecar resolver
+  and empty-frame recovery contract
 
 The compatibility names `create_infiltration_group()`,
 `set_infiltration_baseoverrides()`, `set_infiltration_layer_data()`, and
@@ -311,7 +331,8 @@ Ras Commander never hand-authors or selectively deletes
 
 - `get_significant_mukeys(hdf_path, threshold)` - Identify mukeys above percentage threshold
 - `calculate_total_significant_percentage(hdf_path)` - Compute total coverage
-- `get_infiltration_parameters(hdf_path, mukey)` - Get parameters for specific mukey
+- `get_infiltration_parameters(hdf_path=None, mukey=None, ras_object=None)` - Get
+  parameters for a specific mukey, with the same optional `rasmap_df` lookup
 - `calculate_weighted_parameters(hdf_path)` - Compute weighted average parameters
 
 **Data Export:**

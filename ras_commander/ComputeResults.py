@@ -8,6 +8,8 @@ Classes:
     ComputeResult: Result of compute_plan() - backward compatible with bool
     ComputeParallelResult: Result of compute_parallel/test_mode - backward compatible with Dict[str, bool]
     RasControlResult: Result of RasControl.run_plan() - backward compatible with Tuple[bool, List[str]]
+    FlowPathPolicyResult: Evidence for safe 1D overbank flow-path handling
+    TerrainExportResult: Native RAS Mapper terrain export - backward compatible with bool
 """
 
 import json
@@ -15,9 +17,12 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    import geopandas as gpd
 
 
 def _strict_json_object_copy(
@@ -958,4 +963,102 @@ class GeometryCompleteResult:
             f"edge_lines={self.edge_lines_written}, "
             f"interp_surface={self.interpolation_surface_written}, "
             f"flow_paths={self.flow_paths_written}, time={time_str})"
+        )
+
+
+@dataclass
+class FlowPathPolicyResult:
+    """Evidence used to select a safe 1D overbank flow-path policy.
+
+    ``RasGeometryCompute.assess_flow_path_policy()`` creates the evidence on an
+    isolated project copy.  The two supported recommendations are
+    ``"regenerate_and_recompute"`` and
+    ``"preserve_and_recompute_only_at_join_boundary"``.
+
+    Attributes
+    ----------
+    geom_hdf_path
+        Original geometry HDF.  It is never modified by the assessment.
+    recommended_policy
+        Conservative model-level recommendation.  A preserve recommendation
+        on any reach controls the model-level value.
+    tolerance_fraction
+        Relative tolerance used to compare stored and regenerated lengths.
+    xs_metrics_df
+        Per-cross-section stored/regenerated length evidence.
+    reach_metrics_df
+        Per-river/reach policy and main-channel QA summary.
+    source_flow_paths_gdf
+        Flow paths present in the original geometry, if any.
+    regenerated_flow_paths_gdf
+        RAS Mapper flow paths generated on the isolated copy.
+    join_segments_gdf
+        Optional regenerated left/right flow-path segments clipped between the
+        two cross sections adjacent to a proposed join.
+    review_segments_path
+        GeoParquet path written for ``join_segments_gdf``, when requested.
+    working_copy
+        Retained copied geometry HDF when ``keep_working_copy=True``.
+    """
+
+    geom_hdf_path: Path
+    recommended_policy: str
+    tolerance_fraction: float
+    xs_metrics_df: "gpd.GeoDataFrame"
+    reach_metrics_df: pd.DataFrame
+    source_flow_paths_gdf: "gpd.GeoDataFrame"
+    regenerated_flow_paths_gdf: "gpd.GeoDataFrame"
+    join_segments_gdf: "gpd.GeoDataFrame"
+    review_segments_path: Optional[Path] = None
+    working_copy: Optional[Path] = None
+
+    def __repr__(self) -> str:
+        return (
+            "FlowPathPolicyResult("
+            f"policy={self.recommended_policy!r}, "
+            f"tolerance={self.tolerance_fraction:.4g})"
+        )
+
+
+@dataclass
+class TerrainExportResult:
+    """Result of a supervised native RAS Mapper terrain export.
+
+    ``bool(result)`` is true only when the native output passed semantic
+    validation and both the GeoTIFF and machine-readable receipt were
+    promoted to their requested paths.
+    """
+
+    success: bool
+    output_path: Path
+    receipt_path: Path
+    terrain_name: str = ""
+    terrain_hdf_path: Optional[Path] = None
+    requested_extent: Optional[tuple[float, float, float, float]] = None
+    snapped_extent: Optional[tuple[float, float, float, float]] = None
+    native_cell_size: Optional[float] = None
+    output_cell_size: Optional[float] = None
+    downsample_factor: int = 1
+    rasterize_modifications: bool = True
+    source_inventory: pd.DataFrame = field(default_factory=lambda: pd.DataFrame())
+    validation: Dict[str, Any] = field(default_factory=dict)
+    messages: List[str] = field(default_factory=list)
+    elapsed_seconds: float = 0.0
+    timed_out: bool = False
+    error: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        status = "SUCCESS" if self.success else "FAILED"
+        time_str = (
+            f"{self.elapsed_seconds:.1f}s"
+            if self.elapsed_seconds > 0
+            else "N/A"
+        )
+        return (
+            "TerrainExportResult("
+            f"{status}, terrain={self.terrain_name!r}, "
+            f"factor={self.downsample_factor}x, time={time_str})"
         )

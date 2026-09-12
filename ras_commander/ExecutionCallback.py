@@ -99,7 +99,8 @@ class ExecutionCallback(Protocol):
 
         Args:
             plan_number: Plan identifier (e.g., "01", "02")
-            command: Full command line (e.g., '"C:/RAS/RAS.exe" -c project.prj plan.p01')
+            command: Full version-specific command line (for example, HEC-RAS
+                6.0+ uses '"C:/RAS/RAS.exe" -c project.prj plan.p01').
 
         Note:
             At this point the subprocess has been constructed but not yet started.

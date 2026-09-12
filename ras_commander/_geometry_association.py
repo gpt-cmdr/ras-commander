@@ -353,6 +353,8 @@ def list_registered_rasmap_layers(
     rasmap_path: Optional[PathLike] = None,
 ) -> list[dict[str, Any]]:
     """List terrain and land-classification layer names registered in .rasmap."""
+    from . import _rasmap_layer_helper as _mlh
+
     project_folder = safe_resolve_path(project_folder)
     rasmap_path = Path(rasmap_path) if rasmap_path is not None else None
     if rasmap_path is None:
@@ -377,25 +379,23 @@ def list_registered_rasmap_layers(
             }
         )
 
-    map_layers = root.find("MapLayers")
-    if map_layers is not None:
-        for layer in map_layers.findall("Layer"):
-            if layer.attrib.get("Type") != "LandCoverLayer":
-                continue
-            filename = layer.attrib.get("Filename")
-            resolved_path = _resolve_rasmap_filename(project_folder, filename)
-            records.append(
-                {
-                    "name": layer.attrib.get("Name", ""),
-                    "type": layer.attrib.get("Type", ""),
-                    "filename": filename,
-                    "resolved_path": str(resolved_path) if resolved_path else None,
-                    "layer_kind": _infer_land_classification_kind(
-                        filename,
-                        _get_selected_parameter(layer),
-                    ),
-                }
-            )
+    for layer in _mlh.top_level_map_layers(root):
+        if layer.attrib.get("Type") not in _mlh.LAND_CLASSIFICATION_LAYER_TYPES:
+            continue
+        filename = layer.attrib.get("Filename")
+        resolved_path = _resolve_rasmap_filename(project_folder, filename)
+        records.append(
+            {
+                "name": layer.attrib.get("Name", ""),
+                "type": layer.attrib.get("Type", ""),
+                "filename": filename,
+                "resolved_path": str(resolved_path) if resolved_path else None,
+                "layer_kind": _infer_land_classification_kind(
+                    filename,
+                    _get_selected_parameter(layer),
+                ),
+            }
+        )
 
     return records
 
