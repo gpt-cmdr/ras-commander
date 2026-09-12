@@ -53,6 +53,8 @@ _RAS_PROCESS_NAMES = frozenset({
 })
 
 _DISMISS_LABELS = ["OK", "&OK", "Yes", "&Yes", "Close", "&Close"]
+_DECLINE_LABELS = ["No", "&No", "Cancel", "&Cancel", "Close", "&Close"]
+_OPTIONAL_INSTALL_PATTERNS = ("install the example projects",)
 _WIN32_UNAVAILABLE_WARNED = False
 
 
@@ -274,7 +276,7 @@ class DialogWatchdog:
             pass
         return " | ".join(texts) if texts else ""
 
-    def _find_button(self, hwnd):
+    def _find_button(self, hwnd, preferred_labels=None):
         buttons: List[tuple] = []
 
         def _child_cb(child, _):
@@ -292,7 +294,8 @@ class DialogWatchdog:
         except Exception:
             pass
 
-        for target in _DISMISS_LABELS:
+        labels = preferred_labels or _DISMISS_LABELS
+        for target in labels:
             normalized = target.replace("&", "").strip().lower()
             for btn_hwnd, btn_text in buttons:
                 if btn_text.replace("&", "").strip().lower() == normalized:
@@ -315,7 +318,19 @@ class DialogWatchdog:
             title = win32gui.GetWindowText(hwnd)
             body = self._read_body(hwnd)
             pname = self._process_name(pid)
-            btn_hwnd, btn_text = self._find_button(hwnd)
+            dialog_text = f"{title}\n{body}".casefold()
+            preferred_labels = (
+                _DECLINE_LABELS
+                if any(
+                    pattern in dialog_text
+                    for pattern in _OPTIONAL_INSTALL_PATTERNS
+                )
+                else None
+            )
+            btn_hwnd, btn_text = self._find_button(
+                hwnd,
+                preferred_labels=preferred_labels,
+            )
 
             if btn_hwnd:
                 logger.info(

@@ -68,7 +68,7 @@ def _run_psexec(
         hostname="remote-a",
         share_path=str(share_path),
         worker_folder=r"C:\RasRemote",
-        ras_exe_path=r"C:\HEC-RAS\Ras.exe",
+        ras_exe_path=r"C:\HEC-RAS\6.6\Ras.exe",
         psexec_path="PsExec.exe",
         session_id=7,
         system_account=system_account,

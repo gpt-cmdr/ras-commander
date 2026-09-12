@@ -258,7 +258,7 @@ def test_execute_docker_plan_missing_hdf_and_preserve_paths(
     debug_text = "\n".join(_dockerworker_messages(caplog, logging.DEBUG))
     error_text = "\n".join(_dockerworker_messages(caplog, logging.ERROR))
 
-    assert "No HDF results found for plan 07" in error_text
+    assert "No fresh final HDF result found for plan 07" in error_text
     assert "output_staging=" in error_text
     assert "input_staging=" in error_text
     assert (

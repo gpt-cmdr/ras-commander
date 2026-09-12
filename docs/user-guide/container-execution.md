@@ -368,6 +368,16 @@ collection metadata stays unchanged.
 The notebook demonstrates these checks with the real sample; it does not use
 the presence of `/Results` or a zero process exit code as the sole success test.
 
+The updated native worker also retains
+[RasCmdr.inspect_execution_evidence()][cmdr-source] observations in the compute
+receipt's `execution_evidence` field. Those observations remain separate from
+the native acceptance checks: the HDF completion attribute can already be true
+in a prepared `.tmp.hdf`, and native results can omit the Windows
+`Complete Process` message. A generic completion flag alone therefore cannot
+prove the native stage finished. An unreadable diagnostic channel is recorded
+as `inspection_error`; the solver log, full output window, dimensions, and
+finite-value checks still determine whether the result can be published.
+
 Receipts are retained below `.ras-commander/runs/<run-id>/` in the working
 project. Keep them with the resulting model when reporting a problem. The
 notebook demonstrates execution mechanics; model suitability and interpretation

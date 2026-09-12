@@ -118,6 +118,10 @@ def test_incomplete_hdf_reason_identifies_missing_plan_information(
     caplog,
 ):
     hdf_path = tmp_path / "Demo.p01.hdf"
+    (tmp_path / "Demo.p01").write_text(
+        "Plan Title=Demo\nProgram Version=6.60\n",
+        encoding="ascii",
+    )
     with h5py.File(hdf_path, "w"):
         pass
 

@@ -11,6 +11,29 @@ import pytest
 from ras_commander import _container_compute as worker
 
 
+def test_shared_evidence_is_retained_without_changing_observations(monkeypatch):
+    from ras_commander import RasCmdr
+    from types import SimpleNamespace
+    observation = {"mechanical_completion": {"state": "available", "value": True},
+                   "observations": {"runtime_seconds": {"state": "not_inspected"}}}
+    project = object()
+    def inspect(plan, **kwargs):
+        assert plan == "01"
+        assert kwargs == {"ras_object": project, "hash_files": False}
+        return SimpleNamespace(to_dict=lambda: observation)
+    monkeypatch.setattr(RasCmdr, "inspect_execution_evidence", inspect)
+    assert worker._inspect_execution_evidence(project, "01") == observation
+
+
+def test_shared_evidence_inspection_failure_is_diagnostic(monkeypatch):
+    from ras_commander import RasCmdr
+    def fail(*_args, **_kwargs):
+        raise OSError("unreadable diagnostic channel")
+    monkeypatch.setattr(RasCmdr, "inspect_execution_evidence", fail)
+    assert worker._inspect_execution_evidence(object(), "01") == {
+        "inspection_error": {"type": "OSError", "message": "unreadable diagnostic channel"}}
+
+
 def _prepared(path):
     with h5py.File(path, "w") as hdf:
         area = hdf.create_group("Geometry/2D Flow Areas/Mesh")
@@ -68,6 +91,8 @@ def packet(tmp_path, monkeypatch):
     worker._atomic_json(prep, payload)
     monkeypatch.delenv("HEC_RAS_VERSION", raising=False)
     monkeypatch.setattr(worker, "_initialize", lambda path, exe: path)
+    monkeypatch.setattr(worker, "_inspect_execution_evidence", lambda *_args: {
+        "mechanical_completion": {"state": "available", "value": True}})
     # Domain plan selection is separately checked through actual RasPlan below.
     monkeypatch.setattr(worker, "_validate_selected_plan", lambda *args: None)
     return {"root": root, "project": project, "temporary": temporary,
@@ -104,6 +129,7 @@ def test_success_preserves_prepared_inputs_and_publishes_validated_result(packet
     payload = json.loads(receipt.read_text())
     assert success and payload["status"] == "succeeded"
     assert payload["runtime"]["hec_ras_version"] == version
+    assert payload["execution_evidence"]["mechanical_completion"]["value"] is True
     assert payload["result"]["hdf_validation"]["meshes"]["Mesh"]["water_surface_shape"] == [2, 2]
     assert worker._sha256(packet["temporary"]) == before
     assert packet["project"].with_suffix(".g01").read_bytes() == b"Geom Title=Mesh\r\n"

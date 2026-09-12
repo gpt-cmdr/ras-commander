@@ -454,6 +454,21 @@ def _validate_result(path, log, plan, meshes, window):
     return validation
 
 
+def _inspect_execution_evidence(ras_object, plan):
+    """Retain the shared API's observations without substituting for native checks."""
+    from .RasCmdr import RasCmdr
+
+    try:
+        return RasCmdr.inspect_execution_evidence(
+            plan, ras_object=ras_object, hash_files=False,
+        ).to_dict()
+    except Exception as exc:
+        # Diagnostic inspection must not mask a solver failure or replace the
+        # native log, full-window, mesh-size and finite-value acceptance gates.
+        logger.warning("Execution evidence inspection failed: %s", exc)
+        return {"inspection_error": {"type": type(exc).__name__, "message": str(exc)}}
+
+
 def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
                 replace_generated=False, prepare_receipt=None, job_root=None,
                 runtime_manifest=None, scratch_root=None):
@@ -528,6 +543,7 @@ def run_compute(*, project, plan, timeout=14400, num_cores=2, run_id=None,
         log = staged_project.parent / f"compute_linux_{plan}.log"
         with _forward_native_progress(log):
             result = _call_compute(ras_object, engine, plan, timeout, num_cores)
+        payload["execution_evidence"] = _inspect_execution_evidence(ras_object, plan)
         staged_final = staged_project.with_suffix(f".p{plan}.hdf")
         if not result:
             raise RuntimeError("RasCmdr.compute_plan_linux reported failure; inspect compute_linux log")
