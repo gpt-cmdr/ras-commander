@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ras_commander import HdfXsec
+from ras_commander import HdfXsec, RasPlan
 from ras_commander.RasPrj import RasPrj
 from ras_commander.geom.GeomMetadata import GeomMetadata
 from ras_commander.hdf.HdfBase import HdfBase
@@ -289,6 +289,103 @@ def test_reads_hec_ras_5_separated_cross_section_schema(tmp_path, monkeypatch):
     assert cross_sections.iloc[1]["ineffective_blocks"] == []
 
 
+@pytest.mark.parametrize("selector", [1, "01", "p01"])
+def test_get_cross_sections_resolves_selector_with_ras_object(
+    tmp_path,
+    monkeypatch,
+    selector,
+):
+    hdf_path = tmp_path / "Legacy.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+
+    class FakeRasProject:
+        plan_df = pd.DataFrame(
+            [{"plan_number": "01", "geometry_number": "01"}]
+        )
+
+        @staticmethod
+        def check_initialized():
+            return None
+
+    monkeypatch.setattr(
+        RasPlan,
+        "get_geom_path",
+        staticmethod(lambda *_args, **_kwargs: hdf_path.with_suffix("")),
+    )
+
+    cross_sections = HdfXsec.get_cross_sections(
+        selector,
+        ras_object=FakeRasProject(),
+    )
+
+    assert len(cross_sections) == 2
+    assert cross_sections["RS"].tolist() == ["200", "100"]
+
+
+def test_get_cross_sections_accepts_path_string_and_open_hdf(tmp_path, monkeypatch):
+    hdf_path = tmp_path / "Legacy.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    monkeypatch.setattr(HdfBase, "get_projection", lambda *_args, **_kwargs: None)
+
+    from_path = HdfXsec.get_cross_sections(hdf_path)
+    from_string = HdfXsec.get_cross_sections(str(hdf_path))
+    with h5py.File(hdf_path, "r") as hdf:
+        from_open_hdf = HdfXsec.get_cross_sections(hdf)
+
+    expected_stations = ["200", "100"]
+    assert from_path["RS"].tolist() == expected_stations
+    assert from_string["RS"].tolist() == expected_stations
+    assert from_open_hdf["RS"].tolist() == expected_stations
+
+
+def test_get_cross_sections_unresolved_input_raises_file_not_found(tmp_path):
+    missing = tmp_path / "missing.g01.hdf"
+
+    with pytest.raises(FileNotFoundError, match="HDF file not found"):
+        HdfXsec.get_cross_sections(missing)
+
+
+def test_multipart_cross_section_preserves_disjoint_parts(tmp_path, monkeypatch):
+    hdf_path = tmp_path / "Legacy.g01.hdf"
+    _write_legacy_geometry_hdf(hdf_path)
+    monkeypatch.setattr(HdfBase, "get_projection", lambda *_args, **_kwargs: None)
+    with h5py.File(hdf_path, "a") as hdf:
+        xs = hdf["Geometry/Cross Sections"]
+        del xs["Polyline Info"]
+        del xs["Polyline Parts"]
+        del xs["Polyline Points"]
+        xs.create_dataset(
+            "Polyline Info",
+            data=np.array([[0, 4, 0, 2], [4, 3, 2, 1]], dtype=np.int32),
+        )
+        xs.create_dataset(
+            "Polyline Parts",
+            data=np.array([[0, 2], [2, 2], [0, 3]], dtype=np.int32),
+        )
+        xs.create_dataset(
+            "Polyline Points",
+            data=np.array(
+                [
+                    [0.0, 10.0],
+                    [4.0, 10.0],
+                    [6.0, 10.0],
+                    [10.0, 10.0],
+                    [0.0, 0.0],
+                    [5.0, 1.0],
+                    [10.0, 0.0],
+                ],
+                dtype=np.float64,
+            ),
+        )
+
+    cross_sections = HdfXsec.get_cross_sections(hdf_path)
+
+    assert len(cross_sections) == 2
+    assert cross_sections.geometry.iloc[0].geom_type == "MultiLineString"
+    assert len(cross_sections.geometry.iloc[0].geoms) == 2
+    assert cross_sections.geometry.iloc[1].geom_type == "LineString"
+
+
 def test_legacy_schema_count_classifies_as_1d(tmp_path):
     hdf_path = tmp_path / "Legacy.g01.hdf"
     _write_legacy_geometry_hdf(hdf_path)
@@ -369,6 +466,7 @@ def test_reads_legacy_centerline_and_bank_line_schemas(tmp_path, monkeypatch):
     assert len(centerlines.geometry.iloc[0].coords) == 3
     assert reaches["river_id"].tolist() == [0]
     assert reaches["River Name"].tolist() == ["River A"]
+    assert reaches["length"].tolist() == pytest.approx([14.0])
     assert len(bank_lines) == 2
     assert bank_lines["bank_side"].tolist() == ["Left", "Right"]
     assert bank_lines.geometry.apply(lambda geometry: len(geometry.coords)).tolist() == [2, 2]
