@@ -34,7 +34,7 @@ handling and logging.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -729,24 +729,32 @@ class HdfXsec:
 
     @staticmethod
     @log_call
-    def get_cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
+    @standardize_input(file_type='geom_hdf')
+    def get_cross_sections(
+        hdf_path: Union[str, Path],
+        datetime_to_str: bool = True,
+        *,
+        ras_object=None,
+    ) -> gpd.GeoDataFrame:
         """
         Extracts cross-section geometries and attributes from a HEC-RAS geometry HDF file.
 
         Parameters
         ----------
-        hdf_path : str
-            Path to the HEC-RAS geometry HDF file
+        hdf_path : str or Path
+            HEC-RAS geometry HDF path or supported geometry selector. String
+            and numeric selectors are resolved against ``ras_object``.
         datetime_to_str : bool, optional
             Convert datetime objects to strings, defaults to True
         ras_object : RasPrj, optional
-            RAS project object for additional context, defaults to None
+            Project used to resolve plan/geometry selectors. When omitted, the
+            initialized global project is used. Must be passed by keyword.
 
         Returns
         -------
         gpd.GeoDataFrame
             Cross-section data with columns:
-            - geometry: LineString - Cross-section polyline geometry
+            - geometry: LineString or MultiLineString - Cross-section polyline geometry
             - station_elevation: ndarray - Station-elevation profile (Nx2 array: [station, elevation])
             - mannings_n: dict - Raw Manning's n data with keys 'Station' and 'Mann n' (lists)
             - n_lob: float - Left overbank Manning's n (computed from bank stations)
@@ -785,6 +793,12 @@ class HdfXsec:
         -----
         The returned GeoDataFrame includes the coordinate system from the HDF file
         when available. All byte strings are converted to regular strings.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the path or project selector cannot be resolved to an existing
+            geometry HDF file.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
@@ -1052,7 +1066,7 @@ class HdfXsec:
         -------
         GeoDataFrame
             River centerline data with columns:
-            - geometry: LineString - River centerline geometry
+            - geometry: LineString or MultiLineString - River centerline geometry
             - River Name: str - Name of the river
             - Reach Name: str - Name of the reach
             - US Type: str - Upstream connection type (e.g., 'Junction', 'External')
@@ -1297,7 +1311,7 @@ class HdfXsec:
         -------
         GeoDataFrame
             River reach data with columns:
-            - geometry: LineString - River reach line geometry
+            - geometry: LineString or MultiLineString - River reach line geometry
             - river_id: int - Unique identifier for each reach (0-indexed)
             - River Name: str - Name of the river
             - Reach Name: str - Name of the reach
@@ -1306,6 +1320,7 @@ class HdfXsec:
             - DS Type: str - Downstream connection type
             - DS Name: str - Downstream connection name
             - Last Edited: datetime or str - Last edit timestamp (str if datetime_to_str=True)
+            - length: float - Reach length in project coordinate units (computed)
 
             Note: Additional HDF attributes may be included depending on HEC-RAS version.
         """
