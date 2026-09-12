@@ -1927,11 +1927,12 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         source_root = Path(
             downloaded_folder
             or "./ebfe_downloads/12050004_DoubleMountainForkBrazos"
-        )
+        ).resolve()
         output_folder = Path(
             output_folder
             or "./ebfe_organized/DoubleMountainForkBrazos_12050004"
         )
+        serialized_output_root = output_folder.resolve()
 
         assets = deepcopy(
             RasEbfeModels._MODEL_REGISTRY[
@@ -1993,7 +1994,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                 "project": project_name,
                 "archive": str(archive),
                 "destination": str(
-                    output_folder / "RAS Model" / project_name
+                    serialized_output_root / "RAS Model" / project_name
                 ),
                 "member_count": receipt["archive"]["member_count"],
                 "file_count": receipt["audit"]["file_count"],
@@ -2074,7 +2075,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             "delivered_ras_version": "6.10",
             "qualified_ras_version": "6.1",
             "source_root": str(source_root),
-            "output_root": str(output_folder),
+            "output_root": str(serialized_output_root),
             "source_objects_immutable": True,
             "source_assets": source_records,
             "extractions": extraction_records,
@@ -2083,7 +2084,7 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
                     "name": name,
                     **details,
                     "folder": str(
-                        output_folder
+                        serialized_output_root
                         / "RAS Model"
                         / name
                         / name
@@ -2128,18 +2129,32 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             "hms": hms_summary,
             "completed_utc": datetime.now(timezone.utc).isoformat(),
         }
+        manifest = (
+            RasEbfeModels
+            ._relocate_double_mountain_fork_brazos_serialized_paths(
+                manifest,
+                staging_root=working_output,
+                final_root=serialized_output_root,
+            )
+        )
+        manifest_text = json.dumps(manifest, indent=2) + "\n"
+        if ".assembling-" in manifest_text.casefold():
+            raise RuntimeError(
+                "Double Mountain Fork Brazos manifest retained a temporary "
+                "staging-root alias after path relocation"
+            )
         manifest_path = (
             folders["agent"]
             / "double_mountain_fork_brazos_manifest.json"
         )
         manifest_path.write_text(
-            json.dumps(manifest, indent=2) + "\n",
+            manifest_text,
             encoding="utf-8",
         )
         RasEbfeModels._write_double_mountain_fork_brazos_reports(
             folders["agent"],
             source_root,
-            output_folder,
+            serialized_output_root,
             manifest,
         )
         RasEbfeModels._finalize_double_mountain_fork_brazos_output(
@@ -2147,6 +2162,86 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             output_folder,
         )
         return output_folder
+
+    @staticmethod
+    def _relocate_double_mountain_fork_brazos_serialized_paths(
+        value: Any,
+        staging_root: Path,
+        final_root: Path,
+    ) -> Any:
+        """Recursively replace temporary staging paths in serialized evidence."""
+        staging_path = Path(staging_root)
+        final_text = str(Path(final_root).resolve()).rstrip("\\/")
+
+        staging_aliases = []
+        for candidate in (
+            staging_path,
+            staging_path.absolute(),
+            staging_path.resolve(),
+        ):
+            candidate_text = str(candidate).rstrip("\\/")
+            normalized = candidate_text.replace("/", "\\").casefold()
+            if candidate_text and all(
+                existing[0] != normalized for existing in staging_aliases
+            ):
+                staging_aliases.append((normalized, candidate_text))
+
+        def _path_pattern(path_text: str) -> str:
+            return "".join(
+                r"[\\/]" if part in ("\\", "/") else re.escape(part)
+                for part in re.split(r"([\\/])", path_text)
+            )
+
+        replacements = [
+            (re.compile(_path_pattern(alias), re.IGNORECASE), final_text)
+            for _normalized, alias in sorted(
+                staging_aliases,
+                key=lambda item: len(item[1]),
+                reverse=True,
+            )
+        ]
+
+        if isinstance(value, Path):
+            value = str(value)
+        if isinstance(value, str):
+            relocated = value
+            for old_prefix, new_prefix in replacements:
+                relocated = old_prefix.sub(
+                    lambda _match, replacement=new_prefix: replacement,
+                    relocated,
+                )
+            return relocated
+        if isinstance(value, dict):
+            return {
+                key: RasEbfeModels
+                ._relocate_double_mountain_fork_brazos_serialized_paths(
+                    item,
+                    staging_root,
+                    final_root,
+                )
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [
+                RasEbfeModels
+                ._relocate_double_mountain_fork_brazos_serialized_paths(
+                    item,
+                    staging_root,
+                    final_root,
+                )
+                for item in value
+            ]
+        if isinstance(value, tuple):
+            return tuple(
+                RasEbfeModels
+                ._relocate_double_mountain_fork_brazos_serialized_paths(
+                    item,
+                    staging_root,
+                    final_root,
+                )
+                for item in value
+            )
+        return value
 
     @staticmethod
     def _double_mountain_fork_brazos_is_reusable(
@@ -2164,7 +2259,10 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
         if not manifest.is_file():
             return False
         try:
-            manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+            manifest_text = manifest.read_text(encoding="utf-8")
+            if ".assembling-" in manifest_text.casefold():
+                return False
+            manifest_data = json.loads(manifest_text)
             if (
                 manifest_data.get("schema_version") != 1
                 or manifest_data.get("huc8") != "12050004"

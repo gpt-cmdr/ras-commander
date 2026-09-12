@@ -104,6 +104,17 @@ def _disable_download_progress(monkeypatch) -> None:
     )
 
 
+def _iter_manifest_strings(value, trail=()):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield from _iter_manifest_strings(item, (*trail, str(key)))
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            yield from _iter_manifest_strings(item, (*trail, str(index)))
+    elif isinstance(value, str):
+        yield trail, value
+
+
 def _write_zip(path: Path, members: dict[str, str | bytes]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -680,6 +691,62 @@ def test_existing_asset_identity_rejects_wrong_size_and_etag(tmp_path) -> None:
         raise AssertionError("wrong source ETag was accepted")
 
 
+def test_serialized_path_relocation_handles_mapped_and_unc_staging_aliases(
+    monkeypatch,
+) -> None:
+    lexical_staging = Path(
+        r"H:\Testing\eBFE\12050004\.organized-final-v2.assembling-token"
+    )
+    resolved_staging = Path(
+        r"\\192.168.3.20\CLB-Engineering\Testing\eBFE\12050004"
+        r"\.organized-final-v2.assembling-token"
+    )
+    final_root = Path(
+        r"\\192.168.3.20\CLB-Engineering\Testing\eBFE\12050004"
+        r"\organized-final-v2"
+    )
+    original_resolve = Path.resolve
+
+    def _resolve_alias(path, *args, **kwargs):
+        normalized = str(path).replace("/", "\\").casefold().rstrip("\\")
+        if normalized == str(lexical_staging).casefold().rstrip("\\"):
+            return resolved_staging
+        if normalized == str(final_root).casefold().rstrip("\\"):
+            return final_root
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", _resolve_alias)
+    payload = {
+        "lexical": str(lexical_staging / "RAS Model" / "DMF1"),
+        "resolved": str(resolved_staging / "RAS Model" / "DMF2"),
+        "forward_slashes": str(
+            lexical_staging / "agent" / "model_log.md"
+        ).replace("\\", "/"),
+        "embedded": (
+            f"Unreadable HDF {resolved_staging / 'RAS Model' / 'DMF3'}: "
+            "synthetic reason"
+        ),
+    }
+
+    relocated = (
+        RasEbfeModels
+        ._relocate_double_mountain_fork_brazos_serialized_paths(
+            payload,
+            staging_root=lexical_staging,
+            final_root=final_root,
+        )
+    )
+    serialized = json.dumps(relocated)
+
+    assert relocated["lexical"] == str(final_root / "RAS Model" / "DMF1")
+    assert relocated["resolved"] == str(final_root / "RAS Model" / "DMF2")
+    assert relocated["forward_slashes"].startswith(str(final_root))
+    assert str(final_root / "RAS Model" / "DMF3") in relocated["embedded"]
+    assert ".assembling-" not in serialized.casefold()
+    assert str(lexical_staging).casefold() not in serialized.casefold()
+    assert str(resolved_staging).casefold() not in serialized.casefold()
+
+
 def test_organizer_assembles_four_projects_and_preserves_source(
     tmp_path,
     monkeypatch,
@@ -832,7 +899,31 @@ def test_organizer_assembles_four_projects_and_preserves_source(
     manifest_path = (
         output / "agent" / "double_mountain_fork_brazos_manifest.json"
     )
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_text = manifest_path.read_text(encoding="utf-8")
+    assert ".assembling-" not in manifest_text
+    manifest = json.loads(manifest_text)
+    assert Path(manifest["output_root"]) == output.resolve()
+    for trail, value in _iter_manifest_strings(manifest):
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            continue
+        if (
+            trail[-1] == "resolved_path"
+            and any(
+                section in trail
+                for section in (
+                    "named_area_association_gaps",
+                    "native_blocking_gaps",
+                    "blocking_gaps",
+                    "qualification_required_gaps",
+                )
+            )
+        ):
+            continue
+        assert candidate.exists(), (
+            f"Serialized local path does not survive promotion at "
+            f"{'.'.join(trail)}: {candidate}"
+        )
     assert manifest["dependency_order"] == ["DMF1", "DMF2", "DMF3", "DMF4"]
     assert manifest["source_objects_immutable"] is True
     assert manifest["terrain_source_complete"] is True
@@ -891,6 +982,11 @@ def test_organizer_assembles_four_projects_and_preserves_source(
     rod = (
         output / "agent" / "record_of_deficiencies.md"
     ).read_text(encoding="utf-8")
+    model_log = (
+        output / "agent" / "model_log.md"
+    ).read_text(encoding="utf-8")
+    assert ".assembling-" not in rod
+    assert ".assembling-" not in model_log
     assert "static delivery-path closure" in rod
     assert "hydraulic path closure" not in rod
     assert "**DMF1, DMF2, DMF3, DMF4**" in rod
@@ -901,6 +997,7 @@ def test_organizer_assembles_four_projects_and_preserves_source(
         output_folder=output,
     ) == output
     assert manifest_path.read_bytes() == before
+    assert ".assembling-" not in manifest_path.read_text(encoding="utf-8")
 
     missing_companion = (
         output
