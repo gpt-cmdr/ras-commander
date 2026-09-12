@@ -142,8 +142,8 @@ class RasDocker:
                 and shutdown receive an additional 120 seconds on the host.
                 Pull a large image separately if the initial download is slow.
             num_cores: Integer from 1 through 8 (default 2). Sets Docker's CPU
-                quota for either stage. Native computation also passes this
-                count to HEC-RAS. The published Wine CLI has no thread option.
+                quota and passes the same count to the in-container worker,
+                which sets the selected HEC-RAS plan's processor count.
             replace_generated: Explicit permission to replace existing outputs.
                 Defaults to False; use a fresh model copy when enabling it.
             docker_executable: Docker CLI executable path, not a shell command.
@@ -401,9 +401,8 @@ class RasDocker:
                        "--cidfile", str(cid_file), "--user", user,
                        "--cpus", str(num_cores), *mount_args,
                        image, stage, "--project", f"/job/{project.name}", "--plan", plan,
-                       "--timeout", str(timeout), "--run-id", run_id]
-            if stage == "compute":
-                command += ["--num-cores", str(num_cores)]
+                       "--timeout", str(timeout), "--run-id", run_id,
+                       "--num-cores", str(num_cores)]
             if selected_receipt is not None:
                 command += ["--prepare-receipt", selected_receipt]
             if replace_generated:

@@ -66,7 +66,7 @@ prepared = RasDocker.preprocess_plan(
     project, "01", version="6.5",
     mounts={"/source_terrain": models / "source_terrain",
             "/projection": models / "projection"},
-    timeout=900, replace_generated=True, pull="always",
+    timeout=900, num_cores=2, replace_generated=True, pull="always",
 )
 if not prepared:
     raise RuntimeError(prepared.error or prepared.receipt)

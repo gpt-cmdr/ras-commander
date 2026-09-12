@@ -24,7 +24,7 @@ def project(tmp_path):
 
 def install_transport(monkeypatch, project, failed=False):
     calls = []
-    def receipt_for(stage, run_id, plan, version, preparation=None):
+    def receipt_for(stage, run_id, plan, version, preparation=None, cores=2):
         suffixes = ((f".p{plan}.tmp.hdf", f".b{plan}", f".x{plan}")
                     if stage == "prepare" else (f".p{plan}.hdf",))
         artifacts = []
@@ -36,6 +36,7 @@ def install_transport(monkeypatch, project, failed=False):
         receipt = {"schema": "ras-commander-job/v1", "run_id": run_id,
                    "command": stage, "project": project.name, "plan": plan,
                    "geometry": plan, "status": "failed" if failed else "succeeded",
+                   "arguments": {"num_cores": cores},
                    "runtime": {"kind": "wine" if stage == "prepare" else "native",
                                "hec_ras_version": version},
                    "result": ({"timed_out": False, "full_result_copied": False}
@@ -68,7 +69,8 @@ def install_transport(monkeypatch, project, failed=False):
                                / f"fixture-prepare-{plan}" / "prepare.json")
                 if not preparation.exists():
                     receipt_for("prepare", f"fixture-prepare-{plan}", plan, version)
-        receipt_for(stage, run_id, plan, version, preparation)
+        receipt_for(stage, run_id, plan, version, preparation,
+                    int(command[command.index("--num-cores") + 1]))
         return subprocess.CompletedProcess(command, 1 if failed else 0, "Computing\n", "Solver progress\n")
     monkeypatch.setattr(module, "run_streaming", run)
     return calls

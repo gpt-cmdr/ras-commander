@@ -209,6 +209,11 @@ def _receipt(project, plan, stage, version, path):
 
 def _evidence(project, plan, stage, identity, path):
     payload, receipt = _receipt(project, plan, stage, identity["version"], path)
+    arguments = payload.get("arguments")
+    if (not isinstance(arguments, dict)
+            or type(arguments.get("num_cores")) is not int
+            or arguments["num_cores"] != identity["num_cores"]):
+        raise ValueError("Resume receipt does not confirm the requested solver core count")
     evidence = {"receipt": receipt}
     if stage == "compute":
         preparation = _relative_file(payload.get("preparation_receipt"), project.parent)

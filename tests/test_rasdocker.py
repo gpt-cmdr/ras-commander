@@ -84,7 +84,7 @@ def test_prepare_command_preserves_spaces_and_readonly_sibling_mounts(monkeypatc
     assert "rascommander/hec-ras-wine-precompute_6.5:v4" in command
     assert command[command.index("--project") + 1] == "/job/Example Model.prj"
     assert command[command.index("--plan") + 1] == "01"
-    assert "--num-cores" not in command
+    assert command[command.index("--num-cores") + 1] == "4"
     assert command[command.index("--cpus") + 1] == "4"
     assert "--replace-generated" not in command
     assert kwargs["shell"] is False and kwargs["timeout"] == 1020

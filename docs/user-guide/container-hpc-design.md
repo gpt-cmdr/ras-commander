@@ -25,6 +25,9 @@ The default is two cores per container, configurable from one through eight.
 On Docker, [RasDocker](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasDocker.py)
 sets `--cpus=N`; the native worker passes `num_cores=N` to
 [RasCmdr.compute_plan_linux()](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasCmdr.py).
+The Wine worker applies the same count through
+[RasPlan.set_num_cores() and RasPlan.set_2d_flow_options()](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasPlan.py)
+before preprocessing. Both stage receipts record the effective count.
 Docker's quota and the solver's thread count serve different purposes and
 should agree. The quota alone does not prevent the solver from creating many
 threads, and a thread setting alone is not a container resource limit.

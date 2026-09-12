@@ -167,7 +167,7 @@ uv pip install -e ".[compute]"
 
 `num_cores` defaults to **2** and accepts integers from **1 through 8**.
 [RasDocker][docker-source] passes it as Docker's `--cpus` for both stages and
-as `--num-cores` for native computation. The native worker passes the count
+as `--num-cores` for each stage. The native worker passes the count
 to [RasCmdr.compute_plan_linux()][cmdr-source], which sets the plan/HDF core
 settings and `OMP_NUM_THREADS`/`MKL_NUM_THREADS`.
 
@@ -175,8 +175,10 @@ Docker's CPU limit controls aggregate CPU time. It does not reserve exclusive
 physical cores or pin the process; CPU affinity is a separate setting.
 Resource limits belong in the launch command, while the Dockerfile defines
 the installed environment. See [Docker CPU constraints](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
-The published Wine preprocessing CLI has no solver-thread argument: that
-stage receives the Docker CPU quota, but not a new Wine CLI option.
+The updated Wine worker uses [RasPlan.set_num_cores()][plan-source] on the
+selected plan before preprocessing, so its plan setting matches the quota too.
+Both receipts record the effective count in `arguments.num_cores`. Resume
+requires that recorded count to match the new request.
 
 Each container runs one selected plan. Running several model containers is
 the host or scheduler's responsibility. For example, four simultaneous jobs

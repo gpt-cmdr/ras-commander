@@ -42,6 +42,7 @@ def _receipt(project, stage="prepare", run_id="prepare-one", **changes):
     payload = {"schema": "ras-commander-job/v1", "run_id": run_id,
                "command": stage, "project": project.name, "plan": "01",
                "geometry": "03", "status": "succeeded", "result": result,
+               "arguments": {"num_cores": 2},
                "runtime": {"kind": "wine" if stage == "prepare" else "native",
                            "hec_ras_version": "7.0.1"},
                "artifacts": artifacts}
@@ -105,6 +106,22 @@ def test_unchanged_success_resumes_original_receipt(run, stage):
     result = find_resume(project, "01", stage, identity)
     assert result == {"receipt_path": str(receipt), "receipt": json.loads(original)}
     assert receipt.read_bytes() == original
+
+
+@pytest.mark.parametrize("stage", ["prepare", "compute"])
+@pytest.mark.parametrize("cores", [None, 4, True, 2.0, "2"])
+def test_receipt_must_confirm_exact_solver_core_count(run, stage, cores):
+    if stage == "compute":
+        run = _compute(run)
+    project, identity, receipt = run
+    payload = json.loads(receipt.read_text())
+    payload["arguments"] = {} if cores is None else {"num_cores": cores}
+    _write_json(receipt, payload)
+    before = receipt.read_bytes()
+    record_resume(project, "01", stage, identity, receipt)
+    assert find_resume(project, "01", stage, identity) is None
+    assert receipt.read_bytes() == before
+    assert not (project.parent / ".ras-commander" / "resume").exists()
 
 
 @pytest.mark.parametrize("change", ["project", "plan", "input", "added", "removed", "directory",
