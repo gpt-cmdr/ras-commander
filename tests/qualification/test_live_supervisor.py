@@ -38,6 +38,42 @@ from ._helpers import GIT_HEAD, HASH_A, valid_table_rows
 
 pytestmark = pytest.mark.qualification_harness
 
+
+def _dialog_observation(details):
+    return {
+        "scope": "exact_controller_identity",
+        "process_discovery": False,
+        "available": True,
+        "start_attempted": True,
+        "started": True,
+        "start_status": "started",
+        "stop_requested": True,
+        "stop_confirmed": True,
+        "thread_alive": False,
+        "stop_status": "completed",
+        "lifecycle": "stopped",
+        "target": {
+            "pid": details["controller_pid"],
+            "create_time": details["controller_create_time"],
+            "process_name": "Ras.exe",
+            "executable_path": details["controller_executable_path"],
+            "executable_sha256": details["controller_executable_sha256"],
+        },
+        "observed_count": 0,
+        "action_count": 0,
+        "action_attempt_count": 0,
+        "stop_prevented_action_count": 0,
+        "observations": [],
+        "identity_checks": [{"state": "exact", "first_check_count": 1}],
+        "identity_check_count": 1,
+        "lifecycle_transitions": [
+            {"state": "created"}, {"state": "running"},
+            {"state": "stopping"}, {"state": "stopped"},
+        ],
+    }
+
+
+
 _LIVE_INVARIANT_NAMES = {
     "R01": "Read-only inspection",
     "R02": "Engine-owned result family",
@@ -2263,8 +2299,12 @@ def test_parent_controller_proof_requires_exact_binary_identity(
                 "owned_process_exit_confirmed": True,
                 "post_close_plan_processes_quiescent": True,
                 "post_close_global_processes_quiescent": True,
-                "compute_mode": "poll",
-                "completion_method": "Compute_IsStillComputing",
+                "compute_mode": "blocking",
+                "completion_method": "Compute_CurrentPlan_blocking_return",
+                "poll_count": 0,
+                "controller_inherently_blocking": True,
+                "compute_current_plan_argument_count": 2,
+                "blocking_requested": False,
                 "controller_quit_supported": False,
                 "controller_close_method": "owned_process_cleanup",
                 "watchdog_requested": True,
@@ -2279,9 +2319,12 @@ def test_parent_controller_proof_requires_exact_binary_identity(
         },
     }
 
-    live._verify_worker_execution_proof(worker, request, engine)
     details = worker["execution_result"]["execution_details"]
+    details["dialog_observation_requested"] = True
+    details["dialog_observation"] = _dialog_observation(details)
+    live._verify_worker_execution_proof(worker, request, engine)
     for field in (
+        "dialog_observation_requested",
         "calculation_attempted",
         "solver_quiescence_confirmed",
         "actual_engine_provenance_confirmed",
@@ -2299,6 +2342,15 @@ def test_parent_controller_proof_requires_exact_binary_identity(
         details[field] = True
     for field, invalid_value in (
         ("completion_method", "Compute_Complete"),
+        ("completion_method", "Compute_IsStillComputing"),
+        ("poll_count", 1),
+        ("poll_count", False),
+        ("controller_inherently_blocking", False),
+        ("controller_inherently_blocking", 1),
+        ("compute_current_plan_argument_count", 3),
+        ("compute_current_plan_argument_count", True),
+        ("blocking_requested", True),
+        ("blocking_requested", 0),
         ("controller_quit_supported", True),
         ("controller_quit_supported", 0),
         ("controller_close_method", "QuitRas"),
@@ -2313,6 +2365,10 @@ def test_parent_controller_proof_requires_exact_binary_identity(
         details[field] = expected_value
     for field in (
         "completion_method",
+        "poll_count",
+        "controller_inherently_blocking",
+        "compute_current_plan_argument_count",
+        "blocking_requested",
         "controller_quit_supported",
         "controller_close_method",
     ):
@@ -2339,6 +2395,17 @@ def test_parent_controller_proof_requires_exact_binary_identity(
         controller_progid="RAS400.HECRASController",
     )
     live._verify_worker_execution_proof(worker, request, engine)
+    for resolved_version in ("4.0", "4.1"):
+        engine["resolved_controller_version"] = resolved_version
+        details["resolved_controller_version"] = resolved_version
+        for blocking in (False, True):
+            engine["blocking"] = blocking
+            details["blocking_requested"] = blocking
+            live._verify_worker_execution_proof(worker, request, engine)
+            details["compute_mode"] = "poll"
+            with pytest.raises(live.LiveSupervisorError, match="identity/close/watchdog"):
+                live._verify_worker_execution_proof(worker, request, engine)
+            details["compute_mode"] = "blocking"
     request["engine"]["expected_result_format"] = "hdf"
     engine.update(
         version_requested="5.0.7",
@@ -4772,3 +4839,87 @@ def test_public_cli_requires_explicit_real_ras_acknowledgement(
     with pytest.raises(SystemExit) as recovery_exc:
         main(["recover", "--run-root", "unused"])
     assert recovery_exc.value.code == 2
+
+
+def test_controller_dialog_observation_requires_exact_terminal_proof(tmp_path: Path) -> None:
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"pinned test executable")
+    details = {
+        "controller_pid": 1234,
+        "controller_create_time": 12345.0,
+        "controller_executable_path": str(executable),
+        "controller_executable_sha256": "e" * 64,
+        "dialog_observation_requested": True,
+    }
+    details["dialog_observation"] = _dialog_observation(details)
+    live._validate_controller_dialog_observation(details)
+    observer = details["dialog_observation"]
+    for field in observer:
+        broken = json.loads(json.dumps(details))
+        del broken["dialog_observation"][field]
+        with pytest.raises(live.LiveSupervisorError, match="dialog observation"):
+            live._validate_controller_dialog_observation(broken)
+    for field, invalid in (
+        ("process_discovery", True), ("process_discovery", 0),
+        ("started", False), ("started", 1), ("available", False),
+        ("thread_alive", True), ("stop_confirmed", False),
+        ("stop_status", "thread_timeout"), ("lifecycle", "running"),
+        ("observed_count", False), ("action_count", 1),
+        ("identity_check_count", True), ("identity_check_count", 0),
+        ("identity_checks", [{"state": "identity_unverified"}]),
+        ("lifecycle_transitions", [{"state": "stopped"}]),
+        ("observations", [None]),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"][field] = invalid
+        with pytest.raises(live.LiveSupervisorError, match="dialog observation"):
+            live._validate_controller_dialog_observation(broken)
+    for field, invalid in (
+        ("pid", 5678), ("pid", True), ("create_time", 54321.0),
+        ("process_name", "python.exe"), ("executable_sha256", "0" * 64),
+        ("executable_path", str(tmp_path)),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"]["target"][field] = invalid
+        with pytest.raises(live.LiveSupervisorError, match="dialog observation"):
+            live._validate_controller_dialog_observation(broken)
+    for missing in ("dialog_observation", "dialog_observation_requested"):
+        broken = json.loads(json.dumps(details))
+        del broken[missing]
+        with pytest.raises(live.LiveSupervisorError, match="dialog observation"):
+            live._validate_controller_dialog_observation(broken)
+
+
+def test_controller_dialog_observation_preserves_unknown_and_scopes_actions(tmp_path: Path) -> None:
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"pinned test executable")
+    details = {
+        "controller_pid": 1234,
+        "controller_create_time": 12345.0,
+        "controller_executable_path": str(executable),
+        "controller_executable_sha256": "e" * 64,
+        "dialog_observation_requested": True,
+    }
+    observer = details["dialog_observation"] = _dialog_observation(details)
+    unknown = {
+        "pid": 1234, "classification": "unknown_preserved", "action": "none",
+        "action_status": "not_requested", "rule_id": None,
+        "identity_state": "exact", "proof_state": "not_applicable",
+    }
+    allowed = {
+        "pid": 1234, "classification": "allowlisted_dialog_declined", "action": "BM_CLICK",
+        "action_status": "completed", "rule_id": "decline_optional_example_install",
+        "identity_state": "exact", "proof_state": "exact",
+    }
+    observer.update(observed_count=2, action_count=1, action_attempt_count=1,
+                    observations=[unknown, allowed])
+    live._validate_controller_dialog_observation(details)
+    for field, invalid in (
+        ("pid", 5678), ("action", "WM_CLOSE"), ("action", []),
+        ("rule_id", "generic_dismiss"), ("proof_state", "unproved"),
+        ("identity_state", "pid_reused"), ("action_status", []),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"]["observations"][1][field] = invalid
+        with pytest.raises(live.LiveSupervisorError, match="dialog observation"):
+            live._validate_controller_dialog_observation(broken)

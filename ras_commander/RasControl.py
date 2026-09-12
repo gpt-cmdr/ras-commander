@@ -41,6 +41,7 @@ Session tracking infrastructure:
 
 import hashlib
 import math
+import re
 import psutil
 import pandas as pd
 from pathlib import Path
@@ -343,6 +344,7 @@ class _WatchdogIdentity:
             and isinstance(self.create_time, (int, float))
             and not isinstance(self.create_time, bool)
             and math.isfinite(float(self.create_time))
+            and float(self.create_time) > 0
             and isinstance(self.name, str)
             and bool(self.name)
         )
@@ -795,23 +797,92 @@ def _cleanup_session(session_id: str) -> _SessionCleanupResult:
                     proc.wait(timeout=5)
                     terminated = True
                 except psutil.TimeoutExpired:
-                    logger.warning(
-                        f"Tracked ras.exe PID {lock.ras_pid} did not exit gracefully; forcing kill"
+                    # A timed-out handle is not kill authority. Re-open the
+                    # PID so reuse between terminate() and kill() is detected.
+                    try:
+                        kill_proc = psutil.Process(lock.ras_pid)
+                    except psutil.NoSuchProcess:
+                        kill_state = 'absent'
+                        kill_proc = None
+                    except (
+                        psutil.AccessDenied,
+                        OSError,
+                        ValueError,
+                        TypeError,
+                    ):
+                        kill_state = 'identity_unverified'
+                        kill_proc = None
+                    else:
+                        kill_state = _process_matches_lock_identity(
+                            kill_proc,
+                            lock,
+                        )
+
+                    if kill_state in {'absent', 'pid_reused'}:
+                        terminated = True
+                    elif kill_state == 'exact':
+                        logger.warning(
+                            "Tracked ras.exe PID %s did not exit gracefully; "
+                            "forcing kill",
+                            lock.ras_pid,
+                        )
+                        kill_proc.kill()
+                        killed = True
+                        kill_proc.wait(timeout=5)
+                    else:
+                        survived = True
+                        identity_state = 'identity_unverified'
+                        error = (
+                            "Tracked ras.exe identity could not be verified "
+                            "before forced termination"
+                        )
+                        logger.warning(error)
+
+                if not survived:
+                    try:
+                        post_proc = psutil.Process(lock.ras_pid)
+                    except psutil.NoSuchProcess:
+                        post_state = 'absent'
+                    except (
+                        psutil.AccessDenied,
+                        OSError,
+                        ValueError,
+                        TypeError,
+                    ):
+                        post_state = 'identity_unverified'
+                    else:
+                        post_state = _process_matches_lock_identity(
+                            post_proc,
+                            lock,
+                        )
+
+                    if post_state == 'exact':
+                        try:
+                            survived = bool(post_proc.is_running())
+                        except psutil.NoSuchProcess:
+                            survived = False
+                        except (
+                            psutil.AccessDenied,
+                            OSError,
+                            ValueError,
+                            TypeError,
+                        ):
+                            survived = True
+                        identity_state = (
+                            'identity_unverified' if survived else 'absent'
+                        )
+                    elif post_state in {'absent', 'pid_reused'}:
+                        identity_state = 'killed' if killed else 'terminated'
+                    else:
+                        survived = True
+                        identity_state = 'identity_unverified'
+
+                if survived and error is None:
+                    error = (
+                        "Tracked ras.exe exit identity could not be verified "
+                        "after signal"
                     )
-                    proc.kill()
-                    killed = True
-                    proc.wait(timeout=5)
-                post_state = _process_matches_lock_identity(proc, lock)
-                if post_state == 'exact':
-                    survived = bool(proc.is_running())
-                    identity_state = 'identity_unverified' if survived else 'absent'
-                elif post_state in {'absent', 'pid_reused'}:
-                    identity_state = 'killed' if killed else 'terminated'
-                else:
-                    survived = True
-                    error = "Tracked ras.exe exit identity could not be verified after signal"
                     logger.warning(error)
-                    identity_state = 'identity_unverified'
             elif running and name == 'ras.exe':
                 if identity_state == 'pid_reused':
                     logger.info(
@@ -898,6 +969,77 @@ def _emergency_cleanup_all() -> None:
         _cleanup_session(session_id)
 
 
+def _read_watchdog_worker_identity(
+    identity_file: Path,
+    *,
+    token: str,
+    argv: List[str],
+    launcher: _WatchdogIdentity,
+    parent_pid: int,
+) -> _WatchdogIdentity:
+    """Prove the worker handshake, including the Windows venv launcher hop."""
+    if identity_file.stat().st_size > 1024 * 1024:
+        raise ValueError("watchdog identity payload exceeds its size bound")
+    payload = json.loads(identity_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or (
+        payload.get("schema") != "ras-commander-orphan-watchdog/v1"
+        or payload.get("token") != token
+        or payload.get("argv") != argv[1:]
+    ):
+        raise ValueError("watchdog identity token/schema/arguments do not match")
+    identity = _WatchdogIdentity(
+        payload.get("pid"), payload.get("create_time"), payload.get("name")
+    )
+    if not identity.complete:
+        raise ValueError("watchdog worker identity is incomplete")
+    state, worker = _watchdog_process_state(identity)
+    if state != "exact" or worker is None:
+        raise ValueError(f"watchdog worker identity is {state}")
+    executable = payload.get("exe")
+    if not isinstance(executable, str) or not Path(executable).is_absolute():
+        raise ValueError("watchdog worker executable path is invalid")
+    if os.path.normcase(os.path.abspath(worker.exe())) != os.path.normcase(
+        os.path.abspath(executable)
+    ):
+        raise ValueError("watchdog worker executable path does not match")
+    if list(worker.cmdline())[1:] != argv[1:]:
+        raise ValueError("watchdog live worker arguments do not match")
+    actual_parent = worker.ppid()
+    if (
+        not isinstance(payload.get("parent_pid"), int)
+        or isinstance(payload.get("parent_pid"), bool)
+        or payload.get("parent_pid") != actual_parent
+    ):
+        raise ValueError("watchdog worker parent handshake does not match")
+    if identity.pid == launcher.pid:
+        if identity != launcher or actual_parent != parent_pid:
+            raise ValueError("watchdog direct-launch identity does not match")
+    else:
+        launcher_state, launcher_process = _watchdog_process_state(launcher)
+        if (
+            launcher_state != "exact"
+            or launcher_process is None
+            or actual_parent != launcher.pid
+            or launcher_process.ppid() != parent_pid
+            or list(launcher_process.cmdline())[1:] != argv[1:]
+            or identity.create_time < launcher.create_time
+        ):
+            raise ValueError("watchdog worker is not the exact launcher's child")
+    # Re-open the worker after reading its command and ancestry; a cached
+    # process handle or self-reported JSON alone is not termination authority.
+    final_state, final_worker = _watchdog_process_state(identity)
+    if final_state != "exact" or final_worker is None:
+        raise ValueError("watchdog worker identity changed during handshake")
+    if (
+        final_worker.ppid() != actual_parent
+        or list(final_worker.cmdline())[1:] != argv[1:]
+        or os.path.normcase(os.path.abspath(final_worker.exe()))
+        != os.path.normcase(os.path.abspath(executable))
+    ):
+        raise ValueError("watchdog worker metadata changed during handshake")
+    return identity
+
+
 def _spawn_watchdog(parent_pid: int, ras_pid: int, ras_create_time: float,
                     max_runtime: int, lock_file_path: Path) -> Optional[_WatchdogIdentity]:
     """
@@ -946,10 +1088,15 @@ def _spawn_watchdog(parent_pid: int, ras_pid: int, ras_create_time: float,
             logger.error("Orphan-watchdog worker is unavailable: %s", watchdog_worker)
             return None
 
+        # Retain the worker's own handshake beside the session evidence. A
+        # Windows venv python.exe can be only a launcher for another Python PID.
+        identity_token = uuid.uuid4().hex
+        identity_file = Path(lock_file_path).with_name(
+            f"{Path(lock_file_path).name}.watchdog-{identity_token}.identity.json"
+        )
         # Launch watchdog as completely independent process
         creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
-        proc = subprocess.Popen(
-            [
+        argv = [
                 sys.executable,
                 str(watchdog_worker),
                 '--parent-pid',
@@ -968,7 +1115,13 @@ def _spawn_watchdog(parent_pid: int, ras_pid: int, ras_create_time: float,
                 str(max_runtime),
                 '--lock-file',
                 str(lock_file_path),
-            ],
+                '--identity-file',
+                str(identity_file),
+                '--identity-token',
+                identity_token,
+            ]
+        proc = subprocess.Popen(
+            argv,
             creationflags=creationflags,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
@@ -983,12 +1136,27 @@ def _spawn_watchdog(parent_pid: int, ras_pid: int, ras_create_time: float,
             )
             state, _ = _watchdog_process_state(identity)
             if state == 'absent':
-                return None
+                return _WatchdogIdentity(int(proc.pid), None, None)
             if state != 'exact':
                 return _WatchdogIdentity(int(proc.pid), None, None)
+            deadline = time.monotonic() + 5.0
+            while not identity_file.is_file():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("watchdog worker identity handshake timed out")
+                time.sleep(min(0.05, remaining))
+            identity = _read_watchdog_worker_identity(
+                identity_file,
+                token=identity_token,
+                argv=argv,
+                launcher=identity,
+                parent_pid=parent_pid,
+            )
         except psutil.NoSuchProcess:
-            return None
-        except (psutil.AccessDenied, OSError, ValueError, TypeError) as exc:
+            # Popen may identify only a venv launcher. Its disappearance alone
+            # does not prove that an unverified worker child is also absent.
+            return _WatchdogIdentity(int(proc.pid), None, None)
+        except (psutil.AccessDenied, OSError, ValueError, TypeError, RuntimeError) as exc:
             logger.error(
                 "Spawned watchdog PID %s but could not prove its identity: %s",
                 proc.pid,
@@ -1298,14 +1466,15 @@ class RasControl:
     }
 
     # HEC-RAS 4.0 and 4.1 expose the older two-argument compute contract.
-    # Their registered type libraries provide Compute_IsStillComputing(), not
-    # Compute_Complete(), and do not provide QuitRas(). All currently supported
+    # Their two-argument Compute_CurrentPlan call is inherently blocking; the
+    # absence of a configurable blocking argument does not make it asynchronous.
+    # They do not provide QuitRas(). All currently supported
     # 5.x+ Controllers share the modern contract. Keep this keyed by ProgID so
     # 3.x aliases that resolve to RAS41 inherit the actual Controller surface.
     _LEGACY_CONTROLLER_CAPABILITIES = _ControllerCapabilities(
         compute_current_plan_argument_count=2,
-        completion_method='Compute_IsStillComputing',
-        completion_true_means_complete=False,
+        completion_method='Compute_CurrentPlan_blocking_return',
+        completion_true_means_complete=True,
         supports_blocking=False,
         supports_quit_ras=False,
     )
@@ -1533,6 +1702,8 @@ class RasControl:
             Callable[[bool, _SessionCleanupResult, Optional[BaseException]], None]
         ] = None,
         session_open_callback: Optional[Callable[[SessionLock], None]] = None,
+        observe_dialogs: bool = False,
+        dialog_observation_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> Any:
         """
         PRIVATE: Open HEC-RAS via COM, run operation, close HEC-RAS.
@@ -1559,6 +1730,9 @@ class RasControl:
         result = None
         session_id = str(uuid.uuid4())
         operation_error = None
+        dialog_observer = None
+        dialog_observation = None
+        dialog_observer_error = None
 
         # Take snapshot of ras.exe processes before COM launch
         before_snapshot = {}
@@ -1579,7 +1753,8 @@ class RasControl:
             # Open project
             logger.debug(f"Opening project: {project_path.name}")
             logger.debug(f"Opening project path: {project_path}")
-            com_rc.Project_Open(str(project_path))
+            if not observe_dialogs:
+                com_rc.Project_Open(str(project_path))
 
             # Detect ras.exe PID after COM launch
             (
@@ -1614,6 +1789,25 @@ class RasControl:
             if session_open_callback is not None:
                 session_open_callback(lock_data)
 
+            if observe_dialogs:
+                from .RasDialogWatchdog import (
+                    _ExactDialogObserver,
+                    _ExactRasProcessIdentity,
+                )
+                # Qualification observes the exact freshly activated Controller
+                # before Project_Open, which can itself encounter a modal gate.
+                identity = _ExactRasProcessIdentity(
+                    pid=ras_pid,
+                    create_time=ras_create_time,
+                    process_name="ras.exe",
+                    executable_path=Path(ras_executable_path),
+                    executable_sha256=ras_executable_sha256,
+                )
+                dialog_observer = _ExactDialogObserver(identity)
+                if not dialog_observer._start():
+                    raise RuntimeError("Exact Controller dialog observer could not start")
+                com_rc.Project_Open(str(project_path))
+
             # Perform operation
             logger.debug("Executing operation...")
             result = operation_func(com_rc)
@@ -1621,7 +1815,7 @@ class RasControl:
 
             return result
 
-        except Exception as e:
+        except BaseException as e:
             operation_error = e
             logger.error(f"Operation failed: {e}")
             raise
@@ -1629,6 +1823,34 @@ class RasControl:
         finally:
             # ALWAYS close
             logger.debug("Closing HEC-RAS...")
+
+            if dialog_observer is not None:
+                try:
+                    dialog_observer._stop_observing()
+                    dialog_observation = dialog_observer._evidence()
+                    if (
+                        dialog_observation.get("stop_confirmed") is not True
+                        or dialog_observation.get("thread_alive") is not False
+                    ):
+                        raise RuntimeError("Exact Controller dialog observer did not stop")
+                except Exception as exc:
+                    dialog_observer_error = exc
+                    if dialog_observation is None:
+                        dialog_observation = {
+                            "scope": "exact_controller_identity",
+                            "stop_confirmed": False,
+                            "error_type": type(exc).__name__,
+                            "error_detail": str(exc),
+                        }
+                if dialog_observation_callback is not None:
+                    try:
+                        dialog_observation_callback(dialog_observation)
+                    except Exception as exc:
+                        dialog_observer_error = exc
+                if operation_error is not None:
+                    details = dict(getattr(operation_error, "execution_details", {}))
+                    details["dialog_observation"] = dialog_observation
+                    operation_error.execution_details = details
 
             close_error = None
             if com_rc is not None:
@@ -1689,8 +1911,10 @@ class RasControl:
             else:
                 logger.debug("Session cleanup completed successfully")
 
-            if (strict_close or require_safe_close) and operation_error is None:
+            if (strict_close or require_safe_close or observe_dialogs) and operation_error is None:
                 strict_errors = []
+                if dialog_observer_error is not None:
+                    strict_errors.append(str(dialog_observer_error))
                 if (
                     strict_close
                     and capabilities.supports_quit_ras
@@ -1710,7 +1934,12 @@ class RasControl:
                         "confirmed"
                     )
                 if strict_errors:
-                    raise RuntimeError("; ".join(strict_errors)) from close_error
+                    close_failure = RuntimeError("; ".join(strict_errors))
+                    if dialog_observation is not None:
+                        close_failure.execution_details = {
+                            "dialog_observation": dialog_observation,
+                        }
+                    raise close_failure from close_error
 
     # ========== PUBLIC API (ras-commander style) ==========
 
@@ -1720,17 +1949,17 @@ class RasControl:
                  use_watchdog: bool = True, max_runtime: int = 86400,
                  refresh_results: bool = True, *, blocking: bool = False,
                  controller_version: Optional[str] = None,
-                 strict_close: bool = False) -> 'RasControlResult':
+                 strict_close: bool = False,
+                 observe_dialogs: bool = False) -> 'RasControlResult':
         """
         Run a plan (steady or unsteady) and wait for completion.
 
         This method checks if results are current before running. If results
         are up-to-date, it skips computation (unless force_recompute=True).
-        When computation is needed, the default path starts it asynchronously
-        and polls the resolved Controller's completion method. HEC-RAS 4.0/4.1
-        use ``Compute_IsStillComputing()``; HEC-RAS 5+ uses
-        ``Compute_Complete()``. The opt-in blocking path delegates the wait to
-        a Controller that exposes the blocking argument.
+        HEC-RAS 4.0/4.1 always wait inside their two-argument
+        ``Compute_CurrentPlan`` call. HEC-RAS 5+ defaults to asynchronous
+        execution followed by ``Compute_Complete()`` polling; ``blocking=True``
+        instead passes the modern Controller's blocking argument.
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
@@ -1744,14 +1973,18 @@ class RasControl:
                 protection against orphaned processes in Jupyter notebooks.
                 Defaults to True (recommended). Set to False to disable.
             max_runtime: Maximum runtime in seconds. The nonblocking Controller
-                poll loop always enforces this deadline; when ``use_watchdog``
-                is enabled, the independent watchdog enforces it as well.
+                poll loop enforces this deadline. An inherently blocking 4.x
+                call or explicit modern blocking call requires an independent
+                watchdog or caller supervisor to interrupt a stalled call;
+                same-thread code can only reject a late return afterwards.
                 Defaults to 86400 (24 hours).
             refresh_results: Refresh ``plan_df`` and ``results_df`` after the
                 controller returns. Disable for compute-only validation when
                 detailed legacy result extraction is unnecessary. Defaults to True.
-            blocking: Pass the Controller's blocking flag to
+            blocking: For modern Controllers, pass the blocking flag to
                 ``Compute_CurrentPlan`` instead of polling ``Compute_Complete``.
+                Legacy 4.0/4.1 are inherently blocking for either value and
+                receive exactly two arguments, with no unsupported third flag.
                 This is required by exact HEC-RAS 6.3.0.2 batch execution.
                 Defaults to False for backward compatibility.
             controller_version: Optional exact Controller product identity.
@@ -1766,6 +1999,14 @@ class RasControl:
                 always fails plan execution, including in the default
                 non-strict mode. Defaults to False for compatibility with
                 recoverable modern ``QuitRas()`` failures.
+            observe_dialogs: Opt in to exact Controller dialog observation before
+                ``Project_Open``. Records dialogs for the proved PID, creation
+                time, executable path, and SHA-256; unknown dialogs are preserved.
+                Only the exact reviewed optional example-install prompt may be
+                declined. Requires available Windows observation support and
+                confirmed observer shutdown. Default False preserves existing
+                behavior. Evidence is returned as ``dialog_observation`` inside
+                ``execution_details`` and attached to observed COM exceptions.
 
         Returns:
             RasControlResult: Result object backward compatible with Tuple[bool, List[str]].
@@ -1859,7 +2100,26 @@ class RasControl:
         controller_capabilities = RasControl._CONTROLLER_CAPABILITIES[
             controller_progid
         ]
-        if blocking and not controller_capabilities.supports_blocking:
+        inherently_blocking = (
+            controller_capabilities.compute_current_plan_argument_count == 2
+        )
+        effective_blocking = bool(blocking or inherently_blocking)
+        dialog_observation = None
+
+        def _record_dialog_observation(evidence):
+            nonlocal dialog_observation
+            dialog_observation = evidence
+
+        dialog_kwargs = (
+            {
+                "observe_dialogs": True,
+                "dialog_observation_callback": _record_dialog_observation,
+            }
+            if observe_dialogs else {}
+        )
+        if blocking and not (
+            controller_capabilities.supports_blocking or inherently_blocking
+        ):
             raise ValueError(
                 "blocking=True is supported only by HEC-RAS 5.x and newer Controllers"
             )
@@ -1937,6 +2197,13 @@ class RasControl:
                     post_close_global_processes_quiescent
                 ),
                 'compute_mode': mode,
+                'dialog_observation_requested': bool(observe_dialogs),
+                'dialog_observation': dialog_observation,
+                'blocking_requested': bool(blocking),
+                'controller_inherently_blocking': inherently_blocking,
+                'compute_current_plan_argument_count': (
+                    controller_capabilities.compute_current_plan_argument_count
+                ),
                 'completion_method': None,
                 'controller_quit_supported': (
                     controller_capabilities.supports_quit_ras
@@ -1946,6 +2213,7 @@ class RasControl:
                 'controller_message_count': returned_count,
                 'watchdog_requested': use_watchdog,
                 'watchdog_started': watchdog_pid != 0,
+                'watchdog_pid': watchdog_pid if watchdog_pid else None,
                 'strict_close_requested': bool(strict_close),
                 'max_runtime_seconds': float(max_runtime_seconds),
                 'duration_seconds': float(duration_seconds),
@@ -2031,6 +2299,7 @@ class RasControl:
                     _check_current,
                     require_safe_close=True,
                     close_outcome_callback=_record_current_check_close,
+                    **dialog_kwargs,
                     **close_kwargs,
                 )
                 if not current_check_close_safe:
@@ -2207,6 +2476,11 @@ class RasControl:
                         max_runtime=max_runtime_seconds,
                         lock_file_path=str(lock_file)
                     )
+                    if watchdog_identity is None:
+                        raise RuntimeError(
+                            "Requested watchdog worker could not be started or "
+                            "identified; computation was not started"
+                        )
                     if watchdog_identity is not None:
                         watchdog_pid = watchdog_identity.pid
                         current_session.watchdog_pid = watchdog_identity.pid
@@ -2231,13 +2505,16 @@ class RasControl:
                                 "was not started"
                             )
                 else:
-                    logger.warning("Could not spawn watchdog - ras.exe PID not detected")
+                    raise RuntimeError(
+                        "Requested watchdog requires an exact active Controller "
+                        "session; computation was not started"
+                    )
 
             try:
                 compute_started = time.monotonic()
                 logger.info(
                     "Starting %s Controller computation...",
-                    "blocking" if blocking else "asynchronous",
+                    "blocking" if effective_blocking else "asynchronous",
                 )
 
                 # Couple cleanup to the actual compute attempt so Controller
@@ -2252,11 +2529,22 @@ class RasControl:
                 )
                 calculation_attempted = True
 
-                if blocking:
-                    raw_compute = com_rc.Compute_CurrentPlan(None, None, True)
+                if effective_blocking:
+                    if inherently_blocking:
+                        raw_compute = com_rc.Compute_CurrentPlan(None, None)
+                    else:
+                        raw_compute = com_rc.Compute_CurrentPlan(None, None, True)
                     if not isinstance(raw_compute, (tuple, list)) or len(raw_compute) < 3:
                         raise RuntimeError(
                             "Blocking Compute_CurrentPlan returned an unsupported result"
+                        )
+                    duration_seconds = time.monotonic() - compute_started
+                    if duration_seconds >= max_runtime_seconds:
+                        raise TimeoutError(
+                            "HEC-RAS blocking computation exceeded max_runtime="
+                            f"{max_runtime} seconds before returning; solver "
+                            "quiescence was not credited and opposing result "
+                            "artifacts were preserved"
                         )
                     # A valid blocking Controller return arrives only after the
                     # calculation has stopped writing its result artifacts.
@@ -2270,27 +2558,25 @@ class RasControl:
                         messages,
                         controller_message_count=controller_message_count,
                         watchdog_pid=watchdog_pid,
-                        duration_seconds=time.monotonic() - compute_started,
+                        watchdog_create_time=(
+                            watchdog_identity.create_time if watchdog_identity else None
+                        ),
+                        watchdog_name=(
+                            watchdog_identity.name if watchdog_identity else None
+                        ),
+                        duration_seconds=duration_seconds,
                         completion_method='Compute_CurrentPlan_blocking_return',
                         blocking_result=blocking_result,
+                        poll_count=0,
                     )
 
-                if (
-                    controller_capabilities.compute_current_plan_argument_count
-                    == 2
-                ):
-                    status, controller_message_count, raw_messages = (
-                        com_rc.Compute_CurrentPlan(None, None)
-                    )
-                else:
-                    status, controller_message_count, raw_messages, _ = (
-                        com_rc.Compute_CurrentPlan(None, None)
-                    )
+                status, controller_message_count, raw_messages, _ = (
+                    com_rc.Compute_CurrentPlan(None, None)
+                )
                 messages = _normalize_messages(raw_messages)
 
-                # CRITICAL: Wait for computation to complete. Legacy 4.0/4.1
-                # Controllers expose an inverted "still computing" signal;
-                # modern Controllers expose a positive completion signal.
+                # Modern asynchronous Controllers expose a positive completion
+                # signal. Legacy blocking calls never enter this poll loop.
                 logger.info("Waiting for computation to complete...")
                 poll_count = 0
                 completion_deadline = compute_started + max_runtime_seconds
@@ -2357,6 +2643,12 @@ class RasControl:
                     messages,
                     controller_message_count=controller_message_count,
                     watchdog_pid=watchdog_pid,
+                    watchdog_create_time=(
+                        watchdog_identity.create_time if watchdog_identity else None
+                    ),
+                    watchdog_name=(
+                        watchdog_identity.name if watchdog_identity else None
+                    ),
                     duration_seconds=time.monotonic() - compute_started,
                     completion_method=(
                         controller_capabilities.completion_method
@@ -2390,97 +2682,110 @@ class RasControl:
                         )
 
         try:
-            close_kwargs = {"strict_close": True} if strict_close else {}
-            raw_result = RasControl._com_open_close(
-                info.project_path,
-                requested_controller_version,
-                _run_operation,
-                require_safe_close=True,
-                close_outcome_callback=_record_close_outcome,
-                session_open_callback=_record_controller_session,
-                **close_kwargs,
-            )
-            (
-                post_close_plan_inventory,
-                post_close_global_inventory,
-            ) = _inspect_controller_post_close_processes(
-                project_path=info.project_path,
-                plan_number=info.plan_number,
-            )
-            post_close_plan_processes_quiescent = bool(
-                post_close_plan_inventory.complete
-                and not post_close_plan_inventory.matched
-            )
-            post_close_global_processes_quiescent = bool(
-                post_close_global_inventory.complete
-                and not post_close_global_inventory.processes
-            )
-            if (
-                not post_close_plan_inventory.complete
-                or not post_close_global_inventory.complete
-            ):
-                solver_quiescence_confirmed = False
-                raise RuntimeError(
-                    "Controller post-close HEC-RAS process inventory was "
-                    "incomplete; opposing result artifacts were preserved"
+            try:
+                close_kwargs = {"strict_close": True} if strict_close else {}
+                raw_result = RasControl._com_open_close(
+                    info.project_path,
+                    requested_controller_version,
+                    _run_operation,
+                    require_safe_close=True,
+                    close_outcome_callback=_record_close_outcome,
+                    session_open_callback=_record_controller_session,
+                    **dialog_kwargs,
+                    **close_kwargs,
                 )
-            if (
-                post_close_plan_inventory.matched
-                or post_close_global_inventory.processes
-            ):
-                solver_quiescence_confirmed = False
-                raise RuntimeError(
-                    "A HEC-RAS compute process remained after Controller "
-                    "close; opposing result artifacts were preserved"
-                )
-            if not all(
                 (
-                    solver_quiescence_confirmed,
-                    controller_close_safe,
-                    owned_process_exit_confirmed,
-                    actual_engine_provenance_confirmed,
-                    post_close_plan_processes_quiescent,
-                    post_close_global_processes_quiescent,
+                    post_close_plan_inventory,
+                    post_close_global_inventory,
+                ) = _inspect_controller_post_close_processes(
+                    project_path=info.project_path,
+                    plan_number=info.plan_number,
                 )
-            ):
-                raise RuntimeError(
-                    "Plan execution did not establish exact Controller "
-                    "provenance, solver quiescence, safe close, and owned "
-                    "process exit"
+                post_close_plan_processes_quiescent = bool(
+                    post_close_plan_inventory.complete
+                    and not post_close_plan_inventory.matched
                 )
-        finally:
-            # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
-            # the selected engine's output family after the controller closes.
-            if (
-                calculation_attempted
-                and solver_quiescence_confirmed
-                and controller_close_safe
-                and owned_process_exit_confirmed
-                and actual_engine_provenance_confirmed
-                and post_close_plan_processes_quiescent
-                and post_close_global_processes_quiescent
-            ):
-                artifact_finalization_cleanup = finalize_plan_execution_artifacts(
-                    info.plan_number,
-                    output_format=execution_result_format,
-                    ras_object=_ras_obj,
-                    project_folder=info.project_path.parent,
-                    project_name=info.project_path.stem,
+                post_close_global_processes_quiescent = bool(
+                    post_close_global_inventory.complete
+                    and not post_close_global_inventory.processes
                 )
-                result_artifacts_finalized = True
-                if not selected_result.is_file():
-                    result_artifacts_finalized = False
+                if (
+                    not post_close_plan_inventory.complete
+                    or not post_close_global_inventory.complete
+                ):
+                    solver_quiescence_confirmed = False
                     raise RuntimeError(
-                        "HEC-RAS reported completion but the selected "
-                        f"{execution_result_format} result artifact was not created: "
-                        f"{selected_result}"
+                        "Controller post-close HEC-RAS process inventory was "
+                        "incomplete; opposing result artifacts were preserved"
                     )
-            elif calculation_attempted:
-                logger.warning(
-                    "Preserving opposing result artifacts for plan %s because "
-                    "solver quiescence or safe Controller close was not confirmed",
-                    info.plan_number,
-                )
+                if (
+                    post_close_plan_inventory.matched
+                    or post_close_global_inventory.processes
+                ):
+                    solver_quiescence_confirmed = False
+                    raise RuntimeError(
+                        "A HEC-RAS compute process remained after Controller "
+                        "close; opposing result artifacts were preserved"
+                    )
+                if not all(
+                    (
+                        solver_quiescence_confirmed,
+                        controller_close_safe,
+                        owned_process_exit_confirmed,
+                        actual_engine_provenance_confirmed,
+                        post_close_plan_processes_quiescent,
+                        post_close_global_processes_quiescent,
+                    )
+                ):
+                    raise RuntimeError(
+                        "Plan execution did not establish exact Controller "
+                        "provenance, solver quiescence, safe close, and owned "
+                        "process exit"
+                    )
+            finally:
+                # HEC-RAS 5+ can recreate .O## during 1D computation, so enforce
+                # the selected engine's output family after the controller closes.
+                if (
+                    calculation_attempted
+                    and solver_quiescence_confirmed
+                    and controller_close_safe
+                    and owned_process_exit_confirmed
+                    and actual_engine_provenance_confirmed
+                    and post_close_plan_processes_quiescent
+                    and post_close_global_processes_quiescent
+                ):
+                    artifact_finalization_cleanup = finalize_plan_execution_artifacts(
+                        info.plan_number,
+                        output_format=execution_result_format,
+                        ras_object=_ras_obj,
+                        project_folder=info.project_path.parent,
+                        project_name=info.project_path.stem,
+                    )
+                    result_artifacts_finalized = True
+                    if not selected_result.is_file():
+                        result_artifacts_finalized = False
+                        raise RuntimeError(
+                            "HEC-RAS reported completion but the selected "
+                            f"{execution_result_format} result artifact was not created: "
+                            f"{selected_result}"
+                        )
+                elif calculation_attempted:
+                    logger.warning(
+                        "Preserving opposing result artifacts for plan %s because "
+                        "solver quiescence or safe Controller close was not confirmed",
+                        info.plan_number,
+                    )
+        except BaseException as execution_error:
+            # COM may have closed cleanly before a post-close inventory or
+            # missing-output gate fails. Preserve the same observer snapshot
+            # on that original exception, including failures from finalization.
+            if observe_dialogs and dialog_observation is not None:
+                prior_details = getattr(execution_error, "execution_details", None)
+                details = dict(prior_details) if isinstance(prior_details, dict) else {}
+                details["dialog_observation_requested"] = True
+                details["dialog_observation"] = dialog_observation
+                execution_error.execution_details = details
+            raise
 
         # Wrap tuple result into RasControlResult with results_df_row
         from .ComputeResults import RasControlResult
@@ -2489,6 +2794,8 @@ class RasControl:
         _details = raw_result[2] if raw_result and len(raw_result) > 2 else {}
         _details.update(
             {
+                'dialog_observation_requested': bool(observe_dialogs),
+                'dialog_observation': dialog_observation,
                 'execution_api': 'ras_control',
                 'engine_kind': 'controller',
                 'selected_result_format': execution_result_format,
@@ -3246,6 +3553,43 @@ class RasControl:
         return RasControl._com_open_close(info.project_path, info.version, _set_plan)
 
     @staticmethod
+    def _stored_message_artifact_paths(plan: Union[str, Path], ras_object=None):
+        """Resolve exact message paths without project metadata for file inputs."""
+        direct_path = Path(plan) if isinstance(plan, (str, Path)) else None
+        match = (
+            re.fullmatch(r"(.+)\.p([0-9]{2})(?:\.hdf)?", direct_path.name, re.IGNORECASE)
+            if direct_path is not None else None
+        )
+        if match is not None:
+            return get_plan_result_artifact_paths(
+                match.group(2),
+                project_folder=direct_path.parent,
+                project_name=match.group(1),
+            )
+        info = RasControl._get_project_info(plan, ras_object)
+        return get_plan_result_artifact_paths(
+            info.plan_number,
+            project_folder=info.project_path.parent,
+            project_name=info.project_path.stem,
+        )
+
+    @staticmethod
+    def _read_hdf_comp_msgs(hdf_file: Path) -> str:
+        """Read only the embedded dataset, with no recursive sidecar fallback."""
+        import h5py
+
+        with h5py.File(hdf_file, "r") as source:
+            dataset = source.get("Results/Summary/Compute Messages (text)")
+            if dataset is None:
+                return ""
+            data = dataset[()]
+            if getattr(data, "ndim", 0) > 0:
+                if data.size == 0:
+                    return ""
+                data = data.flat[0]
+            return data.decode("utf-8", errors="ignore") if isinstance(data, bytes) else str(data)
+
+    @staticmethod
     def _read_stored_comp_msgs(
         plan: Union[str, Path],
         ras_object=None,
@@ -3262,17 +3606,8 @@ class RasControl:
         selection precedence: ``.comp_msgs.txt``, ``.computeMsgs.txt``, then
         ``.bco##``.
         """
-        info = RasControl._get_project_info(plan, ras_object)
-        project_base = info.project_path.stem
-        plan_file = info.project_path.parent / (
-            f"{project_base}.p{info.plan_number}"
-        )
-        candidates = (
-            Path(f"{plan_file}.comp_msgs.txt"),
-            Path(f"{plan_file}.computeMsgs.txt"),
-            info.project_path.parent
-            / f"{project_base}.bco{info.plan_number}",
-        )
+        artifacts = RasControl._stored_message_artifact_paths(plan, ras_object)
+        candidates = artifacts.message_sidecars
 
         inspected = []
         for candidate in candidates:
@@ -3341,7 +3676,9 @@ class RasControl:
         If no text file exists, falls back to HDF extraction.
 
         Args:
-            plan: Plan number ("01", "02") or path to .prj file
+            plan: Plan number ("01", "02"), project .prj path, or exact
+                .p## / .p##.hdf path. Direct plan/HDF paths resolve only adjacent
+                files and do not require an initialized project or HEC-RAS.
             ras_object: Optional RasPrj instance (uses global ras if None)
 
         Returns:
@@ -3363,17 +3700,12 @@ class RasControl:
             identifies the additional candidates.
             Falls back to HDF: /Results/Summary/Compute Messages (text)
         """
-        info = RasControl._get_project_info(plan, ras_object)
-        project_base = info.project_path.stem
-        plan_file = (
-            info.project_path.parent
-            / f"{project_base}.p{info.plan_number}"
-        )
+        artifacts = RasControl._stored_message_artifact_paths(plan, ras_object)
+        plan_number = artifacts.plan_number
 
         try:
             stored_candidates = RasControl._read_stored_comp_msgs(
-                plan,
-                ras_object,
+                artifacts.plan_file,
                 strict=False,
             )
             if stored_candidates:
@@ -3389,7 +3721,7 @@ class RasControl:
                     logger.warning(
                         "Multiple stored computation-message sidecars exist for "
                         "plan %s; using %s by fixed precedence and ignoring: %s",
-                        info.plan_number,
+                        plan_number,
                         source_path.name,
                         ", ".join(
                             candidate.path.name
@@ -3400,7 +3732,7 @@ class RasControl:
                     "\r\n", "\n"
                 ).replace("\r", "\n")
                 is_bco = source_path.name.casefold().endswith(
-                    f".bco{info.plan_number}".casefold()
+                    f".bco{plan_number}".casefold()
                 )
                 has_usable_contents = (
                     bool(normalized_contents.strip()) if is_bco else True
@@ -3408,7 +3740,7 @@ class RasControl:
                 if has_usable_contents:
                     logger.debug(
                         "Reading computation messages for plan %s from comp_msgs file",
-                        info.plan_number,
+                        plan_number,
                     )
                     logger.debug(
                         "Computation messages file path: %s",
@@ -3437,18 +3769,14 @@ class RasControl:
 
         # If no .txt or .bco file found, try HDF fallback
         logger.debug(
-            f"Computation messages file not found (tried .comp_msgs.txt, .computeMsgs.txt, and .bco{info.plan_number}), "
+            f"Computation messages file not found (tried .comp_msgs.txt, .computeMsgs.txt, and .bco{plan_number}), "
             f"falling back to HDF extraction"
         )
 
         try:
-            # Late import to avoid circular dependency
-            from .hdf.HdfResultsPlan import HdfResultsPlan
-
-            # Construct HDF path
-            hdf_file = Path(str(plan_file) + ".hdf")
+            hdf_file = artifacts.hdf
             if hdf_file.exists():
-                hdf_contents = HdfResultsPlan.get_compute_messages(hdf_file)
+                hdf_contents = RasControl._read_hdf_comp_msgs(hdf_file)
                 if hdf_contents:
                     logger.debug(f"Successfully retrieved {len(hdf_contents)} characters from HDF")
                     return hdf_contents
@@ -3457,7 +3785,7 @@ class RasControl:
 
         # Both methods failed
         logger.debug(
-            f"No computation messages found in .txt or HDF sources for plan {info.plan_number}"
+            f"No computation messages found in .txt or HDF sources for plan {plan_number}"
         )
         return ""
 
@@ -3654,39 +3982,100 @@ class RasControl:
         for orphan in orphans:
             try:
                 proc = psutil.Process(orphan.ras_pid)
-                if not _process_matches_lock_identity(proc, orphan):
+                identity_state = _process_matches_lock_identity(proc, orphan)
+                if identity_state != 'exact':
                     logger.warning(
-                        "Refusing to terminate PID %s because its creation "
-                        "time does not match the session lock",
+                        "Refusing to terminate PID %s because its identity "
+                        "state is %s",
                         orphan.ras_pid,
+                        identity_state,
                     )
                     continue
-                proc.terminate()
-                proc.wait(timeout=10)
-                print(f"✅ Terminated PID {orphan.ras_pid}")
-                logger.info(f"Terminated orphaned PID {orphan.ras_pid}")
-                cleaned += 1
 
-                # Remove lock file
-                lock_file = _get_lock_file_path(orphan.session_id)
-                lock_file.unlink(missing_ok=True)
-            except psutil.TimeoutExpired:
-                # Force kill if graceful termination fails
+                proc.terminate()
                 try:
-                    if not _process_matches_lock_identity(proc, orphan):
+                    proc.wait(timeout=10)
+                    signal = "Terminated"
+                except psutil.TimeoutExpired:
+                    # Never use the timed-out handle as kill authority. A
+                    # newly constructed handle is required to detect PID
+                    # reuse between terminate() and kill().
+                    try:
+                        kill_proc = psutil.Process(orphan.ras_pid)
+                    except psutil.NoSuchProcess:
+                        identity_state = 'absent'
+                        kill_proc = None
+                    except (
+                        psutil.AccessDenied,
+                        OSError,
+                        ValueError,
+                        TypeError,
+                    ):
+                        identity_state = 'identity_unverified'
+                        kill_proc = None
+                    else:
+                        identity_state = _process_matches_lock_identity(
+                            kill_proc,
+                            orphan,
+                        )
+
+                    if identity_state in {'absent', 'pid_reused'}:
+                        # The tracked process exited after terminate() timed
+                        # out. Do not signal the replacement PID.
+                        signal = "Terminated"
+                    elif identity_state != 'exact':
                         logger.warning(
                             "Refusing to kill PID %s because its identity "
-                            "changed after terminate()",
+                            "state changed to %s after terminate()",
                             orphan.ras_pid,
+                            identity_state,
                         )
                         continue
-                    proc.kill()
-                    print(f"⚠️  Force killed PID {orphan.ras_pid}")
-                    logger.warning(f"Force killed orphaned PID {orphan.ras_pid}")
-                    cleaned += 1
-                except Exception as e:
-                    print(f"❌ Failed to kill PID {orphan.ras_pid}: {e}")
-                    logger.error(f"Failed to kill orphaned PID {orphan.ras_pid}: {e}")
+                    else:
+                        kill_proc.kill()
+                        kill_proc.wait(timeout=10)
+                        signal = "Force killed"
+
+                # A successful wait is not sufficient proof for retiring the
+                # lock: the PID may already have been reused, or its identity
+                # may no longer be queryable. Require the tracked PID to be
+                # absent or replaced and retain the lock for every uncertain
+                # post-state.
+                try:
+                    post_proc = psutil.Process(orphan.ras_pid)
+                except psutil.NoSuchProcess:
+                    post_state = 'absent'
+                except (psutil.AccessDenied, OSError, ValueError, TypeError):
+                    post_state = 'identity_unverified'
+                else:
+                    post_state = _process_matches_lock_identity(post_proc, orphan)
+
+                if post_state not in {'absent', 'pid_reused'}:
+                    logger.warning(
+                        "Retaining session lock for PID %s because its "
+                        "post-signal identity state is %s",
+                        orphan.ras_pid,
+                        post_state,
+                    )
+                    continue
+
+                lock_file = _get_lock_file_path(orphan.session_id)
+                try:
+                    lock_file.unlink(missing_ok=True)
+                except OSError as exc:
+                    logger.error(
+                        "Retaining cleanup evidence for PID %s because its "
+                        "session lock could not be removed: %s",
+                        orphan.ras_pid,
+                        exc,
+                    )
+                    continue
+
+                icon = "✅" if signal == "Terminated" else "⚠️ "
+                print(f"{icon} {signal} PID {orphan.ras_pid}")
+                log = logger.info if signal == "Terminated" else logger.warning
+                log(f"{signal} orphaned PID {orphan.ras_pid}")
+                cleaned += 1
             except Exception as e:
                 print(f"❌ Failed to terminate PID {orphan.ras_pid}: {e}")
                 logger.error(f"Failed to terminate orphaned PID {orphan.ras_pid}: {e}")

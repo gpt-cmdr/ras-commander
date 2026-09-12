@@ -8,9 +8,11 @@ disposable EX1 results, terminalized `passed`, selected only the HDF family,
 passed all eight required invariants, reproduced identical semantic cleanup
 and provenance evidence, preserved the source tree, and ended with no retained
 process or lock. Their PyArrow aggregates and Markdown reports rebuild from
-immutable receipts. Earlier preflight, path-boundary, launcher-identity,
-overnight-stall, partial-intent, and first-receipt campaigns remain superseded
-diagnostics and must not be reused.
+immutable receipts. A later 4.1 L0 attempt at clean commit `b0bfb42b` produced
+diagnostic execution evidence but no result dataset; it exposed the legacy
+blocking-return and dialog-observation gaps recorded below. Earlier preflight,
+path-boundary, launcher-identity, overnight-stall, partial-intent, and
+first-receipt campaigns remain superseded diagnostics and must not be reused.
 
 Branch: `codex/structured-execution-evidence-integration`
 
@@ -565,6 +567,55 @@ evidence, proves the exact worker/helper and any delegated launcher absent,
 reproves source immutability, and obtains a complete empty global inventory.
 Recovery never signals a process and never treats an absent PID alone as
 sufficient evidence.
+
+### HEC-RAS 4.1 L0 blocking-return diagnostic
+
+Campaign `35a5c102-2f7c-41e4-ba3c-ff9d648f4d99`, execution run
+`5dac46d0-7709-467b-8c97-ddf6b9873863`, selected only
+`steady_1d__4_1_0__l0` at clean pushed commit `b0bfb42b`. Attempt
+`fdfe1e87-c0df-4dab-9b74-261b027b952f` generated no result dataset. It staged
+a disposable EX1 plan-01 copy, removed neither result family because both were
+already absent, passed the exact 4.1 TCU gate, and invoked HEC-RAS only through
+`RasControl.run_plan()`. The source snapshot remained byte- and metadata-exact.
+
+The two-argument HEC-RAS 4.1 `Compute_CurrentPlan` call blocked for about
+13 minutes and then returned computation messages. Only after that return did
+the prior implementation enter its completion branch, where it polled zero
+times. The disposable stage still contained no `.O01` or plan HDF; only the
+plan and run files had current timestamps. Strict close then rejected the run
+because the owned `Ras.exe` had not exited, preserved the ambiguous stage, and
+the supervisor retained the host lock. The attempt therefore has no terminal
+qualification receipt and must not be represented as a failed hydraulic
+calculation or a generated-results lane.
+
+Read-only typelib and historical notebook review confirmed the actual legacy
+contract: HEC-RAS 4.0/4.1 expose a two-argument, blocking-return
+`Compute_CurrentPlan`; their lack of a configurable blocking flag does not make
+that call asynchronous. A same-thread `Compute_IsStillComputing()` poll after
+the call returns cannot govern its runtime. The absence of a solver child,
+negligible `Ras.exe` CPU use, and absence of output are instead consistent with
+a modal or equivalent GUI-side gate, but the exact dialog was not observable.
+
+The incident also exposed two safety defects that block another legacy live
+attempt:
+
+- `RasDialogWatchdog` expands an explicit PID set with host-wide process
+  discovery and auto-dismisses unknown dialogs. Qualification requires an
+  exact PID/create-time/image-scoped, observe-first mode that records unknown
+  dialogs without clicking or closing them; and
+- the independent orphan watchdog recorded the virtual-environment launcher
+  PID rather than proving the identity of the Python worker child that performs
+  cleanup. The worker must publish an identity handshake that cleanup verifies.
+
+The supervisor terminalized with host quarantine after the exact Controller
+process eventually exited. Official recovery
+`550dcc6a-0fe2-4874-a582-e5b44625fc58` then proved the supervisor and worker
+absent, reproduced both source fingerprints, obtained two complete-empty
+global process inventories, invoked and signalled no HEC-RAS process, and
+atomically retired the unchanged host lock. No manual GUI action, process kill,
+lock deletion, or orphan-cleanup API was used. Another 4.0/4.1 attempt is NO-GO
+until the blocking contract, scoped dialog evidence, and watchdog identity are
+corrected and pass deterministic review.
 
 ## Full installed-version expansion
 

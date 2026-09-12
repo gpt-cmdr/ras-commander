@@ -53,10 +53,10 @@ import os
 import shutil
 import uuid
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from numbers import Real
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Optional
 
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
@@ -68,6 +68,32 @@ from ..RasUtils import RasUtils
 from .Utils import clear_staged_plan_execution_artifacts
 
 logger = get_logger(__name__)
+
+
+def _validate_native_container_result(
+    result_hdf: Path,
+    logs: str,
+    plan_number: str,
+    staging_folder: Path,
+) -> bool:
+    """Validate native solver output using this container's captured log."""
+    from ..RasCmdr import RasCmdr
+
+    # Native RasUnsteady does not write the Windows pipeline's Complete
+    # Process record. Its log and populated result datasets are authoritative;
+    # Event Conditions/Completed Successfully may come from preprocessing.
+    log_path = staging_folder / "native-container.log"
+    log_path.write_text(
+        logs.replace("\r\n", "\n").replace("\r", "\n"),
+        encoding="utf-8",
+        newline="\n",
+    )
+    complete, reason = RasCmdr._validate_linux_solve(
+        log_path, result_hdf, plan_number
+    )
+    if not complete:
+        logger.error("Container native result is incomplete: %s (%s)", result_hdf, reason)
+    return complete
 
 
 @log_call
@@ -327,7 +353,7 @@ def init_docker_worker(**kwargs) -> DockerWorker:
     if is_ssh_host and not worker.use_ssh_client:
         # Check if paramiko is available for native SSH transport
         try:
-            import paramiko
+            import paramiko  # noqa: F401 -- confirm the optional transport imports successfully
             logger.debug("paramiko available for SSH transport")
         except ImportError:
             raise ImportError(
@@ -488,7 +514,6 @@ def execute_docker_plan(
     # (e.g., via init_ras_project calls in preprocessing)
     project_folder = Path(ras_obj.project_folder)
     project_name = ras_obj.project_name
-    ras_version = ras_obj.ras_version
 
     # Validate project folder exists before proceeding
     if not project_folder.exists():
@@ -554,7 +579,7 @@ def execute_docker_plan(
         logger.debug(f"Created local staging: {local_staging_folder}")
 
         # Copy project to LOCAL staging (for preprocessing)
-        logger.info(f"Copying project to local staging for preprocessing...")
+        logger.info("Copying project to local staging for preprocessing...")
         for item in project_folder.iterdir():
             if RasUtils.is_windows_reserved_name(item.name):
                 continue
@@ -571,7 +596,7 @@ def execute_docker_plan(
 
         # Step 1: Preprocess on Windows LOCALLY (if enabled)
         if worker.preprocess_on_host:
-            logger.info(f"Running preprocessing locally (not on network share)...")
+            logger.info("Running preprocessing locally (not on network share)...")
             from ..RasPreprocess import RasPreprocess
             from ..RasPrj import RasPrj, init_ras_project
             temp_ras = RasPrj()
@@ -596,7 +621,7 @@ def execute_docker_plan(
 
         # Step 1.5: For remote Docker, copy preprocessed files to remote share
         if worker._is_remote:
-            logger.info(f"Copying preprocessed files to remote share...")
+            logger.info("Copying preprocessed files to remote share...")
             remote_staging_folder.mkdir(parents=True, exist_ok=True)
             remote_input_staging.mkdir(parents=True, exist_ok=True)
             remote_output_staging.mkdir(parents=True, exist_ok=True)
@@ -718,13 +743,13 @@ def execute_docker_plan(
             logger.error(f"Container execution failed: {e}")
             try:
                 container.kill()
-            except:
+            except BaseException:
                 pass
             return False
         finally:
             try:
                 container.remove()
-            except:
+            except BaseException:
                 pass
             client.close()
 
@@ -757,10 +782,9 @@ def execute_docker_plan(
         if result_file.stat().st_mtime < start_time - 2.0:
             logger.error("Container result is stale: %s", result_file)
             return False
-        from ..RasCurrency import RasCurrency
-
-        if not RasCurrency.check_plan_hdf_complete(result_file):
-            logger.error("Container result HDF is incomplete: %s", result_file)
+        if not _validate_native_container_result(
+            result_file, logs, plan_number, local_staging_folder
+        ):
             return False
 
         dest_file = project_folder / result_file.name
@@ -801,7 +825,7 @@ def execute_docker_plan(
             try:
                 shutil.rmtree(local_staging_folder, ignore_errors=True)
                 logger.debug(f"Cleaned up staging: {local_staging_folder}")
-            except:
+            except BaseException:
                 pass
         elif not autoclean:
             logger.info(
@@ -860,7 +884,6 @@ def execute_docker_plan_linux(
         bool: True if execution succeeded and an HDF result was retrieved.
     """
     import tempfile
-    import re as _re
 
     docker = check_docker_dependencies()
     from .DockerSshStaging import LinuxDockerSshStager
@@ -1082,13 +1105,12 @@ def execute_docker_plan_linux(
             logger.error("Failed to download HDF results from Linux host")
             return False
         downloaded_hdf = Path(downloaded[0])
-        from ..RasCurrency import RasCurrency
-
         if downloaded_hdf.name != expected_name:
             logger.error("Unexpected Docker result selected: %s", downloaded_hdf)
             return False
-        if not RasCurrency.check_plan_hdf_complete(downloaded_hdf):
-            logger.error("Container result HDF is incomplete: %s", downloaded_hdf)
+        if not _validate_native_container_result(
+            downloaded_hdf, logs, plan_number, local_staging_folder
+        ):
             return False
         dest_file = project_folder / expected_name
         temp_dest = dest_file.with_name(

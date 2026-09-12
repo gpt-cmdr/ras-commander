@@ -151,6 +151,40 @@ def _modern_execution_details(
     }
 
 
+def _dialog_observation(details):
+    return {
+        "scope": "exact_controller_identity",
+        "process_discovery": False,
+        "available": True,
+        "start_attempted": True,
+        "started": True,
+        "start_status": "started",
+        "stop_requested": True,
+        "stop_confirmed": True,
+        "thread_alive": False,
+        "stop_status": "completed",
+        "lifecycle": "stopped",
+        "target": {
+            "pid": details["controller_pid"],
+            "create_time": details["controller_create_time"],
+            "process_name": "Ras.exe",
+            "executable_path": details["controller_executable_path"],
+            "executable_sha256": details["controller_executable_sha256"],
+        },
+        "observed_count": 0,
+        "action_count": 0,
+        "action_attempt_count": 0,
+        "stop_prevented_action_count": 0,
+        "observations": [],
+        "identity_checks": [{"state": "exact", "first_check_count": 1}],
+        "identity_check_count": 1,
+        "lifecycle_transitions": [
+            {"state": "created"}, {"state": "running"},
+            {"state": "stopping"}, {"state": "stopped"},
+        ],
+    }
+
+
 def _controller_execution_details(
     request: dict[str, Any],
     *,
@@ -159,7 +193,7 @@ def _controller_execution_details(
     preparation, finalization = _execution_cleanup_details(request)
     engine = request["engine"]
     legacy_controller = engine["resolved_controller_version"] in {"4.0", "4.1"}
-    return {
+    details = {
         "execution_api": "ras_control",
         "calculation_attempted": True,
         "selected_result_format": engine["expected_result_format"],
@@ -177,9 +211,9 @@ def _controller_execution_details(
         "controller_executable_sha256": engine["controller_executable_sha256"],
         "controller_pid": 2468,
         "controller_create_time": 12345.0,
-        "compute_mode": "blocking" if engine["blocking"] else "poll",
+        "compute_mode": "blocking" if legacy_controller or engine["blocking"] else "poll",
         "completion_method": (
-            "Compute_IsStillComputing"
+            "Compute_CurrentPlan_blocking_return"
             if legacy_controller
             else (
                 "Compute_CurrentPlan_blocking_return"
@@ -191,6 +225,12 @@ def _controller_execution_details(
         "controller_close_method": (
             "owned_process_cleanup" if legacy_controller else "quit_ras"
         ),
+        **({
+            "poll_count": 0,
+            "controller_inherently_blocking": True,
+            "compute_current_plan_argument_count": 2,
+            "blocking_requested": engine["blocking"],
+        } if legacy_controller else {}),
         "watchdog_requested": True,
         "watchdog_started": True,
         "strict_close_requested": True,
@@ -201,6 +241,9 @@ def _controller_execution_details(
         "post_close_global_processes_quiescent": True,
         "actual_engine_provenance_confirmed": True,
     }
+    details["dialog_observation_requested"] = True
+    details["dialog_observation"] = _dialog_observation(details)
+    return details
 
 
 def _configure_modern_controller_request(
@@ -1333,6 +1376,7 @@ def test_controller_live_attempt_uses_exact_controller_route_and_externalizes_me
     assert kwargs["blocking"] is False
     assert kwargs["controller_version"] == "4.1.0"
     assert kwargs["strict_close"] is True
+    assert kwargs["observe_dialogs"] is True
     assert calls["tcu_status"] == ["4.1.0"]
     attempt = context.run_root / "attempts" / "lane-1" / "attempt-1"
     receipt, _ = read_json_with_digest(attempt / "worker_receipt.json")
@@ -1455,7 +1499,18 @@ def test_qualification_manifest_pin_mismatch_stops_before_staging(
         ("solver_quiescence_confirmed", 1),
         ("actual_engine_provenance_confirmed", False),
         ("requested_controller_version", "4.0"),
-        ("compute_mode", "blocking"),
+        ("compute_mode", "poll"),
+        ("poll_count", 1),
+        ("poll_count", False),
+        ("controller_inherently_blocking", False),
+        ("controller_inherently_blocking", 1),
+        ("compute_current_plan_argument_count", 3),
+        ("compute_current_plan_argument_count", True),
+        ("blocking_requested", True),
+        ("blocking_requested", 0),
+        ("dialog_observation_requested", False),
+        ("dialog_observation_requested", 1),
+        ("dialog_observation", None),
         ("watchdog_requested", False),
         ("watchdog_requested", 1),
         ("watchdog_started", False),
@@ -1567,6 +1622,11 @@ def test_modern_controller_live_result_requires_complete_capability_evidence(
         for resolved_version in ("4.0", "4.1")
         for missing_field in (
             "completion_method",
+            "compute_mode",
+            "poll_count",
+            "controller_inherently_blocking",
+            "compute_current_plan_argument_count",
+            "blocking_requested",
             "controller_quit_supported",
             "controller_close_method",
         )
@@ -1587,6 +1647,33 @@ def test_controller_live_result_requires_legacy_capability_evidence(
             live_worker.LiveCapabilityError,
             match="Controller capability evidence is missing",
         ):
+            live_worker._validate_execution_result(request, result)
+    finally:
+        lock.release()
+
+
+@pytest.mark.parametrize("resolved_version", ["4.0", "4.1"])
+@pytest.mark.parametrize("blocking", [False, True])
+def test_legacy_controller_live_result_proves_blocking_return_for_both_requests(
+    tmp_path: Path,
+    resolved_version: str,
+    blocking: bool,
+) -> None:
+    request, _, lock = _request(tmp_path, execution_api="ras_control")
+    request["engine"].update(
+        resolved_controller_version=resolved_version,
+        blocking=blocking,
+    )
+    details = _controller_execution_details(request)
+    result = SimpleNamespace(success=True, messages=[], execution_details=details)
+    try:
+        observed, success, _, _, _ = live_worker._validate_execution_result(request, result)
+        assert success is True
+        assert observed["compute_mode"] == "blocking"
+        assert observed["poll_count"] == 0
+        assert observed["blocking_requested"] is blocking
+        details["completion_method"] = "Compute_IsStillComputing"
+        with pytest.raises(live_worker.LiveCapabilityError, match="capability evidence is invalid"):
             live_worker._validate_execution_result(request, result)
     finally:
         lock.release()
@@ -2402,3 +2489,131 @@ def test_live_worker_contains_no_raw_process_or_filesystem_deletion_escape_hatch
     assert "taskkill" not in source.casefold()
     assert "stop-process" not in source.casefold()
     assert "Popen(" not in source
+
+
+def test_controller_dialog_observation_requires_exact_terminal_proof(tmp_path: Path) -> None:
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"pinned test executable")
+    details = {
+        "controller_pid": 1234,
+        "controller_create_time": 12345.0,
+        "controller_executable_path": str(executable),
+        "controller_executable_sha256": "e" * 64,
+        "dialog_observation_requested": True,
+    }
+    details["dialog_observation"] = _dialog_observation(details)
+    live_worker._validate_controller_dialog_observation(details)
+    observer = details["dialog_observation"]
+    for field in observer:
+        broken = json.loads(json.dumps(details))
+        del broken["dialog_observation"][field]
+        with pytest.raises(live_worker.LiveCapabilityError, match="dialog observation"):
+            live_worker._validate_controller_dialog_observation(broken)
+    for field, invalid in (
+        ("process_discovery", True), ("process_discovery", 0),
+        ("started", False), ("started", 1), ("available", False),
+        ("thread_alive", True), ("stop_confirmed", False),
+        ("stop_status", "thread_timeout"), ("lifecycle", "running"),
+        ("observed_count", False), ("action_count", 1),
+        ("identity_check_count", True), ("identity_check_count", 0),
+        ("identity_checks", [{"state": "identity_unverified"}]),
+        ("lifecycle_transitions", [{"state": "stopped"}]),
+        ("observations", [None]),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"][field] = invalid
+        with pytest.raises(live_worker.LiveCapabilityError, match="dialog observation"):
+            live_worker._validate_controller_dialog_observation(broken)
+    for field, invalid in (
+        ("pid", 5678), ("pid", True), ("create_time", 54321.0),
+        ("process_name", "python.exe"), ("executable_sha256", "0" * 64),
+        ("executable_path", str(tmp_path)),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"]["target"][field] = invalid
+        with pytest.raises(live_worker.LiveCapabilityError, match="dialog observation"):
+            live_worker._validate_controller_dialog_observation(broken)
+    for missing in ("dialog_observation", "dialog_observation_requested"):
+        broken = json.loads(json.dumps(details))
+        del broken[missing]
+        with pytest.raises(live_worker.LiveCapabilityError, match="dialog observation"):
+            live_worker._validate_controller_dialog_observation(broken)
+
+
+def test_controller_dialog_observation_preserves_unknown_and_scopes_actions(tmp_path: Path) -> None:
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"pinned test executable")
+    details = {
+        "controller_pid": 1234,
+        "controller_create_time": 12345.0,
+        "controller_executable_path": str(executable),
+        "controller_executable_sha256": "e" * 64,
+        "dialog_observation_requested": True,
+    }
+    observer = details["dialog_observation"] = _dialog_observation(details)
+    unknown = {
+        "pid": 1234, "classification": "unknown_preserved", "action": "none",
+        "action_status": "not_requested", "rule_id": None,
+        "identity_state": "exact", "proof_state": "not_applicable",
+    }
+    allowed = {
+        "pid": 1234, "classification": "allowlisted_dialog_declined", "action": "BM_CLICK",
+        "action_status": "completed", "rule_id": "decline_optional_example_install",
+        "identity_state": "exact", "proof_state": "exact",
+    }
+    observer.update(observed_count=2, action_count=1, action_attempt_count=1,
+                    observations=[unknown, allowed])
+    live_worker._validate_controller_dialog_observation(details)
+    for field, invalid in (
+        ("pid", 5678), ("action", "WM_CLOSE"), ("action", []),
+        ("rule_id", "generic_dismiss"), ("proof_state", "unproved"),
+        ("identity_state", "pid_reused"), ("action_status", []),
+    ):
+        broken = json.loads(json.dumps(details))
+        broken["dialog_observation"]["observations"][1][field] = invalid
+        with pytest.raises(live_worker.LiveCapabilityError, match="dialog observation"):
+            live_worker._validate_controller_dialog_observation(broken)
+
+
+@pytest.mark.parametrize("persistence_failure", [False, True])
+def test_main_retains_public_exception_evidence_without_terminal_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    persistence_failure: bool,
+) -> None:
+    request_path = tmp_path / "request.json"
+    request_path.write_text("{}")
+    request = {"run_id": "run-1", "lane_id": "lane-1", "attempt_id": "attempt-1"}
+    context = SimpleNamespace(run_root=tmp_path / "archive")
+    error = RuntimeError("Controller calculation did not produce selected results")
+    error.execution_details = {
+        "dialog_observation_requested": True,
+        "dialog_observation": {"scope": "exact_controller_identity", "lifecycle": "stopped"},
+    }
+    monkeypatch.setattr(live_worker, "_register_and_verify_worker_authorization", lambda *args: None)
+    monkeypatch.setattr(live_worker, "_verify_request", lambda *args: (request, "e" * 64, context))
+
+    def fail(*args):
+        raise error
+
+    monkeypatch.setattr(live_worker, "_perform", fail)
+    if persistence_failure:
+        def reject_write(*args, **kwargs):
+            raise OSError("test diagnostic persistence failure")
+        monkeypatch.setattr(live_worker, "write_json_with_digest", reject_write)
+    assert live_worker.main(["--request", str(request_path)]) == 30
+    attempt = context.run_root / "attempts" / "lane-1" / "attempt-1"
+    assert not (attempt / "worker_receipt.json").exists()
+    stderr = capsys.readouterr().err
+    assert str(error) in stderr
+    if persistence_failure:
+        assert "test diagnostic persistence failure" in stderr
+        assert not (attempt / "worker_failure_diagnostic.json").exists()
+    else:
+        diagnostic, _ = read_json_with_digest(attempt / "worker_failure_diagnostic.json")
+        assert diagnostic["diagnostic_only"] is True
+        assert diagnostic["request_sha256"] == "e" * 64
+        assert diagnostic["execution_details"] == error.execution_details
+        assert diagnostic["exception_type"] == "RuntimeError"
+        assert "terminal_category" not in diagnostic

@@ -16,8 +16,8 @@ For older HEC-RAS versions that don't support command-line execution or HDF outp
 | Version | Controller capability contract | Result family |
 |---------|--------------------------------|---------------|
 | 3.x alias | Resolves to the 4.1 Controller contract below | legacy `.O##` |
-| 4.0 | `RAS400`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
-| 4.1 | `RAS41`; two-argument compute; poll `Compute_IsStillComputing()`; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 4.0 | `RAS400`; inherently blocking two-argument compute; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
+| 4.1 | `RAS41`; inherently blocking two-argument compute; exact owned-process cleanup (no `QuitRas`) | legacy `.O##` |
 | 5.0.x (501-507) | Modern three-argument compute, `Compute_Complete`, and `QuitRas` | plan HDF |
 | 6.0 | Modern Controller contract | plan HDF |
 | 6.3 family alias | Modern contract; selects `RAS630` | plan HDF |
@@ -90,12 +90,19 @@ assert result.execution_details["watchdog_started"] is False
 `Compute_Complete()`. `use_watchdog=False` is intended only when an outer batch
 supervisor already owns the process tree and hard timeout. `strict_close=True`
 makes a `QuitRas()` failure or a verified surviving owned `ras.exe` process
-fail the operation instead of logging only a warning. For blocking execution,
-if the internal watchdog is requested but PID detection fails,
-`watchdog_started` is `False` and `max_runtime` is not enforced; batch callers
-must inspect that field or provide an outer supervisor. The nonblocking poll
-loop enforces `max_runtime` independently of watchdog startup. The default
-values preserve existing interactive behavior.
+fail the operation instead of logging only a warning. If the internal watchdog
+is requested but its actual worker identity cannot be proved, execution fails
+before computation. The worker publishes its own PID, creation time, executable,
+and launch arguments; this also handles Windows virtual-environment launchers
+whose PID differs from the interpreter doing the monitoring.
+
+HEC-RAS 4.0/4.1 always use the inherently blocking two-argument
+`Compute_CurrentPlan(None, None)` call, including when the caller leaves
+`blocking=False`. The API records the requested flag separately from the
+effective blocking mode. It does not poll on the same thread after that call
+returns. Its runtime bound requires the independent watchdog or an external
+supervisor. An outer supervisor is also necessary to bound project opening,
+which occurs before the internal compute watchdog starts.
 
 `execution_details` contains JSON-safe provenance. Its stable common keys are
 `requested_controller_version`, `resolved_controller_version`,
@@ -105,7 +112,7 @@ values preserve existing interactive behavior.
 `duration_seconds`. Polled modern Controllers report `Compute_Complete`,
 `True`, and `quit_ras` for the three capability fields; blocking modern
 Controllers report `Compute_CurrentPlan_blocking_return`, `True`, and
-`quit_ras`. HEC-RAS 4.0/4.1 report `Compute_IsStillComputing`, `False`, and
+`quit_ras`. HEC-RAS 4.0/4.1 report `Compute_CurrentPlan_blocking_return`, `False`, and
 `owned_process_cleanup`. The common result-family fields include
 `selected_result_format`, `artifact_preparation_cleanup`,
 `artifact_finalization_cleanup`, and `result_artifacts_finalized`. A cleanup
@@ -118,6 +125,13 @@ non-calculation evidence: `calculation_attempted` is `False` and
 separate currency-check session. `completion_method` and
 `controller_close_method` remain unset because no calculation ran. Blocking results
 also include `blocking_result`; polled results include `poll_count`.
+
+Use `observe_dialogs=True` for exact Controller-scoped diagnostic observation
+before project opening. The observer verifies process and window ownership and
+records its lifecycle in `execution_details["dialog_observation"]`. Unknown
+dialogs remain untouched. This option provides evidence for diagnosing a
+blocking GUI gate; it does not make an inherently blocking COM call asynchronous
+or replace the external deadline.
 
 HEC-RAS 4.0/4.1 expose neither `Compute_Complete` nor `QuitRas`. RasControl
 fails closed unless exact PID/create-time exit is positively proved. An

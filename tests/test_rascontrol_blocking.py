@@ -92,7 +92,7 @@ def test_3x_alias_inherits_resolved_41_controller_capabilities():
     capabilities = RasControl._CONTROLLER_CAPABILITIES[progid]
     assert progid == "RAS41.HECRASController"
     assert capabilities.compute_current_plan_argument_count == 2
-    assert capabilities.completion_method == "Compute_IsStillComputing"
+    assert capabilities.completion_method == "Compute_CurrentPlan_blocking_return"
     assert capabilities.supports_quit_ras is False
 
 
@@ -373,16 +373,17 @@ def test_default_run_retains_async_polling_contract(monkeypatch, tmp_path):
         ("4.1.0", "RAS41.HECRASController", "4.1"),
     ],
 )
-def test_legacy_run_uses_inverted_still_computing_poll_contract(
+@pytest.mark.parametrize("blocking", [False, True])
+def test_legacy_run_uses_two_argument_blocking_return_contract(
     monkeypatch,
     tmp_path,
     version,
     expected_progid,
     expected_resolved,
+    blocking,
 ):
     info = _project_info(tmp_path, version=version)
     calls = []
-    still_computing = iter([True, False])
 
     class FakeCom:
         def Plan_SetCurrent(self, plan_name):
@@ -393,8 +394,7 @@ def test_legacy_run_uses_inverted_still_computing_poll_contract(
             return True, 2, ("Computing", "Computations Completed")
 
         def Compute_IsStillComputing(self):
-            calls.append(("legacy_poll",))
-            return next(still_computing)
+            pytest.fail("Legacy blocking return must never be polled")
 
         def __getattr__(self, name):
             if name in {"Compute_Complete", "QuitRas"}:
@@ -434,12 +434,16 @@ def test_legacy_run_uses_inverted_still_computing_poll_contract(
         refresh_results=False,
         controller_version=version,
         strict_close=True,
+        blocking=blocking,
     )
 
     assert result.success is True
-    assert result.execution_details["compute_mode"] == "poll"
+    assert result.execution_details["compute_mode"] == "blocking"
+    assert result.execution_details["controller_inherently_blocking"] is True
+    assert result.execution_details["blocking_requested"] is blocking
+    assert result.execution_details["compute_current_plan_argument_count"] == 2
     assert result.execution_details["completion_method"] == (
-        "Compute_IsStillComputing"
+        "Compute_CurrentPlan_blocking_return"
     )
     assert result.execution_details["controller_quit_supported"] is False
     assert result.execution_details["controller_close_method"] == (
@@ -449,12 +453,12 @@ def test_legacy_run_uses_inverted_still_computing_poll_contract(
     assert result.execution_details["resolved_controller_version"] == (
         expected_resolved
     )
-    assert result.execution_details["poll_count"] == 1
-    assert calls.count(("legacy_poll",)) == 2
+    assert result.execution_details["poll_count"] == 0
+    assert ("legacy_poll",) not in calls
     assert ("compute", (None, None)) in calls
 
 
-def test_legacy_completion_query_failure_preserves_recreated_hdf(
+def test_legacy_malformed_blocking_return_preserves_recreated_hdf(
     monkeypatch,
     tmp_path,
 ):
@@ -472,10 +476,10 @@ def test_legacy_completion_query_failure_preserves_recreated_hdf(
             assert not hdf.exists()
             legacy.write_bytes(b"possibly incomplete legacy output")
             hdf.write_bytes(b"possibly active opposing writer")
-            return True, 1, ("Computing",)
+            return True, 1
 
         def Compute_IsStillComputing(self):
-            raise OSError("legacy completion status unavailable")
+            pytest.fail("Legacy blocking return must never be polled")
 
         def __getattr__(self, name):
             if name in {"Compute_Complete", "QuitRas"}:
@@ -507,7 +511,7 @@ def test_legacy_completion_query_failure_preserves_recreated_hdf(
 
     with pytest.raises(
         RuntimeError,
-        match="Could not confirm HEC-RAS solver quiescence",
+        match="Blocking Compute_CurrentPlan returned an unsupported result",
     ):
         RasControl.run_plan(
             "01",
@@ -522,23 +526,18 @@ def test_legacy_completion_query_failure_preserves_recreated_hdf(
     assert hdf.read_bytes() == b"possibly active opposing writer"
 
 
-@pytest.mark.parametrize(
-    ("still_computing", "clock_values"),
-    [
-        (True, (0.0, 0.25, 0.5, 1.1)),
-        (False, (0.0, 0.25, 1.1)),
-    ],
-)
-def test_legacy_completion_deadline_rejects_running_or_late_complete(
-    monkeypatch, tmp_path, still_computing, clock_values
+@pytest.mark.parametrize("version", ["4.0", "4.1", "6.3.0.2"])
+def test_blocking_return_deadline_rejects_late_completion(
+    monkeypatch, tmp_path, version
 ):
-    info = _project_info(tmp_path, version="4.1.0")
-    clock = iter(clock_values)
+    info = _project_info(tmp_path, version=version)
+    clock = iter([0.0, 1.1])
 
     class FakeCom:
         def Plan_SetCurrent(self, _plan_name): return None
-        def Compute_CurrentPlan(self, *_args): return True, 1, ("Computing",)
-        def Compute_IsStillComputing(self): return still_computing
+        def Compute_CurrentPlan(self, *_args): return True, 1, ("Complete",)
+        def Compute_IsStillComputing(self): pytest.fail("No polling of blocking call")
+        def Compute_Complete(self): pytest.fail("No polling of blocking call")
 
     def fake_open_close(
         project_path, _version, operation_func, *, close_outcome_callback=None,
@@ -554,13 +553,12 @@ def test_legacy_completion_deadline_rejects_running_or_late_complete(
     monkeypatch.setattr(RasControl, "_get_project_info", staticmethod(lambda *_a, **_k: info))
     monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
     monkeypatch.setattr(rascontrol_module.time, "monotonic", lambda: next(clock))
-    monkeypatch.setattr(rascontrol_module.time, "sleep", lambda _seconds: None)
     _disable_detailed_logging(monkeypatch)
 
     with pytest.raises(TimeoutError, match="exceeded max_runtime"):
         RasControl.run_plan(
-            "01", force_recompute=True, use_watchdog=False,
-            refresh_results=False, controller_version="4.1.0", max_runtime=1.0,
+            "01", force_recompute=True, use_watchdog=False, blocking=True,
+            refresh_results=False, controller_version=version, max_runtime=1.0,
         )
 
 
@@ -626,25 +624,12 @@ def test_legacy_watchdog_cleanup_is_deferred_until_controller_release(
     assert events == ["compute", "controller_proxy_released", "ras_cleanup", "watchdog_stop"]
 
 
-def test_blocking_rejects_legacy_controller_before_open(monkeypatch, tmp_path):
-    info = _project_info(tmp_path, version="4.1")
-    monkeypatch.setattr(
-        RasControl,
-        "_get_project_info",
-        staticmethod(lambda plan, ras_object=None: info),
-    )
-    monkeypatch.setattr(
-        RasControl,
-        "_com_open_close",
-        staticmethod(
-            lambda *args, **kwargs: pytest.fail(
-                "legacy validation must precede COM open"
-            )
-        ),
-    )
-
-    with pytest.raises(ValueError, match="HEC-RAS 5.x and newer"):
-        RasControl.run_plan("01", blocking=True)
+def test_legacy_blocking_capability_means_no_configurable_third_argument():
+    for progid in ("RAS400.HECRASController", "RAS41.HECRASController"):
+        capabilities = RasControl._CONTROLLER_CAPABILITIES[progid]
+        assert capabilities.supports_blocking is False
+        assert capabilities.compute_current_plan_argument_count == 2
+        assert capabilities.completion_method == "Compute_CurrentPlan_blocking_return"
 
 
 @pytest.mark.parametrize(
@@ -1077,23 +1062,37 @@ def test_watchdog_starts_before_blocking_compute(monkeypatch, tmp_path):
     assert result.success is True
     assert result.execution_details["watchdog_requested"] is True
     assert result.execution_details["watchdog_started"] is True
+    assert result.execution_details["watchdog_pid"] == 99
+    assert result.execution_details["watchdog_create_time"] == 123.0
+    assert result.execution_details["watchdog_name"] == "python.exe"
     assert events == ["watchdog_start", "compute", "watchdog_stop"]
 
 
+@pytest.mark.parametrize("worker_pid", [99, 100])
 def test_watchdog_worker_receives_exact_parent_and_ras_identity(
     monkeypatch,
     tmp_path,
+    worker_pid,
 ):
     launches = []
 
     class WatchdogProcess:
         pid = 99
 
-    monkeypatch.setattr(
-        rascontrol_module.subprocess,
-        "Popen",
-        lambda argv, **kwargs: launches.append((argv, kwargs)) or WatchdogProcess(),
-    )
+    def launch(argv, **kwargs):
+        launches.append((argv, kwargs))
+        arguments = dict(zip(argv[2::2], argv[3::2]))
+        Path(arguments["--identity-file"]).write_text(json.dumps({
+            "schema": "ras-commander-orphan-watchdog/v1",
+            "token": arguments["--identity-token"],
+            "pid": worker_pid, "create_time": 123.0, "name": "python.exe",
+            "exe": rascontrol_module.sys.executable,
+            "parent_pid": 12 if worker_pid == 99 else 99,
+            "argv": argv[1:],
+        }), encoding="utf-8")
+        return WatchdogProcess()
+
+    monkeypatch.setattr(rascontrol_module.subprocess, "Popen", launch)
 
     class ExactWatchdog:
         def __init__(self, pid):
@@ -1111,6 +1110,15 @@ def test_watchdog_worker_receives_exact_parent_and_ras_identity(
         def is_running():
             return True
 
+        def exe(self):
+            return rascontrol_module.sys.executable
+
+        def cmdline(self):
+            return launches[0][0]
+
+        def ppid(self):
+            return 99 if self.pid == 100 else 12
+
     monkeypatch.setattr(
         rascontrol_module.psutil,
         "Process",
@@ -1126,11 +1134,13 @@ def test_watchdog_worker_receives_exact_parent_and_ras_identity(
     )
 
     assert watchdog_identity == rascontrol_module._WatchdogIdentity(
-        99, 123.0, "python.exe"
+        worker_pid, 123.0, "python.exe"
     )
     argv = launches[0][0]
     assert Path(argv[1]).name == "_orphan_watchdog.py"
     arguments = dict(zip(argv[2::2], argv[3::2]))
+    assert Path(arguments.pop("--identity-file")).is_file()
+    assert len(arguments.pop("--identity-token")) == 32
     assert arguments == {
         "--parent-pid": "12",
         "--parent-create-time": "123.0",
@@ -1143,7 +1153,7 @@ def test_watchdog_worker_receives_exact_parent_and_ras_identity(
     }
 
 
-def test_watchdog_receipt_reports_requested_but_not_started(monkeypatch, tmp_path):
+def test_requested_watchdog_requires_exact_session_before_compute(monkeypatch, tmp_path):
     info = _project_info(tmp_path)
 
     class FakeCom:
@@ -1151,7 +1161,7 @@ def test_watchdog_receipt_reports_requested_but_not_started(monkeypatch, tmp_pat
             pass
 
         def Compute_CurrentPlan(self, *args):
-            return True, 1, ("Computations Completed",), True
+            pytest.fail("An unprotected requested-watchdog run must not compute")
 
     def fake_open_close(
         project_path,
@@ -1176,17 +1186,57 @@ def test_watchdog_receipt_reports_requested_but_not_started(monkeypatch, tmp_pat
     monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
     _disable_detailed_logging(monkeypatch)
 
-    result = RasControl.run_plan(
-        "01",
-        force_recompute=True,
-        use_watchdog=True,
-        refresh_results=False,
-        blocking=True,
-        controller_version="6.3.0.2",
-    )
+    with pytest.raises(RuntimeError, match="Requested watchdog requires an exact"):
+        RasControl.run_plan(
+            "01", force_recompute=True, use_watchdog=True,
+            refresh_results=False, blocking=True, controller_version="6.3.0.2",
+        )
 
-    assert result.execution_details["watchdog_requested"] is True
-    assert result.execution_details["watchdog_started"] is False
+
+def test_actual_watchdog_python_child_handshake_and_exact_cleanup(monkeypatch, tmp_path):
+    """Launch only the Python watchdog, with a proved-absent artificial RAS PID."""
+    absent_ras_pid = 2147483647
+    assert rascontrol_module.psutil.pid_exists(absent_ras_pid) is False
+    lock_file = tmp_path / "watchdog-only-test.lock"
+    lock_file.write_text("watchdog process transport test; no HEC-RAS", encoding="ascii")
+    popen = rascontrol_module.subprocess.Popen
+    launched = []
+
+    def launch(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        launched.append(process)
+        return process
+
+    monkeypatch.setattr(rascontrol_module.subprocess, "Popen", launch)
+    identity = None
+    try:
+        identity = rascontrol_module._spawn_watchdog(
+            parent_pid=rascontrol_module.os.getpid(), ras_pid=absent_ras_pid,
+            ras_create_time=1.0, max_runtime=1.0, lock_file_path=lock_file,
+        )
+        assert identity is not None and identity.complete
+        records = list(tmp_path.glob("*.identity.json"))
+        assert len(records) == 1
+        payload = json.loads(records[0].read_text(encoding="utf-8"))
+        assert payload["pid"] == identity.pid
+        assert payload["create_time"] == identity.create_time
+        assert payload["name"] == identity.name
+        assert payload["parent_pid"] in {launched[0].pid, rascontrol_module.os.getpid()}
+        state, _ = rascontrol_module._watchdog_process_state(identity)
+        assert state == "exact"
+        cleanup = rascontrol_module._terminate_watchdog(identity)
+        assert cleanup.safe is True
+        assert cleanup.pid == identity.pid
+        state, _ = rascontrol_module._watchdog_process_state(identity)
+        assert state in {"absent", "pid_reused"}
+    finally:
+        if identity is not None and identity.complete:
+            assert rascontrol_module._terminate_watchdog(identity).safe is True
+        # Also reap a Windows venv launcher after its actual worker exits. If
+        # identity could not be proved, allow only the worker's own one-second
+        # timeout (observed at its five-second tick); never signal an unknown PID.
+        for process in launched:
+            process.wait(timeout=7)
 
 
 def test_watchdog_cleanup_never_signals_reused_pid(monkeypatch):
@@ -1223,6 +1273,202 @@ def test_watchdog_cleanup_never_signals_reused_pid(monkeypatch):
     assert result.safe is True
     assert result.identity_state == "pid_reused"
     assert signals == []
+
+
+@pytest.mark.parametrize("corruption", [
+    "token", "schema", "argv", "exe", "parent_pid", "zero_time",
+    "live_arguments", "live_parent", "reused_after_read",
+])
+def test_watchdog_handshake_rejects_unproved_worker(monkeypatch, tmp_path, corruption):
+    argv = [str(tmp_path / "python.exe"), str(tmp_path / "_orphan_watchdog.py"),
+            "--identity-token", "a" * 32]
+    payload = {
+        "schema": "ras-commander-orphan-watchdog/v1", "token": "a" * 32,
+        "pid": 99, "create_time": 123.0, "name": "python.exe",
+        "exe": argv[0], "parent_pid": 12, "argv": argv[1:],
+    }
+    if corruption in {"token", "schema", "exe"}:
+        payload[corruption] = "different"
+    elif corruption == "argv":
+        payload["argv"] = ["another_worker.py"]
+    elif corruption == "parent_pid":
+        payload["parent_pid"] = 41
+    elif corruption == "zero_time":
+        payload["create_time"] = 0
+    identity_file = tmp_path / "identity.json"
+    identity_file.write_text(json.dumps(payload), encoding="utf-8")
+    lookups = []
+
+    class FakeWorker:
+        def __init__(self, pid):
+            self.pid = pid
+            lookups.append(pid)
+
+        def create_time(self):
+            return 999 if corruption == "reused_after_read" and len(lookups) > 1 else 123.0
+
+        def name(self): return "python.exe"
+        def is_running(self): return True
+        def exe(self): return argv[0]
+        def cmdline(self):
+            return [argv[0], "other.py"] if corruption == "live_arguments" else argv
+        def ppid(self): return 41 if corruption == "live_parent" else 12
+
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", FakeWorker)
+    with pytest.raises(ValueError):
+        rascontrol_module._read_watchdog_worker_identity(
+            identity_file, token="a" * 32, argv=argv,
+            launcher=rascontrol_module._WatchdogIdentity(99, 123.0, "python.exe"),
+            parent_pid=12,
+        )
+    assert identity_file.is_file(), "Uncertain identity evidence must be preserved"
+
+
+@pytest.mark.parametrize("outcome", ["success", "open_error", "interrupt", "start_failure", "stop_failure"])
+def test_exact_dialog_observer_lifecycle_surrounds_project_open_and_cleanup(
+    monkeypatch, tmp_path, outcome
+):
+    watchdog_module = importlib.import_module("ras_commander.RasDialogWatchdog")
+    project_path = tmp_path / "Demo.prj"
+    project_path.write_text("Proj Title=Demo\n", encoding="utf-8")
+    executable = tmp_path / "Ras.exe"
+    executable.write_bytes(b"deterministic exact Controller image")
+    digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+    events = []
+    evidence = []
+
+    def project_open(path):
+        assert path == str(project_path)
+        events.append("open")
+        assert "observer_start" in events
+        if outcome == "open_error":
+            raise OSError("Project_Open failed")
+
+    fake_com = SimpleNamespace(Project_Open=project_open)
+    _patch_com_session(monkeypatch, tmp_path, fake_com, [])
+    monkeypatch.setattr(
+        rascontrol_module, "_find_our_ras_process",
+        lambda *_args: (4321, 123.5, 100, str(executable), digest),
+    )
+
+    class FakeObserver:
+        def __init__(self, identity):
+            assert (identity.pid, identity.create_time) == (4321, 123.5)
+            assert identity.executable_path == executable
+            assert identity.executable_sha256 == digest
+
+        def _start(self):
+            events.append("observer_start")
+            return outcome != "start_failure"
+
+        def _stop_observing(self):
+            events.append("observer_stop")
+
+        def _evidence(self):
+            return {
+                "scope": "exact_controller_identity", "process_discovery": False,
+                "started": outcome != "start_failure",
+                "stop_confirmed": outcome != "stop_failure",
+                "thread_alive": outcome == "stop_failure",
+                "observations": [{"classification": "unknown_preserved", "action": "none"}],
+            }
+
+    monkeypatch.setattr(watchdog_module, "_ExactDialogObserver", FakeObserver)
+
+    def cleanup(session_id):
+        events.append("cleanup")
+        rascontrol_module._active_sessions.pop(session_id, None)
+        return _owned_cleanup()
+
+    monkeypatch.setattr(rascontrol_module, "_cleanup_session", cleanup)
+
+    def operation(com):
+        assert com is fake_com
+        events.append("compute")
+        if outcome == "interrupt":
+            raise KeyboardInterrupt("outer supervisor stopped compute")
+        return "computed"
+
+    def run():
+        return RasControl._com_open_close(
+            project_path, "4.1", operation, strict_close=True,
+            observe_dialogs=True, dialog_observation_callback=evidence.append,
+        )
+
+    if outcome == "success":
+        assert run() == "computed"
+    else:
+        expected = {"open_error": OSError, "interrupt": KeyboardInterrupt,
+                    "start_failure": RuntimeError, "stop_failure": RuntimeError}[outcome]
+        with pytest.raises(expected) as raised:
+            run()
+        assert raised.value.execution_details["dialog_observation"] == evidence[-1]
+    assert events[-2:] == ["observer_stop", "cleanup"]
+    assert evidence[-1]["observations"][0]["action"] == "none"
+    assert not rascontrol_module._active_sessions
+    if outcome == "start_failure":
+        assert "open" not in events
+
+
+@pytest.mark.parametrize("outcome", ["success", "no_output", "postclose_failure"])
+def test_run_plan_retains_opt_in_dialog_evidence_after_close(monkeypatch, tmp_path, outcome):
+    info = _project_info(tmp_path, version="4.1")
+    observed = {"scope": "exact_controller_identity", "stop_confirmed": True,
+                "thread_alive": False, "observations": []}
+
+    class FakeCom:
+        def Plan_SetCurrent(self, _name): pass
+        def Compute_CurrentPlan(self, *args):
+            assert args == (None, None)
+            return True, 0, ()
+
+    def fake_open_close(path, _version, operation, **kwargs):
+        assert kwargs["observe_dialogs"] is True
+        _emit_owned_session(kwargs, project_path=path)
+        result = operation(FakeCom())
+        kwargs["dialog_observation_callback"](observed)
+        kwargs["close_outcome_callback"](True, _owned_cleanup(), None)
+        return result
+
+    monkeypatch.setattr(RasControl, "_get_project_info", staticmethod(lambda *_a, **_k: info))
+    monkeypatch.setattr(RasControl, "_com_open_close", staticmethod(fake_open_close))
+    _disable_detailed_logging(monkeypatch)
+    original_error = RuntimeError("post-close inspection failed")
+    if outcome == "no_output":
+        (tmp_path / "Demo.O01").unlink()
+    elif outcome == "postclose_failure":
+        original_error.execution_details = {"original_detail": "preserve me"}
+        preflight = rascontrol_module._inspect_controller_post_close_processes
+        inspection_count = 0
+        def fail_inspection(**_kwargs):
+            nonlocal inspection_count
+            inspection_count += 1
+            if inspection_count == 1:
+                return preflight(**_kwargs)
+            raise original_error
+        monkeypatch.setattr(
+            rascontrol_module, "_inspect_controller_post_close_processes", fail_inspection
+        )
+
+    def run():
+        return RasControl.run_plan(
+            "01", force_recompute=True, use_watchdog=False, refresh_results=False,
+            controller_version="4.1", observe_dialogs=True,
+        )
+
+    if outcome == "success":
+        details = run().execution_details
+    else:
+        with pytest.raises(RuntimeError) as raised:
+            run()
+        if outcome == "postclose_failure":
+            assert raised.value is original_error
+            assert raised.value.execution_details["original_detail"] == "preserve me"
+        else:
+            assert "result artifact was not created" in str(raised.value)
+        details = raised.value.execution_details
+    assert details["dialog_observation_requested"] is True
+    assert details["dialog_observation"] == observed
 
 
 def test_watchdog_cleanup_access_denied_is_unverified_and_unsignalled(monkeypatch):
@@ -2100,10 +2346,10 @@ def test_cleanup_force_kills_then_verifies_exit(monkeypatch, tmp_path):
     events = []
 
     class FakeProcess:
-        running = True
-
-        def __init__(self, pid):
+        def __init__(self, pid, label):
             self.pid = pid
+            self.label = label
+            self.running = True
 
         def is_running(self):
             return self.running
@@ -2112,23 +2358,39 @@ def test_cleanup_force_kills_then_verifies_exit(monkeypatch, tmp_path):
             return "ras.exe"
 
         def create_time(self):
+            events.append(("identity", self.label))
             return 123.5
 
         def terminate(self):
-            events.append("terminate")
+            events.append(("terminate", self.label))
 
         def kill(self):
-            events.append("kill")
+            events.append(("kill", self.label))
 
         def wait(self, timeout):
-            events.append(("wait", timeout))
-            if "kill" not in events:
+            events.append(("wait", self.label, timeout))
+            if self.label == "terminate-handle":
                 raise rascontrol_module.psutil.TimeoutExpired(timeout)
             self.running = False
 
+    terminate_proc = FakeProcess(4321, "terminate-handle")
+    kill_proc = FakeProcess(4321, "fresh-kill-handle")
+    process_queries = 0
+
+    def process_factory(pid):
+        nonlocal process_queries
+        process_queries += 1
+        if process_queries == 1:
+            return terminate_proc
+        if process_queries == 2:
+            return kill_proc
+        if not kill_proc.running:
+            raise rascontrol_module.psutil.NoSuchProcess(pid)
+        return pytest.fail("unexpected process lookup")
+
     lock = _tracked_lock(tmp_path)
     monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
-    monkeypatch.setattr(rascontrol_module.psutil, "Process", FakeProcess)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", process_factory)
     monkeypatch.setattr(
         rascontrol_module, "_remove_session_lock", lambda session_id: None
     )
@@ -2140,7 +2402,225 @@ def test_cleanup_force_kills_then_verifies_exit(monkeypatch, tmp_path):
     assert result.killed is True
     assert result.process_survived is False
     assert lock.session_id not in rascontrol_module._active_sessions
-    assert events == ["terminate", ("wait", 5), "kill", ("wait", 5)]
+    assert process_queries == 3
+    assert events == [
+        ("identity", "terminate-handle"),
+        ("terminate", "terminate-handle"),
+        ("wait", "terminate-handle", 5),
+        ("identity", "fresh-kill-handle"),
+        ("kill", "fresh-kill-handle"),
+        ("wait", "fresh-kill-handle", 5),
+    ]
+
+
+def test_cleanup_does_not_kill_reused_pid_from_cached_timeout_handle(
+    monkeypatch,
+    tmp_path,
+):
+    events = []
+    process_queries = 0
+
+    class TimedOutHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def is_running(self):
+            return True
+
+        def name(self):
+            return "ras.exe"
+
+        def create_time(self):
+            events.append("cached-identity")
+            return 123.5
+
+        def terminate(self):
+            events.append("terminate")
+
+        def kill(self):
+            events.append("cached-kill")
+
+        def wait(self, timeout):
+            events.append(("wait", timeout))
+            raise rascontrol_module.psutil.TimeoutExpired(timeout)
+
+    class ReusedHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            events.append("fresh-reused-identity")
+            return 999.0
+
+        def kill(self):
+            events.append("replacement-kill")
+
+    timed_out = TimedOutHandle(4321)
+    reused = ReusedHandle(4321)
+
+    def process_factory(_pid):
+        nonlocal process_queries
+        process_queries += 1
+        return timed_out if process_queries == 1 else reused
+
+    lock = _tracked_lock(tmp_path)
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", process_factory)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_remove_session_lock",
+        lambda _session_id: None,
+    )
+
+    result = rascontrol_module._cleanup_session(lock.session_id)
+
+    assert result.success is True
+    assert result.terminated is True
+    assert result.killed is False
+    assert result.identity_state == "terminated"
+    assert "cached-kill" not in events
+    assert "replacement-kill" not in events
+    assert events.count("cached-identity") == 1
+    assert process_queries == 3
+    assert lock.session_id not in rascontrol_module._active_sessions
+
+
+def test_cleanup_retains_evidence_when_fresh_kill_identity_is_unverifiable(
+    monkeypatch,
+    tmp_path,
+):
+    events = []
+    process_queries = 0
+
+    class TimedOutHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def is_running(self):
+            return True
+
+        def name(self):
+            return "ras.exe"
+
+        def create_time(self):
+            return 123.5
+
+        def terminate(self):
+            events.append("terminate")
+
+        def kill(self):
+            events.append("cached-kill")
+
+        def wait(self, timeout):
+            raise rascontrol_module.psutil.TimeoutExpired(timeout)
+
+    class UnverifiableFreshHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            raise rascontrol_module.psutil.AccessDenied(self.pid)
+
+        def kill(self):
+            events.append("unverified-kill")
+
+    timed_out = TimedOutHandle(4321)
+    unverified = UnverifiableFreshHandle(4321)
+
+    def process_factory(_pid):
+        nonlocal process_queries
+        process_queries += 1
+        return timed_out if process_queries == 1 else unverified
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = tmp_path / "retained-session.lock"
+    lock_path.write_text(lock.to_json(), encoding="utf-8")
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", process_factory)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_get_lock_file_path",
+        lambda _session_id: lock_path,
+    )
+
+    result = rascontrol_module._cleanup_session(lock.session_id)
+
+    assert result.success is False
+    assert result.process_survived is True
+    assert result.lock_retained is True
+    assert result.identity_state == "identity_unverified"
+    assert "before forced termination" in result.error
+    assert events == ["terminate"]
+    assert process_queries == 2
+    assert lock.session_id in rascontrol_module._active_sessions
+    assert lock_path.exists()
+
+
+def test_cleanup_retains_evidence_when_fresh_post_signal_proof_is_denied(
+    monkeypatch,
+    tmp_path,
+):
+    events = []
+    process_queries = 0
+
+    class TerminatedHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def is_running(self):
+            return True
+
+        def name(self):
+            return "ras.exe"
+
+        def create_time(self):
+            return 123.5
+
+        def terminate(self):
+            events.append("terminate")
+
+        def wait(self, timeout):
+            events.append(("wait", timeout))
+
+    class UnverifiablePostHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            raise rascontrol_module.psutil.AccessDenied(self.pid)
+
+    terminated = TerminatedHandle(4321)
+    unverified = UnverifiablePostHandle(4321)
+
+    def process_factory(_pid):
+        nonlocal process_queries
+        process_queries += 1
+        return terminated if process_queries == 1 else unverified
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = tmp_path / "retained-post-signal.lock"
+    lock_path.write_text(lock.to_json(), encoding="utf-8")
+    monkeypatch.setitem(rascontrol_module._active_sessions, lock.session_id, lock)
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", process_factory)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_get_lock_file_path",
+        lambda _session_id: lock_path,
+    )
+
+    result = rascontrol_module._cleanup_session(lock.session_id)
+
+    assert result.success is False
+    assert result.terminated is True
+    assert result.killed is False
+    assert result.process_survived is True
+    assert result.lock_retained is True
+    assert result.identity_state == "identity_unverified"
+    assert "after signal" in result.error
+    assert events == ["terminate", ("wait", 5)]
+    assert process_queries == 2
+    assert lock.session_id in rascontrol_module._active_sessions
+    assert lock_path.exists()
 
 
 def test_cleanup_retains_session_evidence_when_process_survives(monkeypatch, tmp_path):
@@ -2207,4 +2687,370 @@ def test_cleanup_identity_query_uncertainty_retains_evidence_without_signal(
     assert result.lock_retained is True
     assert signals == []
     assert lock.session_id in rascontrol_module._active_sessions
+    assert lock_path.exists()
+
+
+def _patch_orphan_cleanup(monkeypatch, tmp_path, lock, process_factory):
+    lock_path = tmp_path / "orphan-cleanup.lock"
+    lock_path.write_text(lock.to_json(), encoding="utf-8")
+    monkeypatch.setattr(
+        RasControl,
+        "scan_orphans",
+        staticmethod(lambda: [lock]),
+    )
+    monkeypatch.setattr(rascontrol_module.psutil, "Process", process_factory)
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_get_lock_file_path",
+        lambda _session_id: lock_path,
+    )
+    return lock_path
+
+
+def test_cleanup_orphans_terminates_exact_identity_and_retires_lock(
+    monkeypatch,
+    tmp_path,
+):
+    events = []
+
+    class ExactProcess:
+        exited = False
+
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            events.append("identity")
+            return 123.5
+
+        def terminate(self):
+            events.append("terminate")
+
+        def wait(self, timeout):
+            events.append(("wait", timeout))
+            self.exited = True
+
+    proc = ExactProcess(4321)
+
+    def process_factory(pid):
+        if proc.exited:
+            raise rascontrol_module.psutil.NoSuchProcess(pid)
+        return proc
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        process_factory,
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == 1
+    assert events == ["identity", "terminate", ("wait", 10)]
+    assert not lock_path.exists()
+
+
+def test_cleanup_orphans_force_kills_only_after_exact_recheck(
+    monkeypatch,
+    tmp_path,
+):
+    events = []
+
+    class ExactProcess:
+        def __init__(self, pid, label):
+            self.pid = pid
+            self.label = label
+            self.exited = False
+
+        def create_time(self):
+            events.append(("identity", self.label))
+            return 123.5
+
+        def terminate(self):
+            events.append(("terminate", self.label))
+
+        def kill(self):
+            events.append(("kill", self.label))
+
+        def wait(self, timeout):
+            events.append(("wait", self.label, timeout))
+            if self.label == "terminate-handle":
+                raise rascontrol_module.psutil.TimeoutExpired(timeout)
+            self.exited = True
+
+    terminate_proc = ExactProcess(4321, "terminate-handle")
+    kill_proc = ExactProcess(4321, "fresh-kill-handle")
+    process_queries = 0
+
+    def process_factory(pid):
+        nonlocal process_queries
+        process_queries += 1
+        if process_queries == 1:
+            return terminate_proc
+        if process_queries == 2:
+            return kill_proc
+        if kill_proc.exited:
+            raise rascontrol_module.psutil.NoSuchProcess(pid)
+        return pytest.fail("unexpected process lookup")
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        process_factory,
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == 1
+    assert events == [
+        ("identity", "terminate-handle"),
+        ("terminate", "terminate-handle"),
+        ("wait", "terminate-handle", 10),
+        ("identity", "fresh-kill-handle"),
+        ("kill", "fresh-kill-handle"),
+        ("wait", "fresh-kill-handle", 10),
+    ]
+    assert process_queries == 3
+    assert not lock_path.exists()
+
+
+@pytest.mark.parametrize(
+    "identity_error",
+    [
+        None,
+        rascontrol_module.psutil.AccessDenied(4321),
+        rascontrol_module.psutil.NoSuchProcess(4321),
+    ],
+    ids=["pid-reused", "identity-unverified", "absent"],
+)
+def test_cleanup_orphans_refuses_nonexact_identity_before_terminate(
+    monkeypatch,
+    tmp_path,
+    identity_error,
+):
+    signals = []
+
+    class NonexactProcess:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            if identity_error is not None:
+                raise identity_error
+            return 999.0
+
+        def terminate(self):
+            signals.append("terminate")
+
+        def kill(self):
+            signals.append("kill")
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        NonexactProcess,
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == 0
+    assert signals == []
+    assert lock_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("fresh_state", "expected_cleaned", "lock_retained"),
+    [
+        ("pid_reused", 1, False),
+        ("identity_unverified", 0, True),
+        ("absent", 1, False),
+    ],
+)
+def test_cleanup_orphans_uses_fresh_handle_before_kill(
+    monkeypatch,
+    tmp_path,
+    fresh_state,
+    expected_cleaned,
+    lock_retained,
+):
+    events = []
+    process_queries = 0
+
+    class TimedOutHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            events.append("cached-identity")
+            return 123.5
+
+        def terminate(self):
+            events.append("terminate")
+
+        def kill(self):
+            events.append("kill")
+
+        def wait(self, timeout):
+            events.append(("wait", timeout))
+            raise rascontrol_module.psutil.TimeoutExpired(timeout)
+
+    class FreshHandle:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            events.append("fresh-identity")
+            if fresh_state == "identity_unverified":
+                raise rascontrol_module.psutil.AccessDenied(self.pid)
+            return 999.0
+
+        def kill(self):
+            events.append("kill")
+
+    timed_out = TimedOutHandle(4321)
+    fresh = FreshHandle(4321)
+
+    def process_factory(pid):
+        nonlocal process_queries
+        process_queries += 1
+        if process_queries == 1:
+            return timed_out
+        if fresh_state == "absent":
+            raise rascontrol_module.psutil.NoSuchProcess(pid)
+        return fresh
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        process_factory,
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == expected_cleaned
+    assert "kill" not in events
+    assert events[:3] == ["cached-identity", "terminate", ("wait", 10)]
+    assert events.count("cached-identity") == 1
+    assert lock_path.exists() is lock_retained
+
+
+@pytest.mark.parametrize(
+    ("post_state", "expected_cleaned", "lock_retained"),
+    [
+        ("pid_reused", 1, False),
+        ("identity_unverified", 0, True),
+        ("exact", 0, True),
+    ],
+)
+def test_cleanup_orphans_requires_terminal_post_signal_state(
+    monkeypatch,
+    tmp_path,
+    post_state,
+    expected_cleaned,
+    lock_retained,
+):
+    events = []
+    process_queries = 0
+
+    class Process:
+        def __init__(self, pid, create_time):
+            self.pid = pid
+            self._create_time = create_time
+
+        def create_time(self):
+            if isinstance(self._create_time, Exception):
+                raise self._create_time
+            return self._create_time
+
+        def terminate(self):
+            events.append("terminate")
+
+        def wait(self, timeout):
+            events.append(("wait", timeout))
+
+    exact = Process(4321, 123.5)
+    post_create_time = {
+        "pid_reused": 999.0,
+        "identity_unverified": rascontrol_module.psutil.AccessDenied(4321),
+        "exact": 123.5,
+    }[post_state]
+
+    def process_factory(pid):
+        nonlocal process_queries
+        process_queries += 1
+        if process_queries == 1:
+            return exact
+        return Process(pid, post_create_time)
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        process_factory,
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == expected_cleaned
+    assert events == ["terminate", ("wait", 10)]
+    assert lock_path.exists() is lock_retained
+
+
+def test_cleanup_orphans_does_not_count_cleanup_when_lock_retirement_fails(
+    monkeypatch,
+    tmp_path,
+):
+    class ExactProcess:
+        exited = False
+
+        def __init__(self, pid):
+            self.pid = pid
+
+        def create_time(self):
+            return 123.5
+
+        def terminate(self):
+            return None
+
+        def wait(self, timeout):
+            self.exited = True
+
+    proc = ExactProcess(4321)
+
+    def process_factory(pid):
+        if proc.exited:
+            raise rascontrol_module.psutil.NoSuchProcess(pid)
+        return proc
+
+    lock = _tracked_lock(tmp_path)
+    lock_path = _patch_orphan_cleanup(
+        monkeypatch,
+        tmp_path,
+        lock,
+        process_factory,
+    )
+
+    class UnretirableLock:
+        @staticmethod
+        def unlink(*, missing_ok):
+            raise OSError("lock is busy")
+
+    monkeypatch.setattr(
+        rascontrol_module,
+        "_get_lock_file_path",
+        lambda _session_id: UnretirableLock(),
+    )
+
+    cleaned = RasControl.cleanup_orphans(interactive=False)
+
+    assert cleaned == 0
     assert lock_path.exists()

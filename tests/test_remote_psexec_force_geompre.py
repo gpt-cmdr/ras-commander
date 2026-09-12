@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from ras_commander.RasBco import BcoMonitor
 from ras_commander.RasCurrency import RasCurrency
+from ras_commander.RasCmdr import RasCmdr
 from ras_commander.geom import GeomPreprocessor
 
 
@@ -119,9 +120,9 @@ def test_force_geompre_bypasses_skip_and_preserves_source(monkeypatch, tmp_path)
     )
     monkeypatch.setattr(psexec_module.subprocess, "run", fake_run)
     monkeypatch.setattr(
-        psexec_module,
-        "copy_plan_hdf_back",
-        lambda *args, **kwargs: source / "TestProject.p01.hdf",
+        RasCmdr,
+        "_destination_promotion_process_gate",
+        staticmethod(lambda *args, **kwargs: (True, {})),
     )
     monkeypatch.setattr(
         psexec_module, "copy_geometry_outputs_back", lambda *args, **kwargs: []

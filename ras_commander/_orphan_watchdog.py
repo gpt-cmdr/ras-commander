@@ -9,8 +9,12 @@ the identity captured by the Controller parent.
 from __future__ import annotations
 
 import argparse
+import json
 import math
+import os
+import re
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +24,55 @@ import psutil
 
 
 _SAFE_STATES = frozenset({"absent", "stopped", "pid_reused", "terminated", "killed"})
+
+
+def _publish_worker_identity(identity_file: Path, token: str) -> dict[str, Any]:
+    """Publish the actual interpreter identity before arming the watchdog.
+
+    On Windows a virtual-environment Python launcher can create a second
+    interpreter process. Its Popen PID is not necessarily this worker's PID.
+    The parent verifies this nonce-bound record against the live process and
+    launcher ancestry before recording an identity eligible for cleanup.
+    Publication is atomic and never replaces an existing record.
+    """
+    if not isinstance(token, str) or re.fullmatch(r"[0-9a-f]{32,64}", token) is None:
+        raise ValueError("watchdog identity token must be 32 to 64 lowercase hex characters")
+    process = psutil.Process(os.getpid())
+    payload = {
+        "schema": "ras-commander-orphan-watchdog/v1",
+        "token": token,
+        "pid": os.getpid(),
+        "create_time": float(process.create_time()),
+        "name": str(process.name()),
+        "exe": str(process.exe()),
+        "parent_pid": os.getppid(),
+        "argv": list(sys.argv),
+    }
+    if (
+        not math.isfinite(payload["create_time"])
+        or payload["create_time"] <= 0
+        or not payload["name"]
+        or not payload["exe"]
+    ):
+        raise ValueError("watchdog worker identity is incomplete")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=identity_file.parent,
+            prefix=identity_file.name + ".", suffix=".tmp", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            json.dump(payload, stream, sort_keys=True, allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        # A same-directory hard link is atomic and fails if the destination
+        # already exists, including a symlink. Never overwrite retained proof.
+        os.link(temporary, identity_file)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return payload
 
 
 @dataclass(frozen=True)
@@ -394,11 +447,27 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--ras-name", required=True)
     parser.add_argument("--max-runtime", required=True, type=float)
     parser.add_argument("--lock-file", required=True, type=Path)
-    return parser.parse_args(argv)
+    parser.add_argument("--identity-file", type=Path)
+    parser.add_argument("--identity-token")
+    args = parser.parse_args(argv)
+    if (args.identity_file is None) != (args.identity_token is None):
+        parser.error("--identity-file and --identity-token must be supplied together")
+    if not math.isfinite(args.max_runtime) or args.max_runtime <= 0:
+        parser.error("--max-runtime must be finite and positive")
+    return args
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = _parse_args(argv)
+    if args.identity_file is not None:
+        try:
+            _publish_worker_identity(args.identity_file, args.identity_token)
+        except (OSError, ValueError, psutil.Error) as error:
+            print(
+                f"[Watchdog] identity publication failed: {_error_text(error)}",
+                file=sys.stderr, flush=True,
+            )
+            return 2  # Do not arm an unidentifiable cleanup worker.
     return _run_watchdog(
         parent_pid=args.parent_pid,
         parent_create_time=args.parent_create_time,
