@@ -96,6 +96,34 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
       groupId: "san-gabriel",
       variantLabel: "LBSG_505",
     },
+    "double-mountain-fork-brazos-dmf1-12050004": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.10 source (6.1 family); unsteady-start validated",
+      summary: "Upstream domain in the four-project Double Mountain Fork Brazos cascade.",
+      groupId: "double-mountain-fork-brazos",
+      variantLabel: "DMF1",
+    },
+    "double-mountain-fork-brazos-dmf2-12050004": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.10 source (6.1 family); unsteady-start validated",
+      summary: "Second domain in the four-project cascade; retains its delivered modified Terrain.Clone (1).hdf.",
+      groupId: "double-mountain-fork-brazos",
+      variantLabel: "DMF2",
+    },
+    "double-mountain-fork-brazos-dmf3-12050004": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.10 source (6.1 family); unsteady-start validated",
+      summary: "Third domain in the four-project Double Mountain Fork Brazos cascade.",
+      groupId: "double-mountain-fork-brazos",
+      variantLabel: "DMF3",
+    },
+    "double-mountain-fork-brazos-dmf4-12050004": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.10 source (6.1 family); unsteady-start validated",
+      summary: "Downstream domain in the four-project Double Mountain Fork Brazos cascade.",
+      groupId: "double-mountain-fork-brazos",
+      variantLabel: "DMF4",
+    },
     "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab": {
       modelType: "1D/2D unsteady dam-break",
       version: "HEC-RAS 7.0 (rerun)",
@@ -137,6 +165,14 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
     },
   },
   groups: {
+    "double-mountain-fork-brazos": {
+      title: "Double Mountain Fork Brazos Model Suite",
+      sourceLabel: "FEMA eBFE/BLE delivery",
+      modelType: "Four cascading 2D unsteady models",
+      version: "HEC-RAS 6.10 source (6.1 family); unsteady-start validated",
+      summary: "Four linked 2D projects route the Double Mountain Fork Brazos system from DMF1 through DMF4. The delivery includes compiled terrain for every model; DMF2 correctly uses a modified terrain clone. Every selected two-core 1% AEP plan reached unsteady computation after native geometry association and property-table preparation.",
+      recordOfDeficiencies: "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-11_double_mountain_fork_brazos_record_of_deficiencies.md",
+    },
     "san-gabriel": {
       title: "San Gabriel Model Suite",
       sourceLabel: "FEMA eBFE/BLE delivery",

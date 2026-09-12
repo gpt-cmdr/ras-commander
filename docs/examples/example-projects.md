@@ -33,22 +33,24 @@ available geometry, terrain, and results.
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
-<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260906Tsan-gabriel-submodels01"></script>
+<script src="../../assets/javascripts/ras-example-project-profiles.js?v=20260911Tdmfb-candidate02"></script>
 <script src="../../assets/javascripts/ras-example-projects-data.js?v=20260906Texact-extents01"></script>
-<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260909Tcandidate-detail-links01"></script>
+<script src="../../assets/javascripts/ras-example-project-supplements.js?v=20260911Tdmfb-candidate02"></script>
 <script src="../../assets/javascripts/ras-example-library.js?v=20260909Tcandidate-detail-links01"></script>
 
 ## Dashboard Qualification Status
 
-The San Gabriel model system appears in the dashboard only as a **deficient
-source candidate**. Its five sub-model footprints and technical profile are
-discoverable, and each sub-model name in the table links to its project-specific
+San Gabriel appears in the dashboard only as a **deficient source candidate**.
+Double Mountain Fork Brazos (12050004) is a four-project **source qualification
+candidate** after all four selected two-core 1% AEP plans reached unsteady
+computation. Each candidate sub-model name links to its project-specific
 qualification record. These evidence links are not project-viewer links and
-must not imply that the public delivery is a runnable or reproducible 2D example.
+must not imply that the public delivery has a published result viewer.
 
 | Source | RAS Commander entry point | Qualification | Known limitation |
 |---|---|---|---|
 | FEMA San Gabriel BLE (12070205) | `RasEbfeModels.organize_model("san-gabriel")` | Five linked HEC-RAS 6.3 projects; one 1% plan per project reached unsteady computation. A reconstructed-terrain LBSG_503 1% run also completed successfully with a 0.0236% volume error and 0.737-ft P95 maximum-WSE difference from the supplied result. LBSG_504 covers Round Rock and LBSG_503 is the Florence-area project. This is compute evidence only. | **Critical, model-blocking source gap:** the compiled `Terrain\Terrain.hdf` and its road-crossing/Lake Georgetown modification payloads were not provided. The HDEM-only reconstruction resolves paths and supports diagnostic QA, but does not make the public 2D model reproducible or usable downstream. |
+| FEMA Double Mountain Fork Brazos eBFE (12050004) | `RasEbfeModels.organize_model("double-mountain-fork-brazos")` | Four chained HEC-RAS 6.10 projects (HEC-RAS 6.1 family). Exact API-derived footprints are published here, and all four selected two-core 1% AEP plans reached unsteady computation with `owned_process_artifacts` evidence and no timeout or error. This is source-qualification evidence, not a completed-result viewer. | Hydraulic inputs and compiled terrain are delivered. DMF2 correctly references `Terrain.Clone (1).hdf` with the `Polygons (1)` elevation modification. DMF1/DMF2 `g01` require native `RasMap` reassociation plus HEC-RAS table recomputation in the validation copy. Remaining nonhydraulic gaps are local basemap/profile-line references and an inaccurate DMF1 result count in `Readme.txt`. |
 
 San Gabriel retains `unsteady_start` evidence but has delivery-readiness status
 `critical_source_gap`. It must not be published as a runnable example until the
@@ -59,6 +61,17 @@ The organizer normalizes all five
 single expected organized target, `RAS Model\Terrain\Terrain.hdf`, and creates
 a durable [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-05_san_gabriel_record_of_deficiencies.md)
 for any explicitly authorized reconstruction.
+
+Double Mountain Fork Brazos keeps its supplied compiled terrain intact. In
+particular, DMF2's modified `Terrain.Clone (1).hdf` is not missing and must not
+be silently replaced by the unmodified terrain. The first organizer incorrectly
+redirected valid outer terrain and land-cover references to incomplete `Input`
+copies; identical Geometry Writer failures on network and local-disk validation
+copies proved this was not a network/path-length problem. The specialized
+organizer now preserves the delivered outer references. Its
+[Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-11_double_mountain_fork_brazos_record_of_deficiencies.md)
+records the four-project chain, deterministic assembly repairs, 4/4 native
+unsteady-start qualification, and the remaining publication gates.
 
 ## Related Workflows
 

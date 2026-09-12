@@ -75,6 +75,52 @@ def test_san_gabriel_catalog_has_five_linked_submodel_entries() -> None:
     ]
 
 
+def test_double_mountain_fork_brazos_catalog_has_four_linked_candidates() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    projects = [
+        item
+        for item in config["projects"]
+        if item["id"].startswith("double-mountain-fork-brazos-dmf")
+    ]
+    assert [project["id"] for project in projects] == [
+        f"double-mountain-fork-brazos-dmf{number}-12050004"
+        for number in range(1, 5)
+    ]
+    assert all(
+        project["status"] == "Source qualification candidate"
+        for project in projects
+    )
+    assert all(
+        project["viewer_type"] == "Qualification candidate"
+        for project in projects
+    )
+    assert all(
+        not project[field]
+        for project in projects
+        for field in ("webmap", "manifest", "project_manifest")
+    )
+    assert [project["details"].rsplit("#", 1)[-1] for project in projects] == [
+        f"dmf{number}" for number in range(1, 5)
+    ]
+    assert all(
+        project["record_of_deficiencies"].endswith(
+            "2026-09-11_double_mountain_fork_brazos_record_of_deficiencies.md"
+        )
+        for project in projects
+    )
+    assert [Path(project["geometry_hdf"]).name for project in projects] == [
+        "DMF_1.g01.hdf",
+        "DMF2.g01.hdf",
+        "DMF_3.g01.hdf",
+        "DMF_BrazosRiver4.g01.hdf",
+    ]
+    assert all(
+        "reached unsteady computation" in project["notes"] for project in projects
+    )
+    assert all("pending" not in project["notes"].lower() for project in projects)
+
+
 def test_write_javascript_catalog_preserves_exact_project_footprint(
     tmp_path: Path,
 ) -> None:
