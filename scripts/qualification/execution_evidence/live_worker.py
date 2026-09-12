@@ -80,7 +80,11 @@ _WORKER_IDENTITY_TOLERANCE_SECONDS = 0.001
 _WORKER_AUTHORIZATION_POLL_SECONDS = 0.02
 _SUPERVISOR_RECEIPT_MARGIN_SECONDS = 5.0
 _LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE: Mapping[str, Any] = {
-    "completion_method": "Compute_IsStillComputing",
+    "completion_method": "Compute_CurrentPlan_blocking_return",
+    "compute_mode": "blocking",
+    "poll_count": 0,
+    "controller_inherently_blocking": True,
+    "compute_current_plan_argument_count": 2,
     "controller_quit_supported": False,
     "controller_close_method": "owned_process_cleanup",
 }
@@ -100,13 +104,115 @@ _RASCMD_LAUNCH_DETAIL_FIELDS = frozenset(
 )
 
 
+def _validate_controller_dialog_observation(details: Mapping[str, Any]) -> None:
+    """Require a stopped observer bound to the same proved Controller process."""
+    observation = details.get("dialog_observation")
+    expected = {
+        "scope": "exact_controller_identity",
+        "process_discovery": False,
+        "available": True,
+        "start_attempted": True,
+        "started": True,
+        "start_status": "started",
+        "stop_requested": True,
+        "stop_confirmed": True,
+        "thread_alive": False,
+        "stop_status": "completed",
+        "lifecycle": "stopped",
+    }
+    if (
+        details.get("dialog_observation_requested") is not True
+        or not isinstance(observation, Mapping)
+        or any(
+            type(observation.get(field)) is not type(value)
+            or observation.get(field) != value
+            for field, value in expected.items()
+        )
+    ):
+        raise LiveCapabilityError("Controller dialog observation lifecycle proof is invalid")
+    target = observation.get("target")
+    if (
+        not isinstance(target, Mapping)
+        or not _valid_process_identity(target.get("pid"), target.get("create_time"))
+        or target.get("pid") != details.get("controller_pid")
+        or target.get("create_time") != details.get("controller_create_time")
+        or str(target.get("process_name", "")).casefold() != "ras.exe"
+        or target.get("executable_sha256") != details.get("controller_executable_sha256")
+    ):
+        raise LiveCapabilityError("Controller dialog observation target proof is invalid")
+    try:
+        observer_path = Path(target["executable_path"]).resolve(strict=True)
+        controller_path = Path(details["controller_executable_path"]).resolve(strict=True)
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise LiveCapabilityError("Controller dialog observation target path is unproved") from exc
+    if observer_path != controller_path:
+        raise LiveCapabilityError("Controller dialog observation target path differs")
+    observations = observation.get("observations")
+    if not isinstance(observations, list) or not all(
+        isinstance(item, Mapping) for item in observations
+    ):
+        raise LiveCapabilityError("Controller dialog observation records are invalid")
+    counts = {
+        "observed_count": len(observations),
+        "action_count": sum(item.get("action_status") == "completed" for item in observations),
+        "action_attempt_count": sum(
+            item.get("action_status") in ("completed", "timed_out", "failed")
+            for item in observations
+        ),
+        "stop_prevented_action_count": sum(
+            item.get("action_status") == "stop_requested" for item in observations
+        ),
+    }
+    if any(
+        type(observation.get(field)) is not int or observation.get(field) != count
+        for field, count in counts.items()
+    ):
+        raise LiveCapabilityError("Controller dialog observation counts are invalid")
+    for item in observations:
+        if (
+            type(item.get("pid")) is not int
+            or item.get("pid") != target["pid"]
+            or item.get("action") not in ("none", "BM_CLICK")
+            or item.get("action") == "none"
+            and item.get("action_status") in ("completed", "timed_out", "failed")
+            or item.get("action") == "BM_CLICK"
+            and (
+                item.get("rule_id") != "decline_optional_example_install"
+                or item.get("identity_state") != "exact"
+                or item.get("proof_state") != "exact"
+                or item.get("action_status") not in ("completed", "timed_out", "failed")
+            )
+        ):
+            raise LiveCapabilityError("Controller dialog observation action scope is invalid")
+    checks = observation.get("identity_checks")
+    check_count = observation.get("identity_check_count")
+    transitions = observation.get("lifecycle_transitions")
+    if (
+        not isinstance(checks, list)
+        or not checks
+        or not all(isinstance(item, Mapping) for item in checks)
+        or type(check_count) is not int
+        or check_count < len(checks)
+        or not any(item.get("state") == "exact" for item in checks)
+        or not isinstance(transitions, list)
+        or not transitions
+        or not all(isinstance(item, Mapping) for item in transitions)
+        or not any(item.get("state") == "running" for item in transitions)
+        or transitions[-1].get("state") != "stopped"
+    ):
+        raise LiveCapabilityError("Controller dialog observation audit trail is invalid")
+
+
 def _expected_controller_capability_evidence(
     engine: Mapping[str, Any],
 ) -> dict[str, Any] | None:
     """Return the exact successful Controller capability receipt contract."""
     resolved_version = engine.get("resolved_controller_version")
     if resolved_version in {"4.0", "4.1"}:
-        return dict(_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE)
+        return {
+            **_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE,
+            "blocking_requested": engine["blocking"],
+        }
     try:
         major_version = int(str(resolved_version).split(".", maxsplit=1)[0])
     except (TypeError, ValueError):
@@ -1845,7 +1951,10 @@ def _validate_execution_result(
             raise LiveCapabilityError(
                 "RasControl Controller PID/create-time identity was not proved"
             )
-        expected_mode = "blocking" if engine["blocking"] else "poll"
+        _validate_controller_dialog_observation(details)
+        expected_mode = expected_capabilities.get(
+            "compute_mode", "blocking" if engine["blocking"] else "poll"
+        )
         if details.get("compute_mode") != expected_mode:
             raise LiveCapabilityError("RasControl blocking mode evidence mismatch")
         if details.get("watchdog_requested") is not True:
@@ -2178,6 +2287,7 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
             blocking=request["engine"]["blocking"],
             controller_version=request["engine"]["controller_version"],
             strict_close=True,
+            observe_dialogs=True,
         )
     details, process_success, completion_verified, _, _ = _validate_execution_result(
         request,
@@ -2628,6 +2738,32 @@ def _perform(request: dict[str, Any], request_sha256: str, context: Any) -> int:
     return worker_exit_code
 
 
+def _write_failure_diagnostic(
+    request: Mapping[str, Any], request_sha256: str, context: Any, error: Exception,
+) -> None:
+    """Retain public exception evidence without creating a terminal receipt."""
+    details = getattr(error, "execution_details", None)
+    if not isinstance(details, Mapping):
+        return
+    attempt_dir = context.run_root / "attempts" / request["lane_id"] / request["attempt_id"]
+    write_json_with_digest(
+        attempt_dir / "worker_failure_diagnostic.json",
+        json_safe({
+            "schema_version": 1,
+            "action": "live_failure_diagnostic",
+            "diagnostic_only": True,
+            "run_id": request["run_id"],
+            "lane_id": request["lane_id"],
+            "attempt_id": request["attempt_id"],
+            "request_sha256": request_sha256,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "exception_type": type(error).__name__,
+            "exception_message": str(error),
+            "execution_details": details,
+        }),
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="execution-evidence-live-worker")
     parser.add_argument("--request", required=True, type=Path)
@@ -2651,8 +2787,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 31
     try:
         return _perform(request, request_sha256, context)
-    except Exception:
+    except Exception as exc:
         traceback.print_exc()
+        try:
+            _write_failure_diagnostic(request, request_sha256, context, exc)
+        except Exception:
+            # Evidence persistence must not mask the original execution failure.
+            traceback.print_exc()
         return 30
 
 

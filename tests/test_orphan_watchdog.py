@@ -3,9 +3,88 @@
 from __future__ import annotations
 
 import importlib
+import json
+import os
+import sys
+
+import pytest
 
 
 watchdog = importlib.import_module("ras_commander._orphan_watchdog")
+
+
+def test_identity_handshake_records_actual_interpreter_and_does_not_replace(tmp_path):
+    path = tmp_path / "worker-identity.json"
+    token = "a" * 32
+    payload = watchdog._publish_worker_identity(path, token)
+    observed = watchdog.psutil.Process(os.getpid())
+    assert json.loads(path.read_text(encoding="utf-8")) == payload
+    assert payload == {
+        "schema": "ras-commander-orphan-watchdog/v1",
+        "token": token,
+        "pid": os.getpid(),
+        "create_time": observed.create_time(),
+        "name": observed.name(),
+        "exe": observed.exe(),
+        "parent_pid": os.getppid(),
+        "argv": sys.argv,
+    }
+    original = path.read_bytes()
+    with pytest.raises(FileExistsError):
+        watchdog._publish_worker_identity(path, "b" * 32)
+    assert path.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize("token", ["", "a" * 31, "a" * 65, "A" * 32, "../identity"])
+def test_identity_handshake_rejects_malformed_nonce_before_writing(tmp_path, token):
+    with pytest.raises(ValueError, match="token"):
+        watchdog._publish_worker_identity(tmp_path / "identity.json", token)
+    assert list(tmp_path.iterdir()) == []
+
+
+def _worker_args(tmp_path):
+    return [
+        "--parent-pid", "1", "--parent-create-time", "1", "--parent-name", "python",
+        "--ras-pid", "2", "--ras-create-time", "2", "--ras-name", "Ras.exe",
+        "--max-runtime", "60", "--lock-file", str(tmp_path / "session.lock"),
+    ]
+
+
+@pytest.mark.parametrize("option,value", [("--identity-file", "identity.json"),
+                                          ("--identity-token", "a" * 32)])
+def test_identity_arguments_are_an_indivisible_pair(tmp_path, option, value):
+    with pytest.raises(SystemExit):
+        watchdog._parse_args([*_worker_args(tmp_path), option, value])
+
+
+@pytest.mark.parametrize("runtime", ["nan", "inf", "-1", "0"])
+def test_watchdog_rejects_unbounded_or_invalid_runtime(tmp_path, runtime):
+    args = _worker_args(tmp_path)
+    args[args.index("--max-runtime") + 1] = runtime
+    with pytest.raises(SystemExit):
+        watchdog._parse_args(args)
+
+
+def test_watchdog_never_arms_if_identity_publication_fails(monkeypatch, tmp_path):
+    path = tmp_path / "identity.json"
+    path.write_text("retained evidence", encoding="utf-8")
+    monkeypatch.setattr(watchdog, "_run_watchdog", lambda **_kw: pytest.fail("must not arm"))
+    assert watchdog.main([
+        *_worker_args(tmp_path), "--identity-file", str(path), "--identity-token", "a" * 32,
+    ]) == 2
+    assert path.read_text(encoding="utf-8") == "retained evidence"
+
+
+def test_watchdog_publishes_identity_before_monitoring(monkeypatch, tmp_path):
+    path = tmp_path / "identity.json"
+    def monitor(**_kwargs):
+        assert json.loads(path.read_text(encoding="utf-8"))["pid"] == os.getpid()
+        return 0
+    monkeypatch.setattr(watchdog, "_run_watchdog", monitor)
+    assert watchdog.main([
+        *_worker_args(tmp_path), "--identity-file", str(path), "--identity-token", "a" * 32,
+    ]) == 0
 
 
 def test_watchdog_timeout_uses_monotonic_clock_despite_wall_clock_jumps(

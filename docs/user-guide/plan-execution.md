@@ -450,6 +450,15 @@ Mechanical completion is deliberately independent from message errors,
 warnings, result freshness, volume accounting, convergence quality, and
 hydraulic acceptance. Review those observations separately.
 
+For native Linux unsteady runs, an HDF `Event Conditions` completion attribute
+can be inherited from the prepared `.tmp.hdf`. An `available / True`
+observation from that attribute describes the file; it does not establish that
+the subsequent native calculation finished. Native results may also omit the
+Windows `Complete Process` message. Use the native execution API's solver-log
+and populated-result checks, then verify the requested output time window,
+array dimensions, and finite values. Keep the structured observations alongside
+these checks rather than using the inherited attribute as the acceptance gate.
+
 ### Quick Verification
 
 ```python

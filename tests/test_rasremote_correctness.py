@@ -100,9 +100,9 @@ def _run_psexec(
         lambda *args, **kwargs: [],
     )
     monkeypatch.setattr(
-        psexec_module,
-        "copy_plan_hdf_back",
-        lambda *args, **kwargs: source_plan.with_suffix(".p01.hdf"),
+        importlib.import_module("ras_commander.RasCmdr").RasCmdr,
+        "_destination_promotion_process_gate",
+        staticmethod(lambda *args, **kwargs: (True, {})),
     )
     monkeypatch.setattr(
         psexec_module,

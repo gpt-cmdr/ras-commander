@@ -835,3 +835,23 @@ complete.
   TCU is unaccepted, although the exact pinned executable then succeeds and the
   structured TCU gate records acceptance. That message is a logging-consistency
   backlog item, not contradictory terminal evidence.
+- 2026-08-30: fresh representative campaign
+  `35a5c102-2f7c-41e4-ba3c-ff9d648f4d99`, run
+  `5dac46d0-7709-467b-8c97-ddf6b9873863`, selected only the approved
+  `steady_1d__4_1_0__l0` lane at clean pushed commit `b0bfb42b`. Attempt
+  `fdfe1e87-c0df-4dab-9b74-261b027b952f` staged a disposable EX1 plan and
+  invoked the exact accepted 4.1 Controller through `RasControl`; it generated
+  no `.O01`, plan HDF, or other result dataset. The two-argument
+  `Compute_CurrentPlan` call returned after about 13 minutes and was followed
+  by zero completion polls, proving the legacy call is blocking-return rather
+  than an asynchronous call governed by `Compute_IsStillComputing`. Strict
+  close failed because the owned `Ras.exe` had not yet exited, so finalization
+  preserved the stage and the supervisor quarantined the host. The attempt has
+  no terminal receipt and is diagnostic-only. Read-only typelib, notebook, and
+  process review found no solver child or result artifact and identified exact
+  dialog observation plus actual orphan-watchdog worker identity as P1 gaps.
+  After every Python and HEC-RAS process was absent, official recovery
+  `550dcc6a-0fe2-4874-a582-e5b44625fc58` reproved both source fingerprints and
+  two complete-empty inventories, invoked/signalled no HEC-RAS process, and
+  atomically retired the retained host lock. Another 4.0/4.1 live attempt is
+  blocked pending deterministic remediation and independent review.

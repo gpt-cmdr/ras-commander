@@ -1388,11 +1388,26 @@ def test_rascontrol_nonblocking_deadline_preserves_opposing_output(
 ) -> None:
     from ras_commander.RasBco import BcoMonitor
 
+    control_module = importlib.import_module("ras_commander.RasControl")
+
     ras_obj = _write_project(tmp_path / f"control-timeout-{use_watchdog}", "6.60")
     ras_obj.plan_df["Plan Title"] = ["Base"]
     hdf = ras_obj.project_folder / "Model.p01.hdf"
     legacy = ras_obj.project_folder / "Model.O01"
     legacy.write_bytes(b"stale legacy")
+    # Exercise the polling deadline with and without a separately verified
+    # watchdog. A requested watchdog may no longer silently fail to start.
+    monkeypatch.setattr(control_module, "_active_sessions", {
+        "deadline-test": SimpleNamespace(
+            project_path=str(ras_obj.project_folder / "Model.prj"),
+            ras_pid=4321, ras_create_time=123.5, session_id="deadline-test",
+        ),
+    })
+    monkeypatch.setattr(control_module, "_spawn_watchdog", lambda **_kw:
+                        control_module._WatchdogIdentity(8765, 456.5, "python.exe"))
+    monkeypatch.setattr(control_module, "_terminate_watchdog", lambda _identity:
+                        control_module._WatchdogCleanupResult(
+                            pid=8765, identity_state="absent"))
 
     class Controller:
         def Plan_SetCurrent(self, _name):

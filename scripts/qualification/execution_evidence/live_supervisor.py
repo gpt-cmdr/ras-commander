@@ -68,10 +68,113 @@ class LiveHostQuarantinedError(LiveSupervisorError):
 
 
 _LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE: Mapping[str, Any] = {
-    "completion_method": "Compute_IsStillComputing",
+    "completion_method": "Compute_CurrentPlan_blocking_return",
+    "compute_mode": "blocking",
+    "poll_count": 0,
+    "controller_inherently_blocking": True,
+    "compute_current_plan_argument_count": 2,
     "controller_quit_supported": False,
     "controller_close_method": "owned_process_cleanup",
 }
+
+
+def _validate_controller_dialog_observation(details: Mapping[str, Any]) -> None:
+    """Require a stopped observer bound to the same proved Controller process."""
+    observation = details.get("dialog_observation")
+    expected = {
+        "scope": "exact_controller_identity",
+        "process_discovery": False,
+        "available": True,
+        "start_attempted": True,
+        "started": True,
+        "start_status": "started",
+        "stop_requested": True,
+        "stop_confirmed": True,
+        "thread_alive": False,
+        "stop_status": "completed",
+        "lifecycle": "stopped",
+    }
+    if (
+        details.get("dialog_observation_requested") is not True
+        or not isinstance(observation, Mapping)
+        or any(
+            type(observation.get(field)) is not type(value)
+            or observation.get(field) != value
+            for field, value in expected.items()
+        )
+    ):
+        raise LiveSupervisorError("Controller dialog observation lifecycle proof is invalid")
+    target = observation.get("target")
+    if (
+        not isinstance(target, Mapping)
+        or not _valid_pid_create_time(target.get("pid"), target.get("create_time"))
+        or target.get("pid") != details.get("controller_pid")
+        or target.get("create_time") != details.get("controller_create_time")
+        or str(target.get("process_name", "")).casefold() != "ras.exe"
+        or target.get("executable_sha256") != details.get("controller_executable_sha256")
+    ):
+        raise LiveSupervisorError("Controller dialog observation target proof is invalid")
+    try:
+        observer_path = Path(target["executable_path"]).resolve(strict=True)
+        controller_path = Path(details["controller_executable_path"]).resolve(strict=True)
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise LiveSupervisorError("Controller dialog observation target path is unproved") from exc
+    if observer_path != controller_path:
+        raise LiveSupervisorError("Controller dialog observation target path differs")
+    observations = observation.get("observations")
+    if not isinstance(observations, list) or not all(
+        isinstance(item, Mapping) for item in observations
+    ):
+        raise LiveSupervisorError("Controller dialog observation records are invalid")
+    counts = {
+        "observed_count": len(observations),
+        "action_count": sum(item.get("action_status") == "completed" for item in observations),
+        "action_attempt_count": sum(
+            item.get("action_status") in ("completed", "timed_out", "failed")
+            for item in observations
+        ),
+        "stop_prevented_action_count": sum(
+            item.get("action_status") == "stop_requested" for item in observations
+        ),
+    }
+    if any(
+        type(observation.get(field)) is not int or observation.get(field) != count
+        for field, count in counts.items()
+    ):
+        raise LiveSupervisorError("Controller dialog observation counts are invalid")
+    for item in observations:
+        if (
+            type(item.get("pid")) is not int
+            or item.get("pid") != target["pid"]
+            or item.get("action") not in ("none", "BM_CLICK")
+            or item.get("action") == "none"
+            and item.get("action_status") in ("completed", "timed_out", "failed")
+            or item.get("action") == "BM_CLICK"
+            and (
+                item.get("rule_id") != "decline_optional_example_install"
+                or item.get("identity_state") != "exact"
+                or item.get("proof_state") != "exact"
+                or item.get("action_status") not in ("completed", "timed_out", "failed")
+            )
+        ):
+            raise LiveSupervisorError("Controller dialog observation action scope is invalid")
+    checks = observation.get("identity_checks")
+    check_count = observation.get("identity_check_count")
+    transitions = observation.get("lifecycle_transitions")
+    if (
+        not isinstance(checks, list)
+        or not checks
+        or not all(isinstance(item, Mapping) for item in checks)
+        or type(check_count) is not int
+        or check_count < len(checks)
+        or not any(item.get("state") == "exact" for item in checks)
+        or not isinstance(transitions, list)
+        or not transitions
+        or not all(isinstance(item, Mapping) for item in transitions)
+        or not any(item.get("state") == "running" for item in transitions)
+        or transitions[-1].get("state") != "stopped"
+    ):
+        raise LiveSupervisorError("Controller dialog observation audit trail is invalid")
 
 
 def _expected_controller_capability_evidence(
@@ -80,7 +183,10 @@ def _expected_controller_capability_evidence(
     """Return the exact successful Controller capability receipt contract."""
     resolved_version = engine.get("resolved_controller_version")
     if resolved_version in {"4.0", "4.1"}:
-        return dict(_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE)
+        return {
+            **_LEGACY_40_41_CONTROLLER_CAPABILITY_EVIDENCE,
+            "blocking_requested": engine["blocking"],
+        }
     try:
         major_version = int(str(resolved_version).split(".", maxsplit=1)[0])
     except (TypeError, ValueError):
@@ -3061,7 +3167,12 @@ def _verify_worker_execution_proof(
         "requested_controller_version": engine.get("controller_version"),
         "resolved_controller_version": engine.get("resolved_controller_version"),
         "controller_progid": engine.get("controller_progid"),
-        "compute_mode": "blocking" if engine.get("blocking") else "poll",
+        "compute_mode": (
+            "blocking"
+            if engine.get("resolved_controller_version") in {"4.0", "4.1"}
+            or engine.get("blocking")
+            else "poll"
+        ),
         "watchdog_requested": True,
         "watchdog_started": True,
         "strict_close_requested": True,
@@ -3092,7 +3203,8 @@ def _verify_worker_execution_proof(
     invalid_capabilities = sorted(
         field
         for field, expected in expected_capabilities.items()
-        if not _matches_exact_expected_value(details[field], expected)
+        if type(details[field]) is not type(expected)
+        or not _matches_exact_expected_value(details[field], expected)
     )
     if invalid_capabilities:
         raise LiveSupervisorError(
@@ -3120,6 +3232,7 @@ def _verify_worker_execution_proof(
         ) from exc
     if selected != expected:
         raise LiveSupervisorError("live Controller executable path is invalid")
+    _validate_controller_dialog_observation(details)
     return execution_removed
 
 
