@@ -97,6 +97,12 @@ def test_download_file_resumes_partial_download(monkeypatch, tmp_path):
     part_path = RasEbfeModels._get_partial_download_path(dest)
     resume_from = len(zip_bytes) // 2
     part_path.write_bytes(zip_bytes[:resume_from])
+    RasEbfeModels._write_partial_download_identity(
+        part_path,
+        source_url="https://example.com/archive.zip",
+        final_url="https://example.com/archive.zip",
+        etag="archive-etag",
+    )
     calls = []
 
     def fake_get(url, **kwargs):
@@ -105,6 +111,7 @@ def test_download_file_resumes_partial_download(monkeypatch, tmp_path):
             zip_bytes[resume_from:],
             status_code=206,
             headers={
+                "etag": '"archive-etag"',
                 "content-length": str(len(zip_bytes) - resume_from),
                 "content-range": (
                     f"bytes {resume_from}-{len(zip_bytes) - 1}/"
@@ -126,7 +133,8 @@ def test_download_file_resumes_partial_download(monkeypatch, tmp_path):
     assert dest.read_bytes() == zip_bytes
     assert not part_path.exists()
     assert calls[0]["kwargs"]["headers"] == {
-        "Range": f"bytes={resume_from}-"
+        "Range": f"bytes={resume_from}-",
+        "If-Range": '"archive-etag"',
     }
 
 
@@ -136,6 +144,12 @@ def test_download_file_restarts_when_server_ignores_range(monkeypatch, tmp_path)
     part_path = RasEbfeModels._get_partial_download_path(dest)
     resume_from = len(zip_bytes) // 3
     part_path.write_bytes(zip_bytes[:resume_from])
+    RasEbfeModels._write_partial_download_identity(
+        part_path,
+        source_url="https://example.com/archive.zip",
+        final_url="https://example.com/archive.zip",
+        etag="archive-etag",
+    )
     calls = []
 
     def fake_get(url, **kwargs):
@@ -143,7 +157,10 @@ def test_download_file_restarts_when_server_ignores_range(monkeypatch, tmp_path)
         return FakeResponse(
             zip_bytes,
             status_code=200,
-            headers={"content-length": str(len(zip_bytes))}
+            headers={
+                "etag": '"archive-etag"',
+                "content-length": str(len(zip_bytes)),
+            }
         )
 
     monkeypatch.setattr(ebfe_module.requests, "get", fake_get)
@@ -159,7 +176,8 @@ def test_download_file_restarts_when_server_ignores_range(monkeypatch, tmp_path)
     assert not part_path.exists()
     assert len(calls) == 2
     assert calls[0]["kwargs"]["headers"] == {
-        "Range": f"bytes={resume_from}-"
+        "Range": f"bytes={resume_from}-",
+        "If-Range": '"archive-etag"',
     }
     assert "headers" not in calls[1]["kwargs"]
 

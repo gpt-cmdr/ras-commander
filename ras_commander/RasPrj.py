@@ -2880,6 +2880,7 @@ def get_ras_exe(ras_version=None):
         # 6.x aliases
         "60": "6.0",
         "61": "6.1",
+        "6.1.0": "6.1",      # Legacy dotted normalization rewrites 6.10 to 6.1.0
         "62": "6.2",
         "63": "6.3",
         "631": "6.3.1",
