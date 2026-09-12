@@ -100,9 +100,10 @@ flowchart TD
     A["Host: RasDocker.compute_plan()"] --> B["Worker validates project, plan and preparation receipt"]
     B --> C["Copy prepared project into private Linux scratch"]
     C --> D["init_ras_project()"]
-    D --> E["RasCmdr.compute_plan_linux(retry=False)"]
+    D --> E["RasCmdr.compute_plan_linux(retry=False, num_cores=N)"]
     E --> F["Official Linux RasUnsteady"]
-    F --> G["Validate mesh, water-surface output and completed time window"]
+    F --> OBS["RasCmdr.inspect_execution_evidence(): supplementary observations"]
+    OBS --> G["Validate mesh, water-surface output and completed time window"]
     G --> H["Copy validated final p01.hdf through /job mount"]
     H --> I["Write compute.json receipt to host"]
 ```
@@ -123,6 +124,12 @@ A zero exit status or the mere existence of an HDF is insufficient. The
 worker checks retained mesh structure, populated water-surface results, and
 simulation time coverage. It does not run geometry preprocessing or repair
 missing dependencies on behalf of a failed preparation.
+
+[RasCmdr.inspect_execution_evidence()][cmdr] adds structured observations to
+the receipt, including missing, unreadable or conflicting evidence. These
+observations supplement the native solver log and result checks. The prepared
+input may already contain a generic completion flag, so that flag alone cannot
+prove that the requested native simulation finished.
 
 The receipt is stored at `.ras-commander/runs/<run-id>/compute.json` under the
 host project directory. It includes the selected plan, runtime identity,

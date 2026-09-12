@@ -175,8 +175,11 @@ Docker's CPU limit controls aggregate CPU time. It does not reserve exclusive
 physical cores or pin the process; CPU affinity is a separate setting.
 Resource limits belong in the launch command, while the Dockerfile defines
 the installed environment. See [Docker CPU constraints](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
-The updated Wine worker uses [RasPlan.set_num_cores()][plan-source] on the
-selected plan before preprocessing, so its plan setting matches the quota too.
+The Wine worker calls [RasPlan.set_num_cores()][plan-source] and
+[RasPlan.set_2d_flow_options()][plan-source] before preprocessing. The second
+call also inserts missing default or named-mesh processor settings. It reads
+the setting back with [RasPlan.get_plan_value()][plan-source], so the selected
+plan's processor count matches the container quota.
 Both receipts record the effective count in `arguments.num_cores`. Resume
 requires that recorded count to match the new request.
 
@@ -282,16 +285,21 @@ needed in ras2fim. That backend has not yet been implemented or qualified.
 flowchart TD
     P["Host Python: RasDocker.preprocess_plan()"] --> W["Wine container: init_ras_project()"]
     W --> G["RasPlan.get_plan_path()"]
-    G --> C["GeomPreprocessor.clear_geompre_files()"]
+    G --> CPU["RasPlan.set_num_cores()"]
+    CPU --> CPU2D["RasPlan.set_2d_flow_options(cores=N, include_default=True)"]
+    CPU2D --> CHECK["RasPlan.get_plan_value(): verify requested cores"]
+    CHECK --> C["GeomPreprocessor.clear_geompre_files()"]
     C --> F["RasPlan.update_run_flags()"]
     F --> PRE["RasPreprocess.preprocess_plan()"]
     PRE --> H["Windows HEC-RAS under Wine"]
     H --> T["Validated .p01.tmp.hdf, .b01 and geometry inputs on host"]
     T --> D["Host Python: RasDocker.compute_plan()"]
     D --> S["Native container: private Linux project copy"]
-    S --> N["RasCmdr.compute_plan_linux(retry=False)"]
+    S --> INIT["init_ras_project()"]
+    INIT --> N["RasCmdr.compute_plan_linux(retry=False, num_cores=N)"]
     N --> R["Official Linux RasUnsteady"]
-    R --> V["Validate results and completed simulation time"]
+    R --> E["RasCmdr.inspect_execution_evidence(): supplementary observations"]
+    E --> V["Validate results and completed simulation time"]
     V --> O["Publish .p01.hdf and compute receipt to host"]
     O --> Q["HdfResultsMesh.get_mesh_timeseries()"]
 ```
@@ -299,9 +307,10 @@ flowchart TD
 Inspect the actual API implementations:
 [RasDocker][docker-source], [init_ras_project()][project-source],
 [RasPlan.get_plan_path() and RasPlan.update_run_flags()][plan-source],
+[RasPlan.set_num_cores(), RasPlan.set_2d_flow_options() and RasPlan.get_plan_value()][plan-source],
 [GeomPreprocessor.clear_geompre_files()][geom-source],
 [RasPreprocess.preprocess_plan()][preprocess-source],
-[RasCmdr.compute_plan_linux()][cmdr-source], and
+[RasCmdr.compute_plan_linux() and RasCmdr.inspect_execution_evidence()][cmdr-source], and
 [HdfResultsMesh.get_mesh_timeseries()][mesh-results-source]. The
 [preprocessing worker][wine-worker] and [native container worker][native-worker]
 show how these calls are connected.
