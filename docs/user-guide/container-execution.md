@@ -14,12 +14,11 @@ with Linux containers. HEC-RAS, Wine, and Windows Python are included in the
 preprocessing image; a separate host HEC-RAS installation or Wine profile
 mount is unnecessary.
 
-The container API is available from the source revision below; an existing
-PyPI installation of `0.99.2` may not contain it. In an activated Python
-environment, install this revision and the notebook inspection dependencies:
+Install the pinned host API and notebook inspection dependencies in an
+activated Python environment:
 
 ```bash
-uv pip install "ras-commander[compute] @ git+https://github.com/gpt-cmdr/ras-commander.git@aa003b179e9d0f89ba23da0607ffab9bfee74a60" jupyterlab matplotlib xarray geopandas
+uv pip install "ras-commander[compute] @ git+https://github.com/gpt-cmdr/ras-commander.git@15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5" jupyterlab matplotlib xarray geopandas
 ```
 
 The image contains its own installed library. This command installs the host
@@ -27,41 +26,28 @@ API used to launch the containers and inspect their outputs. This host
 revision accepts HEC-RAS 6.5, 6.6, and 7.0.1. Image qualification and
 publication status are listed below.
 
-The 6.5/6.6 native images retain their installed source revision `e5380db`.
-The published 7.0.1 native image contains `aa003b1` and has a separate
-qualification record.
+Native images install library source `604704d440c49a39d6f6e8bae262e2233d895dd0`; the host API uses `15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5`. Wine controllers use `dc60b219091e85bcb4564eca45313475c39ce58a`, with Windows library source `9e4217713e954236b0c16023e1815c6f2b7a5309`.
 
 ## Select matching images
 
-| HEC-RAS | Preprocessing image | Native unsteady image |
+**Qualification status:** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads. See the [current release record][release].
+
+| HEC-RAS | Wine preprocessing image | Native unsteady image |
 |---|---|---|
-| 6.5 | [`rascommander/hec-ras-wine-precompute_6.5:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_6.5) | [`rascommander/hec-ras-linux-unsteady_6.5:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.5) |
-| 6.6 | [`rascommander/hec-ras-wine-precompute_6.6:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_6.6) | [`rascommander/hec-ras-linux-unsteady_6.6:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.6) |
-| 7.0.1 | [`rascommander/hec-ras-wine-precompute_7.0.1:v4`](https://hub.docker.com/r/rascommander/hec-ras-wine-precompute_7.0.1) | [`rascommander/hec-ras-linux-unsteady_7.0.1:v1`](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_7.0.1) |
+| 6.5 | `rascommander/hec-ras-wine-precompute_6.5:v4` | `rascommander/hec-ras-linux-unsteady_6.5:v1` |
+| 6.6 | `rascommander/hec-ras-wine-precompute_6.6:v4` | `rascommander/hec-ras-linux-unsteady_6.6:v1` |
+| 7.0.1 | `rascommander/hec-ras-wine-precompute_7.0.1:v4` | `rascommander/hec-ras-linux-unsteady_7.0.1:v1` |
 
-The HEC-RAS 6.5 and 6.6 native images are published on Docker Hub as `v1` and `latest` for
-`linux/amd64`. They include HEC-RAS and were tested on Linux and Windows
-Docker Desktop. The [release record][release] records the exact source,
-image identities, full Linux runs, Windows notebook runs, and failure tests.
+Pull both matching images before the first run to refresh the local tags:
 
-The HEC-RAS 7.0.1 images are also public: Wine preprocessing as `v4` and
-`latest`, and native computation as `v1` and `latest`. Both were pulled back
-from Docker Hub after publication. The full 266-hour Linux sample produced
-267 output times with 6,548 finite water-surface values per time. All ten
-notebook code cells passed a one-hour sample on Windows Docker Desktop
-(Engine 29.7.2), including a host folder containing spaces. Both runs
-preserved the prepared temporary HDF and reported HEC-RAS 7.0.1, June 2026.
-The [7.0.1 release record][release-701] retains the exact image identities
-and test evidence. Windows qualification covers the one-hour sample, not
-the full 266-hour calculation.
+```bash
+docker pull rascommander/hec-ras-wine-precompute_6.5:v4
+docker pull rascommander/hec-ras-linux-unsteady_6.5:v1
+```
 
-The v1 worker requires populated 2D meshes and validates their complete
-water-surface output. Qualification covers the supplied 2D sample.
+For 6.6 or 7.0.1, change the version in both repository names. Wine `v4` and native `v1` also have matching `latest` tags. The API examples use `pull="always"` to refresh the selected image.
 
-Keep the HEC-RAS versions identical between the two phases. `pull="always"`
-requests a fresh pull, which matters when a development tag is updated in
-place. An unavailable image fails the call rather than falling back to a
-different HEC-RAS version.
+Use matching HEC-RAS versions. A missing image fails explicitly; the API does not choose another version. The native worker requires populated 2D meshes and validates their complete water-surface output.
 
 ## Prepare a complete working copy
 
@@ -114,16 +100,20 @@ models = Path("/path/to/working/02_model_copies")
 name = "your-model-name"
 project = models / name / f"{name}.prj"
 version = "6.5"
+preprocess_image = f"rascommander/hec-ras-wine-precompute_{version}:v4"
+compute_image = f"rascommander/hec-ras-linux-unsteady_{version}:v1"
 
 prepared = RasDocker.preprocess_plan(
     project,
     "01",
     version=version,
+    image=preprocess_image,
     mounts={
         "/source_terrain": models / "source_terrain",
         "/projection": models / "projection",
     },
     timeout=900,
+    num_cores=2,
     replace_generated=True,
     pull="always",
 )
@@ -135,6 +125,7 @@ computed = RasDocker.compute_plan(
     project,
     "01",
     version=version,
+    image=compute_image,
     prepare_receipt=prepared.receipt_path,
     timeout=14400,
     num_cores=2,
@@ -155,13 +146,9 @@ The `error` field explains host-side failures, such as a failed image pull;
 
 ## CPU limits, progress, resume, and batch summaries
 
-These additions are on the [container API development branch][docker-source].
-The pinned installation revision above reproduces the published-image tests;
-install the development checkout to use these newer host features:
-
-```bash
-uv pip install -e ".[compute]"
-```
+The pinned host API and native source above provide these features. The
+container runs one selected plan at a time; scheduling multiple models stays
+on the host.
 
 ### Match solver cores to container resources
 
@@ -175,10 +162,10 @@ Docker's CPU limit controls aggregate CPU time. It does not reserve exclusive
 physical cores or pin the process; CPU affinity is a separate setting.
 Resource limits belong in the launch command, while the Dockerfile defines
 the installed environment. See [Docker CPU constraints](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
-The Wine worker calls [RasPlan.set_num_cores()][plan-source] and
-[RasPlan.set_2d_flow_options()][plan-source] before preprocessing. The second
-call also inserts missing default or named-mesh processor settings. It reads
-the setting back with [RasPlan.get_plan_value()][plan-source], so the selected
+The Wine worker calls [RasPlan.set_num_cores()][wine-plan-source] and
+[RasPlan.set_2d_flow_options()][wine-plan-source] before preprocessing. The second
+call uses `include_default=True` and inserts missing default or named-mesh
+processor settings. It reads the setting back with [RasPlan.get_plan_value()][wine-plan-source], so the selected
 plan's processor count matches the container quota.
 Both receipts record the effective count in `arguments.num_cores`. Resume
 requires that recorded count to match the new request.
@@ -202,6 +189,8 @@ class Progress:
 
 computed = RasDocker.compute_plan(
     project, "01", version=version, num_cores=2,
+    image=compute_image, pull="always",
+    prepare_receipt=prepared.receipt_path, replace_generated=True,
     stream_callback=Progress(), resume=True,
 )
 ```
@@ -220,12 +209,11 @@ model; `KeyboardInterrupt` propagates after owned-container cleanup. Keep
 callbacks quick, and use project-aware events when different models share a
 plan number.
 
-The revised native worker forwards its solver log while computation is
-running, with CRLF, LF and lone-CR support. This image-side addition requires
-an image rebuilt from this revision; the previously published image inventory
-above does not claim that addition. Older installed workers expose only the
-output they already emit. Progress timing depends on when HEC-RAS flushes
-its output; the API does not fabricate percentages during silent periods.
+The native worker forwards its solver log while computation is running,
+handling CRLF, LF and lone-CR progress records. Live callbacks matched the
+complete ordered solver log in all three Linux qualification runs. Timing
+depends on when HEC-RAS flushes its output; the API does not fabricate
+percentages during silent periods.
 
 ### Resume completed stages
 
@@ -245,7 +233,7 @@ normally, and `replace_generated` still controls whether existing outputs
 can be replaced. Existing receipts created before resume was enabled are
 insufficient by themselves. A cache hit returns `resumed=True`, the original
 receipt, and `returncode=None` because no Docker process ran. It also skips
-pulling an image, even if `pull="always"` was supplied.
+pulling an image, regardless of the requested pull policy.
 
 ### Collect a batch summary
 
@@ -259,6 +247,7 @@ jobs = [
 ]
 batch = RasDocker.run_batch(
     jobs, stage="run", version=version, num_cores=2,
+    preprocess_image=preprocess_image, compute_image=compute_image, pull="always",
     mounts={"/source_terrain": models / "source_terrain",
             "/projection": models / "projection"},
     resume=True, stream_callback=Progress(),
@@ -296,7 +285,8 @@ flowchart TD
     T --> D["Host Python: RasDocker.compute_plan()"]
     D --> S["Native container: private Linux project copy"]
     S --> INIT["init_ras_project()"]
-    INIT --> N["RasCmdr.compute_plan_linux(retry=False, num_cores=N)"]
+    INIT --> PLAN["RasPlan.get_plan_value(): geometry and time window"]
+    PLAN --> N["RasCmdr.compute_plan_linux(retry=False, num_cores=N)"]
     N --> R["Official Linux RasUnsteady"]
     R --> E["RasCmdr.inspect_execution_evidence(): supplementary observations"]
     E --> V["Validate results and completed simulation time"]
@@ -305,11 +295,13 @@ flowchart TD
 ```
 
 Inspect the actual API implementations:
-[RasDocker][docker-source], [init_ras_project()][project-source],
-[RasPlan.get_plan_path() and RasPlan.update_run_flags()][plan-source],
-[RasPlan.set_num_cores(), RasPlan.set_2d_flow_options() and RasPlan.get_plan_value()][plan-source],
+[RasDocker][docker-source], [Wine init_ras_project()][wine-project-source],
+[Wine RasPlan.get_plan_path() and RasPlan.update_run_flags()][wine-plan-source],
+[RasPlan.set_num_cores(), RasPlan.set_2d_flow_options() and RasPlan.get_plan_value()][wine-plan-source],
 [GeomPreprocessor.clear_geompre_files()][geom-source],
 [RasPreprocess.preprocess_plan()][preprocess-source],
+[native init_ras_project()][native-project-source],
+[native RasPlan.get_plan_value()][native-plan-source],
 [RasCmdr.compute_plan_linux() and RasCmdr.inspect_execution_evidence()][cmdr-source], and
 [HdfResultsMesh.get_mesh_timeseries()][mesh-results-source]. The
 [preprocessing worker][wine-worker] and [native container worker][native-worker]
@@ -322,13 +314,24 @@ application within Linux. The image contains a prepared Windows directory and
 registry tree, called a Wine prefix, under `/runtime/wine-seed/prefix`.
 Its `drive_c` directory contains Windows Python and the installed HEC-RAS
 application. `/runtime/wine-seed/runtime.json` identifies the matching HEC-RAS
-version and its installed paths.
+version and its installed paths. For version `V`, the executable is
+`C:\Program Files (x86)\HEC\HEC-RAS\V\Ras.exe`, backed by
+`/runtime/wine-seed/prefix/drive_c/Program Files (x86)/HEC/HEC-RAS/V/Ras.exe`.
+Windows Python is `C:\Python311\python.exe`.
 
-Each run copies the profile into private writable scratch space. Windows
+Each run copies the profile into `/run/ras-job/<run-id>/wineprefix`, its
+private writable scratch space. Windows
 Python runs the [preprocessing worker][wine-worker], which calls the linked
 [ras-commander](https://rascommander.info/ras/) APIs. HEC-RAS reads and writes the
 host working model through `/job`; Wine provides Windows access to those
 mounted Linux paths. The profile template remains reusable between runs.
+
+In the standard API launch, `/run/ras-job` and `/tmp` use the container's
+writable layer. Docker removes that layer with `--rm`; the host bind mounts
+remain. The root-owned seed is protected from UID 1000, while root could write
+it; the controller directs ordinary job changes to its copied prefix. The
+[ras2fim launcher](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/src/stage_hecras_for_linux_wine_02b.py)
+separately configures a read-only root, temporary-memory mount and scratch volume.
 
 Preflight checks the project and its dependencies before changing model files.
 Selected model text is normalized to Windows CRLF line endings, including
@@ -339,14 +342,16 @@ cell counts, and populated hydraulic property tables before reporting success.
 ### Native Linux unsteady computation
 
 The second image contains the official Linux solver and its shared libraries
-under `/opt/hecras-runtime`. It does not use Wine. The
+at `/opt/hecras-runtime/engine/RasUnsteady` and
+`/opt/hecras-runtime/engine/libs/`, with settings in
+`/opt/hecras-runtime/runtime.json`. It does not use Wine. The
 [container worker][native-worker] stages a private project copy on Linux
 storage and calls [RasCmdr.compute_plan_linux()][cmdr-source]. That API handles
 the Linux solver's runtime library environment and `io.*` file aliases.
 
 Private Linux storage allows those aliases and solver scratch writes to work
-consistently even when `/job` comes from a Windows drive. The prepared host
-`.p01.tmp.hdf` is preserved. After a successful calculation and result checks,
+consistently even when `/job` comes from a Windows drive. Scratch text uses Linux LF line endings; binary HDFs are not text-normalized.
+The host `.p01.tmp.hdf`, `.b01` and `.x01` preparation artifacts are preserved. After a successful calculation and result checks,
 the worker publishes the final `.p01.hdf` back through the host mount. A
 failed calculation is recorded in its receipt; an unvalidated result is not
 promoted to the final host result path.
@@ -394,7 +399,9 @@ project. Keep them with the resulting model when reporting a problem. The
 notebook demonstrates execution mechanics; model suitability and interpretation
 of hydraulic results remain engineering decisions.
 
-For the installed source inventory and instructions to build from the source
+The current [Wine runtime inventory](https://github.com/gpt-cmdr/ras2fim-2d/blob/codex/phase2-linux-wine-preprocessing/containers/hecras-prepare/runtime-inventory-current.json) and [native runtime inventory](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/runtime-inventory-current.json) list installed packages, source identities and runtime paths for all three versions.
+
+For instructions to build from the source
 checkout and an external vendor runtime, see
 [How to re-create the native container][container-readme]. The existing
 [Wine container operating guide][wine-guide] documents its corresponding
@@ -403,26 +410,30 @@ installed runtime and build inputs. For 7.0.1, the
 [extract_installer.py][extractor-701] document extraction of the official
 combined installer into the native build inputs.
 
-[docker-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasDocker.py
-[native-worker]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/_container_compute.py
-[project-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasPrj.py
-[plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasPlan.py
-[geom-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/geom/GeomPreprocessor.py
-[preprocess-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasPreprocess.py
-[cmdr-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasCmdr.py
-[base-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/hdf/HdfBase.py
-[mesh-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/hdf/HdfMesh.py
-[mesh-results-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/hdf/HdfResultsMesh.py
-[plan-results-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/hdf/HdfResultsPlan.py
-[hdf-plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/hdf/HdfPlan.py
+[docker-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/RasDocker.py
+[native-worker]: https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_container_compute.py
+[project-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/RasPrj.py
+[plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/RasPlan.py
+[geom-source]: https://github.com/gpt-cmdr/ras-commander/blob/9e4217713e954236b0c16023e1815c6f2b7a5309/ras_commander/geom/GeomPreprocessor.py
+[preprocess-source]: https://github.com/gpt-cmdr/ras-commander/blob/9e4217713e954236b0c16023e1815c6f2b7a5309/ras_commander/RasPreprocess.py
+[cmdr-source]: https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCmdr.py
+[base-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/hdf/HdfBase.py
+[mesh-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/hdf/HdfMesh.py
+[mesh-results-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/hdf/HdfResultsMesh.py
+[plan-results-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/hdf/HdfResultsPlan.py
+[hdf-plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/15b7ffc7e1b5c6896eb5c99da0b34739d4b8b9e5/ras_commander/hdf/HdfPlan.py
 [container-readme]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/README.md
 [notebook]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/examples/512_docker_precompute_and_linux_compute.ipynb
-[wine-worker]: https://github.com/gpt-cmdr/ras2fim-2d/blob/codex/phase2-linux-wine-preprocessing/containers/hecras-prepare/windows_worker.py
+[wine-worker]: https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/windows_worker.py
 [wine-guide]: https://github.com/gpt-cmdr/ras2fim-2d/blob/codex/phase2-linux-wine-preprocessing/containers/hecras-prepare/OPERATION.md
 
-[release]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RELEASE-20260911.md
+[release]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RELEASE-CURRENT.md
 
-[release-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RELEASE-7.0.1-20260911.md
 
 [runtime-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/RUNTIME-7.0.1.md
-[extractor-701]: https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/containers/hecras-unsteady/extract_installer.py
+[extractor-701]: https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/extract_installer.py
+
+[wine-project-source]: https://github.com/gpt-cmdr/ras-commander/blob/9e4217713e954236b0c16023e1815c6f2b7a5309/ras_commander/RasPrj.py
+[wine-plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/9e4217713e954236b0c16023e1815c6f2b7a5309/ras_commander/RasPlan.py
+[native-project-source]: https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPrj.py
+[native-plan-source]: https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPlan.py

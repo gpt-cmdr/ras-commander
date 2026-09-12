@@ -2,7 +2,7 @@
 
 This recipe extracts the official HEC-RAS 7.0.1 Linux solver and libraries,
 retains the vendor notices, and creates the external input used by
-[Dockerfile](Dockerfile). Run it on a Linux build machine. The extraction
+[Dockerfile](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/Dockerfile). Run it on a Linux build machine. The extraction
 steps read archive contents; they do not install or run HEC-RAS, require
 Wine, or create a Wine profile. Keep the download, extracted files, and
 runtime context outside the Git checkout.
@@ -11,21 +11,20 @@ The actual native `RasUnsteady` file contains the version banner
 **HEC-RAS 7.0.1 June 2026**. Its identity was verified independently of the
 installer filename. This is the native engine distributed with 7.0.1.
 Image qualification and publication are recorded separately in the
-[7.0.1 release record](RELEASE-7.0.1-20260911.md).
+[current release record](RELEASE-CURRENT.md).
 
 ## 1. Gather the source and extraction tools
 
 Use the native image's source checkout at
-`aa003b179e9d0f89ba23da0607ffab9bfee74a60`, which contains
-[bundle_runtime.py](bundle_runtime.py). The [extractor](extract_installer.py)
-was added later as reconstruction tooling and is not installed in the image.
-The command below downloads that utility from its immutable documentation
-revision into the external work directory, so the image-source checkout
-need not change. Use Python 3.11 or later for this recipe.
+`604704d440c49a39d6f6e8bae262e2233d895dd0`, which contains
+[bundle_runtime.py](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/bundle_runtime.py). The [extractor](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/extract_installer.py)
+is a source-side reconstruction utility. The command below downloads it from
+that exact source revision into the external work directory. Use Python 3.11
+or later for this recipe.
 
 | Tool | Use and source | Tested version and license |
 |---|---|---|
-| [extract_installer.py](extract_installer.py) | Bounded Python reader for the official installer's ISSetupStream v4 archive. Uses only the Python standard library. | Archive decoding follows [ISx source at `098e866`](https://github.com/Coldblackice/InstallShield-installer-extractor-ISx/blob/098e866fa5341db4424d3831d40943c01b88aefe/ISx.c); its [MIT license](https://github.com/Coldblackice/InstallShield-installer-extractor-ISx/blob/098e866fa5341db4424d3831d40943c01b88aefe/LICENSE) is retained in the Python file. |
+| [extract_installer.py](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/extract_installer.py) | Bounded Python reader for the official installer's ISSetupStream v4 archive. Uses only the Python standard library. | Archive decoding follows [ISx source at `098e866`](https://github.com/Coldblackice/InstallShield-installer-extractor-ISx/blob/098e866fa5341db4424d3831d40943c01b88aefe/ISx.c); its [MIT license](https://github.com/Coldblackice/InstallShield-installer-extractor-ISx/blob/098e866fa5341db4424d3831d40943c01b88aefe/LICENSE) is retained in the Python file. |
 | [7-Zip](https://www.7-zip.org/) | Inspects the MSI's embedded CAB and verifies its checksum. | 25.01; Debian package `25.01+dfsg-1~deb13u2`. See the [upstream license](https://www.7-zip.org/license.txt). |
 | [msitools](https://github.com/GNOME/msitools) | `msiextract` restores filenames and directories from MSI tables; `msiinfo` exports identity and TCU records. | [Debian `0.106+repack-1`](https://packages.debian.org/trixie/msitools). The [source copyright file](https://github.com/GNOME/msitools/blob/master/copyright) identifies LGPL-2.1+ components and GPL-2+ tools, including `msiinfo`. |
 
@@ -54,7 +53,7 @@ test ! -e "$HEC701_WORK"
 mkdir -p "$HEC701_WORK/downloads" "$HEC701_WORK/notices" "$HEC701_WORK/evidence"
 git rev-parse HEAD > "$HEC701_WORK/evidence/reconstruction-source-commit.txt"
 curl --fail --location \
-  'https://raw.githubusercontent.com/gpt-cmdr/ras-commander/fdde90229a30fe259fbcb1c1679e8de720a25d8f/containers/hecras-unsteady/extract_installer.py' \
+  'https://raw.githubusercontent.com/gpt-cmdr/ras-commander/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/extract_installer.py' \
   --output "$HEC701_WORK/extract_installer.py"
 ```
 
@@ -87,7 +86,7 @@ These checks make the reconstruction refer to specific vendor bytes.
 
 ## 3. Extract the MSI and restore the vendor paths
 
-[extract_installer.py](extract_installer.py) locates the archive after the
+[extract_installer.py](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/extract_installer.py) locates the archive after the
 PE sections, validates member boundaries and flat filenames, decodes the
 ISSetupStream blocks, and checks each zlib stream. It writes all ten
 installer members plus `extraction.json` through a temporary directory,
@@ -237,7 +236,7 @@ PY
 
 ## 5. Export the clean runtime context
 
-Use [bundle_runtime.py](bundle_runtime.py) from the source checkout:
+Use [bundle_runtime.py](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/bundle_runtime.py) from the source checkout:
 
 ```bash
 python3 containers/hecras-unsteady/bundle_runtime.py \
@@ -256,8 +255,8 @@ Windows application files, and model data from the image context.
 
 Continue with the [container build and qualification steps](README.md#3-build-from-source-and-the-named-runtime-context),
 using this directory for `hecras_runtime` and setting `HEC_RAS_VERSION=7.0.1`.
-The image calls [RasCmdr.compute_plan_linux()](https://github.com/gpt-cmdr/ras-commander/blob/codex/container-precompute-linux/ras_commander/RasCmdr.py)
-through the [container worker](../../ras_commander/_container_compute.py).
+The image calls [RasCmdr.compute_plan_linux()](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCmdr.py)
+through the [container worker](https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_container_compute.py).
 Its library search path includes `libs`, `libs/mkl`, and `libs/rhel_8`,
 matching the supplied vendor helper. `RasUnsteady` is an x86-64 ELF binary
 with no embedded RPATH; its referenced glibc symbol versions reach

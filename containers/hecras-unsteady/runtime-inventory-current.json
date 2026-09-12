@@ -1,0 +1,3370 @@
+{
+  "schema": "ras-commander-installed-container-inventory/v1",
+  "generated_at_utc": "2026-09-12T02:26:36.266910+00:00",
+  "container_kind": "native_linux_unsteady",
+  "publication_status": "published_and_verified",
+  "scope": "Current published and qualified Linux/amd64 images for HEC-RAS 6.5, 6.6 and 7.0.1; full execution evidence remains external.",
+  "inventory_method": {
+    "image_filesystem": "Read-only, network-disabled ephemeral containers; normal entrypoint replaced by Linux Python -B.",
+    "linux_packages": "Full dpkg-query inventory, including architecture and installed status; importlib.metadata for Linux Python distributions.",
+    "windows_packages": "Not applicable.",
+    "hec_ras_executed_during_inventory": false,
+    "wine_executed_during_inventory": false,
+    "windows_python_executed_during_inventory": false,
+    "image_id_config_and_rootfs_preserved": true,
+    "shared_inventories_verified_equal_across_all_three_versions": true
+  },
+  "recreation_limits": [
+    "This is an installed-package and source inventory, not an installation lock file or a guarantee of byte-identical rebuilding.",
+    "Vendor runtimes, original installers, prepared Wine prefixes, registry state and model data are not stored in Git.",
+    "The complete runtime.json artifact list is retained inside each image at the recorded path and in external build evidence."
+  ],
+  "source": {
+    "repository": "https://github.com/gpt-cmdr/ras-commander",
+    "build_commit": "604704d440c49a39d6f6e8bae262e2233d895dd0",
+    "dockerfile": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/Dockerfile",
+    "ras_commander_documentation": "https://rascommander.info/ras/",
+    "requirements_lock": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/containers/hecras-unsteady/requirements.lock"
+  },
+  "base_image": "python:3.13.15-slim-trixie@sha256:cc9dffa47c8294ba9bb795a8dfaeb7b76f2b30acade2c52a461a2999d127eb00",
+  "linux_os_release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\n",
+  "linux_dpkg_package_count": 90,
+  "linux_dpkg_packages": [
+    {
+      "name": "adduser",
+      "version": "3.152",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "apt",
+      "version": "3.0.3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "base-files",
+      "version": "13.8+deb13u6",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "base-passwd",
+      "version": "3.6.7",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "bash",
+      "version": "5.2.37-2+b9",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "bsdutils",
+      "version": "1:2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "ca-certificates",
+      "version": "20250419",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "coreutils",
+      "version": "9.7-3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "dash",
+      "version": "0.5.12-12",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "debconf",
+      "version": "1.5.91",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "debian-archive-keyring",
+      "version": "2025.1",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "debianutils",
+      "version": "5.23.2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "diffutils",
+      "version": "1:3.10-4",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "dpkg",
+      "version": "1.22.22",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "findutils",
+      "version": "4.10.0-3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "gcc-14-base:amd64",
+      "version": "14.2.0-19",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "grep",
+      "version": "3.11-4",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "gzip",
+      "version": "1.13-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "hostname",
+      "version": "3.25",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "init-system-helpers",
+      "version": "1.69~deb13u1",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "libacl1:amd64",
+      "version": "2.3.2-2+b1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libapt-pkg7.0:amd64",
+      "version": "3.0.3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libattr1:amd64",
+      "version": "1:2.5.2-3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libaudit-common",
+      "version": "1:4.0.2-2",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "libaudit1:amd64",
+      "version": "1:4.0.2-2+b2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libblkid1:amd64",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libbsd0:amd64",
+      "version": "0.12.2-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libbz2-1.0:amd64",
+      "version": "1.0.8-6",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libc-bin",
+      "version": "2.41-12+deb13u3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libc6:amd64",
+      "version": "2.41-12+deb13u3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libcap-ng0:amd64",
+      "version": "0.8.5-4+b1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libcap2:amd64",
+      "version": "1:2.75-10+deb13u1+b1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libcrypt1:amd64",
+      "version": "1:4.4.38-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libdb5.3t64:amd64",
+      "version": "5.3.28+dfsg2-9",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libdebconfclient0:amd64",
+      "version": "0.280",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libffi8:amd64",
+      "version": "3.4.8-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libgcc-s1:amd64",
+      "version": "14.2.0-19",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libgdbm6t64:amd64",
+      "version": "1.24-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libgfortran5:amd64",
+      "version": "14.2.0-19",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libgmp10:amd64",
+      "version": "2:6.3.0+dfsg-3",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libgomp1:amd64",
+      "version": "14.2.0-19",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libhogweed6t64:amd64",
+      "version": "3.10.1-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "liblastlog2-2:amd64",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "liblz4-1:amd64",
+      "version": "1.10.0-4",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "liblzma5:amd64",
+      "version": "5.8.1-1+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libmd0:amd64",
+      "version": "1.1.0-2+b1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libmount1:amd64",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libncursesw6:amd64",
+      "version": "6.5+20250216-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libnettle8t64:amd64",
+      "version": "3.10.1-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libpam-modules-bin",
+      "version": "1.7.0-5",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libpam-modules:amd64",
+      "version": "1.7.0-5",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libpam-runtime",
+      "version": "1.7.0-5",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "libpam0g:amd64",
+      "version": "1.7.0-5",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libpcre2-8-0:amd64",
+      "version": "10.46-1~deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libreadline8t64:amd64",
+      "version": "8.2-6",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libseccomp2:amd64",
+      "version": "2.6.0-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libselinux1:amd64",
+      "version": "3.8.1-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libsemanage-common",
+      "version": "3.8.1-1",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "libsemanage2:amd64",
+      "version": "3.8.1-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libsepol2:amd64",
+      "version": "3.8.1-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libsmartcols1:amd64",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libsqlite3-0:amd64",
+      "version": "3.46.1-7+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libssl3t64:amd64",
+      "version": "3.5.7-1~deb13u2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libstdc++6:amd64",
+      "version": "14.2.0-19",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libsystemd0:amd64",
+      "version": "257.13-1~deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libtinfo6:amd64",
+      "version": "6.5+20250216-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libudev1:amd64",
+      "version": "257.13-1~deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libuuid1:amd64",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libxxhash0:amd64",
+      "version": "0.8.3-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "libzstd1:amd64",
+      "version": "1.5.7+dfsg-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "login",
+      "version": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "login.defs",
+      "version": "1:4.17.4-2",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "mawk",
+      "version": "1.3.4.20250131-1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "mount",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "ncurses-base",
+      "version": "6.5+20250216-2",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "ncurses-bin",
+      "version": "6.5+20250216-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "netbase",
+      "version": "6.5",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "openssl",
+      "version": "3.5.7-1~deb13u2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "openssl-provider-legacy",
+      "version": "3.5.7-1~deb13u2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "passwd",
+      "version": "1:4.17.4-2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "perl-base",
+      "version": "5.40.1-6",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "readline-common",
+      "version": "8.2-6",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "sed",
+      "version": "4.9-2+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "sqv",
+      "version": "1.3.0-3+b2",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "sysvinit-utils",
+      "version": "3.14-4",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "tar",
+      "version": "1.35+dfsg-3.1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "tini",
+      "version": "0.19.0-3+b7",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "tzdata",
+      "version": "2026b-0+deb13u1",
+      "architecture": "all",
+      "status": "ii "
+    },
+    {
+      "name": "util-linux",
+      "version": "2.41.5-0+deb13u1",
+      "architecture": "amd64",
+      "status": "ii "
+    },
+    {
+      "name": "zlib1g:amd64",
+      "version": "1:1.3.dfsg+really1.3.1-1+b1",
+      "architecture": "amd64",
+      "status": "ii "
+    }
+  ],
+  "linux_python": {
+    "version": "3.13.15",
+    "executable": "/usr/local/bin/python",
+    "packages": [
+      {
+        "name": "h5py",
+        "version": "3.14.0"
+      },
+      {
+        "name": "numpy",
+        "version": "2.3.2"
+      },
+      {
+        "name": "pandas",
+        "version": "2.3.1"
+      },
+      {
+        "name": "pip",
+        "version": "26.2.1"
+      },
+      {
+        "name": "psutil",
+        "version": "7.0.0"
+      },
+      {
+        "name": "python-dateutil",
+        "version": "2.9.0.post0"
+      },
+      {
+        "name": "pytz",
+        "version": "2025.2"
+      },
+      {
+        "name": "ras-commander",
+        "version": "0.99.2"
+      },
+      {
+        "name": "setuptools",
+        "version": "80.9.0"
+      },
+      {
+        "name": "six",
+        "version": "1.17.0"
+      },
+      {
+        "name": "tzdata",
+        "version": "2025.2"
+      },
+      {
+        "name": "wheel",
+        "version": "0.45.1"
+      }
+    ]
+  },
+  "ras_commander": {
+    "site_packages": "/usr/local/lib/python3.13/site-packages",
+    "installed_package_files": [
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/ComputeResults.py",
+        "size_bytes": 40115,
+        "sha256": "b28cf8e8fb0364397642663b78e10c0cb47db9e6c0977fea4e26aa19de3f50bd",
+        "package_relative_path": "ras_commander/ComputeResults.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/ComputeResults.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/Decorators.py",
+        "size_bytes": 17118,
+        "sha256": "d1d9eab1f9fb8a0f0b1829cbacb01ebc57bc2aff38c02c2168f817ff1e37cdfd",
+        "package_relative_path": "ras_commander/Decorators.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/Decorators.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/ExecutionArtifacts.py",
+        "size_bytes": 23305,
+        "sha256": "e6c775dcbb36d6de113139fe96f07a89e3abeeaed9fbf584a1044e2278bdc482",
+        "package_relative_path": "ras_commander/ExecutionArtifacts.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/ExecutionArtifacts.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/ExecutionCallback.py",
+        "size_bytes": 7530,
+        "sha256": "a73ac11359604e20214d12b03737c615da4f496895c6928bf9d8942833dc52ca",
+        "package_relative_path": "ras_commander/ExecutionCallback.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/ExecutionCallback.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/ExecutionEvidence.py",
+        "size_bytes": 56117,
+        "sha256": "27718a159e60da24081c52fe94b3e0f4ad9cc9fccc6d40c875a8a00ed3543890",
+        "package_relative_path": "ras_commander/ExecutionEvidence.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/ExecutionEvidence.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/LLM_GUIDE.md",
+        "size_bytes": 5827,
+        "sha256": "3a9854d897ce935d99afbb32eec24d397d8a2d6802e4ead39ffe726d030e8e51",
+        "package_relative_path": "ras_commander/LLM_GUIDE.md",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/LLM_GUIDE.md"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/LoggingConfig.py",
+        "size_bytes": 4728,
+        "sha256": "b9876d187b6636af1d343f3863c9e63dcab4748d8b44067a17f38f477c6903e1",
+        "package_relative_path": "ras_commander/LoggingConfig.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/LoggingConfig.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBco.py",
+        "size_bytes": 13516,
+        "sha256": "52ad312434e05a48e2fc4054ba64c555e8e36064ce4b744942743593ac673049",
+        "package_relative_path": "ras_commander/RasBco.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBco.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBenefits.py",
+        "size_bytes": 65802,
+        "sha256": "4a1ba1d9b85d8c56aea53294fc8760a268e00a7f144c67e0b2747db3ac558eaa",
+        "package_relative_path": "ras_commander/RasBenefits.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBenefits.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBoundary.py",
+        "size_bytes": 55003,
+        "sha256": "c3f38587710e2afcd8c2145d46e41600e307265deff1c29d9f6620c2b1fca1bd",
+        "package_relative_path": "ras_commander/RasBoundary.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBoundary.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBreach.py",
+        "size_bytes": 67044,
+        "sha256": "1da0c71290e174d9767a5c3a1f5fc992bfe3abb05852d3c46023cd4bf93542a4",
+        "package_relative_path": "ras_commander/RasBreach.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBreach.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBreakout1D.py",
+        "size_bytes": 200950,
+        "sha256": "90c9a74286a64bae0fb56c31224f0906f35b99d4c697212b2cb7c1e582adef0d",
+        "package_relative_path": "ras_commander/RasBreakout1D.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBreakout1D.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasBreakout2D.py",
+        "size_bytes": 68050,
+        "sha256": "0dad15ae7495f410ba515b1353c4fbec1da3a5b5a8302fbdfdb939e80ed9d724",
+        "package_relative_path": "ras_commander/RasBreakout2D.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasBreakout2D.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasCalibrate.py",
+        "size_bytes": 77423,
+        "sha256": "b0de01112f8c7f0d7ac3892ae19e86bf75d4f052c8bb7216f29c1afc1f644f83",
+        "package_relative_path": "ras_commander/RasCalibrate.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCalibrate.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasCmdr.py",
+        "size_bytes": 335769,
+        "sha256": "4e37e07a355e310de0da6edb4c2b78d9d3a5b2d4b7788dc78aad643acb0bdde4",
+        "package_relative_path": "ras_commander/RasCmdr.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCmdr.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasControl.py",
+        "size_bytes": 183177,
+        "sha256": "634a2a6e5314275c3f54f98b43d0d953c3679e2785094706c6569c7af613851b",
+        "package_relative_path": "ras_commander/RasControl.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasControl.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasCrossSections.py",
+        "size_bytes": 28223,
+        "sha256": "7ac5804d4f7542ac81fc26f8e77ccb2081a30842354b43acbd2e0c66f8963aea",
+        "package_relative_path": "ras_commander/RasCrossSections.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCrossSections.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasCurrency.py",
+        "size_bytes": 20164,
+        "sha256": "a776a59c803fd48645e71b1c3cdc7a9caf62f3051f17702f3797e63c22f5f8a3",
+        "package_relative_path": "ras_commander/RasCurrency.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasCurrency.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasDialogWatchdog.py",
+        "size_bytes": 39910,
+        "sha256": "495a0183d17982bfe3730429ae2449c5ec7ab2e8b94db6492dc9f4f35cf92c39",
+        "package_relative_path": "ras_commander/RasDialogWatchdog.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasDialogWatchdog.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasDocker.py",
+        "size_bytes": 30234,
+        "sha256": "9499a6b3913336b06c12a48308921695e0831a0503831412f8b56386c71ce907",
+        "package_relative_path": "ras_commander/RasDocker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasDocker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasEncroachments.py",
+        "size_bytes": 30125,
+        "sha256": "27ba9e15799a9d3c12c27255b70d94049393fee6e62c30e21fdf3c09b463dee8",
+        "package_relative_path": "ras_commander/RasEncroachments.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasEncroachments.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasExamples.py",
+        "size_bytes": 40272,
+        "sha256": "22c76f36ac0dcbbcac015cab3ac27c5d007b5d6e0e19b23b217efc5ff472db64",
+        "package_relative_path": "ras_commander/RasExamples.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasExamples.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasFloodway.py",
+        "size_bytes": 52472,
+        "sha256": "488100d63cea837d880d614f1b1f5b0eef05176eb449ae5998dddab64054a35b",
+        "package_relative_path": "ras_commander/RasFloodway.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasFloodway.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasFlowOptimization.py",
+        "size_bytes": 54415,
+        "sha256": "cedc0d58f652eab31326e90644f859880f394b0c7a0a7eb869fb9c7ce349c6fd",
+        "package_relative_path": "ras_commander/RasFlowOptimization.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasFlowOptimization.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasGeo.py",
+        "size_bytes": 11301,
+        "sha256": "b2f6f0bcf97b42487f1e08525e9906ca29ece0c7ae60cb8fd372c22269a22918",
+        "package_relative_path": "ras_commander/RasGeo.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasGeo.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasGeometry.py",
+        "size_bytes": 19845,
+        "sha256": "1f1018ba34fa5fd12df899700a7da2e5bf4a392d96330816fbf88e7a698331ff",
+        "package_relative_path": "ras_commander/RasGeometry.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasGeometry.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasGeometryCompute.py",
+        "size_bytes": 71867,
+        "sha256": "b5760275bee534b6dfcc4fb7192b48dddeed645be2009eaf7703a993feb1ced9",
+        "package_relative_path": "ras_commander/RasGeometryCompute.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasGeometryCompute.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasGeometryUtils.py",
+        "size_bytes": 7515,
+        "sha256": "ed153bd80832e944785e6306a375e8829e46370e940b50da7e26b2e14b4c98d1",
+        "package_relative_path": "ras_commander/RasGeometryUtils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasGeometryUtils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasGuiAutomation.py",
+        "size_bytes": 4672,
+        "sha256": "d51165592d8b23e90fac756ea50cbefaaaa5eb7d0198a8eeea746ee078bc48af",
+        "package_relative_path": "ras_commander/RasGuiAutomation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasGuiAutomation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasHydroCompare.py",
+        "size_bytes": 7384,
+        "sha256": "173b5b223c9162fc0e95f4124e2dfee27b53d2a1c8ad73fa26b58bfe5b0e237a",
+        "package_relative_path": "ras_commander/RasHydroCompare.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasHydroCompare.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasMap.py",
+        "size_bytes": 263236,
+        "sha256": "5033a4792d65f5c039fa10eccb94f3afb777cb75b23c354156321ec15d7584f1",
+        "package_relative_path": "ras_commander/RasMap.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasMap.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasMapValidation.py",
+        "size_bytes": 25440,
+        "sha256": "c7e0bcaade1288d4c4b43c0c7753ce103eefd7bbc71534ccc1c19d255d2592f8",
+        "package_relative_path": "ras_commander/RasMapValidation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasMapValidation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasModPuls.py",
+        "size_bytes": 36698,
+        "sha256": "29d470f5f5a53bd5faeb5d535667433e7c867a7c856eb267f00c09ad02b30428",
+        "package_relative_path": "ras_commander/RasModPuls.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasModPuls.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasMonteCarlo.py",
+        "size_bytes": 124397,
+        "sha256": "ab0072eac67f2b141fa716a895d80a604174b4705994d714c7d493c502a3748d",
+        "package_relative_path": "ras_commander/RasMonteCarlo.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasMonteCarlo.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasNetworkConflation.py",
+        "size_bytes": 116023,
+        "sha256": "9589321d3288417b2b95b26b1c412a78f2651a130e42eedf90d2a9bddd505fae",
+        "package_relative_path": "ras_commander/RasNetworkConflation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasNetworkConflation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasPermutation.py",
+        "size_bytes": 38082,
+        "sha256": "671cc98a259e039c2f6489001c6ec61f5ef9a03b9a59bba191aefddcbfa5d0dd",
+        "package_relative_path": "ras_commander/RasPermutation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPermutation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasPlan.py",
+        "size_bytes": 213952,
+        "sha256": "3772ab14724990a03f3ad5ed906929127d796e124e5a10f116015ed616f758ee",
+        "package_relative_path": "ras_commander/RasPlan.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPlan.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasPreprocess.py",
+        "size_bytes": 42543,
+        "sha256": "ff1a361222ef394b824802fc79711573d39b8d06e2054ac6347f5f86c9c12914",
+        "package_relative_path": "ras_commander/RasPreprocess.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPreprocess.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasPrj.py",
+        "size_bytes": 138758,
+        "sha256": "b60347020bb01de8912ddb3be60050c594954383b0f5003c4c2a091ecd78df66",
+        "package_relative_path": "ras_commander/RasPrj.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasPrj.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasProcess.py",
+        "size_bytes": 248656,
+        "sha256": "6279687574eaeead68774a2b801d07b68d36aa47d9cc4b738d34fb196cf52a63",
+        "package_relative_path": "ras_commander/RasProcess.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasProcess.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasProject.py",
+        "size_bytes": 118171,
+        "sha256": "8c9d4c3320a0ff58028fc642165aeb1d875da765b885cc1b0b12ad5a13fe3273",
+        "package_relative_path": "ras_commander/RasProject.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasProject.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasScreenshot.py",
+        "size_bytes": 333,
+        "sha256": "73d04a88b4f9db2bdc6f03d2c34407ea0b704c1b1193d9f4c9a8c0a1c3f2f413",
+        "package_relative_path": "ras_commander/RasScreenshot.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasScreenshot.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasSteady.py",
+        "size_bytes": 42143,
+        "sha256": "e250d3307bb02a4a1373c381014dee60f28631b0d3e056d857f27435eefe6e9d",
+        "package_relative_path": "ras_commander/RasSteady.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasSteady.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasTcu.py",
+        "size_bytes": 28784,
+        "sha256": "f99b5625f84c82ddf4f3ee41bd8f1053aef32866e8e1224d9a53c2b8aea6a0c5",
+        "package_relative_path": "ras_commander/RasTcu.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasTcu.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasUnsteady.py",
+        "size_bytes": 515328,
+        "sha256": "4de7dc6fe305a0553321d36200344548571e1aad7fd350c079d2c9f6a887c6d1",
+        "package_relative_path": "ras_commander/RasUnsteady.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasUnsteady.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasUtils.py",
+        "size_bytes": 90445,
+        "sha256": "c28cc5b5cfca1bf8df81c3261bf9027cbaf2225b4600a1331861cecb6dc5bc66",
+        "package_relative_path": "ras_commander/RasUtils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasUtils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasValidation.py",
+        "size_bytes": 16580,
+        "sha256": "93033da27c0bf035307d6b19a0ed6e5f33c94ee21506760ab18797fb527a6f0c",
+        "package_relative_path": "ras_commander/RasValidation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasValidation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/RasterPerformance.py",
+        "size_bytes": 50211,
+        "sha256": "bee7aedc19c3133ed05331e4b0c2f7297e3668fbd50d332ccfb55f4bff1d637a",
+        "package_relative_path": "ras_commander/RasterPerformance.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/RasterPerformance.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/__init__.py",
+        "size_bytes": 25422,
+        "sha256": "648383e95ffe8810abb15826984dcc81b5e21a142371ba9bce77ae5b9fb17e88",
+        "package_relative_path": "ras_commander/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_container_compute.py",
+        "size_bytes": 30881,
+        "sha256": "693b6101c3b3ecf1a708ab9f2ba1d58972e69c25af5c5fc1fa8a3a6c365661f0",
+        "package_relative_path": "ras_commander/_container_compute.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_container_compute.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_container_process.py",
+        "size_bytes": 8880,
+        "sha256": "5e439c2b5e1cdfafdc8245f617e0abae2593bed82f764e78dc19ddfc4cea2970",
+        "package_relative_path": "ras_commander/_container_process.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_container_process.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_container_resume.py",
+        "size_bytes": 14392,
+        "sha256": "7574d1a4868c92a6574d9d87e5abafb344d59439e9a8223b30ba77b39c74cec2",
+        "package_relative_path": "ras_commander/_container_resume.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_container_resume.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_execution_types.py",
+        "size_bytes": 5744,
+        "sha256": "cb9ff3f6b22fdbf9d774e072931aef7588c208ae65f5fb75f13623218478c079",
+        "package_relative_path": "ras_commander/_execution_types.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_execution_types.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_gdal_runtime.py",
+        "size_bytes": 8738,
+        "sha256": "a8f5fdeb393104d7d6379c3b8adb781e52d0add85d890c75ff4741c6f4e74bbe",
+        "package_relative_path": "ras_commander/_gdal_runtime.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_gdal_runtime.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_geometry_association.py",
+        "size_bytes": 26642,
+        "sha256": "2427b60842e7388079a9149e356b77aa2ba94576e60c8d37606ba6fffa2379cb",
+        "package_relative_path": "ras_commander/_geometry_association.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_geometry_association.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_infiltration_override_native.py",
+        "size_bytes": 38781,
+        "sha256": "f8277dbe545615110a8e4cb68465f671c8a92dc815db815cf00ff1bd603cc1ae",
+        "package_relative_path": "ras_commander/_infiltration_override_native.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_infiltration_override_native.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_land_classification_helper.py",
+        "size_bytes": 76603,
+        "sha256": "6582a09c50508ad97594d807adedcd52d5f4460923a6d4949fc62bb35b1005f3",
+        "package_relative_path": "ras_commander/_land_classification_helper.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_land_classification_helper.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_land_classification_polygon_native.py",
+        "size_bytes": 31838,
+        "sha256": "aabfca72e7ad76afb711e55ad1aefec14e5c4bc87ff0bc6067ce0217cbe778dd",
+        "package_relative_path": "ras_commander/_land_classification_polygon_native.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_land_classification_polygon_native.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_landcover_native.py",
+        "size_bytes": 51763,
+        "sha256": "45aceaa9f4fe31dce08f9d7e884ca421c1e1db75a737c9b03c397a0f6a30b0b4",
+        "package_relative_path": "ras_commander/_landcover_native.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_landcover_native.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_legal_dialogs.py",
+        "size_bytes": 1319,
+        "sha256": "a71199b3062e012c61fde1175007bc4692929707f5871c10f6270a4a28bfc0af",
+        "package_relative_path": "ras_commander/_legal_dialogs.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_legal_dialogs.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_native_helper.py",
+        "size_bytes": 26908,
+        "sha256": "bffdcbe6c3cf487fda26eb4653a9a6abc42d392497af7848febb596477d233a5",
+        "package_relative_path": "ras_commander/_native_helper.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_native_helper.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_orphan_watchdog.py",
+        "size_bytes": 16845,
+        "sha256": "cd1a056bd8ebea271a0affb3e016eb23f1857735af47293210f0224f96541fb8",
+        "package_relative_path": "ras_commander/_orphan_watchdog.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_orphan_watchdog.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_process_inspection.py",
+        "size_bytes": 19615,
+        "sha256": "633b2dd4a6db384dc162a76effbb8b6176296e7009a268fff892878f8042de26",
+        "package_relative_path": "ras_commander/_process_inspection.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_process_inspection.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_rasmap_control_helper.py",
+        "size_bytes": 102489,
+        "sha256": "bccd262681b57137d349cb2613352b5c777b57ccc80a445df32f015606c8c38b",
+        "package_relative_path": "ras_commander/_rasmap_control_helper.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_rasmap_control_helper.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_rasmap_layer_helper.py",
+        "size_bytes": 23750,
+        "sha256": "1abf07afcf0418384c967481a4c3236cf9a2616a2e90d60970ec5603bcbc9101",
+        "package_relative_path": "ras_commander/_rasmap_layer_helper.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_rasmap_layer_helper.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_rasmap_schema.py",
+        "size_bytes": 3015,
+        "sha256": "8a30078c05e9813eeedc002e93d49bc4fac633cd75afa89d08c418899c499bcc",
+        "package_relative_path": "ras_commander/_rasmap_schema.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_rasmap_schema.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/_spatial_extent.py",
+        "size_bytes": 7421,
+        "sha256": "6d2fb66dc724b2a7895f9260cab3a4bfc800b58a40bc02716d457d26c5320a25",
+        "package_relative_path": "ras_commander/_spatial_extent.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/_spatial_extent.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/boundaries/__init__.py",
+        "size_bytes": 140,
+        "sha256": "f80f99f0c7134106d29cd5b05be274f0619989c683a5c17e86ffdc96b482fce9",
+        "package_relative_path": "ras_commander/boundaries/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/boundaries/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/boundaries/coastal_boundary.py",
+        "size_bytes": 33108,
+        "sha256": "f7c892151978ef46aa1e63375ba80fe3ca889291d937c39b5c224a8ba3ee876e",
+        "package_relative_path": "ras_commander/boundaries/coastal_boundary.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/boundaries/coastal_boundary.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/callbacks.py",
+        "size_bytes": 11086,
+        "sha256": "6618757491a0f87df61e002f4d967e859f861c29b9ac09dc182501ee9e5c93af",
+        "package_relative_path": "ras_commander/callbacks.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/callbacks.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/RasCheck.py",
+        "size_bytes": 16537,
+        "sha256": "fbdc75e2358a7519820ffd0b8de09b23f9f8a985bebfca2704357cf7e7b48b17",
+        "package_relative_path": "ras_commander/check/RasCheck.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/RasCheck.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/__init__.py",
+        "size_bytes": 3415,
+        "sha256": "12be67cf7de41425b9fd2069e2dca3fe58959021942dfbd651f48b3cf2fd6e55",
+        "package_relative_path": "ras_commander/check/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/_utils.py",
+        "size_bytes": 7955,
+        "sha256": "1f5b51086afd78d1b6c89a8ed2c994180270df8532bc245de4951ea6912fdfb5",
+        "package_relative_path": "ras_commander/check/_utils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/_utils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_floodways.py",
+        "size_bytes": 129854,
+        "sha256": "ea3b2122247b161b01e7096b7f2f3289513b897c8e10efc779d00f35e9826601",
+        "package_relative_path": "ras_commander/check/check_floodways.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_floodways.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_nt.py",
+        "size_bytes": 68071,
+        "sha256": "e40f6f84849739b8c5221a4b09a610de0a98df89405b038e07c0bf71a3c6e1ee",
+        "package_relative_path": "ras_commander/check/check_nt.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_nt.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_profiles.py",
+        "size_bytes": 20010,
+        "sha256": "d05986f6ce8f4b3b692016545e8dcc3a2be915c5bb616244c350efd9b9efecf8",
+        "package_relative_path": "ras_commander/check/check_profiles.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_profiles.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_structures.py",
+        "size_bytes": 152022,
+        "sha256": "ea82a8da46a485bf535e43ef42163a1946aa6d19897a173d265f0a4a9c795970",
+        "package_relative_path": "ras_commander/check/check_structures.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_structures.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_unsteady.py",
+        "size_bytes": 42640,
+        "sha256": "fd7a72b2222876be12ec3afeb5184f4beaf11d1e0fa05cafb8430ae3dbcd304f",
+        "package_relative_path": "ras_commander/check/check_unsteady.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_unsteady.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/check_xs.py",
+        "size_bytes": 101594,
+        "sha256": "7e320cfd96f3e29cfda90ad48a270844d96e6224ef90dab04435e29ceece9b5d",
+        "package_relative_path": "ras_commander/check/check_xs.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/check_xs.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/messages.py",
+        "size_bytes": 124147,
+        "sha256": "a24c1c3b4776c6cb8c03ef242f31b196b20d3313e4b4a0520fccb63cc19f052f",
+        "package_relative_path": "ras_commander/check/messages.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/messages.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/report.py",
+        "size_bytes": 22962,
+        "sha256": "8c53f81832042a367073fd458982400d1dc1c3321678fe9dc79c7a5c51636721",
+        "package_relative_path": "ras_commander/check/report.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/report.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/thresholds.py",
+        "size_bytes": 22477,
+        "sha256": "ea2894c7866c33f7432dad2e99ced2cde06b14c0c9255b1c8e21f7a26b175146",
+        "package_relative_path": "ras_commander/check/thresholds.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/thresholds.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/check/types.py",
+        "size_bytes": 4554,
+        "sha256": "a93287656493a0f8b7c168119aec5736c52c6ce5e85ba92adececc8dc459927d",
+        "package_relative_path": "ras_commander/check/types.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/check/types.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/compute.py",
+        "size_bytes": 1407,
+        "sha256": "af7304f7295809d4ec8d0c76fc706ba25597eb997b96f63086f34977ed367610",
+        "package_relative_path": "ras_commander/compute.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/compute.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dotnet/__init__.py",
+        "size_bytes": 1141,
+        "sha256": "c64753c3a7bb9b0b94c07a300c928fe01a304e309dd53d813129c7bdd850b3a3",
+        "package_relative_path": "ras_commander/dotnet/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dotnet/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dotnet/_profile_interop.py",
+        "size_bytes": 50781,
+        "sha256": "8b7d84e1fb42be475632a2d8843c57ac2904dbeb93bc7d446a40ca7460c3efd3",
+        "package_relative_path": "ras_commander/dotnet/_profile_interop.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dotnet/_profile_interop.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dotnet/clr_bootstrap.py",
+        "size_bytes": 5864,
+        "sha256": "ad25ed4eb88aee6b3f355f53dcf43a1ee59339e4c478dd7892495c3ac403ec4d",
+        "package_relative_path": "ras_commander/dotnet/clr_bootstrap.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dotnet/clr_bootstrap.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dotnet/velocity_interop.py",
+        "size_bytes": 167,
+        "sha256": "fefd2fed714dbf307eff3ffada94a03938c5f2639adba8aab2edaaba8e869a18",
+        "package_relative_path": "ras_commander/dotnet/velocity_interop.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dotnet/velocity_interop.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dss/RasDss.py",
+        "size_bytes": 138431,
+        "sha256": "5a5fe9e89eae16e9d65436db3c8489f90892a7448c1f8dca7911c2e82f1107a2",
+        "package_relative_path": "ras_commander/dss/RasDss.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dss/RasDss.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dss/__init__.py",
+        "size_bytes": 1860,
+        "sha256": "eddfe8711c78671230b80d278235cc6dfc6c9e20ccfe90ade396ba566e493027",
+        "package_relative_path": "ras_commander/dss/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dss/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/dss/_hec_monolith.py",
+        "size_bytes": 11412,
+        "sha256": "fd7262bb7deade57c3d6e96e2257dd5b670080c49267af2ad815869f67db8464",
+        "package_relative_path": "ras_commander/dss/_hec_monolith.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/dss/_hec_monolith.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/RasFixit.py",
+        "size_bytes": 48478,
+        "sha256": "0b5ce846671852d3ac3310dd8f19e6b69ce71864c06b8c8aca6a6e8313aae10f",
+        "package_relative_path": "ras_commander/fixit/RasFixit.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/RasFixit.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/__init__.py",
+        "size_bytes": 3932,
+        "sha256": "341e83b75d56147350cc05dea6a38f509ac3d51cbe5c5f154789e6c082309b40",
+        "package_relative_path": "ras_commander/fixit/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/log_parser.py",
+        "size_bytes": 9434,
+        "sha256": "7319298cfad1e6f65aeba1067cbac0d1c135c8325f8905a9b58f504e5420cc9c",
+        "package_relative_path": "ras_commander/fixit/log_parser.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/log_parser.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/obstructions.py",
+        "size_bytes": 9475,
+        "sha256": "de78dffbc296809f115481e4741eb1c654d3aae142c3e85de0dc0b92cab4c15f",
+        "package_relative_path": "ras_commander/fixit/obstructions.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/obstructions.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/results.py",
+        "size_bytes": 5758,
+        "sha256": "78fc2f2e5015c64fd421442932d5741a200c2022d25b86dc88c162463a57ce49",
+        "package_relative_path": "ras_commander/fixit/results.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/results.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/fixit/visualization.py",
+        "size_bytes": 4467,
+        "sha256": "1507912fb6ade6d9f31012c5612ff1f0b24cee40f2d776aa4a184904da5564aa",
+        "package_relative_path": "ras_commander/fixit/visualization.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/fixit/visualization.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomBcLines.py",
+        "size_bytes": 20768,
+        "sha256": "b3a9037349ac216da6811a3e0fd2a628bf9e4b76a5907965dcb212628e27dde2",
+        "package_relative_path": "ras_commander/geom/GeomBcLines.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomBcLines.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomBridge.py",
+        "size_bytes": 180951,
+        "sha256": "6ae389950813c8d3006db4b0b50f197ec954ba59a27f59e8b76279d698a43725",
+        "package_relative_path": "ras_commander/geom/GeomBridge.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomBridge.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomCrossSection.py",
+        "size_bytes": 240421,
+        "sha256": "9ed4736cdb28b5051b3529c8460168926113245d48fea5c40fd3d2486b2b4c97",
+        "package_relative_path": "ras_commander/geom/GeomCrossSection.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomCrossSection.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomCulvert.py",
+        "size_bytes": 61816,
+        "sha256": "597594dd8aeff7738a5fa6a7cce7a2ead41cdbc3fff8402a2c15b5dd58c8c8d8",
+        "package_relative_path": "ras_commander/geom/GeomCulvert.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomCulvert.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomCulvertGIS.py",
+        "size_bytes": 31434,
+        "sha256": "912c8507a7f4e29b5da1b6e52eec39932a0e65734b1c19f927104ac1643a8d7f",
+        "package_relative_path": "ras_commander/geom/GeomCulvertGIS.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomCulvertGIS.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomHtab.py",
+        "size_bytes": 25120,
+        "sha256": "f653cc40ad6b63f0f83f9fdfeb52f8f50267fb308ac6e808545963400251cc8e",
+        "package_relative_path": "ras_commander/geom/GeomHtab.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomHtab.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomHtabUtils.py",
+        "size_bytes": 33183,
+        "sha256": "bb3eae1136fae1f2399c857e1e24a4281b1d1998519bd2555d7aaa0aea4a29e3",
+        "package_relative_path": "ras_commander/geom/GeomHtabUtils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomHtabUtils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomInlineWeir.py",
+        "size_bytes": 21841,
+        "sha256": "3a041914f7d996c515a6bcbfd2f1e5b2fc3f3348a2a534babcd80fb6fe5141e6",
+        "package_relative_path": "ras_commander/geom/GeomInlineWeir.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomInlineWeir.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomLandCover.py",
+        "size_bytes": 44452,
+        "sha256": "89a7d23bf0d03160cf790345d1ca5322b10658df6faef49562663ad1358bd080",
+        "package_relative_path": "ras_commander/geom/GeomLandCover.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomLandCover.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomLateral.py",
+        "size_bytes": 106579,
+        "sha256": "06f48a98a3ef9988511f1bafef6d9afd8b778ebe3a8aca59d6ec53a23eeeac2a",
+        "package_relative_path": "ras_commander/geom/GeomLateral.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomLateral.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomMesh.py",
+        "size_bytes": 206967,
+        "sha256": "3cab62aa94168b4f35ed11b79eab0b624e60481a5deef709ee4e59c7d8f1f53e",
+        "package_relative_path": "ras_commander/geom/GeomMesh.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomMesh.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomMeshDataclasses.py",
+        "size_bytes": 3669,
+        "sha256": "6cce8825cf9044e089d5c12a7ab8f052bb0eadb079f768767214226be19c5961",
+        "package_relative_path": "ras_commander/geom/GeomMeshDataclasses.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomMeshDataclasses.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomMetadata.py",
+        "size_bytes": 19707,
+        "sha256": "07e763832a10cb13ea34b1e5e3fdebf29dec57dbc9ac2e4239d3754a5ec16669",
+        "package_relative_path": "ras_commander/geom/GeomMetadata.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomMetadata.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomParser.py",
+        "size_bytes": 46132,
+        "sha256": "c319f3c2d782328467dd6007801e70434dfbfd86629011efe78dc3e321845fb7",
+        "package_relative_path": "ras_commander/geom/GeomParser.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomParser.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomPipeNetwork.py",
+        "size_bytes": 14592,
+        "sha256": "46f69192fcd09459891daf3a8dcbd708c59c1cb1a09f52509316745246fb19a7",
+        "package_relative_path": "ras_commander/geom/GeomPipeNetwork.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomPipeNetwork.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomPreprocessor.py",
+        "size_bytes": 60060,
+        "sha256": "64c4100009ab95eb23e67542e96fe90b589e584e99bdbed88f89898e22df2f7e",
+        "package_relative_path": "ras_commander/geom/GeomPreprocessor.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomPreprocessor.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomProjection.py",
+        "size_bytes": 47876,
+        "sha256": "37e2144fc92261074c9b48362e719da9c26ed5d01ab93cae6b7e3708f7ab51be",
+        "package_relative_path": "ras_commander/geom/GeomProjection.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomProjection.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomReferenceFeatures.py",
+        "size_bytes": 54226,
+        "sha256": "1cccb1b144f286752ef2afe5cf96a20fb84ed807f4d5ddb4f175e8cfbd41e49d",
+        "package_relative_path": "ras_commander/geom/GeomReferenceFeatures.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomReferenceFeatures.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/GeomStorage.py",
+        "size_bytes": 84018,
+        "sha256": "11286ac8f4aebd6a15d5a1ac78ca43580b6e23f8b200231c9f02f2163fc368e2",
+        "package_relative_path": "ras_commander/geom/GeomStorage.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/GeomStorage.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/ManningsFromLandCover.py",
+        "size_bytes": 43980,
+        "sha256": "ae4326c897d010da90eae2ca121daaf450df6d4db24e1f04295b4a9e655ead26",
+        "package_relative_path": "ras_commander/geom/ManningsFromLandCover.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/ManningsFromLandCover.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/geom/__init__.py",
+        "size_bytes": 3741,
+        "sha256": "78a723325d41f6c7f4ffcc0197c7421522c0d4bc1051c7b689aecb84fefc8a3d",
+        "package_relative_path": "ras_commander/geom/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/geom/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/__init__.py",
+        "size_bytes": 2241,
+        "sha256": "b4d44845610892e574207727b7b0998f2cf1cacf5d326fba272a6d746dcb515f",
+        "package_relative_path": "ras_commander/gui/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/constants.py",
+        "size_bytes": 1480,
+        "sha256": "a74c3df30ab0a53ff748b04a19e3df2e3c403f5deabf4765b2a14defcafa0cfd",
+        "package_relative_path": "ras_commander/gui/constants.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/constants.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/hecras_elements.py",
+        "size_bytes": 19563,
+        "sha256": "6c8d7e14cdbf4567051ed31d62921cb6288fdc1b2214ccebe487bb56ab2cbdf9",
+        "package_relative_path": "ras_commander/gui/hecras_elements.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/hecras_elements.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/rasmapper_elements.py",
+        "size_bytes": 6394,
+        "sha256": "b233e8d92dbdb5e5c1add26e291e7674a0694005afee3dcd09c9f2a1089ed6d2",
+        "package_relative_path": "ras_commander/gui/rasmapper_elements.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/rasmapper_elements.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/screenshots.py",
+        "size_bytes": 19405,
+        "sha256": "ff48cf5f9da8726169e6125e31aff03424d51cf13be3f5eb209671fb6ece3c7f",
+        "package_relative_path": "ras_commander/gui/screenshots.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/screenshots.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/treeview_automation.py",
+        "size_bytes": 48280,
+        "sha256": "739455f9983f82b0d2fde08e765343f294ba93f1ddf2ff99a41dbef833e8d187",
+        "package_relative_path": "ras_commander/gui/treeview_automation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/treeview_automation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/win32_primitives.py",
+        "size_bytes": 14840,
+        "sha256": "03bdf55f093828ce45f831482b390795271389252718eb2b320021c1de417f58",
+        "package_relative_path": "ras_commander/gui/win32_primitives.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/win32_primitives.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflow_base.py",
+        "size_bytes": 5487,
+        "sha256": "5f3a1fe9afc9681c718ae8771ba2d7b3dd6485a6ff372ea66b2e0654adfcf51c",
+        "package_relative_path": "ras_commander/gui/workflow_base.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflow_base.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/__init__.py",
+        "size_bytes": 795,
+        "sha256": "f4c11bca1f3222cafcdd7195a76a8a1e5482b4ea105b114a7ce12ce93c6dadb2",
+        "package_relative_path": "ras_commander/gui/workflows/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/mesh_regeneration.py",
+        "size_bytes": 63418,
+        "sha256": "165fccea59d1db362b722c4ed91bd80393b97556765a51b579a3123bd084d05b",
+        "package_relative_path": "ras_commander/gui/workflows/mesh_regeneration.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/mesh_regeneration.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/open_compute.py",
+        "size_bytes": 10335,
+        "sha256": "2acef56d218a72b273991fc28d506e4dcfe7ebff9db60e7dadaa4be78dd2a9cf",
+        "package_relative_path": "ras_commander/gui/workflows/open_compute.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/open_compute.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/open_rasmapper.py",
+        "size_bytes": 5140,
+        "sha256": "ce1d30e4383093284443d26fcde152b9d62e46d7f2ee162bb17685ed560efd1c",
+        "package_relative_path": "ras_commander/gui/workflows/open_rasmapper.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/open_rasmapper.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/run_multiple_plans.py",
+        "size_bytes": 6060,
+        "sha256": "f18504058ea1f32d9590dc4884fd21b1cab97957a2572967f75eba442bf4abb4",
+        "package_relative_path": "ras_commander/gui/workflows/run_multiple_plans.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/run_multiple_plans.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/gui/workflows/xsec_update.py",
+        "size_bytes": 37426,
+        "sha256": "7b75fa5a978cf6b698cbde1ad7f66a5cf5a279424c7cca08fb4ab4c283de991a",
+        "package_relative_path": "ras_commander/gui/workflows/xsec_update.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/gui/workflows/xsec_update.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfBase.py",
+        "size_bytes": 31995,
+        "sha256": "10a0fc4a7f7869b714c3e75717b2c64c99f8dacbaa533d9435cf862e632abbd2",
+        "package_relative_path": "ras_commander/hdf/HdfBase.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfBase.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfBenefitAreas.py",
+        "size_bytes": 35238,
+        "sha256": "38b423918a1b2a357d29cfb84be948bf7db5cf0cb1d45621d22acc0b8a6a7f63",
+        "package_relative_path": "ras_commander/hdf/HdfBenefitAreas.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfBenefitAreas.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfBndry.py",
+        "size_bytes": 19995,
+        "sha256": "cb72aef621daaaa4d07fcdc09100a434863ae292294d7ce8fc5fc5aa676f35ab",
+        "package_relative_path": "ras_commander/hdf/HdfBndry.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfBndry.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfChannelCapacity.py",
+        "size_bytes": 51891,
+        "sha256": "a5e65cd72f89bc73b5e9e9f5831584e0482cd816ec4f4b4eb23d8a8d21b3042f",
+        "package_relative_path": "ras_commander/hdf/HdfChannelCapacity.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfChannelCapacity.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfFluvialPluvial.py",
+        "size_bytes": 22227,
+        "sha256": "2925dbb0c8b52ba29d8168a337483ac6e391eb084a45d23527a313d9ae121b01",
+        "package_relative_path": "ras_commander/hdf/HdfFluvialPluvial.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfFluvialPluvial.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfHydraulicTables.py",
+        "size_bytes": 21400,
+        "sha256": "22e74e0cd2f1b1ad5c443ddafccd4b7926f96348f589c26c9cfaf92dfacebde4",
+        "package_relative_path": "ras_commander/hdf/HdfHydraulicTables.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfHydraulicTables.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfInfiltration.py",
+        "size_bytes": 98940,
+        "sha256": "7f0e9bbee83d9f53070037855a3162a815ded871a714d51635b9a88d0f55cc89",
+        "package_relative_path": "ras_commander/hdf/HdfInfiltration.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfInfiltration.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfLandCover.py",
+        "size_bytes": 49282,
+        "sha256": "20cc3feae42e7f9f3af06305d60c0e3eb5c9f3366cfe6e9a838cbd6dae082166",
+        "package_relative_path": "ras_commander/hdf/HdfLandCover.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfLandCover.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfMesh.py",
+        "size_bytes": 130760,
+        "sha256": "fbf5621881e1691864a5c1055d0d33b91bcbd7b3447f4d2edc67771765c00954",
+        "package_relative_path": "ras_commander/hdf/HdfMesh.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfMesh.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfPipe.py",
+        "size_bytes": 42809,
+        "sha256": "44502e3320ceda1e9920eaa0e7d42907ba7b468679f74a8ba9640715981e92bc",
+        "package_relative_path": "ras_commander/hdf/HdfPipe.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfPipe.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfPlan.py",
+        "size_bytes": 28818,
+        "sha256": "45d18d9c5fdcac74fcd352505019fb6bf208f5d9b3e36e9c7c7b1acab75536f8",
+        "package_relative_path": "ras_commander/hdf/HdfPlan.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfPlan.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfPlot.py",
+        "size_bytes": 4139,
+        "sha256": "2844358c8bb6caef9b2738c59b1be426d6905ded51d7391d3542bd58941322d9",
+        "package_relative_path": "ras_commander/hdf/HdfPlot.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfPlot.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfProject.py",
+        "size_bytes": 27523,
+        "sha256": "5f86c7ebae9d6e8b4e93931996ed3bccb818d653afc38a652415fba533ae8267",
+        "package_relative_path": "ras_commander/hdf/HdfProject.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfProject.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfPump.py",
+        "size_bytes": 19263,
+        "sha256": "ac3df3269731d98a24750e511a8615feeee8171c3bbb10be21a81620e58da565",
+        "package_relative_path": "ras_commander/hdf/HdfPump.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfPump.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsAnalysis.py",
+        "size_bytes": 14700,
+        "sha256": "1984eeb70d9ff0d78f33d479a191663dccf057f168b2940ce2cb0755bcf2154f",
+        "package_relative_path": "ras_commander/hdf/HdfResultsAnalysis.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsAnalysis.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsBreach.py",
+        "size_bytes": 24699,
+        "sha256": "e40f94954bc96ca1952decf0cdbacec7b6eb776a7f0bc510f26e6cbc3340054a",
+        "package_relative_path": "ras_commander/hdf/HdfResultsBreach.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsBreach.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsMesh.py",
+        "size_bytes": 124405,
+        "sha256": "dbbd9c31abc66a22409dca17a460be8de877b8624664b1a4609a51afd4f041ca",
+        "package_relative_path": "ras_commander/hdf/HdfResultsMesh.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsMesh.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsPlan.py",
+        "size_bytes": 64726,
+        "sha256": "ba4237167f748630bee1e143e4ac3bad79e93464f03065b76db9c993cfd359d3",
+        "package_relative_path": "ras_commander/hdf/HdfResultsPlan.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsPlan.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsPlot.py",
+        "size_bytes": 8343,
+        "sha256": "04666ff49046cc3b91e5e0cbbe37ebdafdec053de73f79f7a5e37a1756366933",
+        "package_relative_path": "ras_commander/hdf/HdfResultsPlot.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsPlot.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsProducts.py",
+        "size_bytes": 55911,
+        "sha256": "a1fff22cf399fd9e3840dd1094f2a2ec0a69260a6612f2a13185deac6f65fb1f",
+        "package_relative_path": "ras_commander/hdf/HdfResultsProducts.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsProducts.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsQuery.py",
+        "size_bytes": 91944,
+        "sha256": "9fa22c680594842347e0a97f941ca5b546d532419aaf190340f73d54ef86caf7",
+        "package_relative_path": "ras_commander/hdf/HdfResultsQuery.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsQuery.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsSediment.py",
+        "size_bytes": 17698,
+        "sha256": "7cceb02afb164a572c1d4681abad145a36e0b4f65d77d02a96fbb113922f7fde",
+        "package_relative_path": "ras_commander/hdf/HdfResultsSediment.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsSediment.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfResultsXsec.py",
+        "size_bytes": 30923,
+        "sha256": "a42f790099d59c0e46d4ad0be99faae029233f9c013ac4b16f6c9a928ac46b0f",
+        "package_relative_path": "ras_commander/hdf/HdfResultsXsec.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfResultsXsec.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfStorageArea.py",
+        "size_bytes": 33374,
+        "sha256": "80b3bb3ec31d74acc2f62cd3b17a2b6d93aa5eb1bcfdca9fabeae0e013fabb28",
+        "package_relative_path": "ras_commander/hdf/HdfStorageArea.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfStorageArea.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfStruc.py",
+        "size_bytes": 34825,
+        "sha256": "d0dec64ec9f57a0497191a9db2ca6a478055ca567a885cccf449df687fbfcade",
+        "package_relative_path": "ras_commander/hdf/HdfStruc.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfStruc.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfStruc1D.py",
+        "size_bytes": 27554,
+        "sha256": "ee2123c856c1410b1363d9bff2f43196e2627f754627efc6271e8c3549cc358f",
+        "package_relative_path": "ras_commander/hdf/HdfStruc1D.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfStruc1D.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfUtils.py",
+        "size_bytes": 17864,
+        "sha256": "fd6e04a9ed62b8ad5253a3386f2e7d767c6ae8943e13b45d673456c40ae29251",
+        "package_relative_path": "ras_commander/hdf/HdfUtils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfUtils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/HdfXsec.py",
+        "size_bytes": 91823,
+        "sha256": "1b084debe6490646e815ec62bc8c163db0ded1dfeb51be7518e0285cb52a07cf",
+        "package_relative_path": "ras_commander/hdf/HdfXsec.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/HdfXsec.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/_HdfResultsProductRenderers.py",
+        "size_bytes": 29074,
+        "sha256": "8c1b390faa1cdc74b90109e660e8da70aba550eda923fcbd018c875446d1e466",
+        "package_relative_path": "ras_commander/hdf/_HdfResultsProductRenderers.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/_HdfResultsProductRenderers.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/hdf/__init__.py",
+        "size_bytes": 4941,
+        "sha256": "eadaf4c8987bbd635e6b2c7401faf3edaa464a3d48f8eca1623e1927898efd61",
+        "package_relative_path": "ras_commander/hdf/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/hdf/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/BuildRasMapperTerrainExportHelper.ps1",
+        "size_bytes": 4897,
+        "sha256": "abf3bc2c2401a6f6f9d89c7c9a2951fc292df0567d3088a08fb060d7e1fa72cb",
+        "package_relative_path": "ras_commander/native/BuildRasMapperTerrainExportHelper.ps1",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/BuildRasMapperTerrainExportHelper.ps1"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/InvokeRas5GeometryLandCover.ps1",
+        "size_bytes": 1704,
+        "sha256": "9fbcb6c30dee9dab21633188c48a454416308f916281423aae2da2def58b4e22",
+        "package_relative_path": "ras_commander/native/InvokeRas5GeometryLandCover.ps1",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/InvokeRas5GeometryLandCover.ps1"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/InvokeRas5LandCover.ps1",
+        "size_bytes": 5100,
+        "sha256": "db4c91d5f9e2ac17725caaa6dd5f29537df816e9165d7c24de569c13cdb4a0d7",
+        "package_relative_path": "ras_commander/native/InvokeRas5LandCover.ps1",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/InvokeRas5LandCover.ps1"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/RasMapperTerrainExportHelper.cs",
+        "size_bytes": 14015,
+        "sha256": "07773e244f2f89620542c1e0da933484c252deb6e58c2516d7bd2442fa7e4513",
+        "package_relative_path": "ras_commander/native/RasMapperTerrainExportHelper.cs",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/RasMapperTerrainExportHelper.cs"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/RasMapperTerrainExportHelper.exe",
+        "size_bytes": 15360,
+        "sha256": "7e9772549b64e17f09751797b76e635d7490618d8390a110570a94240ee21f9c",
+        "package_relative_path": "ras_commander/native/RasMapperTerrainExportHelper.exe",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/RasMapperTerrainExportHelper.exe"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/RasStoreMapHelper.cs",
+        "size_bytes": 30698,
+        "sha256": "75ebb7c1512032a3446889e2ad558ce83104eafafcb033c1781f55c13eecea16",
+        "package_relative_path": "ras_commander/native/RasStoreMapHelper.cs",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/RasStoreMapHelper.cs"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/RasStoreMapHelper.exe",
+        "size_bytes": 20480,
+        "sha256": "d1a79dadb9b42139f8cd8ba18084136e561685faf3ab067f83a1ce50b2761f0b",
+        "package_relative_path": "ras_commander/native/RasStoreMapHelper.exe",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/RasStoreMapHelper.exe"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/__init__.py",
+        "size_bytes": 61,
+        "sha256": "4917a0a17689fd25b305e33d8481717101607e0d9f8b3c0181c9646542b336da",
+        "package_relative_path": "ras_commander/native/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/native/terrain_export_host.py",
+        "size_bytes": 56838,
+        "sha256": "5f3942b358dba75bdd83ab9c6b63622c69874e42a66abc29635e07cf98ca89fa",
+        "package_relative_path": "ras_commander/native/terrain_export_host.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/native/terrain_export_host.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/AbmHyetographGrid.py",
+        "size_bytes": 60413,
+        "sha256": "ab665d62819e49a7203547962852d5e141e9c755074d0d113785cdf7ac8cdb7f",
+        "package_relative_path": "ras_commander/precip/AbmHyetographGrid.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/AbmHyetographGrid.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/Atlas14Grid.py",
+        "size_bytes": 22664,
+        "sha256": "4b77d1b85e88caea2641f5cbbb8f1de1401ac82e5c6393f17e695806a78c74d2",
+        "package_relative_path": "ras_commander/precip/Atlas14Grid.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/Atlas14Grid.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/Atlas14Variance.py",
+        "size_bytes": 25599,
+        "sha256": "0fd1ae2f5856b45fee65ac1b6108cde2197c927a4803360fc7389adc9d54b01d",
+        "package_relative_path": "ras_commander/precip/Atlas14Variance.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/Atlas14Variance.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/PrecipAorc.py",
+        "size_bytes": 40928,
+        "sha256": "76fa91781b9474d41be3673c8c96cf0b5d0a326b43907bb3d5b93d5f7166ae53",
+        "package_relative_path": "ras_commander/precip/PrecipAorc.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/PrecipAorc.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/PrecipHrrr.py",
+        "size_bytes": 34050,
+        "sha256": "f29d6e6aab967ba60603323b6cfd7db8e042c53b66a6d49daf4cfa5d44362847",
+        "package_relative_path": "ras_commander/precip/PrecipHrrr.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/PrecipHrrr.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/PrecipMrms.py",
+        "size_bytes": 100403,
+        "sha256": "887817e80f8dd7a25092e65521a383d57de220f2939eff701d32b11c40e48c66",
+        "package_relative_path": "ras_commander/precip/PrecipMrms.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/PrecipMrms.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/StormGenerator.py",
+        "size_bytes": 45631,
+        "sha256": "f052f8f4cbda47ce328d2c5189c3e67dfff9095f77d281f94a56bbb1b41a593a",
+        "package_relative_path": "ras_commander/precip/StormGenerator.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/StormGenerator.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/VortexCli.py",
+        "size_bytes": 34451,
+        "sha256": "adcb07ef92575a63e64ff3c5ea974c75571283ab3428e7e25fd5e3bf874dac0c",
+        "package_relative_path": "ras_commander/precip/VortexCli.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/VortexCli.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/precip/__init__.py",
+        "size_bytes": 11048,
+        "sha256": "a21e17b4e4d04bbbf867a705f2af81f913c9b3ed142f10742a672776048aa01f",
+        "package_relative_path": "ras_commander/precip/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/precip/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/AwsEc2Worker.py",
+        "size_bytes": 3742,
+        "sha256": "042714dcd0b1f79bce7e5ba7d63096e5c5879bd8cb75969b6221c89b7984b62f",
+        "package_relative_path": "ras_commander/remote/AwsEc2Worker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/AwsEc2Worker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/AzureFrWorker.py",
+        "size_bytes": 4314,
+        "sha256": "2db0acd0fdfcc7451ab1868fea8480c405d6f607db41f698b81ebd98a75024e1",
+        "package_relative_path": "ras_commander/remote/AzureFrWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/AzureFrWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/DockerSshStaging.py",
+        "size_bytes": 14696,
+        "sha256": "6df47ee92f12f3ff485d9b4800ee9cef08e2533adcc63f7262b95627e622f7b3",
+        "package_relative_path": "ras_commander/remote/DockerSshStaging.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/DockerSshStaging.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/DockerWorker.py",
+        "size_bytes": 49673,
+        "sha256": "bd372837756ebe238976a5ffb77298c842a8b762845e78c01d063b3efb37afa6",
+        "package_relative_path": "ras_commander/remote/DockerWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/DockerWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/Execution.py",
+        "size_bytes": 22459,
+        "sha256": "2e8a7dc9aa5fcb19118b4e5ff851b57031b68e5274b0f40e4318c5d93fdddced",
+        "package_relative_path": "ras_commander/remote/Execution.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/Execution.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/LocalWorker.py",
+        "size_bytes": 13952,
+        "sha256": "687d4a89acfcd8a2f29d6af2fc3a77ba720fb8ee61d4dc31160c2236b6d018f5",
+        "package_relative_path": "ras_commander/remote/LocalWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/LocalWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/PsexecWorker.py",
+        "size_bytes": 33285,
+        "sha256": "9ffe5d01c2ef2ced386b4969988afca04c2b58f954fc8d03f496524f556e49df",
+        "package_relative_path": "ras_commander/remote/PsexecWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/PsexecWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/RasWorker.py",
+        "size_bytes": 12877,
+        "sha256": "cc0bb70f705b780dcfd1b734749b46102b6fe1fc62da21d052a197f91ffed7d2",
+        "package_relative_path": "ras_commander/remote/RasWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/RasWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/SlurmWorker.py",
+        "size_bytes": 2751,
+        "sha256": "40ce98191670cf8fefcd9205f11ef78700ffd4206d2ce600c2f8ad7cd60ad34b",
+        "package_relative_path": "ras_commander/remote/SlurmWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/SlurmWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/SshWorker.py",
+        "size_bytes": 3072,
+        "sha256": "30b46746f5de0a19c9efa137a2841bd7432b0f99b3787ddb7babcb445d013f6d",
+        "package_relative_path": "ras_commander/remote/SshWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/SshWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/Utils.py",
+        "size_bytes": 12592,
+        "sha256": "2b25df859372410fc44c637fb7d6673f5b789ea642d5ecf710c87a2ce5235dd0",
+        "package_relative_path": "ras_commander/remote/Utils.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/Utils.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/WinrmWorker.py",
+        "size_bytes": 3502,
+        "sha256": "888b3088da4ea98b4b28fa175f7c6bbd8b0cd7f27b852fd781e98d612b2dc83e",
+        "package_relative_path": "ras_commander/remote/WinrmWorker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/WinrmWorker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/__init__.py",
+        "size_bytes": 2623,
+        "sha256": "d159d7d33bdd27c9dc3676830087f009b8bfb7ebd3091ca511a18a7fd1a962e6",
+        "package_relative_path": "ras_commander/remote/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/docker/__init__.py",
+        "size_bytes": 46,
+        "sha256": "3fbfc6e6187fd0ff0711d6a96d79d02e3d7b0c2c4b8b1c8d8a0effac30798cf9",
+        "package_relative_path": "ras_commander/remote/docker/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/docker/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/remote/docker/setup_docker.py",
+        "size_bytes": 16752,
+        "sha256": "990e5b38073fb4c33a19b0baae2f0eea59288a27ecbc142d077ccb9b28403454",
+        "package_relative_path": "ras_commander/remote/docker/setup_docker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/remote/docker/setup_docker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/__init__.py",
+        "size_bytes": 50,
+        "sha256": "79ba7a9ab382e3754e21d7fa768892f77a67e4fe2ff6c61e7cd734e6b927f890",
+        "package_relative_path": "ras_commander/resources/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/culvert_taxonomy.json",
+        "size_bytes": 47830,
+        "sha256": "78aa40318f758895f6bbb2d87df0d43eb2875d45e5757b867bb96eb6dcfbb8c0",
+        "package_relative_path": "ras_commander/resources/culvert_taxonomy.json",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/culvert_taxonomy.json"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/land_classification/__init__.py",
+        "size_bytes": 64,
+        "sha256": "a19382411302fe204f10f067e83d9609ffabef39593cdb5807b1dd876b4c5e97",
+        "package_relative_path": "ras_commander/resources/land_classification/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/land_classification/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_6.6/EPSG_5070.prj",
+        "size_bytes": 461,
+        "sha256": "2de5707c6e947d39e76b5fe4feaae55c7f4979850cb8ee5019c460738085bdf0",
+        "package_relative_path": "ras_commander/resources/templates/RAS_6.6/EPSG_5070.prj",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_6.6/EPSG_5070.prj"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01",
+        "size_bytes": 315,
+        "sha256": "607b0fb7eb35147ed1a27435f2fa7d7dc0aa056db5c7d880eed0d5a8375acf0c",
+        "package_relative_path": "ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01.hdf",
+        "size_bytes": 9200,
+        "sha256": "7af1aade5ee6144aba8dcd6117e437fac43b0ca5c7458b026d7831d712d5c27a",
+        "package_relative_path": "ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01.hdf",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_6.6/TEMPLATE.g01.hdf"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_6.6/TEMPLATE.prj",
+        "size_bytes": 497,
+        "sha256": "8bbcd391186779b08ff70497cd95865e64600e417b4c4746a51dc076d2084701",
+        "package_relative_path": "ras_commander/resources/templates/RAS_6.6/TEMPLATE.prj",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_6.6/TEMPLATE.prj"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_6.6/TEMPLATE.rasmap",
+        "size_bytes": 10569,
+        "sha256": "aee5764149f7a513cdcca9a1b50e5af5f0a60621b93ffe70224f83f4cc917d7b",
+        "package_relative_path": "ras_commander/resources/templates/RAS_6.6/TEMPLATE.rasmap",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_6.6/TEMPLATE.rasmap"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_7.0/EPSG_5070.prj",
+        "size_bytes": 461,
+        "sha256": "2de5707c6e947d39e76b5fe4feaae55c7f4979850cb8ee5019c460738085bdf0",
+        "package_relative_path": "ras_commander/resources/templates/RAS_7.0/EPSG_5070.prj",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_7.0/EPSG_5070.prj"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01",
+        "size_bytes": 315,
+        "sha256": "9f2ff14d07043db8cb1ca676d93931add02c522139a8c261a9d90f0afd8400f0",
+        "package_relative_path": "ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01.hdf",
+        "size_bytes": 9200,
+        "sha256": "2aec8c053cb00e8d983667bbf1bcd1fdf195ba2164b291a72c4d9b79bddc7f1a",
+        "package_relative_path": "ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01.hdf",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_7.0/TEMPLATE.g01.hdf"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_7.0/TEMPLATE.prj",
+        "size_bytes": 502,
+        "sha256": "cb0b0dce598b8120911eeee01139ecd4766aa260d9c19b8f63c96ac217824c6a",
+        "package_relative_path": "ras_commander/resources/templates/RAS_7.0/TEMPLATE.prj",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_7.0/TEMPLATE.prj"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/RAS_7.0/TEMPLATE.rasmap",
+        "size_bytes": 11807,
+        "sha256": "1d996e025c469b501718adb33b6b7df944e2891b7666e440ea6c5598e033fb20",
+        "package_relative_path": "ras_commander/resources/templates/RAS_7.0/TEMPLATE.rasmap",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/RAS_7.0/TEMPLATE.rasmap"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/resources/templates/__init__.py",
+        "size_bytes": 99,
+        "sha256": "93bf6651a3520be4fcb12a58585904a4a6ccf3bb5ec93b34352bb72679c8fb37",
+        "package_relative_path": "ras_commander/resources/templates/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/resources/templates/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/results/ResultsParser.py",
+        "size_bytes": 16247,
+        "sha256": "37f43d293e401f7646e1b57820758e8f40ab9d1cdea746eadf36f4d84ea8485d",
+        "package_relative_path": "ras_commander/results/ResultsParser.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/results/ResultsParser.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/results/ResultsSummary.py",
+        "size_bytes": 19589,
+        "sha256": "aa6d74ff0a4c8b09570127828c688370ce8eae02c7a517ccb59ebfc87e28863e",
+        "package_relative_path": "ras_commander/results/ResultsSummary.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/results/ResultsSummary.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/results/__init__.py",
+        "size_bytes": 292,
+        "sha256": "fb336119a765a7e22edbf9bc5f8a5b14a953c95ba85107cb5e6e2d4647d10d65",
+        "package_relative_path": "ras_commander/results/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/results/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/schemas.py",
+        "size_bytes": 96782,
+        "sha256": "efa061903f811c854f0cb1ad8b8d4d0b242af791c4684e1c02e4fe74d7ca8d13",
+        "package_relative_path": "ras_commander/schemas.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/schemas.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/__init__.py",
+        "size_bytes": 1021,
+        "sha256": "4b65adc8f9046d359d45cb6e9bd7414e531956b16474d60818c1a7c68f76330a",
+        "package_relative_path": "ras_commander/sources/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/base.py",
+        "size_bytes": 3319,
+        "sha256": "158f4807ab1ff66d343d6ee372df105afaf672b3e2902770ca780484190443d2",
+        "package_relative_path": "ras_commander/sources/base.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/base.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/catalog.py",
+        "size_bytes": 8057,
+        "sha256": "ba71ffbd034c687e0f7caf36651ee28e3b5d518b2c06e991e94206faf479072f",
+        "package_relative_path": "ras_commander/sources/catalog.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/catalog.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/county/__init__.py",
+        "size_bytes": 118,
+        "sha256": "e5c153fd0b48ebe8376f73741088c24618a3508580cbe800b416e425a5828d8d",
+        "package_relative_path": "ras_commander/sources/county/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/county/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/county/m3_model.py",
+        "size_bytes": 24783,
+        "sha256": "a902768aa6241b4338a426a67a29a5f0a5ef014a17fab6f9c59be69ac7d0b33b",
+        "package_relative_path": "ras_commander/sources/county/m3_model.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/county/m3_model.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/__init__.py",
+        "size_bytes": 1093,
+        "sha256": "324c01690d80982518490f53287b949e62b9ce2e0555e5b42aa79b8e0ae6c57a",
+        "package_relative_path": "ras_commander/sources/federal/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/ebfe_models.py",
+        "size_bytes": 347157,
+        "sha256": "948d81855a8d77fdc4ab1f0d8225e7a820d2e615e77a01c5c61c79c421960788",
+        "package_relative_path": "ras_commander/sources/federal/ebfe_models.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/ebfe_models.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/noaa_ras2fim.py",
+        "size_bytes": 6728,
+        "sha256": "8a80ac9e40927efb303dc7a5cdd03f7151089dc64d7c235c6aa363f50d7a8ba7",
+        "package_relative_path": "ras_commander/sources/federal/noaa_ras2fim.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/noaa_ras2fim.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/sciencebase_legacy_worker.py",
+        "size_bytes": 1432,
+        "sha256": "6fbd5d59d285d4cb037d469495e4d7e9c3911e119f8be98a7189574da1a5bc6e",
+        "package_relative_path": "ras_commander/sources/federal/sciencebase_legacy_worker.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/sciencebase_legacy_worker.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/sciencebase_validation.py",
+        "size_bytes": 33822,
+        "sha256": "f00fbb436ec6f78a47e10cc85e7960e4a5b2238882b4ea15a0f9dca56238335a",
+        "package_relative_path": "ras_commander/sources/federal/sciencebase_validation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/sciencebase_validation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/federal/usgs_sciencebase.py",
+        "size_bytes": 117892,
+        "sha256": "5a1147c80f9d7def15e2e8ca10cce0f90f724da953327b87ed133a49dc1bf80e",
+        "package_relative_path": "ras_commander/sources/federal/usgs_sciencebase.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/federal/usgs_sciencebase.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/state/__init__.py",
+        "size_bytes": 72,
+        "sha256": "3b5a286aedc979b9869a8b3371d034c18cfbcc1e50b49d6c8870f3fdf0d1af2f",
+        "package_relative_path": "ras_commander/sources/state/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/state/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/state/co_champ.py",
+        "size_bytes": 12202,
+        "sha256": "60e851998f2db9b77fa87c348625a01a7aa5efb2269b69f8902f5b16323ddf55",
+        "package_relative_path": "ras_commander/sources/state/co_champ.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/state/co_champ.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/state/in_dnr.py",
+        "size_bytes": 29371,
+        "sha256": "a61796d9e7dfaa1f5a3a530b0784210a3170e9a9517fb003aec1d4234554f8c4",
+        "package_relative_path": "ras_commander/sources/state/in_dnr.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/state/in_dnr.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/sources/state/mn_dnr.py",
+        "size_bytes": 23473,
+        "sha256": "760cba306b34060b98a0c27b1cd35d4696e8250d92105093f620f604909b2b84",
+        "package_relative_path": "ras_commander/sources/state/mn_dnr.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/sources/state/mn_dnr.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/terrain/RasTerrain.py",
+        "size_bytes": 105977,
+        "sha256": "0ac70de0bd3f760f108c49053b20a0552c2a9d25c34080d3ff623a5356722f25",
+        "package_relative_path": "ras_commander/terrain/RasTerrain.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/terrain/RasTerrain.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/terrain/RasTerrainMod.py",
+        "size_bytes": 31812,
+        "sha256": "5a1ee81c81ebface3d0d465c0791f21104e291b72762ff0f86957bb577f40171",
+        "package_relative_path": "ras_commander/terrain/RasTerrainMod.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/terrain/RasTerrainMod.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/terrain/RasTerrainModWriter.py",
+        "size_bytes": 90728,
+        "sha256": "8e6018e7bb3cf20e4f9e96dc581c1d0c58b1fbbdd9505d0cec16ed5f27f9a0ac",
+        "package_relative_path": "ras_commander/terrain/RasTerrainModWriter.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/terrain/RasTerrainModWriter.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/terrain/Usgs3depAws.py",
+        "size_bytes": 43551,
+        "sha256": "f44c78c6aa212d349fc545e21c1a2ab50668f03a0c4ada12f5b87cdb1966f55a",
+        "package_relative_path": "ras_commander/terrain/Usgs3depAws.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/terrain/Usgs3depAws.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/terrain/__init__.py",
+        "size_bytes": 3943,
+        "sha256": "a6bbf257e093003e828c06e2b8775b1c2c4c013530fad01619b979c22ef6f41c",
+        "package_relative_path": "ras_commander/terrain/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/terrain/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/__init__.py",
+        "size_bytes": 16355,
+        "sha256": "f5d18a5b0698dc030ad6d92c1c83f925dd3bd8e8e5a7b98f35b55acbdb7f142f",
+        "package_relative_path": "ras_commander/usgs/__init__.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/__init__.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/boundary_generation.py",
+        "size_bytes": 16350,
+        "sha256": "70aba6165b606c5a1dbe925593b8d6fae5578a9ccd677b6558e2fece931b2047",
+        "package_relative_path": "ras_commander/usgs/boundary_generation.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/boundary_generation.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/catalog.py",
+        "size_bytes": 49057,
+        "sha256": "f0c51f56d15f7221ed628a2eab883322bf8f6ed38ebffb0e0cd41bf94d0873fa",
+        "package_relative_path": "ras_commander/usgs/catalog.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/catalog.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/config.py",
+        "size_bytes": 21061,
+        "sha256": "cfc05e7cb6ccf52192787deb96ebf86043677a5733b21671eb73f07e36b3a427",
+        "package_relative_path": "ras_commander/usgs/config.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/config.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/core.py",
+        "size_bytes": 24680,
+        "sha256": "d74586795114b4acacfe088f906c76b6d210620da8581a8b9fe1c5d0ecb83d1a",
+        "package_relative_path": "ras_commander/usgs/core.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/core.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/file_io.py",
+        "size_bytes": 12997,
+        "sha256": "c382c8154832849e6b6e834aba0d0d8967237548f4ad12c9a78e6528b73a4ce7",
+        "package_relative_path": "ras_commander/usgs/file_io.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/file_io.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/gauge_matching.py",
+        "size_bytes": 20145,
+        "sha256": "84eec48acb30f2197dd7984e7c27433b85c69aa4ee81aa1dcb47a73156ede8a6",
+        "package_relative_path": "ras_commander/usgs/gauge_matching.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/gauge_matching.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/initial_conditions.py",
+        "size_bytes": 29484,
+        "sha256": "6c2843eed0d8578dbd676caa965717a876b185b5a9ecdb52bc9d6db8833d5b8f",
+        "package_relative_path": "ras_commander/usgs/initial_conditions.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/initial_conditions.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/metrics.py",
+        "size_bytes": 90434,
+        "sha256": "a878cbaf93feebb0b195596b9693b99ead561504dd07c0411b98378e09bdf341",
+        "package_relative_path": "ras_commander/usgs/metrics.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/metrics.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/rate_limiter.py",
+        "size_bytes": 16835,
+        "sha256": "a6ae0630db8ce068899674ae0cbac2cd8afdac133dcecde72a17c8a787f46c9c",
+        "package_relative_path": "ras_commander/usgs/rate_limiter.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/rate_limiter.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/real_time.py",
+        "size_bytes": 35811,
+        "sha256": "adc8782c8c67ee61a2b696772433656723cc17a8c04ea23391b04a4be73e8b50",
+        "package_relative_path": "ras_commander/usgs/real_time.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/real_time.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/spatial.py",
+        "size_bytes": 25739,
+        "sha256": "ff843cbe466eb071172a3e4cce452751cffa75c069a46180e35cb948b52cf1ad",
+        "package_relative_path": "ras_commander/usgs/spatial.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/spatial.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/study.py",
+        "size_bytes": 71275,
+        "sha256": "8639732d78ff7500a76999ee87ce8c55f66b965ee04b0db301307369af5c75c9",
+        "package_relative_path": "ras_commander/usgs/study.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/study.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/time_series.py",
+        "size_bytes": 25275,
+        "sha256": "3272b1e8e3194074dbadcc3304a9b898ca4b5497363491169fd75c4e9c92208d",
+        "package_relative_path": "ras_commander/usgs/time_series.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/time_series.py"
+      },
+      {
+        "path": "/usr/local/lib/python3.13/site-packages/ras_commander/usgs/visualization.py",
+        "size_bytes": 27092,
+        "sha256": "15cadcd1adb949ea26242a053d76becaf418c06ad1c191f8d7bfbaba8220fb4b",
+        "package_relative_path": "ras_commander/usgs/visualization.py",
+        "matches_embedded_source_bytes": true,
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander/usgs/visualization.py"
+      }
+    ],
+    "embedded_build_files": [
+      {
+        "path": "/opt/ras-commander-source/setup.py",
+        "size_bytes": 8125,
+        "sha256": "b5c2c5193ff8afc232429d80695e45b79ae22ab0df4b77fa2b71a5e0e038ab4a",
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/setup.py"
+      },
+      {
+        "path": "/opt/ras-commander-source/pyproject.toml",
+        "size_bytes": 980,
+        "sha256": "a0740bccd8134aaca1632c01be15872b1984a37880ed0f54a0febbfeb4b4c33f",
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/pyproject.toml"
+      },
+      {
+        "path": "/opt/ras-commander-source/README.md",
+        "size_bytes": 39875,
+        "sha256": "1dee1f42683000d81dd3a64a1e211d66eafa7fc4fcac9cfff4d597f7493ffed5",
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/README.md"
+      },
+      {
+        "path": "/opt/ras-commander-source/LICENSE",
+        "size_bytes": 1083,
+        "sha256": "53c8454039ba30602a86dd737124943b4eb352fb972d31763fd86205a7c40b3d",
+        "source_url": "https://github.com/gpt-cmdr/ras-commander/blob/604704d440c49a39d6f6e8bae262e2233d895dd0/LICENSE"
+      }
+    ],
+    "source_commit": "604704d440c49a39d6f6e8bae262e2233d895dd0",
+    "source_url": "https://github.com/gpt-cmdr/ras-commander/tree/604704d440c49a39d6f6e8bae262e2233d895dd0/ras_commander",
+    "distribution_version": "0.99.2",
+    "installed_package_file_count": 248
+  },
+  "images": [
+    {
+      "hec_ras_version": "6.5",
+      "candidate_tag": "rascommander/hec-ras-linux-unsteady_6.5:cpu-604704d",
+      "publication_status": "published_and_verified",
+      "published_repository_digest": "rascommander/hec-ras-linux-unsteady_6.5@sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8",
+      "local_image_store_id": "sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8",
+      "archived_config_digest": "sha256:568b0a8f2854baf2ba2159e83eb4b6489e069bab996153acb3f8aa63cf39467e",
+      "identity_note": "This build daemon uses a containerd image store. Its local image/index ID differs from the archived image Config digest; Config and RootFS identify the same filesystem across image stores.",
+      "platform": "linux/amd64",
+      "rootfs": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:411a86676185cb54d695a805b238194a64e9b77e0c723f3802fbb87d333ea0b3",
+          "sha256:ac03b9b8028ef885548e0abeafdd0c0c548a6821ba7463e55a8505e985bb81f4",
+          "sha256:6b1273b0d0edb3eeba426ec54c7409396d83b82aaee569e49b1000e392ea292b",
+          "sha256:748b8823d6d330abbbd313c17773ac291f00c257bc2a78467bb8d0a22c010360",
+          "sha256:6f6f286e57fa8096200a15527745b2028665b0f626bc2cae58ded5a42a4650d0",
+          "sha256:edb8915830e48ca4070fcc548015457947bc976d31d9060bea8bb5f3baeb216f",
+          "sha256:099a4ca3f2f1b7107b8c533da3f27cc69417cc3b729083054e69145808c12cd4",
+          "sha256:dad9976b1ba19e83db9174de5225202dfc667a72b055dcc36a535e9da22028de",
+          "sha256:f6f847b8e14b039463e9182861071d1e6d0eb1b2d4e6888f3ced1fe6976cb810",
+          "sha256:c0bf5e917dfe6e967f2ef73fed017c3eaffd42aec59ce995c0977ce5259594aa",
+          "sha256:d5a31fbdf7c38c3e1f5201d880e18a2b8287ffaf608a9825354d764968447760",
+          "sha256:925bdc59cfeb78ec7452b65c6b9d91b4fe238bae28336598b5a5545f473441e1",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "default_user": "rasworker",
+      "entrypoint": [
+        "/usr/bin/tini",
+        "--",
+        "python",
+        "-m",
+        "ras_commander._container_compute"
+      ],
+      "default_command": [
+        "compute",
+        "--help"
+      ],
+      "runtime_manifest": {
+        "path": "/opt/hecras-runtime/runtime.json",
+        "size_bytes": 5240,
+        "sha256": "1c91852942364655ae63e0c665c1403ce11129ae0cffff852c22e2d5d0e3059f",
+        "hec_ras_version": "6.5",
+        "schema": "ras-commander-native-runtime/v1",
+        "declared_artifact_count": 29,
+        "native": {
+          "engine_directory": "engine"
+        }
+      },
+      "native_runtime_files": [
+        {
+          "path": "/opt/hecras-runtime/engine/RasUnsteady",
+          "size_bytes": 70856456,
+          "sha256": "018ebbe788b15c7e5fd5829ff23580d47a7df09c7ace74b4a8afa9f2e0943e04",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcore.so.5",
+          "size_bytes": 1395584,
+          "sha256": "f95bc3d2f0a38f1599620263025548bdc2a60cec0cf4c9af03f70a3693c6a27a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcoremt.so.5",
+          "size_bytes": 1408584,
+          "sha256": "fcf95ab2a59c02fd39c3fa3085b3a101ba301cd0d93008be22333eb8bd28d548",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifport.so.5",
+          "size_bytes": 209960,
+          "sha256": "e09af0d6957a59246c38d0333c682888fcec272a39f79c23e31099ed1cbeaed1",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libimf.so",
+          "size_bytes": 5116008,
+          "sha256": "5a80a3b3be2d8273b8334f77bfa4ffa3c3dd3e76ff42d9d0d7c5935cbeda171e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libintlc.so.5",
+          "size_bytes": 519456,
+          "sha256": "4d66d2a1793eda037a001eb42869939e3b93c62bf29ba696498a5fa1bc534fc8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5.so",
+          "size_bytes": 2472833,
+          "sha256": "1b715c7feba2dbd327b4cb73ab138039629f657bfc57451d16628a0961d02828",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5_db.so",
+          "size_bytes": 623861,
+          "sha256": "e94f8b5d924fe1e5a72cc7845715b57524aa62aed167f4889367ebe18122db9c",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx.so.1",
+          "size_bytes": 53034328,
+          "sha256": "bcfb7efd64ee6f2062fd3b71cf6be9a496c9bb35cf0cbb1f870e49d945ce9f31",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx2.so.1",
+          "size_bytes": 50137384,
+          "sha256": "74c9ed34437d02fa204306fca394a3be0935b5bef0584bf2cf0562ad44e9aa3d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx512.so.1",
+          "size_bytes": 66658392,
+          "sha256": "836fe6f8bf1c3ffacc57602322bbe2d088cc540985e0d9aab26fb511de721007",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_core.so.1",
+          "size_bytes": 74757224,
+          "sha256": "a1f8e95a2a06b64188efaf6da64c13c02bc50488d72eb31f0b5a8c63f0cf70f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_def.so.1",
+          "size_bytes": 42420592,
+          "sha256": "50cf997a5a25632a0bbdb76bdad55eba06fd6412b5912ff4fe36182b87e35f5d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_ilp64.so.1",
+          "size_bytes": 12914912,
+          "sha256": "26a314ab35953e894f61e469ed623d2af9d5c2e70af6b169c90cf5f241c6b103",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_lp64.so.1",
+          "size_bytes": 13560968,
+          "sha256": "eeafede967fadc9f6d20c796c1d1b975c50b3cfcaf3f2b824a517950b8bb6364",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_thread.so.1",
+          "size_bytes": 64778624,
+          "sha256": "6fb3ae5d0ef55e0de79d0cae33d9bf9f4d4c2ebed9eed9c92d21bab6f8b5933e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc.so.1",
+          "size_bytes": 48746808,
+          "sha256": "a9e7e7af8ed94c246e911e820ad97fa351d8215c0ae0840065898f9a48272911",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc3.so.1",
+          "size_bytes": 50321448,
+          "sha256": "201b1b4c6e7f0914e049648f59fa71ad88cccd717d5d64e525862458a5cf6584",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_pgi_thread.so.1",
+          "size_bytes": 38032808,
+          "sha256": "1537289c0fa5f64906800f07fe22368be1ba75d6db8f4df34720ffb776297b94",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_rt.so.1",
+          "size_bytes": 7177832,
+          "sha256": "7861cbaad330a99ac2545304a277a32a824faef08b94e3f36b6c07835aa49966",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx.so.1",
+          "size_bytes": 15887632,
+          "sha256": "ecdb21c8e92e2f8ce9c8eccc9317029025d9f6b1fe91bbbaa3902960dc8e54c3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx2.so.1",
+          "size_bytes": 15038944,
+          "sha256": "aa212c64de48eca1e8285b7b0bed5f6bc19704ca285ab5792d44fd1f9850f4f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512.so.1",
+          "size_bytes": 14364224,
+          "sha256": "3250f3a0ad08aa812a07bcd444933be0f7e4c4aff3106b1b5485a01c523903f0",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+          "size_bytes": 16210632,
+          "sha256": "a596cb3608ec0c9ba1b13bea8532a232bb0a70c7a672a7e9d7f072a8ab78342a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libgfortran.so.5",
+          "size_bytes": 2626536,
+          "sha256": "6081ee1065d636a7898d9fd7aec77420f76f93bbf5e0519dd15c6b36b04c16d8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libquadmath.so.0",
+          "size_bytes": 267512,
+          "sha256": "a56f60c706e2dc6d6d8aa55c606be2234e7eab228b06be9ede2bd22fe20e6435",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-Terms-and-Conditions-of-Use.html",
+          "size_bytes": 92774,
+          "sha256": "95d06a32310fbbb9d663f299c61ecab0a72170ef360273dbc3d5317245459694",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/Linux-Release-Notes.pdf",
+          "size_bytes": 235853,
+          "sha256": "d4e45680671ce0ff266f4304b8ec6e0edd6948dd6e660480cefdca5ffe201df8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/SOURCE.txt",
+          "size_bytes": 257,
+          "sha256": "783dbcf657fcd49ae2276086a0868b4bd2266766624c163374c8fcdd3b49a37a",
+          "matches_manifest": true
+        }
+      ],
+      "published_tags": [
+        "rascommander/hec-ras-linux-unsteady_6.5:v1",
+        "rascommander/hec-ras-linux-unsteady_6.5:latest"
+      ],
+      "public_digest_pull_verified": true
+    },
+    {
+      "hec_ras_version": "6.6",
+      "candidate_tag": "rascommander/hec-ras-linux-unsteady_6.6:cpu-604704d",
+      "publication_status": "published_and_verified",
+      "published_repository_digest": "rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c",
+      "local_image_store_id": "sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c",
+      "archived_config_digest": "sha256:7b6ff681681ddd67a641a48953e82a23b592b28f66ec5106a4b24b23d7c4b497",
+      "identity_note": "This build daemon uses a containerd image store. Its local image/index ID differs from the archived image Config digest; Config and RootFS identify the same filesystem across image stores.",
+      "platform": "linux/amd64",
+      "rootfs": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:411a86676185cb54d695a805b238194a64e9b77e0c723f3802fbb87d333ea0b3",
+          "sha256:ac03b9b8028ef885548e0abeafdd0c0c548a6821ba7463e55a8505e985bb81f4",
+          "sha256:6b1273b0d0edb3eeba426ec54c7409396d83b82aaee569e49b1000e392ea292b",
+          "sha256:748b8823d6d330abbbd313c17773ac291f00c257bc2a78467bb8d0a22c010360",
+          "sha256:76da4b32c39f3d2ece5610f772b36044b74f9ebd67cf7e281548ff00f662d7f0",
+          "sha256:748ae0d60f2b6021c73e98f89c19759ba7765789bcaf6533eaa80506d99ef7a0",
+          "sha256:f332e5b93cbb873843c1473a38b06045447c31a53c0d2cfb6660b79da8067d58",
+          "sha256:785cac668363792ab9340099e2fa105e94d93b8a3e69d29ad279cc59682d286a",
+          "sha256:731da7e085cc4ef382cd69a5f7abd697ab70476bb53aed1a40c755b5c6400a84",
+          "sha256:6504f07d7b57bb32b9cfcce612c7b72cc4cb8ebb8e774e86419374beef3be84e",
+          "sha256:5b64dca1b18a44c1c417c021cc61cdb3fdd4179930900ecdc6e92054af179b6b",
+          "sha256:9aa5319cb86926b83026149e3bc3b810e8ed7b58b926398318a574c0c1a82527",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "default_user": "rasworker",
+      "entrypoint": [
+        "/usr/bin/tini",
+        "--",
+        "python",
+        "-m",
+        "ras_commander._container_compute"
+      ],
+      "default_command": [
+        "compute",
+        "--help"
+      ],
+      "runtime_manifest": {
+        "path": "/opt/hecras-runtime/runtime.json",
+        "size_bytes": 5240,
+        "sha256": "58380fe6326689d3829232750ca05b763a75ab76cb4c390d8dd690a7646ac722",
+        "hec_ras_version": "6.6",
+        "schema": "ras-commander-native-runtime/v1",
+        "declared_artifact_count": 29,
+        "native": {
+          "engine_directory": "engine"
+        }
+      },
+      "native_runtime_files": [
+        {
+          "path": "/opt/hecras-runtime/engine/RasUnsteady",
+          "size_bytes": 70978696,
+          "sha256": "efc1ef6a167c20a81675c27f7ae35022f71420fd8b9dc14511fa1dcca9989957",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcore.so.5",
+          "size_bytes": 1395584,
+          "sha256": "f95bc3d2f0a38f1599620263025548bdc2a60cec0cf4c9af03f70a3693c6a27a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcoremt.so.5",
+          "size_bytes": 1408584,
+          "sha256": "fcf95ab2a59c02fd39c3fa3085b3a101ba301cd0d93008be22333eb8bd28d548",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifport.so.5",
+          "size_bytes": 209960,
+          "sha256": "e09af0d6957a59246c38d0333c682888fcec272a39f79c23e31099ed1cbeaed1",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libimf.so",
+          "size_bytes": 5116008,
+          "sha256": "5a80a3b3be2d8273b8334f77bfa4ffa3c3dd3e76ff42d9d0d7c5935cbeda171e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libintlc.so.5",
+          "size_bytes": 519456,
+          "sha256": "4d66d2a1793eda037a001eb42869939e3b93c62bf29ba696498a5fa1bc534fc8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5.so",
+          "size_bytes": 2472833,
+          "sha256": "1b715c7feba2dbd327b4cb73ab138039629f657bfc57451d16628a0961d02828",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5_db.so",
+          "size_bytes": 623861,
+          "sha256": "e94f8b5d924fe1e5a72cc7845715b57524aa62aed167f4889367ebe18122db9c",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx.so.1",
+          "size_bytes": 53034328,
+          "sha256": "bcfb7efd64ee6f2062fd3b71cf6be9a496c9bb35cf0cbb1f870e49d945ce9f31",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx2.so.1",
+          "size_bytes": 50137384,
+          "sha256": "74c9ed34437d02fa204306fca394a3be0935b5bef0584bf2cf0562ad44e9aa3d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx512.so.1",
+          "size_bytes": 66658392,
+          "sha256": "836fe6f8bf1c3ffacc57602322bbe2d088cc540985e0d9aab26fb511de721007",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_core.so.1",
+          "size_bytes": 74757224,
+          "sha256": "a1f8e95a2a06b64188efaf6da64c13c02bc50488d72eb31f0b5a8c63f0cf70f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_def.so.1",
+          "size_bytes": 42420592,
+          "sha256": "50cf997a5a25632a0bbdb76bdad55eba06fd6412b5912ff4fe36182b87e35f5d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_ilp64.so.1",
+          "size_bytes": 12914912,
+          "sha256": "26a314ab35953e894f61e469ed623d2af9d5c2e70af6b169c90cf5f241c6b103",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_lp64.so.1",
+          "size_bytes": 13560968,
+          "sha256": "eeafede967fadc9f6d20c796c1d1b975c50b3cfcaf3f2b824a517950b8bb6364",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_thread.so.1",
+          "size_bytes": 64778624,
+          "sha256": "6fb3ae5d0ef55e0de79d0cae33d9bf9f4d4c2ebed9eed9c92d21bab6f8b5933e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc.so.1",
+          "size_bytes": 48746808,
+          "sha256": "a9e7e7af8ed94c246e911e820ad97fa351d8215c0ae0840065898f9a48272911",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc3.so.1",
+          "size_bytes": 50321448,
+          "sha256": "201b1b4c6e7f0914e049648f59fa71ad88cccd717d5d64e525862458a5cf6584",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_pgi_thread.so.1",
+          "size_bytes": 38032808,
+          "sha256": "1537289c0fa5f64906800f07fe22368be1ba75d6db8f4df34720ffb776297b94",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_rt.so.1",
+          "size_bytes": 7177832,
+          "sha256": "7861cbaad330a99ac2545304a277a32a824faef08b94e3f36b6c07835aa49966",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx.so.1",
+          "size_bytes": 15887632,
+          "sha256": "ecdb21c8e92e2f8ce9c8eccc9317029025d9f6b1fe91bbbaa3902960dc8e54c3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx2.so.1",
+          "size_bytes": 15038944,
+          "sha256": "aa212c64de48eca1e8285b7b0bed5f6bc19704ca285ab5792d44fd1f9850f4f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512.so.1",
+          "size_bytes": 14364224,
+          "sha256": "3250f3a0ad08aa812a07bcd444933be0f7e4c4aff3106b1b5485a01c523903f0",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+          "size_bytes": 16210632,
+          "sha256": "a596cb3608ec0c9ba1b13bea8532a232bb0a70c7a672a7e9d7f072a8ab78342a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libgfortran.so.5",
+          "size_bytes": 2626536,
+          "sha256": "6081ee1065d636a7898d9fd7aec77420f76f93bbf5e0519dd15c6b36b04c16d8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libquadmath.so.0",
+          "size_bytes": 267512,
+          "sha256": "a56f60c706e2dc6d6d8aa55c606be2234e7eab228b06be9ede2bd22fe20e6435",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-Terms-and-Conditions-of-Use.html",
+          "size_bytes": 92765,
+          "sha256": "910083dcc2f61486d1851050da6a5af2efb1e7c101b0e69b3df3490243691fed",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/Linux-Release-Notes.pdf",
+          "size_bytes": 954650,
+          "sha256": "f2198d09a7cace55093c260a4ae62943344bd8d107ccf5cf89a11d1debc8f2a8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/SOURCE.txt",
+          "size_bytes": 256,
+          "sha256": "c5778bcd6cd182ccade8241a37b41f58e431dd76a8745eac72219c5884df03d9",
+          "matches_manifest": true
+        }
+      ],
+      "published_tags": [
+        "rascommander/hec-ras-linux-unsteady_6.6:v1",
+        "rascommander/hec-ras-linux-unsteady_6.6:latest"
+      ],
+      "public_digest_pull_verified": true
+    },
+    {
+      "hec_ras_version": "7.0.1",
+      "candidate_tag": "rascommander/hec-ras-linux-unsteady_7.0.1:cpu-604704d",
+      "publication_status": "published_and_verified",
+      "published_repository_digest": "rascommander/hec-ras-linux-unsteady_7.0.1@sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9",
+      "local_image_store_id": "sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9",
+      "archived_config_digest": "sha256:a9d2ae8f18b34f2266d0217c63bd900e3a1885190405dd0da032d3414805e684",
+      "identity_note": "This build daemon uses a containerd image store. Its local image/index ID differs from the archived image Config digest; Config and RootFS identify the same filesystem across image stores.",
+      "platform": "linux/amd64",
+      "rootfs": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:411a86676185cb54d695a805b238194a64e9b77e0c723f3802fbb87d333ea0b3",
+          "sha256:ac03b9b8028ef885548e0abeafdd0c0c548a6821ba7463e55a8505e985bb81f4",
+          "sha256:6b1273b0d0edb3eeba426ec54c7409396d83b82aaee569e49b1000e392ea292b",
+          "sha256:748b8823d6d330abbbd313c17773ac291f00c257bc2a78467bb8d0a22c010360",
+          "sha256:83c7f95f4fb0f980a2b29f5d3079f005e7b058393e7abb02fbcdf681714cafbb",
+          "sha256:dc5d237cc2c39b3551dc108e84d913320fdf76d6f9016e3532d82b5e7b367fa5",
+          "sha256:5e4d9a2361f53c4ac29b18705df3e8ae0a5433b7da21fad2384c540287a76ba4",
+          "sha256:2a324e4f49c058349ed43571fa73357c80f9750a6c3f5fc8ccad2ca6bfb7b7a5",
+          "sha256:233efb63b620b4e5f426105c3c4163a78894ab51fce6b553d912e049273d8b7f",
+          "sha256:fad6e5f99e0436dd2544673992409e757e90bc6cb6695b8b93f3d5876527db14",
+          "sha256:7f13edaade1c3b178d796bb91c6341bed4ddd5f3a5447ac936b737fa103f4ccf",
+          "sha256:1d2cc1523c1c051a859e3decde7008400c24693ef0edd9f9a02ceb21a9109cf1",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "default_user": "rasworker",
+      "entrypoint": [
+        "/usr/bin/tini",
+        "--",
+        "python",
+        "-m",
+        "ras_commander._container_compute"
+      ],
+      "default_command": [
+        "compute",
+        "--help"
+      ],
+      "runtime_manifest": {
+        "path": "/opt/hecras-runtime/runtime.json",
+        "size_bytes": 5985,
+        "sha256": "0537f07a5394a061b496253ded722e080c895dc68ebc49a9c3e2134af891d1f6",
+        "hec_ras_version": "7.0.1",
+        "schema": "ras-commander-native-runtime/v1",
+        "declared_artifact_count": 33,
+        "native": {
+          "engine_directory": "engine"
+        }
+      },
+      "native_runtime_files": [
+        {
+          "path": "/opt/hecras-runtime/engine/RasUnsteady",
+          "size_bytes": 72179496,
+          "sha256": "caae44088b52fb66cbfd7eeca92d0ec8a3f5d7abff2c03eea05e7fca344c250f",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcore.so.5",
+          "size_bytes": 1395584,
+          "sha256": "f95bc3d2f0a38f1599620263025548bdc2a60cec0cf4c9af03f70a3693c6a27a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifcoremt.so.5",
+          "size_bytes": 1408584,
+          "sha256": "fcf95ab2a59c02fd39c3fa3085b3a101ba301cd0d93008be22333eb8bd28d548",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libifport.so.5",
+          "size_bytes": 209960,
+          "sha256": "e09af0d6957a59246c38d0333c682888fcec272a39f79c23e31099ed1cbeaed1",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libimf.so",
+          "size_bytes": 5116008,
+          "sha256": "5a80a3b3be2d8273b8334f77bfa4ffa3c3dd3e76ff42d9d0d7c5935cbeda171e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libintlc.so.5",
+          "size_bytes": 519456,
+          "sha256": "4d66d2a1793eda037a001eb42869939e3b93c62bf29ba696498a5fa1bc534fc8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5.so",
+          "size_bytes": 2472833,
+          "sha256": "1b715c7feba2dbd327b4cb73ab138039629f657bfc57451d16628a0961d02828",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/libiomp5_db.so",
+          "size_bytes": 623861,
+          "sha256": "e94f8b5d924fe1e5a72cc7845715b57524aa62aed167f4889367ebe18122db9c",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx.so.1",
+          "size_bytes": 53034328,
+          "sha256": "bcfb7efd64ee6f2062fd3b71cf6be9a496c9bb35cf0cbb1f870e49d945ce9f31",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx2.so.1",
+          "size_bytes": 50137384,
+          "sha256": "74c9ed34437d02fa204306fca394a3be0935b5bef0584bf2cf0562ad44e9aa3d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_avx512.so.1",
+          "size_bytes": 66658392,
+          "sha256": "836fe6f8bf1c3ffacc57602322bbe2d088cc540985e0d9aab26fb511de721007",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_core.so.1",
+          "size_bytes": 74757224,
+          "sha256": "a1f8e95a2a06b64188efaf6da64c13c02bc50488d72eb31f0b5a8c63f0cf70f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_def.so.1",
+          "size_bytes": 42420592,
+          "sha256": "50cf997a5a25632a0bbdb76bdad55eba06fd6412b5912ff4fe36182b87e35f5d",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_ilp64.so.1",
+          "size_bytes": 12914912,
+          "sha256": "26a314ab35953e894f61e469ed623d2af9d5c2e70af6b169c90cf5f241c6b103",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_lp64.so.1",
+          "size_bytes": 13560968,
+          "sha256": "eeafede967fadc9f6d20c796c1d1b975c50b3cfcaf3f2b824a517950b8bb6364",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_intel_thread.so.1",
+          "size_bytes": 64778624,
+          "sha256": "6fb3ae5d0ef55e0de79d0cae33d9bf9f4d4c2ebed9eed9c92d21bab6f8b5933e",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc.so.1",
+          "size_bytes": 48746808,
+          "sha256": "a9e7e7af8ed94c246e911e820ad97fa351d8215c0ae0840065898f9a48272911",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_mc3.so.1",
+          "size_bytes": 50321448,
+          "sha256": "201b1b4c6e7f0914e049648f59fa71ad88cccd717d5d64e525862458a5cf6584",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_pgi_thread.so.1",
+          "size_bytes": 38032808,
+          "sha256": "1537289c0fa5f64906800f07fe22368be1ba75d6db8f4df34720ffb776297b94",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_rt.so.1",
+          "size_bytes": 7177832,
+          "sha256": "7861cbaad330a99ac2545304a277a32a824faef08b94e3f36b6c07835aa49966",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx.so.1",
+          "size_bytes": 15887632,
+          "sha256": "ecdb21c8e92e2f8ce9c8eccc9317029025d9f6b1fe91bbbaa3902960dc8e54c3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx2.so.1",
+          "size_bytes": 15038944,
+          "sha256": "aa212c64de48eca1e8285b7b0bed5f6bc19704ca285ab5792d44fd1f9850f4f3",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512.so.1",
+          "size_bytes": 14364224,
+          "sha256": "3250f3a0ad08aa812a07bcd444933be0f7e4c4aff3106b1b5485a01c523903f0",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/mkl/libmkl_vml_avx512_mic.so.1",
+          "size_bytes": 16210632,
+          "sha256": "a596cb3608ec0c9ba1b13bea8532a232bb0a70c7a672a7e9d7f072a8ab78342a",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libgfortran.so.5",
+          "size_bytes": 2626536,
+          "sha256": "6081ee1065d636a7898d9fd7aec77420f76f93bbf5e0519dd15c6b36b04c16d8",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/engine/libs/rhel_8/libquadmath.so.0",
+          "size_bytes": 267512,
+          "sha256": "a56f60c706e2dc6d6d8aa55c606be2234e7eab228b06be9ede2bd22fe20e6435",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-7.0.1-Installer-TCU.rtf",
+          "size_bytes": 12244,
+          "sha256": "cbfaefaae3fb7ca96fbfa76fa86c85f2b7bfcbe11a2c237f68a6c3c42b50d6bf",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-7.0.1-release-notes.html",
+          "size_bytes": 99138,
+          "sha256": "76d2ec37841a411e5d2554cd0a5a60c8e0c09d207ee2ab1078b03b80d86c5127",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-7.0.1-resolved-issues.html",
+          "size_bytes": 103571,
+          "sha256": "ebc2ecff9b92e156ef79c76abc1eabee1a38e020a3b88876a342d7f2ecf47405",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-downloads.html",
+          "size_bytes": 41871,
+          "sha256": "b4a835972b3c9c5c1c5b4f09f5b6138ef04505cfe5fd4d1126d67e0db80600e9",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/HEC-RAS-linux-computation-engines.html",
+          "size_bytes": 90537,
+          "sha256": "49ad774512e754e60267b3f6b73d6044bc508ae002254b9829b8c24f551ab73f",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/USACE-Distribution-Policy.html",
+          "size_bytes": 32913,
+          "sha256": "6b123ade5fa66b083db59b52b9f2cb7683dd3a109ef30f2a54660665e58841e7",
+          "matches_manifest": true
+        },
+        {
+          "path": "/opt/hecras-runtime/notices/USACE-Terms-and-Conditions.html",
+          "size_bytes": 36488,
+          "sha256": "0c5c8bdfa6e871dad883287b07ca49f44c3a3a511278757680dc756c5c3d17ff",
+          "matches_manifest": true
+        }
+      ],
+      "published_tags": [
+        "rascommander/hec-ras-linux-unsteady_7.0.1:v1",
+        "rascommander/hec-ras-linux-unsteady_7.0.1:latest"
+      ],
+      "public_digest_pull_verified": true
+    }
+  ],
+  "publication_verified_at_utc": "2026-09-12T02:46:04.488696+00:00"
+}
