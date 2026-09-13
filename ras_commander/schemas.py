@@ -793,7 +793,7 @@ DATAFRAME_SCHEMAS = {
         "dynamic": False,
         "columns": [
             {"name": "geometry_id", "dtype": "str", "description": "Stable source model identifier."},
-            {"name": "footprint_source", "dtype": "str", "description": "supplied, geometry_hdf, or geometry_text_convex_hull."},
+            {"name": "footprint_source", "dtype": "str", "description": "supplied, geometry_hdf, geometry_text_footprint, or geometry_text_convex_hull."},
             {"name": "geometry", "dtype": "geometry", "description": "Source model footprint in the catalog analysis CRS."},
         ],
     },
