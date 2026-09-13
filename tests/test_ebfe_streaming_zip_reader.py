@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from ras_commander.sources.federal import ebfe_extract as ebfe_extract_module
 from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
 from ras_commander.sources.federal.ebfe_extract import _read_zip64_extra
 
@@ -352,6 +353,45 @@ def test_finish_decompressor_tolerates_a_decompressor_without_flush():
 
     import zlib
     assert StreamingZipReader._finish_decompressor(zlib.decompressobj(-zlib.MAX_WBITS)) == b""
+
+
+def test_deflate64_value_error_is_reported_as_unreadable(monkeypatch, tmp_path):
+    class InvalidDeflate64:
+        def decompress(self, block):
+            raise ValueError("Bad Deflate64 data")
+
+    name_bytes = b"payload.bin"
+    compressed = b"bad"
+    header = struct.pack(
+        "<IHHHHHIIIHH",
+        0x04034B50,
+        20,
+        0,
+        9,
+        0,
+        0,
+        0,
+        len(compressed),
+        1,
+        len(name_bytes),
+        0,
+    )
+    archive_path = tmp_path / "invalid_deflate64.zip"
+    archive_path.write_bytes(header + name_bytes + compressed)
+    monkeypatch.setattr(ebfe_extract_module, "_DEFLATE64_AVAILABLE", True)
+    monkeypatch.setattr(
+        ebfe_extract_module,
+        "deflate64",
+        type("Deflate64Module", (), {"Deflate64": InvalidDeflate64}),
+    )
+
+    reader = StreamingZipReader(archive_path)
+    results = list(reader.walk(sink_factory=sink_factory(tmp_path / "invalid_out")))
+
+    assert results[0][1] is False
+    assert reader.stats.extracted == 0
+    assert reader.stats.unreadable == 1
+    assert reader.stats.failures_of("read")
 
 
 # -- streamed archives with no central directory (Little Red) ------------------

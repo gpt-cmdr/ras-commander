@@ -342,14 +342,13 @@ class StreamingZipReader:
         runs off the end of the file the member is returned with a size that
         places it past EOF, so the survey reports it truncated.
         """
-        if member.compress_type not in (_DEFLATED, _DEFLATED64):
+        # zipfile-deflate64 exposes ``eof`` but not the number of unused input
+        # bytes. It can decode a member whose compressed size is known, but it
+        # cannot locate a trailing descriptor after a multi-byte read. Refuse
+        # that ambiguous recovery case instead of stepping past the boundary.
+        if member.compress_type != _DEFLATED:
             return None, member.data_offset
-        if member.compress_type == _DEFLATED:
-            decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
-        else:
-            if deflate64 is None:
-                return None, member.data_offset
-            decompressor = deflate64.Deflate64()
+        decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
 
         handle.seek(member.data_offset)
         consumed = 0
@@ -719,7 +718,7 @@ class StreamingZipReader:
                                     "Could not clear failed output for archive member %s",
                                     member.name,
                                 )
-                except (EOFError, zlib.error, OSError) as exc:
+                except (EOFError, zlib.error, OSError, ValueError) as exc:
                     self.stats.unreadable += 1
                     self.stats.bytes_written += written
                     self.stats.failures.append(

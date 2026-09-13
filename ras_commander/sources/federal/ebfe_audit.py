@@ -529,6 +529,16 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     # one step; otherwise the blocking count doubles.
     seen_moves = {(a.kind, a.from_value, a.to_value) for a in actions}
 
+    acquisition_targets = {
+        str(recipe.get("acquisition_target") or recipe.get("from") or recipe.get("file") or "")
+        .replace("\\", "/")
+        for recipe in bundle.recipes
+        if recipe.get("kind") == "acquisition"
+        or recipe.get("confidence") == "acquisition"
+    }
+    acquisition_basenames = Counter(
+        Path(target).name.casefold() for target in acquisition_targets
+    )
     acquired_files: set = set()
     for recipe in bundle.recipes:
         surface = recipe.get("surface", "")
@@ -548,9 +558,14 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
                 continue
             acquired_files.add(acquisition_key)
             label = "DSS boundary data" if surface == "dss_pathname" else "Referenced file"
+            display_target = (
+                target_file.replace("\\", "/")
+                if acquisition_basenames[base.casefold()] > 1
+                else base
+            )
             reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
             actions.append(RepairAction(
-                order=0, kind="acquisition", target=f"{label} ({base})", reason="not_delivered",
+                order=0, kind="acquisition", target=f"{label} ({display_target})", reason="not_delivered",
                 evidence=(f"{recipe.get('locator', '')}: {reason_text}").strip(": "),
                 confidence="resolved", blocking=True, escape_depth=escape_depth(raw_from),
                 from_value=raw_from or None, project=recipe.get("project"),

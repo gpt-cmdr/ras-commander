@@ -774,3 +774,7 @@ def test_acquisition_deduplication_preserves_distinct_paths_with_same_basename()
     ]
 
     assert len(acquisitions) == 2
+    assert {action.target for action in acquisitions} == {
+        "DSS boundary data (../A/100YR.dss)",
+        "DSS boundary data (../B/100YR.dss)",
+    }

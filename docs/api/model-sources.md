@@ -31,6 +31,16 @@ compressed with Deflate64 require the optional dependency:
 pip install "ras-commander[ebfe]"
 ```
 
+The `ebfe` extra installs the decoder on Python 3.10, the newest interpreter
+for which its publisher provides wheels. It is intentionally excluded from
+the broad `all` extra so Python 3.11+ installations do not depend on an
+unqualified native source build.
+
+Deflate64 members require an authoritative compressed size from a local or
+central-directory record. Deferred-size Deflate64 members in archives with no
+central directory are reported as unsupported because the dependency does not
+expose the exact compressed boundary.
+
 This is a direct recovery API. `RasEbfeModels` does not automatically invoke it.
 Archive member names are untrusted input. A `sink_factory` must normalize each
 name and verify that its output path remains below the intended destination.
