@@ -204,6 +204,43 @@ def test_crc_mismatch_is_not_success_and_clears_seekable_output(tmp_path):
     assert (out / "payload.bin").read_bytes() == b""
 
 
+def test_midstream_decompression_error_clears_seekable_output(tmp_path):
+    payload = b"A" * 1000
+    stored_block = (
+        b"\x00"
+        + struct.pack("<H", len(payload))
+        + struct.pack("<H", 0xFFFF - len(payload))
+        + payload
+    )
+    compressed = stored_block + b"\x07"  # final block with reserved BTYPE=3
+    name_bytes = b"payload.bin"
+    header = struct.pack(
+        "<IHHHHHIIIHH",
+        0x04034B50,
+        20,
+        0,
+        zipfile.ZIP_DEFLATED,
+        0,
+        0,
+        zlib.crc32(payload) & 0xFFFFFFFF,
+        len(compressed),
+        len(payload),
+        len(name_bytes),
+        0,
+    )
+    archive_path = tmp_path / "corrupt_deflate.zip"
+    archive_path.write_bytes(header + name_bytes + compressed)
+
+    out = tmp_path / "corrupt_out"
+    reader = StreamingZipReader(archive_path, chunk_size=len(stored_block))
+    results = list(reader.walk(sink_factory=sink_factory(out)))
+
+    assert results[0][1] is False
+    assert reader.stats.unreadable == 1
+    assert reader.stats.failures_of("read")
+    assert (out / "payload.bin").read_bytes() == b""
+
+
 def test_zero_declared_size_is_still_validated(intact_archive, tmp_path):
     reader = StreamingZipReader(intact_archive)
     survey = reader.probe()

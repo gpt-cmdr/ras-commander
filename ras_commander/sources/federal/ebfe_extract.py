@@ -359,7 +359,11 @@ class StreamingZipReader:
             block = handle.read(self.chunk_size)
             if not block:
                 break
-            chunk = decompressor.decompress(block)
+            if self.max_probe_member_size is None:
+                chunk = decompressor.decompress(block)
+            else:
+                remaining_output = self.max_probe_member_size - written
+                chunk = decompressor.decompress(block, remaining_output + 1)
             if chunk:
                 crc = zlib.crc32(chunk, crc)
                 written += len(chunk)
@@ -704,12 +708,13 @@ class StreamingZipReader:
                     continue
 
                 written = 0
+                read_error = None
                 try:
                     with sink:
-                        written, crc = self._inflate_member(handle, member, sink)
-                        crc_mismatch = crc != member.crc32
-                        size_mismatch = written != member.file_size
-                        if crc_mismatch or size_mismatch:
+                        try:
+                            written, crc = self._inflate_member(handle, member, sink)
+                        except (EOFError, zlib.error, OSError, ValueError) as exc:
+                            read_error = exc
                             try:
                                 sink.seek(0)
                                 sink.truncate(0)
@@ -718,11 +723,30 @@ class StreamingZipReader:
                                     "Could not clear failed output for archive member %s",
                                     member.name,
                                 )
-                except (EOFError, zlib.error, OSError, ValueError) as exc:
+                        else:
+                            crc_mismatch = crc != member.crc32
+                            size_mismatch = written != member.file_size
+                            if crc_mismatch or size_mismatch:
+                                try:
+                                    sink.seek(0)
+                                    sink.truncate(0)
+                                except (AttributeError, OSError):
+                                    logger.warning(
+                                        "Could not clear failed output for archive member %s",
+                                        member.name,
+                                    )
+                except OSError as exc:
+                    read_error = read_error or exc
+
+                if read_error is not None:
                     self.stats.unreadable += 1
                     self.stats.bytes_written += written
                     self.stats.failures.append(
-                        (member.name, "read", f"{type(exc).__name__}: {exc}")
+                        (
+                            member.name,
+                            "read",
+                            f"{type(read_error).__name__}: {read_error}",
+                        )
                     )
                     yield member, False
                     continue
