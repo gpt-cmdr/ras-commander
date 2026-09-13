@@ -135,6 +135,8 @@ setup(
         ],
         # USGS gauge data integration
         'usgs': ['dataretrieval>=1.0'],
+        # FEMA eBFE archives that use Deflate64 compression (ZIP method 9)
+        'ebfe': ['zipfile-deflate64'],
         # Precipitation enhancements
         'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
@@ -177,6 +179,7 @@ setup(
             'aiohttp',
             'pythonnet>=3.0.5',
             'pyjnius',
+            'zipfile-deflate64',
         ],
     })
 

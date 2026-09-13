@@ -8,7 +8,6 @@ classifier that turns a raw path into an action.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -45,6 +44,8 @@ SECTIONS = [
         ("g01", 0),
         ("", 0),
         (r"..\Terrain\Terrain.hdf", 1),
+        (r"folder\..\..\outside.dss", 1),
+        (r"..\folder\..\..\outside.dss", 2),
         (r"..\..\..\..\HEC-HMS_v43\Spring\100YR.dss", 4),
         ("../../GIS/Working/Spring.shp", 2),
         (r"C:\Projects\Spring\100YR.dss", -1),
@@ -160,7 +161,9 @@ def test_unreferenced_absent_infiltration_is_not_a_gap():
     assert "Infiltration" not in targets and "Soils" not in targets
     markdown = render_audit_markdown(bundle)
     assert "needs data not in the delivery" not in markdown
-    row = next(l for l in markdown.splitlines() if l.startswith("| Infiltration |"))
+    row = next(
+        line for line in markdown.splitlines() if line.startswith("| Infiltration |")
+    )
     assert "Not used by this model" in row and "**No**" not in row
 
 
@@ -235,7 +238,9 @@ def test_no_internal_vocabulary_leaks_into_the_engineer_sections():
 def test_verdict_reports_not_expected_rather_than_missing():
     markdown = render_audit_markdown(_minimal_bundle())
     # 1D steady: infiltration is not for this model type, and must not read as "No".
-    infiltration_row = next(l for l in markdown.splitlines() if l.startswith("| Infiltration |"))
+    infiltration_row = next(
+        line for line in markdown.splitlines() if line.startswith("| Infiltration |")
+    )
     assert "Not used by this model" in infiltration_row
     assert "**No**" not in infiltration_row
 
@@ -304,6 +309,21 @@ def test_any_action_means_not_runnable_as_delivered():
     verdict = markdown.split("## 1. Verdict")[1].split("## 2.")[0]
     assert "| Runnable as delivered | **yes** |" not in verdict
     assert "after repair" in verdict
+
+
+def test_reviewed_real_missing_reference_without_recipe_is_not_runnable():
+    bundle = _minimal_bundle()
+    bundle.gaps = [{
+        "gap": "MISSING_REFERENCE",
+        "source_file": "x.u01",
+        "role": "dss",
+        "raw_value": r"..\missing.dss",
+        "review": {"verdict": "real", "evidence": "not present in archive"},
+    }]
+
+    verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
+    assert "unresolved references are missing from the delivery" in verdict
+    assert "**yes**" not in verdict
 
 
 def test_source_only_terrain_is_a_blocking_reconstruction_not_delivered():
@@ -389,7 +409,11 @@ def test_critical_row_names_every_acquisition_not_only_terrain():
         },
     )
     verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
-    row = next(l for l in verdict.splitlines() if l.startswith("| Critical data missing |"))
+    row = next(
+        line
+        for line in verdict.splitlines()
+        if line.startswith("| Critical data missing |")
+    )
     assert "**Infiltration** -- not in the delivery" in row
     assert "**Soils** -- not in the delivery" in row
     assert "needs data not in the delivery" in verdict
@@ -404,7 +428,11 @@ def test_terrain_entry_and_other_acquisitions_coexist_without_duplicating_terrai
         supporting_elements={"soils": {"state": "no", "location": None, "referenced": True, "note": ""}},
     )
     verdict = render_audit_markdown(bundle).split("## 1. Verdict")[1].split("## 2.")[0]
-    row = next(l for l in verdict.splitlines() if l.startswith("| Critical data missing |"))
+    row = next(
+        line
+        for line in verdict.splitlines()
+        if line.startswith("| Critical data missing |")
+    )
     assert row.count("**terrain**") + row.count("**Terrain**") == 1     # once, with its specific reason
     assert "modifications referenced" in row
     assert "**Soils** -- not in the delivery" in row
@@ -568,7 +596,11 @@ def test_review_analysis_gap_on_a_layer_is_not_an_acquisition():
     markdown = render_audit_markdown(bundle)
     assert "needs data not in the delivery" not in markdown
     assert "Critical data missing" not in markdown
-    row = next(l for l in markdown.splitlines() if l.startswith("| Land cover / Manning's n |"))
+    row = next(
+        line
+        for line in markdown.splitlines()
+        if line.startswith("| Land cover / Manning's n |")
+    )
     assert "Yes" in row and "**No**" not in row
     assert "Landcover/Manning_N.hdf" in row
     # and the reclassification is visible in section 5
@@ -650,7 +682,11 @@ def test_dss_state_follows_verification_when_every_boundary_resolved():
     )
     assert not any(a.kind == "acquisition" and a.target == "DSS boundary data" for a in actions_from_bundle(bundle))
     markdown = render_audit_markdown(bundle)
-    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    row = next(
+        line
+        for line in markdown.splitlines()
+        if line.startswith("| DSS boundary data |")
+    )
     assert "Yes" in row and "42 of 42" in row
 
 
@@ -671,7 +707,11 @@ def test_dss_captured_yes_is_not_downgraded_by_unverified_boundaries():
         dss_verification={"bridge_available": True, "boundaries_checked": 3, "boundaries_resolved": 0,
                           "boundaries_acquisition": 0, "boundaries_inferred": 3},
     )
-    row = next(l for l in render_audit_markdown(bundle).splitlines() if l.startswith("| DSS boundary data |"))
+    row = next(
+        line
+        for line in render_audit_markdown(bundle).splitlines()
+        if line.startswith("| DSS boundary data |")
+    )
     assert "Yes" in row
 
 
@@ -705,5 +745,32 @@ def test_acquisition_recipes_become_acquisition_actions_and_the_verdict_needs_da
     markdown = render_audit_markdown(bundle)
     assert "needs data not in the delivery" in markdown
     assert "| Critical data missing | **DSS boundary data** -- not in the delivery |" in markdown
-    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    row = next(
+        line
+        for line in markdown.splitlines()
+        if line.startswith("| DSS boundary data |")
+    )
     assert "**No**" in row and "14 of 14" in row
+
+
+def test_acquisition_deduplication_preserves_distinct_paths_with_same_basename():
+    bundle = _minimal_bundle()
+    bundle.recipes = [
+        {
+            "file": "x.u01",
+            "surface": "dss_pathname",
+            "locator": f"x.u01:{line}:DSS File",
+            "from": target,
+            "kind": "acquisition",
+            "confidence": "acquisition",
+            "acquisition_target": target,
+        }
+        for line, target in ((10, r"..\A\100YR.dss"), (20, r"..\B\100YR.dss"))
+    ]
+
+    acquisitions = [
+        action for action in actions_from_bundle(bundle)
+        if action.kind == "acquisition"
+    ]
+
+    assert len(acquisitions) == 2

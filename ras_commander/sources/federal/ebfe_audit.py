@@ -13,8 +13,6 @@ that were valid on the authoring machine and walk straight out of anything
 FEMA shipped. :func:`escape_depth` is the classifier that turns "33 missing
 references" into a sorted list of actions with known resolutions.
 
-Specification: ``agent_tasks/2026-09-08_ebfe_audit_document_spec.md``.
-
 The renderer is a pure function of the audit artefacts. There is exactly one
 renderer, in the library, so 300-odd documents share a skeleton that never
 varies; a section with nothing to report says so rather than disappearing.
@@ -34,7 +32,7 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional, Union
+from typing import Optional, Union
 
 from ras_commander.LoggingConfig import get_logger, log_call
 
@@ -136,14 +134,16 @@ def escape_depth(reference: str) -> int:
     if re.match(r"^[A-Za-z]:/", normalized) or normalized.startswith("//") or normalized.startswith("/"):
         return -1
     depth = 0
+    maximum_escape = 0
     for segment in normalized.split("/"):
         if segment == "..":
-            depth += 1
+            depth -= 1
+            maximum_escape = max(maximum_escape, -depth)
         elif segment in ("", "."):
             continue
         else:
-            break  # first real path segment ends the climb
-    return depth
+            depth += 1
+    return maximum_escape
 
 
 def classify_reference(
@@ -543,9 +543,10 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # correction. One acquisition per missing file, named.
             target_file = str(recipe.get("acquisition_target") or raw_from or recipe.get("file") or "")
             base = Path(target_file.replace("\\", "/")).name or target_file
-            if base in acquired_files:
+            acquisition_key = target_file.replace("\\", "/").casefold()
+            if acquisition_key in acquired_files:
                 continue
-            acquired_files.add(base)
+            acquired_files.add(acquisition_key)
             label = "DSS boundary data" if surface == "dss_pathname" else "Referenced file"
             reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
             actions.append(RepairAction(
@@ -600,7 +601,11 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             mods = ((bundle.audit.get("terrain") or {}).get("modifications") or {})
             referenced = mods.get("referenced_in_rasmap")
             layers = mods.get("rasmap_layers") or []
-            mod_count = sum(len(l.get("modifications") or []) for l in layers if isinstance(l, dict))
+            mod_count = sum(
+                len(layer.get("modifications") or [])
+                for layer in layers
+                if isinstance(layer, dict)
+            )
             if referenced:
                 why_mods = f"{mod_count} terrain modification(s) referenced in the .rasmap"
             elif referenced is False:
@@ -745,6 +750,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     expected = expected_elements(dims, regime, _referenced_elements(bundle))
     delivered = _delivered_elements(bundle)
     actions = actions_from_bundle(bundle)
+    grouped = _group_gaps(bundle)
     load = audit.get("g6a_load", {}) or {}
     total, loaded = load.get("projects_total", 0), load.get("projects_loaded", 0)
     blocking = [a for a in actions if a.blocking]
@@ -769,6 +775,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     needs_external = any(a.kind == "acquisition" for a in actions)
     if not total or loaded < total:
         runnable = "no -- one or more projects will not open"
+    elif not actions and grouped["groups"]:
+        runnable = "no -- unresolved references are missing from the delivery"
     elif not actions:
         runnable = "yes"
     elif needs_external:
@@ -784,8 +792,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w("")
     w("## 1. Verdict")
     w("")
-    w(f"| | |")
-    w(f"|---|---|")
+    w("| | |")
+    w("|---|---|")
     w(f"| Model type | **{dims} {regime}** |")
     w(f"| Authored HEC-RAS version | {authored or '*not captured*'} |")
     w(f"| Projects | {loaded} of {total} open |")
@@ -847,7 +855,6 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     if parts:
         w(f"| Critical data missing | {'; '.join(parts)} |")
 
-    grouped = _group_gaps(bundle)
     bv = grouped["by_verdict"]
     # deficiency_review (schema v2) is the authoritative tally: it covers every
     # reviewed gap kind, not only MISSING_REFERENCE rows. The row-derived count
@@ -937,7 +944,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         w("")
         for action in actions:
             flag = " **[blocking]**" if action.blocking else ""
-            conf = "" if action.confidence == "resolved" else f" *(inferred -- review)*"
+            conf = "" if action.confidence == "resolved" else " *(inferred -- review)*"
             w(f"{action.order}. {_describe_action(action)}{flag}{conf}  ")
             w(f"    evidence: `{action.evidence}`")
     w("")
@@ -945,7 +952,6 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # 5 -----------------------------------------------------------------
     w("## 5. What is still missing")
     w("")
-    grouped = _group_gaps(bundle)
     if not grouped["groups"]:
         w("**Nothing.** Every reference the model makes was found in the delivery or repaired above.")
     else:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import os
+import struct
 import zipfile
 import zlib
 from pathlib import Path
@@ -20,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
+from ras_commander.sources.federal.ebfe_extract import _read_zip64_extra
 
 PAYLOAD = {
     "model/project.prj": b"Proj Title=Test\n" * 400,
@@ -169,9 +171,102 @@ def test_projected_bytes_counts_only_recoverable_members(truncated_archive):
     assert survey.projected_bytes < sum(len(d) for d in PAYLOAD.values())
 
 
+def test_truncated_local_header_is_reported_as_truncated(intact_archive, tmp_path):
+    with zipfile.ZipFile(intact_archive) as archive:
+        second_header = archive.infolist()[1].header_offset
+    cut = tmp_path / "header_cut.zip"
+    cut.write_bytes(intact_archive.read_bytes()[: second_header + 10])
+
+    survey = StreamingZipReader(cut).probe()
+
+    assert survey.truncated
+    assert survey.stopped_reason == "truncated_header"
+
+
+def test_crc_mismatch_is_not_success_and_clears_seekable_output(tmp_path):
+    archive_path = tmp_path / "stored.zip"
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr("payload.bin", b"correct payload")
+    survey = StreamingZipReader(archive_path).probe()
+    raw = bytearray(archive_path.read_bytes())
+    raw[survey.members[0].data_offset] ^= 0x01
+    archive_path.write_bytes(raw)
+
+    out = tmp_path / "crc_out"
+    reader = StreamingZipReader(archive_path)
+    results = list(reader.walk(sink_factory=sink_factory(out)))
+
+    assert results == [(reader.probe().members[0], False)]
+    assert reader.stats.extracted == 0
+    assert reader.stats.unreadable == 1
+    assert reader.stats.crc_fail == 1
+    assert (out / "payload.bin").read_bytes() == b""
+
+
+def test_zero_declared_size_is_still_validated(intact_archive, tmp_path):
+    reader = StreamingZipReader(intact_archive)
+    survey = reader.probe()
+    member = survey.members[0]
+    member.file_size = 0
+    out = tmp_path / "size_out"
+
+    results = list(
+        reader.walk(
+            want=lambda candidate: candidate is member,
+            sink_factory=sink_factory(out),
+            survey=survey,
+        )
+    )
+
+    assert results[0] == (member, False)
+    assert reader.stats.size_mismatch == 1
+    assert reader.stats.extracted == 0
+    assert (out / member.name).read_bytes() == b""
+
+
 def test_missing_archive_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         StreamingZipReader(tmp_path / "nope.zip")
+
+
+@pytest.mark.parametrize(
+    "need_uncompressed, need_compressed, expected",
+    [
+        (True, False, (123, None)),
+        (False, True, (None, 123)),
+    ],
+)
+def test_zip64_extra_honors_one_sided_size_fields(
+    need_uncompressed, need_compressed, expected
+):
+    extra = struct.pack("<HHQ", 0x0001, 8, 123)
+    assert _read_zip64_extra(extra, need_uncompressed, need_compressed) == expected
+
+
+def test_local_header_uses_cp437_when_utf8_flag_is_absent(tmp_path):
+    payload = b"legacy filename"
+    name = "caf\u00e9.txt"
+    name_bytes = name.encode("cp437")
+    header = struct.pack(
+        "<IHHHHHIIIHH",
+        0x04034B50,
+        20,
+        0,
+        zipfile.ZIP_STORED,
+        0,
+        0,
+        zlib.crc32(payload) & 0xFFFFFFFF,
+        len(payload),
+        len(payload),
+        len(name_bytes),
+        0,
+    )
+    archive_path = tmp_path / "cp437.zip"
+    archive_path.write_bytes(header + name_bytes + payload)
+
+    survey = StreamingZipReader(archive_path).probe()
+
+    assert [member.name for member in survey.members] == [name]
 
 
 # -- data-descriptor members: the central directory must win -----------------
@@ -299,6 +394,34 @@ def test_deferred_size_members_extract_byte_identical_without_a_central_director
     assert reader.stats.crc_fail == 0 and reader.stats.size_mismatch == 0
     for name, data in PAYLOAD.items():
         assert (out / name).read_bytes() == data
+
+
+def test_probe_limit_stops_deferred_member_scan(descriptor_archive):
+    streamed = _strip_central_directory(descriptor_archive)
+    survey = StreamingZipReader(streamed, max_probe_member_size=10).probe()
+
+    assert survey.stopped_reason == "deferred_sizes_unsupported"
+    assert not survey.complete_members
+
+
+def test_unresolved_deferred_stored_member_is_not_an_empty_success(tmp_path):
+    buffer = _NonSeekable()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as archive:
+        archive.writestr("payload.bin", b"nonempty")
+    complete = tmp_path / "streamed_stored_complete.zip"
+    complete.write_bytes(buffer.getvalue())
+    streamed = _strip_central_directory(complete)
+
+    reader = StreamingZipReader(streamed)
+    survey = reader.probe()
+    results = list(reader.walk(sink_factory=sink_factory(tmp_path / "stored_out"), survey=survey))
+
+    assert survey.stopped_reason == "deferred_sizes_unsupported"
+    assert not survey.complete_members
+    assert results == [(survey.members[0], False)]
+    assert reader.stats.extracted == 0
+    assert reader.stats.unreadable == 1
+    assert reader.stats.failures_of("unsupported")
 
 
 def test_streamed_archive_truncated_mid_member_reports_truncation(descriptor_archive, tmp_path):

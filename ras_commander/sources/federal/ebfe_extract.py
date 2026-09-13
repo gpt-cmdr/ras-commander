@@ -24,7 +24,7 @@ twice.
 Example:
     >>> from ras_commander.sources.federal.ebfe_extract import StreamingZipReader
     >>> reader = StreamingZipReader("Medina_Models.zip")
-    >>> survey = reader.probe()                       # headers only, no member data
+    >>> survey = reader.probe()                       # may scan deferred-size members
     >>> survey.truncated
     True
     >>> survey.overrun_bytes
@@ -59,9 +59,11 @@ _LOCAL_HEADER_SIZE = _LOCAL_HEADER_STRUCT.size  # 30
 
 _ZIP64_EXTRA_ID = 0x0001
 _FLAG_DEFERRED_SIZES = 0x08  # sizes live in a trailing data descriptor
+_FLAG_UTF8_NAMES = 0x800
 _STORED, _DEFLATED, _DEFLATED64 = 0, 8, 9
 
 _DEFAULT_CHUNK = 4 << 20
+_DEFAULT_MAX_PROBE_MEMBER_SIZE = 64 << 30
 
 # Deflate64 (method 9) is a real thing in FEMA deliveries -- seven result archives
 # in the Baffin Bay East work area, 62 GB, are compressed with it -- and the
@@ -99,7 +101,11 @@ class ZipMemberInfo:
 
 @dataclass
 class ArchiveSurvey:
-    """What a header-only walk found. Cheap: no member data is read."""
+    """What an archive survey found.
+
+    A missing central directory can require inflating deferred-size members to
+    locate their trailing descriptors. See :meth:`StreamingZipReader.probe`.
+    """
 
     members: list = field(default_factory=list)
     declared_end: int = 0
@@ -109,7 +115,10 @@ class ArchiveSurvey:
 
     @property
     def truncated(self) -> bool:
-        return self.declared_end > self.file_size
+        return (
+            self.declared_end > self.file_size
+            or self.stopped_reason == "truncated_header"
+        )
 
     @property
     def overrun_bytes(self) -> int:
@@ -118,11 +127,23 @@ class ArchiveSurvey:
     @property
     def complete_members(self) -> list:
         """Members whose data lies wholly inside the file."""
-        return [m for m in self.members if m.data_offset + m.compress_size <= self.file_size]
+        return [
+            m for m in self.members
+            if not (
+                m.sizes_deferred
+                and not m.is_dir
+                and m.compress_size == 0
+                and m.file_size == 0
+            )
+            and m.data_offset + m.compress_size <= self.file_size
+        ]
 
     @property
     def truncated_members(self) -> list:
-        return [m for m in self.members if m.data_offset + m.compress_size > self.file_size]
+        return [
+            m for m in self.members
+            if m.data_offset + m.compress_size > self.file_size
+        ]
 
     @property
     def projected_bytes(self) -> int:
@@ -185,7 +206,11 @@ class ExtractStats:
         return [f for f in self.failures if f[1] == kind]
 
 
-def _read_zip64_extra(extra: bytes, need_sizes: bool) -> Tuple[Optional[int], Optional[int]]:
+def _read_zip64_extra(
+    extra: bytes,
+    need_uncompressed: bool,
+    need_compressed: bool,
+) -> Tuple[Optional[int], Optional[int]]:
     """Pull 64-bit sizes out of the ZIP64 extra field.
 
     The ZIP64 record is **positional**, not tagged: fields appear in a fixed
@@ -193,7 +218,7 @@ def _read_zip64_extra(extra: bytes, need_sizes: bool) -> Tuple[Optional[int], Op
     Reading it as tagged key/value pairs yields plausible-looking garbage, so
     honour the order.
     """
-    if not need_sizes:
+    if not need_uncompressed and not need_compressed:
         return None, None
     pos = 0
     while pos + 4 <= len(extra):
@@ -202,10 +227,12 @@ def _read_zip64_extra(extra: bytes, need_sizes: bool) -> Tuple[Optional[int], Op
         if header_id == _ZIP64_EXTRA_ID:
             block = extra[pos : pos + size]
             uncompressed = compressed = None
-            if len(block) >= 8:
-                uncompressed = struct.unpack_from("<Q", block, 0)[0]
-            if len(block) >= 16:
-                compressed = struct.unpack_from("<Q", block, 8)[0]
+            value_offset = 0
+            if need_uncompressed and len(block) >= value_offset + 8:
+                uncompressed = struct.unpack_from("<Q", block, value_offset)[0]
+                value_offset += 8
+            if need_compressed and len(block) >= value_offset + 8:
+                compressed = struct.unpack_from("<Q", block, value_offset)[0]
             return uncompressed, compressed
         pos += size
     return None, None
@@ -217,16 +244,27 @@ class StreamingZipReader:
     Args:
         archive_path: Archive to read. Never modified.
         chunk_size: Read granularity in bytes.
+        max_probe_member_size: Maximum uncompressed bytes that :meth:`probe`
+            will scan for one deferred-size member when no central directory is
+            available. Set to ``None`` to disable the limit.
 
     Attributes:
         stats: Populated by :meth:`walk`; ``crc_fail`` is the one to assert on.
     """
 
-    def __init__(self, archive_path: Union[str, Path], chunk_size: int = _DEFAULT_CHUNK):
+    def __init__(
+        self,
+        archive_path: Union[str, Path],
+        chunk_size: int = _DEFAULT_CHUNK,
+        max_probe_member_size: Optional[int] = _DEFAULT_MAX_PROBE_MEMBER_SIZE,
+    ):
         self.archive_path = Path(archive_path)
         if not self.archive_path.exists():
             raise FileNotFoundError(f"Archive not found: {self.archive_path}")
+        if max_probe_member_size is not None and max_probe_member_size <= 0:
+            raise ValueError("max_probe_member_size must be positive or None")
         self.chunk_size = chunk_size
+        self.max_probe_member_size = max_probe_member_size
         self.file_size = self.archive_path.stat().st_size
         self.stats = ExtractStats()
 
@@ -260,14 +298,18 @@ class StreamingZipReader:
         if len(name_bytes) < name_len or len(extra) < extra_len:
             return None
 
-        need_zip64 = compress_size == 0xFFFFFFFF or file_size == 0xFFFFFFFF
-        z_uncompressed, z_compressed = _read_zip64_extra(extra, need_zip64)
+        z_uncompressed, z_compressed = _read_zip64_extra(
+            extra,
+            need_uncompressed=file_size == 0xFFFFFFFF,
+            need_compressed=compress_size == 0xFFFFFFFF,
+        )
         if z_uncompressed is not None:
             file_size = z_uncompressed
         if z_compressed is not None:
             compress_size = z_compressed
 
-        name = name_bytes.decode("utf-8", errors="replace").replace("\\", "/")
+        name_encoding = "utf-8" if flags & _FLAG_UTF8_NAMES else "cp437"
+        name = name_bytes.decode(name_encoding, errors="replace").replace("\\", "/")
         return ZipMemberInfo(
             name=name,
             header_offset=offset,
@@ -322,6 +364,11 @@ class StreamingZipReader:
             if chunk:
                 crc = zlib.crc32(chunk, crc)
                 written += len(chunk)
+                if (
+                    self.max_probe_member_size is not None
+                    and written > self.max_probe_member_size
+                ):
+                    return None, member.data_offset
             unused = getattr(decompressor, "unused_data", b"")
             if getattr(decompressor, "eof", False) or unused:
                 consumed += len(block) - len(unused)
@@ -418,10 +465,14 @@ class StreamingZipReader:
 
     @log_call
     def probe(self) -> ArchiveSurvey:
-        """Enumerate members. Reads headers only, never member data.
+        """Enumerate members and identify recoverable archive content.
 
         Uses the central directory when one is readable, else walks local
         headers forward (the only option when the directory was never written).
+        Deferred-size compressed members have no boundary in their local
+        header, so this fallback inflates them without retaining their output,
+        up to ``max_probe_member_size`` per member, to find and validate the
+        trailing descriptor.
 
         Returns:
             ArchiveSurvey: members found, plus whether the archive is truncated.
@@ -459,6 +510,11 @@ class StreamingZipReader:
                         survey.stopped_reason = "central_directory"
                     elif signature == _EOCD_SIG:
                         survey.stopped_reason = "eocd"
+                    elif signature == _LOCAL_HEADER_SIG:
+                        survey.stopped_reason = "truncated_header"
+                        survey.declared_end = max(
+                            survey.declared_end, self.file_size + 1
+                        )
                     elif not signature:
                         survey.stopped_reason = "eof"
                     else:
@@ -577,14 +633,17 @@ class StreamingZipReader:
     ) -> Iterator[Tuple[ZipMemberInfo, bool]]:
         """Walk members, extracting the ones ``want`` accepts.
 
-        ``want`` is evaluated **before** any member data is read, so selecting a
-        handful of files from a 52 GB archive costs a header walk rather than a
-        full read. That is why probe and extract are the same traversal.
+        ``want`` is evaluated **before extraction**. On archives with a central
+        directory, skipped member data is not read. Without one, :meth:`probe`
+        may already have scanned deferred-size compressed members to recover
+        their boundaries.
 
         ``sink_factory`` returns a writable binary handle for a member, or None
         to skip it. Taking a factory rather than a destination directory keeps
         path policy -- flattening, projection, long-path budgets -- with the
-        caller, where it belongs.
+        caller, where it belongs. ``member.name`` is untrusted archive input;
+        callers must normalize it and verify the destination remains beneath
+        their intended extraction root.
 
         Yields:
             (member, extracted) for every member considered. The flag makes a
@@ -597,6 +656,20 @@ class StreamingZipReader:
         with open(self.archive_path, "rb") as handle:
             for member in survey.members:
                 if member.is_dir:
+                    continue
+
+                if (
+                    member.sizes_deferred
+                    and member.compress_size == 0
+                    and member.file_size == 0
+                ):
+                    self.stats.unreadable += 1
+                    self.stats.failures.append((
+                        member.name,
+                        "unsupported",
+                        "deferred-size member boundary could not be recovered",
+                    ))
+                    yield member, False
                     continue
 
                 if id(member) not in recoverable:
@@ -631,34 +704,52 @@ class StreamingZipReader:
                     yield member, False
                     continue
 
+                written = 0
                 try:
                     with sink:
                         written, crc = self._inflate_member(handle, member, sink)
+                        crc_mismatch = crc != member.crc32
+                        size_mismatch = written != member.file_size
+                        if crc_mismatch or size_mismatch:
+                            try:
+                                sink.seek(0)
+                                sink.truncate(0)
+                            except (AttributeError, OSError):
+                                logger.warning(
+                                    "Could not clear failed output for archive member %s",
+                                    member.name,
+                                )
                 except (EOFError, zlib.error, OSError) as exc:
                     self.stats.unreadable += 1
+                    self.stats.bytes_written += written
                     self.stats.failures.append(
                         (member.name, "read", f"{type(exc).__name__}: {exc}")
                     )
                     yield member, False
                     continue
 
-                self.stats.extracted += 1
                 self.stats.bytes_written += written
 
-                if member.crc32 and crc != member.crc32:
+                if crc_mismatch:
                     self.stats.crc_fail += 1
                     self.stats.failures.append(
                         (member.name, "crc",
                          f"CRC mismatch: header {member.crc32:08x}, read {crc:08x}")
                     )
-                elif member.crc32:
+                else:
                     self.stats.crc_ok += 1
 
-                if member.file_size and written != member.file_size:
+                if size_mismatch:
                     self.stats.size_mismatch += 1
                     self.stats.failures.append(
                         (member.name, "size",
                          f"size mismatch: header {member.file_size}, wrote {written}")
                     )
 
+                if crc_mismatch or size_mismatch:
+                    self.stats.unreadable += 1
+                    yield member, False
+                    continue
+
+                self.stats.extracted += 1
                 yield member, True
