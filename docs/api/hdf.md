@@ -193,13 +193,17 @@ Plan-level results.
 
 Cross-section and river geometry extraction from HDF.
 
-- `get_cross_sections(hdf_path)` - Extract cross-section geometries as GeoDataFrame
+- `get_cross_sections(hdf_path, ras_object=None)` - Extract cross-section
+  geometries as a GeoDataFrame. Accepts a geometry HDF path or a plan selector;
+  multipart cut lines are returned as `MultiLineString` without synthetic connectors.
 - `get_xs_coords(hdf_path, river=None, reach=None, rs=None)` - Extract native
   station/elevation points as XYZ with point/station order, cut-line distance,
   Manning's n, bank classification, coordinate metadata, and source provenance
-- `get_river_centerlines(hdf_path)` - Extract river centerlines
+- `get_river_centerlines(hdf_path)` - Extract river centerlines as `LineString`
+  or `MultiLineString` geometries
 - `get_river_stationing(hdf_path)` - Calculate river stationing along centerlines
-- `get_river_reaches(hdf_path)` - Return model 1D river reach lines
+- `get_river_reaches(hdf_path)` - Return model 1D river reach lines with stable
+  `river_id` and computed `length` columns
 - `get_river_edge_lines(hdf_path)` - Return river edge lines
 - `get_river_bank_lines(hdf_path)` - Extract river bank lines
 

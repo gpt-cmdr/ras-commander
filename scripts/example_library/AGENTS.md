@@ -177,9 +177,31 @@ requirements:
 - paired RASMapper/web review covers geometry, terrain, vector results, and
   raster results.
 
-Do not add the 1D steady BLE collection to this landing page. Publish it later
-as a separate consolidated map after its grouping, symbology, and metadata
-contract is established.
+### Authorized 1D BLE corpus discovery entries
+
+A maintainer may authorize a complete 1D steady BLE watershed corpus as one
+landing-page discovery entry before hydraulic result qualification. Such an
+entry must:
+
+- represent one HUC8 with one catalog feature and one table row, never one row
+  per reach project;
+- use the exact union of all API-derived individual model footprints for its
+  landing outline;
+- use one combined PMTiles archive with the `ras-1d-corpus-v1` profile and
+  exactly `ras_model_extent`, `ras_river_centerlines`, `ras_cross_sections`,
+  and `ras_bank_lines` layers at their contracted zoom ranges;
+- preserve portable per-feature `study_id`, publisher `model_id`, `model_key`,
+  `display_id`, `source_feature_id`, and `feature_key` identity metadata;
+- link a durable Record of Deficiencies and state exact model, plan, geometry,
+  and cross-section counts from the portable delivery inventory;
+- omit project-viewer and result-manifest links and explicitly state when no
+  computation or result qualification has occurred; and
+- treat the combined PMTiles as a display derivative only. The portable,
+  relative-path delivery inventory remains the canonical FIM Commander intake.
+
+Do not place a local PMTiles path or an unverified URL in public catalog data.
+Publish through the private release pipeline, require HTTP byte-range support,
+and validate the four-layer metadata before activating the hosted URL.
 
 ## Viewer Template Contract
 

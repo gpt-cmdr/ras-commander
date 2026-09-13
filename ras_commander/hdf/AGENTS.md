@@ -90,7 +90,10 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `close_with_end_xs=False` for the legacy straight-chord closure, `dissolve=True` for a single
   (multi)polygon.
 - True model extent polygon: `HdfProject.get_project_extent(..., geometry_type='footprint')`
-  unions 2D flow-area perimeters with 1D reach footprints (multipart when multiple areas/reaches).
+  unions 2D flow-area perimeters, storage areas, and 1D reach footprints (multipart when multiple
+  areas/reaches).
+  Missing HDF components fall back to companion plain-text geometry by default; pass
+  `fallback_to_plaintext=False` for strict HDF-only extraction.
   Use `include_1d=False` / `include_2d=False` for 2D-only / 1D-only extents, and
   `buffer_percent=0` for the raw footprint. `fill_holes=True` (default, footprint mode) removes the
   thin interior sliver gaps left where 1D reach footprints and 2D flow areas overlap without

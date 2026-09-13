@@ -1,12 +1,12 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from ras_commander.RasUtils import RasUtils
-from ras_commander.RasPrj import get_ras_exe
 from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
+from ras_commander.RasPrj import get_ras_exe
+from ras_commander.RasUtils import RasUtils
 
 
 class _FakeRasProject:
@@ -53,6 +53,19 @@ def test_get_ras_exe_keeps_compact_66_mapped_to_66(monkeypatch):
     )
 
     assert get_ras_exe("66") == str(fake_66)
+
+
+def test_get_ras_exe_maps_610_plan_version_to_61_release(monkeypatch):
+    fake_61 = Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.1\Ras.exe")
+
+    monkeypatch.setattr(
+        RasUtils,
+        "discover_ras_versions",
+        staticmethod(lambda: {"6.1": fake_61}),
+    )
+
+    assert get_ras_exe("6.10") == str(fake_61)
+    assert get_ras_exe("6.1.0") == str(fake_61)
 
 
 def test_get_ras_exe_maps_compact_701_to_exact_patch_release(monkeypatch):

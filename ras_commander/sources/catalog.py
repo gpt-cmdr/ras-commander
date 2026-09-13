@@ -201,6 +201,12 @@ def get_catalog(auto_register: bool = True) -> ModelCatalog:
                 logger.debug("ColoradoChampModels not available")
 
             try:
+                from ras_commander.sources.state.alabama_ble import AlabamaBleModels
+                _catalog.register_source(AlabamaBleModels())
+            except (ImportError, Exception):
+                logger.debug("AlabamaBleModels not available")
+
+            try:
                 from ras_commander.sources.federal.noaa_ras2fim import NoaaRas2fimModels
                 _catalog.register_source(NoaaRas2fimModels())
             except (ImportError, Exception):
