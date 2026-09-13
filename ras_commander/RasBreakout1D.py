@@ -4703,33 +4703,39 @@ class RasBreakout1D:
         source_crs: CRS,
         target_crs: CRS,
     ) -> tuple[Any, str]:
-        """Prefer an HDF footprint, with a legacy text-geometry fallback."""
+        """Prefer an API footprint, with a legacy text convex-hull fallback."""
         geom_hdf = Path(f"{geom_file}.hdf")
-        if geom_hdf.is_file():
-            try:
-                from .hdf import HdfProject
+        try:
+            from .hdf import HdfProject
 
-                footprint, _ = HdfProject.get_project_extent(
-                    geom_hdf,
-                    include_1d=True,
-                    include_2d=False,
-                    include_storage=False,
-                    buffer_percent=0.0,
-                    geometry_type="footprint",
+            footprint, _ = HdfProject.get_project_extent(
+                geom_hdf if geom_hdf.is_file() else geom_file,
+                include_1d=True,
+                include_2d=False,
+                include_storage=False,
+                buffer_percent=0.0,
+                geometry_type="footprint",
+                geom_path=geom_file,
+            )
+            if footprint is not None and not footprint.empty:
+                if footprint.crs is None:
+                    footprint = footprint.set_crs(
+                        source_crs, allow_override=True
+                    )
+                footprint_source = str(footprint.iloc[0].get("source", "hdf"))
+                source_label = (
+                    "geometry_text_footprint"
+                    if "plaintext" in footprint_source
+                    else "geometry_hdf"
                 )
-                if footprint is not None and not footprint.empty:
-                    if footprint.crs is None:
-                        footprint = footprint.set_crs(
-                            source_crs, allow_override=True
-                        )
-                    footprint = footprint.to_crs(target_crs)
-                    return unary_union(footprint.geometry.tolist()), "geometry_hdf"
-            except Exception as exc:
-                logger.debug(
-                    "Could not derive source-catalog footprint from %s: %s",
-                    geom_hdf,
-                    exc,
-                )
+                footprint = footprint.to_crs(target_crs)
+                return unary_union(footprint.geometry.tolist()), source_label
+        except Exception as exc:
+            logger.debug(
+                "Could not derive source-catalog footprint from %s: %s",
+                geom_file,
+                exc,
+            )
         geometry = unary_union(
             centerlines.geometry.tolist() + cross_sections.geometry.tolist()
         ).convex_hull
