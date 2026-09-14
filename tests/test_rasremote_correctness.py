@@ -264,6 +264,108 @@ def test_compute_dispatches_geometry_copyback_option(monkeypatch):
     assert received == [False]
 
 
+def test_compute_preserves_caller_plan_numbers(monkeypatch):
+    received = []
+
+    def fake_execute_single_plan(**kwargs):
+        received.append(kwargs["plan_number"])
+        return ExecutionResult(
+            plan_number=kwargs["plan_number"],
+            worker_id=kwargs["worker"].worker_id,
+            success=True,
+        )
+
+    monkeypatch.setattr(remote_execution, "_execute_single_plan", fake_execute_single_plan)
+
+    results = compute_parallel_remote(
+        ["1", "p02"],
+        workers=[_fake_worker("worker-a")],
+        ras_object=_fake_ras(),
+        num_cores=1,
+    )
+
+    assert received == ["1", "p02"]
+    assert list(results) == ["1", "p02"]
+
+
+def test_execute_single_plan_resolves_hdf_path_for_plan_alias(monkeypatch, tmp_path):
+    ras_obj, _ = _seed_project(tmp_path / "project")
+    expected_hdf = ras_obj.project_folder / "TestProject.p01.hdf"
+    expected_hdf.write_text("result\n", encoding="utf-8")
+
+    local_worker = importlib.import_module("ras_commander.remote.LocalWorker")
+    monkeypatch.setattr(local_worker, "execute_local_plan", lambda **kwargs: True)
+
+    result = remote_execution._execute_single_plan(
+        worker=_fake_worker("worker-a"),
+        plan_number="p01",
+        ras_object=ras_obj,
+        num_cores=1,
+        clear_geompre=False,
+        force_geompre=False,
+        force_rerun=False,
+        sub_worker_id=1,
+    )
+
+    assert result.success
+    assert result.plan_number == "p01"
+    assert result.hdf_path == str(expected_hdf)
+    assert result.result_path == str(expected_hdf)
+    assert result.result_format == "hdf"
+
+
+def test_execute_single_plan_resolves_legacy_result_for_plan_alias(monkeypatch, tmp_path):
+    ras_obj, _ = _seed_project(tmp_path / "project")
+    expected_result = ras_obj.project_folder / "TestProject.O01"
+    expected_result.write_text("legacy result\n", encoding="utf-8")
+
+    local_worker = importlib.import_module("ras_commander.remote.LocalWorker")
+    monkeypatch.setattr(local_worker, "execute_local_plan", lambda **kwargs: True)
+
+    result = remote_execution._execute_single_plan(
+        worker=_fake_worker("worker-a"),
+        plan_number="p01",
+        ras_object=ras_obj,
+        num_cores=1,
+        clear_geompre=False,
+        force_geompre=False,
+        force_rerun=False,
+        sub_worker_id=1,
+    )
+
+    assert result.success
+    assert result.plan_number == "p01"
+    assert result.result_path == str(expected_result)
+    assert result.result_format == "legacy"
+    assert result.hdf_path is None
+
+
+def test_execute_single_plan_resolves_docker_tmp_hdf_for_plan_alias(monkeypatch, tmp_path):
+    ras_obj, _ = _seed_project(tmp_path / "project")
+    expected_hdf = ras_obj.project_folder / "TestProject.p01.tmp.hdf"
+    expected_hdf.write_text("temporary result\n", encoding="utf-8")
+
+    docker_worker = importlib.import_module("ras_commander.remote.DockerWorker")
+    monkeypatch.setattr(docker_worker, "execute_docker_plan", lambda **kwargs: True)
+    worker = _fake_worker("worker-a")
+    worker.worker_type = "docker"
+
+    result = remote_execution._execute_single_plan(
+        worker=worker,
+        plan_number="p01",
+        ras_object=ras_obj,
+        num_cores=1,
+        clear_geompre=False,
+        force_geompre=False,
+        force_rerun=False,
+        sub_worker_id=1,
+    )
+
+    assert result.success
+    assert result.plan_number == "p01"
+    assert result.hdf_path == str(expected_hdf)
+
+
 def test_scheduler_enforces_capacity_and_reuses_faster_worker(monkeypatch):
     lock = threading.Lock()
     release_slow_worker = threading.Event()

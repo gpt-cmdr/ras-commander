@@ -13,12 +13,12 @@ from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from numbers import Integral, Real
-from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..RasCurrency import RasCurrency
 
 logger = get_logger(__name__)
 
@@ -461,8 +461,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -483,8 +482,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -508,10 +506,14 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
+                else:
+                    # Check for .tmp.hdf (Linux container output)
+                    tmp_hdf = hdf_file.with_name(f"{hdf_file.stem}.tmp.hdf")
+                    if tmp_hdf.exists():
+                        result.hdf_path = str(tmp_hdf)
 
         elif worker.worker_type == "slurm":
             result.error_message = "Slurm worker not yet implemented"
@@ -527,9 +529,10 @@ def _execute_single_plan(
 
         if result.success:
             project_name = ras_object.project_name
-            project_folder = Path(ras_object.project_folder)
-            hdf_file = project_folder / f"{project_name}.p{plan_number}.hdf"
-            legacy_file = project_folder / f"{project_name}.O{plan_number}"
+            hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
+            project_folder = hdf_file.parent
+            canonical_plan = hdf_file.stem.removeprefix(f"{project_name}.p")
+            legacy_file = project_folder / f"{project_name}.O{canonical_plan}"
             if hdf_file.is_file() and not legacy_file.is_file():
                 result.result_path = str(hdf_file)
                 result.result_format = "hdf"
