@@ -114,7 +114,10 @@ geometry HDF and preprocessor outputs. The default remains `True`.
     shared geometry, set `copy_geometry_outputs=False`.
 
 The return value maps each plan number to an `ExecutionResult` with `success`,
-`worker_id`, `hdf_path`, `error_message`, and `execution_time` fields.
+`worker_id`, `hdf_path`, `result_path`, `result_format`, `error_message`, and
+`execution_time` fields. `result_path` identifies the selected HDF or legacy
+output artifact; `result_format` is `"hdf"` or `"legacy"` when one result
+family is available.
 
 The progress watchdog stops queued submissions when no plan finishes within the
 slowest worker's `max_runtime_minutes` plus a staging/copy-back margin. It then

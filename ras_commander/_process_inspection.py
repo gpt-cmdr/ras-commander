@@ -473,6 +473,23 @@ def _unresolved_computation_identity_error(
     )
 
 
+def _unsupported_plan_engine_error(
+    process: RasProcessRecord,
+) -> RasProcessQueryError:
+    """Describe a plan-linked engine without a safe cancellation signature."""
+    return RasProcessQueryError(
+        pid=process.pid,
+        operation="match_plan_process_engine",
+        reason_code="plan_process_signature_unsupported",
+        exception_type="PlanProcessSignatureUnsupported",
+        detail=(
+            f"{process.name} references an exact artifact for this plan, but "
+            "ras-commander cannot yet prove a cancellation-safe process "
+            "identity for that engine"
+        ),
+    )
+
+
 def match_plan_processes(
     inventory: RasProcessInventory,
     *,
@@ -494,6 +511,57 @@ def match_plan_processes(
     for process in inventory.processes:
         name = process.name.casefold()
         if name not in _PLAN_MATCHABLE_PROCESS_NAMES:
+            cwd_marker_match = (
+                process.working_directory is not None
+                and _same_windows_path(
+                    process.working_directory,
+                    str(project_path.parent),
+                )
+                and _command_has_exact_marker(
+                    process.command_line,
+                    f"b{plan_number}",
+                )
+            )
+            exact_plan_paths = (
+                plan_path,
+                run_file_path,
+                tmp_hdf_path,
+            )
+            shared_project_paths = (
+                project_path,
+                computation_file_path,
+            )
+            plan_marker_match = _command_has_exact_marker(
+                process.command_line,
+                f"b{plan_number}",
+            )
+            if (
+                cwd_marker_match
+                or any(
+                    candidate is not None
+                    and _command_has_exact_path(
+                        process.command_line,
+                        candidate,
+                        process.working_directory,
+                    )
+                    for candidate in exact_plan_paths
+                )
+                or (
+                    plan_marker_match
+                    and any(
+                        candidate is not None
+                        and _command_has_exact_path(
+                            process.command_line,
+                            candidate,
+                            process.working_directory,
+                        )
+                        for candidate in shared_project_paths
+                    )
+                )
+            ):
+                identity_errors.append(
+                    _unsupported_plan_engine_error(process)
+                )
             continue
         if name == "ras.exe":
             matched = _command_has_exact_path(

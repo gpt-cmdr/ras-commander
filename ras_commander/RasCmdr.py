@@ -748,6 +748,64 @@ class RasCmdr:
         return digest.hexdigest()
 
     @staticmethod
+    def _snapshot_result_artifact(
+        path: Path,
+    ) -> Optional[tuple[tuple[int, ...], str]]:
+        """Capture a stable identity and digest for a pre-existing result."""
+        if not path.exists():
+            return None
+        if not path.is_file():
+            raise IsADirectoryError(f"Result artifact is not a file: {path}")
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            before = RasCmdr._file_identity(os.fstat(stream.fileno()))
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+            after = RasCmdr._file_identity(os.fstat(stream.fileno()))
+        path_after = RasCmdr._file_identity(path.stat())
+        if before != after or after[:4] != path_after[:4]:
+            raise RuntimeError(
+                f"Result artifact changed while fingerprinting: {path}"
+            )
+        return path_after, digest.hexdigest()
+
+    @staticmethod
+    def _result_artifact_changed_since(
+        path: Path,
+        prior_snapshot: Optional[tuple[tuple[int, ...], str]],
+    ) -> bool:
+        """Return whether a result is new or differs from its pre-run state."""
+        if not path.is_file():
+            return False
+        if prior_snapshot is None:
+            return True
+        prior_identity, prior_sha256 = prior_snapshot
+        try:
+            current_identity = RasCmdr._file_identity(path.stat())
+        except OSError as exc:
+            logger.debug(
+                "Could not inspect result artifact %s: %s",
+                path,
+                exc,
+            )
+            return False
+        if current_identity == prior_identity:
+            return False
+        try:
+            current_snapshot = RasCmdr._snapshot_result_artifact(path)
+        except (OSError, RuntimeError) as exc:
+            logger.debug(
+                "Could not fingerprint result artifact %s: %s",
+                path,
+                exc,
+            )
+            return False
+        return (
+            current_snapshot is not None
+            and current_snapshot[1] != prior_sha256
+        )
+
+    @staticmethod
     def _publish_plan_artifacts_transaction(
         plan_number: str,
         *,
@@ -1639,6 +1697,10 @@ class RasCmdr:
         *,
         check_errors: bool = True,
         modified_after: Optional[float] = None,
+        prior_artifact_snapshot: Optional[
+            tuple[tuple[int, ...], str]
+        ] = None,
+        require_artifact_change: bool = False,
         project_folder: Optional[Union[str, Path]] = None,
         project_name: Optional[str] = None,
     ) -> bool:
@@ -1659,6 +1721,15 @@ class RasCmdr:
         ):
             logger.debug(
                 "Verification rejected stale legacy result %s",
+                output_path.name,
+            )
+            return False
+        if require_artifact_change and not RasCmdr._result_artifact_changed_since(
+            output_path,
+            prior_artifact_snapshot,
+        ):
+            logger.debug(
+                "Verification rejected unchanged legacy result %s",
                 output_path.name,
             )
             return False
@@ -1721,6 +1792,10 @@ class RasCmdr:
         output_format: ResultFormat,
         check_errors: bool = True,
         modified_after: Optional[float] = None,
+        prior_artifact_snapshot: Optional[
+            tuple[tuple[int, ...], str]
+        ] = None,
+        require_artifact_change: bool = False,
     ) -> bool:
         """Verify the result family produced by the selected execution engine."""
         if output_format == "legacy":
@@ -1729,11 +1804,15 @@ class RasCmdr:
                 ras_object,
                 check_errors=check_errors,
                 modified_after=modified_after,
+                prior_artifact_snapshot=prior_artifact_snapshot,
+                require_artifact_change=require_artifact_change,
             )
         return RasCmdr._verify_completion(
             RasCmdr._get_hdf_path(plan_number, ras_object),
             check_errors=check_errors,
             modified_after=modified_after,
+            prior_artifact_snapshot=prior_artifact_snapshot,
+            require_artifact_change=require_artifact_change,
         )
 
     @staticmethod
@@ -1741,6 +1820,10 @@ class RasCmdr:
         hdf_path: Path,
         check_errors: bool = True,
         modified_after: Optional[float] = None,
+        prior_artifact_snapshot: Optional[
+            tuple[tuple[int, ...], str]
+        ] = None,
+        require_artifact_change: bool = False,
     ) -> bool:
         """
         Verify that a HEC-RAS computation completed successfully (HDF-only).
@@ -1758,6 +1841,10 @@ class RasCmdr:
                 reject an otherwise valid HDF whose modification time predates
                 this execution. This prevents a failed forced rerun from being
                 credited with a copied or stale successful result.
+            prior_artifact_snapshot: Stable identity and SHA-256 captured before
+                launch when a result already existed.
+            require_artifact_change: Require the result to be new or different
+                from ``prior_artifact_snapshot``.
 
         Returns:
             bool: True if verification passed
@@ -1775,6 +1862,16 @@ class RasCmdr:
                     hdf_path.name,
                 )
                 return False
+
+        if require_artifact_change and not RasCmdr._result_artifact_changed_since(
+            hdf_path,
+            prior_artifact_snapshot,
+        ):
+            logger.debug(
+                "Verification rejected unchanged pre-run HDF %s",
+                hdf_path.name,
+            )
+            return False
 
         try:
             import h5py
@@ -2064,6 +2161,10 @@ class RasCmdr:
         poll_interval: float = 5.0,
         timeout_seconds: float = 7200.0,
         modified_after: Optional[float] = None,
+        prior_artifact_snapshot: Optional[
+            tuple[tuple[int, ...], str]
+        ] = None,
+        require_artifact_change: bool = False,
         deadline_monotonic: Optional[float] = None,
         max_runtime_seconds: Optional[float] = None,
         stage_callback: Optional[Callable[[str], None]] = None,
@@ -2113,6 +2214,8 @@ class RasCmdr:
                 hdf_path,
                 check_errors=check_errors,
                 modified_after=modified_after,
+                prior_artifact_snapshot=prior_artifact_snapshot,
+                require_artifact_change=require_artifact_change,
             )
             if stage_callback is not None:
                 stage_callback("async_solver_completion")
@@ -2320,15 +2423,15 @@ class RasCmdr:
     ):
         """Resolve canonical process-matching paths for one plan."""
         plan_num = RasUtils.normalize_ras_number(plan_number)
-        project_path = Path(ras_object.prj_file).resolve(strict=False)
+        project_path = RasUtils.safe_resolve(Path(ras_object.prj_file))
         resolved_plan_path = RasPlan.get_plan_path(plan_num, ras_object)
         if resolved_plan_path is None:
             raise FileNotFoundError(f"Plan file not found: {plan_num}")
-        plan_path = Path(resolved_plan_path).resolve(strict=False)
-        tmp_hdf_path = (
+        plan_path = RasUtils.safe_resolve(Path(resolved_plan_path))
+        tmp_hdf_path = RasUtils.safe_resolve(
             Path(ras_object.project_folder)
             / f"{ras_object.project_name}.p{plan_num}.tmp.hdf"
-        ).resolve(strict=False)
+        )
         return plan_num, project_path, plan_path, tmp_hdf_path
 
     @staticmethod
@@ -2997,6 +3100,7 @@ class RasCmdr:
         _post_launch_failure_handled = False
         _active_failure_stage = None
         _deadline_monotonic = None
+        _prior_result_artifact_snapshot = None
 
         def _record_async_stage(stage: str) -> None:
             nonlocal _active_failure_stage
@@ -3035,7 +3139,22 @@ class RasCmdr:
             ras_obj.check_initialized()
 
             if RasCmdr._tcu_blocks_launch(ras_obj):
-                return ComputeResult(success=False, results_df_row=None)
+                _execution_details.update(
+                    {
+                        "failure_stage": "tcu_preflight",
+                        "failure_type": "TcuAcceptanceRequired",
+                        "failure_detail": (
+                            "HEC-RAS Terms and Conditions acceptance was not "
+                            "confirmed"
+                        ),
+                    }
+                )
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    completion_verified=False if verify else None,
+                    execution_details=dict(_execution_details),
+                )
 
             if dest_folder is not None:
                 dest_folder = Path(ras_obj.project_folder).parent / dest_folder if isinstance(dest_folder, str) else Path(dest_folder)
@@ -3078,6 +3197,7 @@ class RasCmdr:
                 return ComputeResult(
                     success=False,
                     results_df_row=None,
+                    completion_verified=False if verify else None,
                     execution_details=dict(_execution_details),
                 )
 
@@ -3271,8 +3391,8 @@ class RasCmdr:
             )
             cmd = RasCmdr._direct_windows_compute_command(
                 _callback_executable,
-                Path(compute_prj_path).resolve(),
-                Path(compute_plan_path).resolve(),
+                RasUtils.safe_resolve(Path(compute_prj_path)),
+                RasUtils.safe_resolve(Path(compute_plan_path)),
                 project_only=RasCmdr._uses_legacy_project_cli(compute_ras),
             )
             logger.debug("Running Ras.exe with -c command line flag for plan %s", plan_number)
@@ -3358,8 +3478,12 @@ class RasCmdr:
                             compute_ras.ras_exe_path
                         )
                     )
-                    resolved_project_path = Path(compute_prj_path).resolve()
-                    resolved_plan_path = Path(compute_plan_path).resolve()
+                    resolved_project_path = RasUtils.safe_resolve(
+                        Path(compute_prj_path)
+                    )
+                    resolved_plan_path = RasUtils.safe_resolve(
+                        Path(compute_plan_path)
+                    )
                     command_line = RasCmdr._direct_windows_compute_command(
                         selected_executable,
                         resolved_project_path,
@@ -3383,6 +3507,18 @@ class RasCmdr:
                     )
                     _execution_details["artifact_preparation_cleanup"] = (
                         preparation_cleanup.to_dict()
+                    )
+                    result_artifact_paths = get_plan_result_artifact_paths(
+                        plan_number,
+                        ras_object=compute_ras,
+                    )
+                    selected_result_path = (
+                        result_artifact_paths.hdf
+                        if _execution_result_format == "hdf"
+                        else result_artifact_paths.legacy_output
+                    )
+                    _prior_result_artifact_snapshot = (
+                        RasCmdr._snapshot_result_artifact(selected_result_path)
                     )
                     # The public max_runtime budget measures the engine launch
                     # and completion path. Executable hashing, exact-plan
@@ -3537,6 +3673,10 @@ class RasCmdr:
                         compute_ras,
                         check_errors=verify,
                         modified_after=start_time,
+                        prior_artifact_snapshot=(
+                            _prior_result_artifact_snapshot
+                        ),
+                        require_artifact_change=True,
                         # Preserve the existing 7,200-second asynchronous-
                         # solver bound when max_runtime is omitted.  An
                         # explicit max_runtime supplies the caller deadline;
@@ -3612,6 +3752,10 @@ class RasCmdr:
                                 compute_ras,
                                 output_format=_execution_result_format,
                                 modified_after=start_time,
+                                prior_artifact_snapshot=(
+                                    _prior_result_artifact_snapshot
+                                ),
+                                require_artifact_change=True,
                             )
                         )
                         _completion_verified = bool(verified)
@@ -3656,6 +3800,10 @@ class RasCmdr:
                         compute_ras,
                         check_errors=True,
                         modified_after=start_time,
+                        prior_artifact_snapshot=(
+                            _prior_result_artifact_snapshot
+                        ),
+                        require_artifact_change=True,
                         # Preserve the existing 7,200-second asynchronous-
                         # solver bound when max_runtime is omitted.  An
                         # explicit max_runtime supplies the caller deadline;

@@ -432,6 +432,11 @@ def test_compute_plan_fails_before_launch_when_installed_tcu_is_unaccepted(
         result = RasCmdr.compute_plan("01", ras_object=ras_obj)
 
     assert result.success is False
+    assert result.execution_details["failure_stage"] == "tcu_preflight"
+    assert result.execution_details["failure_type"] == (
+        "TcuAcceptanceRequired"
+    )
+    assert result.execution_details["calculation_attempted"] is False
     assert "Terms & Conditions for Use have not been accepted" in caplog.text
 
 
@@ -1097,6 +1102,75 @@ def test_compute_plan_uses_one_exact_popen_path_and_reports_provenance(
             include_message_sidecars=False,
         ).to_dict(),
     }
+
+
+def test_compute_plan_launch_uses_drive_preserving_resolved_paths(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _calls = _make_skip_scenario(monkeypatch, tmp_path)
+    launches = []
+    local_project = Path(ras_obj.prj_file)
+    local_plan = Path(ras_obj.project_folder) / "TestProject.p01"
+    mapped_project = Path(r"H:\Models\TestProject.prj")
+    mapped_plan = Path(r"H:\Models\TestProject.p01")
+    original_safe_resolve = rascmdr_module.RasUtils.safe_resolve
+
+    def drive_preserving_resolve(path):
+        candidate = Path(path)
+        if candidate == local_project:
+            return mapped_project
+        if candidate == local_plan:
+            return mapped_plan
+        return original_safe_resolve(candidate)
+
+    class CapturingPopen:
+        pid = 7654
+
+        def __init__(self, argv, **kwargs):
+            launches.append((argv, kwargs))
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.returncode
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(
+        rascmdr_module.RasUtils,
+        "safe_resolve",
+        staticmethod(drive_preserving_resolve),
+    )
+    monkeypatch.setattr(rascmdr_module.subprocess, "Popen", CapturingPopen)
+    monkeypatch.setattr(
+        RasCmdr,
+        "_launcher_create_time",
+        staticmethod(lambda pid: 456.75),
+    )
+
+    result = RasCmdr.compute_plan(
+        "01",
+        force_rerun=True,
+        ras_object=ras_obj,
+        dialog_watchdog=False,
+    )
+
+    executable = Path(ras_obj.ras_exe_path).resolve(strict=True)
+    expected_command = (
+        f'"{executable}" -c "{mapped_project}" "{mapped_plan}"'
+    )
+    assert result.success is True
+    assert len(launches) == 1
+    assert launches[0][0] == expected_command
+    assert launches[0][1]["shell"] is False
+    assert result.execution_details["launch_details"]["project_path"] == str(
+        mapped_project
+    )
+    assert result.execution_details["launch_details"]["plan_path"] == str(
+        mapped_plan
+    )
 
 
 @pytest.mark.parametrize(
@@ -2458,6 +2532,64 @@ def test_verify_completion_rejects_hdf_older_than_execution(tmp_path):
     ) is False
 
 
+def test_verify_completion_rejects_unchanged_pre_run_hdf_within_tolerance(
+    tmp_path,
+):
+    hdf_path = tmp_path / "stale.p01.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.create_group("Plan Data/Plan Information")
+        hdf.create_dataset(
+            "Results/Summary/Compute Messages (text)",
+            data=b"Steady Flow Simulation HEC-RAS 6.6\r\n"
+            b"Complete Process\t1\r\n",
+        )
+    execution_start = time.time()
+    stale_time = execution_start - 1.0
+    os.utime(hdf_path, (stale_time, stale_time))
+    prior_snapshot = RasCmdr._snapshot_result_artifact(hdf_path)
+    fresh_time = execution_start + 1.0
+    os.utime(hdf_path, (fresh_time, fresh_time))
+
+    assert RasCmdr._verify_completion(
+        hdf_path,
+        modified_after=execution_start,
+        prior_artifact_snapshot=prior_snapshot,
+        require_artifact_change=True,
+    ) is False
+
+
+def test_plan_process_paths_preserve_mapped_drive_when_resolve_returns_unc(
+    monkeypatch,
+):
+    plan_path = Path(r"H:\Models\Fox.p01")
+    ras_obj = SimpleNamespace(
+        prj_file=Path(r"H:\Models\Fox.prj"),
+        project_folder=Path(r"H:\Models"),
+        project_name="Fox",
+    )
+    monkeypatch.setattr(
+        rascmdr_module.RasPlan,
+        "get_plan_path",
+        staticmethod(lambda *_args, **_kwargs: plan_path),
+    )
+    monkeypatch.setattr(
+        Path,
+        "resolve",
+        lambda self, strict=False: Path(
+            r"\\server\share" + str(self)[2:]
+        ),
+    )
+
+    _, project, plan, tmp_hdf = RasCmdr._resolve_plan_process_paths(
+        "01",
+        ras_obj,
+    )
+
+    assert str(project).startswith("H:")
+    assert str(plan).startswith("H:")
+    assert str(tmp_hdf).startswith("H:")
+
+
 def test_async_wait_does_not_finalize_while_completed_hdf_has_active_solver(
     monkeypatch,
     tmp_path,
@@ -2872,7 +3004,7 @@ def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
     ras_obj.project_folder = tmp_path
     ras_obj.project_name = "TestProject"
     ras_obj.prj_file = prj_path
-    ras_obj.ras_exe_path = "Ras.exe"
+    _patch_compute_launcher(monkeypatch, tmp_path, ras_obj)
 
     monkeypatch.setattr(
         rascmdr_module.RasPlan,
@@ -2885,11 +3017,6 @@ def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
         staticmethod(lambda _plan_path: None),
     )
     monkeypatch.setattr(
-        rascmdr_module.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
-    )
-    monkeypatch.setattr(
         RasCmdr,
         "_get_hdf_path",
         staticmethod(lambda *_args, **_kwargs: hdf_path),
@@ -2899,16 +3026,6 @@ def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
         "_rasunsteady_process_running_for_tmp_hdf",
         staticmethod(lambda *_args, **_kwargs: False),
     )
-    monkeypatch.setattr(
-        RasCmdr,
-        "_verify_completion",
-        staticmethod(
-            lambda _path, check_errors=True, modified_after=None: (
-                modified_after is None
-            )
-        ),
-    )
-
     result = RasCmdr.compute_plan(
         "01",
         ras_object=ras_obj,
@@ -2918,6 +3035,7 @@ def test_compute_plan_does_not_credit_stale_hdf_after_failed_rerun(
     )
 
     assert result.success is False
+    assert hdf_path.read_text(encoding="utf-8") == "old complete result\n"
 
 
 def test_compute_plan_keeps_launcher_error_when_final_hdf_not_verified(

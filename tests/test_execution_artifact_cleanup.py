@@ -21,8 +21,10 @@ from ras_commander import (
 from ras_commander.ExecutionArtifacts import (
     PlanExecutionCleanup,
     PlanExecutionCleanupError,
+    PlanResultArtifactPaths,
     infer_execution_result_format,
 )
+from ras_commander.RasPrj import RasPrj
 from ras_commander.remote.Utils import clear_staged_plan_execution_artifacts
 from ras_commander.RasTcu import RasTcu, TcuStatus
 
@@ -789,7 +791,9 @@ def test_compute_skip_existing_reruns_ambiguous_plan(
     assert not legacy.exists()
 
 
-def test_currency_raises_for_modern_newer_legacy_output(tmp_path: Path) -> None:
+def test_currency_is_not_current_for_modern_newer_legacy_output(
+    tmp_path: Path,
+) -> None:
     ras_obj = _write_project(tmp_path / "currency", "6.60")
     hdf = ras_obj.project_folder / "Model.p01.hdf"
     legacy = ras_obj.project_folder / "Model.O01"
@@ -801,14 +805,98 @@ def test_currency_raises_for_modern_newer_legacy_output(tmp_path: Path) -> None:
         ns=(legacy_stat.st_atime_ns, hdf.stat().st_mtime_ns + 1_000_000_000),
     )
 
-    with pytest.raises(ResultArtifactAmbiguityError) as caught:
-        RasCurrency.are_plan_results_current(
-            "01",
-            ras_obj,
-            check_complete=False,
+    is_current, reason = RasCurrency.are_plan_results_current(
+        "01",
+        ras_obj,
+        check_complete=False,
+    )
+
+    assert is_current is False
+    assert "legacy_output_timestamp_after_hdf" in reason
+
+
+@pytest.mark.parametrize("unavailable_kind", ["ambiguous", "missing"])
+def test_results_summary_skips_only_unavailable_plan(
+    tmp_path: Path,
+    monkeypatch,
+    unavailable_kind: str,
+) -> None:
+    artifacts_module = importlib.import_module(
+        "ras_commander.ExecutionArtifacts"
+    )
+    summary_module = importlib.import_module(
+        "ras_commander.results.ResultsSummary"
+    )
+    ras_obj = RasPrj()
+    ras_obj.project_folder = tmp_path
+    ras_obj.plan_df = pd.DataFrame(
+        [
+            {"plan_number": "01", "Plan Title": "Ambiguous"},
+            {"plan_number": "02", "Plan Title": "Valid"},
+        ]
+    )
+    ras_obj.results_df = pd.DataFrame(
+        [{"plan_number": "01", "completed": True}]
+    )
+    paths = PlanResultArtifactPaths(
+        plan_number="01",
+        plan_file=tmp_path / "Model.p01",
+        hdf=tmp_path / "Model.p01.hdf",
+        legacy_output=tmp_path / "Model.O01",
+        message_sidecars=(),
+    )
+    ambiguity = ResultArtifactAmbiguityError(
+        paths=paths,
+        declared_program_version="6.6",
+        expected_format="hdf",
+        reason_code="legacy_output_timestamp_after_hdf",
+    )
+
+    def resolve(plan_number, *, ras_object):
+        assert ras_object is ras_obj
+        if plan_number == "01":
+            if unavailable_kind == "ambiguous":
+                raise ambiguity
+            raise FileNotFoundError("Plan file not found")
+        return SimpleNamespace(
+            selected_format="hdf",
+            selected_exists=True,
+            selected_path=tmp_path / "Model.p02.hdf",
         )
 
-    assert caught.value.reason_code == "legacy_output_timestamp_after_hdf"
+    monkeypatch.setattr(
+        artifacts_module,
+        "resolve_plan_result_artifact",
+        resolve,
+    )
+    monkeypatch.setattr(
+        summary_module.ResultsSummary,
+        "summarize_plans",
+        staticmethod(
+            lambda entries, _folder: pd.DataFrame(
+                [
+                    {
+                        "plan_number": entries[0]["plan_number"],
+                        "completed": True,
+                    }
+                ]
+            )
+        ),
+    )
+
+    result = ras_obj.update_results_df()
+
+    assert result["plan_number"].tolist() == ["02"]
+
+
+def test_currency_missing_plan_returns_not_current(tmp_path: Path) -> None:
+    ras_obj = _write_project(tmp_path / "currency-missing-plan", "6.60")
+    (ras_obj.project_folder / "Model.p01").unlink()
+
+    is_current, reason = RasCurrency.are_plan_results_current("01", ras_obj)
+
+    assert is_current is False
+    assert "plan file was not found" in reason
 
 
 def test_currency_modern_multiple_formats_selects_newer_hdf(

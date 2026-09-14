@@ -45,4 +45,3 @@ def test_raw_quoted_command_preserves_spaced_paths_and_shell_metacharacter(
         strict=True
     )
     assert observed_argv[1:] == [argument]
-

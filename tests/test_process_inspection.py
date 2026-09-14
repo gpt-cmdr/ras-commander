@@ -315,7 +315,9 @@ def test_strict_inventory_includes_compute_taxonomy_and_tracking():
         "RasProcess.exe",
     ],
 )
-def test_plan_matcher_ignores_globally_visible_non_plan_engines(engine_name):
+def test_plan_matcher_fails_closed_for_plan_linked_unmatchable_engines(
+    engine_name,
+):
     process = FakeProcess(
         10,
         engine_name,
@@ -341,6 +343,86 @@ def test_plan_matcher_ignores_globally_visible_non_plan_engines(engine_name):
 
     assert [item.name for item in inventory.processes] == [engine_name]
     assert result.matched == ()
+    assert result.complete is False
+    assert [error.reason_code for error in result.query_errors] == [
+        "plan_process_signature_unsupported"
+    ]
+
+
+def test_plan_matcher_ignores_unrelated_unmatchable_engine():
+    process = FakeProcess(
+        10,
+        "RasUnsteadySediment.exe",
+        ["RasUnsteadySediment.exe", r"C:\Models\Otter.p01.tmp.hdf"],
+    )
+
+    inventory = scan_ras_processes(
+        psutil_module=FakePsutil([process]),
+    )
+    result = match_plan_processes(
+        inventory,
+        plan_number="01",
+        project_path=Path(r"C:\Models\Fox.prj"),
+        plan_path=Path(r"C:\Models\Fox.p01"),
+        tmp_hdf_path=Path(r"C:\Models\Fox.p01.tmp.hdf"),
+    )
+
+    assert result.matched == ()
+    assert result.complete is True
+    assert result.query_errors == ()
+
+
+def test_plan_matcher_fails_closed_for_unmatchable_engine_with_plan_marker():
+    process = _record(
+        10,
+        "RasUnsteadySediment.exe",
+        ["RasUnsteadySediment.exe", "b01"],
+    )
+
+    result = _plan_inventory(process)
+
+    assert result.matched == ()
+    assert result.complete is False
+    assert [error.reason_code for error in result.query_errors] == [
+        "plan_process_signature_unsupported"
+    ]
+
+
+def test_unmatchable_engine_for_sibling_plan_does_not_block_shared_project(
+    tmp_path,
+):
+    project = tmp_path / "Fox.prj"
+    plan = tmp_path / "Fox.p01"
+    project.write_text("Proj Title=Fox\n", encoding="ascii")
+    plan.write_text("Geom File=g01\n", encoding="ascii")
+    sibling = _record(
+        10,
+        "RasUnsteadySediment.exe",
+        [
+            "RasUnsteadySediment.exe",
+            str(project),
+            str(tmp_path / "Fox.c01"),
+            "b02",
+        ],
+        cwd=str(tmp_path),
+    )
+    inventory = RasProcessInventory(
+        observed_at=1.0,
+        complete=True,
+        processes=(sibling,),
+    )
+
+    result = match_plan_processes(
+        inventory,
+        plan_number="01",
+        project_path=project,
+        plan_path=plan,
+        tmp_hdf_path=tmp_path / "Fox.p01.tmp.hdf",
+    )
+
+    assert result.matched == ()
+    assert result.complete is True
+    assert result.query_errors == ()
 
 
 @pytest.mark.parametrize("solver_name", ["RasSteady.exe", "Steady.exe"])

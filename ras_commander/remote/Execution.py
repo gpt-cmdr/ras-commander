@@ -32,7 +32,8 @@ class ExecutionResult:
         plan_number: Plan number that was executed
         worker_id: ID of worker that executed the plan
         success: True if execution completed successfully
-        hdf_path: Path to output HDF file (if successful)
+        hdf_path: Path to the output HDF when ``result_format == "hdf"``;
+            ``None`` for legacy results
         result_path: Path to the selected HDF or legacy output artifact
         result_format: ``"hdf"`` or ``"legacy"`` when one family exists
         error_message: Error message (if failed)
@@ -540,6 +541,7 @@ def _execute_single_plan(
             elif legacy_file.is_file() and not hdf_file.is_file():
                 result.result_path = str(legacy_file)
                 result.result_format = "legacy"
+                result.hdf_path = None
 
     except NotImplementedError as e:
         result.error_message = str(e)

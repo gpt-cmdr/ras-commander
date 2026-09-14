@@ -14,8 +14,6 @@ Currency Logic:
 All methods are static and designed to be used without instantiation.
 """
 
-import os
-import logging
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Union
 from numbers import Number
@@ -23,6 +21,7 @@ from numbers import Number
 from .LoggingConfig import get_logger
 from .Decorators import log_call
 from .ExecutionArtifacts import (
+    ResultArtifactAmbiguityError,
     ResultFormat,
     get_plan_result_artifact_paths,
     resolve_plan_result_artifact,
@@ -309,11 +308,29 @@ class RasCurrency:
         """
         plan_num = RasCurrency._normalize_plan_number(plan_number)
 
-        resolution = resolve_plan_result_artifact(
-            plan_number,
-            ras_object=ras_object,
-        )
+        try:
+            resolution = resolve_plan_result_artifact(
+                plan_number,
+                ras_object=ras_object,
+            )
+        except ResultArtifactAmbiguityError as exc:
+            return (
+                False,
+                f"Plan {plan_num} result artifacts are ambiguous "
+                f"({exc.reason_code}); execution is required",
+            )
+        except FileNotFoundError:
+            return (
+                False,
+                f"Plan {plan_num} plan file was not found; execution is required",
+            )
         if not resolution.selected_exists:
+            if resolution.selected_format is None:
+                return (
+                    False,
+                    f"Plan {plan_num} has no results and its Program Version "
+                    "does not select a result format",
+                )
             return (
                 False,
                 f"Plan {plan_num} has no {resolution.selected_format} results "

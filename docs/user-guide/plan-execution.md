@@ -115,6 +115,14 @@ untouched. Exact-plan cancellation and terminal evidence collection can extend
 the method's wall-clock return time beyond `max_runtime`; the deadline limits
 the engine attempt, not the safety work needed to prove what remains running.
 
+Plan-specific cancellation currently has qualified command signatures for the
+core steady and unsteady launchers/solvers. Sediment, quasi-unsteady, and
+water-quality engines are inventoried and make quiescence fail closed when they
+can be linked to the plan, but they are not signalled until their exact native
+command signatures are qualified. A timeout involving one of these engines can
+therefore return an uncertain, failed cancellation while leaving the process
+running for manual review.
+
 `ComputeResult.execution_details` provides JSON-safe audit evidence, including:
 
 - `max_runtime_seconds` and `runtime_timed_out`;

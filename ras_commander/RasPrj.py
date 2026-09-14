@@ -2346,6 +2346,7 @@ class RasPrj:
             >>> print(ras.results_df[['plan_number', 'completed', 'has_errors']])
         """
         from ras_commander.ExecutionArtifacts import (
+            ResultArtifactAmbiguityError,
             resolve_plan_result_artifact,
         )
         from ras_commander.results.ResultsSummary import ResultsSummary
@@ -2370,10 +2371,19 @@ class RasPrj:
         # results are intentionally not summarized through the HDF-only path.
         plan_entries = []
         for _, row in plans_to_update.iterrows():
-            resolution = resolve_plan_result_artifact(
-                row["plan_number"],
-                ras_object=self,
-            )
+            try:
+                resolution = resolve_plan_result_artifact(
+                    row["plan_number"],
+                    ras_object=self,
+                )
+            except (ResultArtifactAmbiguityError, OSError) as exc:
+                logger.warning(
+                    "Skipping results summary for plan %s because its result "
+                    "artifacts are unavailable (%s)",
+                    row["plan_number"],
+                    getattr(exc, "reason_code", type(exc).__name__),
+                )
+                continue
             if (
                 resolution.selected_format != "hdf"
                 or not resolution.selected_exists
