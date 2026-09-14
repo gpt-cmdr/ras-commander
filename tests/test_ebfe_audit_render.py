@@ -23,6 +23,7 @@ from ras_commander.sources.federal.ebfe_audit import (
     expected_elements,
     load_audit_bundle,
     render_audit_markdown,
+    study_critical_threshold,
 )
 
 SECTIONS = [
@@ -123,6 +124,97 @@ def test_2d_unsteady_expects_the_structural_set():
     expected = expected_elements("2D", "unsteady")
     for key in ("terrain", "projection", "rasmap", "dss", "land_cover"):
         assert expected[key], key
+
+
+def _threshold_bundle(total, affected=0, element="terrain", dims="1D", referenced=True):
+    aggregate = {
+        "terrain": {"state": "yes", "referenced": False},
+        "land_cover": {"state": "yes", "referenced": False},
+    }
+    models = []
+    for index in range(total):
+        supporting = {
+            "terrain": {"state": "yes", "referenced": False},
+            "land_cover": {"state": "yes", "referenced": False},
+        }
+        if index < affected:
+            supporting[element] = {"state": "no", "referenced": referenced}
+        models.append({
+            "model_id": f"m{index}",
+            "project_name": f"m{index}",
+            "model_type": dims,
+            "supporting_elements": supporting,
+        })
+    if affected:
+        aggregate[element] = {"state": "no", "referenced": referenced}
+    bundle = _minimal_bundle(
+        model_type=dims,
+        flow_regime="steady" if dims == "1D" else "unsteady",
+        g6a_load={"projects_total": total, "projects_loaded": total},
+        supporting_elements=aggregate,
+        critical_missing=[{
+            "element": element,
+            "reason": "legacy_capture_claim",
+            "projects": [f"m{i}" for i in range(affected)],
+        }] if affected else [],
+    )
+    bundle.models = models
+    return bundle
+
+
+@pytest.mark.parametrize(
+    "total,affected,critical",
+    [(10, 0, False), (9, 1, True), (10, 1, True), (100, 9, False), (100, 10, True)],
+)
+def test_1d_study_critical_threshold_boundaries(total, affected, critical):
+    row = study_critical_threshold(_threshold_bundle(total, affected))["elements"]["terrain"]
+    assert (row["numerator"], row["denominator"]) == (affected, total)
+    assert row["study_critical"] is critical
+
+
+def test_unreferenced_1d_terrain_is_exact_informational_text_only():
+    bundle = _threshold_bundle(10, 10, referenced=False)
+    threshold = study_critical_threshold(bundle)
+    assert threshold["elements"]["terrain"]["numerator"] == 0
+    assert not threshold["elements"]["terrain"]["study_critical"]
+    assert not any(action.target == "Terrain" for action in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "No terrain provided or referenced by model (1D)" in markdown
+    assert "Critical data missing" not in markdown
+    assert "needs data not in the delivery" not in markdown
+
+
+def test_below_threshold_1d_reference_is_not_study_critical_and_reports_denominator():
+    bundle = _threshold_bundle(100, 9)
+    assert not any(action.target == "Terrain" for action in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert "| Terrain | 9 | 100 | 9.00% | no |" in markdown
+    assert "legacy capture claim" not in markdown
+
+
+def test_land_cover_uses_same_threshold_as_terrain():
+    bundle = _threshold_bundle(10, 1, element="land_cover")
+    threshold = study_critical_threshold(bundle)
+    assert threshold["elements"]["land_cover"]["study_critical"]
+    assert any(action.target == "Land cover / Manning's n" for action in actions_from_bundle(bundle))
+    assert "| Land cover / Manning's n | 1 | 10 | 10.00% | yes |" in render_audit_markdown(bundle)
+
+
+def test_duplicate_model_row_does_not_inflate_threshold_denominator():
+    bundle = _threshold_bundle(10, 1)
+    bundle.models.append(dict(bundle.models[0]))
+    row = study_critical_threshold(bundle)["elements"]["terrain"]
+    assert (row["numerator"], row["denominator"]) == (1, 10)
+
+
+def test_2d_required_missing_terrain_remains_fatal():
+    bundle = _threshold_bundle(1, 1, dims="2D", referenced=False)
+    threshold = study_critical_threshold(bundle)
+    assert not threshold["applies_to_integrated_1d"]
+    terrain = [a for a in actions_from_bundle(bundle) if a.target == "Terrain"]
+    assert len(terrain) == 1 and terrain[0].blocking and terrain[0].kind == "acquisition"
+    markdown = render_audit_markdown(bundle)
+    assert "needs data not in the delivery" in markdown
 
 
 def test_optional_layers_are_expected_only_when_referenced():
