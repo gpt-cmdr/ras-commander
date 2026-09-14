@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     )
 
 from .ebfe_models import RasEbfeModels
+from .ebfe_extract import ArchiveSurvey, ExtractStats, StreamingZipReader, ZipMemberInfo
 from .noaa_ras2fim import NoaaRas2fimModels
 
 def __getattr__(name: str):
@@ -33,4 +34,8 @@ __all__ = [
     'ScienceBaseInteractiveDownloadRequired',
     'RasEbfeModels',
     'NoaaRas2fimModels',
+    'StreamingZipReader',
+    'ZipMemberInfo',
+    'ArchiveSurvey',
+    'ExtractStats',
 ]

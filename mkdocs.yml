@@ -84,6 +84,7 @@ plugins:
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
+          - api/model-sources.md
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -223,6 +224,7 @@ nav:
     - Fixit Module: api/fixit.md
     - DSS Modules: api/dss.md
     - Remote Modules: api/remote.md
+    - Model Source Utilities: api/model-sources.md
     - DataFrame Reference: reference/dataframe-reference.md
   - RAS Data Formats:
     - Overview: reference/file-formats.md
