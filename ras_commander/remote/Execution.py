@@ -13,12 +13,12 @@ from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from numbers import Integral, Real
-from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from .RasWorker import RasWorker
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..RasCurrency import RasCurrency
 
 logger = get_logger(__name__)
 
@@ -457,8 +457,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -479,8 +478,7 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
@@ -504,13 +502,12 @@ def _execute_single_plan(
             result.success = success
 
             if success:
-                project_name = ras_object.project_name
-                hdf_file = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.hdf"
+                hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
                 else:
                     # Check for .tmp.hdf (Linux container output)
-                    tmp_hdf = Path(ras_object.project_folder) / f"{project_name}.p{plan_number}.tmp.hdf"
+                    tmp_hdf = hdf_file.with_name(f"{hdf_file.stem}.tmp.hdf")
                     if tmp_hdf.exists():
                         result.hdf_path = str(tmp_hdf)
 
