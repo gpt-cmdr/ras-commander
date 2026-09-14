@@ -439,6 +439,7 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
     }
     for element in STUDY_CRITICAL_ELEMENTS:
         affected = []
+        unreferenced_not_delivered = []
         for identity, rows in grouped.items():
             values = [((row.get("supporting_elements") or {}).get(element) or {}) for row in rows]
             referenced = any(bool(value.get("referenced")) for value in values)
@@ -448,6 +449,8 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
             )
             if referenced and not_delivered:
                 affected.append(labels[identity])
+            if not referenced and not_delivered:
+                unreferenced_not_delivered.append(labels[identity])
         numerator = len(affected)
         fraction = float(numerator) / denominator if denominator else 0.0
         row = {
@@ -457,9 +460,15 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
             "percent": round(100.0 * fraction, 4),
             "study_critical": bool(applies and fraction >= STUDY_CRITICAL_THRESHOLD_FRACTION),
             "affected_models": affected,
+            "unreferenced_not_delivered": len(unreferenced_not_delivered),
             "display": f"{numerator}/{denominator} unique model rows ({100.0 * fraction:.2f}%)",
         }
-        if element == "terrain" and applies and numerator == 0:
+        if (
+            element == "terrain"
+            and applies
+            and denominator
+            and len(unreferenced_not_delivered) == denominator
+        ):
             row["informational"] = UNREFERENCED_1D_TERRAIN_NOTE
         result["elements"][element] = row
     return result

@@ -184,6 +184,13 @@ def test_unreferenced_1d_terrain_is_exact_informational_text_only():
     assert "needs data not in the delivery" not in markdown
 
 
+def test_delivered_1d_terrain_does_not_emit_absence_note():
+    bundle = _threshold_bundle(10, 0)
+    threshold = study_critical_threshold(bundle)
+    assert "informational" not in threshold["elements"]["terrain"]
+    assert "No terrain provided or referenced by model (1D)" not in render_audit_markdown(bundle)
+
+
 def test_below_threshold_1d_reference_is_not_study_critical_and_reports_denominator():
     bundle = _threshold_bundle(100, 9)
     assert not any(action.target == "Terrain" for action in actions_from_bundle(bundle))
