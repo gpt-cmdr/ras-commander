@@ -732,13 +732,14 @@ def _to_arrow_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
             frame[column] = pd.array(frame[column], dtype="bool[pyarrow]")
         elif column not in timestamp_columns:
             frame[column] = pd.array(frame[column], dtype="string[pyarrow]")
+    frame = frame.convert_dtypes(dtype_backend="pyarrow")
     for column in ("expected_start", "expected_end", "available_start", "available_end"):
         timestamps = pd.to_datetime(frame[column], errors="coerce", utc=True)
         frame[column] = pd.array(
             timestamps,
             dtype="timestamp[ns, tz=UTC][pyarrow]",
         )
-    return frame.convert_dtypes(dtype_backend="pyarrow")
+    return frame
 
 
 def _rebase_value(value: Any, old_root: Path, new_root: Path) -> Any:
