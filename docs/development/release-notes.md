@@ -2,7 +2,62 @@
 
 ## Version History
 
-### v0.99.2 (Current published release — August 2026)
+### v0.100.0 (September 2026)
+
+**Text and HDF Geometry Extents**
+
+- Build 1D model footprints directly from plain-text `XS GIS Cut Line`
+  endpoints when compiled geometry HDF content is absent or incomplete.
+- Prefer usable HDF geometry component by component, then fill missing 1D,
+  2D, and storage-area geometry from the matching text geometry file.
+- Enable the fallback by default across project extents, WGS84 bounds, and
+  GeoJSON export. Set `fallback_to_plaintext=False` to require HDF-only
+  results.
+- Make `include_storage=True` include storage-area polygons from HDF through
+  `HdfStruc.get_storage_area_polygons()` before considering text geometry.
+- Preserve geometry provenance in 1D breakout catalogs and improve HDF
+  cross-section handling for legacy schemas, multipart cut lines, explicit
+  project context, and exact edge-line diagnostics.
+
+**Federal Model Sources and Archive Recovery**
+
+- Add Alabama BLE watershed discovery, verified download, safe extraction,
+  organization, portable inventory generation, and map-catalog integration.
+- Add Alabama Flood Effective and Preliminary model adapters using the shared
+  hardened ArcGIS, provenance, download, and extraction machinery;
+  Preliminary sources remain explicitly non-regulatory.
+- Add a bounded, forward-walking reader for eBFE ZIP deliveries that lack an
+  End of Central Directory record, with CRC and size verification and explicit
+  truncation reporting.
+- Add the optional `ebfe` extra for Deflate64 ZIP method 9 on supported Python
+  versions, plus a common renderer for engineer-facing eBFE audit and repair
+  documents.
+
+**Execution Evidence and Cleanup**
+
+- Add `RasCmdr.inspect_execution_evidence()` for immutable, source-aware
+  completion observations across HDF, stored-message, legacy-output, process,
+  and Controller channels.
+- Select the result family from the plan program version, fail closed on unsafe
+  ambiguity or conflicting completion evidence, and keep mechanical completion
+  separate from errors, freshness, runtime, and hydraulic acceptance.
+- Add `RasCmdr.remove_plan_execution_artifacts()` and apply exact artifact
+  ownership, cleanup, freshness, process-exit, and transactional publication
+  rules across local, parallel, COM, Docker, PsExec, and remote workflows.
+- Preserve mapped-drive launch paths, reject stale byte-identical results, and
+  report structured preflight and execution details through `ComputeResult`.
+
+**Matched Docker Compute**
+
+- Add a matched Wine preprocessing and native Linux unsteady-compute workflow
+  for HEC-RAS 6.5, 6.6, and 7.0.1.
+- Add CPU selection, progress callbacks, validated resume behavior, sequential
+  batch execution, host-side receipt verification, and a stable batch-summary
+  schema.
+- Include the scoped container build assets and operational guidance while
+  excluding generated qualification payloads and duplicate release records.
+
+### v0.99.2 (August 2026)
 
 **Network-Aligned 1D Breakout Assembly**
 
