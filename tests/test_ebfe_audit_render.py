@@ -93,9 +93,9 @@ def test_1d_steady_expects_nothing_it_does_not_reference():
         assert not expected[key], key
 
 
-def test_1d_steady_expects_terrain_when_it_references_one():
+def test_1d_steady_keeps_referenced_terrain_informational():
     expected = expected_elements("1D", "steady", {"terrain": True, "projection": True})
-    assert expected["terrain"] and expected["projection"]
+    assert not expected["terrain"] and expected["projection"]
 
 
 def test_2d_always_expects_terrain_and_projection():
@@ -163,13 +163,13 @@ def _threshold_bundle(total, affected=0, element="terrain", dims="1D", reference
 
 
 @pytest.mark.parametrize(
-    "total,affected,critical",
-    [(10, 0, False), (9, 1, True), (10, 1, True), (100, 9, False), (100, 10, True)],
+    "total,affected",
+    [(10, 0), (100, 1), (1, 1), (100, 100)],
 )
-def test_1d_study_critical_threshold_boundaries(total, affected, critical):
+def test_1d_terrain_is_informational_at_every_prevalence(total, affected):
     row = study_critical_threshold(_threshold_bundle(total, affected))["elements"]["terrain"]
     assert (row["numerator"], row["denominator"]) == (affected, total)
-    assert row["study_critical"] is critical
+    assert row["study_critical"] is False
 
 
 def test_unreferenced_1d_terrain_is_exact_informational_text_only():
@@ -199,7 +199,21 @@ def test_below_threshold_1d_reference_is_not_study_critical_and_reports_denomina
     assert "legacy capture claim" not in markdown
 
 
-def test_land_cover_uses_same_threshold_as_terrain():
+def test_referenced_1d_terrain_is_exact_informational_text_only_even_at_100_percent():
+    bundle = _threshold_bundle(10, 10)
+    assert not any(action.target.startswith("Terrain") for action in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    assert (
+        "Terrain referenced but not provided (1D; informational — does not prevent recomputation)"
+        in markdown
+    )
+    assert "| Terrain | 10 | 10 | 100.00% | no |" in markdown
+    assert "Critical data missing" not in markdown
+    assert "Obtain `Terrain`" not in markdown
+    assert "Rebuild `Terrain`" not in markdown
+
+
+def test_land_cover_retains_the_inclusive_10_percent_threshold():
     bundle = _threshold_bundle(10, 1, element="land_cover")
     threshold = study_critical_threshold(bundle)
     assert threshold["elements"]["land_cover"]["study_critical"]

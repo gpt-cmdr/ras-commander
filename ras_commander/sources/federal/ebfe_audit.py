@@ -90,6 +90,9 @@ STUDY_CRITICAL_THRESHOLD_FRACTION = 0.10
 STUDY_CRITICAL_ELEMENTS = ("terrain", "land_cover")
 STUDY_CRITICAL_MISSING_STATES = ("no", "source_only", "partial")
 UNREFERENCED_1D_TERRAIN_NOTE = "No terrain provided or referenced by model (1D)"
+REFERENCED_1D_TERRAIN_NOTE = (
+    "Terrain referenced but not provided (1D; informational — does not prevent recomputation)"
+)
 
 _SURFACE_TO_KIND = {
     "asset_relocation": "file_movement",
@@ -334,7 +337,7 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     # and runs with neither -- 12090301's 2,378 projects reference no terrain
     # and no projection, and calling those "needs external data" was wrong.
     return {
-        "terrain": is_2d or optional("terrain", False),
+        "terrain": is_2d,
         "land_cover": optional("land_cover", is_2d),
         "infiltration": optional("infiltration", False),
         "soils": optional("soils", False),
@@ -408,11 +411,12 @@ def _unique_model_identity(row: dict) -> tuple:
 def study_critical_threshold(bundle: AuditBundle) -> dict:
     """Measure 1D missing supporting data over total unique model rows.
 
-    Terrain and land cover/Manning's n become *study-critical* for an integrated
-    1D study only when they are both referenced and not delivered by at least 10
-    percent of its unique models. Duplicate captures of one project/prj pair do
-    not inflate either numerator or denominator. This is a study classification
-    rule; 2D's structurally required terrain rule is deliberately unchanged.
+    Missing terrain is informational for an integrated 1D study at every
+    prevalence because cross-section computations do not require it. Land
+    cover/Manning's n becomes *study-critical* only when it is referenced and
+    not delivered by at least 10 percent of the study's unique models. Duplicate
+    captures of one project/prj pair do not inflate either numerator or
+    denominator. The structurally required 2D terrain rule is unchanged.
     """
     grouped: dict[tuple, list[dict]] = defaultdict(list)
     labels: dict[tuple, str] = {}
@@ -458,18 +462,21 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
             "denominator": denominator,
             "fraction": round(fraction, 8),
             "percent": round(100.0 * fraction, 4),
-            "study_critical": bool(applies and fraction >= STUDY_CRITICAL_THRESHOLD_FRACTION),
+            "study_critical": bool(
+                applies
+                and element == "land_cover"
+                and fraction >= STUDY_CRITICAL_THRESHOLD_FRACTION
+            ),
             "affected_models": affected,
             "unreferenced_not_delivered": len(unreferenced_not_delivered),
             "display": f"{numerator}/{denominator} unique model rows ({100.0 * fraction:.2f}%)",
         }
-        if (
-            element == "terrain"
-            and applies
-            and denominator
-            and len(unreferenced_not_delivered) == denominator
-        ):
-            row["informational"] = UNREFERENCED_1D_TERRAIN_NOTE
+        if element == "terrain" and applies and (affected or unreferenced_not_delivered):
+            row["informational"] = (
+                REFERENCED_1D_TERRAIN_NOTE
+                if affected
+                else UNREFERENCED_1D_TERRAIN_NOTE
+            )
         result["elements"][element] = row
     return result
 
@@ -671,8 +678,8 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     expected = expected_elements(dims, regime, _referenced_elements(bundle))
     threshold = study_critical_threshold(bundle)
     if threshold["applies_to_integrated_1d"]:
-        for element in STUDY_CRITICAL_ELEMENTS:
-            expected[element] = threshold["elements"][element]["study_critical"]
+        expected["terrain"] = False
+        expected["land_cover"] = threshold["elements"]["land_cover"]["study_critical"]
     delivered = _delivered_elements(bundle)
     labels = dict(SUPPORTING_ELEMENTS)
     for ekey, is_expected in expected.items():
@@ -743,6 +750,7 @@ def _group_gaps(bundle: AuditBundle) -> dict:
     by_verdict: Counter = Counter()
     analysis_counts: Counter = Counter()
     analysis_evidence: dict[str, str] = {}
+    dims, _ = _model_type(bundle)
     for gap in bundle.gaps:
         if gap.get("gap") != "MISSING_REFERENCE":
             continue
@@ -769,6 +777,12 @@ def _group_gaps(bundle: AuditBundle) -> dict:
             group = "Projection"
         else:
             group = f"Other ({ext or 'no extension'})"
+        # A referenced terrain asset remains useful mapping context, but it is
+        # not something an integrated 1D model must obtain to recompute. Keep
+        # its prevalence in section 3 instead of restating it as a deficiency
+        # in sections 5 and 6.
+        if dims == "1D" and group == "Terrain":
+            continue
         grouped[group][raw] += 1
         example_source.setdefault((group, raw), gap.get("source_file", ""))
     # Element-level reclassifications: a supporting layer the capture called
@@ -840,8 +854,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     expected = expected_elements(dims, regime, _referenced_elements(bundle))
     threshold = study_critical_threshold(bundle)
     if threshold["applies_to_integrated_1d"]:
-        for element in STUDY_CRITICAL_ELEMENTS:
-            expected[element] = threshold["elements"][element]["study_critical"]
+        expected["terrain"] = False
+        expected["land_cover"] = threshold["elements"]["land_cover"]["study_critical"]
     delivered = _delivered_elements(bundle)
     actions = actions_from_bundle(bundle)
     load = audit.get("g6a_load", {}) or {}
@@ -1016,7 +1030,11 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w("| Element | Expected | Delivered | Location | Note |")
     w("|---|---|---|---|---|")
     for ekey, label in SUPPORTING_ELEMENTS:
-        exp = "Yes" if expected[ekey] else "Not used by this model"
+        exp = (
+            "Informational only (1D)"
+            if ekey == "terrain" and threshold["applies_to_integrated_1d"]
+            else ("Yes" if expected[ekey] else "Not used by this model")
+        )
         d = delivered.get(ekey, {})
         state = _yes_no(d.get("state", "unknown"))
         if not expected[ekey] and d.get("state") in ("no", "unknown", "not captured"):
@@ -1029,7 +1047,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         w("")
         w("Study-critical prevalence for integrated 1D supporting data:")
         w("")
-        w("| Element | Referenced and not delivered | Total unique models | Fraction | Study-critical (>=10%) |")
+        w("| Element | Referenced and not delivered | Total unique models | Fraction | Study-critical |")
         w("|---|---:|---:|---:|---|")
         for ekey in STUDY_CRITICAL_ELEMENTS:
             row = threshold["elements"][ekey]
