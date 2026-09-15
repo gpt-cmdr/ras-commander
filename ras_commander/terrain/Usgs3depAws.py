@@ -61,7 +61,6 @@ Example:
     )
 """
 
-import logging
 import re
 import subprocess
 import tempfile
@@ -78,7 +77,10 @@ from .._spatial_extent import (
     _normalize_extent_bounds,
     _normalize_extent_geometry,
 )
-logger = logging.getLogger(__name__)
+from ..Decorators import log_call
+from ..LoggingConfig import get_logger
+
+logger = get_logger(__name__)
 
 
 class Usgs3depAws:
@@ -108,6 +110,7 @@ class Usgs3depAws:
     }
 
     @staticmethod
+    @log_call
     def download_tile_index(
         resolution: int,
         cache_folder: Optional[Union[str, Path]] = None
@@ -169,6 +172,7 @@ class Usgs3depAws:
         return gdf
 
     @staticmethod
+    @log_call
     def query_tiles_api(
         bbox: Any,
         resolution: int,
@@ -236,6 +240,7 @@ class Usgs3depAws:
         return gdf
 
     @staticmethod
+    @log_call
     def find_tiles_for_bbox(
         bbox: Any,
         resolution: int,
@@ -285,6 +290,7 @@ class Usgs3depAws:
         return intersecting
 
     @staticmethod
+    @log_call
     def list_projects_for_bbox(
         bbox: Any,
         resolution: int,
@@ -416,6 +422,7 @@ class Usgs3depAws:
         return int(year_value)
 
     @staticmethod
+    @log_call
     def select_projects_for_coverage(
         projects: gpd.GeoDataFrame,
         bbox: Any,
@@ -873,7 +880,7 @@ class Usgs3depAws:
     @staticmethod
     def _download_single_tile(
         tile_url: str,
-        output_folder: Path,
+        output_folder: Union[str, Path],
         overwrite_dest: bool
     ) -> Optional[Path]:
         """
@@ -888,7 +895,7 @@ class Usgs3depAws:
             Path to downloaded/cached file, or None if failed
         """
         filename = tile_url.split('/')[-1]
-        output_path = output_folder / filename
+        output_path = Path(output_folder) / filename
 
         try:
             # Check if file exists and is valid (passive caching)
@@ -960,6 +967,7 @@ class Usgs3depAws:
             return (minx, miny, maxx, maxy)
 
     @staticmethod
+    @log_call
     def download_tiles(
         bbox: Any,
         resolution: int,
@@ -1361,6 +1369,7 @@ class Usgs3depAws:
         return all_downloaded, provenance
 
     @staticmethod
+    @log_call
     def create_vrt(
         tile_files: Sequence[Union[str, Path]],
         output_vrt: Union[str, Path],
@@ -1848,7 +1857,7 @@ class Usgs3depAws:
                 yield install_dir
 
     @staticmethod
-    def _find_gdalbuildvrt_in_install_dir(install_dir: Path) -> Optional[Path]:
+    def _find_gdalbuildvrt_in_install_dir(install_dir: Union[str, Path]) -> Optional[Path]:
         """Return gdalbuildvrt.exe from a specific HEC-RAS install directory."""
         return Usgs3depAws._find_gdal_tool_in_install_dir(install_dir, "gdalbuildvrt.exe")
 
@@ -1875,8 +1884,8 @@ class Usgs3depAws:
 
     @staticmethod
     def _write_gdal_input_file_list(
-        tile_paths: List[Path],
-        output_dir: Path,
+        tile_paths: Sequence[Union[str, Path]],
+        output_dir: Union[str, Path],
     ) -> Path:
         """Write a temporary GDAL input file list and return its path."""
         with tempfile.NamedTemporaryFile(
