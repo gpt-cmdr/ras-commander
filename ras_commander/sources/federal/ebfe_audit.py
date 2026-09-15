@@ -432,7 +432,7 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
     dims, _ = _model_type(bundle)
     applies = bool(denominator) and dims == "1D"
     result = {
-        "rule": "referenced_and_not_delivered_unique_models_gte_10_percent",
+        "rule": "integrated_1d_terrain_informational_land_cover_gte_10_percent",
         "threshold_fraction": STUDY_CRITICAL_THRESHOLD_FRACTION,
         "threshold_percent": 10,
         "denominator_definition": "total unique model rows by normalized project_folder + prj_file",
@@ -625,7 +625,7 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     # A relocation is recorded twice by the worker -- once in the audit's
     # asset_relocation block and once as an asset_relocation recipe. One move,
     # one step; otherwise the blocking count doubles.
-    seen_moves = {(a.kind, a.from_value, a.to_value) for a in actions}
+    seen_moves = {(a.kind, a.target, a.from_value, a.to_value) for a in actions}
 
     acquired_files: set = set()
     for recipe in bundle.recipes:
@@ -634,6 +634,15 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         raw_from = recipe.get("from") or ""
         raw_to = recipe.get("to")
         if recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition":
+            # The independent review is authoritative over the producer's
+            # provisional acquisition classification.  When it finds the
+            # source file in the delivered archive, the reviewer marks the
+            # original recipe ``analysis_gap`` and appends the corrected path
+            # recipe.  Retaining both would falsely tell the engineer to
+            # obtain a file that was delivered (Aransas 12100407).
+            review = recipe.get("review") or {}
+            if review.get("verdict") == "analysis_gap":
+                continue
             # Worker rev i: the DSS a boundary was authored for is in no
             # delivered archive (reviewed "real" by the archive-member match).
             # Spring Creek carries 24 of these and still rendered "after
@@ -655,15 +664,16 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             continue
         if raw_from and raw_to and str(raw_from) == str(raw_to):
             continue    # an identity rewrite is not an action
-        if (kind, raw_from or None, raw_to) in seen_moves:
+        target = recipe.get("file", "")
+        if (kind, target, raw_from or None, raw_to) in seen_moves:
             continue
-        seen_moves.add((kind, raw_from or None, raw_to))
+        seen_moves.add((kind, target, raw_from or None, raw_to))
         depth = escape_depth(raw_from)
         reason = recipe.get("why") or ("broken_relative_reference" if depth > 0 else "separately_delivered")
         if depth > 0 and reason == "missing_from_delivery":
             reason = "broken_relative_reference"
         actions.append(RepairAction(
-            order=0, kind=kind, target=recipe.get("file", ""), reason=reason,
+            order=0, kind=kind, target=target, reason=reason,
             evidence=recipe.get("locator", ""), confidence=recipe.get("confidence", "resolved"),
             blocking=surface in ("dss_pathname", "asset_relocation", "hdf_asset_attribute"),
             escape_depth=depth, from_value=raw_from or None, to_value=recipe.get("to"),
