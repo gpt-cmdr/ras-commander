@@ -83,12 +83,14 @@ def _receipt(project_file, arguments, **changes):
     return path
 
 
-def _fake_run(monkeypatch, project, *, changes=None, returncode=0):
+def _fake_run(monkeypatch, project, *, changes=None, returncode=0, mutate=None):
     calls = []
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        _receipt(project, command, **(changes or {}))
+        receipt = _receipt(project, command, **(changes or {}))
+        if mutate is not None:
+            mutate(receipt, project)
         return subprocess.CompletedProcess(command, returncode, "container output", "diagnostic output")
 
     monkeypatch.setattr(module.subprocess, "run", run)
@@ -305,6 +307,45 @@ def test_compute_receipt_requires_verified_success(monkeypatch, project, stage_r
     _fake_run(monkeypatch, project, changes={"result": stage_result})
     result = RasDocker.compute_plan(project, 1, image="custom-compute:local")
     assert not result and ("stage result" in result.error or "successful completion" in result.error)
+
+
+@pytest.mark.parametrize("failure", ["missing", "size", "sha256", "escape"])
+def test_receipt_artifacts_must_match_confined_regular_files(monkeypatch, project, failure):
+    outside = project.parent.parent / "outside.tmp.hdf"
+    outside.write_bytes(b"outside")
+
+    def mutate(receipt_path, project_file):
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+        artifact = payload["artifacts"][0]
+        target = project_file.parent / artifact["path"]
+        if failure == "missing":
+            target.unlink()
+        elif failure == "size":
+            artifact["size_bytes"] += 1
+        elif failure == "sha256":
+            artifact["sha256"] = "0" * 64
+        else:
+            artifact["path"] = "../outside.tmp.hdf"
+        receipt_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    _fake_run(monkeypatch, project, mutate=mutate)
+    result = RasDocker.preprocess_plan(project, 1, image="custom-preparer:local")
+    assert not result
+    if failure == "missing":
+        assert "cannot find" in result.error.lower() or "no such file" in result.error.lower()
+    elif failure == "size":
+        assert "size does not match" in result.error
+    elif failure == "sha256":
+        assert "SHA-256 does not match" in result.error
+    else:
+        assert "malformed artifact inventory" in result.error
+
+
+def test_receipt_actual_artifacts_are_accepted(monkeypatch, project):
+    _fake_run(monkeypatch, project)
+    result = RasDocker.preprocess_plan(project, 1, image="custom-preparer:local")
+    assert result
+    assert len(result.receipt["artifacts"]) == 3
 
 
 def test_nonzero_docker_exit_rejects_successful_receipt(monkeypatch, project):

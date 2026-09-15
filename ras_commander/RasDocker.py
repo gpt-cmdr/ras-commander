@@ -7,6 +7,7 @@ not transfer files to a remote daemon or require HEC-RAS on the Python host.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import hashlib
 import json
 from numbers import Integral
 from pathlib import Path, PurePosixPath
@@ -587,6 +588,30 @@ class RasDocker:
                         malformed_artifact = True
                         continue
                     artifact_paths.add(path_value)
+                    artifact_file = RasUtils.safe_resolve(
+                        result.project_path.parent.joinpath(*relative.parts)
+                    )
+                    try:
+                        canonical_artifact = artifact_file.resolve(strict=True)
+                        canonical_root = result.project_path.parent.resolve(strict=True)
+                        linked = artifact_file.is_symlink() or (
+                            hasattr(artifact_file, "is_junction")
+                            and artifact_file.is_junction()
+                        )
+                        if (not artifact_file.is_relative_to(result.project_path.parent)
+                                or not canonical_artifact.is_relative_to(canonical_root)):
+                            raise ValueError("path escapes the project folder")
+                        if linked or not artifact_file.is_file():
+                            raise ValueError("path is not a regular file")
+                        actual = RasDocker._stable_artifact_state(artifact_file)
+                        if actual["size_bytes"] != item["size_bytes"]:
+                            raise ValueError("size does not match the receipt")
+                        if actual["sha256"] != item["sha256"]:
+                            raise ValueError("SHA-256 does not match the receipt")
+                    except (OSError, ValueError) as exc:
+                        diagnostics.append(
+                            f"Container receipt artifact {path_value!r} is invalid: {exc}"
+                        )
                 if malformed_artifact or len(artifact_paths) != len(artifacts):
                     diagnostics.append("Container receipt has a malformed artifact inventory")
                 if result.stage == "prepare":
@@ -616,6 +641,20 @@ class RasDocker:
         if diagnostics:
             result.error = "; ".join(([result.error] if result.error else []) + diagnostics)
         result.success = result.error is None
+
+    @staticmethod
+    def _stable_artifact_state(path):
+        before = path.stat()
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        after = path.stat()
+        before_identity = (before.st_size, before.st_mtime_ns, before.st_ino)
+        after_identity = (after.st_size, after.st_mtime_ns, after.st_ino)
+        if before_identity != after_identity:
+            raise ValueError("file changed while validating receipt evidence")
+        return {"size_bytes": after.st_size, "sha256": digest.hexdigest()}
 
     @staticmethod
     def _text(value):
