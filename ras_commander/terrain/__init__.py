@@ -19,7 +19,11 @@ Main Classes:
 
     Usgs3depAws: USGS 3DEP elevation tile download from AWS S3
         - find_tiles_for_bbox(): Find tiles covering a bounding box
-        - download_tiles(): Download tiles with concurrent threads
+        - select_projects_for_coverage(): Newest project per sub-area, with a coverage report
+        - download_tiles(): Download tiles with concurrent threads, optional
+          coverage-aware project selection and per-tile provenance
+        - create_vrt(): Mosaic tiles, optionally onto an explicit target CRS,
+          cell size, resampling method, and nodata value
 
     RasTerrainMod: Terrain modification analysis via pythonnet (Windows only)
         - get_terrain_profile(): Sample terrain with modifications applied
