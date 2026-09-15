@@ -175,6 +175,8 @@ nav:
       - Project Initialization: getting-started/project-initialization.md
     - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
+    - Container Execution: user-guide/container-execution.md
+    - Container HPC Design: user-guide/container-hpc-design.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
     - Spatial Data & RASMapper: user-guide/spatial-data.md
