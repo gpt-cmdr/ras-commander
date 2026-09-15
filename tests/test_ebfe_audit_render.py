@@ -906,3 +906,102 @@ def test_path_corrections_with_same_values_but_different_files_are_not_deduplica
         ("Aransas.u01", "Aransas.u01:9:DSS File"),
         ("Aransas.u02", "Aransas.u02:9:DSS File"),
     ]
+
+
+def test_registered_element_scope_excludes_unregistered_flow_actions():
+    bundle = _two_d_unsteady()
+    bundle.models = [{
+        "prj_file": "Aransas.prj",
+        "elements": [
+            {"type": "unsteady_flow", "number": "01", "registered": True},
+            {"type": "unsteady_flow", "number": "02", "registered": True},
+        ],
+    }]
+    shared = {
+        "surface": "dss_pathname",
+        "from": r".\DSS Inputs\Aransas.dss",
+        "to": r"..\DSS\100YR.dss",
+        "why": "relocated_by_assembly",
+        "confidence": "inferred",
+        "origin": "deficiency_review",
+    }
+    bundle.recipes = [
+        dict(shared, file="Aransas.u01", locator="Aransas.u01:9:DSS File"),
+        dict(shared, file="Aransas.u03", locator="Aransas.u03:9:DSS File"),
+        dict(shared, file="Backup.u01", locator="Backup.u01:9:DSS File"),
+    ]
+    corrections = [action for action in actions_from_bundle(bundle) if action.kind == "path_correction"]
+    assert [(action.target, action.evidence) for action in corrections] == [
+        ("Aransas.u01", "Aransas.u01:9:DSS File"),
+    ]
+
+
+def test_reviewed_dss_destinations_and_plan_hdf_list_replace_sampled_capture():
+    bundle = _two_d_unsteady(supporting_elements={
+        "dss": {
+            "state": "yes", "location": r".\DSS Inputs\Aransas.dss",
+            "referenced": True, "note": "1 referenced, 1 resolve",
+        },
+        "results_hdf": {
+            "state": "yes", "location": "Aransas.p09.hdf", "referenced": True,
+            "note": "2 plan HDFs",
+        },
+    })
+    bundle.models = [{
+        "prj_file": "Aransas.prj",
+        "elements": [
+            {"type": "plan", "number": "09", "registered": True},
+            {"type": "plan", "number": "10", "registered": True},
+            {"type": "unsteady_flow", "number": "01", "registered": True},
+            {"type": "unsteady_flow", "number": "02", "registered": True},
+        ],
+    }]
+    bundle.recipes = [
+        {"file": "Aransas.u01", "surface": "dss_pathname", "locator": "u01:9",
+         "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\100YR.dss",
+         "origin": "deficiency_review"},
+        {"file": "Aransas.u02", "surface": "dss_pathname", "locator": "u02:9",
+         "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\500YR.dss",
+         "origin": "deficiency_review"},
+        {"file": "Aransas.p09.hdf", "surface": "hdf_asset_attribute", "locator": "Geometry@x",
+         "from": "old", "to": "new"},
+        {"file": "Aransas.p10.hdf", "surface": "hdf_asset_attribute", "locator": "Geometry@x",
+         "from": "old", "to": "new"},
+    ]
+    markdown = render_audit_markdown(bundle)
+    dss = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+    assert r"..\DSS\100YR.dss, ..\DSS\500YR.dss" in dss
+    assert "2 reviewed references resolve to 2 delivered DSS files" in dss
+    assert r".\DSS Inputs\Aransas.dss" not in dss
+    results = next(line for line in markdown.splitlines() if line.startswith("| Results (plan HDFs) |"))
+    assert "Aransas.p09.hdf, Aransas.p10.hdf" in results
+    assert "2 plan HDFs" in results
+
+
+@pytest.mark.skipif(not Path(r"F:\eBFE\audit\12100407\_audit.json").is_file(), reason="Aransas audit unavailable")
+def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete():
+    bundle = load_audit_bundle(Path(r"F:\eBFE\audit\12100407"))
+    actions = actions_from_bundle(bundle)
+    dss_actions = [action for action in actions if action.evidence.endswith(":DSS File")]
+    assert len(actions) == 33
+    assert sum(action.blocking for action in actions) == 31
+    assert len(dss_actions) == 14
+    assert not any(
+        Path(action.target).name in {
+            "Aransas.u03", "Aransas.u04", "Aransas.u05", "Aransas.u06", "Aransas.u07", "Backup.u01"
+        }
+        for action in actions
+    )
+
+    markdown = render_audit_markdown(bundle)
+    dss = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+    assert "20 reviewed references resolve to 7 delivered DSS files" in dss
+    assert r".\DSS Inputs\Aransas.dss" not in dss
+    for name in ("01__MINUS.dss", "10_ACE.dss", "100YR.dss", "100YR_PLUS.dss", "25YR.dss", "500YR.dss", "50YR.dss"):
+        assert name in dss
+    results = next(line for line in markdown.splitlines() if line.startswith("| Results (plan HDFs) |"))
+    for number in ("09", "10", "11", "16", "17", "18", "19"):
+        assert f"Aransas.p{number}.hdf" in results
+    assert "7 plan HDFs" in results
+    assert "Critical data missing" not in markdown
+    assert "Obtain `DSS boundary data" not in markdown

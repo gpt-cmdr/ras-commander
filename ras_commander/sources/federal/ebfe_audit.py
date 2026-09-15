@@ -527,6 +527,57 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         else:
             out[key] = {"state": "not captured", "location": None, "note": "schema v1 did not record this"}
 
+    # The deficiency review can supersede a synthetic DSS location without
+    # changing the producer capture.  Aransas (12100407) originally collapsed
+    # every boundary onto ``.\\DSS Inputs\\Aransas.dss``; review matched twenty
+    # file references to the delivered ``..\\DSS\\*.dss`` members and appended
+    # one locator-aware correction per reference.  The engineer-facing
+    # supporting-data row must describe those reviewed destinations, not the
+    # capture's placeholder path.
+    reviewed_dss = [
+        recipe for recipe in bundle.recipes
+        if recipe.get("surface") == "dss_pathname"
+        and recipe.get("origin") == "deficiency_review"
+        and recipe.get("from") and recipe.get("to")
+    ]
+    if reviewed_dss:
+        destinations = sorted({str(recipe["to"]) for recipe in reviewed_dss}, key=str.casefold)
+        entry = dict(out.get("dss") or {})
+        entry["state"] = "yes"
+        entry["location"] = ", ".join(destinations)
+        entry["note"] = (
+            f"{len(reviewed_dss)} reviewed references resolve to "
+            f"{len(destinations)} delivered DSS file{'s' if len(destinations) != 1 else ''} "
+            "(path corrections required)"
+        )
+        entry["reviewed_correction_count"] = len(reviewed_dss)
+        out["dss"] = entry
+
+    # Keep the plan-HDF count and the displayed list as one derivation.  Some
+    # captures sampled the location list even though their note retained the
+    # full count.  A registered plan HDF that carries an HDF-asset correction
+    # is direct evidence that the file was opened, so it may safely complete
+    # the list without changing the producer record.
+    results = dict(out.get("results_hdf") or {})
+    if results.get("state") == "yes":
+        locations = {
+            item.strip()
+            for item in str(results.get("location") or "").split(",")
+            if item.strip()
+        }
+        locations.update(
+            Path(str(recipe.get("file") or "").replace("\\", "/")).name
+            for recipe in bundle.recipes
+            if recipe.get("surface") == "hdf_asset_attribute"
+            and re.search(r"\.p\d{2}\.hdf$", str(recipe.get("file") or ""), re.I)
+            and _recipe_targets_registered_element(bundle, recipe)
+        )
+        if locations:
+            ordered = sorted(locations, key=str.casefold)
+            results["location"] = ", ".join(ordered)
+            results["note"] = f"{len(ordered)} plan HDF{'s' if len(ordered) != 1 else ''}"
+            out["results_hdf"] = results
+
     # DSS: the boundary verification (worker rev i) is the authority on whether
     # the DSS a boundary was authored for is in the delivery. The element
     # capture still says "no" when the file is not at the literal post-assembly
@@ -584,6 +635,69 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     return out
 
 
+_RAS_ELEMENT_FILE = re.compile(
+    r"^(?P<stem>.+)\.(?P<suffix>[pgfuq])(?P<number>\d{2})(?:\.hdf)?$", re.I
+)
+_ELEMENT_SUFFIX = {
+    "plan": "p",
+    "geometry": "g",
+    "steady_flow": "f",
+    "flow": "f",
+    "unsteady_flow": "u",
+    "quasi_unsteady_flow": "q",
+}
+
+
+def _registered_element_identities(bundle: AuditBundle) -> Optional[set[tuple[str, str, str]]]:
+    """Return registered ``(project stem, suffix, number)`` identities.
+
+    ``None`` means the capture has no element-level registration inventory, so
+    old schema records retain their historical behavior instead of being
+    filtered on missing evidence.
+    """
+    identities: set[tuple[str, str, str]] = set()
+    captured = False
+    for model in bundle.models:
+        elements = model.get("elements")
+        if not isinstance(elements, list):
+            continue
+        captured = True
+        stem = Path(str(model.get("prj_file") or "")).stem.casefold()
+        if not stem:
+            continue
+        for element in elements:
+            if not element.get("registered"):
+                continue
+            suffix = _ELEMENT_SUFFIX.get(str(element.get("type") or "").casefold())
+            number = str(element.get("number") or "").zfill(2)
+            if suffix and number:
+                identities.add((stem, suffix, number))
+    return identities if captured else None
+
+
+def _recipe_targets_registered_element(bundle: AuditBundle, recipe: dict) -> bool:
+    """Whether an element-file recipe is in the captured ``.prj`` scope.
+
+    Non-element files (RASMapper, supporting rasters, and similar) are not
+    constrained by this predicate.  When the record has an element inventory,
+    however, a recipe for an unregistered ``.uNN/.pNN/...`` file is evidence
+    about delivered corpus residue, not a step required to run the project.
+    """
+    registered = _registered_element_identities(bundle)
+    if registered is None:
+        return True
+    name = Path(str(recipe.get("file") or "").replace("\\", "/")).name
+    match = _RAS_ELEMENT_FILE.match(name)
+    if not match:
+        return True
+    identity = (
+        match.group("stem").casefold(),
+        match.group("suffix").casefold(),
+        match.group("number"),
+    )
+    return identity in registered
+
+
 def _nested_archives(bundle: AuditBundle) -> list:
     probe = bundle.audit.get("g2_probe", {}) or {}
     return list(probe.get("nested_archives") or [])
@@ -629,6 +743,8 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
 
     acquired_files: set = set()
     for recipe in bundle.recipes:
+        if not _recipe_targets_registered_element(bundle, recipe):
+            continue
         surface = recipe.get("surface", "")
         kind = _SURFACE_TO_KIND.get(surface, "path_correction")
         raw_from = recipe.get("from") or ""
