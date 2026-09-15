@@ -820,3 +820,89 @@ def test_acquisition_recipes_become_acquisition_actions_and_the_verdict_needs_da
     assert "| Critical data missing | **DSS boundary data** -- not in the delivery |" in markdown
     row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
     assert "**No**" in row and "14 of 14" in row
+
+
+def test_reviewed_analysis_gap_dss_acquisition_is_replaced_by_corrected_path_action():
+    """Aransas (12100407): an unreadable DSS catalog caused 20 provisional
+    acquisitions. Review found each authored DSS file in the delivery and
+    appended the corrected path recipe, so the predecessor acquisition must
+    not survive into the engineer-facing action list or critical verdict.
+    """
+    bundle = _two_d_unsteady(
+        supporting_elements={
+            "dss": {
+                "state": "yes",
+                "location": "DSS Inputs/Aransas.dss",
+                "referenced": True,
+                "note": "",
+            }
+        },
+        dss_verification={
+            "bridge_available": False,
+            "boundaries_checked": 1,
+            "boundaries_resolved": 1,
+            "boundaries_acquisition": 0,
+            "boundaries_inferred": 0,
+            "resolved_needing_path_correction": 1,
+        },
+    )
+    acquisition = {
+        "file": "RAS Model/HECRAS_507/Aransas.u01",
+        "surface": "dss_pathname",
+        "locator": "Aransas.u01:9:DSS File",
+        "from": r"..\..\..\..\HEC-HMS_v43\Aransas\100YR.dss",
+        "to": r".\DSS Inputs\Aransas.dss",
+        "why": "relocated_by_assembly",
+        "confidence": "acquisition",
+        "kind": "acquisition",
+        "acquisition_target": r"..\..\..\..\HEC-HMS_v43\Aransas\100YR.dss",
+        "review": {
+            "verdict": "analysis_gap",
+            "method": "archive_member_match",
+            "evidence": "original 100YR.dss delivered as Models.zip::_Final/DSS/100YR.dss",
+        },
+    }
+    correction = {
+        "file": acquisition["file"],
+        "surface": "dss_pathname",
+        "locator": acquisition["locator"],
+        "from": r".\DSS Inputs\Aransas.dss",
+        "to": r"..\DSS\100YR.dss",
+        "why": "relocated_by_assembly",
+        "confidence": "inferred",
+        "origin": "deficiency_review",
+        "blocking": True,
+    }
+    bundle.recipes = [acquisition, correction]
+
+    actions = actions_from_bundle(bundle)
+    assert [a.kind for a in actions] == ["path_correction"]
+    assert actions[0].to_value == r"..\DSS\100YR.dss"
+    markdown = render_audit_markdown(bundle)
+    assert "needs data not in the delivery" not in markdown
+    assert "Critical data missing" not in markdown
+    assert "Obtain `DSS boundary data" not in markdown
+    assert "change `.\\DSS Inputs\\Aransas.dss` to `..\\DSS\\100YR.dss`" in markdown
+
+
+def test_path_corrections_with_same_values_but_different_files_are_not_deduplicated():
+    bundle = _two_d_unsteady()
+    shared = {
+        "surface": "dss_pathname",
+        "from": r".\DSS Inputs\Aransas.dss",
+        "to": r"..\DSS\100YR.dss",
+        "why": "relocated_by_assembly",
+        "confidence": "inferred",
+        "origin": "deficiency_review",
+    }
+    bundle.recipes = [
+        dict(shared, file="Aransas.u01", locator="Aransas.u01:9:DSS File"),
+        dict(shared, file="Aransas.u01", locator="Aransas.u01:40:DSS File"),
+        dict(shared, file="Aransas.u02", locator="Aransas.u02:9:DSS File"),
+    ]
+    corrections = [action for action in actions_from_bundle(bundle) if action.kind == "path_correction"]
+    assert [(action.target, action.evidence) for action in corrections] == [
+        ("Aransas.u01", "Aransas.u01:40:DSS File"),
+        ("Aransas.u01", "Aransas.u01:9:DSS File"),
+        ("Aransas.u02", "Aransas.u02:9:DSS File"),
+    ]

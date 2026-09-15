@@ -625,7 +625,7 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     # A relocation is recorded twice by the worker -- once in the audit's
     # asset_relocation block and once as an asset_relocation recipe. One move,
     # one step; otherwise the blocking count doubles.
-    seen_moves = {(a.kind, a.target, a.from_value, a.to_value) for a in actions}
+    seen_moves = {(a.kind, a.target, a.from_value, a.to_value, None) for a in actions}
 
     acquired_files: set = set()
     for recipe in bundle.recipes:
@@ -667,7 +667,16 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         target = recipe.get("file", "")
         if (kind, target, raw_from or None, raw_to) in seen_moves:
             continue
-        seen_moves.add((kind, target, raw_from or None, raw_to))
+        identity = (
+            kind,
+            target,
+            raw_from or None,
+            raw_to,
+            recipe.get("locator") if kind == "path_correction" else None,
+        )
+        if identity in seen_moves:
+            continue
+        seen_moves.add(identity)
         depth = escape_depth(raw_from)
         reason = recipe.get("why") or ("broken_relative_reference" if depth > 0 else "separately_delivered")
         if depth > 0 and reason == "missing_from_delivery":
