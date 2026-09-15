@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from .federal import RasEbfeModels
 from .county import M3Model
-from .state import AlabamaBleModels
+from .state import AlabamaBleModels, AlabamaFloodModels, AlabamaModelClassification
 
 if TYPE_CHECKING:
     from .federal import ScienceBaseInteractiveDownloadRequired, UsgsScienceBase
@@ -33,6 +33,8 @@ __all__ = [
     'ScienceBaseInteractiveDownloadRequired',
     # State sources
     'AlabamaBleModels',
+    'AlabamaFloodModels',
+    'AlabamaModelClassification',
     # County sources
     'M3Model',
 ]
