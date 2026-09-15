@@ -243,6 +243,73 @@ comparison = RasTerrainMod.compare_terrain_profiles(
 print(comparison[['station', 'existing_elevation', 'proposed_elevation', 'difference']])
 ```
 
+## Usgs3depAws
+
+USGS 3DEP elevation acquisition from the public AWS S3 bucket, plus VRT
+mosaicking with HEC-RAS bundled GDAL. Direct download currently covers the 1m
+project-based products; 10m and 30m are discovery only.
+
+### Discovery Methods
+
+- `download_tile_index(resolution, cache_folder=None)` - Download and cache the spatial metadata GeoPackage
+- `query_tiles_api(bbox, resolution, buffer_distance=0.0)` - Query the National Map tile index REST API
+- `find_tiles_for_bbox(bbox, resolution, cache_folder=None, buffer_distance=0.0)` - Projects intersecting a WGS84 extent
+- `list_projects_for_bbox(bbox, resolution, cache_folder=None, buffer_distance=0.0)` - Same, with `_year` parsed from project names
+- `select_projects_for_coverage(projects, bbox, min_coverage_fraction=0.999, min_project_area_fraction=0.0)` - Newest project per sub-area, plus a coverage report
+
+### Download Methods
+
+- `download_tiles(bbox, resolution, output_folder, cache_folder=None, overwrite_dest=False, max_workers=3, project_name=None, min_year=None, buffer_distance=0.0, *, project_selection="newest", min_coverage_fraction=0.999, min_project_area_fraction=0.0, return_provenance=False)` - Download the intersecting 1m tiles
+
+`project_selection` controls what happens when several projects intersect the
+extent:
+
+| Mode | Behavior |
+|------|----------|
+| `"newest"` (default) | Keeps only the single most recent project. Any sub-area that project does not cover is silently absent from the mosaic. |
+| `"coverage"` | Greedily covers the extent with the newest project available per sub-area, falls back to older projects only for the residual geometry, logs each project's contributed area, and warns when the extent cannot be fully covered. Tiles are returned oldest project first so the newest data wins on overlap in a `gdalbuildvrt` mosaic. |
+
+With `return_provenance=True` the call returns `(tile_paths, provenance)`, where
+each provenance record carries `tile_id`, `file_name`, `file_path`,
+`source_url`, `project_name`, `project_year`, `etag`, `last_modified`,
+`content_length`, and `local_size_bytes`. That is enough to record exactly which
+tiles a terrain was built from without re-hashing the rasters.
+
+### Mosaic Methods
+
+- `create_vrt(tile_files, output_vrt, hecras_version=None, *, target_crs=None, target_resolution=None, resampling_method="bilinear", src_nodata=None, vrt_nodata=None, source_crs=None)` - Build a VRT mosaic with HEC-RAS bundled GDAL
+
+By default the mosaic inherits the source SRS and native cell size, which is
+only safe when every tile shares one projection. USGS 3DEP 1m tiles are
+delivered per UTM zone, so an extent that straddles a zone boundary produces
+mixed-SRS tiles. Setting `target_crs` reprojects each tile to a warped VRT with
+the HEC-RAS bundled `gdalwarp.exe` (discovered exactly like `gdalbuildvrt.exe`)
+before mosaicking; the warped VRTs live in a `<output stem>_warped` folder
+beside the output and must stay there for the mosaic to remain readable.
+`target_resolution` accepts a single number or an `(x, y)` pair in target CRS
+units, and the warp step uses `-tap` so every tile lands on one aligned grid.
+
+```python
+from ras_commander.terrain import Usgs3depAws
+
+tiles, provenance = Usgs3depAws.download_tiles(
+    bbox=(-97.85, 30.20, -97.70, 30.32),
+    resolution=1,
+    output_folder="Terrain",
+    project_selection="coverage",
+    return_provenance=True,
+)
+
+vrt = Usgs3depAws.create_vrt(
+    tiles,
+    "Terrain/terrain_2277.vrt",
+    target_crs="EPSG:2277",      # NAD83 / Texas Central (US survey feet)
+    target_resolution=10.0,      # 10-foot cells
+    src_nodata=-999999,
+    vrt_nodata=-9999,
+)
+```
+
 ## Related Examples
 
 | Notebook | Description |

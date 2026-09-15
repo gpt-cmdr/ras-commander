@@ -68,7 +68,7 @@ soils_hdf = RasMap.add_soils_layer(
 |----------|-----------------|
 | `RasMap.add_landcover_layer()` | Normalizes polygon or legacy bounds, applies a project-CRS buffer, then derives raster bounds. |
 | `RasMap.add_soils_layer()` | Uses the same normalization and buffer contract as land cover. |
-| `Usgs3depAws.query_tiles_api()`, `find_tiles_for_bbox()`, `list_projects_for_bbox()`, `download_tiles()` | Use the shared contract for WGS84 terrain acquisition; polygon intersection is preserved where the tile workflow supports it. |
+| `Usgs3depAws.query_tiles_api()`, `find_tiles_for_bbox()`, `list_projects_for_bbox()`, `download_tiles()`, `select_projects_for_coverage()` | Use the shared contract for WGS84 terrain acquisition; polygon intersection is preserved where the tile workflow supports it. `download_tiles(project_selection="coverage")` covers the normalized extent with the newest project available per sub-area instead of the single newest project. |
 | `PrecipAorc.download()`, `check_availability()`, `get_storm_catalog()`, `create_storm_plans()` | Normalize a WGS84 polygon/legacy extent and optional degree buffer before precipitation subsetting. |
 | `RasMap.add_infiltration_layer()` | Registration/combination only. Its raster extent comes from the prepared land-cover and soils inputs, so no artificial extent parameter is added. |
 | `RasMap.add_terrain_layer()` | Registration only for an existing terrain HDF; terrain acquisition owns the analysis extent. |
