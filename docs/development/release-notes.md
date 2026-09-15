@@ -2,23 +2,133 @@
 
 ## Version History
 
-### v0.99.2 (Current published release — August 2026)
+### v0.100.0 (September 2026)
 
-**Network-Aligned 1D Breakout Assembly**
+**Text and HDF Geometry Extents**
 
-- Add `RasBreakout1D.assemble_network_edge()` to assemble adjacent main-stem
-  model slices into one independent, restationed steady-flow project while
-  preserving complete retained geometry blocks and source provenance.
-- Resolve provisional footprint handoffs against the actual source river
-  centerlines, reject intersecting cross-source cut lines, recompute main-channel
-  reach lengths, and rewrite station-keyed steady-flow changes and endpoint
-  boundaries for the assembled reach.
-- Expose GeoDataFrame evidence for source-to-destination stations and resolved
-  seams, plus automatic 10-percent upstream and 25-percent downstream hydraulic
-  buffers and a separate one-cross-section inundation-overlap domain.
-- Keep overbank reach lengths provisional until the caller supplies reviewed
-  flow-path policy evidence, supporting either complete regeneration or
-  join-boundary-only recomputation.
+- Build 1D model footprints directly from plain-text `XS GIS Cut Line`
+  endpoints when compiled geometry HDF content is absent or incomplete.
+- Prefer usable HDF geometry component by component, then fill missing 1D,
+  2D, and storage-area geometry from the matching text geometry file.
+- Enable the fallback by default across project extents, WGS84 bounds, and
+  GeoJSON export. Set `fallback_to_plaintext=False` to require HDF-only
+  results.
+- Make `include_storage=True` include storage-area polygons from HDF through
+  `HdfStruc.get_storage_area_polygons()` before considering text geometry.
+- Preserve geometry provenance in 1D breakout catalogs and improve HDF
+  cross-section handling for legacy schemas, multipart cut lines, explicit
+  project context, and exact edge-line diagnostics.
+
+**1D Breakout and Network Conflation**
+
+- Add generic, extent-first `RasNetworkConflation` workflows with pluggable
+  NWM Hydrofabric and NextGen adapters, candidate evidence, coverage metrics,
+  and fail-closed topology handling.
+- Add `RasBreakout1D` for independent one-reach steady-flow breakouts with
+  separate buffered compute and one-cross-section-overlap raster domains.
+- Add `RasBreakout1D.assemble_network_edge()` to combine adjacent source-model
+  slices into one restationed project while preserving complete node blocks,
+  source provenance, steady-flow changes, and endpoint boundaries.
+- Resolve joins against source centerlines, reject intersecting cross-source
+  cut lines, recompute main-channel lengths, and expose station and seam
+  GeoDataFrames. Overbank reach lengths remain provisional until the caller
+  selects complete regeneration or join-boundary-only recomputation.
+
+**Exact 2D Geometry Preparation**
+
+- Add guarded, atomic replacement of breaklines, refinement regions, and
+  reference lines, plus exact geometry-text-to-HDF refresh through the
+  explicitly initialized HEC-RAS version.
+- Add `RasBreakout2D` for contained pure-2D breakout preparation with
+  one-base-cell inward-containment checks, transactional restoration of
+  non-target HDFs, association preservation, remeshing, and parent cut-face
+  flux evidence. It prepares geometry but does not author boundary conditions
+  or claim a hydraulic run.
+
+**Cross-Section and Steady-Map Primitives**
+
+- Add `RasCrossSections.get_points()` and `HdfXsec.get_xs_coords()` as the
+  unified text/HDF cross-section point export, preserving native elevations,
+  point order, Manning zones, banks, CRS, units, and source metadata.
+- Add batched steady-profile mapping through
+  `RasMap.store_all_maps(mode="steady_profiles")` and
+  `RasProcess.store_maps_at_steady_profiles()`, using one temporary RASMapper
+  transaction and one aggregate helper launch per plan.
+- Add strict standalone-result unit metadata through
+  `HdfBase.get_result_unit_metadata()` while retaining the project text marker
+  as authoritative when a `.prj` file is available.
+
+**Federal Model Sources and Archive Recovery**
+
+- Add Alabama BLE watershed discovery, verified download, safe extraction,
+  organization, portable inventory generation, and map-catalog integration.
+- Add Alabama Flood Effective and Preliminary model adapters using the shared
+  hardened ArcGIS, provenance, download, and extraction machinery;
+  Preliminary sources remain explicitly non-regulatory.
+- Add a bounded, forward-walking reader for eBFE ZIP deliveries that lack an
+  End of Central Directory record, with CRC and size verification and explicit
+  truncation reporting.
+- Add the optional `ebfe` extra for Deflate64 ZIP method 9 on supported Python
+  versions, plus a common renderer for engineer-facing eBFE audit and repair
+  documents.
+
+**Named eBFE Workflows and Example Library**
+
+- Add source, organization, and deficiency-review workflows for the five-model
+  San Gabriel suite, the 2,378-project Lower Colorado-Cummins steady 1D
+  collection, and the four linked Double Mountain Fork Brazos 2D projects.
+- Preserve delivered terrain and resource relationships, guard source-specific
+  repairs with fingerprints, and distinguish static delivery closure,
+  preprocessing readiness, and full hydraulic qualification.
+- Publish exact API-derived project footprints in the Example Projects
+  dashboard, including distinct San Gabriel and Double Mountain Fork model
+  extents, project-specific evidence links, and guarded viewer links that are
+  disabled when manifests are unavailable or invalid.
+- Document the San Gabriel supplied-versus-rebuilt maximum-WSE COG comparison
+  and validate its COG layout, CRS, masks, and pixel statistics without
+  overstating source-terrain reproducibility.
+
+**RASMapper and Legacy Execution Compatibility**
+
+- Make `rasmap_df` parse outcomes observable through additive path, lifecycle,
+  document-error, and field-error provenance while preserving its single-row
+  summary and valid sibling layers after partial parsing.
+- Use the verified project-first command layout for HEC-RAS 5.x, retain the
+  explicit project/plan layout for 6.0+, and safely match project-only legacy
+  launches during cancellation.
+- Validate exact, release-specific Terms and Conditions sentinels, fail before
+  compute when acceptance is definitively absent, and mutate acceptance state
+  only through explicit `RasTcu.accept()` calls.
+
+**Execution Evidence and Cleanup**
+
+- Add `RasCmdr.inspect_execution_evidence()` for immutable, source-aware
+  completion observations across HDF, stored-message, legacy-output, process,
+  and Controller channels.
+- Preserve unavailable, uninspected, failed, and explicit-false states rather
+  than collapsing them into one boolean, and require exact `Complete Process`
+  records instead of matching misleading substrings.
+- Select the result family from the plan program version, fail closed on unsafe
+  ambiguity or conflicting completion evidence, and keep mechanical completion
+  separate from errors, freshness, runtime, and hydraulic acceptance.
+- Add `RasCmdr.remove_plan_execution_artifacts()` and apply exact artifact
+  ownership, cleanup, freshness, process-exit, and transactional publication
+  rules across local, parallel, Controller, Docker, PsExec, and remote
+  workflows. Opposing result formats are normalized around each owned run.
+- Preserve mapped-drive launch paths, reject stale byte-identical results, and
+  report structured preflight and execution details through `ComputeResult`.
+
+**Matched Docker Compute**
+
+- Add a matched Wine preprocessing and native Linux unsteady-compute workflow
+  for HEC-RAS 6.5, 6.6, and 7.0.1.
+- Add CPU selection, progress callbacks, validated resume behavior, sequential
+  batch execution, host-side receipt verification, and a stable batch-summary
+  schema.
+- Include the scoped container build assets and operational guidance while
+  excluding generated qualification payloads and duplicate release records.
+
+### v0.99.2 (August 2026)
 
 **Native Registered-Terrain Export**
 
@@ -29,28 +139,6 @@
   `RasTerrainMod.compute_modified_terrain_raster()` compatibility method in
   0.99.2. New callers should use the native registered-terrain export; removal
   is scheduled for 1.1.
-
-**Structured Execution Evidence**
-
-- Add read-only `RasCmdr.inspect_execution_evidence()` with immutable,
-  source-aware observations across HDF, stored-message, legacy-output,
-  process, and COM channels.
-- Preserve available-false, version-unavailable, uninspected, and failed
-  states instead of collapsing them into one completion boolean.
-- Keep mechanical completion independent from parsed errors, warnings,
-  freshness thresholds, and hydraulic acceptance, and fail closed when
-  authoritative completion sources disagree.
-- Use exact `Complete Process` records rather than accepting misleading text
-  substrings.
-- Resolve coexisting HDF and `.O##` results from the current plan-file program
-  version, fail on unsafe ambiguity, and keep all completion/runtime channels
-  tied to the selected result family.
-- Add exact, permanent `RasCmdr.remove_plan_execution_artifacts()` remediation
-  and normalize opposing result formats before and after local, COM, parallel,
-  test-mode, Linux/WSL, Docker, PsExec, and remote-promotion execution paths.
-- Fail closed before cleanup when the selected execution-engine version cannot
-  be resolved, and publish only exact, verified final worker results rather
-  than copied timestamps or Linux preprocessing `.tmp.hdf` files.
 
 **Lean Command-Line Compute Integration**
 

@@ -32,6 +32,31 @@ Plan-level information from HDF files.
 - `get_plan_parameters(hdf_path)` - Get computation parameters
 - `get_2d_flow_options(hdf_path)` - Get 2D equation set, initial condition time, tolerances, and solver options from computed HDF output
 
+### HdfProject
+
+Project-wide extent and coordinate-system helpers.
+
+- `get_project_extent(hdf_path=None, include_1d=True, include_2d=True,
+  include_storage=True, buffer_percent=50.0, buffer_x_percent=None,
+  buffer_y_percent=None, geometry_type="footprint", fill_holes=True, *,
+  geom_path=None, fallback_to_plaintext=True, ras_object=None)` - Return a
+  footprint or buffered bounding box and its project-coordinate bounds.
+- `get_project_bounds_latlon(hdf_path=None, buffer_percent=50.0,
+  include_1d=True, include_2d=True, include_storage=True, project_crs=None, *,
+  geom_path=None, fallback_to_plaintext=True, ras_object=None)` - Return the
+  project bounds in WGS84.
+- `export_extent_geojson(hdf_path, output_path, buffer_percent=50.0, *,
+  geom_path=None, fallback_to_plaintext=True, ras_object=None)` - Export the
+  project extent as GeoJSON.
+
+Extent extraction prefers usable HDF geometry independently for 1D reaches,
+2D flow areas, and storage areas. With the default
+`fallback_to_plaintext=True`, a matching plain-text `.g##` file supplies only
+components unavailable from HDF; a text-only 1D footprint is constructed from
+cross-section cut-line endpoints. Set `fallback_to_plaintext=False` for strict
+HDF-only behavior. `include_storage=True` is also component-aware: HDF storage
+polygons are preferred and companion text geometry is used only when needed.
+
 ## Mesh Operations
 
 ### HdfMesh
@@ -216,6 +241,10 @@ Structure geometry and SA/2D connections.
 - `get_connection_list(hdf_path)` - List SA/2D connections
 - `get_connection_profile(hdf_path, name)` - Get connection profile
 - `get_connection_gates(hdf_path, name)` - Get gate data
+- `get_storage_area_polygons(hdf_path, *, ras_object=None)` - Extract storage
+  area polygons and attributes from geometry or plan HDF files, including
+  multi-ring polygons with interior rings; returns an empty GeoDataFrame when no
+  storage areas are present.
 
 ### HdfResultsBreach
 
