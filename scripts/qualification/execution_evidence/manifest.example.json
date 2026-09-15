@@ -1,0 +1,65 @@
+{
+  "archive_root": "H:/working/qualification/pr319/archive",
+  "defaults": {
+    "hash_files": true,
+    "real_engine_jobs": 1,
+    "termination_grace_seconds": 120,
+    "timeout_seconds": 14400
+  },
+  "engines": [
+    {
+      "engine_id": "modern-example",
+      "executable": "C:/Program Files (x86)/HEC/HEC-RAS/7.0/Ras.exe",
+      "executable_sha256": "replace-with-lowercase-sha256",
+      "execution_api": "ras_cmdr",
+      "expected_result_format": "hdf",
+      "support_state": "supported",
+      "version_requested": "7.0"
+    }
+  ],
+  "execution_root": "C:/ras-commander/qualification/execution",
+  "fixtures": [
+    {
+      "data_origin": "captured_real",
+      "fixture_id": "steady-example",
+      "plan_number": "01",
+      "plan_title": "Replace with exact title",
+      "plan_type": "steady_1d",
+      "source_immutable": true,
+      "source_content_fingerprint_algorithm": "ras_commander.qualification_snapshot.canonical_json.v1",
+      "source_content_fingerprint": "replace-with-lowercase-sha256",
+      "source_kind": "project_file",
+      "source_project": "C:/immutable-model/Model.prj"
+    }
+  ],
+  "lanes": [
+    {
+      "engine_id": "modern-example",
+      "expected_terminal_category": "passed",
+      "fixture_id": "steady-example",
+      "initial_state": "neither",
+      "lane_id": "steady-example__7_0",
+      "required_invariants": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R06",
+        "R10",
+        "R11",
+        "R12"
+      ],
+      "tags": [
+        "real_ras"
+      ]
+    }
+  ],
+  "repository": {
+    "bind_running_code": true,
+    "require_clean": true,
+    "required_head": "replace-with-40-hex-commit",
+    "root": "H:/CLB-Repos/ras-commander"
+  },
+  "run_name": "pr319-representative",
+  "schema_version": 1
+}

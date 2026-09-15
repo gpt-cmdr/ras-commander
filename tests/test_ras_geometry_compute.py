@@ -36,10 +36,15 @@ def _hecras_available():
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _hecras_available(),
-    reason="HEC-RAS / RasMapperLib (pythonnet) not available",
-)
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.destructive_copy,
+    pytest.mark.skipif(
+        not _hecras_available(),
+        reason="HEC-RAS / RasMapperLib (pythonnet) not available",
+    ),
+]
 
 
 def _geom_with_xs(project, ras):

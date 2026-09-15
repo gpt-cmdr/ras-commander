@@ -1,4 +1,5 @@
 import logging
+import importlib
 from pathlib import Path
 
 from ras_commander.RasBco import BcoMonitor
@@ -102,6 +103,43 @@ def test_monitor_timeout_warning_has_signal_and_debug_path(tmp_path, caplog):
         "'Starting Unsteady Flow Computations'"
     ]
     assert str(tmp_path / "TestProject.bco07") in debug_text
+
+
+def test_monitor_timeout_uses_monotonic_deadline_and_bounds_final_sleep(
+    tmp_path,
+    monkeypatch,
+):
+    rasbco_module = importlib.import_module("ras_commander.RasBco")
+    clock = {"monotonic": 100.0, "wall": 1_000.0}
+    sleeps = []
+
+    monkeypatch.setattr(
+        rasbco_module.time,
+        "monotonic",
+        lambda: clock["monotonic"],
+    )
+    monkeypatch.setattr(
+        rasbco_module.time,
+        "time",
+        lambda: clock["wall"],
+    )
+
+    def oversleep(seconds):
+        sleeps.append(seconds)
+        clock["monotonic"] += seconds + 5.0
+        clock["wall"] -= 3_600.0
+
+    monkeypatch.setattr(rasbco_module.time, "sleep", oversleep)
+    monitor = BcoMonitor(
+        project_path=tmp_path,
+        plan_number="07",
+        project_name="TestProject",
+        check_interval=10.0,
+        max_wait_seconds=2.0,
+    )
+
+    assert not monitor.monitor_until_signal(_FakeProcess(returncode=None))
+    assert sleeps == [2.0]
 
 
 def test_callback_error_warns_once_then_debugs_repeats(tmp_path, caplog):

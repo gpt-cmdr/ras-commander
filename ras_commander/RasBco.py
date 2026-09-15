@@ -66,7 +66,7 @@ class BcoMonitor:
     project_name: str
     signal_string: str = "Starting Unsteady Flow Computations"
     check_interval: float = 0.5
-    max_wait_seconds: int = 300
+    max_wait_seconds: float = 300.0
 
     # Optional callback for streaming messages
     message_callback: Optional[Callable[[str], None]] = None
@@ -162,11 +162,14 @@ class BcoMonitor:
             - File is read incrementally to minimize I/O overhead
         """
         self.execution_start_time = time.time()
-        start_time = time.time()
+        deadline = time.monotonic() + float(self.max_wait_seconds)
 
         logger.info(f"Monitoring {self.bco_file.name} for '{self.signal_string}' signal...")
 
-        while time.time() - start_time < self.max_wait_seconds:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             # Check if process died
             if process.poll() is not None:
                 if process.returncode == 0:
@@ -226,7 +229,7 @@ class BcoMonitor:
                         logger.info(f"Detected '{self.signal_string}' in {self.bco_file.name}")
                         return True
 
-            time.sleep(self.check_interval)
+            time.sleep(min(float(self.check_interval), remaining))
 
         logger.warning(
             f"Monitoring {self.bco_file.name} timed out after "

@@ -115,6 +115,22 @@ _LAZY_EXPORTS = {
     'RasTcu': ('.RasTcu', 'RasTcu'),
     'TcuStatus': ('.RasTcu', 'TcuStatus'),
     'RasPreprocess': ('.RasPreprocess', 'RasPreprocess'),
+    **{
+        name: ('.ExecutionEvidence', name)
+        for name in (
+            'EVIDENCE_CHANNELS', 'EVIDENCE_STATES',
+            'EXECUTION_OBSERVATION_NAMES', 'EvidenceChannel',
+            'EvidenceObservation', 'EvidenceState', 'ExecutionEvidence',
+            'ObservationName',
+        )
+    },
+    **{
+        name: ('.ExecutionArtifacts', name)
+        for name in (
+            'PlanExecutionCleanup', 'PlanExecutionCleanupError',
+            'ResultArtifactAmbiguityError',
+        )
+    },
     'DialogWatchdog': ('.RasDialogWatchdog', 'DialogWatchdog'),
     'DismissedDialog': ('.RasDialogWatchdog', 'DismissedDialog'),
     'RasEncroachments': ('.RasEncroachments', 'RasEncroachments'),
@@ -167,6 +183,7 @@ _LAZY_EXPORTS = {
             'ProjectLockedError', 'ProjectPathAmbiguityError',
             'ProjectPopulationError', 'ProjectPublicationError',
             'ProjectStageError', 'StageProjectResult',
+            'STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM',
             'inspect_project_assets', 'stage_project',
         )
     },
@@ -184,8 +201,10 @@ _LAZY_EXPORTS = {
         for name in (
             'RasControlResult', 'PreprocessResult',
             'GeometryPreprocessResult', 'GeometryLayerResult',
-            'GeometryCompleteResult', 'FlowPathPolicyResult',
-            'TerrainExportResult',
+            'GeometryCompleteResult', 'RasProcessRecord',
+            'RasProcessQueryError', 'RasProcessInventory',
+            'PlanProcessInventory', 'PlanCancellationResult',
+            'FlowPathPolicyResult', 'TerrainExportResult',
         )
     },
     **{
@@ -376,12 +395,20 @@ __all__ = [
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',
-    'StageProjectResult', 'inspect_project_assets', 'stage_project',
+    'StageProjectResult', 'STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM',
+    'inspect_project_assets', 'stage_project',
     'BoundaryMutationResult', 'BoundaryMutationError',
     'BoundaryStageOwnershipError', 'BoundarySelectorError',
     'BoundaryStaleEvidenceError', 'BoundaryFormatError',
     'BoundaryPublicationError', 'BoundaryPostPublicationError',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
+    'RasProcessRecord', 'RasProcessQueryError', 'RasProcessInventory',
+    'PlanProcessInventory', 'PlanCancellationResult',
+    'EvidenceState', 'EvidenceChannel', 'ObservationName',
+    'EVIDENCE_STATES', 'EVIDENCE_CHANNELS', 'EXECUTION_OBSERVATION_NAMES',
+    'EvidenceObservation', 'ExecutionEvidence',
+    'PlanExecutionCleanup', 'PlanExecutionCleanupError',
+    'ResultArtifactAmbiguityError',
     'PreprocessResult', 'GeometryPreprocessResult',
     'GeometryLayerResult', 'GeometryCompleteResult', 'FlowPathPolicyResult',
     'TerrainExportResult',

@@ -13,7 +13,11 @@ from ras_commander import RasControl, RasPrj, init_ras_project
 from ras_commander.RasControl import _active_sessions
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.destructive_copy,
+]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="HECRASController requires Windows")

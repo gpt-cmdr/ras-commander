@@ -299,6 +299,7 @@ def _assert_clean_native_output(
     ("requested", "expected_version"),
     [("default", 7), ("6", 6), ("7", 7)],
 )
+@pytest.mark.integration
 def test_separate_process_creates_requested_dss_version_and_round_trips(
     tmp_path,
     requested: str,
@@ -351,6 +352,7 @@ def test_separate_process_creates_requested_dss_version_and_round_trips(
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+@pytest.mark.integration
 def test_separate_process_matching_update_then_mismatch_is_fail_closed(
     tmp_path,
 ) -> None:
@@ -431,6 +433,7 @@ def test_separate_process_matching_update_then_mismatch_is_fail_closed(
 
 
 @pytest.mark.parametrize("dss_version", [6, 7])
+@pytest.mark.integration
 def test_separate_process_creates_requested_grid_dss_version(
     tmp_path,
     dss_version: int,

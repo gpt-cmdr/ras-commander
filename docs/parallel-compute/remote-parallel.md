@@ -163,6 +163,8 @@ class ExecutionResult:
     worker_id: str            # Worker that ran this plan
     success: bool             # True if completed successfully
     hdf_path: Optional[str]   # Path to output HDF (if success)
+    result_path: Optional[str]  # Selected HDF or legacy result path
+    result_format: Optional[str]  # "hdf" or "legacy"
     error_message: Optional[str]  # Error details (if failed)
     execution_time: float     # Execution time in seconds
 ```
@@ -175,7 +177,7 @@ results = compute_parallel_remote(plans, workers)
 for plan_num, result in results.items():
     if result.success:
         print(f"Plan {plan_num}: completed in {result.execution_time:.1f}s")
-        print(f"  Output: {result.hdf_path}")
+        print(f"  Output: {result.result_path}")
         print(f"  Worker: {result.worker_id}")
     else:
         print(f"Plan {plan_num}: FAILED")

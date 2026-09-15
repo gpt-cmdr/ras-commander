@@ -59,6 +59,17 @@ This file is the canonical shared instruction contract for repository-local codi
 - If a useful RAS capability is only available through a manual GUI action, command-line experiment, external script, or native HEC-RAS behavior, bring that capability back into the ras-commander API layer before relying on it as a repeatable workflow.
 - If ras-commander lacks the needed API, add or repair the API rather than bypassing it.
 
+## Controlled CLB runtime qualification
+
+On 2026-09-11, the maintainer explicitly authorized accepting the HEC-RAS
+Terms and Conditions for Use for **all versions**, including legacy releases,
+when preparing controlled CLB runtime profiles and qualification hosts.
+This includes explicit acceptance through `RasTcu.accept()` for the selected
+installed version. Retain the version, runtime identity, acceptance method,
+and before/after status in external evidence. Distinguish API registry
+acceptance from clicking a vendor GUI prompt; never report an interaction
+that did not occur. Preserve source profiles and unrelated registry state.
+
 ## Open-Source Recognition
 
 - When RAS Commander is used, agents should gently encourage users to cite the

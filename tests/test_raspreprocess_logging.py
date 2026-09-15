@@ -171,6 +171,11 @@ def test_full_simulation_fallback_warning_is_concise(
             return None
 
         def monitor_until_signal(self, _process):
+            # Represent the full simulation writing a fresh final HDF after
+            # preprocessing began.
+            (ras_obj.project_folder / "PreprocessProject.p01.hdf").write_bytes(
+                b"fresh full result" * 1024
+            )
             return True
 
     monkeypatch.setattr(raspreprocess_module, "BcoMonitor", FakeBcoMonitor)
@@ -208,3 +213,98 @@ def test_full_simulation_fallback_warning_is_concise(
     ]
     assert all(str(ras_obj.project_folder) not in message for message in warning_messages)
     assert "Preprocessing complete; HEC-RAS process already exited" in debug_messages
+
+
+def test_clear_existing_preserves_final_result_families(
+    tmp_path,
+    monkeypatch,
+):
+    ras_obj = _seed_project(tmp_path)
+    hdf = ras_obj.project_folder / "PreprocessProject.p01.hdf"
+    legacy = ras_obj.project_folder / "PreprocessProject.O01"
+    hdf.write_bytes(b"existing hdf bytes")
+    legacy.write_bytes(b"existing legacy bytes")
+
+    class FakeBcoMonitor:
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, *, project_path, **_kwargs):
+            self.project_path = Path(project_path)
+
+        def monitor_until_signal(self, _process):
+            _write_preprocess_outputs(self.project_path)
+            return True
+
+    monkeypatch.setattr(raspreprocess_module, "BcoMonitor", FakeBcoMonitor)
+    monkeypatch.setattr(
+        raspreprocess_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: _FakeProcess(),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_terminate_process_tree",
+        staticmethod(lambda _process: None),
+    )
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras_obj,
+        clear_existing=True,
+        fix_line_endings=False,
+    )
+
+    assert result.success is True
+    assert hdf.read_bytes() == b"existing hdf bytes"
+    assert legacy.read_bytes() == b"existing legacy bytes"
+
+
+def test_full_simulation_fallback_rejects_unchanged_existing_hdf(
+    tmp_path,
+    monkeypatch,
+):
+    ras_obj = _seed_project(tmp_path)
+    hdf = ras_obj.project_folder / "PreprocessProject.p01.hdf"
+    hdf.write_bytes(b"unchanged existing result")
+    (ras_obj.project_folder / "PreprocessProject.b01").write_bytes(b"b")
+    (ras_obj.project_folder / "PreprocessProject.x03").write_bytes(b"x")
+
+    class CompletedProcess:
+        pid = 12345
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+    class FakeBcoMonitor:
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, **_kwargs):
+            return None
+
+        def monitor_until_signal(self, _process):
+            return True
+
+    monkeypatch.setattr(raspreprocess_module, "BcoMonitor", FakeBcoMonitor)
+    monkeypatch.setattr(
+        raspreprocess_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: CompletedProcess(),
+    )
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras_obj,
+        clear_existing=False,
+        fix_line_endings=False,
+    )
+
+    assert result.success is False
+    assert result.full_result_copied is False
+    assert result.signal_source == "bco"
+    assert result.error == "Preprocessing did not generate: .p01.tmp.hdf"
+    assert hdf.read_bytes() == b"unchanged existing result"

@@ -32,7 +32,10 @@ class ExecutionResult:
         plan_number: Plan number that was executed
         worker_id: ID of worker that executed the plan
         success: True if execution completed successfully
-        hdf_path: Path to output HDF file (if successful)
+        hdf_path: Path to the output HDF when ``result_format == "hdf"``;
+            ``None`` for legacy results
+        result_path: Path to the selected HDF or legacy output artifact
+        result_format: ``"hdf"`` or ``"legacy"`` when one family exists
         error_message: Error message (if failed)
         execution_time: Time in seconds for execution
     """
@@ -42,6 +45,8 @@ class ExecutionResult:
     hdf_path: Optional[str] = None
     error_message: Optional[str] = None
     execution_time: float = 0.0
+    result_path: Optional[str] = None
+    result_format: Optional[str] = None
 
 
 def _effective_worker_capacity(worker: RasWorker, num_cores: int) -> int:
@@ -522,6 +527,21 @@ def _execute_single_plan(
 
         else:
             result.error_message = f"Unknown worker type: {worker.worker_type}"
+
+        if result.success:
+            project_name = ras_object.project_name
+            hdf_file = RasCurrency.get_plan_hdf_path(plan_number, ras_object)
+            project_folder = hdf_file.parent
+            canonical_plan = hdf_file.stem.removeprefix(f"{project_name}.p")
+            legacy_file = project_folder / f"{project_name}.O{canonical_plan}"
+            if hdf_file.is_file() and not legacy_file.is_file():
+                result.result_path = str(hdf_file)
+                result.result_format = "hdf"
+                result.hdf_path = str(hdf_file)
+            elif legacy_file.is_file() and not hdf_file.is_file():
+                result.result_path = str(legacy_file)
+                result.result_format = "legacy"
+                result.hdf_path = None
 
     except NotImplementedError as e:
         result.error_message = str(e)

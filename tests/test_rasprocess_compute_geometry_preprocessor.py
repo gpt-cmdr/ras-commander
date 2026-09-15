@@ -21,7 +21,11 @@ from ras_commander.RasProcess import RasProcess
 h5py = pytest.importorskip("h5py")
 import numpy as np
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.real_ras,
+    pytest.mark.destructive_copy,
+]
 
 PROJECT = "BaldEagleCrkMulti2D"
 CELLS_CENTER_N = "Cells Center Manning's n"

@@ -52,6 +52,13 @@ session with `-i <session_id>`. When `system_account=True`, the command uses bot
 `-s` and `-i <session_id>`; SYSTEM remains unsuitable for most interactive
 HEC-RAS runs.
 
+The PsExec worker uses the command-line interface and requires HEC-RAS 5 or
+newer. It rejects 4.x before staging because those versions require COM.
+For 5.x, it sets Current Plan only in the staged project and uses the
+project-first command form. Result copyback publishes the selected result
+and exact fresh completion-message sidecars together, removes stale
+destination messages, and retains the worker copy if publication fails.
+
 ### DockerWorker
 
 Run plans with a local Docker daemon and an HEC-RAS Linux image:
@@ -107,7 +114,10 @@ geometry HDF and preprocessor outputs. The default remains `True`.
     shared geometry, set `copy_geometry_outputs=False`.
 
 The return value maps each plan number to an `ExecutionResult` with `success`,
-`worker_id`, `hdf_path`, `error_message`, and `execution_time` fields.
+`worker_id`, `hdf_path`, `result_path`, `result_format`, `error_message`, and
+`execution_time` fields. `result_path` identifies the selected HDF or legacy
+output artifact; `result_format` is `"hdf"` or `"legacy"` when one result
+family is available.
 
 The progress watchdog stops queued submissions when no plan finishes within the
 slowest worker's `max_runtime_minutes` plus a staging/copy-back margin. It then

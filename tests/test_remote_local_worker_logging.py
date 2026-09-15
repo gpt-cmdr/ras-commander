@@ -63,7 +63,7 @@ def _patch_local_execution(monkeypatch):
         ras_object.project_folder = Path(project_path)
         ras_object.project_name = "TestProject"
         ras_object.ras_version = ras_version
-        ras_object.ras_exe_path = r"C:\HEC-RAS\6.6\Ras.exe"
+        ras_object.ras_exe_path = ras_version
         return ras_object
 
     def fake_compute_plan(plan_number, ras_object, **kwargs):
@@ -181,7 +181,7 @@ def test_execute_local_plan_paths_are_debug_not_info(monkeypatch, tmp_path, capl
     assert "Copying project for plan 07 to local worker folder" in debug_text
     assert str(worker_folder) in debug_text
     assert "Executing plan 07 with RasCmdr.compute_plan()" in debug_text
-    assert "HDF file created successfully for plan 07" in debug_text
+    assert "hdf result created successfully for plan 07" in debug_text
 
 
 def test_execute_local_plan_geometry_copyback_can_be_disabled(monkeypatch, tmp_path):
@@ -206,6 +206,85 @@ def test_execute_local_plan_geometry_copyback_can_be_disabled(monkeypatch, tmp_p
     )
 
     assert geometry_copy_calls == []
+
+
+def test_execute_local_plan_uses_worker_selected_executable(monkeypatch, tmp_path):
+    ras_obj = _seed_project(tmp_path / "project")
+    worker = _local_worker(tmp_path / "workers")
+    worker.ras_exe_path = r"C:\HEC-RAS\7.0\Ras.exe"
+    _patch_local_execution(monkeypatch)
+    rasprj_module = importlib.import_module("ras_commander.RasPrj")
+    selected_engines = []
+
+    def capture_init(project_path, execution_engine, ras_object=None, **kwargs):
+        selected_engines.append(execution_engine)
+        ras_object.project_folder = Path(project_path)
+        ras_object.project_name = "TestProject"
+        ras_object.ras_version = "7.0"
+        ras_object.ras_exe_path = execution_engine
+        return ras_object
+
+    monkeypatch.setattr(rasprj_module, "init_ras_project", capture_init)
+
+    assert local_worker_module.execute_local_plan(
+        worker=worker,
+        plan_number="07",
+        ras_obj=ras_obj,
+        num_cores=2,
+        clear_geompre=False,
+        force_rerun=True,
+    )
+
+    assert selected_engines == [worker.ras_exe_path]
+
+
+def test_execute_local_plan_does_not_publish_copied_stale_result(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    ras_obj = _seed_project(tmp_path / "project")
+    source_hdf = Path(ras_obj.project_folder) / "TestProject.p07.hdf"
+    source_hdf.write_text("stale source result\n", encoding="utf-8")
+    worker = _local_worker(tmp_path / "workers")
+    _patch_local_execution(monkeypatch)
+    rascmdr_module = importlib.import_module("ras_commander.RasCmdr")
+    monkeypatch.setattr(
+        local_worker_module.RasCurrency,
+        "_are_plan_results_current_for_execution",
+        staticmethod(lambda *_args, **_kwargs: (False, "stale")),
+    )
+
+    def clear_staged(worker_project_path, plan_number, _ras_obj):
+        path = Path(worker_project_path) / f"TestProject.p{plan_number}.hdf"
+        if path.exists():
+            path.unlink()
+        return [path]
+
+    monkeypatch.setattr(
+        local_worker_module,
+        "clear_worker_plan_hdf_artifacts",
+        clear_staged,
+    )
+    monkeypatch.setattr(
+        rascmdr_module.RasCmdr,
+        "compute_plan",
+        staticmethod(lambda *_args, **_kwargs: True),
+    )
+    monkeypatch.setattr(
+        local_worker_module.RasCurrency,
+        "check_plan_hdf_complete",
+        staticmethod(lambda path: Path(path).is_file()),
+    )
+
+    assert not local_worker_module.execute_local_plan(
+        worker=worker,
+        plan_number="07",
+        ras_obj=ras_obj,
+        num_cores=2,
+        clear_geompre=False,
+        force_rerun=False,
+    )
+    assert source_hdf.read_text(encoding="utf-8") == "stale source result\n"
 
 
 def test_execute_local_plan_preserve_folder_info_is_concise(
