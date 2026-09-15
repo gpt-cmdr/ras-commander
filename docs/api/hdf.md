@@ -243,7 +243,7 @@ Structure geometry and SA/2D connections.
 - `get_connection_gates(hdf_path, name)` - Get gate data
 - `get_storage_area_polygons(hdf_path, *, ras_object=None)` - Extract storage
   area polygons and attributes from geometry or plan HDF files, including
-  multipart polygons and interior rings; returns an empty GeoDataFrame when no
+  multi-ring polygons with interior rings; returns an empty GeoDataFrame when no
   storage areas are present.
 
 ### HdfResultsBreach
