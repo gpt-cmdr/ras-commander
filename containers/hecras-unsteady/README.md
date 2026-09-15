@@ -13,7 +13,9 @@ require Wine or a host HEC-RAS installation.
 
 ## Image status
 
-**Qualification status:** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads. See the [current release record][release].
+Use the matching preprocessing and compute image pair for the selected HEC-RAS
+version. Image qualification and publication evidence are maintained separately
+from this source tree.
 
 | HEC-RAS | Wine preprocessing image | Native unsteady image |
 |---|---|---|

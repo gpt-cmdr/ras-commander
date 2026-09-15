@@ -19,6 +19,7 @@ import uuid
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from .RasUtils import RasUtils
 from ._container_process import run_streaming
 from ._container_resume import find_resume, record_resume
 
@@ -104,8 +105,14 @@ class ContainerBatchResult:
         import pandas as pd
         from .schemas import DATAFRAME_SCHEMAS
 
-        columns = [item["name"] for item in DATAFRAME_SCHEMAS["container_batch_summary"]["columns"]]
-        return pd.DataFrame(self.rows, columns=columns)
+        columns = DATAFRAME_SCHEMAS["container_batch_summary"]["columns"]
+        return pd.DataFrame({
+            item["name"]: pd.Series(
+                [row.get(item["name"]) for row in self.rows],
+                dtype=item["dtype"],
+            )
+            for item in columns
+        })
 
 
 class RasDocker:
@@ -280,7 +287,9 @@ class RasDocker:
                 if not isinstance(job, Mapping):
                     raise TypeError("Each batch job must be a mapping")
                 kwargs = {**options, **job}
-                row["project_path"] = str(Path(kwargs["project_path"]).expanduser().resolve())
+                row["project_path"] = str(
+                    RasUtils.safe_resolve(Path(kwargs["project_path"]).expanduser())
+                )
                 row["plan_number"] = RasDocker._normalize_plan(kwargs["plan_number"])
                 value = methods[stage](**kwargs)
                 if stage == "run":
@@ -340,7 +349,7 @@ class RasDocker:
         for name, value in (("docker_executable", docker_executable), ("user", user)):
             if not isinstance(value, str) or not value.strip() or any(c in value for c in "\x00\r\n"):
                 raise ValueError(f"{name} must be a nonempty string without control characters")
-        project = Path(project_path).expanduser().resolve(strict=True)
+        project = RasUtils.safe_resolve(Path(project_path).expanduser())
         if not project.is_file() or project.suffix.lower() != ".prj":
             raise ValueError("project_path must point to an existing .prj file")
         plan = RasDocker._normalize_plan(plan_number)
@@ -352,12 +361,15 @@ class RasDocker:
         known_image = re.search(r"(?:^|/)hec-ras-(wine-precompute|linux-unsteady)_([^:@/]+)(?=[:@]|$)", image)
         if known_image and (known_image.group(1) != family or known_image.group(2) != version):
             raise ValueError("Image stage/version does not match the requested stage/version")
-        mount_args = RasDocker._mount_arguments(project.parent, mounts)
+        mount_args, normalized_mounts = RasDocker._mount_arguments(project.parent, mounts)
         selected_receipt = None
         if prepare_receipt is not None:
-            selected = Path(prepare_receipt).expanduser().resolve(strict=True)
+            selected = RasUtils.safe_resolve(Path(prepare_receipt).expanduser())
             if (not selected.is_file() or selected.name != "prepare.json"
-                    or not selected.is_relative_to(project.parent)):
+                    or not selected.is_relative_to(project.parent)
+                    or not selected.resolve(strict=True).is_relative_to(
+                        project.parent.resolve(strict=True)
+                    )):
                 raise ValueError("prepare_receipt must be a prepare.json file inside the project folder")
             selected_receipt = "/job/" + selected.relative_to(project.parent).as_posix()
         if run_id is None:
@@ -365,8 +377,8 @@ class RasDocker:
         if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
             raise ValueError("run_id must use 1–64 letters, digits, periods, underscores or hyphens, starting with a letter or digit")
         identity = {"version": version, "image": image, "num_cores": int(num_cores),
-                    "mounts": {str(dest): str(Path(source).expanduser().resolve())
-                               for dest, source in (mounts or {}).items()},
+                    "mounts": {destination: str(source)
+                               for destination, source in normalized_mounts.items()},
                     "prepare_receipt": str(selected) if prepare_receipt is not None else None}
         if resume:
             cached = find_resume(project, plan, stage, identity)
@@ -380,7 +392,7 @@ class RasDocker:
         runs = project.parent / ".ras-commander" / "runs"
         # An exclusive claim prevents concurrent calls from crediting each
         # other's receipt. Keep it after launch failures to prohibit ID reuse.
-        if not runs.resolve().is_relative_to(project.parent):
+        if not runs.resolve().is_relative_to(project.parent.resolve(strict=True)):
             raise ValueError("Receipt directory must remain inside the project folder")
         runs.mkdir(parents=True, exist_ok=True)
         run_dir = runs / run_id
@@ -483,7 +495,10 @@ class RasDocker:
             if any(path == prior or path in prior.parents or prior in path.parents for prior in destinations):
                 raise ValueError(f"Overlapping dependency mount destination: {destination}")
             destinations.append(path)
-            entries.append((normalized, Path(source).expanduser().resolve(strict=True), True))
+            source_path = RasUtils.safe_resolve(Path(source).expanduser())
+            if not source_path.exists():
+                raise FileNotFoundError(f"Dependency mount source does not exist: {source_path}")
+            entries.append((normalized, source_path, True))
         arguments = []
         for destination, source, readonly in entries:
             # Docker --mount is a CSV mini-language even with shell=False.
@@ -494,32 +509,106 @@ class RasDocker:
             if readonly:
                 spec += ",readonly"
             arguments += ["--mount", spec]
-        return arguments
+        return arguments, {
+            destination: source
+            for destination, source, _readonly in entries
+            if destination != "/job"
+        }
 
     @staticmethod
     def _read_receipt(result, run_id, version):
         diagnostics = []
         try:
-            receipt_file = result.receipt_path.resolve(strict=True)
-            if not receipt_file.is_relative_to(result.project_path.parent):
+            receipt_file = RasUtils.safe_resolve(result.receipt_path)
+            if (not receipt_file.is_relative_to(result.project_path.parent)
+                    or not receipt_file.resolve(strict=True).is_relative_to(
+                        result.project_path.parent.resolve(strict=True)
+                    )):
                 raise ValueError("Receipt path escapes the project folder")
             receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
             if not isinstance(receipt, dict):
                 raise ValueError("Receipt must be a JSON object")
             result.receipt = receipt
+            if receipt.get("schema") != "ras-commander-job/v1":
+                diagnostics.append("Container receipt schema is not ras-commander-job/v1")
             expected = {"run_id": run_id, "command": result.stage,
                         "project": result.project_path.name, "plan": result.plan_number}
             for field_name, value in expected.items():
                 if receipt.get(field_name) != value:
                     diagnostics.append(f"Receipt {field_name} does not match this invocation")
-            versions = [receipt.get("hec_ras_version")]
             runtime = receipt.get("runtime")
+            expected_kind = "wine" if result.stage == "prepare" else "native"
+            if not isinstance(runtime, dict) or runtime.get("kind") != expected_kind:
+                diagnostics.append(f"Container receipt runtime kind is not {expected_kind}")
+            versions = [receipt.get("hec_ras_version")]
             if isinstance(runtime, dict):
                 versions.append(runtime.get("hec_ras_version"))
+            else:
+                versions.append(None)
+            if not isinstance(runtime, dict) or runtime.get("hec_ras_version") is None:
+                diagnostics.append("Container receipt runtime lacks a HEC-RAS version")
             if any(str(value) != version for value in versions if value is not None):
                 diagnostics.append("Receipt HEC-RAS version does not match the requested version")
             if receipt.get("status") != "succeeded":
                 diagnostics.append("Container receipt does not report success")
+            stage_result = receipt.get("result")
+            if not isinstance(stage_result, dict):
+                diagnostics.append("Container receipt lacks a stage result")
+            elif result.stage == "prepare":
+                if (stage_result.get("timed_out") is not False
+                        or stage_result.get("full_result_copied") is not False):
+                    diagnostics.append("Preparation receipt records incomplete or fallback output")
+            elif (stage_result.get("success") is not True
+                    or stage_result.get("completion_verified") is not True):
+                diagnostics.append("Compute receipt does not verify successful completion")
+            artifacts = receipt.get("artifacts")
+            if not isinstance(artifacts, list) or not artifacts:
+                diagnostics.append("Container receipt lacks an artifact inventory")
+            else:
+                artifact_paths = set()
+                malformed_artifact = False
+                for item in artifacts:
+                    path_value = item.get("path") if isinstance(item, dict) else None
+                    relative = PurePosixPath(path_value) if isinstance(path_value, str) else None
+                    if (
+                        not isinstance(item, dict)
+                        or relative is None
+                        or relative.is_absolute()
+                        or ".." in relative.parts
+                        or "\\" in path_value
+                        or ":" in path_value
+                        or relative.as_posix() != path_value
+                        or isinstance(item.get("size_bytes"), bool)
+                        or not isinstance(item.get("size_bytes"), int)
+                        or item["size_bytes"] <= 0
+                        or not isinstance(item.get("sha256"), str)
+                        or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                    ):
+                        malformed_artifact = True
+                        continue
+                    artifact_paths.add(path_value)
+                if malformed_artifact or len(artifact_paths) != len(artifacts):
+                    diagnostics.append("Container receipt has a malformed artifact inventory")
+                if result.stage == "prepare":
+                    geometry = receipt.get("geometry")
+                    if not isinstance(geometry, str) or not re.fullmatch(r"[0-9]{2}", geometry):
+                        diagnostics.append("Preparation receipt lacks a geometry number")
+                        expected_artifacts = set()
+                    else:
+                        expected_artifacts = {
+                            result.project_path.with_suffix(suffix).name
+                            for suffix in (
+                                f".p{result.plan_number}.tmp.hdf",
+                                f".b{result.plan_number}",
+                                f".x{geometry}",
+                            )
+                        }
+                else:
+                    expected_artifacts = {
+                        result.project_path.with_suffix(f".p{result.plan_number}.hdf").name
+                    }
+                if not expected_artifacts.issubset(artifact_paths):
+                    diagnostics.append("Container receipt lacks expected output artifacts")
         except (OSError, ValueError) as exc:
             diagnostics.append(f"Could not validate container receipt: {exc}")
         if result.returncode != 0:

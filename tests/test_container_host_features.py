@@ -208,6 +208,24 @@ def test_batch_resume_summary_and_empty_schema(monkeypatch, project):
     assert list(RasDocker.run_batch([]).summary_df.columns) == list(reused.summary_df.columns)
 
 
+@pytest.mark.parametrize("jobs", [
+    [],
+    [{"plan_number": 1}],
+])
+def test_batch_summary_uses_declared_dtypes_for_empty_and_invalid_rows(jobs):
+    frame = RasDocker.run_batch(jobs, stage="compute").summary_df
+    schema = DATAFRAME_SCHEMAS["container_batch_summary"]["columns"]
+    expected = {
+        item["name"]: pd.Series(dtype=item["dtype"]).dtype
+        for item in schema
+    }
+    assert frame.dtypes.to_dict() == expected
+    if jobs:
+        assert frame.iloc[0].success is False or not frame.iloc[0].success
+        assert pd.isna(frame.iloc[0].project_path)
+        assert "KeyError" in frame.iloc[0].error
+
+
 def test_batch_stops_on_interrupt(monkeypatch, project):
     calls = []
     def interrupted(*args, **kwargs):

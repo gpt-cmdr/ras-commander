@@ -4,8 +4,10 @@ The subprocess boundary is replaced here so argument, receipt and cleanup
 behavior can be checked without running Docker or HEC-RAS.
 """
 
+import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 
@@ -41,11 +43,39 @@ def _receipt(project_file, arguments, **changes):
     run_id = arguments[arguments.index("--run-id") + 1]
     stage = arguments[arguments.index("--project") - 1]
     plan = arguments[arguments.index("--plan") + 1]
+    suffixes = (
+        (f".p{plan}.tmp.hdf", f".b{plan}", f".x{plan}")
+        if stage == "prepare"
+        else (f".p{plan}.hdf",)
+    )
+    artifacts = []
+    for suffix in suffixes:
+        artifact = project_file.with_suffix(suffix)
+        artifact.write_bytes(f"{stage}:{suffix}".encode())
+        artifacts.append({
+            "path": artifact.name,
+            "size_bytes": artifact.stat().st_size,
+            "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        })
     receipt = {
         "schema": "ras-commander-job/v1", "run_id": run_id, "command": stage,
         "project": project_file.name, "plan": plan, "status": "succeeded",
-        "runtime": {"hec_ras_version": "6.5"},
+        "geometry": plan,
+        "runtime": {
+            "kind": "wine" if stage == "prepare" else "native",
+            "hec_ras_version": "6.5",
+        },
+        "result": (
+            {"timed_out": False, "full_result_copied": False}
+            if stage == "prepare"
+            else {"success": True, "completion_verified": True}
+        ),
+        "artifacts": artifacts,
     }
+    changes = dict(changes)
+    runtime_change = changes.get("runtime")
+    if isinstance(runtime_change, dict) and set(runtime_change) == {"hec_ras_version"}:
+        receipt["runtime"].update(changes.pop("runtime"))
     receipt.update(changes)
     path = project_file.parent / ".ras-commander" / "runs" / run_id / f"{stage}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +122,52 @@ def test_prepare_command_preserves_spaces_and_readonly_sibling_mounts(monkeypatc
     assert result.receipt_path.name == "prepare.json"
     assert result.stdout == "container output"
     assert result.stderr == "diagnostic output"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Mapped-drive behavior is Windows-specific")
+def test_mapped_drive_form_survives_mount_receipt_result_and_batch_display(monkeypatch, project):
+    dependency = project.parent.parent / "mapped dependency"
+    dependency.mkdir()
+    expected_project = project.absolute()
+    expected_dependency = dependency.absolute()
+    real_resolve = Path.resolve
+
+    def resolve_to_unc(path, strict=False):
+        resolved = real_resolve(path, strict=strict)
+        if resolved.drive and not str(resolved).startswith("\\\\"):
+            return Path(r"\\server\mapped") / Path(*resolved.parts[1:])
+        return resolved
+
+    monkeypatch.setattr(Path, "resolve", resolve_to_unc)
+    captured_identity = {}
+
+    def miss_resume(_project, _plan, _stage, identity):
+        captured_identity.update(identity)
+        return None
+
+    monkeypatch.setattr(module, "find_resume", miss_resume)
+    monkeypatch.setattr(module, "record_resume", lambda *_args: None)
+    calls = _fake_run(monkeypatch, project)
+    batch = RasDocker.run_batch([{
+        "project_path": project,
+        "plan_number": 1,
+        "mounts": {"/dependency": dependency},
+        "run_id": "mapped-drive",
+    }], stage="prepare", resume=True)
+
+    prepared, computed = batch.results[0]
+    assert prepared and computed is None
+    assert prepared.project_path == expected_project
+    assert prepared.receipt_path.drive == expected_project.drive
+    assert not str(prepared.receipt_path).startswith("\\\\")
+    command = calls[0][0]
+    assert f"type=bind,src={expected_project.parent},dst=/job" in command
+    assert f"type=bind,src={expected_dependency},dst=/dependency,readonly" in command
+    assert captured_identity["mounts"]["/dependency"] == str(expected_dependency)
+    row = batch.summary_df.iloc[0]
+    assert row.project_path == str(expected_project)
+    assert Path(row.prepare_receipt).drive == expected_project.drive
+    assert not row.prepare_receipt.startswith("\\\\")
 
 
 def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, project):
@@ -183,7 +259,52 @@ def test_receipt_identity_and_failure_status_are_not_success(monkeypatch, projec
     assert not result and error in result.error
     assert result.receipt_path.is_file()
     for key, value in changes.items():
-        assert result.receipt[key] == value
+        if isinstance(value, dict):
+            assert all(result.receipt[key][name] == item for name, item in value.items())
+        else:
+            assert result.receipt[key] == value
+
+
+@pytest.mark.parametrize("changes, error", [
+    ({"schema": "custom-job/v1"}, "schema"),
+    ({"runtime": {"kind": "wine"}}, "version"),
+    ({"runtime": {"kind": "native", "hec_ras_version": "6.5"}}, "runtime kind"),
+    ({"result": None}, "stage result"),
+    ({"result": {"timed_out": True, "full_result_copied": False}}, "incomplete"),
+    ({"result": {"timed_out": False, "full_result_copied": True}}, "fallback"),
+    ({"artifacts": []}, "artifact inventory"),
+    ({"artifacts": [{"path": "Example.p01.tmp.hdf"}]}, "malformed artifact"),
+])
+def test_prepare_receipt_requires_complete_success_contract(monkeypatch, project, changes, error):
+    _fake_run(monkeypatch, project, changes=changes)
+    result = RasDocker.preprocess_plan(project, 1, image="custom-preparer:local")
+    assert not result and error in result.error
+
+
+def test_matching_custom_receipt_without_worker_evidence_is_not_success(monkeypatch, project):
+    _fake_run(monkeypatch, project, changes={
+        "schema": None,
+        "runtime": {"kind": "custom", "hec_ras_version": "6.5"},
+        "result": {},
+        "artifacts": [],
+    })
+    result = RasDocker.preprocess_plan(project, 1, image="custom-preparer:local")
+    assert not result
+    assert "schema" in result.error
+    assert "runtime kind" in result.error
+    assert "incomplete" in result.error
+    assert "artifact inventory" in result.error
+
+
+@pytest.mark.parametrize("stage_result", [
+    None,
+    {"success": False, "completion_verified": True},
+    {"success": True, "completion_verified": False},
+])
+def test_compute_receipt_requires_verified_success(monkeypatch, project, stage_result):
+    _fake_run(monkeypatch, project, changes={"result": stage_result})
+    result = RasDocker.compute_plan(project, 1, image="custom-compute:local")
+    assert not result and ("stage result" in result.error or "successful completion" in result.error)
 
 
 def test_nonzero_docker_exit_rejects_successful_receipt(monkeypatch, project):
