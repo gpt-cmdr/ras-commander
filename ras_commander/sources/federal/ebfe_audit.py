@@ -93,6 +93,10 @@ UNREFERENCED_1D_TERRAIN_NOTE = "No terrain provided or referenced by model (1D)"
 REFERENCED_1D_TERRAIN_NOTE = (
     "Terrain referenced but not provided (1D; informational — does not prevent recomputation)"
 )
+REFERENCED_1D_LAND_COVER_NOTE = (
+    "Land cover / Manning's n referenced but not provided "
+    "(1D; informational — cross-section n values allow recomputation)"
+)
 
 _SURFACE_TO_KIND = {
     "asset_relocation": "file_movement",
@@ -323,6 +327,12 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
 
     ``referenced`` maps optional-layer keys to booleans. Keys absent from it
     fall back to a conservative default (infiltration and soils: not expected).
+
+    Land cover / Manning's n follows the model type, not the reference (user
+    direction, 2026-09-16): a 2D model requires it; a 1D model never does,
+    because its cross sections carry their own n values, so a referenced but
+    undelivered layer is informational. Infiltration stays expected only when
+    a RASMapper file references it.
     """
     # A "mixed" study has at least one 2D project, so it expects what 2D expects.
     is_2d = dims in ("2D", "mixed")
@@ -338,7 +348,7 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     # and no projection, and calling those "needs external data" was wrong.
     return {
         "terrain": is_2d,
-        "land_cover": optional("land_cover", is_2d),
+        "land_cover": is_2d,
         "infiltration": optional("infiltration", False),
         "soils": optional("soils", False),
         "dss": optional("dss", unsteady),
@@ -411,10 +421,11 @@ def _unique_model_identity(row: dict) -> tuple:
 def study_critical_threshold(bundle: AuditBundle) -> dict:
     """Measure 1D missing supporting data over total unique model rows.
 
-    Missing terrain is informational for an integrated 1D study at every
-    prevalence because cross-section computations do not require it. Land
-    cover/Manning's n becomes *study-critical* only when it is referenced and
-    not delivered by at least 10 percent of the study's unique models. Duplicate
+    Missing terrain and missing land cover/Manning's n are informational for an
+    integrated 1D study at every prevalence: cross-section computations need
+    neither. (Until 2026-09-16 land cover became study-critical at 10 percent
+    of unique models; the user retired that rule.) The prevalence is still
+    measured and reported. Duplicate
     captures of one project/prj pair do not inflate either numerator or
     denominator. The structurally required 2D terrain rule is unchanged.
     """
@@ -432,7 +443,7 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
     dims, _ = _model_type(bundle)
     applies = bool(denominator) and dims == "1D"
     result = {
-        "rule": "integrated_1d_terrain_informational_land_cover_gte_10_percent",
+        "rule": "integrated_1d_terrain_and_land_cover_informational",
         "threshold_fraction": STUDY_CRITICAL_THRESHOLD_FRACTION,
         "threshold_percent": 10,
         "denominator_definition": "total unique model rows by normalized project_folder + prj_file",
@@ -462,11 +473,8 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
             "denominator": denominator,
             "fraction": round(fraction, 8),
             "percent": round(100.0 * fraction, 4),
-            "study_critical": bool(
-                applies
-                and element == "land_cover"
-                and fraction >= STUDY_CRITICAL_THRESHOLD_FRACTION
-            ),
+            # Neither element is ever study-critical for integrated 1D.
+            "study_critical": False,
             "affected_models": affected,
             "unreferenced_not_delivered": len(unreferenced_not_delivered),
             "display": f"{numerator}/{denominator} unique model rows ({100.0 * fraction:.2f}%)",
@@ -477,6 +485,8 @@ def study_critical_threshold(bundle: AuditBundle) -> dict:
                 if affected
                 else UNREFERENCED_1D_TERRAIN_NOTE
             )
+        if element == "land_cover" and applies and affected:
+            row["informational"] = REFERENCED_1D_LAND_COVER_NOTE
         result["elements"][element] = row
     return result
 
@@ -814,7 +824,7 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     threshold = study_critical_threshold(bundle)
     if threshold["applies_to_integrated_1d"]:
         expected["terrain"] = False
-        expected["land_cover"] = threshold["elements"]["land_cover"]["study_critical"]
+        expected["land_cover"] = False
     delivered = _delivered_elements(bundle)
     labels = dict(SUPPORTING_ELEMENTS)
     for ekey, is_expected in expected.items():
@@ -990,7 +1000,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     threshold = study_critical_threshold(bundle)
     if threshold["applies_to_integrated_1d"]:
         expected["terrain"] = False
-        expected["land_cover"] = threshold["elements"]["land_cover"]["study_critical"]
+        expected["land_cover"] = False
     delivered = _delivered_elements(bundle)
     actions = actions_from_bundle(bundle)
     load = audit.get("g6a_load", {}) or {}
@@ -1067,6 +1077,9 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
                 and element in STUDY_CRITICAL_ELEMENTS
                 and not threshold["elements"][element]["study_critical"]
             ):
+                continue
+            if element == "land_cover" and not expected.get("land_cover"):
+                # A 1D capture may still carry a land-cover row; it is informational.
                 continue
             if str(item.get("element")) == "terrain" and str(item.get("reason", "")).startswith("terrain_hdf_absent"):
                 named = [str(p) for p in (item.get("projects") or [])]
@@ -1167,7 +1180,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     for ekey, label in SUPPORTING_ELEMENTS:
         exp = (
             "Informational only (1D)"
-            if ekey == "terrain" and threshold["applies_to_integrated_1d"]
+            if ekey in STUDY_CRITICAL_ELEMENTS and threshold["applies_to_integrated_1d"]
             else ("Yes" if expected[ekey] else "Not used by this model")
         )
         d = delivered.get(ekey, {})
@@ -1175,8 +1188,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         if not expected[ekey] and d.get("state") in ("no", "unknown", "not captured"):
             state = "--"
         note = d.get("note") or ""
-        if ekey == "terrain" and threshold["applies_to_integrated_1d"]:
-            note = threshold["elements"]["terrain"].get("informational") or note
+        if ekey in STUDY_CRITICAL_ELEMENTS and threshold["applies_to_integrated_1d"]:
+            note = threshold["elements"][ekey].get("informational") or note
         w(f"| {label} | {exp} | {state} | {_md_escape(d.get('location') or '')} | {_md_escape(note)} |")
     if threshold["applies_to_integrated_1d"]:
         w("")

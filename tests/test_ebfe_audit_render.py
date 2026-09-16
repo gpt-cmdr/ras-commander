@@ -213,12 +213,41 @@ def test_referenced_1d_terrain_is_exact_informational_text_only_even_at_100_perc
     assert "Rebuild `Terrain`" not in markdown
 
 
-def test_land_cover_retains_the_inclusive_10_percent_threshold():
-    bundle = _threshold_bundle(10, 1, element="land_cover")
+@pytest.mark.parametrize("total,affected", [(10, 1), (85, 85)])
+def test_1d_land_cover_is_informational_at_every_prevalence(total, affected):
+    """User direction 2026-09-16: missing land cover is not fatal for a 1D model.
+
+    Wheeler Lake (AL06030002) references land cover in all 85 models and delivers
+    it in none; it was hatched "critical data missing" under the retired 10% rule.
+    """
+    bundle = _threshold_bundle(total, affected, element="land_cover")
     threshold = study_critical_threshold(bundle)
-    assert threshold["elements"]["land_cover"]["study_critical"]
-    assert any(action.target == "Land cover / Manning's n" for action in actions_from_bundle(bundle))
-    assert "| Land cover / Manning's n | 1 | 10 | 10.00% | yes |" in render_audit_markdown(bundle)
+    row = threshold["elements"]["land_cover"]
+    assert (row["numerator"], row["denominator"]) == (affected, total)
+    assert row["study_critical"] is False
+    assert row["informational"].startswith("Land cover / Manning's n referenced but not provided (1D")
+    assert not any(action.target == "Land cover / Manning's n" for action in actions_from_bundle(bundle))
+    markdown = render_audit_markdown(bundle)
+    percent = f"{100.0 * affected / total:.2f}%"
+    assert f"| Land cover / Manning's n | {affected} | {total} | {percent} | no |" in markdown
+    assert "Critical data missing | land cover" not in markdown
+    assert "needs data not in the delivery" not in markdown
+
+
+def test_1d_referenced_land_cover_is_not_expected():
+    expected = expected_elements("1D", "unsteady", {"land_cover": True})
+    assert not expected["land_cover"]
+
+
+def test_2d_requires_land_cover_even_when_unreferenced():
+    assert expected_elements("2D", "unsteady", {"land_cover": False})["land_cover"]
+    assert expected_elements("mixed", "steady", {"land_cover": False})["land_cover"]
+
+
+def test_2d_infiltration_is_expected_only_when_referenced():
+    assert not expected_elements("2D", "unsteady", {})["infiltration"]
+    assert not expected_elements("2D", "unsteady", {"infiltration": False})["infiltration"]
+    assert expected_elements("2D", "unsteady", {"infiltration": True})["infiltration"]
 
 
 def test_duplicate_model_row_does_not_inflate_threshold_denominator():
