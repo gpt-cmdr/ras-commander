@@ -26,6 +26,8 @@ Main Classes:
           with 10m/30m backfill, explicit vertical unit conversion, a
           zero-nodata gate inside the buffered model extent, and a
           single-source HEC-RAS terrain check
+        - plan_terrain_tiles(): Plan every tile a terrain build needs (network)
+        - prefetch_terrain_tiles(): Download plans' tiles once into a shared store
         - create_vrt(): Mosaic downloaded tiles into a VRT
 
     RasTerrainMod: Terrain modification analysis via pythonnet (Windows only)
