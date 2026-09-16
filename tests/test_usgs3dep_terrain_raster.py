@@ -3,16 +3,19 @@
 RASMapper creates result rasters that mirror the terrain VRT structure, so the
 terrain handed to HEC-RAS must be ONE raster in the project CRS with no nodata
 inside the buffered model extent. These tests pin the AOI construction,
-priority/backfill ordering, dominant-resolution choice, explicit vertical unit
-conversion, the nodata gate, the single-member Terrain.vrt assertion, and the
+priority/backfill ordering, the integer-multiple cell-size rule, explicit
+vertical unit conversion, the nodata gate, the single-member Terrain.vrt assertion, and the
 HEC-RAS terrain handoff. GDAL executables, HEC-RAS, and all network
 access are mocked; small real GeoTIFFs are written with rasterio where pixel
 values matter.
 """
 
+import inspect
 import json
+import logging
 import math
 import subprocess
+from fractions import Fraction
 from importlib import import_module
 from pathlib import Path
 
@@ -160,6 +163,7 @@ def test_native_resolution_of_1m_utm_is_exact_us_survey_feet(tmp_path):
     )
 
     assert result["native_resolution_project_units"] == 3.2808333333333333
+    assert result["_native_resolution_exact"] == Fraction(3937, 1200)
     assert result["native_resolution_source_unit"] == "metre"
 
 
@@ -183,6 +187,94 @@ def test_native_resolution_of_one_third_arc_second_is_about_30_feet(tmp_path):
 
 def test_snap_bounds_outward_matches_target_aligned_pixels():
     assert Usgs3depAws._snap_bounds_outward((12.5, 7.1, 38.2, 19.9), 10) == (10, 0, 40, 20)
+
+
+# ---------------------------------------------------------------------------
+# Cell-size rule
+# ---------------------------------------------------------------------------
+
+ONE_METRE_FTUS = Fraction(3937, 1200)
+
+
+@pytest.mark.parametrize(
+    "dominant, minimum, expected_multiple, expected_cell",
+    [
+        # 1 m in EPSG:2277: 3.28 ft < 5 ft, so k = 2.
+        (ONE_METRE_FTUS, 5.0, 2, Fraction(3937, 600)),
+        # 10 m (32.8 ft) already meets the minimum: k = 1.
+        (10 * ONE_METRE_FTUS, 5.0, 1, 10 * ONE_METRE_FTUS),
+        # Exactly equal to the minimum: k = 1, not 2.
+        (Fraction(5), 5.0, 1, Fraction(5)),
+        # An exact divisor of the minimum: k = 2 exactly, not 3.
+        (Fraction(5, 2), 5.0, 2, Fraction(5)),
+        # Metre project, 1 m source, 5 m minimum: k = 5.
+        (Fraction(1), 5.0, 5, Fraction(5)),
+    ],
+)
+def test_cell_size_rule_picks_smallest_multiple_reaching_the_minimum(
+    dominant, minimum, expected_multiple, expected_cell
+):
+    cell, report = Usgs3depAws._cell_size_for_dominant(dominant, minimum)
+
+    assert cell == expected_cell
+    assert report["multiple"] == expected_multiple
+    assert report["value"] == float(expected_cell)
+    assert report["dominant_resolution"] == float(dominant)
+    assert report["minimum_cell_size"] == minimum
+    assert report["chosen_by"] == "minimum_cell_size_rule"
+    assert report["snapped"] is False
+
+
+def test_cell_size_for_1m_in_epsg2277_is_exactly_twice_3937_over_1200_ftus():
+    cell, _ = Usgs3depAws._cell_size_for_dominant(ONE_METRE_FTUS, 5.0)
+
+    assert cell == Fraction(3937, 600)
+    assert float(cell) == 6.5616666666666667
+
+
+def test_cell_size_override_that_is_an_integer_multiple_is_used_as_is(caplog):
+    caplog.set_level(logging.WARNING, logger=usgs_module.logger.name)
+
+    cell, report = Usgs3depAws._cell_size_for_dominant(
+        ONE_METRE_FTUS, 5.0, target_resolution=float(3 * ONE_METRE_FTUS)
+    )
+
+    assert cell == 3 * ONE_METRE_FTUS
+    assert report["chosen_by"] == "override"
+    assert report["snapped"] is False
+    assert "not an integer multiple" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "requested, expected_multiple",
+    [
+        (10.0, 3),   # 10 / 3.28 = 3.05 -> 3 x = 9.8425 ft
+        (12.0, 4),   # 12 / 3.28 = 3.66 -> 4 x = 13.1233 ft
+        (1.0, 1),    # below the dominant resolution -> at least 1 x
+    ],
+)
+def test_cell_size_override_that_is_not_a_multiple_is_snapped_with_a_warning(
+    caplog, requested, expected_multiple
+):
+    caplog.set_level(logging.WARNING, logger=usgs_module.logger.name)
+
+    cell, report = Usgs3depAws._cell_size_for_dominant(
+        ONE_METRE_FTUS, 5.0, target_resolution=requested
+    )
+
+    assert cell == expected_multiple * ONE_METRE_FTUS
+    assert report["multiple"] == expected_multiple
+    assert report["requested_resolution"] == requested
+    assert report["snapped"] is True
+    assert report["chosen_by"] == "override_snapped"
+    assert "not an integer multiple" in caplog.text
+
+
+def test_cell_size_rule_rejects_non_positive_sizes():
+    with pytest.raises(ValueError):
+        Usgs3depAws._cell_size_for_dominant(ONE_METRE_FTUS, 0)
+    with pytest.raises(ValueError):
+        Usgs3depAws._cell_size_for_dominant(ONE_METRE_FTUS, 5.0, target_resolution=-1)
 
 
 def test_composite_orders_sources_lowest_priority_first(monkeypatch, tmp_path):
@@ -335,7 +427,12 @@ def test_count_vrt_source_members(tmp_path, members):
 # ---------------------------------------------------------------------------
 
 AOI = box(3125000, 10003000, 3125200, 10003200)
-TIER_RESOLUTION = {"t1.tif": 3.2808333333333333, "t2.tif": 30.0, "t3.tif": 90.0}
+TIER_RESOLUTION = {
+    "t1.tif": Fraction(3937, 1200),   # 1 m -> k = 2 -> 6.5616666666666667 ft
+    "t2.tif": Fraction(30),           # ~10 m backfill already >= 5 ft -> k = 1
+    "t3.tif": Fraction(90),
+}
+CELL_1M = float(Fraction(3937, 600))
 
 
 @pytest.fixture
@@ -362,7 +459,8 @@ def pipeline(monkeypatch, tmp_path):
             "native_resolution_source_units": 1.0,
             "native_resolution_source_unit": "metre",
             "native_resolution_source_crs": "EPSG:26914",
-            "native_resolution_project_units": TIER_RESOLUTION[Path(path).name],
+            "native_resolution_project_units": float(TIER_RESOLUTION[Path(path).name]),
+            "_native_resolution_exact": TIER_RESOLUTION[Path(path).name],
         }
 
     def fake_composite(tiers, output_path, project_crs, resolution, aoi_bounds, **kwargs):
@@ -421,8 +519,18 @@ def test_build_uses_only_tier1_when_it_covers_the_aoi(pipeline):
 
     assert pipeline["seamless_requests"] == []
     assert [tier["status"] for tier in receipt["tiers"]] == ["used", "not_required", "not_required"]
-    assert receipt["resolution"]["value"] == 3.2808333333333333
-    assert receipt["resolution"]["chosen_by"] == "dominant_source"
+    resolution = receipt["resolution"]
+    assert resolution["value"] == CELL_1M == 6.5616666666666667
+    assert resolution["multiple"] == 2
+    assert resolution["dominant_resolution"] == 3.2808333333333333
+    assert resolution["minimum_cell_size"] == 5.0
+    assert resolution["chosen_by"] == "minimum_cell_size_rule"
+    assert resolution["resampling"] == "bilinear"
+    assert "smallest integer multiple" in resolution["reason"]
+    # One composite at the final cell size: no re-warp.
+    assert [cell for _, cell in pipeline["composites"]] == [CELL_1M]
+    assert "_native_resolution_exact" not in receipt["tiers"][0]
+    assert receipt["composite"]["resampling"] == "bilinear"
     assert receipt["nodata"]["inside_aoi_count"] == 0
     assert receipt["vertical"]["scale_factor"] == pytest.approx(FTUS_PER_METRE)
     assert receipt["tiers"][0]["projects"] == ["TX_Central_B1_2017"]
@@ -430,7 +538,8 @@ def test_build_uses_only_tier1_when_it_covers_the_aoi(pipeline):
 
     with rasterio.open(pipeline["output"]) as src:
         values = src.read(1)
-        assert src.res == pytest.approx((3.2808333333333333, 3.2808333333333333))
+        assert src.count == 1
+        assert src.res == pytest.approx((CELL_1M, CELL_1M))
     assert np.allclose(values, 100.0 * FTUS_PER_METRE)
     assert json.loads(pipeline["output"].with_name("terrain.terrain_receipt.json").read_text())["status"] == "pass"
 
@@ -470,18 +579,65 @@ def test_build_uses_backfill_resolution_when_backfill_dominates(pipeline):
     )
 
     assert receipt["resolution"]["dominant_tier"] == 2
+    # The dominant backfill cell (30 ft) already meets the 5-ft minimum: k = 1.
+    assert receipt["resolution"]["multiple"] == 1
     assert receipt["resolution"]["value"] == 30.0
     assert "tier 2" in receipt["resolution"]["reason"]
     assert pipeline["composites"][-1] == (["t2.tif", "t1.tif"], 30.0)
 
 
-def test_build_honours_resolution_override(pipeline):
+def test_build_minimum_cell_size_is_adjustable(pipeline):
+    receipt = Usgs3depAws.build_terrain_raster(
+        pipeline["output"], PROJECT_CRS, aoi_geometry=AOI, buffer_distance=0, minimum_cell_size=10.0
+    )
+
+    assert receipt["resolution"]["multiple"] == 4
+    assert receipt["resolution"]["value"] == float(4 * Fraction(3937, 1200))
+
+
+def test_build_honours_an_integer_multiple_override(pipeline):
+    requested = float(3 * Fraction(3937, 1200))
+
+    receipt = Usgs3depAws.build_terrain_raster(
+        pipeline["output"], PROJECT_CRS, aoi_geometry=AOI, buffer_distance=0, target_resolution=requested
+    )
+
+    assert receipt["resolution"]["chosen_by"] == "override"
+    assert receipt["resolution"]["snapped"] is False
+    assert all(cell == requested for _, cell in pipeline["composites"])
+
+
+def test_build_snaps_a_non_multiple_override_and_records_it(pipeline, caplog):
+    caplog.set_level(logging.WARNING, logger=usgs_module.logger.name)
+
     receipt = Usgs3depAws.build_terrain_raster(
         pipeline["output"], PROJECT_CRS, aoi_geometry=AOI, buffer_distance=0, target_resolution=10.0
     )
 
-    assert receipt["resolution"]["chosen_by"] == "override"
-    assert all(resolution == 10.0 for _, resolution in pipeline["composites"])
+    resolution = receipt["resolution"]
+    assert resolution["chosen_by"] == "override_snapped"
+    assert resolution["requested_resolution"] == 10.0
+    assert resolution["snapped"] is True
+    assert resolution["multiple"] == 3
+    assert resolution["value"] == float(3 * Fraction(3937, 1200))
+    assert all(cell == resolution["value"] for _, cell in pipeline["composites"])
+    assert "not an integer multiple" in caplog.text
+
+
+def test_build_defaults_to_bilinear_and_a_5_unit_minimum():
+    parameters = inspect.signature(Usgs3depAws.build_terrain_raster).parameters
+
+    assert parameters["minimum_cell_size"].default == 5.0
+    assert parameters["resampling_method"].default == "bilinear"
+    assert "dominant_resampling" not in parameters
+    assert "backfill_resampling" not in parameters
+
+
+def test_build_validates_minimum_cell_size(pipeline):
+    with pytest.raises(ValueError, match="minimum_cell_size"):
+        Usgs3depAws.build_terrain_raster(
+            pipeline["output"], PROJECT_CRS, aoi_geometry=AOI, minimum_cell_size=0
+        )
 
 
 def test_build_fails_the_gate_when_backfill_is_exhausted(pipeline):
@@ -534,7 +690,9 @@ def test_build_hec_terrain_has_exactly_one_source_member(pipeline, tmp_path):
         "stitch": False,
     }
     assert receipt["hec_terrain"]["source_member_count"] == 1
+    assert receipt["hec_terrain"]["build_seconds"] >= 0
     assert "PROJCS" in (tmp_path / "hec" / "Projection.prj").read_text()
+    assert sorted(path.name for path in pipeline["output"].parent.glob("*.tif")) == ["terrain.tif"]
 
 
 def test_build_rejects_a_multi_source_hec_terrain(pipeline, tmp_path):

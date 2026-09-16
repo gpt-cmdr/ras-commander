@@ -16,8 +16,9 @@ Key Features:
 - Multi-tile mosaicking for seamless coverage
 - Coverage-aware, newest-per-sub-area project selection (no silent gaps)
 - Virtual raster (VRT) creation for efficient processing
-- Single-raster, project-CRS terrain builds with prioritized backfill and a
-  zero-nodata gate inside the buffered model extent
+- Single-raster, project-CRS terrain builds on the smallest integer multiple of
+  the dominant source resolution >= 5 project units, with prioritized
+  bilinear backfill and a zero-nodata gate inside the buffered model extent
 - Per-tile download provenance (source URL, project, ETag, Last-Modified, size)
 - Cloud Optimized GeoTIFF support for partial reads
 
@@ -1604,6 +1605,7 @@ class Usgs3depAws:
         buffer_distance: float = 100.0,
         buffer_units: str = "US survey foot",
         vertical_unit: Optional[str] = None,
+        minimum_cell_size: float = 5.0,
         target_resolution: Optional[float] = None,
         backfill_resolutions: Sequence[int] = (10, 30),
         exclude_tile_ids: Optional[Sequence[str]] = None,
@@ -1644,14 +1646,22 @@ class Usgs3depAws:
            arc-second (~30m) products. A lower tier is downloaded only when
            the higher tiers leave AOI pixels uncovered, and only for the
            bounds of those pixels.
-        3. **Dominant resolution.** The native resolution of the tier that
-           contributes the most AOI area, converted to project CRS linear
-           units (1m in EPSG:2277 is 3.2808333333333333 US survey feet), unless
-           ``target_resolution`` overrides it.
+        3. **Cell size.** The dominant resolution is the native resolution of
+           the tier contributing the most AOI area, converted to project CRS
+           linear units with exact fractions (1m in EPSG:2277 is 3937/1200 =
+           3.2808333333333333 US survey feet). The cell size is
+           ``k * dominant_resolution`` for the smallest integer ``k >= 1`` with
+           ``k * dominant_resolution >= minimum_cell_size`` (default 5 project
+           units): 1m in EPSG:2277 gives k=2 and 6.5616666666666667 ftUS, while a
+           10m source already exceeds 5 ft, so k=1. ``target_resolution``
+           overrides the rule; a value that is not an integer multiple of the
+           dominant resolution is snapped to the nearest multiple (at least 1x)
+           with a logged warning.
         4. **One composite.** A single HEC-RAS bundled ``gdalwarp.exe`` call
            with every source ordered lowest priority first and highest last
            (later valid pixels overwrite earlier ones), ``-t_srs``, ``-tr``,
-           ``-tap``, ``-te`` snapped outward, and a tiled, compressed GeoTIFF.
+           ``-tap``, ``-te`` snapped outward, bilinear resampling for every
+           tier, and a tiled, compressed GeoTIFF.
         5. **Vertical units.** 3DEP heights are NAVD88 metres and reprojection
            changes horizontal units only; the bundled GDAL 3.0.2 ``gdalwarp``
            does not rescale Z even when given compound CRSs. Valid pixels are
@@ -1685,8 +1695,14 @@ class Usgs3depAws:
             vertical_unit: Output elevation unit: ``"US survey foot"``,
                 ``"foot"``, or ``"metre"``. Default None uses the project CRS
                 linear unit. Keyword-only.
-            target_resolution: Cell size in project CRS units, overriding the
-                dominant-resolution rule. Keyword-only.
+            minimum_cell_size: Minimum output cell size in project CRS linear
+                units. Default 5.0. The cell size is the smallest integer
+                multiple of the dominant resolution that reaches it.
+                Keyword-only.
+            target_resolution: Cell size in project CRS units overriding the
+                minimum-cell-size rule. Snapped, with a warning, to the nearest
+                integer multiple (at least 1) of the dominant resolution.
+                Keyword-only.
             backfill_resolutions: Lower-priority tiers, in priority order,
                 from ``10`` and ``30``. Default ``(10, 30)``; ``()`` disables
                 backfill. Keyword-only.
@@ -1695,8 +1711,8 @@ class Usgs3depAws:
             download_folder: Where source tiles are cached. Default is a
                 ``source-tiles`` folder beside the output. Keyword-only.
             cache_folder: Tile index cache folder. Keyword-only.
-            resampling_method: gdalwarp resampling. Default ``"bilinear"``.
-                Keyword-only.
+            resampling_method: gdalwarp resampling applied to every tier.
+                Default ``"bilinear"``. Keyword-only.
             nodata: Output nodata value. Default -9999. Keyword-only.
             src_nodata: Source nodata override. Default None uses each
                 source's own nodata metadata, which differs between 3DEP
@@ -1734,8 +1750,8 @@ class Usgs3depAws:
             ...     hec_terrain_hdf="Terrain/hec-6.6/Terrain.hdf",
             ...     hecras_version="6.6",
             ... )
-            >>> receipt["resolution"]["value"]
-            3.2808333333333333
+            >>> receipt["resolution"]["value"], receipt["resolution"]["multiple"]
+            (6.5616666666666665, 2)
             >>> receipt["nodata"]["inside_aoi_count"]
             0
             >>> receipt["hec_terrain"]["source_member_count"]
@@ -1762,6 +1778,9 @@ class Usgs3depAws:
 
         if target_resolution is not None and not target_resolution > 0:
             raise ValueError(f"target_resolution must be positive, got {target_resolution}")
+
+        if not minimum_cell_size > 0:
+            raise ValueError(f"minimum_cell_size must be positive, got {minimum_cell_size}")
 
         horizontal_unit, _ = Usgs3depAws._crs_linear_unit(project_crs)
         vertical_unit = Usgs3depAws._normalize_linear_unit(vertical_unit or horizontal_unit)
@@ -1801,7 +1820,8 @@ class Usgs3depAws:
         aoi_wgs84 = Usgs3depAws._geometry_to_wgs84(aoi, project_crs)
 
         used_tiers: List[Dict[str, Any]] = []
-        analysis_resolution = target_resolution
+        analysis_cell: Optional[Fraction] = None
+        analysis_resolution: Optional[float] = None
         gate: Optional[Dict[str, Any]] = None
         composite_path: Optional[Path] = None
         gdalwarp_path: Optional[Path] = None
@@ -1865,8 +1885,15 @@ class Usgs3depAws:
                 tier["status"] = "used"
                 used_tiers.append(tier)
 
-                if analysis_resolution is None:
-                    analysis_resolution = tier["native_resolution_project_units"]
+                if analysis_cell is None:
+                    # Provisional grid: the first tier with data is assumed to
+                    # be dominant until the contributions are known.
+                    analysis_cell, _ = Usgs3depAws._cell_size_for_dominant(
+                        tier["_native_resolution_exact"],
+                        minimum_cell_size,
+                        target_resolution,
+                    )
+                    analysis_resolution = float(analysis_cell)
 
                 uncovered_before = None if gate is None else gate["nodata_pixel_count"]
 
@@ -1917,22 +1944,35 @@ class Usgs3depAws:
                 used_tiers,
                 key=lambda item: (item["contributed_aoi_pixels"], -item["tier"]),
             )
-            if target_resolution is None:
-                resolution = dominant["native_resolution_project_units"]
-                resolution_reason = (
-                    f"native resolution of tier {dominant['tier']} ({dominant['product']}, "
-                    f"{dominant['native_resolution_source_units']} "
-                    f"{dominant['native_resolution_source_unit']}), which contributes the most "
-                    f"AOI area ({dominant['contributed_aoi_fraction']:.2%}), converted to "
-                    f"{horizontal_unit}"
-                )
-                chosen_by = "dominant_source"
+            cell, resolution_report = Usgs3depAws._cell_size_for_dominant(
+                dominant["_native_resolution_exact"],
+                minimum_cell_size,
+                target_resolution,
+            )
+            resolution = float(cell)
+            resolution_report.update(
+                units=horizontal_unit,
+                dominant_tier=dominant["tier"],
+                dominant_product=dominant["product"],
+                dominant_contributed_aoi_fraction=dominant["contributed_aoi_fraction"],
+                analysis_resolution=analysis_resolution,
+                resampling=resampling_method,
+            )
+            if resolution_report["chosen_by"] == "minimum_cell_size_rule":
+                rule_text = f"the smallest integer multiple >= minimum_cell_size {minimum_cell_size!r}"
             else:
-                resolution = float(target_resolution)
-                resolution_reason = "caller override"
-                chosen_by = "override"
+                rule_text = f"from target_resolution {target_resolution!r}"
+            resolution_report["reason"] = (
+                f"{resolution_report['multiple']} x the native resolution of tier "
+                f"{dominant['tier']} ({dominant['product']}: "
+                f"{dominant['native_resolution_source_units']} "
+                f"{dominant['native_resolution_source_unit']} = "
+                f"{resolution_report['dominant_resolution']!r} {horizontal_unit}), which "
+                f"contributes the most AOI area ({dominant['contributed_aoi_fraction']:.2%}); "
+                f"{rule_text}"
+            )
 
-            if not math.isclose(resolution, analysis_resolution, rel_tol=0.0, abs_tol=1e-9):
+            if cell != analysis_cell:
                 composite_path, gdalwarp_path = Usgs3depAws._composite_terrain_sources(
                     used_tiers,
                     work_dir / "composite_final.tif",
@@ -1947,15 +1987,6 @@ class Usgs3depAws:
                     previous_composite=composite_path,
                 )
                 gate = Usgs3depAws._count_nodata_in_aoi(composite_path, aoi, nodata)
-
-            resolution_report = {
-                "value": resolution,
-                "units": horizontal_unit,
-                "chosen_by": chosen_by,
-                "reason": resolution_reason,
-                "dominant_tier": dominant["tier"],
-                "analysis_resolution": analysis_resolution,
-            }
 
             if gate["nodata_pixel_count"] > 0:
                 receipt = Usgs3depAws._terrain_receipt(
@@ -2318,7 +2349,9 @@ class Usgs3depAws:
         Returns:
             Dict with ``native_resolution_source_units``,
             ``native_resolution_source_unit``, ``native_resolution_source_crs``,
-            and ``native_resolution_project_units``.
+            ``native_resolution_project_units`` (float), and
+            ``_native_resolution_exact`` (``fractions.Fraction``, kept out of
+            receipts).
         """
         import rasterio
         from pyproj import CRS, Transformer
@@ -2332,9 +2365,7 @@ class Usgs3depAws:
         if source_crs.is_projected:
             source_unit, source_unit_metres = Usgs3depAws._crs_linear_unit(source_crs)
             source_resolution = (res_x + res_y) / 2.0
-            project_resolution = float(
-                Fraction(source_resolution) * source_unit_metres / project_unit_metres
-            )
+            exact_resolution = Fraction(source_resolution) * source_unit_metres / project_unit_metres
         else:
             source_unit = "degree"
             source_resolution = (res_x + res_y) / 2.0
@@ -2343,13 +2374,87 @@ class Usgs3depAws:
             geod = source_crs.get_geod()
             _, _, dx = geod.inv(lon, lat, lon + res_x, lat)
             _, _, dy = geod.inv(lon, lat, lon, lat + res_y)
-            project_resolution = float(Fraction((dx + dy) / 2.0) / project_unit_metres)
+            exact_resolution = Fraction((dx + dy) / 2.0) / project_unit_metres
 
         return {
             "native_resolution_source_units": source_resolution,
             "native_resolution_source_unit": source_unit,
             "native_resolution_source_crs": source_crs.to_string(),
-            "native_resolution_project_units": project_resolution,
+            "native_resolution_project_units": float(exact_resolution),
+            "_native_resolution_exact": exact_resolution,
+        }
+
+    @staticmethod
+    def _cell_size_for_dominant(
+        dominant_resolution: Union[Fraction, float],
+        minimum_cell_size: float = 5.0,
+        target_resolution: Optional[float] = None,
+    ) -> Tuple[Fraction, Dict[str, Any]]:
+        """
+        Choose the output cell size as an integer multiple of the dominant resolution.
+
+        Default rule: ``k`` is the smallest integer >= 1 with
+        ``k * dominant_resolution >= minimum_cell_size``. With
+        ``target_resolution`` the multiple is instead the nearest integer
+        (at least 1) to ``target_resolution / dominant_resolution``; a request
+        that is not already an integer multiple is snapped with a logged
+        warning rather than rejected, because the dominant resolution is only
+        known after the sources are downloaded. All arithmetic uses exact
+        fractions.
+
+        Args:
+            dominant_resolution: Dominant native resolution in project units.
+            minimum_cell_size: Minimum cell size in project units.
+            target_resolution: Optional caller-requested cell size.
+
+        Returns:
+            ``(cell_size_exact, report)``; the report holds ``value``,
+            ``multiple``, ``dominant_resolution``, ``minimum_cell_size``,
+            ``requested_resolution``, ``snapped``, and ``chosen_by``
+            (``"minimum_cell_size_rule"``, ``"override"``, or
+            ``"override_snapped"``).
+
+        Raises:
+            ValueError: If a size is not positive.
+
+        Example:
+            >>> cell, report = Usgs3depAws._cell_size_for_dominant(Fraction(3937, 1200), 5.0)
+            >>> report["multiple"], float(cell)
+            (2, 6.5616666666666665)
+        """
+        dominant = Fraction(dominant_resolution)
+        minimum = Fraction(minimum_cell_size)
+        if dominant <= 0 or minimum <= 0:
+            raise ValueError("dominant_resolution and minimum_cell_size must be positive")
+
+        snapped = False
+        if target_resolution is None:
+            multiple = max(1, math.ceil(minimum / dominant))
+            chosen_by = "minimum_cell_size_rule"
+        else:
+            requested = Fraction(target_resolution)
+            if requested <= 0:
+                raise ValueError(f"target_resolution must be positive, got {target_resolution}")
+            multiple = max(1, math.floor(requested / dominant + Fraction(1, 2)))
+            exact = multiple * dominant
+            snapped = abs(exact - requested) > requested * Fraction(1, 10**9)
+            chosen_by = "override_snapped" if snapped else "override"
+            if snapped:
+                logger.warning(
+                    f"target_resolution {target_resolution!r} is not an integer multiple of the "
+                    f"dominant resolution {float(dominant)!r}; snapped to {multiple} x = "
+                    f"{float(exact)!r}"
+                )
+
+        cell = multiple * dominant
+        return cell, {
+            "value": float(cell),
+            "multiple": multiple,
+            "dominant_resolution": float(dominant),
+            "minimum_cell_size": float(minimum_cell_size),
+            "requested_resolution": None if target_resolution is None else float(target_resolution),
+            "snapped": snapped,
+            "chosen_by": chosen_by,
         }
 
     @staticmethod
@@ -2679,7 +2784,7 @@ class Usgs3depAws:
             timeout_seconds: RasProcess.exe CreateTerrain timeout.
 
         Returns:
-            Dict with ``hdf``, ``vrt``, ``projection_prj``,
+            Dict with ``hdf``, ``vrt``, ``projection_prj``, ``build_seconds``,
             ``source_member_count``, and ``source_members``.
         """
         from pyproj import CRS
@@ -2702,7 +2807,9 @@ class Usgs3depAws:
         if hecras_version is not None:
             kwargs["hecras_version"] = hecras_version
 
+        started = datetime.now(timezone.utc)
         RasTerrain.create_terrain_hdf(**kwargs)
+        build_seconds = (datetime.now(timezone.utc) - started).total_seconds()
 
         vrt_path = hec_terrain_hdf.with_suffix(".vrt")
         members = Usgs3depAws._count_vrt_source_members(vrt_path) if vrt_path.exists() else []
@@ -2713,6 +2820,7 @@ class Usgs3depAws:
             "projection_prj": str(projection_prj),
             "hecras_version": hecras_version,
             "stitch": False,
+            "build_seconds": build_seconds,
             "source_member_count": len(members),
             "source_members": members,
         }
@@ -2754,7 +2862,11 @@ class Usgs3depAws:
 
         tier_records = []
         for tier in tiers:
-            record = {key: value for key, value in tier.items() if key != "paths"}
+            record = {
+                key: value
+                for key, value in tier.items()
+                if key != "paths" and not key.startswith("_")
+            }
             record.setdefault("status", "not_required")
             record.setdefault("tiles", [])
             record.setdefault("projects", [])
