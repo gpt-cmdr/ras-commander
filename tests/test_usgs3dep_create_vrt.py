@@ -1,3 +1,4 @@
+import inspect
 from importlib import import_module
 import pytest
 import subprocess
@@ -192,3 +193,39 @@ def test_download_tiles_rejects_non_1m_resolutions(tmp_path, resolution):
             resolution=resolution,
             output_folder=tmp_path,
         )
+
+
+def test_create_vrt_has_no_reprojection_options():
+    """The unreleased per-tile warped-VRT options were removed from create_vrt."""
+    parameters = inspect.signature(Usgs3depAws.create_vrt).parameters
+
+    assert list(parameters) == ["tile_files", "output_vrt", "hecras_version"]
+    assert not hasattr(Usgs3depAws, "_warp_tiles_to_target_crs")
+
+
+def test_find_gdalwarp_path_uses_the_hecras_gdal_folder(monkeypatch, tmp_path):
+    RasTerrain = import_module("ras_commander.terrain.RasTerrain").RasTerrain
+
+    install_dir = tmp_path / "6.6"
+    gdal_bin = install_dir / "GDAL" / "bin64"
+    gdal_bin.mkdir(parents=True)
+    gdalwarp = gdal_bin / "gdalwarp.exe"
+    gdalwarp.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(
+        RasTerrain,
+        "_get_hecras_path",
+        staticmethod(lambda version: install_dir if version == "6.6" else None),
+    )
+
+    assert Usgs3depAws._find_gdalwarp_path("6.6") == gdalwarp
+
+
+def test_find_gdalwarp_path_reports_missing_tool(monkeypatch):
+    RasTerrain = import_module("ras_commander.terrain.RasTerrain").RasTerrain
+
+    monkeypatch.setattr(RasTerrain, "_HECRAS_BASE_PATHS", [])
+    monkeypatch.setattr(RasTerrain, "get_available_versions", staticmethod(lambda: []))
+
+    with pytest.raises(FileNotFoundError, match="gdalwarp.exe not found"):
+        Usgs3depAws._find_gdalwarp_path()

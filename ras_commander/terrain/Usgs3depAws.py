@@ -16,7 +16,6 @@ Key Features:
 - Multi-tile mosaicking for seamless coverage
 - Coverage-aware, newest-per-sub-area project selection (no silent gaps)
 - Virtual raster (VRT) creation for efficient processing
-- Explicit target CRS, cell size, resampling, and nodata for the mosaic
 - Per-tile download provenance (source URL, project, ETag, Last-Modified, size)
 - Cloud Optimized GeoTIFF support for partial reads
 
@@ -42,23 +41,6 @@ Example:
     # Create VRT mosaic
     vrt = Usgs3depAws.create_vrt(tiles, "terrain_1m.vrt")
 
-    # Coverage-aware download plus provenance, mosaicked onto an explicit grid
-    tiles, provenance = Usgs3depAws.download_tiles(
-        bbox=bbox,
-        resolution=1,
-        output_folder="Terrain",
-        project_selection="coverage",
-        return_provenance=True,
-    )
-    vrt = Usgs3depAws.create_vrt(
-        tiles,
-        "terrain_2277.vrt",
-        target_crs="EPSG:2277",          # NAD83 / Texas Central (US survey feet)
-        target_resolution=10.0,          # 10-foot cells
-        resampling_method="bilinear",
-        src_nodata=-999999,
-        vrt_nodata=-9999,
-    )
 """
 
 import re
@@ -1374,83 +1356,19 @@ class Usgs3depAws:
         tile_files: Sequence[Union[str, Path]],
         output_vrt: Union[str, Path],
         hecras_version: Optional[str] = None,
-        *,
-        target_crs: Optional[str] = None,
-        target_resolution: Optional[Union[int, float, Tuple[float, float]]] = None,
-        resampling_method: str = "bilinear",
-        src_nodata: Optional[Union[int, float, str]] = None,
-        vrt_nodata: Optional[Union[int, float, str]] = None,
-        source_crs: Optional[str] = None,
     ) -> Path:
         """
         Create a Virtual Raster (VRT) mosaic from multiple tiles.
 
-        By default the mosaic inherits the SRS and native cell size of the
-        source tiles, which is only safe when every tile already shares one
-        projection. USGS 3DEP 1m tiles are delivered per UTM zone, so a bbox
-        that straddles a zone boundary produces tiles in two projections; use
-        ``target_crs`` (optionally with ``target_resolution``) to state the
-        grid the mosaic must land on instead of inheriting the first tile's.
-
-        When ``target_crs`` is set, each tile is first reprojected to a warped
-        VRT with HEC-RAS bundled ``gdalwarp.exe`` (written to a
-        ``<output_vrt stem>_warped`` folder beside the output), then those
-        warped VRTs are mosaicked. The warped VRTs are lightweight XML that
-        reference the original tiles, but they must be kept alongside the
-        output VRT for it to remain readable.
-
         Args:
-            tile_files: TIFF files to mosaic, as str or Path
+            tile_files: List of TIFF files to mosaic
             output_vrt: Output VRT file path
             hecras_version: Optional HEC-RAS version to use for bundled
                 GDAL discovery. If None, auto-detects the newest available
                 install.
-            target_crs: Optional target CRS for the mosaic (for example
-                ``"EPSG:2277"``). When set, tiles are warped to this CRS
-                before mosaicking. When None (default), the mosaic inherits
-                the source SRS exactly as before. Keyword-only.
-            target_resolution: Optional output cell size in target CRS units.
-                A single number is used for both axes; an ``(x, y)`` pair sets
-                them independently. When None (default), GDAL's native
-                resolution handling is unchanged. Keyword-only.
-            resampling_method: GDAL resampling method for the mosaic and for
-                any warp step. Default ``"bilinear"`` (the historical value).
-                Keyword-only.
-            src_nodata: Optional source nodata value. Keyword-only.
-            vrt_nodata: Optional nodata value written to the mosaic
-                (``-vrtnodata``, or ``-dstnodata`` on the warp step).
-                Keyword-only.
-            source_crs: Optional SRS to assign to source tiles that carry no
-                projection of their own. Without ``target_crs`` this becomes
-                ``gdalbuildvrt -a_srs``, which requires GDAL 3.6 or newer; with
-                ``target_crs`` it becomes ``gdalwarp -s_srs``, which every
-                bundled GDAL supports. Keyword-only.
 
         Returns:
             Path to created VRT file
-
-        Raises:
-            ValueError: If ``tile_files`` is empty or ``target_resolution`` is
-                not a positive number or positive ``(x, y)`` pair.
-            FileNotFoundError: If a tile is missing, or the HEC-RAS bundled
-                GDAL executables cannot be found.
-            RuntimeError: If a GDAL command fails, times out, or produces no
-                output.
-
-        Example:
-            # Unchanged default: inherit source SRS and resolution
-            vrt = Usgs3depAws.create_vrt(tiles, "terrain_1m.vrt")
-
-            # Explicit grid: NAD83 / Texas Central (ftUS), 10-foot cells
-            vrt = Usgs3depAws.create_vrt(
-                tiles,
-                "terrain_2277.vrt",
-                target_crs="EPSG:2277",
-                target_resolution=10.0,
-                resampling_method="bilinear",
-                src_nodata=-999999,
-                vrt_nodata=-9999,
-            )
         """
         if not tile_files:
             raise ValueError("tile_files must contain at least one raster")
@@ -1462,8 +1380,6 @@ class Usgs3depAws:
         for tile_path in tile_paths:
             if not tile_path.exists():
                 raise FileNotFoundError(f"Tile file not found: {tile_path}")
-
-        resolution_xy = Usgs3depAws._normalize_target_resolution(target_resolution)
 
         # Build VRT
         logger.debug(f"Creating VRT mosaic from {len(tile_files)} tile(s)")
@@ -1477,22 +1393,6 @@ class Usgs3depAws:
             ) from exc
         logger.debug(f"Using gdalbuildvrt executable: {gdalbuildvrt}")
 
-        if target_crs:
-            # gdalbuildvrt cannot reproject, so bring every tile onto the
-            # requested grid first. This is what keeps mixed-UTM-zone tiles
-            # from silently inheriting the first tile's SRS.
-            tile_paths = Usgs3depAws._warp_tiles_to_target_crs(
-                tile_paths,
-                output_vrt,
-                target_crs,
-                target_resolution=resolution_xy,
-                resampling_method=resampling_method,
-                src_nodata=src_nodata,
-                dst_nodata=vrt_nodata,
-                source_crs=source_crs,
-                hecras_version=hecras_version,
-            )
-
         input_list_path = Usgs3depAws._write_gdal_input_file_list(
             tile_paths,
             output_vrt.parent,
@@ -1501,38 +1401,35 @@ class Usgs3depAws:
         cmd = [
             str(gdalbuildvrt),
             "-overwrite",
-            "-r", resampling_method,
-        ]
-
-        if source_crs and not target_crs:
-            cmd += ["-a_srs", source_crs]
-
-        if resolution_xy is not None:
-            cmd += [
-                "-resolution", "user",
-                "-tr", str(resolution_xy[0]), str(resolution_xy[1]),
-            ]
-
-        if src_nodata is not None and not target_crs:
-            cmd += ["-srcnodata", str(src_nodata)]
-
-        if vrt_nodata is not None:
-            cmd += ["-vrtnodata", str(vrt_nodata)]
-
-        cmd += [
+            "-r", "bilinear",
             "-input_file_list", str(input_list_path),
             str(output_vrt),
         ]
         logger.debug(f"gdalbuildvrt command: {cmd}")
 
         try:
-            Usgs3depAws._run_gdal_command(
+            result = subprocess.run(
                 cmd,
-                "gdalbuildvrt",
-                "creating the VRT mosaic",
+                capture_output=True,
+                text=True,
+                timeout=600,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "gdalbuildvrt timed out while creating the VRT mosaic."
+            ) from exc
+        except OSError as exc:
+            raise RuntimeError(
+                f"Failed to execute gdalbuildvrt: {exc}"
+            ) from exc
         finally:
             input_list_path.unlink(missing_ok=True)
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gdalbuildvrt failed with code {result.returncode}. "
+                f"STDERR: {result.stderr}"
+            )
 
         if not output_vrt.exists():
             raise RuntimeError(
@@ -1542,196 +1439,6 @@ class Usgs3depAws:
         logger.info(f"VRT mosaic created: {output_vrt.name}")
         logger.debug(f"VRT mosaic output path: {output_vrt}")
         return output_vrt
-
-    @staticmethod
-    def _normalize_target_resolution(
-        target_resolution: Optional[Union[int, float, Tuple[float, float]]],
-    ) -> Optional[Tuple[float, float]]:
-        """
-        Normalize a target resolution to a positive ``(x_res, y_res)`` pair.
-
-        Args:
-            target_resolution: A single number for square cells, an
-                ``(x, y)`` pair, or None.
-
-        Returns:
-            ``(x_res, y_res)`` as floats, or None when no resolution was
-            requested.
-
-        Raises:
-            ValueError: If the value is not a number or a two-item pair, or if
-                either resolution is not positive.
-        """
-        if target_resolution is None:
-            return None
-
-        if isinstance(target_resolution, (int, float)) and not isinstance(target_resolution, bool):
-            resolution_xy = (float(target_resolution), float(target_resolution))
-        else:
-            try:
-                x_res, y_res = target_resolution
-                resolution_xy = (float(x_res), float(y_res))
-            except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    "target_resolution must be a number or an (x, y) pair, "
-                    f"got {target_resolution!r}"
-                ) from exc
-
-        if resolution_xy[0] <= 0 or resolution_xy[1] <= 0:
-            raise ValueError(
-                f"target_resolution values must be positive, got {resolution_xy}"
-            )
-
-        return resolution_xy
-
-    @staticmethod
-    def _warp_tiles_to_target_crs(
-        tile_paths: Sequence[Union[str, Path]],
-        output_vrt: Union[str, Path],
-        target_crs: str,
-        target_resolution: Optional[Tuple[float, float]] = None,
-        resampling_method: str = "bilinear",
-        src_nodata: Optional[Union[int, float, str]] = None,
-        dst_nodata: Optional[Union[int, float, str]] = None,
-        source_crs: Optional[str] = None,
-        hecras_version: Optional[str] = None,
-    ) -> List[Path]:
-        """
-        Reproject each tile to a warped VRT on the requested target grid.
-
-        Uses HEC-RAS bundled ``gdalwarp.exe``, discovered the same way as
-        ``gdalbuildvrt.exe``. Warping each tile individually (rather than
-        assembling a mixed-SRS VRT) is what makes a mosaic across UTM zone
-        boundaries correct. When a target resolution is supplied the warp also
-        uses ``-tap`` so every warped tile shares one aligned grid and the
-        mosaic has no resampling seams.
-
-        Args:
-            tile_paths: Source tiles to reproject
-            output_vrt: Final mosaic path; warped VRTs are written to a
-                ``<stem>_warped`` folder beside it
-            target_crs: Target CRS, for example ``"EPSG:2277"``
-            target_resolution: Optional ``(x_res, y_res)`` in target CRS units
-            resampling_method: GDAL resampling method. Default ``"bilinear"``.
-            src_nodata: Optional source nodata value
-            dst_nodata: Optional destination nodata value
-            source_crs: Optional SRS for tiles that carry no projection
-            hecras_version: Optional HEC-RAS version for GDAL discovery
-
-        Returns:
-            List of warped VRT paths, in the order of ``tile_paths``
-
-        Raises:
-            FileNotFoundError: If HEC-RAS bundled gdalwarp.exe is not found
-            RuntimeError: If a warp command fails or produces no output
-        """
-        try:
-            gdalwarp = Usgs3depAws._find_gdalwarp_path(hecras_version)
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(
-                "Reprojecting a VRT mosaic requires HEC-RAS bundled gdalwarp.exe. "
-                f"{exc}"
-            ) from exc
-        logger.debug(f"Using gdalwarp executable: {gdalwarp}")
-
-        output_vrt = Path(output_vrt)
-        warped_folder = output_vrt.parent / f"{output_vrt.stem}_warped"
-        warped_folder.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Warped tile folder: {warped_folder}")
-
-        warped_paths: List[Path] = []
-
-        for tile_path in tile_paths:
-            tile_path = Path(tile_path)
-            warped_path = warped_folder / f"{tile_path.stem}.vrt"
-
-            cmd = [
-                str(gdalwarp),
-                "-overwrite",
-                "-of", "VRT",
-                "-t_srs", target_crs,
-                "-r", resampling_method,
-            ]
-
-            if source_crs:
-                cmd += ["-s_srs", source_crs]
-
-            if target_resolution is not None:
-                cmd += [
-                    "-tr", str(target_resolution[0]), str(target_resolution[1]),
-                    "-tap",
-                ]
-
-            if src_nodata is not None:
-                cmd += ["-srcnodata", str(src_nodata)]
-
-            if dst_nodata is not None:
-                cmd += ["-dstnodata", str(dst_nodata)]
-
-            cmd += [str(tile_path), str(warped_path)]
-            logger.debug(f"gdalwarp command: {cmd}")
-
-            Usgs3depAws._run_gdal_command(
-                cmd,
-                "gdalwarp",
-                "warping tiles to the target CRS",
-            )
-
-            if not warped_path.exists():
-                raise RuntimeError(
-                    f"gdalwarp completed but warped VRT was not created: {warped_path}"
-                )
-
-            warped_paths.append(warped_path)
-
-        return warped_paths
-
-    @staticmethod
-    def _run_gdal_command(
-        cmd: List[str],
-        tool_name: str,
-        operation: str,
-        timeout_seconds: int = 600,
-    ) -> subprocess.CompletedProcess:
-        """
-        Run one HEC-RAS bundled GDAL command with consistent error handling.
-
-        Args:
-            cmd: Full command line, executable first
-            tool_name: Executable name used in error messages
-            operation: Present-participle phrase used in the timeout message
-            timeout_seconds: Subprocess timeout. Default 600.
-
-        Returns:
-            The completed subprocess result
-
-        Raises:
-            RuntimeError: If the command times out, cannot be executed, or
-                returns a non-zero exit code.
-        """
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                f"{tool_name} timed out while {operation}."
-            ) from exc
-        except OSError as exc:
-            raise RuntimeError(
-                f"Failed to execute {tool_name}: {exc}"
-            ) from exc
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"{tool_name} failed with code {result.returncode}. "
-                f"STDERR: {result.stderr}"
-            )
-
-        return result
 
     @staticmethod
     def _find_gdalbuildvrt_path(hecras_version: Optional[str] = None) -> Path:

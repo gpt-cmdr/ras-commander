@@ -22,8 +22,7 @@ Main Classes:
         - select_projects_for_coverage(): Newest project per sub-area, with a coverage report
         - download_tiles(): Download tiles with concurrent threads, optional
           coverage-aware project selection and per-tile provenance
-        - create_vrt(): Mosaic tiles, optionally onto an explicit target CRS,
-          cell size, resampling method, and nodata value
+        - create_vrt(): Mosaic downloaded tiles into a VRT
 
     RasTerrainMod: Terrain modification analysis via pythonnet (Windows only)
         - get_terrain_profile(): Sample terrain with modifications applied
