@@ -348,7 +348,7 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     # and no projection, and calling those "needs external data" was wrong.
     return {
         "terrain": is_2d,
-        "land_cover": is_2d,
+        "land_cover": is_2d or (dims != "1D" and optional("land_cover", False)),
         "infiltration": optional("infiltration", False),
         "soils": optional("soils", False),
         "dss": optional("dss", unsteady),

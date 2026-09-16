@@ -244,6 +244,11 @@ def test_2d_requires_land_cover_even_when_unreferenced():
     assert expected_elements("mixed", "steady", {"land_cover": False})["land_cover"]
 
 
+def test_unknown_model_type_keeps_referenced_land_cover():
+    assert expected_elements("unknown", "unsteady", {"land_cover": True})["land_cover"]
+    assert not expected_elements("unknown", "unsteady", {"land_cover": False})["land_cover"]
+
+
 def test_2d_infiltration_is_expected_only_when_referenced():
     assert not expected_elements("2D", "unsteady", {})["infiltration"]
     assert not expected_elements("2D", "unsteady", {"infiltration": False})["infiltration"]
