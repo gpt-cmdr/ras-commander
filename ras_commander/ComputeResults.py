@@ -289,6 +289,55 @@ class GeometryLayerResult:
 
 
 @dataclass
+class PrecipRasterImportResult:
+    """
+    Result of RasPrecipHdf.write_gridded_precip_raster().
+
+    Failures raise rather than returning success=False; this object reports
+    outcomes of a call that completed. Backward compatible with bool via __bool__.
+
+    Attributes:
+        success: True when the payload was written, validated in dry-run, or skipped.
+        unsteady_hdf_path: Unsteady flow HDF (.u##.hdf) operated on.
+        met_variable: Meteorology variable group, e.g. "Precipitation".
+        shape: (n_times, n_cells) of the Values datasets.
+        units: Units label written to the Units attribute.
+        values_chunks: Chunk shape used for Values.
+        vertical_chunks: Chunk shape used for Values (Vertical).
+        created_hdf: True when the HDF file did not exist and was created.
+        skipped: True when a payload already existed and overwrite=False.
+        dry_run: True when validation ran but nothing was written.
+        elapsed_seconds: Wall-clock time for the call.
+    """
+    success: bool
+    unsteady_hdf_path: Path
+    met_variable: str
+    shape: Tuple[int, int]
+    units: str
+    values_chunks: Tuple[int, int]
+    vertical_chunks: Tuple[int, int]
+    created_hdf: bool = False
+    skipped: bool = False
+    dry_run: bool = False
+    elapsed_seconds: float = 0.0
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        if self.dry_run:
+            status = 'DRY-RUN'
+        elif self.skipped:
+            status = 'SKIPPED'
+        else:
+            status = 'SUCCESS'
+        return (
+            f"PrecipRasterImportResult({status}, variable={self.met_variable!r}, "
+            f"shape={self.shape}, units={self.units!r})"
+        )
+
+
+@dataclass
 class GeometryCompleteResult:
     """
     Result of RasGeometryCompute.compute_geometry() (RASGeometry.CompleteForComputations).

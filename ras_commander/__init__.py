@@ -93,6 +93,7 @@ from .ComputeResults import (
     GeometryPreprocessResult,
     GeometryLayerResult,
     GeometryCompleteResult,
+    PrecipRasterImportResult,
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
@@ -107,6 +108,7 @@ from .RasBenefits import (
 )
 from .RasProcess import RasProcess, ProjectionInfo
 from .RasGeometryCompute import RasGeometryCompute
+from .RasPrecipHdf import RasPrecipHdf
 from .RasGuiAutomation import RasGuiAutomation
 from .RasScreenshot import RasScreenshot
 from .RasBreach import RasBreach
@@ -240,8 +242,8 @@ __all__ = [
     'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
     'ComputeResult', 'ComputeParallelResult', 'RasControlResult',
     'PreprocessResult', 'GeometryPreprocessResult',
-    'GeometryLayerResult', 'GeometryCompleteResult',
-    'RasGeometryCompute',
+    'GeometryLayerResult', 'GeometryCompleteResult', 'PrecipRasterImportResult',
+    'RasGeometryCompute', 'RasPrecipHdf',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',

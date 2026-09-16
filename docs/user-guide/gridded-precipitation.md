@@ -289,17 +289,65 @@ PrecipAorc.export_to_gdal_raster(
     format="GeoTIFF"  # or "HFA" for ERDAS Imagine
 )
 
-# 3. Configure unsteady file for gridded precipitation
+# 3. Configure the unsteady file and import the grid into its HDF
 from ras_commander import RasUnsteady
 
 RasUnsteady.set_gridded_precipitation(
-    unsteady_file="MyModel.u01",
-    precip_folder="precipitation",
-    start_datetime="2018-05-15 00:00"
+    unsteady_file="01",
+    netcdf_path="precipitation/aorc_2018-05-15.nc",
+    interpolation="Bilinear",
+    units="mm",                 # units of the NetCDF values, not of the project
+    value_type="amount",        # "rate" (per hour), "amount", or "cumulative"
+    first_timestep_hours=1.0,   # deliver the first band (the dialog's "First Timestep Duration")
+    ratio=1.0,                  # optional: set Met BC=Precipitation|Ratio
 )
 ```
 
 **Note**: You do not need to resample AORC grids to match mesh cell size. HEC-RAS internally interpolates gridded precipitation data to 2D mesh cells during simulation.
+
+### How the import is written
+
+`set_gridded_precipitation` edits the `.u##` text and writes the imported grid into the
+unsteady HDF (`.u##.hdf`) at `Event Conditions/Meteorology/Precipitation/Imported Raster Data`,
+in the same layout the HEC-RAS "Import Raster Data" dialog produces. HEC-RAS rebuilds the rest
+of the `.u##.hdf` from the `.u##` text on every save and compute, and copies this payload forward
+only while the text has a `Met BC=Precipitation|` block.
+
+Parameters that change the delivered depth:
+
+- **`units`** - HEC-RAS converts from these units to the project's. Labelling millimetre data
+  as inches, or the reverse, scales every value by 25.4 with no error. If the NetCDF declares
+  its own units and they disagree with `units`, the call raises. `kg/m^2` is written as `mm`.
+- **`value_type`** - `"rate"` multiplies each band by its interval length in hours; `"amount"`
+  uses the values as depths. For hourly data the two agree; for any other interval they differ
+  by the interval length (a 6-minute amount read as a rate is delivered 10x too small). The
+  default, `"rate"`, preserves earlier behaviour.
+- **`first_timestep_hours`** - HEC-RAS uses the first stored row as the zero datum, so the
+  first band is not delivered unless a leading interval is supplied. Omitting it matches the
+  dialog default and logs a warning when that discards non-zero data.
+- **`ratio`** - HEC-RAS multiplies all precipitation by `Met BC=Precipitation|Ratio`. Calibrated
+  BLE models often carry a value below 1; when `ratio` is omitted the existing value is kept and
+  a warning is logged if it is not 1.
+
+Failures raise before the `.u##` is modified: a missing or unreadable NetCDF, an unknown
+`dataset_name`, contradictory units, a non-square or irregular grid, or an HDF that cannot be
+written. Grids stored south-first are reoriented north-up. A missing `.u##.hdf` is created.
+
+To write a payload from arrays rather than a NetCDF, use `RasPrecipHdf`:
+
+```python
+from ras_commander import RasPrecipHdf
+
+values, x, y = RasPrecipHdf.orient_north_up(values, x, y)        # (time, y, x)
+left, top, cell_size, rows, cols = RasPrecipHdf.get_grid_from_coords(x, y)
+cumulative, times_out = RasPrecipHdf.convert_to_cumulative(
+    values, times, value_type="amount", first_timestep_hours=1.0
+)
+result = RasPrecipHdf.write_gridded_precip_raster(
+    "MyModel.u01.hdf", cumulative, times_out, left, top, cell_size,
+    projection=wkt, units="in", overwrite=True,
+)
+```
 
 ## Model Calibration Workflow
 
