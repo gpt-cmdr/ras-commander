@@ -54,6 +54,7 @@ Example:
     )
 """
 
+import hashlib
 import json
 import math
 import re
@@ -64,7 +65,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 from urllib.parse import urlparse
 
 import geopandas as gpd
@@ -149,6 +150,12 @@ class Usgs3depAws:
     TERRAIN_REASON_NO_SOURCES = "terrain_no_source_coverage"
     TERRAIN_REASON_AOI_NODATA = "terrain_aoi_nodata_after_backfill"
     TERRAIN_REASON_HEC_MULTI_SOURCE = "hec_terrain_vrt_not_single_source"
+    TERRAIN_REASON_TILE_NOT_CACHED = "terrain_tile_not_cached"
+
+    TILE_PLAN_SCHEMA = "ras-commander/usgs-3dep-terrain-tile-plan"
+    TILE_PLAN_VERSION = "1.0.0"
+    PREFETCH_MANIFEST_SCHEMA = "ras-commander/usgs-3dep-terrain-prefetch-manifest"
+    ONE_METRE_PRODUCT = "3dep_1m_project"
 
     # Metadata URLs for each resolution (fallback)
     METADATA_URLS = {
@@ -1078,6 +1085,270 @@ class Usgs3depAws:
             return (minx, miny, maxx, maxy)
 
     @staticmethod
+    def _select_1m_tile_groups(
+        bbox_poly: Any,
+        resolution: int,
+        cache_folder: Optional[Union[str, Path]] = None,
+        project_name: Optional[str] = None,
+        min_year: Optional[int] = None,
+        project_selection: str = "newest",
+        min_coverage_fraction: float = 0.999,
+        min_project_area_fraction: float = 0.0,
+        excluded_tile_ids: Optional[Iterable[str]] = None,
+    ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]]]:
+        """
+        Select 1m projects for a WGS84 polygon and list their intersecting tiles.
+
+        This is the network-dependent selection half of ``download_tiles()``
+        (tile index query, project filtering, newest or coverage-aware project
+        selection, S3 tile listing, and tile intersection). It is shared by
+        ``download_tiles()`` and ``plan_terrain_tiles()`` so both select exactly
+        the same tiles.
+
+        Args:
+            bbox_poly: Normalized WGS84 polygon.
+            resolution: Tile index resolution (1).
+            cache_folder: Tile index cache folder.
+            project_name: Optional exact project filter.
+            min_year: Optional minimum project year.
+            project_selection: ``"newest"`` or ``"coverage"``.
+            min_coverage_fraction: Coverage-mode stop condition.
+            min_project_area_fraction: Coverage-mode minimum contribution.
+            excluded_tile_ids: Tile ids (filename stems) to skip.
+
+        Returns:
+            ``(groups, coverage_report)``. ``groups`` is None when no project
+            is available, otherwise one dict per selected project in selection
+            order (newest first in coverage mode) with ``project_name``,
+            ``project_folder``, ``project_year``, and ``tile_urls``.
+            ``coverage_report`` is None outside coverage mode.
+
+        Raises:
+            ValueError: If ``project_name`` or ``min_year`` matches nothing.
+        """
+        excluded_tile_ids = set(excluded_tile_ids or [])
+
+        # Find intersecting projects (from tile index)
+        projects = Usgs3depAws.find_tiles_for_bbox(bbox_poly, resolution, cache_folder)
+
+        coverage_report: Optional[Dict[str, Any]] = None
+
+        if len(projects) == 0:
+            logger.warning("No projects found for bbox - no data available in this area")
+            return None, coverage_report
+
+        logger.debug(f"USGS 3DEP download candidate projects: {len(projects)}")
+
+        # Extract year from project names for filtering/sorting
+        projects['_year'] = projects.apply(Usgs3depAws._extract_project_year, axis=1)
+        selection_logged = False
+
+        # Project selection logic
+        if project_name:
+            # Filter to exact project name match
+            logger.debug(f"Filtering USGS 3DEP projects to: {project_name}")
+
+            # Try all possible project name fields, plus the S3 folder parsed
+            # from 'product_link' (so callers may pass either the collection
+            # name or the actual S3 StagedProducts folder).
+            mask = False
+            for field in ['proj_name', 'project', 'demname']:
+                if field in projects.columns:
+                    mask = mask | (projects[field] == project_name)
+            if 'product_link' in projects.columns:
+                mask = mask | projects['product_link'].apply(
+                    lambda pl: Usgs3depAws._s3_project_folder(pl) == project_name)
+
+            projects_filtered = projects[mask]
+
+            if len(projects_filtered) == 0:
+                # Show available projects to help user
+                available = []
+                for idx, row in projects.iterrows():
+                    proj = row.get('proj_name', row.get('project', row.get('demname', 'Unknown')))
+                    year = row['_year']
+                    available.append(f"{proj} (year {year if year else 'unknown'})")
+
+                raise ValueError(
+                    f"Project '{project_name}' not found in bbox.\n"
+                    f"Available projects:\n  - " + "\n  - ".join(available)
+                )
+
+            projects = projects_filtered
+            logger.debug(f"Matched requested USGS 3DEP project: {project_name}")
+
+        elif min_year:
+            # Filter to projects >= min_year
+            logger.debug(f"Filtering USGS 3DEP projects to {min_year} or newer")
+
+            # Filter out projects with no year or year < min_year
+            projects_filtered = projects[
+                (projects['_year'].notna()) & (projects['_year'] >= min_year)
+            ]
+
+            if len(projects_filtered) == 0:
+                logger.warning(f"No USGS 3DEP projects found from {min_year} or newer")
+                logger.warning(f"Available USGS 3DEP project years: {sorted(projects['_year'].dropna().unique())}")
+                raise ValueError(f"No projects found from year {min_year} or newer")
+
+            projects = projects_filtered
+            logger.debug(f"USGS 3DEP projects matching min_year={min_year}: {len(projects)}")
+
+        if project_selection == "coverage":
+            # Cover the bbox with the newest project available per sub-area
+            # instead of dropping every area the single newest project misses.
+            projects, coverage_report = Usgs3depAws.select_projects_for_coverage(
+                projects,
+                bbox_poly,
+                min_coverage_fraction=min_coverage_fraction,
+                min_project_area_fraction=min_project_area_fraction,
+            )
+            selection_logged = True
+
+            for entry in coverage_report['projects']:
+                entry_year = entry['year'] if entry['year'] else 'unknown'
+                logger.debug(
+                    f"USGS 3DEP coverage project selected: {entry['project']} "
+                    f"(year {entry_year}; {entry['area_fraction']:.2%} of bbox)"
+                )
+
+            if coverage_report['uncovered_fraction'] > 0:
+                logger.warning(
+                    "USGS 3DEP coverage gap: "
+                    f"{coverage_report['uncovered_fraction']:.2%} of the requested "
+                    "bbox is not covered by any available project"
+                )
+
+            if len(projects) == 0:
+                logger.warning("No USGS 3DEP project covers any part of the bbox")
+                return None, coverage_report
+
+        # If multiple projects remain, select most recent
+        elif len(projects) > 1:
+            projects = projects.sort_values('_year', ascending=False, na_position='last')
+
+            most_recent = projects.iloc[0]
+            year = projects.iloc[0]['_year']
+
+            selected_name = most_recent.get('proj_name', most_recent.get('project', most_recent.get('demname')))
+            logger.debug(
+                f"USGS 3DEP project selected: {selected_name} "
+                f"(year {year if year else 'unknown'}; skipped {len(projects) - 1} older)"
+            )
+            selection_logged = True
+
+            logger.debug(f"Skipping {len(projects) - 1} older USGS 3DEP project(s)")
+            for idx in range(1, min(len(projects), 4)):
+                older = projects.iloc[idx]
+                older_year = older['_year']
+                older_name = older.get('proj_name', older.get('project', older.get('demname')))
+                logger.debug(f"Skipped older USGS 3DEP project: {older_name} (year {older_year if older_year else 'unknown'})")
+
+            # Use only the most recent project
+            projects = projects.iloc[[0]]
+
+        # List the intersecting tiles of the selected project(s)
+        groups: List[Dict[str, Any]] = []
+
+        for idx, project_row in projects.iterrows():
+            # The actual S3 StagedProducts folder lives in 'product_link'. The
+            # index 'project' field is a logical collection name that often
+            # differs from the S3 folder (e.g. 'UT_StateWide_2018_A18' whose
+            # tiles live under '.../Projects/UT_Central_QL1_B2_2018', or
+            # 'Wasatch_Fault_UT_LiDAR' -> '.../Projects/UT_Wasatch_L5_2014').
+            # Building the S3 path from the collection name 404s; use the link.
+            s3_folder = Usgs3depAws._s3_project_folder(project_row.get('product_link'))
+            label = None
+            for field in ['proj_name', 'project', 'demname']:
+                if field in project_row.index and project_row[field]:
+                    label = project_row[field]
+                    break
+            s3_folder = s3_folder or label  # fall back to the collection name
+
+            if not s3_folder:
+                logger.warning(f"No project folder/name found in row {idx}, skipping")
+                continue
+
+            if len(projects) == 1 and not selection_logged:
+                year = project_row['_year'] if '_year' in project_row.index else None
+                logger.debug(
+                    f"USGS 3DEP project selected: {label or s3_folder} "
+                    f"(year {year if year else 'unknown'})"
+                )
+            logger.debug(f"Processing USGS 3DEP project: {label or s3_folder}")
+
+            # Get all tile URLs for this project
+            tile_urls = Usgs3depAws._get_project_tile_urls(s3_folder)
+
+            # Skip if project not found in S3 (outdated tile index)
+            if tile_urls is None:
+                logger.debug(f"Skipping USGS 3DEP project not available in S3: {project_name}")
+                continue
+
+            # Coverage mode assigns each project the sub-area it was
+            # selected to cover, so an older project only contributes tiles
+            # for the part of the bbox no newer project reaches.
+            selection_region = bbox_poly
+            if '_coverage_region' in project_row.index:
+                coverage_region = project_row['_coverage_region']
+                if coverage_region is not None and not coverage_region.is_empty:
+                    selection_region = coverage_region
+
+            # Find which tiles intersect our bbox
+            logger.debug(f"Checking {len(tile_urls)} USGS 3DEP tiles for intersection")
+            intersecting_urls = []
+            project_utm_zone: Optional[int] = None
+
+            for tile_url in tile_urls:
+                filename = tile_url.split('/')[-1]
+
+                if Path(filename).stem in excluded_tile_ids:
+                    logger.debug(f"Excluding USGS 3DEP tile by request: {filename}")
+                    continue
+
+                try:
+                    # Fast path: Parse bounds from filename (instant)
+                    tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(filename)
+
+                    # Older 'USGS_one_meter' names omit the UTM zone: read it
+                    # once per project, then keep using the filename fast path.
+                    if tile_bounds is None and 'USGS_one_meter_' in filename:
+                        if project_utm_zone is None:
+                            project_utm_zone = Usgs3depAws._get_tile_utm_zone(tile_url)
+                        if project_utm_zone is not None:
+                            tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(
+                                filename,
+                                utm_zone=project_utm_zone,
+                            )
+
+                    # Fallback: Open remote file if parsing fails (slow, 2-5 sec)
+                    if tile_bounds is None:
+                        logger.debug(f"    Filename parsing failed for {filename}, using /vsicurl/ fallback")
+                        tile_bounds = Usgs3depAws._get_tile_bounds_wgs84(tile_url)
+
+                    tile_box = box(*tile_bounds)
+
+                    # Check intersection
+                    if tile_box.intersects(selection_region):
+                        intersecting_urls.append(tile_url)
+
+                except Exception as e:
+                    logger.debug(f"    Error checking tile {filename}: {e}")
+                    continue
+
+            logger.debug(f"USGS 3DEP intersecting tiles: {len(intersecting_urls)}")
+
+            groups.append({
+                'project_name': label or s3_folder,
+                'project_folder': s3_folder,
+                'project_year': Usgs3depAws._row_year(project_row),
+                'tile_urls': intersecting_urls,
+            })
+
+        return groups, coverage_report
+
+
+    @staticmethod
     @log_call
     def download_tiles(
         bbox: Any,
@@ -1222,214 +1493,26 @@ class Usgs3depAws:
             parameter_name="bbox",
         )
 
-        # Find intersecting projects (from tile index)
-        projects = Usgs3depAws.find_tiles_for_bbox(bbox_poly, resolution, cache_folder)
+        groups, _ = Usgs3depAws._select_1m_tile_groups(
+            bbox_poly,
+            resolution,
+            cache_folder,
+            project_name=project_name,
+            min_year=min_year,
+            project_selection=project_selection,
+            min_coverage_fraction=min_coverage_fraction,
+            min_project_area_fraction=min_project_area_fraction,
+            excluded_tile_ids=excluded_tile_ids,
+        )
 
-        if len(projects) == 0:
-            logger.warning("No projects found for bbox - no data available in this area")
+        if groups is None:
             return ([], []) if return_provenance else []
-
-        logger.debug(f"USGS 3DEP download candidate projects: {len(projects)}")
-
-        # Extract year from project names for filtering/sorting
-        projects['_year'] = projects.apply(Usgs3depAws._extract_project_year, axis=1)
-        selection_logged = False
-
-        # Project selection logic
-        if project_name:
-            # Filter to exact project name match
-            logger.debug(f"Filtering USGS 3DEP projects to: {project_name}")
-
-            # Try all possible project name fields, plus the S3 folder parsed
-            # from 'product_link' (so callers may pass either the collection
-            # name or the actual S3 StagedProducts folder).
-            mask = False
-            for field in ['proj_name', 'project', 'demname']:
-                if field in projects.columns:
-                    mask = mask | (projects[field] == project_name)
-            if 'product_link' in projects.columns:
-                mask = mask | projects['product_link'].apply(
-                    lambda pl: Usgs3depAws._s3_project_folder(pl) == project_name)
-
-            projects_filtered = projects[mask]
-
-            if len(projects_filtered) == 0:
-                # Show available projects to help user
-                available = []
-                for idx, row in projects.iterrows():
-                    proj = row.get('proj_name', row.get('project', row.get('demname', 'Unknown')))
-                    year = row['_year']
-                    available.append(f"{proj} (year {year if year else 'unknown'})")
-
-                raise ValueError(
-                    f"Project '{project_name}' not found in bbox.\n"
-                    f"Available projects:\n  - " + "\n  - ".join(available)
-                )
-
-            projects = projects_filtered
-            logger.debug(f"Matched requested USGS 3DEP project: {project_name}")
-
-        elif min_year:
-            # Filter to projects >= min_year
-            logger.debug(f"Filtering USGS 3DEP projects to {min_year} or newer")
-
-            # Filter out projects with no year or year < min_year
-            projects_filtered = projects[
-                (projects['_year'].notna()) & (projects['_year'] >= min_year)
-            ]
-
-            if len(projects_filtered) == 0:
-                logger.warning(f"No USGS 3DEP projects found from {min_year} or newer")
-                logger.warning(f"Available USGS 3DEP project years: {sorted(projects['_year'].dropna().unique())}")
-                raise ValueError(f"No projects found from year {min_year} or newer")
-
-            projects = projects_filtered
-            logger.debug(f"USGS 3DEP projects matching min_year={min_year}: {len(projects)}")
-
-        if project_selection == "coverage":
-            # Cover the bbox with the newest project available per sub-area
-            # instead of dropping every area the single newest project misses.
-            projects, coverage_report = Usgs3depAws.select_projects_for_coverage(
-                projects,
-                bbox_poly,
-                min_coverage_fraction=min_coverage_fraction,
-                min_project_area_fraction=min_project_area_fraction,
-            )
-            selection_logged = True
-
-            for entry in coverage_report['projects']:
-                entry_year = entry['year'] if entry['year'] else 'unknown'
-                logger.debug(
-                    f"USGS 3DEP coverage project selected: {entry['project']} "
-                    f"(year {entry_year}; {entry['area_fraction']:.2%} of bbox)"
-                )
-
-            if coverage_report['uncovered_fraction'] > 0:
-                logger.warning(
-                    "USGS 3DEP coverage gap: "
-                    f"{coverage_report['uncovered_fraction']:.2%} of the requested "
-                    "bbox is not covered by any available project"
-                )
-
-            if len(projects) == 0:
-                logger.warning("No USGS 3DEP project covers any part of the bbox")
-                return ([], []) if return_provenance else []
-
-        # If multiple projects remain, select most recent
-        elif len(projects) > 1:
-            projects = projects.sort_values('_year', ascending=False, na_position='last')
-
-            most_recent = projects.iloc[0]
-            year = projects.iloc[0]['_year']
-
-            selected_name = most_recent.get('proj_name', most_recent.get('project', most_recent.get('demname')))
-            logger.debug(
-                f"USGS 3DEP project selected: {selected_name} "
-                f"(year {year if year else 'unknown'}; skipped {len(projects) - 1} older)"
-            )
-            selection_logged = True
-
-            logger.debug(f"Skipping {len(projects) - 1} older USGS 3DEP project(s)")
-            for idx in range(1, min(len(projects), 4)):
-                older = projects.iloc[idx]
-                older_year = older['_year']
-                older_name = older.get('proj_name', older.get('project', older.get('demname')))
-                logger.debug(f"Skipped older USGS 3DEP project: {older_name} (year {older_year if older_year else 'unknown'})")
-
-            # Use only the most recent project
-            projects = projects.iloc[[0]]
 
         # Download tiles from selected project(s)
         downloaded_by_project: List[Dict[str, Any]] = []
 
-        for idx, project_row in projects.iterrows():
-            # The actual S3 StagedProducts folder lives in 'product_link'. The
-            # index 'project' field is a logical collection name that often
-            # differs from the S3 folder (e.g. 'UT_StateWide_2018_A18' whose
-            # tiles live under '.../Projects/UT_Central_QL1_B2_2018', or
-            # 'Wasatch_Fault_UT_LiDAR' -> '.../Projects/UT_Wasatch_L5_2014').
-            # Building the S3 path from the collection name 404s; use the link.
-            s3_folder = Usgs3depAws._s3_project_folder(project_row.get('product_link'))
-            label = None
-            for field in ['proj_name', 'project', 'demname']:
-                if field in project_row.index and project_row[field]:
-                    label = project_row[field]
-                    break
-            s3_folder = s3_folder or label  # fall back to the collection name
-
-            if not s3_folder:
-                logger.warning(f"No project folder/name found in row {idx}, skipping")
-                continue
-
-            if len(projects) == 1 and not selection_logged:
-                year = project_row['_year'] if '_year' in project_row.index else None
-                logger.debug(
-                    f"USGS 3DEP project selected: {label or s3_folder} "
-                    f"(year {year if year else 'unknown'})"
-                )
-            logger.debug(f"Processing USGS 3DEP project: {label or s3_folder}")
-
-            # Get all tile URLs for this project
-            tile_urls = Usgs3depAws._get_project_tile_urls(s3_folder)
-
-            # Skip if project not found in S3 (outdated tile index)
-            if tile_urls is None:
-                logger.debug(f"Skipping USGS 3DEP project not available in S3: {project_name}")
-                continue
-
-            # Coverage mode assigns each project the sub-area it was
-            # selected to cover, so an older project only contributes tiles
-            # for the part of the bbox no newer project reaches.
-            selection_region = bbox_poly
-            if '_coverage_region' in project_row.index:
-                coverage_region = project_row['_coverage_region']
-                if coverage_region is not None and not coverage_region.is_empty:
-                    selection_region = coverage_region
-
-            # Find which tiles intersect our bbox
-            logger.debug(f"Checking {len(tile_urls)} USGS 3DEP tiles for intersection")
-            intersecting_urls = []
-            project_utm_zone: Optional[int] = None
-
-            for tile_url in tile_urls:
-                filename = tile_url.split('/')[-1]
-
-                if Path(filename).stem in excluded_tile_ids:
-                    logger.debug(f"Excluding USGS 3DEP tile by request: {filename}")
-                    continue
-
-                try:
-                    # Fast path: Parse bounds from filename (instant)
-                    tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(filename)
-
-                    # Older 'USGS_one_meter' names omit the UTM zone: read it
-                    # once per project, then keep using the filename fast path.
-                    if tile_bounds is None and 'USGS_one_meter_' in filename:
-                        if project_utm_zone is None:
-                            project_utm_zone = Usgs3depAws._get_tile_utm_zone(tile_url)
-                        if project_utm_zone is not None:
-                            tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(
-                                filename,
-                                utm_zone=project_utm_zone,
-                            )
-
-                    # Fallback: Open remote file if parsing fails (slow, 2-5 sec)
-                    if tile_bounds is None:
-                        logger.debug(f"    Filename parsing failed for {filename}, using /vsicurl/ fallback")
-                        tile_bounds = Usgs3depAws._get_tile_bounds_wgs84(tile_url)
-
-                    tile_box = box(*tile_bounds)
-
-                    # Check intersection
-                    if tile_box.intersects(selection_region):
-                        intersecting_urls.append(tile_url)
-
-                except Exception as e:
-                    logger.debug(f"    Error checking tile {filename}: {e}")
-                    continue
-
-            logger.debug(f"USGS 3DEP intersecting tiles: {len(intersecting_urls)}")
-
+        for group in groups:
+            intersecting_urls = group['tile_urls']
             project_tiles: List[Tuple[str, Path]] = []
 
             # Download intersecting tiles (concurrent)
@@ -1472,9 +1555,9 @@ class Usgs3depAws:
                             logger.error(f"Concurrent USGS 3DEP tile download failed for {filename}: {e}")
 
             downloaded_by_project.append({
-                'project_name': label or s3_folder,
-                'project_folder': s3_folder,
-                'project_year': Usgs3depAws._row_year(project_row),
+                'project_name': group['project_name'],
+                'project_folder': group['project_folder'],
+                'project_year': group['project_year'],
                 'tiles': project_tiles,
             })
 
@@ -1596,6 +1679,544 @@ class Usgs3depAws:
 
     @staticmethod
     @log_call
+    def plan_terrain_tiles(
+        project_crs: str,
+        geom_path: Optional[Union[str, Path]] = None,
+        aoi_geometry: Optional[Any] = None,
+        *,
+        buffer_distance: float = 100.0,
+        buffer_units: str = "US survey foot",
+        backfill_resolutions: Sequence[int] = (10, 30),
+        min_coverage_fraction: float = 0.999,
+        min_project_area_fraction: float = 0.0,
+        cache_folder: Optional[Union[str, Path]] = None,
+        exclude_tile_ids: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Plan every USGS 3DEP tile a terrain build needs, without downloading.
+
+        First step of the catalog workflow ``plan_terrain_tiles()`` ->
+        ``prefetch_terrain_tiles()`` -> ``build_terrain_raster(tile_plan=...,
+        require_cached_tiles=True)``, which lets many models share one
+        read-only tile store and build in parallel with no network access.
+        Network access is required here (tile index, S3 tile listings, and
+        HEAD requests for provenance).
+
+        The AOI is computed by the same private routine
+        ``build_terrain_raster()`` uses, so a plan and a direct build agree.
+        Tier 1 lists the 1m tiles chosen by coverage-aware selection, in
+        composite order (oldest project first, filename order within a
+        project), with the coverage residual. Every backfill tier lists EVERY
+        seamless 1-degree tile intersecting the AOI, unconditionally: interior
+        1m voids (water bodies, project edges) cannot be predicted from the
+        index, and listing all backfill tiles guarantees an offline build is
+        never missing one. Seamless tiles that do not exist on S3 (for example
+        over open water) are reported under ``unavailable_tiles``.
+
+        Args:
+            project_crs: Projected CRS of the HEC-RAS project, e.g.
+                ``"EPSG:2277"``.
+            geom_path: Model geometry (``.g##`` or ``.g##.hdf``). Provide
+                exactly one of ``geom_path`` and ``aoi_geometry``.
+            aoi_geometry: Model extent geometry in project CRS.
+            buffer_distance: Absolute AOI buffer. Default 100. Keyword-only.
+            buffer_units: Units of ``buffer_distance``. Default
+                ``"US survey foot"``. Keyword-only.
+            backfill_resolutions: Backfill tiers in priority order, from
+                ``10`` and ``30``. Default ``(10, 30)``. Keyword-only.
+            min_coverage_fraction: Tier-1 coverage selection stop condition.
+                Default 0.999. Keyword-only.
+            min_project_area_fraction: Tier-1 minimum project contribution.
+                Default 0.0. Keyword-only.
+            cache_folder: Tile index cache folder. Keyword-only.
+            exclude_tile_ids: Tile ids (filename stems) to leave out of every
+                tier. Keyword-only.
+
+        Returns:
+            JSON-serializable plan dict: ``schema``, ``version``,
+            ``created_at``, ``project_crs``, ``buffer`` (distance, units,
+            project-unit distance), ``aoi`` (``wkt`` and ``bounds`` in project
+            CRS, ``bounds_wgs84``, ``wkt_sha256``, and the AOI report),
+            ``selection`` (the selection parameters), and ``tiers`` ordered
+            highest priority first. Each tier has ``tier``, ``product``,
+            ``resolution``, and ``tiles``; each tile has ``tile_id``, ``url``,
+            ``filename``, ``relative_path`` (store layout
+            ``<product>/<filename>``), ``product``, ``tier_resolution``,
+            ``project``, ``project_folder``, ``year``, ``etag``,
+            ``last_modified``, and ``content_length``. Tier 1 adds
+            ``coverage``; backfill tiers add ``unavailable_tiles``.
+
+        Raises:
+            ValueError: For invalid backfill resolutions or AOI inputs.
+
+        Example:
+            >>> plan = Usgs3depAws.plan_terrain_tiles(
+            ...     "EPSG:2277", geom_path="MAHA CREEK.g01"
+            ... )
+            >>> manifest = Usgs3depAws.prefetch_terrain_tiles(plan, "tile-store")
+            >>> receipt = Usgs3depAws.build_terrain_raster(
+            ...     "terrain.tif", "EPSG:2277",
+            ...     download_folder="tile-store",
+            ...     tile_plan=plan,
+            ...     require_cached_tiles=True,
+            ... )
+        """
+        Usgs3depAws._validate_backfill_resolutions(backfill_resolutions)
+        excluded = set(exclude_tile_ids or [])
+
+        aoi, aoi_report = Usgs3depAws._build_terrain_aoi(
+            project_crs,
+            geom_path=geom_path,
+            aoi_geometry=aoi_geometry,
+            buffer_distance=buffer_distance,
+            buffer_units=buffer_units,
+        )
+        aoi_wgs84 = Usgs3depAws._geometry_to_wgs84(aoi, project_crs)
+        aoi_wkt = Usgs3depAws._geometry_wkt(aoi)
+
+        groups, coverage = Usgs3depAws._select_1m_tile_groups(
+            aoi_wgs84.convex_hull,
+            1,
+            cache_folder,
+            project_selection="coverage",
+            min_coverage_fraction=min_coverage_fraction,
+            min_project_area_fraction=min_project_area_fraction,
+            excluded_tile_ids=excluded,
+        )
+
+        tier1_tiles: List[Dict[str, Any]] = []
+        for group in reversed(groups or []):
+            for tile_url in sorted(group["tile_urls"], key=lambda url: url.rsplit("/", 1)[-1]):
+                tier1_tiles.append(
+                    Usgs3depAws._plan_tile_record(
+                        tile_url,
+                        Usgs3depAws.ONE_METRE_PRODUCT,
+                        1,
+                        project=group["project_name"],
+                        project_folder=group["project_folder"],
+                        year=group["project_year"],
+                    )
+                )
+
+        coverage_block = None
+        if coverage is not None:
+            coverage_block = {
+                "covered_fraction": coverage["covered_fraction"],
+                "uncovered_fraction": coverage["uncovered_fraction"],
+                "uncovered_area_wgs84_deg2": coverage["uncovered_fraction"] * coverage["bbox_area"],
+                "uncovered_geometry_wkt_wgs84": (
+                    None
+                    if coverage["uncovered_geometry"] is None
+                    else Usgs3depAws._geometry_wkt(coverage["uncovered_geometry"])
+                ),
+                "projects": coverage["projects"],
+                "basis": "tile index project footprints over the WGS84 convex hull of the AOI; interior voids are filled by backfill tiers",
+            }
+
+        tiers: List[Dict[str, Any]] = [{
+            "tier": 1,
+            "product": Usgs3depAws.ONE_METRE_PRODUCT,
+            "resolution": 1,
+            "tiles": tier1_tiles,
+            "coverage": coverage_block,
+        }]
+
+        for position, resolution in enumerate(backfill_resolutions):
+            token, product = Usgs3depAws.SEAMLESS_PRODUCTS[resolution]
+            tiles: List[Dict[str, Any]] = []
+            unavailable: List[str] = []
+            for tile_id in Usgs3depAws._seamless_tile_names(aoi_wgs84.bounds, resolution):
+                if tile_id in excluded:
+                    continue
+                if not box(*Usgs3depAws._seamless_tile_bounds(tile_id)).intersects(aoi_wgs84):
+                    continue
+                folder = tile_id.split("_")[-1]
+                tile_url = f"{Usgs3depAws.S3_BASE_URL}/{token}/TIFF/current/{folder}/{tile_id}.tif"
+                tiles.append(
+                    Usgs3depAws._plan_tile_record(
+                        tile_url, product, resolution, project=product, project_folder=None, year=None
+                    )
+                )
+            tiers.append({
+                "tier": position + 2,
+                "product": product,
+                "resolution": resolution,
+                "tiles": tiles,
+                "unavailable_tiles": unavailable,
+            })
+
+        # Provenance available without downloading: one HEAD per tile.
+        all_tiles = [tile for tier in tiers for tile in tier["tiles"]]
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            headers = list(executor.map(lambda tile: Usgs3depAws._get_remote_file_headers(tile["url"]), all_tiles))
+        for tile, tile_headers in zip(all_tiles, headers):
+            tile.update(
+                etag=tile_headers["etag"],
+                last_modified=tile_headers["last_modified"],
+                content_length=tile_headers["content_length"],
+            )
+
+        for tier in tiers[1:]:
+            missing = [tile for tile in tier["tiles"] if tile["content_length"] is None]
+            tier["unavailable_tiles"] = [tile["tile_id"] for tile in missing]
+            tier["tiles"] = [tile for tile in tier["tiles"] if tile["content_length"] is not None]
+
+        _, project_unit_metres = Usgs3depAws._crs_linear_unit(project_crs)
+        aoi_block = dict(aoi_report)
+        aoi_block.update(
+            wkt=aoi_wkt,
+            wkt_sha256=hashlib.sha256(aoi_wkt.encode("utf-8")).hexdigest(),
+            bounds=list(aoi.bounds),
+            bounds_wgs84=list(aoi_wgs84.bounds),
+        )
+
+        plan = {
+            "schema": Usgs3depAws.TILE_PLAN_SCHEMA,
+            "version": Usgs3depAws.TILE_PLAN_VERSION,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "project_crs": project_crs,
+            "buffer": {
+                "distance": float(buffer_distance),
+                "units": aoi_report["buffer_units"],
+                "distance_project_units": aoi_report["buffer_distance_project_units"],
+            },
+            "aoi": aoi_block,
+            "selection": {
+                "project_selection": "coverage",
+                "min_coverage_fraction": float(min_coverage_fraction),
+                "min_project_area_fraction": float(min_project_area_fraction),
+                "backfill_resolutions": list(backfill_resolutions),
+                "exclude_tile_ids": sorted(excluded),
+            },
+            "tiers": tiers,
+        }
+
+        logger.info(
+            "USGS 3DEP terrain tile plan: "
+            + ", ".join(f"tier {tier['tier']} {len(tier['tiles'])} tile(s)" for tier in tiers)
+        )
+        return plan
+
+    @staticmethod
+    @log_call
+    def prefetch_terrain_tiles(
+        plans: Union[Mapping[str, Any], Iterable[Mapping[str, Any]], str, Path],
+        download_folder: Union[str, Path],
+        *,
+        max_workers: int = 4,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Download every tile of one or more tile plans once into a shared store.
+
+        Tiles are deduplicated by URL across all plans and written to
+        ``download_folder/<product>/<filename>``, the layout that
+        ``build_terrain_raster(tile_plan=..., require_cached_tiles=True)``
+        reads. An existing file whose size matches the remote Content-Length
+        is kept (``status="cached"``) unless ``overwrite`` is True. Failures
+        are reported per tile instead of being raised, and a partially written
+        or size-mismatched file is removed so it cannot be mistaken for a
+        cached tile. Run this with a single writer; builds may then read the
+        store concurrently (and read-only).
+
+        Args:
+            plans: One plan dict (or plan JSON path), or an iterable of them,
+                from ``plan_terrain_tiles()``.
+            download_folder: Tile store root.
+            max_workers: Concurrent tile downloads. Default 4. Keyword-only.
+            overwrite: Re-download tiles that are already present. Default
+                False. Keyword-only.
+
+        Returns:
+            JSON-serializable manifest: ``schema``, ``created_at``,
+            ``download_folder``, ``plans`` (digest, CRS, AOI bounds per plan),
+            ``counts`` (``plans``, ``tiles``, ``downloaded``, ``cached``,
+            ``failed``), and ``tiles``, one per unique URL with ``filename``,
+            ``relative_path``, ``local_path``, ``url``, ``tier_resolutions``,
+            ``products``, ``project``, ``project_folder``, ``year``,
+            ``etag``, ``last_modified``, ``content_length``,
+            ``local_size_bytes``, ``status`` (``downloaded``/``cached``/
+            ``failed``), ``error``, and ``referenced_by_plans`` (plan digests).
+
+        Raises:
+            ValueError: If no plan is given or a plan has the wrong schema.
+        """
+        if isinstance(plans, (Mapping, str, Path)):
+            plan_list = [plans]
+        else:
+            plan_list = list(plans)
+        if not plan_list:
+            raise ValueError("prefetch_terrain_tiles() needs at least one tile plan")
+
+        download_folder = Path(download_folder)
+        entries: Dict[str, Dict[str, Any]] = {}
+        plan_summaries: List[Dict[str, Any]] = []
+
+        for raw_plan in plan_list:
+            plan = Usgs3depAws._load_tile_plan(raw_plan)
+            digest = Usgs3depAws._tile_plan_digest(plan)
+            plan_summaries.append({
+                "sha256": digest,
+                "project_crs": plan["project_crs"],
+                "created_at": plan.get("created_at"),
+                "aoi_bounds_wgs84": plan["aoi"]["bounds_wgs84"],
+            })
+            for tier in plan["tiers"]:
+                for tile in tier["tiles"]:
+                    entry = entries.get(tile["url"])
+                    if entry is None:
+                        entry = {
+                            "url": tile["url"],
+                            "filename": tile["filename"],
+                            "relative_path": tile["relative_path"],
+                            "local_path": str(download_folder / tile["relative_path"]),
+                            "tile_id": tile["tile_id"],
+                            "tier_resolutions": [],
+                            "products": [],
+                            "project": tile.get("project"),
+                            "project_folder": tile.get("project_folder"),
+                            "year": tile.get("year"),
+                            "referenced_by_plans": [],
+                        }
+                        entries[tile["url"]] = entry
+                    if tier["resolution"] not in entry["tier_resolutions"]:
+                        entry["tier_resolutions"].append(tier["resolution"])
+                    if tile["product"] not in entry["products"]:
+                        entry["products"].append(tile["product"])
+                    if digest not in entry["referenced_by_plans"]:
+                        entry["referenced_by_plans"].append(digest)
+
+        def fetch(entry: Dict[str, Any]) -> Dict[str, Any]:
+            target_path = download_folder / entry["relative_path"]
+            result = dict(entry)
+            result.update(
+                status="failed", error=None, etag=None, last_modified=None,
+                content_length=None, local_size_bytes=None,
+            )
+            before = None
+            try:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                before = target_path.stat() if target_path.exists() else None
+                downloaded = Usgs3depAws._download_single_tile(entry["url"], target_path.parent, overwrite)
+                remote = Usgs3depAws._get_remote_file_headers(entry["url"])
+                result.update(
+                    etag=remote["etag"],
+                    last_modified=remote["last_modified"],
+                    content_length=remote["content_length"],
+                )
+                if downloaded is None or not target_path.exists():
+                    result["error"] = "download failed"
+                else:
+                    after = target_path.stat()
+                    result["local_size_bytes"] = after.st_size
+                    if remote["content_length"] is not None and after.st_size != remote["content_length"]:
+                        result["error"] = (
+                            f"size mismatch: local {after.st_size} bytes, "
+                            f"remote {remote['content_length']} bytes"
+                        )
+                    elif (
+                        before is not None
+                        and not overwrite
+                        and before.st_size == after.st_size
+                        and before.st_mtime_ns == after.st_mtime_ns
+                    ):
+                        result["status"] = "cached"
+                    else:
+                        result["status"] = "downloaded"
+            except Exception as exc:
+                result["error"] = f"{type(exc).__name__}: {exc}"
+
+            if result["status"] == "failed" and target_path.exists():
+                unchanged = (
+                    before is not None
+                    and target_path.stat().st_mtime_ns == before.st_mtime_ns
+                    and result["error"] == "download failed"
+                )
+                if not unchanged:
+                    target_path.unlink(missing_ok=True)
+                    result["local_size_bytes"] = None
+            return result
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as executor:
+            tiles = list(executor.map(fetch, entries.values()))
+        tiles.sort(key=lambda item: item["relative_path"])
+
+        counts = {"plans": len(plan_summaries), "tiles": len(tiles)}
+        for status in ("downloaded", "cached", "failed"):
+            counts[status] = sum(1 for tile in tiles if tile["status"] == status)
+
+        logger.info(
+            f"USGS 3DEP terrain prefetch: {counts['tiles']} unique tile(s) from {counts['plans']} plan(s); "
+            f"{counts['downloaded']} downloaded, {counts['cached']} cached, {counts['failed']} failed"
+        )
+        return {
+            "schema": Usgs3depAws.PREFETCH_MANIFEST_SCHEMA,
+            "version": "1.0.0",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "download_folder": str(download_folder),
+            "plans": plan_summaries,
+            "counts": counts,
+            "tiles": tiles,
+        }
+
+    @staticmethod
+    def _validate_backfill_resolutions(backfill_resolutions: Sequence[int]) -> None:
+        """Raise ValueError unless every backfill resolution is a seamless product."""
+        invalid = [res for res in backfill_resolutions if res not in Usgs3depAws.SEAMLESS_PRODUCTS]
+        if invalid:
+            raise ValueError(
+                "backfill_resolutions may only contain "
+                f"{sorted(Usgs3depAws.SEAMLESS_PRODUCTS)}, got {invalid}"
+            )
+
+    @staticmethod
+    def _geometry_wkt(geometry: Any) -> str:
+        """Full-precision WKT that round-trips exactly through ``shapely.from_wkt``."""
+        import shapely
+
+        return shapely.to_wkt(geometry, rounding_precision=-1, trim=True)
+
+    @staticmethod
+    def _seamless_tile_bounds(tile_id: str) -> Tuple[float, float, float, float]:
+        """
+        WGS84 bounds of a seamless 1-degree tile named by its north-west corner.
+
+        Args:
+            tile_id: e.g. ``"USGS_13_n31w098"``.
+
+        Returns:
+            ``(min_lon, min_lat, max_lon, max_lat)``.
+
+        Raises:
+            ValueError: If the id does not carry a corner token.
+        """
+        match = re.search(r'([ns])(\d{2})([ew])(\d{3})$', tile_id)
+        if not match:
+            raise ValueError(f"Not a seamless 1-degree tile id: {tile_id!r}")
+        north = int(match.group(2)) * (1 if match.group(1) == 'n' else -1)
+        west = int(match.group(4)) * (-1 if match.group(3) == 'w' else 1)
+        return (float(west), float(north - 1), float(west + 1), float(north))
+
+    @staticmethod
+    def _plan_tile_record(
+        tile_url: str,
+        product: str,
+        tier_resolution: int,
+        project: Optional[str] = None,
+        project_folder: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Build one tile entry of a tile plan (provenance filled in later)."""
+        filename = tile_url.rsplit("/", 1)[-1]
+        return {
+            "tile_id": Path(filename).stem,
+            "url": tile_url,
+            "filename": filename,
+            "relative_path": f"{product}/{filename}",
+            "product": product,
+            "tier_resolution": tier_resolution,
+            "project": project,
+            "project_folder": project_folder,
+            "year": year,
+            "etag": None,
+            "last_modified": None,
+            "content_length": None,
+        }
+
+    @staticmethod
+    def _load_tile_plan(tile_plan: Union[Mapping[str, Any], str, Path]) -> Dict[str, Any]:
+        """
+        Accept a plan dict or plan JSON path and check its schema.
+
+        Args:
+            tile_plan: Plan from ``plan_terrain_tiles()``, or a JSON file of one.
+
+        Returns:
+            The plan as a dict.
+
+        Raises:
+            ValueError: If the schema is not a USGS 3DEP terrain tile plan.
+        """
+        if isinstance(tile_plan, (str, Path)):
+            plan = json.loads(Path(tile_plan).read_text(encoding="utf-8"))
+        else:
+            plan = dict(tile_plan)
+        if plan.get("schema") != Usgs3depAws.TILE_PLAN_SCHEMA:
+            raise ValueError(
+                f"Not a USGS 3DEP terrain tile plan (schema {plan.get('schema')!r}); "
+                "create one with Usgs3depAws.plan_terrain_tiles()"
+            )
+        return plan
+
+    @staticmethod
+    def _tile_plan_digest(plan: Mapping[str, Any]) -> str:
+        """SHA-256 of the plan's canonical JSON (sorted keys, compact separators)."""
+        canonical = json.dumps(plan, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _tier_tiles_from_plan(
+        plan_tiles: Sequence[Mapping[str, Any]],
+        download_folder: Union[str, Path],
+        require_cached_tiles: bool = False,
+    ) -> Tuple[List[Path], List[Dict[str, Any]]]:
+        """
+        Resolve a plan tier's tiles in the store, downloading only when allowed.
+
+        Offline (``require_cached_tiles``) this makes no network request and
+        writes nothing: it maps each tile to ``download_folder/relative_path``
+        and records the plan's provenance plus the local file size. Missing
+        files must already have been rejected by the caller. Online, missing
+        or stale tiles are fetched with ``_download_single_tile``.
+
+        Args:
+            plan_tiles: The tier's plan tile entries, in composite order.
+            download_folder: Tile store root.
+            require_cached_tiles: Offline mode.
+
+        Returns:
+            ``(tile_paths, provenance)`` in the same order as ``plan_tiles``.
+        """
+        download_folder = Path(download_folder)
+        paths: List[Path] = []
+        provenance: List[Dict[str, Any]] = []
+
+        for tile in plan_tiles:
+            local_path = download_folder / tile["relative_path"]
+            if not require_cached_tiles:
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                downloaded = Usgs3depAws._download_single_tile(tile["url"], local_path.parent, False)
+                if not downloaded:
+                    continue
+            local_size = local_path.stat().st_size if local_path.exists() else None
+            paths.append(local_path)
+            provenance.append({
+                "tile_id": tile["tile_id"],
+                "file_name": tile["filename"],
+                "file_path": str(local_path),
+                "source_url": tile["url"],
+                "project_name": tile.get("project"),
+                "project_folder": tile.get("project_folder"),
+                "project_year": tile.get("year"),
+                "etag": tile.get("etag"),
+                "last_modified": tile.get("last_modified"),
+                "content_length": tile.get("content_length"),
+                "local_size_bytes": local_size,
+                "size_matches_plan": (
+                    None if tile.get("content_length") is None or local_size is None
+                    else local_size == tile["content_length"]
+                ),
+                "provenance_source": "tile_plan",
+            })
+
+        return paths, provenance
+
+    @staticmethod
+    @log_call
     def build_terrain_raster(
         output_raster: Union[str, Path],
         project_crs: str,
@@ -1620,6 +2241,8 @@ class Usgs3depAws:
         receipt_path: Optional[Union[str, Path]] = None,
         overwrite: bool = False,
         timeout_seconds: int = 7200,
+        tile_plan: Optional[Union[Mapping[str, Any], str, Path]] = None,
+        require_cached_tiles: bool = False,
     ) -> Dict[str, Any]:
         """
         Build one gap-free GeoTIFF terrain in the project CRS for HEC-RAS.
@@ -1728,6 +2351,23 @@ class Usgs3depAws:
             overwrite: Replace an existing output. Default False. Keyword-only.
             timeout_seconds: Timeout for each gdalwarp call and for HEC-RAS
                 terrain creation. Default 7200. Keyword-only.
+            tile_plan: Plan dict (or JSON path) from ``plan_terrain_tiles()``.
+                When given, the plan's AOI and tile lists are used: the AOI is
+                not recomputed and neither the tile index nor S3 listings are
+                queried. ``geom_path``/``aoi_geometry`` must then be omitted,
+                ``project_crs`` must match the plan, ``buffer_distance`` and
+                ``buffer_units`` are ignored in favour of the plan's, and
+                ``backfill_resolutions`` must be a subset of the plan's backfill
+                tiers. Tiles are read from ``download_folder/<product>/<filename>``
+                (the ``prefetch_terrain_tiles()`` layout). Default None.
+                Keyword-only.
+            require_cached_tiles: Offline build. Requires ``tile_plan``. Never
+                downloads, never writes into ``download_folder``, and makes no
+                HEAD or other network request (no remote size check; the
+                prefetch manifest recorded sizes). Every tile of every planned
+                tier must already exist in ``download_folder``, otherwise
+                ``TerrainBuildError`` with ``TERRAIN_REASON_TILE_NOT_CACHED``
+                names the missing files. Default False. Keyword-only.
 
         Returns:
             The receipt dict, also written to ``receipt_path``.
@@ -1739,8 +2379,9 @@ class Usgs3depAws:
             FileNotFoundError: If the HEC-RAS bundled gdalwarp.exe is missing.
             RuntimeError: If gdalwarp fails.
             TerrainBuildError: With ``TERRAIN_REASON_NO_SOURCES``,
-                ``TERRAIN_REASON_AOI_NODATA``, or
-                ``TERRAIN_REASON_HEC_MULTI_SOURCE``.
+                ``TERRAIN_REASON_AOI_NODATA``,
+                ``TERRAIN_REASON_HEC_MULTI_SOURCE``, or
+                ``TERRAIN_REASON_TILE_NOT_CACHED``.
 
         Example:
             >>> receipt = Usgs3depAws.build_terrain_raster(
@@ -1769,12 +2410,37 @@ class Usgs3depAws:
                 f"Output raster already exists (pass overwrite=True): {output_raster}"
             )
 
-        invalid_backfill = [res for res in backfill_resolutions if res not in Usgs3depAws.SEAMLESS_PRODUCTS]
-        if invalid_backfill:
+        Usgs3depAws._validate_backfill_resolutions(backfill_resolutions)
+
+        if require_cached_tiles and tile_plan is None:
             raise ValueError(
-                "backfill_resolutions may only contain "
-                f"{sorted(Usgs3depAws.SEAMLESS_PRODUCTS)}, got {invalid_backfill}"
+                "require_cached_tiles=True needs tile_plan: an offline build can only use "
+                "tiles listed by Usgs3depAws.plan_terrain_tiles() and fetched with "
+                "prefetch_terrain_tiles()"
             )
+
+        plan: Optional[Dict[str, Any]] = None
+        if tile_plan is not None:
+            from pyproj import CRS
+
+            plan = Usgs3depAws._load_tile_plan(tile_plan)
+            if geom_path is not None or aoi_geometry is not None:
+                raise ValueError(
+                    "Pass either tile_plan or geom_path/aoi_geometry, not both: "
+                    "with tile_plan the plan's AOI is used"
+                )
+            if CRS.from_user_input(project_crs) != CRS.from_user_input(plan["project_crs"]):
+                raise ValueError(
+                    f"project_crs {project_crs!r} does not match the tile plan's "
+                    f"{plan['project_crs']!r}"
+                )
+            plan_backfill = [tier["resolution"] for tier in plan["tiers"][1:]]
+            unplanned = [res for res in backfill_resolutions if res not in plan_backfill]
+            if unplanned:
+                raise ValueError(
+                    f"backfill_resolutions {unplanned} are not in the tile plan "
+                    f"(planned: {plan_backfill})"
+                )
 
         if target_resolution is not None and not target_resolution > 0:
             raise ValueError(f"target_resolution must be positive, got {target_resolution}")
@@ -1786,13 +2452,22 @@ class Usgs3depAws:
         vertical_unit = Usgs3depAws._normalize_linear_unit(vertical_unit or horizontal_unit)
         vertical_scale_factor = float(1 / Usgs3depAws.LINEAR_UNIT_METRES[vertical_unit])
 
-        aoi, aoi_report = Usgs3depAws._build_terrain_aoi(
-            project_crs,
-            geom_path=geom_path,
-            aoi_geometry=aoi_geometry,
-            buffer_distance=buffer_distance,
-            buffer_units=buffer_units,
-        )
+        if plan is None:
+            aoi, aoi_report = Usgs3depAws._build_terrain_aoi(
+                project_crs,
+                geom_path=geom_path,
+                aoi_geometry=aoi_geometry,
+                buffer_distance=buffer_distance,
+                buffer_units=buffer_units,
+            )
+            aoi_wkt = Usgs3depAws._geometry_wkt(aoi)
+            aoi_report["wkt_sha256"] = hashlib.sha256(aoi_wkt.encode("utf-8")).hexdigest()
+        else:
+            import shapely
+
+            aoi = shapely.from_wkt(plan["aoi"]["wkt"])
+            aoi_report = {key: value for key, value in plan["aoi"].items() if key != "wkt"}
+            aoi_report["source"] = f"tile_plan ({aoi_report.get('source')})"
 
         output_raster.parent.mkdir(parents=True, exist_ok=True)
         download_folder = (
@@ -1800,6 +2475,53 @@ class Usgs3depAws:
             if download_folder is not None
             else output_raster.parent / "source-tiles"
         )
+
+        build_mode = {
+            "offline": bool(require_cached_tiles),
+            "network_access": "none" if require_cached_tiles else "allowed",
+            "download_folder": str(download_folder),
+            "tile_plan": None if plan is None else {
+                "sha256": Usgs3depAws._tile_plan_digest(plan),
+                "schema": plan["schema"],
+                "version": plan.get("version"),
+                "created_at": plan.get("created_at"),
+            },
+        }
+
+        plan_tiers: Dict[int, List[Dict[str, Any]]] = {}
+        if plan is not None:
+            excluded = set(exclude_tile_ids or [])
+            for plan_tier in plan["tiers"]:
+                plan_tiers[plan_tier["resolution"]] = [
+                    tile for tile in plan_tier["tiles"] if tile["tile_id"] not in excluded
+                ]
+
+            if require_cached_tiles:
+                wanted = [1] + list(backfill_resolutions)
+                missing = [
+                    tile["relative_path"]
+                    for resolution in wanted
+                    for tile in plan_tiers.get(resolution, [])
+                    if not (download_folder / tile["relative_path"]).is_file()
+                ]
+                if missing:
+                    Usgs3depAws._write_terrain_receipt(
+                        receipt_path,
+                        Usgs3depAws._terrain_receipt(build_mode, "fail", Usgs3depAws.TERRAIN_REASON_TILE_NOT_CACHED,
+                            output_raster, project_crs, horizontal_unit,
+                            vertical_unit, vertical_scale_factor, aoi_report, [],
+                        ),
+                    )
+                    raise TerrainBuildError(
+                        Usgs3depAws.TERRAIN_REASON_TILE_NOT_CACHED,
+                        f"{len(missing)} planned tile(s) are not in {download_folder}: "
+                        + ", ".join(missing),
+                        {
+                            "missing_tiles": missing,
+                            "download_folder": str(download_folder),
+                            "receipt_path": str(receipt_path),
+                        },
+                    )
         work_dir = output_raster.parent / f".{output_raster.stem}.work"
         if work_dir.exists():
             shutil.rmtree(work_dir)
@@ -1834,7 +2556,13 @@ class Usgs3depAws:
 
                 tier_folder = download_folder / tier["product"]
 
-                if tier["requested_resolution"] == 1:
+                if plan is not None:
+                    tier_paths, tier_provenance = Usgs3depAws._tier_tiles_from_plan(
+                        plan_tiers.get(tier["requested_resolution"], []),
+                        download_folder,
+                        require_cached_tiles=require_cached_tiles,
+                    )
+                elif tier["requested_resolution"] == 1:
                     tier_paths, tier_provenance = Usgs3depAws.download_tiles(
                         aoi_wgs84.convex_hull,
                         1,
@@ -1922,6 +2650,7 @@ class Usgs3depAws:
                 Usgs3depAws._write_terrain_receipt(
                     receipt_path,
                     Usgs3depAws._terrain_receipt(
+                        build_mode,
                         "fail", Usgs3depAws.TERRAIN_REASON_NO_SOURCES, output_raster,
                         project_crs, horizontal_unit, vertical_unit,
                         vertical_scale_factor, aoi_report, tiers,
@@ -1990,6 +2719,7 @@ class Usgs3depAws:
 
             if gate["nodata_pixel_count"] > 0:
                 receipt = Usgs3depAws._terrain_receipt(
+                        build_mode,
                     "fail", Usgs3depAws.TERRAIN_REASON_AOI_NODATA, output_raster,
                     project_crs, horizontal_unit, vertical_unit,
                     vertical_scale_factor, aoi_report, tiers,
@@ -2024,6 +2754,7 @@ class Usgs3depAws:
                 )
 
             receipt = Usgs3depAws._terrain_receipt(
+                        build_mode,
                 "pass", Usgs3depAws.TERRAIN_REASON_VALID, output_raster,
                 project_crs, horizontal_unit, vertical_unit,
                 vertical_scale_factor, aoi_report, tiers,
@@ -2827,6 +3558,7 @@ class Usgs3depAws:
 
     @staticmethod
     def _terrain_receipt(
+        build_mode: Optional[Dict[str, Any]],
         status: str,
         reason_code: str,
         output_raster: Union[str, Path],
@@ -2842,7 +3574,7 @@ class Usgs3depAws:
         resampling_method: Optional[str] = None,
         gdalwarp_path: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Any]:
-        """Assemble the JSON-serializable terrain build receipt."""
+        """Assemble the JSON-serializable terrain build receipt (``build_mode`` records offline/plan identity)."""
         output_raster = Path(output_raster)
         grid = None
         if status == "pass" and output_raster.exists():
@@ -2907,6 +3639,7 @@ class Usgs3depAws:
                 "source_order": "lowest_priority_first",
             },
             "tiers": tier_records,
+            "build_mode": build_mode or {"offline": False, "network_access": "allowed", "tile_plan": None},
             "hec_terrain": None,
         }
 
