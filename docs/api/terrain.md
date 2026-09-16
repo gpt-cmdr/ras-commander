@@ -259,7 +259,7 @@ project-based products; 10m and 30m are discovery only.
 
 ### Download Methods
 
-- `download_tiles(bbox, resolution, output_folder, cache_folder=None, overwrite_dest=False, max_workers=3, project_name=None, min_year=None, buffer_distance=0.0, *, project_selection="newest", min_coverage_fraction=0.999, min_project_area_fraction=0.0, return_provenance=False)` - Download the intersecting 1m tiles
+- `download_tiles(bbox, resolution, output_folder, cache_folder=None, overwrite_dest=False, max_workers=3, project_name=None, min_year=None, buffer_distance=0.0, *, project_selection="newest", min_coverage_fraction=0.999, min_project_area_fraction=0.0, return_provenance=False, exclude_tile_ids=None)` - Download the intersecting 1m tiles
 
 `project_selection` controls what happens when several projects intersect the
 extent:
@@ -275,40 +275,50 @@ each provenance record carries `tile_id`, `file_name`, `file_path`,
 `content_length`, and `local_size_bytes`. That is enough to record exactly which
 tiles a terrain was built from without re-hashing the rasters.
 
-### Mosaic Methods
+### HEC-RAS Terrain Raster
 
-- `create_vrt(tile_files, output_vrt, hecras_version=None, *, target_crs=None, target_resolution=None, resampling_method="bilinear", src_nodata=None, vrt_nodata=None, source_crs=None)` - Build a VRT mosaic with HEC-RAS bundled GDAL
+- `build_terrain_raster(output_raster, project_crs, geom_path=None, aoi_geometry=None, *, buffer_distance=100.0, buffer_units="US survey foot", vertical_unit=None, target_resolution=None, backfill_resolutions=(10, 30), exclude_tile_ids=None, download_folder=None, cache_folder=None, resampling_method="bilinear", nodata=-9999.0, src_nodata=None, max_workers=3, hecras_version=None, hec_terrain_hdf=None, receipt_path=None, overwrite=False, timeout_seconds=7200)` - Build one gap-free GeoTIFF terrain in the project CRS
 
-By default the mosaic inherits the source SRS and native cell size, which is
-only safe when every tile shares one projection. USGS 3DEP 1m tiles are
-delivered per UTM zone, so an extent that straddles a zone boundary produces
-mixed-SRS tiles. Setting `target_crs` reprojects each tile to a warped VRT with
-the HEC-RAS bundled `gdalwarp.exe` (discovered exactly like `gdalbuildvrt.exe`)
-before mosaicking; the warped VRTs live in a `<output stem>_warped` folder
-beside the output and must stay there for the mosaic to remain readable.
-`target_resolution` accepts a single number or an `(x, y)` pair in target CRS
-units, and the warp step uses `-tap` so every tile lands on one aligned grid.
+RASMapper creates result rasters that mirror the terrain VRT structure: when a
+terrain references several rasters, every result output mirrors that
+multi-raster structure. `build_terrain_raster()` therefore delivers exactly one
+raster, already in the project CRS so HEC-RAS never reprojects, and can prove
+the HEC-RAS terrain built from it has a single source member.
+
+| Step | Behavior |
+|------|----------|
+| AOI | Buffered model extent in the project CRS. From `geom_path` it is the model footprint (`HdfProject.get_project_extent(..., geometry_type="footprint")`, text-only 1D supported) unioned with the full cross-section cut lines, which can protrude past the edge-line footprint. The buffer is an absolute distance (default 100 US survey feet), not a percentage. A caller geometry (`aoi_geometry`, project CRS) is buffered the same way. The project CRS is always caller-supplied. |
+| Priority | 3DEP 1m project-based DEMs via `download_tiles(project_selection="coverage")` (newest project per sub-area), then seamless 1/3 arc-second (~10m), then 1 arc-second (~30m). A lower tier is downloaded only where higher tiers leave AOI pixels uncovered. |
+| Resolution | Native resolution of the tier contributing the most AOI area, converted to project units with exact unit ratios (1m is 3.2808333333333333 US survey feet), unless `target_resolution` overrides it. |
+| Composite | One HEC-RAS bundled `gdalwarp.exe` call, sources lowest priority first and highest last, `-t_srs`, `-tr`, `-tap`, `-te` snapped outward, tiled/compressed GeoTIFF with `BIGTIFF=IF_SAFER`. |
+| Vertical units | 3DEP heights are NAVD88 metres. Reprojection changes horizontal units only, and the bundled GDAL 3.0.2 `gdalwarp` does not rescale Z even with compound CRSs, so valid pixels are explicitly scaled (x 3.2808333333333333 for US survey feet). |
+| Gate | Nodata pixels inside the buffered AOI polygon (not its bounding rectangle; any touching pixel counts) must be zero. Otherwise `TerrainBuildError` is raised with `reason_code="terrain_aoi_nodata_after_backfill"`, the count, bounds, and sample locations. Terrain is never fabricated. |
+| Receipt | `<output stem>.terrain_receipt.json`: per-tier projects, tiles (URL, ETag, Last-Modified, size), contributed AOI pixels and area; chosen resolution and why; vertical datum, units, and factor; target CRS; grid origin and shape; nodata-inside-AOI count. |
+| HEC-RAS handoff | With `hec_terrain_hdf`, `RasTerrain.create_terrain_hdf` builds the terrain from the single raster with stitching disabled, and the resulting `Terrain.vrt` must have exactly one source member (`reason_code="hec_terrain_vrt_not_single_source"` otherwise). |
 
 ```python
-from ras_commander.terrain import Usgs3depAws
+from ras_commander.terrain import TerrainBuildError, Usgs3depAws
 
-tiles, provenance = Usgs3depAws.download_tiles(
-    bbox=(-97.85, 30.20, -97.70, 30.32),
-    resolution=1,
-    output_folder="Terrain",
-    project_selection="coverage",
-    return_provenance=True,
-)
-
-vrt = Usgs3depAws.create_vrt(
-    tiles,
-    "Terrain/terrain_2277.vrt",
-    target_crs="EPSG:2277",      # NAD83 / Texas Central (US survey feet)
-    target_resolution=10.0,      # 10-foot cells
-    src_nodata=-999999,
-    vrt_nodata=-9999,
-)
+try:
+    receipt = Usgs3depAws.build_terrain_raster(
+        "Terrain/maha_creek_navd88_ftus_epsg2277.tif",
+        project_crs="EPSG:2277",          # caller-asserted for text-only models
+        geom_path="MAHA CREEK.g01",
+        hecras_version="6.6",
+        hec_terrain_hdf="Terrain/hec-terrain-6.6/Terrain.hdf",
+    )
+except TerrainBuildError as error:
+    print(error.reason_code, error.details)
+else:
+    print(receipt["resolution"]["value"], receipt["hec_terrain"]["source_member_count"])
 ```
+
+### Mosaic Methods
+
+- `create_vrt(tile_files, output_vrt, hecras_version=None)` - Build a VRT mosaic of downloaded tiles with HEC-RAS bundled `gdalbuildvrt.exe`
+
+`create_vrt()` inherits the source SRS and native cell size. Do not use a
+multi-raster VRT as a HEC-RAS terrain source; use `build_terrain_raster()`.
 
 ## Related Examples
 
