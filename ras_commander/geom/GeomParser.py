@@ -18,6 +18,7 @@ List of Functions:
 - validate_river_reach_rs() - Validate river/reach/RS exists
 - get_geom_title() - Read the Geom Title from a geometry file
 - set_geom_title() - Write the Geom Title to a geometry file
+- get_1d_footprint() - Build 1D reach footprints from text cross-section endpoints
 
 Example Usage:
     >>> from ras_commander import GeomParser
@@ -34,9 +35,9 @@ Example Usage:
 """
 
 import re
-from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any, Union
 from datetime import datetime
+from pathlib import Path
+from typing import Any, List, Optional, Tuple, Union
 
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -870,6 +871,138 @@ class GeomParser:
         logger.info(f"Found {len(xs_list)} XS cut lines")
         return gpd.GeoDataFrame(xs_list, geometry='geometry') if xs_list else gpd.GeoDataFrame(
             columns=['river', 'reach', 'station', 'geometry']
+        )
+
+    @staticmethod
+    @log_call
+    def get_1d_footprint(
+        geom_file: Union[str, Path],
+        crs: Optional[Any] = None,
+        dissolve: bool = False,
+        ras_object=None,
+    ):
+        """Build 1D reach footprints from plain-text cross-section cut lines.
+
+        Cross sections are grouped by river and reach in geometry-file order.
+        Their first and last coordinates form the left and right model edges,
+        while the complete first and last cut lines close the reach ends. This
+        provides a footprint for text-only projects that have no usable geometry
+        HDF.
+
+        Parameters:
+            geom_file: Path to the plain-text HEC-RAS geometry file (``.g##``).
+            crs: Optional CRS assigned to the returned GeoDataFrame. When omitted,
+                ``ras_object.project_crs`` is used if available.
+            dissolve: Return one combined footprint row when True; otherwise
+                return one row per river/reach.
+            ras_object: Optional RasPrj instance used only for CRS context.
+
+        Returns:
+            gpd.GeoDataFrame: Columns ``River``, ``Reach``, ``source``, and
+                ``geometry``. Reaches with fewer than two usable cross sections
+                are omitted.
+        """
+        try:
+            import geopandas as gpd
+            from shapely.geometry import LineString, Polygon
+            from shapely.ops import unary_union
+        except ImportError:
+            raise ImportError(
+                "geopandas and shapely are required for get_1d_footprint(). "
+                "Install with: pip install geopandas shapely"
+            )
+
+        if crs is None and ras_object is not None:
+            crs = getattr(ras_object, "project_crs", None)
+
+        cut_lines = GeomParser.get_xs_cut_lines(
+            geom_file,
+            ras_object=ras_object,
+        )
+        empty = gpd.GeoDataFrame(
+            columns=["River", "Reach", "source", "geometry"],
+            geometry="geometry",
+            crs=crs,
+        )
+        if cut_lines is None or cut_lines.empty:
+            logger.warning("No cross-section cut lines found; returning empty footprint")
+            return empty
+
+        rows = []
+        for (river, reach), group in cut_lines.groupby(
+            ["river", "reach"],
+            sort=False,
+        ):
+            lines = [
+                geometry
+                for geometry in group.geometry
+                if isinstance(geometry, LineString)
+                and not geometry.is_empty
+                and len(geometry.coords) >= 2
+            ]
+            if len(lines) < 2:
+                logger.debug(
+                    f"Skipping {river}/{reach}: at least two cut lines are required"
+                )
+                continue
+
+            left_points = []
+            right_points = []
+            for line in lines:
+                coordinates = list(line.coords)
+                left = tuple(coordinates[0][:2])
+                right = tuple(coordinates[-1][:2])
+                if not left_points or left != left_points[-1]:
+                    left_points.append(left)
+                if not right_points or right != right_points[-1]:
+                    right_points.append(right)
+
+            if len(left_points) < 2 or len(right_points) < 2:
+                logger.debug(
+                    f"Skipping {river}/{reach}: cross-section endpoints do not form edges"
+                )
+                continue
+
+            downstream_interior = [
+                tuple(point[:2]) for point in list(lines[-1].coords)[1:-1]
+            ]
+            upstream_interior = [
+                tuple(point[:2])
+                for point in reversed(list(lines[0].coords)[1:-1])
+            ]
+            ring = (
+                left_points
+                + downstream_interior
+                + list(reversed(right_points))
+                + upstream_interior
+            )
+            polygon = Polygon(ring)
+            if not polygon.is_valid:
+                polygon = polygon.buffer(0)
+            if polygon.is_empty or polygon.area <= 0:
+                logger.debug(f"Skipping {river}/{reach}: endpoint ring is degenerate")
+                continue
+
+            rows.append({
+                "River": river,
+                "Reach": reach,
+                "source": "text_xs_endpoints",
+                "geometry": polygon,
+            })
+
+        if not rows:
+            logger.warning("Could not build any 1D footprints from text geometry")
+            return empty
+
+        footprints = gpd.GeoDataFrame(rows, geometry="geometry", crs=crs)
+        if not dissolve:
+            return footprints
+
+        combined = unary_union(footprints.geometry.tolist())
+        return gpd.GeoDataFrame(
+            {"source": ["text_xs_endpoints"]},
+            geometry=[combined],
+            crs=crs,
         )
 
     @staticmethod

@@ -34,22 +34,22 @@ and logging.
 """
 
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
-import geopandas as gpd
-from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
-from typing import List, Optional  # Import List to avoid NameError
-from ..Decorators import standardize_input, log_call
+from shapely.geometry import LineString, MultiLineString, Polygon
+
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
-from ..LoggingConfig import get_logger
-import logging
-
-
 
 logger = get_logger(__name__)
+
 
 class HdfXsec:
     """
@@ -68,6 +68,298 @@ class HdfXsec:
         Requires HEC-RAS geometry HDF files with standard structure and naming conventions.
         All methods use proper error handling and logging.
     """
+    @staticmethod
+    def _resolve_projection(hdf_path: Path, ras_object=None) -> Optional[str]:
+        """Resolve geometry CRS, using initialized project context as fallback."""
+        projection = HdfBase.get_projection(hdf_path)
+        if projection is None and ras_object is not None:
+            projection = getattr(ras_object, 'project_crs', None)
+        return projection
+
+    @staticmethod
+    def _cross_section_group(hdf: h5py.File) -> h5py.Group:
+        """Return the cross-section group or fail with a schema-specific error."""
+        path = '/Geometry/Cross Sections'
+        if path not in hdf or not isinstance(hdf[path], h5py.Group):
+            raise ValueError(f"Missing cross-section group: {path}")
+        return hdf[path]
+
+    @staticmethod
+    def _dataset(group: h5py.Group, name: str, *, columns: int = 0) -> np.ndarray:
+        """Read one required cross-section dataset and validate its shape."""
+        if name not in group or not isinstance(group[name], h5py.Dataset):
+            raise ValueError(f"Missing cross-section dataset: {group.name}/{name}")
+        values = group[name][()]
+        if values.ndim == 0:
+            raise ValueError(f"Cross-section dataset is scalar: {group.name}/{name}")
+        if columns and (values.ndim != 2 or values.shape[1] < columns):
+            raise ValueError(
+                f"Cross-section dataset {group.name}/{name} must have at least "
+                f"{columns} columns; found shape {values.shape}"
+            )
+        return values
+
+    @staticmethod
+    def _get_cross_section_count(hdf: h5py.File) -> int:
+        """Return the XS row count for compound or legacy separated schemas.
+
+        HEC-RAS 5.x geometry HDF files store cross-section identity and
+        hydraulic attributes in separate datasets instead of the compound
+        ``Attributes`` dataset used by newer releases.  A legacy schema is
+        recognized only when its three independent row anchors are present.
+        All feature-row datasets that are present must agree on row count.
+        """
+        path = '/Geometry/Cross Sections'
+        if path not in hdf:
+            return 0
+        group = HdfXsec._cross_section_group(hdf)
+
+        if 'Attributes' in group:
+            attributes = group['Attributes']
+            if not isinstance(attributes, h5py.Dataset) or len(attributes.shape) != 1:
+                raise ValueError(
+                    f"Cross-section Attributes must be a one-dimensional dataset; "
+                    f"found {getattr(attributes, 'shape', None)}"
+                )
+            row_count = int(attributes.shape[0])
+        else:
+            legacy_anchors = ('Node Names', 'River Stations', 'Polyline Info')
+            present = [name for name in legacy_anchors if name in group]
+            if not present:
+                return 0
+            if len(present) != len(legacy_anchors):
+                missing = sorted(set(legacy_anchors) - set(present))
+                raise ValueError(
+                    "Incomplete legacy cross-section schema; missing row anchors: "
+                    + ', '.join(missing)
+                )
+            row_count = int(group['Polyline Info'].shape[0])
+
+        row_datasets = (
+            'Polyline Info',
+            'Station Elevation Info',
+            "Manning's n Info",
+            "Station Manning's n Info",
+            'Ineffective Info',
+            'Blocked Ineffective Info',
+            'River Names',
+            'Reach Names',
+            'River Stations',
+            'Node Names',
+            'Node Descriptions',
+            'Lengths',
+            'Bank Stations',
+            'Contr Expan Coef',
+            'Hydraulic Tables Starting Elevation and Increment Size',
+            'Hydraulic Tables Vertical and Horizontal Slices',
+        )
+        inconsistent = []
+        for name in row_datasets:
+            if name not in group:
+                continue
+            dataset = group[name]
+            if not isinstance(dataset, h5py.Dataset) or not dataset.shape:
+                raise ValueError(f"Unreadable cross-section dataset: {group.name}/{name}")
+            rows = int(dataset.shape[0])
+            if rows != row_count:
+                inconsistent.append(f"{name}={rows}")
+
+        if inconsistent:
+            raise ValueError(
+                f"Cross-section row count mismatch (expected {row_count}): "
+                + ', '.join(inconsistent)
+            )
+        return row_count
+
+    @staticmethod
+    def _info_values_pair(
+        group: h5py.Group,
+        info_names: Tuple[str, ...],
+        value_names: Tuple[str, ...],
+        row_count: int,
+        *,
+        value_columns: int,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Select and validate a matching info/value dataset pair."""
+        info_name = value_name = None
+        for candidate_info, candidate_values in zip(info_names, value_names):
+            if candidate_info in group or candidate_values in group:
+                if candidate_info not in group or candidate_values not in group:
+                    raise ValueError(
+                        "Incomplete cross-section info/value dataset pair: "
+                        f"{candidate_info!r} / {candidate_values!r}"
+                    )
+                info_name, value_name = candidate_info, candidate_values
+                break
+        if info_name is None:
+            raise ValueError(
+                "Missing cross-section info/value dataset pair: "
+                f"{info_names!r} / {value_names!r}"
+            )
+
+        info = HdfXsec._dataset(group, info_name, columns=2)
+        values = HdfXsec._dataset(group, value_name, columns=value_columns)
+        if len(info) != row_count:
+            raise ValueError(
+                f"Cross-section row count mismatch (expected {row_count}): "
+                f"{info_name}={len(info)}"
+            )
+
+        for row_index, (start, count, *_) in enumerate(info):
+            start = int(start)
+            count = int(count)
+            if start < 0 or count < 0 or start + count > len(values):
+                raise ValueError(
+                    f"Invalid {info_name} slice at cross-section row {row_index}: "
+                    f"start={start}, count={count}, values={len(values)}"
+                )
+        return info, values
+
+    @staticmethod
+    def _legacy_cross_section_attributes(
+        group: h5py.Group,
+        row_count: int,
+    ) -> Dict[str, np.ndarray]:
+        """Normalize HEC-RAS 5.x separated XS attributes by public field name."""
+        column_specs = {
+            'River': ('River Names', None),
+            'Reach': ('Reach Names', None),
+            'RS': ('River Stations', None),
+            'Name': ('Node Names', None),
+            'Description': ('Node Descriptions', None),
+            'Len Left': ('Lengths', 0),
+            'Len Channel': ('Lengths', 1),
+            'Len Right': ('Lengths', 2),
+            'Left Bank': ('Bank Stations', 0),
+            'Right Bank': ('Bank Stations', 1),
+            'Contr': ('Contr Expan Coef', 0),
+            'Expan': ('Contr Expan Coef', 1),
+            'HP Start Elev': (
+                'Hydraulic Tables Starting Elevation and Increment Size', 0
+            ),
+            'HP Vert Incr': (
+                'Hydraulic Tables Starting Elevation and Increment Size', 1
+            ),
+            'HP Count': ('Hydraulic Tables Vertical and Horizontal Slices', 0),
+            'HP LOB Slices': ('Hydraulic Tables Vertical and Horizontal Slices', 1),
+            'HP Chan Slices': ('Hydraulic Tables Vertical and Horizontal Slices', 2),
+            'HP ROB Slices': ('Hydraulic Tables Vertical and Horizontal Slices', 3),
+        }
+        attributes = {}
+        for field_name, (dataset_name, column) in column_specs.items():
+            values = HdfXsec._dataset(
+                group,
+                dataset_name,
+                columns=column + 1 if column is not None else 0,
+            )
+            if len(values) != row_count:
+                raise ValueError(
+                    f"Cross-section row count mismatch (expected {row_count}): "
+                    f"{dataset_name}={len(values)}"
+                )
+            column_values = values if column is None else values[:, column]
+            if field_name.startswith('Len '):
+                column_values = np.asarray(column_values, dtype=float).copy()
+                column_values[column_values >= np.finfo(np.float32).max * 0.99] = np.nan
+            attributes[field_name] = column_values
+        return attributes
+
+    @staticmethod
+    def _attribute_columns(
+        group: h5py.Group,
+        row_count: int,
+    ) -> Dict[str, np.ndarray]:
+        """Return normalized attribute columns for either supported XS schema."""
+        if 'Attributes' not in group:
+            return HdfXsec._legacy_cross_section_attributes(group, row_count)
+        attributes = HdfXsec._dataset(group, 'Attributes')
+        if len(attributes) != row_count or not attributes.dtype.names:
+            raise ValueError(
+                "Cross-section Attributes must be a compound dataset with one row "
+                "per cross section"
+            )
+        return {name: attributes[name] for name in attributes.dtype.names}
+
+    @staticmethod
+    def _string_values(values: np.ndarray) -> List[str]:
+        """Decode fixed-width HDF strings without interpreting their contents."""
+        decoded = []
+        for value in values:
+            if isinstance(value, (bytes, np.bytes_)):
+                value = bytes(value).decode('utf-8', errors='replace')
+            decoded.append(str(value).strip())
+        return decoded
+
+    @staticmethod
+    def _polyline_geometries(
+        group: h5py.Group,
+        info_name: str,
+        parts_name: str,
+        points_name: str,
+        *,
+        expected_rows: Optional[int] = None,
+    ) -> List:
+        """Build validated polylines from one HEC-RAS info/parts/points trio."""
+        info = HdfXsec._dataset(group, info_name, columns=4)
+        parts = HdfXsec._dataset(group, parts_name, columns=2)
+        points = HdfXsec._dataset(group, points_name, columns=2)
+        if expected_rows is not None and len(info) != expected_rows:
+            raise ValueError(
+                f"Polyline row count mismatch (expected {expected_rows}): "
+                f"{info_name}={len(info)}"
+            )
+
+        geometries = []
+        for row_index, row in enumerate(info):
+            point_start, point_count, part_start, part_count = (
+                int(value) for value in row[:4]
+            )
+            if min(point_start, point_count, part_start, part_count) < 0:
+                raise ValueError(f"Negative polyline index/count at row {row_index}")
+            if point_count < 2 or point_start + point_count > len(points):
+                raise ValueError(
+                    f"Invalid {points_name} slice at row {row_index}: "
+                    f"start={point_start}, count={point_count}, points={len(points)}"
+                )
+            if part_count == 0 or part_start + part_count > len(parts):
+                raise ValueError(
+                    f"Invalid {parts_name} slice at row {row_index}: "
+                    f"start={part_start}, count={part_count}, parts={len(parts)}"
+                )
+
+            feature_parts = []
+            accounted_points = 0
+            for part in parts[part_start:part_start + part_count]:
+                part_offset, part_points = (int(value) for value in part[:2])
+                if (
+                    part_offset < 0
+                    or part_points < 2
+                    or part_offset + part_points > point_count
+                ):
+                    raise ValueError(
+                        f"Invalid {parts_name} point span at row {row_index}: "
+                        f"offset={part_offset}, count={part_points}"
+                    )
+                start = point_start + part_offset
+                part_coordinates = points[start:start + part_points]
+                if not np.isfinite(part_coordinates).all():
+                    raise ValueError(
+                        f"Polyline part at row {row_index} contains non-finite points"
+                    )
+                feature_parts.append(LineString(part_coordinates))
+                accounted_points += part_points
+            if accounted_points != point_count:
+                raise ValueError(
+                    f"Polyline parts account for {accounted_points} points at row "
+                    f"{row_index}; declared point count is {point_count}"
+                )
+            geometries.append(
+                feature_parts[0]
+                if len(feature_parts) == 1
+                else MultiLineString(feature_parts)
+            )
+        return geometries
+
     @staticmethod
     @log_call
     def get_cross_sections(hdf_path: str, datetime_to_str: bool = True, ras_object=None) -> gpd.GeoDataFrame:
@@ -129,30 +421,50 @@ class HdfXsec:
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
-                # Extract required datasets
-                poly_info = hdf['/Geometry/Cross Sections/Polyline Info'][:]
-                poly_parts = hdf['/Geometry/Cross Sections/Polyline Parts'][:]
-                poly_points = hdf['/Geometry/Cross Sections/Polyline Points'][:]
-                
-                station_info = hdf['/Geometry/Cross Sections/Station Elevation Info'][:]
-                station_values = hdf['/Geometry/Cross Sections/Station Elevation Values'][:]
-                
-                # Get attributes for cross sections
-                xs_attrs = hdf['/Geometry/Cross Sections/Attributes'][:]
-                
-                # Get Manning's n data
-                mann_info = hdf["/Geometry/Cross Sections/Manning's n Info"][:]
-                mann_values = hdf["/Geometry/Cross Sections/Manning's n Values"][:]
-                
-                # Get ineffective blocks data if they exist
-                if '/Geometry/Cross Sections/Ineffective Blocks' in hdf:
-                    ineff_blocks = hdf['/Geometry/Cross Sections/Ineffective Blocks'][:]
-                    ineff_info = hdf['/Geometry/Cross Sections/Ineffective Info'][:]
-                else:
-                    ineff_blocks = None
-                    ineff_info = None
-                
-                # Initialize lists to store data
+                group = HdfXsec._cross_section_group(hdf)
+                row_count = HdfXsec._get_cross_section_count(hdf)
+                if row_count == 0:
+                    return gpd.GeoDataFrame()
+
+                poly_info = HdfXsec._dataset(group, 'Polyline Info', columns=4)
+                poly_parts = HdfXsec._dataset(group, 'Polyline Parts', columns=2)
+                poly_points = HdfXsec._dataset(group, 'Polyline Points', columns=2)
+                if len(poly_info) != row_count:
+                    raise ValueError(
+                        f"Cross-section row count mismatch (expected {row_count}): "
+                        f"Polyline Info={len(poly_info)}"
+                    )
+
+                station_info, station_values = HdfXsec._info_values_pair(
+                    group,
+                    ('Station Elevation Info',),
+                    ('Station Elevation Values',),
+                    row_count,
+                    value_columns=2,
+                )
+                mann_info, mann_values = HdfXsec._info_values_pair(
+                    group,
+                    ("Manning's n Info", "Station Manning's n Info"),
+                    ("Manning's n Values", "Station Manning's n Values"),
+                    row_count,
+                    value_columns=2,
+                )
+                attributes = HdfXsec._attribute_columns(group, row_count)
+
+                modern_ineff = ('Ineffective Info', 'Ineffective Blocks')
+                legacy_ineff = ('Blocked Ineffective Info', 'Blocked Ineffective Values')
+                ineff_info = ineff_values = None
+                for info_name, value_name in (modern_ineff, legacy_ineff):
+                    if info_name in group or value_name in group:
+                        ineff_info, ineff_values = HdfXsec._info_values_pair(
+                            group,
+                            (info_name,),
+                            (value_name,),
+                            row_count,
+                            value_columns=0,
+                        )
+                        break
+
                 geometries = []
                 station_elevations = []
                 mannings_n = []
@@ -160,119 +472,140 @@ class HdfXsec:
                 n_lob_list = []
                 n_channel_list = []
                 n_rob_list = []
-                
-                # Process each cross section
-                for i in range(len(poly_info)):
-                    # Extract polyline info
-                    point_start_idx = poly_info[i][0]
-                    point_count = poly_info[i][1]
-                    part_start_idx = poly_info[i][2]
-                    part_count = poly_info[i][3]
-                    
-                    # Extract parts for current polyline
+
+                for i in range(row_count):
+                    point_start_idx, point_count, part_start_idx, part_count = (
+                        int(value) for value in poly_info[i, :4]
+                    )
+                    if min(point_start_idx, point_count, part_start_idx, part_count) < 0:
+                        raise ValueError(f"Negative polyline index/count at cross-section row {i}")
+                    if point_count < 2 or point_start_idx + point_count > len(poly_points):
+                        raise ValueError(
+                            f"Invalid Polyline Points slice at cross-section row {i}: "
+                            f"start={point_start_idx}, count={point_count}, "
+                            f"points={len(poly_points)}"
+                        )
+                    if part_count == 0 or part_start_idx + part_count > len(poly_parts):
+                        raise ValueError(
+                            f"Invalid Polyline Parts slice at cross-section row {i}: "
+                            f"start={part_start_idx}, count={part_count}, "
+                            f"parts={len(poly_parts)}"
+                        )
+
                     parts = poly_parts[part_start_idx:part_start_idx + part_count]
-                    
-                    # Collect all points for this cross section
                     xs_points = []
+                    accounted_points = 0
                     for part in parts:
-                        part_point_start = point_start_idx + part[0]
-                        part_point_count = part[1]
+                        part_offset, part_point_count = (int(value) for value in part[:2])
+                        if (
+                            part_offset < 0
+                            or part_point_count < 0
+                            or part_offset + part_point_count > point_count
+                            or point_start_idx + part_offset + part_point_count > len(poly_points)
+                        ):
+                            raise ValueError(
+                                f"Invalid Polyline Points slice at cross-section row {i}: "
+                                f"offset={part_offset}, count={part_point_count}"
+                            )
+                        part_point_start = point_start_idx + part_offset
                         points = poly_points[part_point_start:part_point_start + part_point_count]
                         xs_points.extend(points)
-                    
-                    # Create LineString geometry
-                    if len(xs_points) >= 2:
-                        geometry = LineString(xs_points)
-                        geometries.append(geometry)
-                        
-                        # Extract station-elevation data
-                        start_idx = station_info[i][0]
-                        count = station_info[i][1]
-                        station_elev = station_values[start_idx:start_idx + count]
-                        station_elevations.append(station_elev)
-                        
-                        # Extract Manning's n data
-                        mann_start_idx = mann_info[i][0]
-                        mann_count = mann_info[i][1]
-                        mann_n_section = mann_values[mann_start_idx:mann_start_idx + mann_count]
-                        mann_n_dict = {
-                            'Station': mann_n_section[:, 0].tolist(),
-                            'Mann n': mann_n_section[:, 1].tolist()
-                        }
-                        mannings_n.append(mann_n_dict)
+                        accounted_points += part_point_count
+                    if accounted_points != point_count:
+                        raise ValueError(
+                            f"Polyline parts account for {accounted_points} points at "
+                            f"cross-section row {i}; declared point count is {point_count}"
+                        )
+                    if len(xs_points) < 2 or not np.isfinite(np.asarray(xs_points)).all():
+                        raise ValueError(
+                            f"Cross-section row {i} has fewer than two finite polyline points"
+                        )
+                    geometries.append(LineString(xs_points))
 
-                        # Compute LOB/Channel/ROB Manning's n values
-                        # Get bank stations for this XS
-                        left_bank = float(xs_attrs[i]['Left Bank'])
-                        right_bank = float(xs_attrs[i]['Right Bank'])
+                    station_start, station_count = (int(value) for value in station_info[i, :2])
+                    station_elevations.append(
+                        station_values[station_start:station_start + station_count]
+                    )
 
-                        # Map n values to LOB/Channel/ROB based on stations
-                        if mann_count == 0:
-                            n_lob_val = n_channel_val = n_rob_val = np.nan
-                        elif mann_count == 3:
-                            # Simple LOB/Channel/ROB model (most common)
-                            n_lob_val = float(mann_n_section[0, 1])
-                            n_channel_val = float(mann_n_section[1, 1])
-                            n_rob_val = float(mann_n_section[2, 1])
-                        elif mann_count == 2:
-                            # Two regions
-                            sta1, n1 = float(mann_n_section[0, 0]), float(mann_n_section[0, 1])
-                            sta2, n2 = float(mann_n_section[1, 0]), float(mann_n_section[1, 1])
-                            if sta1 < left_bank and sta2 >= left_bank:
-                                n_lob_val, n_channel_val, n_rob_val = n1, n2, n2
-                            else:
-                                n_lob_val, n_channel_val, n_rob_val = n1, n1, n2
-                        elif mann_count >= 4:
-                            # Variable n - map by station regions
-                            n_lob_val = n_channel_val = n_rob_val = None
-                            for j in range(mann_count):
-                                sta, n_val = float(mann_n_section[j, 0]), float(mann_n_section[j, 1])
-                                if sta < left_bank:
-                                    n_lob_val = n_val
-                                elif sta < right_bank:
-                                    if n_channel_val is None:
-                                        n_channel_val = n_val
-                                else:
-                                    if n_rob_val is None:
-                                        n_rob_val = n_val
-                            # Fill missing
-                            if n_lob_val is None:
-                                n_lob_val = float(mann_n_section[0, 1])
-                            if n_channel_val is None:
-                                n_channel_val = n_lob_val
-                            if n_rob_val is None:
-                                n_rob_val = n_channel_val
+                    mann_start, mann_count = (int(value) for value in mann_info[i, :2])
+                    mann_section = mann_values[mann_start:mann_start + mann_count]
+                    mannings_n.append({
+                        'Station': mann_section[:, 0].tolist(),
+                        'Mann n': mann_section[:, 1].tolist(),
+                    })
+
+                    left_bank = float(attributes['Left Bank'][i])
+                    right_bank = float(attributes['Right Bank'][i])
+                    if mann_count == 0:
+                        n_lob_val = n_channel_val = n_rob_val = np.nan
+                    elif mann_count == 3:
+                        n_lob_val = float(mann_section[0, 1])
+                        n_channel_val = float(mann_section[1, 1])
+                        n_rob_val = float(mann_section[2, 1])
+                    elif mann_count == 2:
+                        sta1, n1 = (float(value) for value in mann_section[0, :2])
+                        sta2, n2 = (float(value) for value in mann_section[1, :2])
+                        if sta1 < left_bank and sta2 >= left_bank:
+                            n_lob_val, n_channel_val, n_rob_val = n1, n2, n2
                         else:
-                            # Single value
-                            n_lob_val = n_channel_val = n_rob_val = float(mann_n_section[0, 1])
+                            n_lob_val, n_channel_val, n_rob_val = n1, n1, n2
+                    elif mann_count >= 4:
+                        n_lob_val = n_channel_val = n_rob_val = None
+                        for station, n_value in mann_section[:, :2]:
+                            station, n_value = float(station), float(n_value)
+                            if station < left_bank:
+                                n_lob_val = n_value
+                            elif station < right_bank and n_channel_val is None:
+                                n_channel_val = n_value
+                            elif station >= right_bank and n_rob_val is None:
+                                n_rob_val = n_value
+                        if n_lob_val is None:
+                            n_lob_val = float(mann_section[0, 1])
+                        if n_channel_val is None:
+                            n_channel_val = n_lob_val
+                        if n_rob_val is None:
+                            n_rob_val = n_channel_val
+                    else:
+                        n_lob_val = n_channel_val = n_rob_val = float(mann_section[0, 1])
+                    n_lob_list.append(n_lob_val)
+                    n_channel_list.append(n_channel_val)
+                    n_rob_list.append(n_rob_val)
 
-                        # Append computed Manning's n values
-                        n_lob_list.append(n_lob_val)
-                        n_channel_list.append(n_channel_val)
-                        n_rob_list.append(n_rob_val)
-
-                        # Extract ineffective blocks data
-                        if ineff_info is not None and ineff_blocks is not None:
-                            ineff_start_idx = ineff_info[i][0]
-                            ineff_count = ineff_info[i][1]
-                            if ineff_count > 0:
-                                blocks = ineff_blocks[ineff_start_idx:ineff_start_idx + ineff_count]
-                                blocks_list = []
-                                for block in blocks:
-                                    block_dict = {
-                                        'Left Sta': float(block['Left Sta']),
-                                        'Right Sta': float(block['Right Sta']), 
-                                        'Elevation': float(block['Elevation']),
-                                        'Permanent': bool(block['Permanent'])
-                                    }
-                                    blocks_list.append(block_dict)
-                                ineffective_blocks.append(blocks_list)
+                    blocks_list = []
+                    if ineff_info is not None and ineff_values is not None:
+                        ineff_start, ineff_count = (
+                            int(value) for value in ineff_info[i, :2]
+                        )
+                        blocks = ineff_values[ineff_start:ineff_start + ineff_count]
+                        for block in blocks:
+                            if blocks.dtype.names:
+                                required = {'Left Sta', 'Right Sta', 'Elevation'}
+                                if not required.issubset(blocks.dtype.names):
+                                    raise ValueError(
+                                        "Ineffective Blocks dataset is missing required fields"
+                                    )
+                                permanent = (
+                                    bool(block['Permanent'])
+                                    if 'Permanent' in blocks.dtype.names else False
+                                )
+                                left_sta = block['Left Sta']
+                                right_sta = block['Right Sta']
+                                elevation = block['Elevation']
                             else:
-                                ineffective_blocks.append([])
-                        else:
-                            ineffective_blocks.append([])
-                
-                # Create base dictionary with required fields
+                                if blocks.ndim != 2 or blocks.shape[1] < 3:
+                                    raise ValueError(
+                                        "Blocked Ineffective Values must have at least three columns"
+                                    )
+                                left_sta, right_sta, elevation = block[:3]
+                                permanent = False
+                            blocks_list.append({
+                                'Left Sta': float(left_sta),
+                                'Right Sta': float(right_sta),
+                                'Elevation': float(elevation),
+                                'Permanent': permanent,
+                            })
+                    ineffective_blocks.append(blocks_list)
+
                 data = {
                     'geometry': geometries,
                     'station_elevation': station_elevations,
@@ -283,7 +616,6 @@ class HdfXsec:
                     'ineffective_blocks': ineffective_blocks,
                 }
                 
-                # Define field mappings with default values
                 field_mappings = {
                     'River': ('River', ''),
                     'Reach': ('Reach', ''),
@@ -313,36 +645,26 @@ class HdfXsec:
                     'Default Centerline': ('Default Centerline', 0),
                     'Last Edited': ('Last Edited', '')
                 }
-                
-                # Add fields that exist in xs_attrs
+
                 for field_name, (attr_name, default_value) in field_mappings.items():
-                    if attr_name in xs_attrs.dtype.names:
-                        if xs_attrs[attr_name].dtype.kind == 'S':
-                            # Handle string fields
-                            data[field_name] = [x[attr_name].decode('utf-8').strip() 
-                                              for x in xs_attrs]
+                    if attr_name in attributes:
+                        values = np.asarray(attributes[attr_name])
+                        if values.dtype.kind in {'S', 'U', 'O'}:
+                            data[field_name] = HdfXsec._string_values(values)
                         else:
-                            # Handle numeric fields
-                            data[field_name] = xs_attrs[attr_name]
+                            data[field_name] = values
                     else:
-                        # Use default value if field doesn't exist
                         data[field_name] = [default_value] * len(geometries)
                         logger.debug(f"Field {attr_name} not found in attributes, using default value")
-                
-                if geometries:
-                    gdf = gpd.GeoDataFrame(data)
-                    
-                    # Set CRS if available
-                    if 'Projection' in hdf['/Geometry'].attrs:
-                        proj = hdf['/Geometry'].attrs['Projection']
-                        if isinstance(proj, bytes):
-                            proj = proj.decode('utf-8')
-                        gdf.set_crs(proj, allow_override=True)
-                    
-                    return gdf
-                
-                return gpd.GeoDataFrame()
-                
+
+                projection = HdfXsec._resolve_projection(
+                    Path(hdf_path), ras_object=ras_object
+                )
+                result = gpd.GeoDataFrame(data, crs=projection)
+                if datetime_to_str:
+                    result = HdfUtils.convert_df_datetimes_to_str(result)
+                return result
+
         except Exception as e:
             logger.error(f"Error processing cross-section data: {str(e)}")
             return gpd.GeoDataFrame()
@@ -389,36 +711,78 @@ class HdfXsec:
                     return GeoDataFrame()
 
                 centerline_data = hdf_file["Geometry/River Centerlines"]
-                
-                # Get attributes directly from HDF dataset
-                attrs = centerline_data["Attributes"][()]
-                
-                # Create initial dictionary for DataFrame
-                centerline_dict = {}
-                
-                # Process each attribute field
-                for name in attrs.dtype.names:
-                    values = attrs[name]
-                    if values.dtype.kind == 'S':
-                        # Convert byte strings to regular strings
-                        centerline_dict[name] = [val.decode('utf-8').strip() for val in values]
-                    else:
-                        centerline_dict[name] = values.tolist()  # Convert numpy array to list
-
-                # Get polylines using utility function
-                geoms = HdfBase.get_polylines_from_parts(
-                    hdf_path, 
-                    "Geometry/River Centerlines",
-                    info_name="Polyline Info",
-                    parts_name="Polyline Parts",
-                    points_name="Polyline Points"
+                geoms = HdfXsec._polyline_geometries(
+                    centerline_data,
+                    "Polyline Info",
+                    "Polyline Parts",
+                    "Polyline Points",
                 )
+                row_count = len(geoms)
 
-                # Create GeoDataFrame
+                if "Attributes" in centerline_data:
+                    attrs = HdfXsec._dataset(centerline_data, "Attributes")
+                    if len(attrs) != row_count or not attrs.dtype.names:
+                        raise ValueError(
+                            "River centerline Attributes must be a compound dataset "
+                            "with one row per centerline"
+                        )
+                    centerline_dict = {}
+                    for name in attrs.dtype.names:
+                        values = attrs[name]
+                        centerline_dict[name] = (
+                            HdfXsec._string_values(values)
+                            if values.dtype.kind in {'S', 'U', 'O'}
+                            else values.tolist()
+                        )
+                else:
+                    legacy_names = (
+                        "River Names",
+                        "Reach Names",
+                        "US Junction",
+                        "US SA-2D",
+                        "DS Junction",
+                        "DS SA-2D",
+                    )
+                    legacy_values = {}
+                    for name in legacy_names:
+                        values = HdfXsec._dataset(centerline_data, name)
+                        if values.ndim != 1 or len(values) != row_count:
+                            raise ValueError(
+                                f"River centerline row count mismatch (expected "
+                                f"{row_count}): {name}={len(values)}"
+                            )
+                        legacy_values[name] = HdfXsec._string_values(values)
+
+                    centerline_dict = {
+                        "River Name": legacy_values["River Names"],
+                        "Reach Name": legacy_values["Reach Names"],
+                        "US Type": [],
+                        "US Name": [],
+                        "DS Type": [],
+                        "DS Name": [],
+                    }
+                    for row_index in range(row_count):
+                        for prefix in ("US", "DS"):
+                            junction = legacy_values[f"{prefix} Junction"][row_index]
+                            sa_2d = legacy_values[f"{prefix} SA-2D"][row_index]
+                            if junction and sa_2d:
+                                raise ValueError(
+                                    f"River centerline row {row_index} has both "
+                                    f"{prefix} Junction and {prefix} SA-2D connections"
+                                )
+                            if junction:
+                                connection_type, connection_name = "Junction", junction
+                            elif sa_2d:
+                                connection_type, connection_name = "SA-2D", sa_2d
+                            else:
+                                connection_type, connection_name = "External", ""
+                            centerline_dict[f"{prefix} Type"].append(connection_type)
+                            centerline_dict[f"{prefix} Name"].append(connection_name)
+
                 centerline_gdf = GeoDataFrame(
                     centerline_dict,
                     geometry=geoms,
-                    crs=HdfBase.get_projection(hdf_path)
+                    crs=HdfXsec._resolve_projection(Path(hdf_path)),
                 )
 
                 # Clean up string columns
@@ -432,13 +796,8 @@ class HdfXsec:
                 if not centerline_gdf.empty:
                     centerline_gdf['length'] = centerline_gdf.geometry.length
                     
-                    # Convert datetime columns if requested
                     if datetime_to_str:
-                        datetime_cols = centerline_gdf.select_dtypes(
-                            include=['datetime64']).columns
-                        for col in datetime_cols:
-                            centerline_gdf[col] = centerline_gdf[col].dt.strftime(
-                                '%Y-%m-%d %H:%M:%S')
+                        centerline_gdf = HdfUtils.convert_df_datetimes_to_str(centerline_gdf)
 
                 logger.debug(f"Extracted {len(centerline_gdf)} river centerlines")
                 return centerline_gdf
@@ -581,33 +940,15 @@ class HdfXsec:
             Note: Additional HDF attributes may be included depending on HEC-RAS version.
         """
         try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if "Geometry/River Centerlines" not in hdf_file:
-                    return GeoDataFrame()
-
-                river_data = hdf_file["Geometry/River Centerlines"]
-                v_conv_val = np.vectorize(HdfUtils.convert_ras_string)
-                river_attrs = river_data["Attributes"][()]
-                river_dict = {"river_id": range(river_attrs.shape[0])}
-                river_dict.update(
-                    {name: v_conv_val(river_attrs[name]) for name in river_attrs.dtype.names}
-                )
-                
-                # Get polylines for river reaches
-                geoms = HdfBase.get_polylines_from_parts(
-                    hdf_path, "Geometry/River Centerlines"
-                )
-
-                river_gdf = GeoDataFrame(
-                    river_dict,
-                    geometry=geoms,
-                    crs=HdfBase.get_projection(hdf_path),
-                )
-                if datetime_to_str:
-                    river_gdf["Last Edited"] = river_gdf["Last Edited"].apply(
-                        lambda x: pd.Timestamp.isoformat(x)
-                    )
+            river_gdf = HdfXsec.get_river_centerlines(
+                hdf_path,
+                datetime_to_str=datetime_to_str,
+            )
+            if river_gdf.empty:
                 return river_gdf
+            river_gdf = river_gdf.copy()
+            river_gdf.insert(0, "river_id", range(len(river_gdf)))
+            return river_gdf
         except Exception as e:
             logger.error(f"Error reading river reaches: {str(e)}")
             return GeoDataFrame()
@@ -730,26 +1071,46 @@ class HdfXsec:
                     logger.warning("No river bank lines found in geometry file")
                     return GeoDataFrame()
 
-                # Get polyline geometries using existing helper method
-                geoms = HdfBase.get_polylines_from_parts(
-                    hdf_path, 
-                    "Geometry/River Bank Lines",
-                    info_name="Polyline Info",
-                    parts_name="Polyline Parts",
-                    points_name="Polyline Points"
+                bank_data = hdf_file["Geometry/River Bank Lines"]
+                dataset_trios = (
+                    ("Polyline Info", "Polyline Parts", "Polyline Points"),
+                    ("Bank Lines Info", "Bank Lines Parts", "Bank Lines Points"),
                 )
+                selected = None
+                for trio in dataset_trios:
+                    present = [name in bank_data for name in trio]
+                    if any(present):
+                        if not all(present):
+                            missing = [name for name, exists in zip(trio, present) if not exists]
+                            raise ValueError(
+                                "Incomplete river bank-line polyline datasets; missing: "
+                                + ", ".join(missing)
+                            )
+                        selected = trio
+                        break
+                if selected is None:
+                    raise ValueError("River bank-line group contains no polyline datasets")
+
+                geoms = HdfXsec._polyline_geometries(bank_data, *selected)
+                if len(geoms) % 2:
+                    raise ValueError(
+                        f"River bank lines must occur in left/right pairs; found {len(geoms)}"
+                    )
 
                 # Create basic attributes
                 bank_dict = {
                     "bank_id": range(len(geoms)),
-                    "bank_side": ["Left", "Right"] * (len(geoms) // 2)  # Assuming pairs of left/right banks
+                    "bank_side": [
+                        "Left" if index % 2 == 0 else "Right"
+                        for index in range(len(geoms))
+                    ],
                 }
 
                 # Create GeoDataFrame
                 bank_gdf = GeoDataFrame(
                     bank_dict,
                     geometry=geoms,
-                    crs=HdfBase.get_projection(hdf_path)
+                    crs=HdfXsec._resolve_projection(Path(hdf_path)),
                 )
 
                 # Add length calculation in project units

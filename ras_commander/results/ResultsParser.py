@@ -29,6 +29,16 @@ class ResultsParser:
         ...     print(f"Found {result['error_count']} errors")
     """
 
+    # Exact vendor diagnostics that contain error-like words but are warnings.
+    # Keep these patterns narrow: matching one must never hide a nearby failure.
+    CLASSIFIED_WARNING_PATTERNS = {
+        "hec_ras_edge_line_self_intersection": (
+            r"^The generated edge lines have self intersections,\s*"
+            r"the interpolation surface may not generate correctly because of this\.\s*"
+            r"See the points in the error layer\.$"
+        ),
+    }
+
     # Configurable keyword sets for error/warning detection
     # More specific patterns to avoid false positives from metric names
     ERROR_PATTERNS = [
@@ -91,12 +101,15 @@ class ResultsParser:
                 - error_count (int): Number of lines with error keywords
                 - warning_count (int): Number of lines with warning keywords
                 - first_error_line (str or None): First line containing error (truncated to 200 chars)
+                - diagnostics (list[dict]): Exact, reason-coded vendor diagnostics
+                  classified separately from generic warning and error keywords
 
         Example:
             >>> result = ResultsParser.parse_compute_messages("Complete Process\\nWarning: High velocity")
             >>> result
             {'completed': True, 'has_errors': False, 'has_warnings': True,
-             'error_count': 0, 'warning_count': 1, 'first_error_line': None}
+             'error_count': 0, 'warning_count': 1, 'first_error_line': None,
+             'diagnostics': []}
         """
         if not messages:
             return {
@@ -105,7 +118,8 @@ class ResultsParser:
                 'has_warnings': False,
                 'error_count': 0,
                 'warning_count': 0,
-                'first_error_line': None
+                'first_error_line': None,
+                'diagnostics': [],
             }
 
         # Check for completion
@@ -118,10 +132,15 @@ class ResultsParser:
         error_count = 0
         warning_count = 0
         first_error_line = None
+        diagnostics = []
 
         # Compile error patterns
         error_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in ResultsParser.ERROR_PATTERNS]
         exclusion_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in ResultsParser.ERROR_EXCLUSIONS]
+        classified_warning_patterns = {
+            reason_code: re.compile(pattern, re.IGNORECASE)
+            for reason_code, pattern in ResultsParser.CLASSIFIED_WARNING_PATTERNS.items()
+        }
 
         # Build regex pattern for warnings
         warning_pattern = re.compile(
@@ -132,6 +151,23 @@ class ResultsParser:
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
+                continue
+
+            classified_warning_code = next(
+                (
+                    reason_code
+                    for reason_code, pattern in classified_warning_patterns.items()
+                    if pattern.fullmatch(line_stripped)
+                ),
+                None,
+            )
+            if classified_warning_code is not None:
+                warning_count += 1
+                diagnostics.append({
+                    'reason_code': classified_warning_code,
+                    'severity': 'warning',
+                    'message': line_stripped,
+                })
                 continue
 
             # Check for errors with exclusion filtering
@@ -160,7 +196,8 @@ class ResultsParser:
             'has_warnings': warning_count > 0,
             'error_count': error_count,
             'warning_count': warning_count,
-            'first_error_line': first_error_line
+            'first_error_line': first_error_line,
+            'diagnostics': diagnostics,
         }
 
     @staticmethod

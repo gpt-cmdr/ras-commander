@@ -82,6 +82,67 @@ class HdfInfiltration:
     ]
 
     @staticmethod
+    def _resolve_infiltration_hdf_path(
+        hdf_path: Optional[Union[str, Path]],
+        ras_object: Any = None,
+    ) -> Path:
+        """Resolve an explicit path or the first usable ``rasmap_df`` path."""
+        if hdf_path is not None:
+            return Path(hdf_path)
+
+        if ras_object is None:
+            from ..RasPrj import ras
+
+            ras_object = ras
+
+        rasmap_df = getattr(ras_object, "rasmap_df", None)
+        if rasmap_df is None or rasmap_df.empty:
+            raise ValueError(
+                "No infiltration HDF path was provided and rasmap_df has no "
+                "summary row. Pass hdf_path explicitly or initialize a project "
+                "with a usable RASMapper infiltration layer."
+            )
+
+        summary = rasmap_df.iloc[0]
+        status = summary.get("rasmap_status")
+        rasmap_path = summary.get("rasmap_path")
+        context = f"rasmap_status={status!r}"
+        if rasmap_path:
+            context += f", rasmap_path={rasmap_path!r}"
+
+        if status in {"absent", "failed"}:
+            detail = summary.get("rasmap_error")
+            if detail:
+                context += f", rasmap_error={detail!r}"
+            raise ValueError(
+                "Cannot resolve infiltration_hdf_path from rasmap_df "
+                f"({context}). Pass hdf_path explicitly or correct the "
+                "RASMapper configuration."
+            )
+
+        candidates = summary.get("infiltration_hdf_path")
+        if isinstance(candidates, (list, tuple, np.ndarray)) and len(candidates):
+            candidate = candidates[0]
+            if candidate not in (None, ""):
+                return Path(candidate)
+        elif isinstance(candidates, (str, Path)) and str(candidates):
+            return Path(candidates)
+
+        field_errors = summary.get("rasmap_field_errors", {})
+        if isinstance(field_errors, dict) and "infiltration_hdf_path" in field_errors:
+            raise ValueError(
+                "Cannot resolve infiltration_hdf_path because that RASMapper "
+                f"field failed to parse ({context}): "
+                f"{field_errors['infiltration_hdf_path']}"
+            )
+
+        raise ValueError(
+            "No infiltration layer is configured in rasmap_df "
+            f"({context}). Pass hdf_path explicitly or add an infiltration "
+            "layer in RASMapper."
+        )
+
+    @staticmethod
     def _is_nodata_value(value: Any, no_data: Any) -> bool:
         """Return True when a categorical raster value should be ignored."""
         if value is None:
@@ -1791,12 +1852,15 @@ class HdfInfiltration:
             
         Returns:
             Dictionary mapping raster values to mukeys
+
+        Raises:
+            ValueError: If ``hdf_path`` is omitted and no usable infiltration
+                layer can be resolved from ``rasmap_df``.
         """
-        if hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
+        hdf_path = HdfInfiltration._resolve_infiltration_hdf_path(
+            hdf_path,
+            ras_object,
+        )
             
         with h5py.File(hdf_path, 'r') as hdf:
             raster_map_data = hdf['Raster Map'][:]
@@ -1911,7 +1975,7 @@ class HdfInfiltration:
 
     @staticmethod
     @log_call
-    @standardize_input
+    @standardize_input(file_type='geom_hdf')
     def get_infiltration_parameters(hdf_path: Path = None, mukey: str = None, ras_object: Any = None) -> Optional[Dict[str, float]]:
         """Get infiltration parameters for a specific mukey from HDF file
 
@@ -1922,12 +1986,15 @@ class HdfInfiltration:
 
         Returns:
             Optional[Dict[str, float]]: Dictionary of infiltration parameters, or None if mukey not found
+
+        Raises:
+            ValueError: If ``hdf_path`` is omitted and no usable infiltration
+                layer can be resolved from ``rasmap_df``.
         """
-        if hdf_path is None:
-            if ras_object is None:
-                from ..RasPrj import ras
-                ras_object = ras
-            hdf_path = Path(ras_object.rasmap_df.iloc[0]['infiltration_hdf_path'][0])
+        hdf_path = HdfInfiltration._resolve_infiltration_hdf_path(
+            hdf_path,
+            ras_object,
+        )
             
         with h5py.File(hdf_path, 'r') as hdf:
             if 'Infiltration Parameters' not in hdf:

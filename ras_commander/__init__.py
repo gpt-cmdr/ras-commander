@@ -34,6 +34,7 @@ from .sources.county import M3Model
 from .RasCmdr import RasCmdr
 from .RasCurrency import RasCurrency
 from .RasControl import RasControl
+from .RasTcu import RasTcu, TcuStatus
 from .ComputeResults import (
     ComputeResult,
     ComputeParallelResult,
@@ -45,7 +46,39 @@ from .ComputeResults import (
 )
 from .RasPreprocess import RasPreprocess
 from .RasMap import RasMap
-from .RasDialogWatchdog import DialogWatchdog, DismissedDialog
+from .remote.RasPortableDocker import (
+    PortableDockerExecutionResult,
+    PortableDockerPoolResult,
+    RasPortableDocker,
+)
+from .RasSlurm import (
+    RasSlurm,
+    SlurmCollection,
+    SlurmSiteConfig,
+    SlurmStatus,
+    SlurmSubmission,
+    SlurmTaskAccounting,
+    SlurmTransportConfig,
+)
+from .RasDialogWatchdog import BlockedDialog, DialogWatchdog, DismissedDialog
+from .RasAcceptanceState import (
+    AcceptanceDiagnosticReceipt,
+    AcceptanceProbeResult,
+    AcceptanceProvisionReceipt,
+    AcceptanceStateBundle,
+    AuthorizedLegacyUiTransferReceipt,
+    LegacyTcuContractEvidence,
+    LegacyUiTransferSourceCapture,
+    RasAcceptanceState,
+    RasExecutableIdentity,
+    RegistryValueSnapshot,
+    UserDrivenAcceptanceReceipt,
+)
+from .WinePrefixFingerprint import (
+    WinePrefixFingerprint,
+    WinePrefixFingerprintError,
+    fingerprint_wine_prefix,
+)
 from .RasEncroachments import RasEncroachments
 from .RasMapValidation import RasMapValidation
 from .RasProcess import RasProcess, ProjectionInfo
@@ -72,6 +105,17 @@ from .RasCalibrate import (
     make_xsec_mannings_apply_fn,
 )
 from .RasFlowOptimization import RasFlowOptimization
+from .RasQualification import (
+    ExecutorProfile,
+    NumericTolerance,
+    RasterTolerance,
+    RasQualification,
+)
+from .RasQualificationRunner import (
+    QualificationActionSpec,
+    QualificationRunConfig,
+    RasQualificationRunner,
+)
 
 # Validation framework - core validation infrastructure
 from .RasValidation import ValidationSeverity, ValidationResult, ValidationReport
@@ -114,7 +158,9 @@ _REMOTE_EXPORTS = {
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
-    'ExecutionResult', 'get_worker_status'
+    'ExecutionResult', 'get_worker_status',
+    'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
+    'execute_request', 'validate_steady_results', 'validate_execution_receipt',
 }
 
 # DSS operations - lazy loaded to avoid importing pyjnius/Java until needed
@@ -184,8 +230,10 @@ __all__ = [
     'GeometryLayerResult', 'GeometryCompleteResult',
     'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'M3Model', 'RasCmdr', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasFloodway', 'RasFlowOptimization', 'RasModPuls', 'RasPermutation', 'RangeSpec', 'RasMonteCarlo',
+    'RasQualification', 'ExecutorProfile', 'NumericTolerance', 'RasterTolerance',
+    'RasQualificationRunner', 'QualificationRunConfig', 'QualificationActionSpec',
     'CalibrationPoint', 'RasCalibrate',
     'compute_objective', 'extract_modeled',
     'extract_steady_profile_modeled', 'extract_steady_profile_observations',
@@ -210,6 +258,12 @@ __all__ = [
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status',
+    'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
+    'execute_request', 'validate_steady_results', 'validate_execution_receipt',
+    'RasPortableDocker', 'PortableDockerExecutionResult',
+    'PortableDockerPoolResult',
+    'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
+    'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',
 
     # DSS operations (lazy loaded)
     'RasDss',
@@ -246,7 +300,16 @@ __all__ = [
     'HdfPlot', 'HdfResultsPlot',
 
     # Dialog watchdog (headless execution)
-    'DialogWatchdog', 'DismissedDialog',
+    'DialogWatchdog', 'DismissedDialog', 'BlockedDialog',
+
+    # User-authorized HEC-RAS acceptance-state qualification
+    'RasAcceptanceState', 'RasExecutableIdentity', 'RegistryValueSnapshot',
+    'AcceptanceProbeResult', 'AcceptanceStateBundle',
+    'AcceptanceDiagnosticReceipt', 'AcceptanceProvisionReceipt',
+    'UserDrivenAcceptanceReceipt', 'AuthorizedLegacyUiTransferReceipt',
+    'LegacyTcuContractEvidence', 'LegacyUiTransferSourceCapture',
+    'WinePrefixFingerprint', 'WinePrefixFingerprintError',
+    'fingerprint_wine_prefix',
 
     # Utilities
     'get_logger', 'log_call', 'standardize_input',

@@ -288,22 +288,21 @@ class LandClassificationProjectPaths:
     projection_path: Optional[Path]
 
 
-def empty_rasmap_dataframe() -> pd.DataFrame:
+def empty_rasmap_dataframe(
+    *,
+    rasmap_path: Optional[Union[str, Path]] = None,
+    rasmap_status: str = "absent",
+    rasmap_error: Optional[str] = None,
+    rasmap_field_errors: Optional[dict[str, str]] = None,
+) -> pd.DataFrame:
     """Return the default single-row RasMap dataframe shape."""
-    return pd.DataFrame(
-        {
-            "projection_path": [None],
-            "profile_lines_path": [[]],
-            "soil_layer_path": [[]],
-            "infiltration_hdf_path": [[]],
-            "landcover_hdf_path": [[]],
-            "terrain_hdf_path": [[]],
-            "reference_map_layer_names": [[]],
-            "reference_map_layer_path": [[]],
-            "basemap_layer_names": [[]],
-            "basemap_layer_path": [[]],
-            "current_settings": [{}],
-        }
+    from ._rasmap_schema import create_rasmap_dataframe
+
+    return create_rasmap_dataframe(
+        rasmap_path=rasmap_path,
+        rasmap_status=rasmap_status,
+        rasmap_error=rasmap_error,
+        rasmap_field_errors=rasmap_field_errors,
     )
 
 

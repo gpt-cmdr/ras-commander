@@ -274,38 +274,73 @@ class RasMap:
         
         Args:
             rasmap_path (Union[str, Path]): Path to the .rasmap file.
-            ras_object: Optional RAS object instance.
+            ras_object: Optional RAS object instance. Retained for API
+                compatibility; parsing no longer requires project state.
             
         Returns:
-            pd.DataFrame: DataFrame containing extracted information from the .rasmap file.
+            pd.DataFrame: A single-row DataFrame containing extracted information
+                and parse provenance. ``rasmap_status`` is ``absent``, ``parsed``,
+                ``parsed_with_errors``, or ``failed``.
         """
         rasmap_path = Path(rasmap_path)
+        from ._rasmap_schema import create_rasmap_dataframe
         from . import _land_classification_helper as _lch
 
-        if not rasmap_path.exists():
-            logger.error(f"RASMapper file not found: {rasmap_path}")
-            return _lch.empty_rasmap_dataframe()
-        
         try:
-            data = _lch.empty_rasmap_dataframe().to_dict(orient="list")
-            
-            # Read the file content
-            with open(rasmap_path, 'r', encoding='utf-8') as f:
-                xml_content = f.read()
-            
-            # Check if it's a valid XML file
-            if not xml_content.strip().startswith('<'):
-                logger.error(f"File does not appear to be valid XML: {rasmap_path}")
-                return pd.DataFrame(data)
-            
-            # Parse the XML file
+            if not rasmap_path.exists():
+                logger.error(f"RASMapper file not found: {rasmap_path}")
+                return create_rasmap_dataframe(
+                    rasmap_path=rasmap_path,
+                    rasmap_status="absent",
+                )
+
+            xml_content = rasmap_path.read_bytes()
             try:
-                tree = ET.parse(rasmap_path)
-                root = tree.getroot()
+                root = ET.fromstring(xml_content)
             except ET.ParseError as e:
                 logger.error(f"Error parsing XML in {rasmap_path}: {e}")
-                return _lch.empty_rasmap_dataframe()
-            
+                return create_rasmap_dataframe(
+                    rasmap_path=rasmap_path,
+                    rasmap_status="failed",
+                    rasmap_error=f"ParseError: {e}",
+                )
+
+            root_name = root.tag.rsplit("}", 1)[-1]
+            if root_name != "RASMapper":
+                message = (
+                    "ValueError: Expected RASMapper root element, "
+                    f"found {root.tag!r}"
+                )
+                logger.error("Invalid RASMapper document %s: %s", rasmap_path, message)
+                return create_rasmap_dataframe(
+                    rasmap_path=rasmap_path,
+                    rasmap_status="failed",
+                    rasmap_error=message,
+                )
+
+            from . import _rasmap_layer_helper as _mlh
+
+            map_layers = root.find("MapLayers")
+            data = create_rasmap_dataframe(
+                rasmap_path=rasmap_path,
+                rasmap_status="parsed",
+            ).to_dict(orient="list")
+            field_errors: Dict[str, str] = {}
+
+            def record_field_error(
+                columns: Union[str, List[str]],
+                description: str,
+                exc: Exception,
+            ) -> None:
+                affected_columns = [columns] if isinstance(columns, str) else columns
+                message = f"{type(exc).__name__}: {exc}"
+                for column in affected_columns:
+                    previous = field_errors.get(column)
+                    field_errors[column] = (
+                        f"{previous}; {message}" if previous else message
+                    )
+                logger.warning(f"Error extracting {description}: {message}")
+
             # Extract projection path
             try:
                 projection_elem = root.find(".//RASProjectionFilename")
@@ -318,7 +353,7 @@ class RasMap:
                         str(projection_path) if projection_path is not None else None
                     )
             except Exception as e:
-                logger.warning(f"Error extracting projection path: {e}")
+                record_field_error("projection_path", "projection path", e)
             
             # Extract profile lines path
             try:
@@ -331,14 +366,39 @@ class RasMap:
                     if profile_lines_path is not None:
                         data['profile_lines_path'][0].append(str(profile_lines_path))
             except Exception as e:
-                logger.warning(f"Error extracting profile lines path: {e}")
-            
+                record_field_error("profile_lines_path", "profile lines path", e)
+
+            land_columns = [
+                "soil_layer_path",
+                "infiltration_hdf_path",
+                "landcover_hdf_path",
+            ]
             try:
-                land_layers = RasMap.list_land_classification_layers(
-                    rasmap_path,
-                    ras_object=ras_object,
-                )
-                if not land_layers.empty:
+                land_records = []
+                if map_layers is not None:
+                    for layer in map_layers.findall("Layer"):
+                        if layer.attrib.get("Type") != "LandCoverLayer":
+                            continue
+                        try:
+                            if not layer.attrib.get("Filename", "").strip():
+                                raise ValueError(
+                                    "LandCoverLayer declaration is missing Filename"
+                                )
+                            land_records.append(
+                                _lch.build_land_classification_record(
+                                    layer,
+                                    rasmap_path.parent,
+                                )
+                            )
+                        except Exception as e:
+                            record_field_error(
+                                land_columns,
+                                "land-classification layer declaration",
+                                e,
+                            )
+
+                if land_records:
+                    land_layers = pd.DataFrame(land_records)
                     for kind, target_column in (
                         ("soils", "soil_layer_path"),
                         ("infiltration", "infiltration_hdf_path"),
@@ -353,53 +413,118 @@ class RasMap:
                         ]
                         data[target_column][0] = paths
             except Exception as e:
-                logger.warning(f"Error extracting land-classification layer paths: {e}")
+                record_field_error(
+                    land_columns,
+                    "land-classification layer paths",
+                    e,
+                )
             
             # Extract terrain HDF paths
             try:
                 terrain_layers = root.findall(".//Terrains/Layer")
+                terrain_paths = []
                 for layer in terrain_layers:
-                    if 'Filename' in layer.attrib:
+                    try:
+                        filename = layer.attrib.get("Filename", "")
+                        if not filename.strip():
+                            raise ValueError(
+                                "Terrain layer declaration is missing Filename"
+                            )
                         terrain_path = _lch.resolve_rasmap_relative_path(
                             rasmap_path.parent,
-                            layer.attrib['Filename'],
+                            filename,
                         )
                         if terrain_path is not None:
-                            data['terrain_hdf_path'][0].append(str(terrain_path))
+                            terrain_paths.append(str(terrain_path))
+                    except Exception as e:
+                        record_field_error(
+                            "terrain_hdf_path",
+                            "terrain layer declaration",
+                            e,
+                        )
+                data['terrain_hdf_path'][0] = terrain_paths
             except Exception as e:
-                logger.warning(f"Error extracting terrain HDF paths: {e}")
+                record_field_error("terrain_hdf_path", "terrain HDF paths", e)
 
             try:
-                reference_layers = RasMap.list_reference_map_layers(
-                    rasmap_path,
-                    ras_object=ras_object,
-                )
-                if not reference_layers.empty:
-                    data["reference_map_layer_names"][0] = (
-                        reference_layers["name"].dropna().tolist()
-                    )
-                    data["reference_map_layer_path"][0] = [
-                        str(path)
-                        for path in reference_layers["resolved_path"].dropna().tolist()
-                    ]
+                reference_names = []
+                reference_paths = []
+                if map_layers is not None:
+                    for layer in map_layers.findall("Layer"):
+                        if layer.attrib.get("Type") not in _mlh.REFERENCE_MAP_LAYER_TYPES:
+                            continue
+                        reference_names.append(layer.attrib.get("Name", ""))
+                        filename = layer.attrib.get("Filename", "")
+                        if not filename.strip():
+                            record_field_error(
+                                "reference_map_layer_path",
+                                "reference map layer declaration",
+                                ValueError(
+                                    "Reference map layer declaration is missing Filename"
+                                ),
+                            )
+                            continue
+                        try:
+                            resolved_path = _lch.resolve_rasmap_relative_path(
+                                rasmap_path.parent,
+                                filename,
+                            )
+                            if resolved_path is not None:
+                                reference_paths.append(str(resolved_path))
+                        except Exception as e:
+                            record_field_error(
+                                "reference_map_layer_path",
+                                "reference map layer declaration",
+                                e,
+                            )
+                data["reference_map_layer_names"][0] = reference_names
+                data["reference_map_layer_path"][0] = reference_paths
             except Exception as e:
-                logger.warning(f"Error extracting reference map layers: {e}")
+                record_field_error(
+                    ["reference_map_layer_names", "reference_map_layer_path"],
+                    "reference map layers",
+                    e,
+                )
 
             try:
-                basemap_layers = RasMap.list_basemap_layers(
-                    rasmap_path,
-                    ras_object=ras_object,
-                )
-                if not basemap_layers.empty:
-                    data["basemap_layer_names"][0] = (
-                        basemap_layers["name"].dropna().tolist()
-                    )
-                    data["basemap_layer_path"][0] = [
-                        str(path)
-                        for path in basemap_layers["resolved_path"].dropna().tolist()
-                    ]
+                basemap_names = []
+                basemap_paths = []
+                if map_layers is not None:
+                    for layer in map_layers.findall("Layer"):
+                        if layer.attrib.get("Type") != _mlh.BASEMAP_LAYER_TYPE:
+                            continue
+                        basemap_names.append(layer.attrib.get("Name", ""))
+                        filename = layer.attrib.get("Filename", "")
+                        if not filename.strip():
+                            record_field_error(
+                                "basemap_layer_path",
+                                "basemap layer declaration",
+                                ValueError(
+                                    "Basemap layer declaration is missing Filename"
+                                ),
+                            )
+                            continue
+                        try:
+                            resolved_path = _lch.resolve_rasmap_relative_path(
+                                rasmap_path.parent,
+                                filename,
+                            )
+                            if resolved_path is not None:
+                                basemap_paths.append(str(resolved_path))
+                        except Exception as e:
+                            record_field_error(
+                                "basemap_layer_path",
+                                "basemap layer declaration",
+                                e,
+                            )
+                data["basemap_layer_names"][0] = basemap_names
+                data["basemap_layer_path"][0] = basemap_paths
             except Exception as e:
-                logger.warning(f"Error extracting basemap layers: {e}")
+                record_field_error(
+                    ["basemap_layer_names", "basemap_layer_path"],
+                    "basemap layers",
+                    e,
+                )
             
             # Extract current settings
             current_settings = {}
@@ -420,16 +545,29 @@ class RasMap:
                             
                 data['current_settings'][0] = current_settings
             except Exception as e:
-                logger.warning(f"Error extracting current settings: {e}")
+                record_field_error("current_settings", "current settings", e)
             
-            # Create DataFrame
+            data["rasmap_field_errors"][0] = field_errors
+            if field_errors:
+                data["rasmap_status"][0] = "parsed_with_errors"
+                logger.warning(
+                    "Parsed RASMapper file with %d field error(s): %s",
+                    len(field_errors),
+                    rasmap_path,
+                )
+            else:
+                logger.info(f"Successfully parsed RASMapper file: {rasmap_path}")
+
             df = pd.DataFrame(data)
-            logger.info(f"Successfully parsed RASMapper file: {rasmap_path}")
             return df
             
         except Exception as e:
             logger.error(f"Unexpected error processing RASMapper file {rasmap_path}: {e}")
-            return _lch.empty_rasmap_dataframe()
+            return create_rasmap_dataframe(
+                rasmap_path=rasmap_path,
+                rasmap_status="failed",
+                rasmap_error=f"{type(e).__name__}: {e}",
+            )
 
     @staticmethod
     @log_call
@@ -988,12 +1126,17 @@ class RasMap:
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
-        from . import _land_classification_helper as _lch
         
         rasmap_path = RasMap.get_rasmap_path(ras_obj)
         if rasmap_path is None:
+            from ._rasmap_schema import create_rasmap_dataframe
+
+            expected_path = ras_obj.project_folder / f"{ras_obj.project_name}.rasmap"
             logger.warning("No .rasmap file found for this project. Creating empty rasmap_df.")
-            return _lch.empty_rasmap_dataframe()
+            return create_rasmap_dataframe(
+                rasmap_path=expected_path,
+                rasmap_status="absent",
+            )
         
         return RasMap.parse_rasmap(rasmap_path, ras_obj)
 

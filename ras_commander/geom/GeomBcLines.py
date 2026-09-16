@@ -188,6 +188,99 @@ class GeomBcLines:
 
     @staticmethod
     @log_call
+    def get_bc_lines(geom_file: Union[str, Path]) -> List[Dict[str, Any]]:
+        """Read 2D BC line definitions from a geometry text file.
+
+        Returns one dictionary per block with ``name``, ``storage_area``,
+        ``coordinates``, and ``coordinate_count``.  This reader makes the
+        geometry-to-unsteady association contract independently verifiable
+        before a boundary type is written to the unsteady-flow file.
+        """
+        geom_path = Path(geom_file)
+        if not geom_path.is_file():
+            raise FileNotFoundError(f"Geometry file not found: {geom_path}")
+
+        with open(geom_path, "r", encoding="utf-8", errors="ignore", newline="") as stream:
+            file_lines = stream.readlines()
+
+        results: List[Dict[str, Any]] = []
+        index = 0
+        while index < len(file_lines):
+            line = file_lines[index].rstrip("\r\n")
+            if not line.startswith(_BC_NAME_KEY):
+                index += 1
+                continue
+
+            name = line[len(_BC_NAME_KEY):].strip()
+            storage_area = ""
+            point_count = 0
+            arc_index: Optional[int] = None
+            cursor = index + 1
+            while cursor < len(file_lines):
+                candidate = file_lines[cursor].rstrip("\r\n")
+                if candidate.startswith(_BC_NAME_KEY):
+                    break
+                if candidate.startswith(_BC_STORAGE_AREA_KEY):
+                    storage_area = candidate[len(_BC_STORAGE_AREA_KEY):].strip()
+                elif candidate.startswith("BC Line Arc="):
+                    try:
+                        point_count = int(candidate.split("=", 1)[1].strip())
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Invalid BC Line Arc count for {name!r} in {geom_path.name}"
+                        ) from exc
+                    arc_index = cursor
+                    break
+                cursor += 1
+
+            if arc_index is None or point_count < 2:
+                raise ValueError(
+                    f"BC line {name!r} in {geom_path.name} has no valid coordinate count"
+                )
+
+            coordinates: List[tuple] = []
+            cursor = arc_index + 1
+            while cursor < len(file_lines) and len(coordinates) < point_count:
+                coordinate_line = file_lines[cursor].rstrip("\r\n")
+                if coordinate_line.startswith(_BC_TEXT_POSITION_KEY):
+                    break
+                values: List[float] = []
+                for start in range(0, len(coordinate_line), 16):
+                    field = coordinate_line[start : start + 16].strip()
+                    if not field:
+                        continue
+                    try:
+                        values.append(float(field))
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Invalid coordinate field {field!r} for BC line {name!r}"
+                        ) from exc
+                for value_index in range(0, len(values) - 1, 2):
+                    coordinates.append(
+                        (values[value_index], values[value_index + 1])
+                    )
+                cursor += 1
+
+            coordinates = coordinates[:point_count]
+            if len(coordinates) != point_count:
+                raise ValueError(
+                    f"BC line {name!r} declares {point_count} points but contains "
+                    f"{len(coordinates)} in {geom_path.name}"
+                )
+            results.append(
+                {
+                    "name": name,
+                    "storage_area": storage_area,
+                    "coordinates": coordinates,
+                    "coordinate_count": point_count,
+                }
+            )
+            index = cursor
+
+        return results
+
+    @staticmethod
+    @log_call
     def add_bc_lines(
         geom_file: Union[str, Path],
         lines: List[Dict[str, Any]],

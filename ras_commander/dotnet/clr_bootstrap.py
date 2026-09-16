@@ -12,10 +12,9 @@ from typing import Optional, Union
 
 from ..LoggingConfig import get_logger
 from .._gdal_runtime import configure_rasmapper_gdal_bridge
+from .._rasmapper_runtime import load_rasmapper_assemblies
 
 logger = get_logger(__name__)
-
-_DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
 
 _HECRAS_SEARCH_PATHS = [
     Path(r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1"),
@@ -145,12 +144,7 @@ def load_clr(hecras_dir: Path | None = None) -> None:
     if root_text not in sys.path:
         sys.path.insert(0, root_text)
 
-    for dep in _DEPS:
-        dll = resolved_root / f"{dep}.dll"
-        try:
-            clr.AddReference(str(dll))
-        except Exception as exc:
-            raise RuntimeError(f"Cannot load {dll}: {exc}") from exc
+    load_rasmapper_assemblies(resolved_root, clr.AddReference)
 
     _CLR_LOADED = True
     _CLR_INSTALL_ROOT = resolved_root

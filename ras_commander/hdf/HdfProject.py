@@ -32,8 +32,9 @@ Example Usage:
 """
 
 from pathlib import Path
-from typing import Tuple, Optional, Union, List, TYPE_CHECKING
-import logging
+from typing import TYPE_CHECKING, Optional, Tuple, Union
+
+import h5py
 
 from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
@@ -60,9 +61,8 @@ class HdfProject:
 
     @staticmethod
     @log_call
-    @standardize_input(file_type='geom_hdf')
     def get_project_extent(
-        hdf_path: Path,
+        hdf_path: Optional[Union[str, Path, h5py.File]] = None,
         include_1d: bool = True,
         include_2d: bool = True,
         include_storage: bool = True,
@@ -70,6 +70,8 @@ class HdfProject:
         buffer_x_percent: Optional[float] = None,
         buffer_y_percent: Optional[float] = None,
         geometry_type: str = "footprint",
+        geom_path: Optional[Union[str, Path]] = None,
+        ras_object=None,
     ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
         """
         Calculate the combined project extent from all model elements.
@@ -86,8 +88,10 @@ class HdfProject:
 
         Parameters
         ----------
-        hdf_path : Path
-            Path to HEC-RAS geometry HDF file (.g##.hdf)
+        hdf_path : path-like, optional
+            Path to a HEC-RAS geometry HDF (``.g##.hdf``) or plain-text
+            geometry file (``.g##``). Existing plan-number inputs retain
+            their legacy resolution through ``ras_object``.
         include_1d : bool, default True
             Include 1D river reach footprints (footprint mode) or 1D cross
             sections and river centerlines (bbox mode). Set include_2d=False to
@@ -110,6 +114,12 @@ class HdfProject:
         geometry_type : {'footprint', 'bbox'}, default 'footprint'
             'footprint' returns the true extent polygon; 'bbox' returns the
             legacy buffered bounding box.
+        geom_path : path-like, optional
+            Explicit plain-text geometry path. When omitted, the companion
+            ``.g##`` is inferred from ``hdf_path``. Text geometry is used when
+            the HDF has no usable 1D footprint.
+        ras_object : RasPrj, optional
+            Project context for number/path and CRS resolution.
 
         Returns
         -------
@@ -138,13 +148,27 @@ class HdfProject:
                 f"geometry_type must be 'footprint' or 'bbox', got '{geometry_type}'"
             )
 
+        hdf_path, geom_path, ras_object = HdfProject._resolve_geometry_sources(
+            hdf_path,
+            geom_path=geom_path,
+            ras_object=ras_object,
+        )
+        crs = HdfProject._resolve_extent_crs(
+            hdf_path,
+            geom_path,
+            ras_object=ras_object,
+        )
+
         if geometry_type == "footprint":
             return HdfProject._get_project_footprint(
                 hdf_path,
+                geom_path=geom_path,
+                crs=crs,
                 include_1d=include_1d,
                 include_2d=include_2d,
                 include_storage=include_storage,
                 buffer_percent=buffer_percent,
+                ras_object=ras_object,
             )
 
         # Lazy imports
@@ -153,10 +177,10 @@ class HdfProject:
         from shapely.ops import unary_union
 
         geometries = []
-        crs = None
+        found_hdf_1d = False
 
         # Get 2D flow area perimeters
-        if include_2d:
+        if include_2d and hdf_path is not None:
             try:
                 mesh_areas = HdfMesh.get_mesh_areas(hdf_path)
                 if not mesh_areas.empty:
@@ -168,13 +192,14 @@ class HdfProject:
                 logger.debug(f"No 2D areas found or error: {e}")
 
         # Get 1D cross sections and river centerlines
-        if include_1d:
+        if include_1d and hdf_path is not None:
             try:
                 cross_sections = HdfXsec.get_cross_sections(hdf_path)
                 if not cross_sections.empty:
                     geometries.extend(cross_sections.geometry.tolist())
                     if crs is None:
                         crs = cross_sections.crs
+                    found_hdf_1d = True
                     logger.debug(f"Found {len(cross_sections)} cross sections")
             except Exception as e:
                 logger.debug(f"No cross sections found or error: {e}")
@@ -185,14 +210,22 @@ class HdfProject:
                     geometries.extend(centerlines.geometry.tolist())
                     if crs is None:
                         crs = centerlines.crs
+                    found_hdf_1d = True
                     logger.debug(f"Found {len(centerlines)} river centerlines")
             except Exception as e:
                 logger.debug(f"No river centerlines found or error: {e}")
 
-        # Get CRS from HDF if still None
-        if crs is None:
-            crs = HdfBase.get_projection(hdf_path)
-            logger.debug(f"Got CRS from HDF: {crs}")
+        if include_1d and not found_hdf_1d and geom_path is not None:
+            text_footprint = HdfProject._get_text_1d_footprint(
+                geom_path,
+                crs=crs,
+                ras_object=ras_object,
+            )
+            if not text_footprint.empty:
+                geometries.extend(text_footprint.geometry.tolist())
+                if crs is None:
+                    crs = text_footprint.crs
+                logger.debug("BBox extent: using plain-text 1D footprint fallback")
 
         # Handle empty geometries
         if not geometries:
@@ -243,12 +276,154 @@ class HdfProject:
         return extent_gdf, (buffered_minx, buffered_miny, buffered_maxx, buffered_maxy)
 
     @staticmethod
+    def _resolve_geometry_sources(
+        hdf_path,
+        geom_path=None,
+        ras_object=None,
+    ):
+        """Resolve optional HDF and text geometry sources without requiring HDF."""
+        from numbers import Number
+
+        if isinstance(hdf_path, h5py.File):
+            hdf_path = Path(hdf_path.filename)
+
+        from ..RasPrj import ras as global_ras
+        ras_obj = ras_object or global_ras
+        used_project_resolution = False
+
+        def resolve_project_geometry(value):
+            nonlocal used_project_resolution
+            if not isinstance(value, (str, Number)):
+                return None
+            if isinstance(value, Number):
+                try:
+                    number = int(value)
+                except (TypeError, ValueError, OverflowError):
+                    return None
+            else:
+                raw = str(value).strip().lower()
+                if raw.startswith("p"):
+                    raw = raw[1:]
+                if not raw.isdigit():
+                    return None
+                number = int(raw)
+            if not 1 <= number <= 99:
+                raise ValueError(
+                    f"Plan/geometry number must be between 1 and 99, got {number}"
+                )
+
+            plan_df = getattr(ras_obj, "plan_df", None)
+            if plan_df is None or plan_df.empty or "plan_number" not in plan_df:
+                return None
+            normalized = plan_df["plan_number"].astype(str).str.lstrip("0")
+            matches = plan_df[normalized.replace("", "0").astype(int) == number]
+            if matches.empty:
+                return None
+            used_project_resolution = True
+            row = matches.iloc[0]
+            direct_path = row.get("Geom Path")
+            if direct_path is not None and str(direct_path).strip().lower() not in {
+                "",
+                "<na>",
+                "nan",
+                "none",
+            }:
+                return Path(str(direct_path))
+            geometry_number = row.get("geometry_number")
+            project_folder = getattr(ras_obj, "project_folder", None)
+            project_name = getattr(ras_obj, "project_name", None)
+            if (
+                geometry_number is None
+                or str(geometry_number).strip().lower() in {"", "<na>", "nan", "none"}
+                or project_folder is None
+                or not project_name
+            ):
+                return None
+            return Path(project_folder) / (
+                f"{project_name}.g{str(geometry_number).zfill(2)}"
+            )
+
+        primary = Path(str(hdf_path).strip()) if hdf_path is not None else None
+        if primary is not None and not primary.exists():
+            resolved = resolve_project_geometry(hdf_path)
+            if resolved is not None:
+                primary = resolved
+
+        explicit_text = Path(geom_path) if geom_path is not None else None
+        resolved_hdf = None
+        resolved_text = None
+
+        if primary is not None:
+            if primary.suffix.lower() == ".hdf":
+                if primary.is_file():
+                    resolved_hdf = primary
+                sibling = primary.with_suffix("")
+                if sibling.is_file():
+                    resolved_text = sibling
+            else:
+                if primary.is_file():
+                    resolved_text = primary
+                sibling_hdf = Path(str(primary) + ".hdf")
+                if sibling_hdf.is_file():
+                    resolved_hdf = sibling_hdf
+
+        if explicit_text is not None:
+            if not explicit_text.is_file():
+                raise FileNotFoundError(
+                    f"Plain-text geometry file not found: {explicit_text}"
+                )
+            resolved_text = explicit_text
+            sibling_hdf = Path(str(explicit_text) + ".hdf")
+            if resolved_hdf is None and sibling_hdf.is_file():
+                resolved_hdf = sibling_hdf
+
+        if resolved_hdf is None and resolved_text is None:
+            requested = geom_path if geom_path is not None else hdf_path
+            raise FileNotFoundError(f"Geometry HDF or text file not found: {requested}")
+
+        resolved_ras_object = ras_object
+        if resolved_ras_object is None and used_project_resolution:
+            resolved_ras_object = ras_obj
+        return resolved_hdf, resolved_text, resolved_ras_object
+
+    @staticmethod
+    def _resolve_extent_crs(hdf_path, geom_path, ras_object=None):
+        """Resolve extent CRS from HDF first, then initialized project context."""
+        if hdf_path is not None:
+            try:
+                crs = HdfBase.get_projection(hdf_path)
+                if crs is not None:
+                    return crs
+            except Exception as exc:
+                logger.debug(f"Could not resolve extent CRS from HDF: {exc}")
+        if ras_object is not None:
+            crs = getattr(ras_object, "project_crs", None)
+            if crs is not None:
+                return crs
+        return None
+
+    @staticmethod
+    def _get_text_1d_footprint(geom_path, crs=None, ras_object=None):
+        """Read a 1D footprint from a companion plain-text geometry file."""
+        from ..geom.GeomParser import GeomParser
+
+        return GeomParser.get_1d_footprint(
+            geom_path,
+            crs=crs,
+            dissolve=False,
+            ras_object=ras_object,
+        )
+
+    @staticmethod
     def _get_project_footprint(
-        hdf_path: Path,
+        hdf_path: Optional[Path],
+        geom_path: Optional[Path] = None,
+        crs=None,
         include_1d: bool = True,
         include_2d: bool = True,
         include_storage: bool = True,
         buffer_percent: float = 0.0,
+        ras_object=None,
     ) -> Tuple['GeoDataFrame', Tuple[float, float, float, float]]:
         """
         Build the true model extent as a footprint (multi)polygon.
@@ -263,14 +438,30 @@ class HdfProject:
 
         polygons = []
         fallback_lines = []
-        crs = None
+
+        def usable_polygons(frame):
+            usable = []
+            if frame is None or frame.empty:
+                return usable
+            for geometry in frame.geometry:
+                if geometry is None or geometry.is_empty:
+                    continue
+                if not geometry.is_valid:
+                    geometry = geometry.buffer(0)
+                if (
+                    not geometry.is_empty
+                    and geometry.geom_type in ("Polygon", "MultiPolygon")
+                    and geometry.area > 0
+                ):
+                    usable.append(geometry)
+            return usable
 
         # 2D flow area perimeters (already polygons).
-        if include_2d:
+        if include_2d and hdf_path is not None:
             try:
                 mesh_areas = HdfMesh.get_mesh_areas(hdf_path)
                 if not mesh_areas.empty:
-                    polygons.extend(mesh_areas.geometry.tolist())
+                    polygons.extend(usable_polygons(mesh_areas))
                     if crs is None:
                         crs = mesh_areas.crs
                     logger.debug(f"Footprint: {len(mesh_areas)} 2D flow areas")
@@ -279,18 +470,47 @@ class HdfProject:
 
         # 1D reach footprints (from river edge lines).
         if include_1d:
-            try:
-                footprint_1d = HdfXsec.get_1d_footprint(hdf_path, dissolve=False)
-                if not footprint_1d.empty:
-                    polygons.extend(footprint_1d.geometry.tolist())
-                    if crs is None:
-                        crs = footprint_1d.crs
-                    logger.debug(f"Footprint: {len(footprint_1d)} 1D reach footprints")
-            except Exception as e:
-                logger.debug(f"No 1D footprint or error: {e}")
+            found_hdf_1d = False
+            footprint_1d = None
+            if hdf_path is not None:
+                try:
+                    footprint_1d = HdfXsec.get_1d_footprint(
+                        hdf_path,
+                        dissolve=False,
+                        ras_object=ras_object,
+                    )
+                    hdf_polygons = usable_polygons(footprint_1d)
+                    if hdf_polygons:
+                        polygons.extend(hdf_polygons)
+                        found_hdf_1d = True
+                        if crs is None:
+                            crs = footprint_1d.crs
+                        logger.debug(
+                            f"Footprint: {len(hdf_polygons)} 1D HDF reach footprints"
+                        )
+                except Exception as e:
+                    logger.debug(f"No 1D HDF footprint or error: {e}")
 
-            # Keep 1D line geometry for a convex-hull fallback if no polygons form.
-            if not polygons:
+            if not found_hdf_1d and geom_path is not None:
+                try:
+                    text_footprint = HdfProject._get_text_1d_footprint(
+                        geom_path,
+                        crs=crs,
+                        ras_object=ras_object,
+                    )
+                    text_polygons = usable_polygons(text_footprint)
+                    if text_polygons:
+                        polygons.extend(text_polygons)
+                        if crs is None:
+                            crs = text_footprint.crs
+                        logger.debug(
+                            f"Footprint: {len(text_polygons)} plain-text 1D reach footprints"
+                        )
+                except Exception as e:
+                    logger.debug(f"Plain-text 1D footprint fallback failed: {e}")
+
+            # Keep HDF line geometry for a convex-hull fallback if no polygons form.
+            if not polygons and hdf_path is not None:
                 for getter in (HdfXsec.get_cross_sections, HdfXsec.get_river_centerlines):
                     try:
                         lines = getter(hdf_path)
@@ -300,9 +520,6 @@ class HdfProject:
                                 crs = lines.crs
                     except Exception as e:
                         logger.debug(f"1D line fallback getter failed: {e}")
-
-        if crs is None:
-            crs = HdfBase.get_projection(hdf_path)
 
         # Resolve the core footprint geometry.
         if polygons:

@@ -72,23 +72,20 @@ List of Functions in RasPlan:
 
         
 """
-import os
-import re
 import logging
-from pathlib import Path
+import re
 import shutil
-from typing import Union, Optional, List, Dict, Any, Tuple
+from datetime import datetime
 from numbers import Number
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import pandas as pd
+
+from .Decorators import log_call
+from .LoggingConfig import get_logger
 from .RasPrj import RasPrj, ras
 from .RasUtils import RasUtils
-from pathlib import Path
-from datetime import datetime
-
-import logging
-import re
-from .LoggingConfig import get_logger
-from .Decorators import log_call
 
 logger = get_logger(__name__)
 
@@ -296,6 +293,106 @@ class RasPlan:
         "plan file using Write IC File keys. Restart-file usage remains separate "
         "in the unsteady-flow file as Use Restart and Restart Filename."
     )
+
+    @staticmethod
+    def _replace_reference_in_lines(lines, key: str, value: str):
+        """Replace exactly one top-level ``key=value`` plan-file record."""
+        updated_lines = list(lines)
+        matches = []
+        in_description = False
+
+        for index, line in enumerate(updated_lines):
+            stripped = line.strip()
+            if re.match(r'^BEGIN DESCRIPTION:?$', stripped, re.IGNORECASE):
+                in_description = True
+                continue
+            if re.match(r'^END DESCRIPTION$', stripped, re.IGNORECASE):
+                in_description = False
+                continue
+            if not in_description and line.startswith(f"{key}="):
+                matches.append(index)
+
+        if len(matches) != 1:
+            raise ValueError(
+                f"Expected exactly one top-level {key}= record; found {len(matches)}"
+            )
+
+        index = matches[0]
+        original = updated_lines[index]
+        if original.endswith('\r\n'):
+            newline = '\r\n'
+        elif original.endswith('\n'):
+            newline = '\n'
+        elif original.endswith('\r'):
+            newline = '\r'
+        else:
+            newline = ''
+        updated_lines[index] = f"{key}={value}{newline}"
+        return updated_lines
+
+    @staticmethod
+    def _replace_top_level_plan_reference(
+        plan_file_path: Union[str, Path],
+        key: str,
+        value: str,
+    ) -> None:
+        """Rewrite and verify one plan reference without touching descriptions."""
+        plan_file_path = Path(plan_file_path)
+        with open(
+            plan_file_path,
+            'r',
+            encoding='utf-8',
+            errors='replace',
+            newline='',
+        ) as handle:
+            lines = handle.readlines()
+
+        updated_lines = RasPlan._replace_reference_in_lines(lines, key, value)
+        with open(
+            plan_file_path,
+            'w',
+            encoding='utf-8',
+            errors='replace',
+            newline='',
+        ) as handle:
+            handle.writelines(updated_lines)
+
+        with open(
+            plan_file_path,
+            'r',
+            encoding='utf-8',
+            errors='replace',
+            newline='',
+        ) as handle:
+            verified_lines = handle.readlines()
+        # Re-run the structural check, then verify only top-level records.
+        RasPlan._replace_reference_in_lines(verified_lines, key, value)
+        actual = []
+        in_description = False
+        for line in verified_lines:
+            stripped = line.strip()
+            if re.match(r'^BEGIN DESCRIPTION:?$', stripped, re.IGNORECASE):
+                in_description = True
+                continue
+            if re.match(r'^END DESCRIPTION$', stripped, re.IGNORECASE):
+                in_description = False
+                continue
+            if not in_description and line.startswith(f"{key}="):
+                actual.append(line.rstrip('\r\n'))
+        if actual != [f"{key}={value}"]:
+            raise IOError(
+                f"Plan reference verification failed for {plan_file_path}: "
+                f"expected {key}={value}, found {actual}"
+            )
+
+    @staticmethod
+    def _refresh_classification(ras_obj, *, refresh_flows: bool = False) -> None:
+        """Refresh DataFrames in dependency order after a plan mutation."""
+        ras_obj.geom_df = ras_obj.get_geom_entries()
+        if refresh_flows:
+            ras_obj.flow_df = ras_obj.get_flow_entries()
+            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
+        ras_obj.plan_df = ras_obj.get_plan_entries()
     
     @staticmethod
     @log_call
@@ -325,8 +422,7 @@ class RasPlan:
         plan_number = RasUtils.normalize_ras_number(plan_number)
         new_geom = RasUtils.normalize_ras_number(new_geom)
 
-        # Update all dataframes
-        ras_obj.plan_df = ras_obj.get_plan_entries()
+        # Refresh geometry inventory before validating the new reference.
         ras_obj.geom_df = ras_obj.get_geom_entries()
         
         if new_geom not in ras_obj.geom_df['geom_number'].values:
@@ -339,29 +435,16 @@ class RasPlan:
             logger.error(f"Plan file not found: {plan_file_path}")
             raise ValueError(f"Plan file not found: {plan_file_path}")
         
-        # Read the plan file and update the Geom File line
         try:
-            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                lines = file.readlines()
-            
-            for i, line in enumerate(lines):
-                if line.startswith("Geom File="):
-                    lines[i] = f"Geom File=g{new_geom}\n"
-                    logger.info(f"Updated Geom File in plan file to g{new_geom} for plan {plan_number}")
-                    break
-                
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            RasPlan._replace_top_level_plan_reference(
+                plan_file_path,
+                'Geom File',
+                f"g{new_geom}",
+            )
+            RasPlan._refresh_classification(ras_obj)
         except Exception as e:
             logger.error(f"Error updating plan file: {e}")
             raise
-        # Update the plan_df without reinitializing
-        mask = ras_obj.plan_df['plan_number'] == plan_number
-        ras_obj.plan_df.loc[mask, 'geom_number'] = new_geom
-        ras_obj.plan_df.loc[mask, 'geometry_number'] = new_geom  # Update geometry_number column
-        ras_obj.plan_df.loc[mask, 'Geom File'] = f"g{new_geom}"
-        geom_path = ras_obj.project_folder / f"{ras_obj.project_name}.g{new_geom}"
-        ras_obj.plan_df.loc[mask, 'Geom Path'] = str(geom_path)
 
         logger.info(f"Geometry for plan {plan_number} set to {new_geom}")
         logger.debug("Updated plan DataFrame:")
@@ -410,29 +493,22 @@ class RasPlan:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
-            RasUtils.update_file(plan_file_path, RasPlan._update_steady_in_file, new_steady_flow_number)
-            
-            # Update all dataframes
-            ras_obj.plan_df = ras_obj.get_plan_entries()
-            
-            # Update flow-related columns
-            mask = ras_obj.plan_df['plan_number'] == plan_number
-            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.f{new_steady_flow_number}"
-            ras_obj.plan_df.loc[mask, 'Flow File'] = f"f{new_steady_flow_number}"
-            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
-            ras_obj.plan_df.loc[mask, 'unsteady_number'] = None
-            
-            # Update remaining dataframes
-            ras_obj.geom_df = ras_obj.get_geom_entries()
-            ras_obj.flow_df = ras_obj.get_flow_entries()
-            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-            
+            RasPlan._replace_top_level_plan_reference(
+                plan_file_path,
+                'Flow File',
+                f"f{new_steady_flow_number}",
+            )
+            RasPlan._refresh_classification(ras_obj, refresh_flows=True)
         except Exception as e:
             raise IOError(f"Failed to update steady flow file: {e}")
 
     @staticmethod
     def _update_steady_in_file(lines, new_steady_flow_number):
-        return [f"Flow File=f{new_steady_flow_number}\n" if line.startswith("Flow File=f") else line for line in lines]
+        return RasPlan._replace_reference_in_lines(
+            lines,
+            'Flow File',
+            f"f{new_steady_flow_number}",
+        )
 
     @staticmethod
     @log_call
@@ -475,41 +551,22 @@ class RasPlan:
             raise FileNotFoundError(f"Plan file not found: {plan_number}")
         
         try:
-            # Read the plan file
-            with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as f:
-                lines = f.readlines()
-
-            # Update the Flow File line
-            for i, line in enumerate(lines):
-                if line.startswith("Flow File="):
-                    lines[i] = f"Flow File=u{new_unsteady_flow_number}\n"
-                    break
-            
-            # Write back to the plan file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
-            
-            # Update all dataframes
-            ras_obj.plan_df = ras_obj.get_plan_entries()
-            
-            # Update flow-related columns
-            mask = ras_obj.plan_df['plan_number'] == plan_number
-            flow_path = ras_obj.project_folder / f"{ras_obj.project_name}.u{new_unsteady_flow_number}"
-            ras_obj.plan_df.loc[mask, 'Flow File'] = f"u{new_unsteady_flow_number}"
-            ras_obj.plan_df.loc[mask, 'Flow Path'] = str(flow_path)
-            ras_obj.plan_df.loc[mask, 'unsteady_number'] = new_unsteady_flow_number
-            
-            # Update remaining dataframes
-            ras_obj.geom_df = ras_obj.get_geom_entries()
-            ras_obj.flow_df = ras_obj.get_flow_entries()
-            ras_obj.unsteady_df = ras_obj.get_unsteady_entries()
-            
+            RasPlan._replace_top_level_plan_reference(
+                plan_file_path,
+                'Flow File',
+                f"u{new_unsteady_flow_number}",
+            )
+            RasPlan._refresh_classification(ras_obj, refresh_flows=True)
         except Exception as e:
             raise IOError(f"Failed to update unsteady flow file: {e}")
 
     @staticmethod
     def _update_unsteady_in_file(lines, new_unsteady_flow_number):
-        return [f"Unsteady File=u{new_unsteady_flow_number}\n" if line.startswith("Unsteady File=u") else line for line in lines]
+        return RasPlan._replace_reference_in_lines(
+            lines,
+            'Flow File',
+            f"u{new_unsteady_flow_number}",
+        )
     
     @staticmethod
     @log_call
@@ -3660,11 +3717,11 @@ class RasPlan:
             ras_object: Optional RAS object instance
 
         Returns:
-            str: 'Steady', 'Unsteady', or 'Unknown'
+            str: 'Steady', 'Unsteady', 'Quasi-Unsteady', or 'Unknown'
 
         Notes:
             - Uses plan file metadata (already parsed by ras-commander)
-            - Deterministic: plans with unsteady_number are Unsteady, others are Steady
+            - Deterministic from the normalized ``f##``/``u##``/``q##`` prefix
             - Does NOT require HDF file to exist
             - Much faster than HDF inspection (reads from memory)
         """
@@ -3682,14 +3739,14 @@ class RasPlan:
             # Use flow_type column if available (preferred)
             if 'flow_type' in plan_row.columns:
                 flow_type = plan_row.iloc[0]['flow_type']
-                logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
-                return flow_type
+                if pd.notna(flow_type) and flow_type in {
+                    'Steady', 'Unsteady', 'Quasi-Unsteady', 'Unknown'
+                }:
+                    logger.debug(f"Plan {plan_num}: {flow_type} (from plan_df)")
+                    return flow_type
 
-            # Fallback: determine from unsteady_number
-            import pandas as pd
-            unsteady_num = plan_row.iloc[0]['unsteady_number']
-            flow_type = 'Unsteady' if pd.notna(unsteady_num) else 'Steady'
-            logger.debug(f"Plan {plan_num}: {flow_type} (from unsteady_number)")
+            flow_type = RasPrj._classify_plan_flow(plan_row.iloc[0])
+            logger.debug(f"Plan {plan_num}: {flow_type} (from flow references)")
             return flow_type
 
         except Exception as e:
@@ -3707,7 +3764,8 @@ class RasPlan:
             ras_object: Optional RAS object instance
 
         Returns:
-            bool: True if steady state, False otherwise
+            bool: True only for steady state.  Unsteady, quasi-unsteady, and
+                  unknown plans return False.
         """
         flow_type = RasPlan.get_plan_flow_type(plan_number, ras_object)
         return flow_type == 'Steady'

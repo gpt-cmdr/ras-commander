@@ -757,6 +757,7 @@ class RasPermutation:
         ras_object: Any = None,
         timeout_sec: Optional[int] = None,
         clear_geompre: bool = False,
+        force_geompre: bool = False,
         workers: Optional[List[Any]] = None,
     ) -> pd.DataFrame:
         """
@@ -769,6 +770,7 @@ class RasPermutation:
             ras_object: Optional project object for multi-project workflows.
             timeout_sec: Optional per-plan timeout in seconds.
             clear_geompre: Clear .c## preprocessor files before execution.
+            force_geompre: Force full geometry preprocessing before execution.
             workers: Optional list of remote worker objects from
                 init_ras_worker(). When provided, plans are distributed
                 across the remote fleet via compute_parallel_remote()
@@ -822,6 +824,7 @@ class RasPermutation:
                     ras_object=batch_ras,
                     num_cores=num_cores,
                     clear_geompre=clear_geompre,
+                    force_geompre=force_geompre,
                 )
 
                 execution_success_map = {
@@ -841,6 +844,7 @@ class RasPermutation:
                     ras_object=batch_ras,
                     timeout_sec=timeout_sec,
                     clear_geompre=clear_geompre,
+                    force_geompre=force_geompre,
                 )
 
                 execution_success_map = compute_result.execution_results

@@ -25,6 +25,17 @@ class MeshResult:
     error_message: str = ""
     geom_text_path: str = ""
     geom_hdf_path: str = ""
+    interop_backend: str = ""
+    seed_generation_mode: str = ""
+    seed_count: int = 0
+    product_refinement_regions: List[dict] = field(default_factory=list)
+    hdf_persistence_mode: str = ""
+    hdf_persisted: bool = False
+    persisted_cell_count: int = 0
+    persisted_face_count: int = 0
+    hdf_timestamp_synchronized: bool = False
+    hdf_timestamp_sync_evidence: dict = field(default_factory=dict)
+    managed_host_receipt: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:

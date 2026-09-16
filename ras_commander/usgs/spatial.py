@@ -36,7 +36,10 @@ Example Usage:
 
 from pathlib import Path
 from typing import Union, Optional, List, Tuple, TYPE_CHECKING
+import io
+
 import pandas as pd
+import requests
 
 from ..hdf import HdfProject
 from ..Decorators import log_call
@@ -66,6 +69,54 @@ class UsgsGaugeSpatial:
 
     All methods are static and designed to be used without instantiation.
     """
+
+    @staticmethod
+    def _empty_gauge_geodataframe() -> 'gpd.GeoDataFrame':
+        import geopandas as gpd
+
+        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+
+    @staticmethod
+    def _query_legacy_site_service(
+        west: float,
+        south: float,
+        east: float,
+        north: float,
+        site_type: str,
+        param_codes: Optional[str],
+        active_only: bool,
+    ) -> pd.DataFrame:
+        """Query the NWIS site service when dataretrieval lacks filters."""
+        params = {
+            "format": "rdb",
+            "bBox": ",".join(
+                f"{float(value):.7f}" for value in [west, south, east, north]
+            ),
+            "siteStatus": "active" if active_only else "all",
+        }
+        if site_type:
+            params["siteType"] = site_type
+        if param_codes:
+            params["parameterCd"] = param_codes
+
+        response = requests.get(
+            "https://waterservices.usgs.gov/nwis/site/",
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        lines = [
+            line for line in response.text.splitlines()
+            if line and not line.startswith("#")
+        ]
+        if len(lines) < 2:
+            return pd.DataFrame()
+
+        df = pd.read_csv(io.StringIO("\n".join(lines)), sep="\t", dtype=str)
+        if len(df) and df.iloc[0].astype(str).str.match(r"^\d+s$").any():
+            df = df.iloc[1:].reset_index(drop=True)
+        return df
 
     @staticmethod
     @log_call
@@ -215,7 +266,7 @@ class UsgsGaugeSpatial:
 
         if west == 0.0 and south == 0.0 and east == 0.0 and north == 0.0:
             logger.warning("No valid project geometry found")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
         logger.info(f"Querying USGS gauges in bounds: "
                    f"W={west:.6f}, S={south:.6f}, E={east:.6f}, N={north:.6f}")
@@ -237,30 +288,44 @@ class UsgsGaugeSpatial:
 
         # Query USGS Water Services API
         try:
-            kwargs = {
-                'bbox': [west, south, east, north],  # List of floats, not string
-            }
-
-            # Add parameter code filter if specified
             if param_codes is not None:
-                kwargs['parameterCd'] = param_codes
+                logger.debug(
+                    "Using legacy NWIS site service for parameterCd filter"
+                )
+                df = UsgsGaugeSpatial._query_legacy_site_service(
+                    west,
+                    south,
+                    east,
+                    north,
+                    site_type=site_type,
+                    param_codes=param_codes,
+                    active_only=active_only,
+                )
+            else:
+                kwargs = {
+                    'bbox': [
+                        float(west),
+                        float(south),
+                        float(east),
+                        float(north),
+                    ],
+                }
+                if site_type:
+                    kwargs['site_type_code'] = site_type
 
-            # Note: site_type and active_only filtering happens on returned data
-            # The API doesn't reliably filter by these parameters
+                logger.debug(f"USGS query parameters: {kwargs}")
 
-            logger.debug(f"USGS query parameters: {kwargs}")
-
-            # Query monitoring locations
-            df, md = waterdata.get_monitoring_locations(**kwargs)
+                # Query monitoring locations
+                df, md = waterdata.get_monitoring_locations(**kwargs)
 
         except Exception as e:
             logger.error(f"USGS API query failed: {e}")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
         # Check if results are empty
         if df is None or df.empty:
             logger.info("No gauges found in project bounds")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
         logger.info(f"Found {len(df)} USGS gauges")
         logger.debug(f"API response columns: {list(df.columns)}")
@@ -295,7 +360,7 @@ class UsgsGaugeSpatial:
             
             if lon_col is None or lat_col is None:
                 logger.error(f"Could not find longitude/latitude columns. Available columns: {list(df.columns)}")
-                return gpd.GeoDataFrame()
+                return UsgsGaugeSpatial._empty_gauge_geodataframe()
             
             logger.debug(f"Using columns: lon={lon_col}, lat={lat_col}")
             
@@ -332,6 +397,7 @@ class UsgsGaugeSpatial:
                 'site_type': 'site_type_code',
                 'monitoringLocationType': 'site_type_code',
                 'siteType': 'site_type_code',
+                'site_tp_cd': 'site_type_code',
                 'type': 'site_type_code',
                 # Status
                 'activityStatus': 'site_status',
@@ -384,7 +450,7 @@ class UsgsGaugeSpatial:
         except Exception as e:
             logger.error(f"Failed to create GeoDataFrame: {e}")
             logger.debug(f"DataFrame columns: {list(df.columns)}")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
     @staticmethod
     @log_call
@@ -484,7 +550,7 @@ class UsgsGaugeSpatial:
 
         if gauges.empty:
             logger.info("No gauges found in project bounds")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
         logger.info(f"Checking data availability for {len(gauges)} gauges")
 
@@ -518,7 +584,7 @@ class UsgsGaugeSpatial:
         # Create result GeoDataFrame
         if not gauges_with_data:
             logger.info("No gauges with data found for the specified period")
-            return gpd.GeoDataFrame()
+            return UsgsGaugeSpatial._empty_gauge_geodataframe()
 
         result = gpd.GeoDataFrame(gauges_with_data, crs=gauges.crs)
         result['data_count'] = data_counts

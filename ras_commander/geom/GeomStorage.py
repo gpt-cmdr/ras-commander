@@ -67,6 +67,7 @@ class GeomStorage:
     SURFACE_LINE_PRECISION = 7
 
     DEFAULT_2D_POINT_GENERATION_DATA = ",,,"
+    FLOW_AREA_NAME_MAX_LENGTH = 16
 
     _INVALID_NAME_CHARS = set(',=') | {chr(c) for c in range(0, 32)} | {chr(127)}
 
@@ -132,6 +133,13 @@ class GeomStorage:
     @staticmethod
     def _validate_flow_area_name(name: str) -> None:
         """Reject names containing characters that corrupt the .g## header format."""
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("flow_area_name must be a nonempty string")
+        if len(name) > GeomStorage.FLOW_AREA_NAME_MAX_LENGTH:
+            raise ValueError(
+                "flow_area_name exceeds the HEC-RAS 16-character 2D-area "
+                f"field width: {name!r}"
+            )
         bad = GeomStorage._INVALID_NAME_CHARS.intersection(name)
         if bad:
             raise ValueError(
@@ -574,6 +582,9 @@ class GeomStorage:
 
         When existing_points_lines and existing_points_time_line are provided
         (unchanged-perimeter path), the mesh data and timestamp are preserved.
+        Existing blocks pass their recorded storage-area type explicitly so
+        updates remain lossless. Official HEC-RAS 2D examples use both type 0
+        and type 1; new blocks retain the long-standing type-0 default.
         """
         normalized_settings = dict(GeomStorage._DEFAULT_2D_SETTINGS)
         normalized_settings.update(settings)

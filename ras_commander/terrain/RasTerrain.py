@@ -1713,8 +1713,8 @@ class RasTerrain:
             >>> print(f"Terrain created: {terrain}")
 
         Notes:
-            - The RasProcess.exe command requires all paths to be quoted
-              due to spaces in "Program Files".
+            - RasProcess.exe is launched directly with an argument vector, so
+              paths containing spaces do not require a command shell.
             - Input rasters are processed in order - first raster has
               priority in overlapping areas.
             - The output folder will be created automatically if it doesn't
@@ -1760,29 +1760,29 @@ class RasTerrain:
             output_hdf.unlink()
             logger.info(f"Removed existing terrain HDF: {output_hdf}")
 
-        # Build command string with proper quoting
-        # Note: Must use shell=True due to spaces in "Program Files"
+        # Launch RasProcess.exe directly. Passing a command string through
+        # ``cmd.exe`` is unnecessary for paths with spaces and breaks timeout
+        # containment: RasProcess.exe inherits the shell's captured pipes, so
+        # killing only cmd.exe leaves ``subprocess.run`` draining those pipes.
         stitch_str = "true" if stitch else "false"
 
-        cmd_str = (
-            f'"{rasprocess}" CreateTerrain '
-            f'units={units} stitch={stitch_str} '
-            f'prj="{projection_prj}" '
-            f'out="{output_hdf}"'
-        )
-
-        # Add input files (all in double quotes)
-        for raster in input_rasters:
-            cmd_str += f' "{raster}"'
+        command = [
+            str(rasprocess),
+            "CreateTerrain",
+            f"units={units}",
+            f"stitch={stitch_str}",
+            f"prj={projection_prj}",
+            f"out={output_hdf}",
+            *(str(raster) for raster in input_rasters),
+        ]
 
         logger.info(f"Executing terrain creation command...")
-        logger.debug(f"Command: {cmd_str}")
+        logger.debug("Command: %s", subprocess.list2cmdline(command))
 
         # Execute command
         try:
             result = subprocess.run(
-                cmd_str,
-                shell=True,
+                command,
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
@@ -1804,14 +1804,20 @@ class RasTerrain:
         except Exception as e:
             raise RuntimeError(f"Failed to execute RasProcess.exe: {e}")
 
+        error_details = ""
+        if result.stderr:
+            error_details = f" STDERR: {result.stderr}"
+        if result.stdout:
+            error_details += f" STDOUT: {result.stdout}"
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Terrain creation failed - RasProcess.exe returned "
+                f"{result.returncode}.{error_details}"
+            )
+
         # Verify output was created
         if not output_hdf.exists():
-            error_details = ""
-            if result.stderr:
-                error_details = f" STDERR: {result.stderr}"
-            if result.stdout:
-                error_details += f" STDOUT: {result.stdout}"
-
             raise RuntimeError(
                 f"Terrain creation failed - output HDF not created: {output_hdf}."
                 f" Return code: {result.returncode}.{error_details}"
@@ -1995,7 +2001,8 @@ class RasTerrain:
         units: str = "Feet",
         stitch: bool = True,
         hecras_version: str = "7.0",
-        generate_prj: bool = True
+        generate_prj: bool = True,
+        timeout_seconds: int = 600,
     ) -> Path:
         """
         Create HEC-RAS terrain from input rasters with automatic PRJ generation.
@@ -2014,6 +2021,8 @@ class RasTerrain:
             hecras_version: HEC-RAS version. Defaults to "7.0".
             generate_prj: Auto-generate PRJ from first raster. If False,
                          expects Projection.prj to exist in output_folder.
+            timeout_seconds: Maximum time to wait for RasProcess.exe. Defaults
+                to 600 seconds.
 
         Returns:
             Path: Path to created terrain HDF file.
@@ -2065,7 +2074,8 @@ class RasTerrain:
             projection_prj=projection_prj,
             units=units,
             stitch=stitch,
-            hecras_version=hecras_version
+            hecras_version=hecras_version,
+            timeout_seconds=timeout_seconds,
         )
 
     @staticmethod

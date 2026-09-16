@@ -37,6 +37,8 @@ This file is the canonical local instruction file for `ras_commander/geom/`.
 ## Common Use Cases
 
 - Cross-section extraction and modification: `GeomCrossSection`
+- Text-only 1D reach footprints: `GeomParser.get_1d_footprint()` connects
+  cross-section cut-line endpoints and preserves the complete end cut lines.
 - 2D flow area settings and storage curves: `GeomStorage`
 - SA/2D connections and laterals: `GeomLateral`
 - Structure geometry and metadata: `GeomBridge`, `GeomInlineWeir`, `GeomCulvert`

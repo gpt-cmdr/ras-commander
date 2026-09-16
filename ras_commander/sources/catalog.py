@@ -183,6 +183,12 @@ def get_catalog(auto_register: bool = True) -> ModelCatalog:
                 logger.debug("UsgsScienceBase not available")
 
             try:
+                from ras_commander.sources.state.alabama_flood import AlabamaFloodModels
+                _catalog.register_source(AlabamaFloodModels())
+            except (ImportError, Exception):
+                logger.debug("AlabamaFloodModels not available")
+
+            try:
                 from ras_commander.sources.state.mn_dnr import MinnesotaDnrModels
                 _catalog.register_source(MinnesotaDnrModels())
             except (ImportError, Exception):

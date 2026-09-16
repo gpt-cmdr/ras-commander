@@ -35,7 +35,8 @@ Performance Notes:
 """
 
 from pathlib import Path
-from typing import Union, Optional, Dict, Any, List
+from typing import Any, Dict, Optional, Union
+
 import h5py
 
 from ..LoggingConfig import get_logger
@@ -51,10 +52,11 @@ class GeomMetadata:
     All methods are static and designed to be used without instantiation.
     """
 
-    # Default return values for graceful degradation
+    # Provenance is part of the classification contract.  Unknown metadata
+    # must not look like a valid geometry with zero hydraulic elements.
     DEFAULT_COUNTS = {
-        'has_1d_xs': False,
-        'has_2d_mesh': False,
+        'has_1d_xs': None,
+        'has_2d_mesh': None,
         'num_cross_sections': 0,
         'num_inline_structures': 0,
         'num_bridges': 0,
@@ -63,9 +65,23 @@ class GeomMetadata:
         'num_gates': 0,
         'num_lateral_structures': 0,
         'num_sa_2d_connections': 0,
-        'mesh_cell_count': 0,
+        # Cell counts are only materialized in the geometry HDF.  A text-only
+        # geometry can still prove that a 2D area exists, but its cell count is
+        # unknown until preprocessing creates the HDF.
+        'mesh_cell_count': None,
         'mesh_area_names': [],
+        'geometry_metadata_source': 'unavailable',
+        'geometry_metadata_valid': False,
+        'geometry_metadata_error': None,
     }
+
+    @staticmethod
+    def _new_counts() -> Dict[str, Any]:
+        """Return independent defaults for one geometry inspection."""
+        return {
+            key: value.copy() if isinstance(value, list) else value
+            for key, value in GeomMetadata.DEFAULT_COUNTS.items()
+        }
 
     @staticmethod
     @log_call
@@ -95,56 +111,82 @@ class GeomMetadata:
                 - num_gates (int): Gate count
                 - num_lateral_structures (int): Lateral structure count
                 - num_sa_2d_connections (int): SA to 2D connections count
-                - mesh_cell_count (int): Total 2D mesh cells
+                - mesh_cell_count (int | None): Total 2D mesh cells; ``None``
+                  when only the text geometry is available
                 - mesh_area_names (list[str]): Names of 2D flow areas
+                - geometry_metadata_source (str): ``hdf``, ``text``, or
+                  ``unavailable``
+                - geometry_metadata_valid (bool): Whether a geometry source
+                  was successfully inspected
+                - geometry_metadata_error (str | None): Failed source reads
+                  encountered before success, or the terminal failure
 
         Note:
-            Always returns a complete dict with all keys, using defaults on failure.
-            Graceful degradation is critical - never raises exceptions.
+            Always returns a complete dict and never raises.  The two
+            ``has_*`` values remain ``None`` when no source can be inspected,
+            so execution dispatch cannot mistake an unreadable geometry for a
+            valid 1D model.
 
         Example:
             >>> counts = GeomMetadata.get_geometry_counts("model.g01", "model.g01.hdf")
             >>> if counts['has_2d_mesh']:
             ...     print(f"2D areas: {counts['mesh_area_names']}")
         """
-        # Start with default values
-        result = GeomMetadata.DEFAULT_COUNTS.copy()
+        result = GeomMetadata._new_counts()
 
         # Normalize paths
         geom_path = Path(geom_path) if geom_path else None
         hdf_path = Path(hdf_path) if hdf_path else None
 
-        try:
-            # Try HDF extraction first (fast path)
-            if hdf_path and hdf_path.exists():
+        errors = []
+
+        # Try HDF first.  Build into a fresh candidate so a failed HDF read
+        # cannot leak partial counts into the text fallback.
+        if hdf_path and hdf_path.exists():
+            try:
                 logger.debug(f"Using HDF extraction for {hdf_path.name}")
-                result = GeomMetadata._get_counts_from_hdf(hdf_path, result)
+                candidate = GeomMetadata._new_counts()
+                result = GeomMetadata._get_counts_from_hdf(hdf_path, candidate)
+                result['geometry_metadata_source'] = 'hdf'
+                result['geometry_metadata_valid'] = True
 
                 # For lateral structures and SA/2D connections, need plain text
                 # (these are NOT stored in HDF geometry file)
                 if geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
+            except Exception as exc:
+                errors.append(f"HDF inspection failed: {exc}")
+                logger.warning(f"HDF extraction failed for {hdf_path}: {exc}")
+                result = GeomMetadata._new_counts()
 
-            # Fall back to plain text parsing
-            elif geom_path and geom_path.exists():
+        # Fall back to text when HDF is absent or unusable.
+        if not result['geometry_metadata_valid'] and geom_path and geom_path.exists():
+            try:
                 logger.debug(f"Using text extraction for {geom_path.name}")
-                result = GeomMetadata._get_counts_from_text(geom_path, result)
+                candidate = GeomMetadata._new_counts()
+                result = GeomMetadata._get_counts_from_text(geom_path, candidate)
+                result['geometry_metadata_source'] = 'text'
+                result['geometry_metadata_valid'] = True
+            except Exception as exc:
+                errors.append(f"Text inspection failed: {exc}")
+                logger.warning(f"Text extraction failed for {geom_path}: {exc}")
+                result = GeomMetadata._new_counts()
 
-            else:
-                logger.warning("Neither HDF nor geometry file exists")
+        if not result['geometry_metadata_valid'] and not errors:
+            errors.append("Neither HDF nor geometry file exists")
+            logger.warning(errors[-1])
 
-        except Exception as e:
-            logger.warning(f"Failed to extract geometry metadata: {e}")
-            # Keep default values on failure
+        if result['geometry_metadata_valid']:
+            result['has_1d_xs'] = result['num_cross_sections'] > 0
+            if result['has_2d_mesh'] is None:
+                result['has_2d_mesh'] = bool(result['mesh_area_names'])
 
-        # Calculate derived fields
-        result['has_1d_xs'] = result['num_cross_sections'] > 0
-        result['has_2d_mesh'] = len(result['mesh_area_names']) > 0
         result['num_inline_structures'] = (
             result['num_bridges'] +
             result['num_culverts'] +
             result['num_weirs']
         )
+        result['geometry_metadata_error'] = '; '.join(errors) if errors else None
 
         return result
 
@@ -163,34 +205,21 @@ class GeomMetadata:
         Returns:
             Updated counts dict
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf:
-                # Cross sections
-                counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
-
-                # Structures (bridges, culverts, weirs, gates)
-                structure_counts = GeomMetadata._get_structure_counts_hdf(hdf)
-                counts.update(structure_counts)
-
-                # 2D mesh areas and cell counts
-                mesh_info = GeomMetadata._get_2d_info_hdf(hdf)
-                counts.update(mesh_info)
-
-        except Exception as e:
-            logger.warning(f"HDF extraction failed for {hdf_path}: {e}")
+        with h5py.File(hdf_path, 'r') as hdf:
+            counts['num_cross_sections'] = GeomMetadata._get_xs_count_hdf(hdf)
+            counts.update(GeomMetadata._get_structure_counts_hdf(hdf))
+            counts.update(GeomMetadata._get_2d_info_hdf(hdf))
 
         return counts
 
     @staticmethod
     def _get_xs_count_hdf(hdf: h5py.File) -> int:
-        """Get 1D cross section count from geometry HDF."""
-        try:
-            path = '/Geometry/Cross Sections/Attributes'
-            if path in hdf:
-                return hdf[path].shape[0]
-        except Exception as e:
-            logger.debug(f"XS count HDF error: {e}")
-        return 0
+        """Get the validated 1D cross-section count for modern or legacy HDF."""
+        # Lazy import keeps the geometry metadata module independent during
+        # package initialization while sharing one schema-recognition contract.
+        from ..hdf.HdfXsec import HdfXsec
+
+        return HdfXsec._get_cross_section_count(hdf)
 
     @staticmethod
     def _get_structure_counts_hdf(hdf: h5py.File) -> Dict[str, int]:
@@ -212,47 +241,31 @@ class GeomMetadata:
             'num_gates': 0,
         }
 
-        try:
-            path = '/Geometry/Structures/Attributes'
-            if path not in hdf:
-                return result
+        path = '/Geometry/Structures/Attributes'
+        if path not in hdf:
+            return result
 
-            attrs = hdf[path][:]
+        attrs = hdf[path][()]
+        dtype_names = attrs.dtype.names or ()
 
-            # Check if 'Type' field exists
-            if 'Type' not in attrs.dtype.names:
-                # Fall back to total count if no type breakdown
-                total = attrs.shape[0]
-                logger.debug(f"No Type field in structures, total: {total}")
-                return result
+        # Older geometry HDFs do not always expose a Type field.  That is a
+        # supported schema variant, not an unreadable dataset.
+        if 'Type' not in dtype_names:
+            logger.debug("No Type field in structures, total: %s", attrs.shape[0])
+            return result
 
-            types = attrs['Type']
+        for struct_type in attrs['Type']:
+            if struct_type == 2:
+                result['num_bridges'] += 1
+            elif struct_type == 4:
+                result['num_weirs'] += 1
 
-            # Count by type
-            # Based on HEC-RAS structure types:
-            # Type 2 = Bridge/Culvert structure
-            # Within Bridge/Culvert, need to look for culvert count vs bridge
-            # For simplicity, count Type 2 as potential bridge/culvert
-            # Type 4 = Inline Weir
-            for struct_type in types:
-                if struct_type == 2:
-                    # Bridge/Culvert - need more info to differentiate
-                    # For now, count as bridges (culverts are within bridge structures)
-                    result['num_bridges'] += 1
-                elif struct_type == 4:
-                    result['num_weirs'] += 1
-
-            # Gates: Check for gate groups in structures
-            if '/Geometry/Structures/Gate Groups' in hdf:
-                try:
-                    gate_groups = hdf['/Geometry/Structures/Gate Groups']
-                    if 'Attributes' in gate_groups:
-                        result['num_gates'] = gate_groups['Attributes'].shape[0]
-                except Exception:
-                    pass
-
-        except Exception as e:
-            logger.debug(f"Structure counts HDF error: {e}")
+        gate_path = '/Geometry/Structures/Gate Groups/Attributes'
+        if gate_path in hdf:
+            gate_dataset = hdf[gate_path]
+            if not isinstance(gate_dataset, h5py.Dataset) or not gate_dataset.shape:
+                raise ValueError(f"Unreadable gate-group attributes dataset: {gate_path}")
+            result['num_gates'] = int(gate_dataset.shape[0])
 
         return result
 
@@ -261,39 +274,63 @@ class GeomMetadata:
         """
         Get 2D mesh area names and cell counts from geometry HDF.
 
-        Returns dict with: mesh_area_names, mesh_cell_count
+        Returns dict with: has_2d_mesh, mesh_area_names, mesh_cell_count
         """
         result = {
+            'has_2d_mesh': False,
             'mesh_area_names': [],
             'mesh_cell_count': 0,
         }
 
-        try:
-            base_path = 'Geometry/2D Flow Areas'
-            if base_path not in hdf:
-                return result
+        base_path = 'Geometry/2D Flow Areas'
+        if base_path not in hdf:
+            return result
 
-            # Get area names
-            if f"{base_path}/Attributes" in hdf:
-                attrs = hdf[f"{base_path}/Attributes"][()]
-                if 'Name' in attrs.dtype.names:
-                    names = []
-                    for name in attrs['Name']:
-                        if isinstance(name, bytes):
-                            name = name.decode('utf-8')
-                        # Strip trailing spaces
-                        names.append(name.strip())
-                    result['mesh_area_names'] = names
+        base_group = hdf[base_path]
+        if not isinstance(base_group, h5py.Group):
+            raise ValueError(f"Expected HDF group at {base_path}")
 
-            # Get cell counts from Cell Info
-            if f"{base_path}/Cell Info" in hdf:
-                cell_info = hdf[f"{base_path}/Cell Info"][()]
-                # Cell info format: (start_index, cell_count) per area
-                total_cells = sum(info[1] for info in cell_info)
-                result['mesh_cell_count'] = int(total_cells)
+        attrs_path = f"{base_path}/Attributes"
+        attributes_present = attrs_path in hdf
+        if attributes_present:
+            attrs = hdf[attrs_path][()]
+            dtype_names = attrs.dtype.names or ()
+            if 'Name' not in dtype_names:
+                raise ValueError(f"2D area Attributes dataset has no Name field: {attrs_path}")
+            for raw_name in attrs['Name']:
+                if isinstance(raw_name, bytes):
+                    raw_name = raw_name.decode('utf-8')
+                name = str(raw_name).strip()
+                if name and name not in result['mesh_area_names']:
+                    result['mesh_area_names'].append(name)
 
-        except Exception as e:
-            logger.debug(f"2D info HDF error: {e}")
+        area_group_names = [
+            name for name, item in base_group.items()
+            if isinstance(item, h5py.Group)
+        ]
+        if not attributes_present and area_group_names:
+            result['mesh_area_names'] = area_group_names
+
+        cell_info_path = f"{base_path}/Cell Info"
+        cell_rows = 0
+        if cell_info_path in hdf:
+            cell_info = hdf[cell_info_path][()]
+            cell_rows = int(cell_info.shape[0]) if cell_info.ndim else 0
+            if cell_info.size == 0:
+                result['mesh_cell_count'] = 0
+            elif cell_info.ndim >= 2 and cell_info.shape[1] >= 2:
+                result['mesh_cell_count'] = int(cell_info[:, 1].sum())
+            else:
+                raise ValueError(f"Unexpected 2D Cell Info shape at {cell_info_path}")
+
+        if not attributes_present and cell_info_path not in hdf and not area_group_names:
+            raise ValueError(
+                f"2D Flow Areas group has no Attributes, Cell Info, or area groups: {base_path}"
+            )
+
+        result['has_2d_mesh'] = bool(
+            result['mesh_area_names'] or area_group_names or cell_rows
+        )
 
         return result
 
@@ -351,13 +388,14 @@ class GeomMetadata:
             Updated counts dict
         """
         try:
-            # Cross sections
-            try:
-                from .GeomCrossSection import GeomCrossSection
-                xs_df = GeomCrossSection.get_cross_sections(geom_path)
-                counts['num_cross_sections'] = len(xs_df)
-            except Exception as e:
-                logger.debug(f"XS count text error: {e}")
+            # Cross sections and 2D area markers are classification-critical.
+            # Let their parser errors reach the top-level provenance handler.
+            from .GeomCrossSection import GeomCrossSection
+            xs_df = GeomCrossSection.get_cross_sections(geom_path)
+            counts['num_cross_sections'] = len(xs_df)
+
+            mesh_info = GeomMetadata._get_2d_info_from_text(geom_path)
+            counts.update(mesh_info)
 
             # Bridges
             try:
@@ -403,15 +441,8 @@ class GeomMetadata:
             except Exception as e:
                 logger.debug(f"Connections count text error: {e}")
 
-            # 2D mesh areas - parse from text
-            try:
-                mesh_info = GeomMetadata._get_2d_info_from_text(geom_path)
-                counts.update(mesh_info)
-            except Exception as e:
-                logger.debug(f"2D mesh text error: {e}")
-
         except Exception as e:
-            logger.warning(f"Text extraction failed for {geom_path}: {e}")
+            raise ValueError(f"Geometry text parser failed for {geom_path}: {e}") from e
 
         return counts
 
@@ -420,36 +451,39 @@ class GeomMetadata:
         """
         Extract 2D mesh info from plain text geometry file.
 
-        Returns dict with: mesh_area_names, mesh_cell_count
+        Returns dict with: has_2d_mesh, mesh_area_names, mesh_cell_count
 
         Note: Mesh cell count is not directly available in plain text,
-        only in HDF. Returns 0 for mesh_cell_count from text parsing.
+        only in HDF. Returns ``None`` for mesh_cell_count from text parsing.
         """
         result = {
+            'has_2d_mesh': False,
             'mesh_area_names': [],
-            'mesh_cell_count': 0,  # Not available in plain text
+            'mesh_cell_count': None,
         }
 
-        try:
-            with open(geom_path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
+        current_area = None
+        with open(geom_path, 'r', encoding='utf-8', errors='replace') as handle:
+            for raw_line in handle:
+                line = raw_line.lstrip()
+                if line.startswith('Storage Area='):
+                    current_area = line.split('=', 1)[1].split(',', 1)[0].strip()
+                    continue
 
-            # Find 2D Flow Area names
-            # Format in geometry file: "2D Flow Area="
-            import re
-            pattern = r'2D Flow Area=\s*(.+?)(?:\s*,|$)'
-            matches = re.findall(pattern, content, re.MULTILINE)
+                if not line.startswith('Storage Area Is2D=') or current_area is None:
+                    continue
 
-            # Clean up names
-            area_names = []
-            for match in matches:
-                name = match.strip().rstrip(',')
-                if name and name not in area_names:
-                    area_names.append(name)
+                raw_flag = line.split('=', 1)[1].split(',', 1)[0].strip()
+                try:
+                    is_2d = int(raw_flag)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid Storage Area Is2D flag {raw_flag!r} for {current_area!r}"
+                    ) from exc
 
-            result['mesh_area_names'] = area_names
+                if is_2d == -1 and current_area and current_area not in result['mesh_area_names']:
+                    result['mesh_area_names'].append(current_area)
 
-        except Exception as e:
-            logger.debug(f"2D info text extraction error: {e}")
+        result['has_2d_mesh'] = bool(result['mesh_area_names'])
 
         return result

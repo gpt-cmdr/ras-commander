@@ -507,7 +507,14 @@ class HdfPlan:
                     logger.debug(f"Geometry attribute: {key} = {value}")
 
                 logger.debug(f"Successfully extracted {len(attrs)} root level geometry attributes")
-                return pd.DataFrame.from_dict(attrs, orient='index', columns=['Value'])
+                # Build one explicit row per scalar attribute. DataFrame.from_dict
+                # with orient='index' and a supplied column list asks pandas to
+                # iterate each value, which fails for converted scalar values such
+                # as datetime.
+                return pd.DataFrame(
+                    {"Value": list(attrs.values())},
+                    index=pd.Index(attrs.keys()),
+                )
 
         except (OSError, RuntimeError) as e:
             logger.error(f"Failed to read HDF file {hdf_path}: {str(e)}")

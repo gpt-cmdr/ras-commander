@@ -48,6 +48,37 @@ from .AzureFrWorker import AzureFrWorker
 
 # Execution functions
 from .Execution import compute_parallel_remote, ExecutionResult, get_worker_status
+from .ExecutionContract import (
+    PreprocessPolicy,
+    RasExecutionReceipt,
+    RasExecutionRequest,
+    validate_execution_receipt,
+)
+from .PortableExecution import execute_request, validate_steady_results
+
+
+_PORTABLE_DOCKER_EXPORTS = {
+    'RasPortableDocker',
+    'PortableDockerExecutionResult',
+    'PortableDockerPoolResult',
+}
+_PORTABLE_SLURM_EXPORTS = {
+    'RasSlurm', 'SlurmCollection', 'SlurmSiteConfig', 'SlurmStatus',
+    'SlurmSubmission', 'SlurmTaskAccounting', 'SlurmTransportConfig',
+}
+
+
+def __getattr__(name):
+    """Load portable adapters without importing optional backends eagerly."""
+    from importlib import import_module
+
+    if name in _PORTABLE_DOCKER_EXPORTS:
+        docker_module = import_module(".RasPortableDocker", __name__)
+        return getattr(docker_module, name)
+    if name in _PORTABLE_SLURM_EXPORTS:
+        slurm_module = import_module("..RasSlurm", __name__)
+        return getattr(slurm_module, name)
+    raise AttributeError(f"module 'ras_commander.remote' has no attribute '{name}'")
 
 __all__ = [
     # Base class
@@ -69,4 +100,20 @@ __all__ = [
     'compute_parallel_remote',
     'ExecutionResult',
     'get_worker_status',
+    'PreprocessPolicy',
+    'RasExecutionRequest',
+    'RasExecutionReceipt',
+    'validate_execution_receipt',
+    'execute_request',
+    'validate_steady_results',
+    'RasPortableDocker',
+    'PortableDockerExecutionResult',
+    'PortableDockerPoolResult',
+    'RasSlurm',
+    'SlurmSiteConfig',
+    'SlurmTransportConfig',
+    'SlurmSubmission',
+    'SlurmStatus',
+    'SlurmTaskAccounting',
+    'SlurmCollection',
 ]

@@ -156,6 +156,8 @@ class RasProcess:
 
     # Standard HEC-RAS installation paths (Windows)
     RAS_INSTALL_PATHS = [
+        r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1",
+        r"C:\Program Files (x86)\HEC\HEC-RAS\7.0",
         r"C:\Program Files (x86)\HEC\HEC-RAS\6.6",
         r"C:\Program Files (x86)\HEC\HEC-RAS\6.5",
         r"C:\Program Files (x86)\HEC\HEC-RAS\6.4.1",
@@ -164,6 +166,8 @@ class RasProcess:
         r"C:\Program Files (x86)\HEC\HEC-RAS\6.3",
         r"C:\Program Files\HEC\HEC-RAS\6.6",
         r"C:\Program Files\HEC\HEC-RAS\6.5",
+        r"C:\Program Files\HEC\HEC-RAS\7.0.1",
+        r"C:\Program Files\HEC\HEC-RAS\7.0",
     ]
 
     # Default Wine prefix paths to search on Linux
@@ -546,7 +550,7 @@ class RasProcess:
     @log_call
     def setup_wine_environment(
         wine_prefix: Union[str, Path] = "/opt/hecras-wine",
-        ras_version: str = "7.0",
+        ras_version: str = "7.0.1",
     ) -> None:
         """
         Print setup instructions for the Wine environment.
@@ -1241,6 +1245,9 @@ Step 5: Configure (optional — auto-detection usually works)
         for map_key, tif_list in list(generated_files.items()):
             readable_tifs: List[Path] = []
             for tif_path in tif_list:
+                if Path(tif_path).suffix.lower() not in (".tif", ".tiff"):
+                    readable_tifs.append(tif_path)
+                    continue
                 try:
                     with rasterio.open(tif_path) as src:
                         if src.count < 1 or src.width < 1 or src.height < 1:
@@ -1533,11 +1540,14 @@ Step 5: Configure (optional — auto-detection usually works)
             Dict mapping map type names to lists of generated file paths.
             Paths point to ``output_path`` if specified (files are moved
             there after generation), otherwise to the default Plan ShortID
-            folder.
+            folder. Only files created or changed by this invocation are
+            returned.
 
         Raises:
             FileNotFoundError: If RasProcess.exe or required files not found
-            RuntimeError: If RasProcess.exe command fails
+            RuntimeError: If the map helper fails or does not produce a fresh
+                artifact for every requested map type
+            subprocess.TimeoutExpired: If map generation exceeds ``timeout``
 
         Example:
             >>> # Default output (writes to ./PlanShortID/)
@@ -1701,20 +1711,22 @@ Step 5: Configure (optional — auto-detection usually works)
                     resolved_output_path = (ras_obj.project_folder / resolved_output_path).resolve()
                 resolved_output_path.mkdir(parents=True, exist_ok=True)
 
-            # Snapshot pre-existing files in output_dir so we only move files
-            # that were created or changed by this StoreAllMaps call when
-            # output_path is specified. This preserves unrelated benchmark or
-            # manually curated files while still relocating regenerated rasters
-            # that overwrite the same filenames on reruns.
+            # Snapshot pre-existing files so later discovery is limited to
+            # artifacts created or changed by this StoreAllMaps invocation.
+            # This also preserves unrelated benchmark or manually curated files
+            # when generated artifacts are moved to a custom output path.
             pre_existing_files = {}
             if output_dir.exists():
                 for item in output_dir.iterdir():
+                    if not item.is_file():
+                        continue
                     try:
                         stat = item.stat()
                     except FileNotFoundError:
                         continue
                     pre_existing_files[item.name] = (
                         stat.st_mtime_ns,
+                        stat.st_ctime_ns,
                         stat.st_size,
                     )
 
@@ -1746,38 +1758,78 @@ Step 5: Configure (optional — auto-detection usually works)
             if result.stderr:
                 logger.warning(f"StoreAllMaps stderr: {result.stderr}")
             if result.returncode != 0:
-                logger.error(f"StoreAllMaps failed (exit code {result.returncode})")
-                logger.error(f"stderr: {result.stderr}")
+                detail = (result.stderr or result.stdout or "no helper output").strip()
+                raise RuntimeError(
+                    "StoreAllMaps failed "
+                    f"(exit code {result.returncode}): {detail}"
+                )
 
-            for line in result.stdout.splitlines():
+            for line in (result.stdout or "").splitlines():
                 if "Maps generated" in line:
                     logger.info(line.strip())
 
+            # Build an invocation-scoped inventory before searching for map
+            # names. A successful helper exit does not prove that it generated
+            # anything, and searching the whole output folder can otherwise
+            # report a raster left by an earlier call as this call's output.
+            fresh_output_files: List[Path] = []
+            for item in output_dir.iterdir():
+                if not item.is_file():
+                    continue
+                try:
+                    stat = item.stat()
+                except FileNotFoundError:
+                    continue
+                current_signature = (
+                    stat.st_mtime_ns,
+                    stat.st_ctime_ns,
+                    stat.st_size,
+                )
+                if pre_existing_files.get(item.name) != current_signature:
+                    fresh_output_files.append(item)
+
             search_dir = output_dir
+            fresh_generated_files = fresh_output_files
 
             # If output_path was requested, move files from default dir to output_path
-            if resolved_output_path is not None:
+            if (
+                resolved_output_path is not None
+                and resolved_output_path.resolve() != output_dir.resolve()
+            ):
                 logger.info(
                     f"Moving generated files from {output_dir} to {resolved_output_path}"
                 )
-                moved_count = 0
+                moved_files: List[Path] = []
                 # Move files that were created or modified by this call.
-                for item in output_dir.iterdir():
-                    try:
-                        stat = item.stat()
-                    except FileNotFoundError:
-                        continue
-                    previous_signature = pre_existing_files.get(item.name)
-                    current_signature = (stat.st_mtime_ns, stat.st_size)
-                    if previous_signature != current_signature:
-                        dest = resolved_output_path / item.name
-                        if dest.exists():
-                            dest.unlink()
-                        shutil.move(str(item), str(dest))
-                        moved_count += 1
-                logger.info(f"Moved {moved_count} generated file(s) to {resolved_output_path}")
+                for item in fresh_output_files:
+                    dest = resolved_output_path / item.name
+                    if dest.exists():
+                        dest.unlink()
+                    shutil.move(str(item), str(dest))
+                    moved_files.append(dest)
+                logger.info(
+                    f"Moved {len(moved_files)} generated file(s) "
+                    f"to {resolved_output_path}"
+                )
 
                 search_dir = resolved_output_path
+                fresh_generated_files = moved_files
+            elif resolved_output_path is not None:
+                # ``output_path`` already names StoreAllMaps' default folder.
+                # Keep the original Path spelling so invocation-scoped parent
+                # comparisons below remain reliable for relative project paths.
+                search_dir = output_dir
+
+            def fresh_matches(pattern: str) -> List[Path]:
+                """Return only current-invocation artifacts matching ``pattern``."""
+                return sorted(
+                    (
+                        path
+                        for path in fresh_generated_files
+                        if path.parent == search_dir and path.match(pattern)
+                    ),
+                    key=lambda path: path.name.lower(),
+                )
 
             # Find generated files in the appropriate directory
             generated_files = {}
@@ -1791,11 +1843,11 @@ Step 5: Configure (optional — auto-detection usually works)
 
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 pattern = f"{display_name_used} ({safe_profile})*.tif"
-                tif_files = list(search_dir.glob(pattern))
+                tif_files = fresh_matches(pattern)
 
                 if not tif_files:
                     pattern_alt = f"{display_name_used.replace(' ', '_')} ({safe_profile})*.tif"
-                    tif_files = list(search_dir.glob(pattern_alt))
+                    tif_files = fresh_matches(pattern_alt)
 
                 if tif_files:
                     generated_files[map_key] = tif_files
@@ -1807,10 +1859,10 @@ Step 5: Configure (optional — auto-detection usually works)
             if inundation_boundary:
                 safe_profile = profile_name.replace(":", " ").replace("/", "_")
                 shp_pattern = f"Inundation Boundary ({safe_profile})*.shp"
-                shp_files = list(search_dir.glob(shp_pattern))
+                shp_files = fresh_matches(shp_pattern)
                 if not shp_files:
                     shp_pattern_alt = f"Inundation_Boundary*({safe_profile})*.shp"
-                    shp_files = list(search_dir.glob(shp_pattern_alt))
+                    shp_files = fresh_matches(shp_pattern_alt)
                 if shp_files:
                     generated_files['inundation_boundary'] = shp_files
                     logger.info(f"Generated {len(shp_files)} inundation boundary shapefile(s)")
@@ -1829,6 +1881,8 @@ Step 5: Configure (optional — auto-detection usually works)
                         )
                     for tif_list in generated_files.values():
                         for tif_path in tif_list:
+                            if tif_path.suffix.lower() not in (".tif", ".tiff"):
+                                continue
                             RasProcess._fix_georeferencing(
                                 tif_path,
                                 proj_info.prj_path,
@@ -1837,6 +1891,20 @@ Step 5: Configure (optional — auto-detection usually works)
                 else:
                     logger.warning("Could not find terrain for georef fix")
                 RasProcess._drop_unreadable_tifs(generated_files)
+
+            requested_map_keys = [map_key for _, map_key in maps_to_add]
+            if inundation_boundary:
+                requested_map_keys.append("inundation_boundary")
+            missing_map_keys = [
+                map_key
+                for map_key in requested_map_keys
+                if not generated_files.get(map_key)
+            ]
+            if missing_map_keys:
+                raise RuntimeError(
+                    "StoreAllMaps completed without fresh output for requested "
+                    f"map type(s): {', '.join(missing_map_keys)}"
+                )
 
             return generated_files
 

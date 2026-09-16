@@ -212,6 +212,8 @@ class GeomPreprocessor:
             )
 
             process = None
+            _watchdog = None
+            watchdog_blocked_reason = None
             child_monitor = {
                 "saw_child": False,
                 "timed_out": False,
@@ -233,6 +235,7 @@ class GeomPreprocessor:
                     GeomPreprocessor._set_plan_run_flags(
                         plan_path,
                         {
+                            "Run UNet": "0",
                             "Run PostProcess": "0",
                             "Run RASMapper": "0",
                             "Run Sediment": "0",
@@ -246,11 +249,10 @@ class GeomPreprocessor:
                 logger.debug("Running HEC-RAS geometry preprocessor validation:")
                 logger.debug(command_text)
 
-                _watchdog = None
                 if dialog_watchdog:
                     from ..RasDialogWatchdog import DialogWatchdog
                     _watchdog = DialogWatchdog()
-                    _watchdog.start()
+                    _watchdog.require_available()
 
                 process = subprocess.Popen(
                     command_text,
@@ -261,6 +263,11 @@ class GeomPreprocessor:
                 )
                 if _watchdog:
                     _watchdog.add_pid(process.pid)
+                    try:
+                        _watchdog.start()
+                    except Exception:
+                        GeomPreprocessor._terminate_process_tree(process)
+                        raise
 
                 geom_only_artifacts = None
                 if geometry_only:
@@ -282,8 +289,14 @@ class GeomPreprocessor:
 
                 timed_out = monitor_result["timed_out"]
                 signal_detected = monitor_result["signal_detected"]
+                watchdog_blocked_reason = (
+                    _watchdog.blocked_reason if _watchdog else None
+                )
 
-                if signal_detected and process.poll() is None:
+                if watchdog_blocked_reason:
+                    if process.poll() is None:
+                        GeomPreprocessor._terminate_process_tree(process)
+                elif signal_detected and process.poll() is None:
                     logger.debug(
                         "Geometry preprocessing signal detected; terminating flow "
                         "computation before full plan execution."
@@ -344,6 +357,8 @@ class GeomPreprocessor:
             blocking_lines = GeomPreprocessor._find_blocking_message_lines(messages)
 
             errors = []
+            if watchdog_blocked_reason:
+                errors.append(watchdog_blocked_reason)
             if timed_out:
                 errors.append(f"Timed out after {max_wait} seconds")
             if child_monitor["timed_out"]:
@@ -446,23 +461,11 @@ class GeomPreprocessor:
 
     @staticmethod
     def _resolve_flow_type(plan_num: str, ras_obj) -> str:
-        """Return the flow type recorded in plan_df when available."""
+        """Return the normalized steady/unsteady/quasi flow classification."""
         try:
-            if getattr(ras_obj, "plan_df", None) is None or ras_obj.plan_df.empty:
-                return "Unknown"
-            matching = ras_obj.plan_df[
-                ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                == plan_num
-            ]
-            if matching.empty:
-                return "Unknown"
-            if "flow_type" in matching.columns:
-                return str(matching.iloc[0].get("flow_type") or "Unknown")
-            if "unsteady_number" in matching.columns:
-                return "Unsteady" if matching.iloc[0].get("unsteady_number") else "Steady"
+            return RasPlan.get_plan_flow_type(plan_num, ras_obj)
         except Exception:
             return "Unknown"
-        return "Unknown"
 
     @staticmethod
     def _compute_message_paths(

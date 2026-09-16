@@ -82,6 +82,8 @@ from pathlib import Path
 import pandas as pd
 from typing import Union, Any, List, Dict, Tuple, Optional
 import logging
+
+from ._rasmap_schema import create_rasmap_dataframe
 from ras_commander.LoggingConfig import get_logger
 from ras_commander.Decorators import log_call
 
@@ -193,24 +195,30 @@ class RasPrj:
         self.boundaries_df = self.get_boundary_conditions()
         
         # Load RASMapper data if available
+        expected_rasmap_path = self.project_folder / f"{self.project_name}.rasmap"
         try:
             # Import here to avoid circular imports
             from .RasMap import RasMap
-            self.rasmap_df = RasMap.initialize_rasmap_df(self)
-        except ImportError:
-            logger.warning("RasMap module not available. RASMapper data will not be loaded.")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path', 
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path', 
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
-        except Exception as e:
-            logger.error(f"Error initializing RASMapper data: {e}")
-            self.rasmap_df = pd.DataFrame(columns=['projection_path', 'profile_lines_path', 'soil_layer_path',
-                                                'infiltration_hdf_path', 'landcover_hdf_path', 'terrain_hdf_path',
-                                                'reference_map_layer_names', 'reference_map_layer_path',
-                                                'basemap_layer_names', 'basemap_layer_path',
-                                                'current_settings'])
+        except ImportError as e:
+            logger.warning(
+                "RasMap module not available. RASMapper data will not be loaded: %s",
+                e,
+            )
+            self.rasmap_df = create_rasmap_dataframe(
+                rasmap_path=expected_rasmap_path,
+                rasmap_status="failed",
+                rasmap_error=f"ImportError: {e}",
+            )
+        else:
+            try:
+                self.rasmap_df = RasMap.initialize_rasmap_df(self)
+            except Exception as e:
+                logger.error(f"Error initializing RASMapper data: {e}")
+                self.rasmap_df = create_rasmap_dataframe(
+                    rasmap_path=expected_rasmap_path,
+                    rasmap_status="failed",
+                    rasmap_error=f"{type(e).__name__}: {e}",
+                )
 
         self.refresh_project_crs()
 
@@ -234,7 +242,11 @@ class RasPrj:
                 f"(source={self.project_crs_source})"
             )
             logger.info(f"Geometry HDF files found: {self.plan_df['Geom_File'].notna().sum()}")
-            logger.info(f"RASMapper data loaded: {not self.rasmap_df.empty}")
+            if self.rasmap_df is not None and not self.rasmap_df.empty:
+                rasmap_status = self.rasmap_df.iloc[0].get("rasmap_status", "unknown")
+            else:
+                rasmap_status = "missing_summary"
+            logger.info(f"RASMapper status: {rasmap_status}")
             logger.info(f"Results summaries loaded: {len(self.results_df)} plans with HDF results")
 
     @log_call
@@ -266,24 +278,257 @@ class RasPrj:
             # Make sure all plan paths are properly set
             self._set_plan_paths()
 
-            # Add flow_type column for deterministic steady/unsteady identification
-            if not self.plan_df.empty and 'unsteady_number' in self.plan_df.columns:
-                self.plan_df['flow_type'] = self.plan_df['unsteady_number'].apply(
-                    lambda x: 'Unsteady' if pd.notna(x) else 'Steady'
-                )
-            else:
-                if not self.plan_df.empty:
-                    self.plan_df['flow_type'] = 'Unknown'
+            # Make the DataFrame the source of truth for dispatch.  Flow-file
+            # identity and geometry inventory remain separate columns, then
+            # combine into the finite execution taxonomy.
+            self.plan_df = self._enrich_plan_classification(self.plan_df)
 
         except Exception as e:
             logger.error(f"Error loading project data: {e}")
             raise
 
+    @staticmethod
+    def _classify_plan_flow(row: pd.Series) -> str:
+        """Classify the flow regime from normalized plan-file references."""
+        prefix = row.get('flow_file_prefix')
+        if pd.notna(prefix):
+            flow_type = {
+                'f': 'Steady',
+                'u': 'Unsteady',
+                'q': 'Quasi-Unsteady',
+            }.get(str(prefix).strip().lower())
+            if flow_type:
+                return flow_type
+
+        # Accept prefixed legacy DataFrames as well as the normalized schema,
+        # where Flow File stores the bare two-digit number.
+        flow_reference = row.get('Flow File')
+        if pd.notna(flow_reference):
+            reference = str(flow_reference).strip().lower()
+            if reference[:1] in {'f', 'u', 'q'}:
+                return {
+                    'f': 'Steady',
+                    'u': 'Unsteady',
+                    'q': 'Quasi-Unsteady',
+                }[reference[0]]
+
+        quasi_number = row.get('quasi_unsteady_number')
+        if pd.notna(quasi_number) and str(quasi_number).strip():
+            return 'Quasi-Unsteady'
+
+        unsteady_number = row.get('unsteady_number')
+        if pd.notna(unsteady_number) and str(unsteady_number).strip():
+            return 'Unsteady'
+
+        # Backward compatibility: before flow_file_prefix was added, a bare
+        # Flow File value with no unsteady_number denoted steady flow.
+        if pd.notna(flow_reference) and str(flow_reference).strip():
+            return 'Steady'
+
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_geometry(row: pd.Series) -> str:
+        """Return the hydraulic inventory class for a geometry row."""
+        metadata_valid = row.get('geometry_metadata_valid')
+        if pd.isna(metadata_valid) or not bool(metadata_valid):
+            return 'Unknown'
+
+        has_1d = row.get('has_1d_xs')
+        has_2d = row.get('has_2d_mesh')
+        has_1d = False if pd.isna(has_1d) else bool(has_1d)
+        has_2d = False if pd.isna(has_2d) else bool(has_2d)
+
+        if has_1d and has_2d:
+            return '1D/2D'
+        if has_2d:
+            return '2D'
+        if has_1d:
+            return '1D'
+        return 'Unknown'
+
+    @staticmethod
+    def _classify_plan_type(row: pd.Series) -> tuple[str, bool, Optional[str]]:
+        """Map flow and geometry classes into the supported compute taxonomy."""
+        flow_type = row.get('flow_type')
+        geometry_type = row.get('geometry_type')
+
+        if flow_type == 'Unknown':
+            return 'unknown', False, 'Plan flow reference is missing or unsupported'
+
+        if geometry_type == 'Unknown':
+            metadata_error = row.get('geometry_metadata_error')
+            if pd.notna(metadata_error) and str(metadata_error).strip():
+                reason = str(metadata_error)
+            else:
+                reason = (
+                    'Geometry contains no supported 1D cross sections or '
+                    '2D flow areas'
+                )
+            return 'unknown', False, reason
+
+        if flow_type == 'Steady':
+            if geometry_type == '1D':
+                return 'steady_1d', True, None
+            return (
+                'unknown',
+                False,
+                'The HEC-RAS steady solver does not support 2D flow areas',
+            )
+
+        if flow_type == 'Quasi-Unsteady':
+            if geometry_type == '1D':
+                return 'quasi_unsteady_1d', True, None
+            return (
+                'unknown',
+                False,
+                'Quasi-unsteady plans with 2D flow areas are unsupported',
+            )
+
+        if flow_type == 'Unsteady':
+            plan_type = {
+                '1D': 'unsteady_1d',
+                '2D': 'unsteady_2d',
+                '1D/2D': 'unsteady_1d_2d',
+            }.get(geometry_type)
+            if plan_type:
+                return plan_type, True, None
+
+        return 'unknown', False, 'Unsupported flow and geometry combination'
+
+    def _enrich_plan_classification(self, plan_df: pd.DataFrame) -> pd.DataFrame:
+        """Join geometry provenance to plans and derive execution classes.
+
+        The stable ``plan_type`` values are ``steady_1d``, ``unsteady_1d``,
+        ``unsteady_2d``, ``unsteady_1d_2d``, ``quasi_unsteady_1d``, and
+        ``unknown``.  HEC-RAS has no steady 2D solver, so a steady plan that
+        references a mesh geometry fails closed as ``unknown`` with an
+        explanatory ``plan_classification_reason``.
+        """
+        result = plan_df.copy()
+        geometry_columns = [
+            'has_1d_xs',
+            'has_2d_mesh',
+            'num_cross_sections',
+            'mesh_cell_count',
+            'mesh_area_names',
+            'geometry_metadata_source',
+            'geometry_metadata_valid',
+            'geometry_metadata_error',
+        ]
+        derived_columns = [
+            'geometry_type',
+            'plan_type',
+            'plan_classification_valid',
+            'plan_classification_reason',
+        ]
+
+        if result.empty:
+            for column in ['flow_type', *geometry_columns, *derived_columns]:
+                if column not in result.columns:
+                    result[column] = pd.Series(dtype='object')
+            return result
+
+        result['flow_type'] = result.apply(self._classify_plan_flow, axis=1)
+        result = result.drop(
+            columns=[
+                column for column in [*geometry_columns, *derived_columns]
+                if column in result.columns
+            ],
+            errors='ignore',
+        )
+
+        geom_df = getattr(self, 'geom_df', None)
+        if geom_df is not None and not geom_df.empty and 'geom_number' in geom_df.columns:
+            available_columns = [
+                column for column in geometry_columns if column in geom_df.columns
+            ]
+            geometry_lookup = geom_df[['geom_number', *available_columns]].copy()
+            geometry_lookup = geometry_lookup.rename(
+                columns={'geom_number': 'geometry_number'}
+            )
+            geometry_lookup['geometry_number'] = (
+                geometry_lookup['geometry_number'].astype(str).str.zfill(2)
+            )
+            geometry_lookup['_geometry_metadata_joined'] = True
+            geometry_lookup = geometry_lookup.drop_duplicates(
+                subset=['geometry_number'], keep='first'
+            )
+
+            result['geometry_number'] = result['geometry_number'].apply(
+                lambda value: str(value).zfill(2) if pd.notna(value) else value
+            )
+            result['_plan_row_order'] = range(len(result))
+            result = result.merge(
+                geometry_lookup,
+                how='left',
+                on='geometry_number',
+                validate='many_to_one',
+            )
+            result = result.sort_values('_plan_row_order').drop(
+                columns=['_plan_row_order']
+            )
+            geometry_joined = result.pop('_geometry_metadata_joined').eq(True)
+        else:
+            geometry_joined = pd.Series(False, index=result.index)
+
+        defaults = {
+            'has_1d_xs': pd.NA,
+            'has_2d_mesh': pd.NA,
+            'num_cross_sections': pd.NA,
+            'mesh_cell_count': pd.NA,
+            'mesh_area_names': None,
+            'geometry_metadata_source': 'unavailable',
+            'geometry_metadata_valid': False,
+            'geometry_metadata_error': None,
+        }
+        for column, default in defaults.items():
+            if column not in result.columns:
+                result[column] = default
+
+        missing_geometry = ~geometry_joined.astype(bool)
+        result.loc[missing_geometry, 'geometry_metadata_source'] = 'unavailable'
+        result.loc[missing_geometry, 'geometry_metadata_valid'] = False
+        result.loc[missing_geometry, ['has_1d_xs', 'has_2d_mesh']] = pd.NA
+
+        missing_reference = missing_geometry & result['geometry_number'].isna()
+        missing_lookup = missing_geometry & ~result['geometry_number'].isna()
+        result.loc[missing_reference, 'geometry_metadata_error'] = (
+            'Plan geometry reference is missing'
+        )
+        result.loc[missing_lookup, 'geometry_metadata_error'] = (
+            'Referenced geometry was not found in geom_df'
+        )
+
+        for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+            result[column] = result[column].astype('boolean')
+        for column in ['num_cross_sections', 'mesh_cell_count']:
+            result[column] = pd.to_numeric(result[column], errors='coerce').astype('Int64')
+
+        result['geometry_type'] = result.apply(self._classify_geometry, axis=1)
+        plan_classes = result.apply(
+            self._classify_plan_type,
+            axis=1,
+            result_type='expand',
+        )
+        plan_classes.columns = [
+            'plan_type',
+            'plan_classification_valid',
+            'plan_classification_reason',
+        ]
+        result[plan_classes.columns] = plan_classes
+        result['plan_classification_valid'] = (
+            result['plan_classification_valid'].astype('boolean')
+        )
+        return result
+
     def _ensure_required_columns(self):
         """Ensure all required columns exist in plan_df."""
         required_columns = [
-            'plan_number', 'unsteady_number', 'geometry_number',
-            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+            'plan_number', 'unsteady_number', 'quasi_unsteady_number',
+            'geometry_number', 'sediment_number', 'flow_file_prefix',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
+            'Sediment File', 'Sediment Path', 'full_path'
         ]
         
         for col in required_columns:
@@ -301,6 +546,7 @@ class RasPrj:
             try:
                 self._set_geom_path(idx, row)
                 self._set_flow_path(idx, row)
+                self._set_sediment_path(idx, row)
                 
                 if not self.suppress_logging:
                     logger.debug(f"Plan {row['plan_number']} paths set up")
@@ -316,9 +562,17 @@ class RasPrj:
     def _set_flow_path(self, idx: int, row: pd.Series):
         """Set flow path for a plan entry."""
         if pd.notna(row['Flow File']):
-            prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+            prefix = row.get('flow_file_prefix')
+            if pd.isna(prefix):
+                prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
             flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
             self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+    def _set_sediment_path(self, idx: int, row: pd.Series):
+        """Set sediment-data path for a plan entry when one is referenced."""
+        if pd.notna(row.get('Sediment File')):
+            sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+            self.plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
 
     def _set_plan_paths(self):
         """Set full path information for plan files and their associated geometry and flow files."""
@@ -332,11 +586,13 @@ class RasPrj:
                 lambda x: str(self.project_folder / f"{self.project_name}.p{x}")
             )
         
-        # Create the Geom Path and Flow Path columns if they don't exist
+        # Create associated file-path columns if they don't exist
         if 'Geom Path' not in self.plan_df.columns:
             self.plan_df['Geom Path'] = None
         if 'Flow Path' not in self.plan_df.columns:
             self.plan_df['Flow Path'] = None
+        if 'Sediment Path' not in self.plan_df.columns:
+            self.plan_df['Sediment Path'] = None
         
         # Update paths for each plan entry
         for idx, row in self.plan_df.iterrows():
@@ -348,10 +604,15 @@ class RasPrj:
                 
                 # Set flow path if Flow File exists and Flow Path is missing or invalid
                 if pd.notna(row['Flow File']):
-                    # Determine the prefix (u for unsteady, f for steady flow)
-                    prefix = 'u' if pd.notna(row['unsteady_number']) else 'f'
+                    prefix = row.get('flow_file_prefix')
+                    if pd.isna(prefix):
+                        prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
                     flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                     self.plan_df.at[idx, 'Flow Path'] = str(flow_path)
+
+                if pd.notna(row.get('Sediment File')):
+                    sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+                    self.plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
                 
                 if not self.suppress_logging:
                     logger.debug(f"Plan {row['plan_number']} paths set up")
@@ -511,6 +772,16 @@ class RasPrj:
             description_match = re.search(r'BEGIN DESCRIPTION:?\s*\n(.*?)\nEND DESCRIPTION', content, re.DOTALL | re.IGNORECASE)
             if description_match:
                 plan_info['description'] = description_match.group(1).strip()
+
+            # Plan keys are top-level line records.  Excluding the description
+            # block prevents prose such as ``Flow File=u99`` from shadowing
+            # the real plan reference.
+            key_content = re.sub(
+                r'BEGIN DESCRIPTION:?\s*\n.*?\nEND DESCRIPTION',
+                '',
+                content,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
             
             # BEGIN Exception to Style Guide, this is needed to keep the key names consistent with the plan file keys.
             
@@ -527,6 +798,7 @@ class RasPrj:
                 'Run HTab': r'Run HTab=(.+)',
                 'Run PostProcess': r'Run PostProcess=(.+)',
                 'Run Sediment': r'Run Sediment=(.+)',
+                'Sediment File': r'Sediment File=(.+)',
                 'Run UNet': r'Run UNet=(.+)',
                 'Run WQNet': r'Run WQNet=(.+)',
                 'Short Identifier': r'Short Identifier=(.+)',
@@ -553,7 +825,11 @@ class RasPrj:
                 plan_info[key] = None
             
             for key, pattern in supported_plan_keys.items():
-                match = re.search(pattern, content)
+                match = re.search(
+                    rf'^{pattern}$',
+                    key_content,
+                    flags=re.MULTILINE,
+                )
                 if match:
                     value = match.group(1).strip()
                     # Convert core values to integers if they exist
@@ -667,11 +943,12 @@ class RasPrj:
         # Fixes bug where empty dict {} evaluated to False, skipping these calls
         entry.update(self._process_flow_file(plan_info))
         entry.update(self._process_geom_file(plan_info))
+        entry.update(self._process_sediment_file(plan_info))
 
         # Add remaining plan info (only if data exists)
         if plan_info:
             for key, value in plan_info.items():
-                if key not in ['Flow File', 'Geom File']:
+                if key not in ['Flow File', 'Geom File', 'Sediment File']:
                     entry[key] = value
 
         # Add HDF results path
@@ -683,14 +960,20 @@ class RasPrj:
     def _process_flow_file(self, plan_info: dict) -> dict:
         """Process flow file information from plan info."""
         flow_file = plan_info.get('Flow File')
-        if flow_file and flow_file.startswith('u'):
+        if flow_file and len(flow_file) > 1 and flow_file[0].lower() in {'f', 'u', 'q'}:
+            prefix = flow_file[0].lower()
+            number = flow_file[1:]
             return {
-                'unsteady_number': flow_file[1:],
-                'Flow File': flow_file[1:]
+                'unsteady_number': number if prefix == 'u' else None,
+                'quasi_unsteady_number': number if prefix == 'q' else None,
+                'flow_file_prefix': prefix,
+                'Flow File': number,
             }
         return {
             'unsteady_number': None,
-            'Flow File': flow_file[1:] if flow_file and flow_file.startswith('f') else None
+            'quasi_unsteady_number': None,
+            'flow_file_prefix': None,
+            'Flow File': None,
         }
 
     def _process_geom_file(self, plan_info: dict) -> dict:
@@ -704,6 +987,20 @@ class RasPrj:
         return {
             'geometry_number': None,
             'Geom File': None
+        }
+
+    def _process_sediment_file(self, plan_info: dict) -> dict:
+        """Process a plan's optional sediment-data file reference."""
+        sediment_file = plan_info.get('Sediment File')
+        if sediment_file and len(sediment_file) > 1 and sediment_file[0].lower() == 's':
+            number = sediment_file[1:]
+            return {
+                'sediment_number': number,
+                'Sediment File': number,
+            }
+        return {
+            'sediment_number': None,
+            'Sediment File': None,
         }
 
     def _parse_unsteady_file(self, unsteady_file_path):
@@ -1196,8 +1493,10 @@ class RasPrj:
         # Ensure required columns exist and set file paths
         # This mirrors what _load_project_data() does during initialization
         required_columns = [
-            'plan_number', 'unsteady_number', 'geometry_number',
-            'Geom File', 'Geom Path', 'Flow File', 'Flow Path', 'full_path'
+            'plan_number', 'unsteady_number', 'quasi_unsteady_number',
+            'geometry_number', 'sediment_number', 'flow_file_prefix',
+            'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
+            'Sediment File', 'Sediment Path', 'full_path'
         ]
         for col in required_columns:
             if col not in plan_df.columns:
@@ -1209,11 +1508,16 @@ class RasPrj:
                 geom_path = self.project_folder / f"{self.project_name}.g{row['Geom File']}"
                 plan_df.at[idx, 'Geom Path'] = str(geom_path)
             if pd.notna(row.get('Flow File')):
-                prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
+                prefix = row.get('flow_file_prefix')
+                if pd.isna(prefix):
+                    prefix = 'u' if pd.notna(row.get('unsteady_number')) else 'f'
                 flow_path = self.project_folder / f"{self.project_name}.{prefix}{row['Flow File']}"
                 plan_df.at[idx, 'Flow Path'] = str(flow_path)
+            if pd.notna(row.get('Sediment File')):
+                sediment_path = self.project_folder / f"{self.project_name}.s{row['Sediment File']}"
+                plan_df.at[idx, 'Sediment Path'] = str(sediment_path)
 
-        return plan_df
+        return self._enrich_plan_classification(plan_df)
 
     @log_call
     def get_flow_entries(self):
@@ -1281,6 +1585,8 @@ class RasPrj:
                 - description (str): Description from BEGIN/END DESCRIPTION block
                 - has_1d_xs (bool): True if geometry has 1D cross sections
                 - has_2d_mesh (bool): True if geometry has 2D mesh areas
+                - geometry_type (str): ``1D``, ``2D``, ``1D/2D``, or
+                  ``Unknown``
                 - num_cross_sections (int): Count of 1D cross sections
                 - num_inline_structures (int): Total count of bridges + culverts + weirs
                 - num_bridges (int): Count of bridge structures
@@ -1289,8 +1595,13 @@ class RasPrj:
                 - num_gates (int): Count of gate structures
                 - num_lateral_structures (int): Count of lateral structures
                 - num_sa_2d_connections (int): Count of SA to 2D connections
-                - mesh_cell_count (int): Total 2D mesh cells across all areas
+                - mesh_cell_count (int | None): Total 2D mesh cells when an
+                  HDF source is available
                 - mesh_area_names (list[str]): Names of 2D flow areas
+                - geometry_metadata_source (str): ``hdf``, ``text``, or
+                  ``unavailable``
+                - geometry_metadata_valid (bool): Whether inspection succeeded
+                - geometry_metadata_error (str | None): Source inspection error
 
         Raises:
             RuntimeError: If the project has not been initialized.
@@ -1298,8 +1609,9 @@ class RasPrj:
         Note:
             Geometry metadata is extracted using GeomMetadata, which prefers HDF-based
             extraction (fast) when .g##.hdf files exist, with plain text fallback.
-            If metadata extraction fails for any geometry, default values are used
-            (0 for counts, False for booleans, empty list for mesh_area_names).
+            Failed inspection is explicit: the nullable ``has_*`` values remain
+            unknown and ``geometry_metadata_valid`` is false.  This prevents
+            execution dispatch from treating missing metadata as 1D.
 
         Example:
             >>> geom_entries = ras.get_geom_entries()
@@ -1331,7 +1643,14 @@ class RasPrj:
             geom_df = pd.DataFrame({'geom_file': geom_entries})
             if geom_df.empty:
                 logger.warning(f"No geometry entries found in {self.prj_file}")
-                return pd.DataFrame(columns=['geom_file', 'geom_number', 'full_path', 'hdf_path'])
+                return pd.DataFrame(
+                    columns=[
+                        'geom_file', 'geom_number', 'full_path', 'hdf_path',
+                        'has_1d_xs', 'has_2d_mesh', 'geometry_type',
+                        'geometry_metadata_source', 'geometry_metadata_valid',
+                        'geometry_metadata_error',
+                    ]
+                )
             geom_df['geom_number'] = geom_df['geom_file'].str.extract(r'(\d+)$')
             geom_df['full_path'] = geom_df['geom_file'].apply(lambda x: str(self.project_folder / f"{self.project_name}.{x}"))
             geom_df['hdf_path'] = geom_df['full_path'] + ".hdf"
@@ -1349,7 +1668,9 @@ class RasPrj:
                     'has_1d_xs', 'has_2d_mesh', 'num_cross_sections',
                     'num_inline_structures', 'num_bridges', 'num_culverts',
                     'num_weirs', 'num_gates', 'num_lateral_structures',
-                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names'
+                    'num_sa_2d_connections', 'mesh_cell_count', 'mesh_area_names',
+                    'geometry_metadata_source', 'geometry_metadata_valid',
+                    'geometry_metadata_error'
                 ]
                 for col in metadata_columns:
                     default = GeomMetadata.DEFAULT_COUNTS.get(col)
@@ -1377,7 +1698,18 @@ class RasPrj:
 
                     except Exception as e:
                         logger.debug(f"Failed to extract metadata for {row['geom_file']}: {e}")
-                        # Keep default values on failure
+                        geom_df.at[idx, 'geometry_metadata_source'] = 'unavailable'
+                        geom_df.at[idx, 'geometry_metadata_valid'] = False
+                        geom_df.at[idx, 'geometry_metadata_error'] = str(e)
+                        geom_df.at[idx, 'has_1d_xs'] = None
+                        geom_df.at[idx, 'has_2d_mesh'] = None
+
+                for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+                    geom_df[column] = geom_df[column].astype('boolean')
+                for column in ['num_cross_sections', 'mesh_cell_count']:
+                    geom_df[column] = pd.to_numeric(
+                        geom_df[column], errors='coerce'
+                    ).astype('Int64')
 
                 metadata_elapsed = time.perf_counter() - metadata_start
                 if not self.suppress_logging:
@@ -1387,6 +1719,21 @@ class RasPrj:
                 logger.warning(f"GeomMetadata not available, skipping metadata extraction: {e}")
             except Exception as e:
                 logger.warning(f"Geometry metadata extraction failed: {e}")
+
+            required_metadata_defaults = {
+                'has_1d_xs': pd.NA,
+                'has_2d_mesh': pd.NA,
+                'geometry_metadata_source': 'unavailable',
+                'geometry_metadata_valid': False,
+                'geometry_metadata_error': 'Geometry metadata extraction unavailable',
+            }
+            for column, default in required_metadata_defaults.items():
+                if column not in geom_df.columns:
+                    geom_df[column] = default
+            for column in ['has_1d_xs', 'has_2d_mesh', 'geometry_metadata_valid']:
+                geom_df[column] = geom_df[column].astype('boolean')
+
+            geom_df['geometry_type'] = geom_df.apply(self._classify_geometry, axis=1)
 
             # Extract geom_title and description from each geometry file
             geom_df['geom_title'] = None
@@ -1708,7 +2055,10 @@ class RasPrj:
         
         if entry_type == 'Plan':
             # Set required column order
-            first_cols = ['plan_number', 'unsteady_number', 'geometry_number']
+            first_cols = [
+                'plan_number', 'unsteady_number', 'quasi_unsteady_number',
+                'geometry_number', 'sediment_number', 'flow_file_prefix'
+            ]
             
             # Standard plan key columns in the exact order specified
             plan_key_cols = [
@@ -1721,7 +2071,10 @@ class RasPrj:
             ]
             
             # Additional convenience columns
-            file_path_cols = ['Geom File', 'Geom Path', 'Flow File', 'Flow Path']
+            file_path_cols = [
+                'Geom File', 'Geom Path', 'Flow File', 'Flow Path',
+                'Sediment File', 'Sediment Path'
+            ]
             
             # Special columns that must be preserved
             special_cols = ['HDF_Results_Path']
@@ -1922,7 +2275,12 @@ class RasPrj:
             entry = {
                 'plan_number': row['plan_number'],
                 'plan_title': row.get('Plan Title', row.get('plan_title', '')),
-                'flow_type': row.get('flow_type', 'Unsteady'),
+                'flow_type': row.get('flow_type'),
+                'flow_file_prefix': row.get('flow_file_prefix'),
+                'unsteady_number': row.get('unsteady_number'),
+                'quasi_unsteady_number': row.get('quasi_unsteady_number'),
+                'Flow File': row.get('Flow File'),
+                'Flow Path': row.get('Flow Path'),
                 'HDF_Results_Path': row.get('HDF_Results_Path'),
                 'Program Version': row.get('Program Version'),
             }
@@ -1998,7 +2356,8 @@ def init_ras_project(
     ras_version=None,
     ras_object=None,
     load_results_summary=True,
-    hide_intro=False
+    hide_intro=False,
+    accept_tcu=False,
 ) -> 'RasPrj':
     """
     Initialize a RAS project for use with the ras-commander library.
@@ -2032,6 +2391,10 @@ def init_ras_project(
         hide_intro (bool, default=False): If True, suppress the agent intro banner that is
                                           printed after initialization. The banner provides
                                           API guidance for AI agents using the library.
+        accept_tcu (bool, default=False): If True, explicitly transfer an
+                                          already accepted HEC-RAS state for
+                                          this user/version through RasTcu.
+                                          False is read-only and never writes.
 
     Returns:
         RasPrj: An initialized RasPrj instance.
@@ -2194,6 +2557,26 @@ def init_ras_project(
     # Store version for RasControl (legacy COM interface support)
     ras_object.ras_version = ras_version if ras_version else detected_version
 
+    # Read-only by default.  Acceptance transfer is an explicit caller choice
+    # and requires an already accepted donor state; it is never synthesized.
+    try:
+        from .RasTcu import RasTcu
+
+        tcu_status = RasTcu.status(ras_object=ras_object)
+        if tcu_status.accepted is False:
+            if accept_tcu:
+                tcu_status = RasTcu.accept(ras_object=ras_object)
+            else:
+                logger.warning(
+                    "HEC-RAS %s Terms & Conditions for Use have not been "
+                    "accepted for the current Windows user. Headless launches "
+                    "will remain blocked until an authorized user accepts in "
+                    "the GUI or explicitly requests RasTcu.accept().",
+                    tcu_status.version or "",
+                )
+    except Exception as tcu_exc:
+        logger.debug("TCU acceptance check skipped: %s", tcu_exc)
+
     # NOTE: Removed automatic global ras update for thread-safety
     # When ras_object is explicitly passed, we should NOT modify the global ras object
     # This allows multiple threads to use separate RasPrj instances without conflicts
@@ -2278,7 +2661,7 @@ def get_ras_exe(ras_version=None):
     4. As a fallback, return "Ras.exe" but log an error
     
     Args:
-        ras_version (str, optional): Either a version number (e.g., "7.0") or 
+        ras_version (str, optional): Either a version number (e.g., "7.0.1") or
                                      a full path to the HEC-RAS executable 
                                      (e.g., "D:/Programs/HEC/HEC-RAS/6.6/Ras.exe").
     
@@ -2286,7 +2669,7 @@ def get_ras_exe(ras_version=None):
         str: The full path to the HEC-RAS executable or "Ras.exe" if not found.
     
     Note:
-        - HEC-RAS version numbers include: "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
+        - HEC-RAS version numbers include: "7.0.1", "7.0", "6.6", "6.5", "6.4.1", "6.3", etc.
         - The default installation path follows: C:/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe
         - For non-standard installations, provide the full path to Ras.exe
         - Returns "Ras.exe" if no valid path is found, with error logged
@@ -2305,7 +2688,7 @@ def get_ras_exe(ras_version=None):
     # ACTUAL folder names in C:/Program Files (x86)/HEC/HEC-RAS/
     # This list matches the exact folder names on disk (verified 2026-04-19)
     ras_version_folders = [
-        "7.0", "6.7 Beta 5", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
+        "7.0.1", "7.0", "6.7 Beta 5", "6.7 Beta 4a", "6.7 Beta 4", "6.6", "6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0",
         "5.0.7", "5.0.6", "5.0.5", "5.0.4", "5.0.3", "5.0.1", "5.0",
         "4.1.0", "4.0"
     ]
@@ -2344,6 +2727,7 @@ def get_ras_exe(ras_version=None):
         "6.7.0": "6.7 Beta 5", # Legacy dotted normalization rewrites 6.70 to 6.7.0
         "67": "6.7 Beta 5",
         "70": "7.0",
+        "701": "7.0.1",
     }
 
     # Check if input is a direct path to an executable
@@ -2358,10 +2742,13 @@ def get_ras_exe(ras_version=None):
     #   5.03 -> 5.0.3
     #   6.31 -> 6.3.1
     #   4.10 -> 4.1.0
-    legacy_dotted_match = re.fullmatch(r'(\d)\.(\d{2})', version_str)
+    legacy_dotted_match = re.fullmatch(r'(\d+)\.(\d{2})', version_str)
     if legacy_dotted_match:
         major, compact_minor = legacy_dotted_match.groups()
-        version_str = f"{major}.{compact_minor[0]}.{int(compact_minor[1])}"
+        if compact_minor[1] == "0":
+            version_str = f"{int(major)}.{int(compact_minor[0])}"
+        else:
+            version_str = f"{int(major)}.{int(compact_minor[0])}.{int(compact_minor[1])}"
         logger.debug(f"Normalized legacy dotted version '{ras_version}' to '{version_str}'")
 
     # Check if there's an alias for this version

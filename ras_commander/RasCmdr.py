@@ -68,7 +68,7 @@ from .Decorators import log_call
 from .RasBco import BcoMonitor
 from .ComputeResults import ComputeResult, ComputeParallelResult
 import pandas as pd
-from typing import Callable
+from typing import Callable, Mapping
 
 logger = get_logger(__name__)
 
@@ -87,6 +87,71 @@ class RasCmdr:
         compute_parallel(): Execute multiple plans in parallel using worker folders
         compute_test_mode(): Execute multiple plans sequentially in a test folder
     """
+
+    @staticmethod
+    def _prepare_linux_unsteady_input(tmp_hdf: Union[str, Path]) -> Dict[str, Any]:
+        """Remove stale solver results from a preprocessed Linux input HDF."""
+        import h5py
+
+        path = Path(tmp_hdf)
+        with h5py.File(path, "r+") as hdf:
+            results_present_before = "Results" in hdf
+            if results_present_before:
+                del hdf["Results"]
+                hdf.flush()
+            results_present_after = "Results" in hdf
+        return {
+            "path": str(path),
+            "results_group_present_before": results_present_before,
+            "results_group_present_after": results_present_after,
+            "results_group_removed": bool(
+                results_present_before and not results_present_after
+            ),
+        }
+
+    @staticmethod
+    def _inspect_linux_unsteady_completion(
+        tmp_hdf: Union[str, Path],
+        log_path: Union[str, Path],
+    ) -> Dict[str, Any]:
+        """Require native-Linux log and HDF content before accepting exit zero."""
+        import h5py
+
+        hdf_path = Path(tmp_hdf)
+        solver_log = Path(log_path)
+        text = solver_log.read_text(errors="replace") if solver_log.exists() else ""
+        fatal_signatures = tuple(
+            signature
+            for signature in (
+                "HDF_ERROR",
+                "Segmentation fault",
+                "forrtl: severe",
+                "The output must not already exist",
+            )
+            if signature.casefold() in text.casefold()
+        )
+        completion_signal = "Finished Unsteady Flow Simulation"
+        completion_signal_present = completion_signal in text
+        results_unsteady_present = False
+        hdf_error = None
+        try:
+            with h5py.File(hdf_path, "r") as hdf:
+                results_unsteady_present = "Results/Unsteady" in hdf
+        except (OSError, ValueError) as exc:
+            hdf_error = str(exc)
+        return {
+            "completion_signal": completion_signal,
+            "completion_signal_present": completion_signal_present,
+            "results_unsteady_present": results_unsteady_present,
+            "fatal_signatures": list(fatal_signatures),
+            "hdf_error": hdf_error,
+            "passed": bool(
+                completion_signal_present
+                and results_unsteady_present
+                and not fatal_signatures
+                and hdf_error is None
+            ),
+        }
 
     @staticmethod
     def _get_hdf_path(plan_number: Union[str, Number], ras_object: 'RasPrj') -> Path:
@@ -328,6 +393,386 @@ class RasCmdr:
             logger.warning(f"Failed to kill process tree for PID {pid}: {_e}")
 
     @staticmethod
+    def _communicate_with_watchdog(
+        process: subprocess.Popen,
+        watchdog,
+        timeout_sec: Optional[int],
+        plan_number,
+    ):
+        """Drain a process while polling modal supervision and wall timeout."""
+        deadline = (
+            time.monotonic() + timeout_sec if timeout_sec is not None else None
+        )
+        while True:
+            blocked_reason = watchdog.blocked_reason if watchdog else None
+            if blocked_reason:
+                RasCmdr._kill_process_tree(process.pid)
+                try:
+                    process.communicate(timeout=5)
+                except Exception:
+                    pass
+                raise RuntimeError(blocked_reason)
+
+            wait_slice = 0.25
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    RasCmdr._kill_process_tree(process.pid)
+                    try:
+                        process.communicate(timeout=5)
+                    except Exception:
+                        pass
+                    blocked_reason = watchdog.blocked_reason if watchdog else None
+                    if blocked_reason:
+                        raise RuntimeError(blocked_reason)
+                    raise RuntimeError(
+                        f"Plan {plan_number}: HEC-RAS execution exceeded "
+                        f"timeout_sec={timeout_sec}s; process tree killed"
+                    )
+                wait_slice = min(wait_slice, remaining)
+
+            try:
+                return process.communicate(timeout=wait_slice)
+            except subprocess.TimeoutExpired:
+                continue
+
+    @staticmethod
+    def _compute_process_cwd(project_folder, ras_exe_path) -> str:
+        """Return a CreateProcess-safe working directory for a computation.
+
+        Windows accepts extended-length (``\\\\?\\``) paths for most file I/O,
+        but ``CreateProcess``/Wine can reject such a path when it is supplied as
+        the child working directory (``WinError 123``).  The project and plan
+        remain explicit command-line arguments, so the HEC-RAS installation
+        directory is a safe working directory for this narrow case.
+        """
+        project_text = str(project_folder)
+        if project_text.startswith("\\\\?\\") or len(project_text) >= 260:
+            return str(Path(ras_exe_path).parent)
+        return project_text
+
+    @staticmethod
+    def _compute_process_invocation(ras_exe_path, project_path, plan_path):
+        """Build an invocation that does not route long paths through cmd.exe."""
+        original_project_text = str(project_path)
+        original_plan_text = str(plan_path)
+        project_text = RasCmdr._windows_product_path(project_path)
+        plan_text = RasCmdr._windows_product_path(plan_path)
+        if (
+            original_project_text.startswith("\\\\?\\")
+            or original_plan_text.startswith("\\\\?\\")
+            or max(len(original_project_text), len(original_plan_text)) >= 260
+        ):
+            return [str(ras_exe_path), "-c", project_text, plan_text], False
+        return (
+            f'"{ras_exe_path}" -c "{project_text}" "{plan_text}"',
+            True,
+        )
+
+    @staticmethod
+    def _windows_product_path(path) -> str:
+        """Return a short Windows alias for a long existing product input.
+
+        Python file I/O can use extended-length paths, while legacy Windows
+        products may reject the ``\\\\?\\`` form.  ``GetShortPathNameW`` keeps
+        the artifact in place and supplies the compatible alias expected by
+        those products.  If the platform cannot supply an alias, the original
+        path is returned so the caller receives the vendor failure unchanged.
+        """
+        text = str(path)
+        if os.name != "nt" or (
+            not text.startswith("\\\\?\\") and len(text) < 260
+        ):
+            return text
+        try:
+            import ctypes
+
+            function = ctypes.windll.kernel32.GetShortPathNameW
+            required = int(function(text, None, 0))
+            if required <= 0:
+                return text
+            buffer = ctypes.create_unicode_buffer(required)
+            written = int(function(text, buffer, required))
+            if written <= 0 or written >= required or not buffer.value:
+                return text
+            return buffer.value
+        except (AttributeError, OSError, ValueError):
+            return text
+
+    @staticmethod
+    def _define_windows_project_drive(project_folder):
+        """Map a free drive letter to a project folder for legacy products."""
+        if os.name != "nt":
+            return None
+        text = str(project_folder)
+        if text.startswith("\\\\?\\UNC\\"):
+            target = "\\??\\UNC\\" + text[8:]
+        elif text.startswith("\\\\?\\"):
+            target = "\\??\\" + text[4:]
+        else:
+            target = "\\??\\" + text
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            logical_drives = int(kernel32.GetLogicalDrives())
+            for letter in "QPONMLKJIHGFED":
+                bit = 1 << (ord(letter) - ord("A"))
+                if logical_drives & bit:
+                    continue
+                device = f"{letter}:"
+                if kernel32.DefineDosDeviceW(0x00000001, device, target):
+                    logger.info(
+                        "Mapped a temporary Windows drive for long-path "
+                        "HEC-RAS product execution"
+                    )
+                    return {
+                        "kind": "drive",
+                        "device": device,
+                        "target": target,
+                    }
+        except (AttributeError, OSError, ValueError):
+            return None
+        return None
+
+    @staticmethod
+    def _remove_windows_project_drive(mapping) -> None:
+        if not mapping or os.name != "nt":
+            return
+        if mapping.get("kind") == "symlink":
+            alias = Path(mapping["path"])
+            try:
+                alias.unlink(missing_ok=True)
+                try:
+                    alias.parent.rmdir()
+                except OSError:
+                    pass
+            except OSError:
+                logger.warning("Could not remove temporary long-path symlink")
+            return
+        try:
+            import ctypes
+
+            removed = ctypes.windll.kernel32.DefineDosDeviceW(
+                0x00000001 | 0x00000002 | 0x00000004,
+                mapping["device"],
+                mapping["target"],
+            )
+            if not removed:
+                ctypes.windll.kernel32.DefineDosDeviceW(
+                    0x00000002,
+                    mapping["device"],
+                    None,
+                )
+        except (AttributeError, OSError, ValueError):
+            logger.warning("Could not remove temporary long-path drive mapping")
+
+    @staticmethod
+    def _define_windows_project_symlink(project_folder):
+        """Create a short directory alias when a drive mapping is unavailable."""
+        if os.name != "nt":
+            return None
+        base = Path(r"C:\ras-qualification-links")
+        alias = base / f"rasq-{os.getpid()}-{time.time_ns()}"
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            os.symlink(
+                str(project_folder),
+                str(alias),
+                target_is_directory=True,
+            )
+            if alias.is_dir():
+                logger.info(
+                    "Created a temporary Windows directory alias for long-path "
+                    "HEC-RAS product execution"
+                )
+                return {"kind": "symlink", "path": str(alias)}
+        except OSError:
+            pass
+        try:
+            alias.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+
+    @staticmethod
+    def _prepare_windows_product_paths(project_folder, project_path, plan_path):
+        """Return HEC-RAS-compatible paths plus any drive mapping to clean up."""
+        project_text = str(project_path)
+        plan_text = str(plan_path)
+        project_alias = RasCmdr._windows_product_path(project_path)
+        plan_alias = RasCmdr._windows_product_path(plan_path)
+        aliases_usable = all(
+            not value.startswith("\\\\?\\") and len(value) < 260
+            for value in (project_alias, plan_alias)
+        )
+        originals_long = any(
+            value.startswith("\\\\?\\") or len(value) >= 260
+            for value in (project_text, plan_text)
+        )
+        if not originals_long or aliases_usable:
+            return project_alias, plan_alias, None
+
+        configured_drive = os.environ.get(
+            "RAS_COMMANDER_LONG_PATH_ROOT_DRIVE", ""
+        ).strip().rstrip("\\")
+        configured_root = os.environ.get(
+            "RAS_COMMANDER_LONG_PATH_ROOT", ""
+        ).strip().rstrip("\\")
+        folder_text = str(project_folder)
+        if folder_text.startswith("\\\\?\\"):
+            folder_text = folder_text[4:]
+        if configured_drive and configured_root:
+            root_casefold = configured_root.casefold()
+            folder_casefold = folder_text.casefold()
+            if folder_casefold == root_casefold:
+                relative_folder = ""
+            elif folder_casefold.startswith(root_casefold + "\\"):
+                relative_folder = folder_text[len(configured_root) + 1 :]
+            else:
+                relative_folder = None
+            if relative_folder is not None:
+                alias_root = configured_drive + "\\"
+                if relative_folder:
+                    alias_root += relative_folder.rstrip("\\") + "\\"
+                mapped_project = alias_root + Path(project_text).name
+                mapped_plan = alias_root + Path(plan_text).name
+                if (
+                    len(mapped_project) < 260
+                    and len(mapped_plan) < 260
+                    and Path(mapped_project).is_file()
+                    and Path(mapped_plan).is_file()
+                ):
+                    logger.info(
+                        "Using the isolated Wine long-path drive for HEC-RAS "
+                        "product execution"
+                    )
+                    return mapped_project, mapped_plan, None
+
+        mapping = RasCmdr._define_windows_project_drive(project_folder)
+        if mapping:
+            root = mapping["device"] + "\\"
+            mapped_project = root + Path(project_text).name
+            mapped_plan = root + Path(plan_text).name
+        else:
+            mapped_project = mapped_plan = ""
+        if mapping and (
+            not Path(mapped_project).is_file() or not Path(mapped_plan).is_file()
+        ):
+            RasCmdr._remove_windows_project_drive(mapping)
+            mapping = None
+
+        if not mapping:
+            mapping = RasCmdr._define_windows_project_symlink(project_folder)
+            if mapping:
+                root = mapping["path"] + "\\"
+                mapped_project = root + Path(project_text).name
+                mapped_plan = root + Path(plan_text).name
+
+        if not mapping or (
+            not Path(mapped_project).is_file() or not Path(mapped_plan).is_file()
+        ):
+            RasCmdr._remove_windows_project_drive(mapping)
+            raise RuntimeError(
+                "Temporary Windows path alias did not resolve the long-path "
+                "HEC-RAS project and plan files"
+            )
+        return mapped_project, mapped_plan, mapping
+
+    @staticmethod
+    def _create_long_path_execution_shadow(project_folder, ras_exe_path):
+        """Clone a long Windows project to a short, task-private execution path."""
+        source = Path(project_folder)
+        source_text = str(source)
+        if os.name != "nt" or not (
+            source_text.startswith("\\\\?\\") or len(source_text) >= 260
+        ):
+            return None, None
+        root = Path(r"C:\ras-qualification-execution")
+        shadow_parent = root / f"rasq-{os.getpid()}-{time.time_ns()}"
+        shadow = shadow_parent / source.name
+
+        def ignore_runtime_files(_directory, names):
+            ignored = set(RasUtils.ignore_windows_reserved(_directory, names))
+            if ".ras-commander-project.lock" in names:
+                ignored.add(".ras-commander-project.lock")
+            return sorted(ignored)
+
+        shadow_parent.mkdir(parents=True, exist_ok=False)
+        shutil.copytree(source, shadow, ignore=ignore_runtime_files)
+        compute_ras = RasPrj()
+        compute_ras.initialize(shadow, ras_exe_path)
+        details = {
+            "mode": "long_path_execution_shadow",
+            "source_project_folder": source_text,
+            "source_path_length": len(source_text),
+            "shadow_project_folder": str(shadow),
+            "shadow_path_length": len(str(shadow)),
+            "initial_file_count": sum(1 for path in shadow.rglob("*") if path.is_file()),
+            "synchronized": False,
+            "shadow_removed": False,
+        }
+        logger.info(
+            "Created a task-private short execution shadow for a long-path "
+            "HEC-RAS project"
+        )
+        return compute_ras, details
+
+    @staticmethod
+    def _synchronize_long_path_execution_shadow(details) -> Dict[str, Any]:
+        """Copy shadow outputs back to the accepted long-path project and remove it."""
+        if not details:
+            return {}
+        source = Path(details["source_project_folder"])
+        shadow = Path(details["shadow_project_folder"])
+        copied = 0
+        if shadow.is_dir():
+            for path in sorted(shadow.rglob("*")):
+                relative = path.relative_to(shadow)
+                if relative.name == ".ras-commander-project.lock":
+                    continue
+                destination = RasUtils.windows_extended_path(source / relative)
+                if path.is_dir():
+                    destination.mkdir(parents=True, exist_ok=True)
+                elif path.is_file():
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(path, destination)
+                    copied += 1
+        shadow_parent = shadow.parent
+        removal_error = None
+        for delay in (0.0, 0.5, 1.0, 2.0, 4.0, 8.0):
+            if not shadow_parent.exists():
+                break
+            if delay:
+                time.sleep(delay)
+            try:
+                shutil.rmtree(shadow_parent)
+                removal_error = None
+                break
+            except OSError as exc:
+                removal_error = exc
+                try:
+                    import gc
+
+                    gc.collect()
+                except Exception:
+                    pass
+        if shadow_parent.exists() and removal_error is not None:
+            raise removal_error
+        details.update(
+            {
+                "synchronized": True,
+                "synchronized_file_count": copied,
+                "shadow_removed": not shadow_parent.exists(),
+            }
+        )
+        logger.info(
+            "Synchronized HEC-RAS outputs to the long-path project and removed "
+            "its execution shadow"
+        )
+        return details
+
+    @staticmethod
     @log_call
     def compute_plan(
         plan_number: Union[str, Number, Path],
@@ -349,6 +794,7 @@ class RasCmdr:
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
         timeout_sec: Optional[int] = None,
+        process_environment: Optional[Mapping[str, Any]] = None,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -407,19 +853,24 @@ class RasCmdr:
                 passed to ``RasPlan.set_hdf_output_options()`` before execution.
             hdf_output_profile (str, optional): Named HDF output profile to apply before
                 execution. Equivalent to ``use_optimal_hdf_settings=True`` with a profile.
+            process_environment (Mapping[str, Any], optional): Environment variables
+                merged into the child HEC-RAS process only. This is intended for
+                controlled runtime compatibility settings such as OpenMP behavior;
+                the parent Python environment is not mutated.
 
         Returns:
-            ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
+            ComputeResult: Result object with ``success`` bool,
+                ``results_df_row`` (pd.Series or None), and an optional
+                structured ``error`` diagnostic.
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
                 Access execution metrics via ``result.results_df_row`` (e.g., runtime, volume accounting).
                 ``results_df_row`` is None when dest_folder is used, execution fails, or extraction errors.
                 When skip_existing=True and results exist, returns ComputeResult(success=True).
 
-        Raises:
-            ValueError: If the specified dest_folder already exists and is not empty, and overwrite_dest is False.
-            FileNotFoundError: If the plan file or project file cannot be found.
-            PermissionError: If there are issues accessing or writing to the destination folder.
-            subprocess.CalledProcessError: If the HEC-RAS execution fails.
+        Failure handling:
+            Operational failures are returned as ``ComputeResult(success=False,
+            error=...)``. ``BaseException`` subclasses such as
+            ``KeyboardInterrupt`` still propagate after cleanup.
 
         Examples:
             # Run a plan in the original project folder
@@ -470,9 +921,13 @@ class RasCmdr:
         """
         _success = False
         _results_df_row = None
+        _error = None
         _ras_obj = None
         _did_execute = False  # Track if we actually ran HEC-RAS (vs skip/early exit)
         _watchdog = None
+        _product_drive_mapping = None
+        _long_path_shadow = None
+        _execution_details: Dict[str, Any] = {}
         try:
             ras_obj = ras_object if ras_object is not None else ras
             _ras_obj = ras_obj
@@ -502,13 +957,30 @@ class RasCmdr:
                 compute_ras = ras_obj
                 compute_prj_path = ras_obj.prj_file
 
+            if dest_folder is None:
+                shadow_ras, _long_path_shadow = (
+                    RasCmdr._create_long_path_execution_shadow(
+                        compute_ras.project_folder,
+                        compute_ras.ras_exe_path,
+                    )
+                )
+                if shadow_ras is not None:
+                    compute_ras = shadow_ras
+                    compute_prj_path = compute_ras.prj_file
+                    _execution_details.update(_long_path_shadow)
+
             # Determine the plan path
             compute_plan_path = Path(plan_number) if isinstance(plan_number, (str, Path)) and Path(plan_number).is_file() else RasPlan.get_plan_path(plan_number, compute_ras)
 
             if not compute_prj_path or not compute_plan_path:
-                logger.error(f"Could not find project file or plan file for plan {plan_number}")
+                _error = f"Could not find project file or plan file for plan {plan_number}"
+                logger.error(_error)
                 _success = False
-                return ComputeResult(success=False, results_df_row=None)
+                return ComputeResult(
+                    success=False,
+                    results_df_row=None,
+                    error=_error,
+                )
 
             if use_optimal_hdf_settings or hdf_output_profile:
                 profile_to_apply = hdf_output_profile or hdf_settings_profile
@@ -623,6 +1095,29 @@ class RasCmdr:
 
             # Prepare the command for HEC-RAS execution
             cmd = f'"{compute_ras.ras_exe_path}" -c "{compute_prj_path}" "{compute_plan_path}"'
+            product_prj_path, product_plan_path, _product_drive_mapping = (
+                RasCmdr._prepare_windows_product_paths(
+                    compute_ras.project_folder,
+                    compute_prj_path,
+                    compute_plan_path,
+                )
+            )
+            process_command, process_shell = RasCmdr._compute_process_invocation(
+                compute_ras.ras_exe_path,
+                product_prj_path,
+                product_plan_path,
+            )
+            process_cwd = RasCmdr._compute_process_cwd(
+                compute_ras.project_folder,
+                compute_ras.ras_exe_path,
+            )
+            if _product_drive_mapping:
+                if _product_drive_mapping.get("kind") == "drive":
+                    process_cwd = _product_drive_mapping["device"] + "\\"
+                else:
+                    process_cwd = _product_drive_mapping["path"]
+            elif str(product_prj_path) != str(compute_prj_path):
+                process_cwd = str(Path(product_prj_path).parent)
             logger.info("Running HEC-RAS from the Command Line:")
             logger.info(f"Running command: {cmd}")
 
@@ -631,75 +1126,110 @@ class RasCmdr:
                 stream_callback.on_exec_start(str(plan_number), cmd)
 
             # Execute the HEC-RAS command
-            _did_execute = True
             start_time = time.time()
             try:
+                child_environment = None
+                if process_environment is not None:
+                    if not isinstance(process_environment, Mapping):
+                        raise TypeError("process_environment must be a mapping")
+                    child_environment = os.environ.copy()
+                    for key, value in process_environment.items():
+                        key_text = str(key).strip()
+                        if not key_text or "=" in key_text or "\x00" in key_text:
+                            raise ValueError(
+                                f"Invalid process environment variable name: {key!r}"
+                            )
+                        value_text = str(value)
+                        if "\x00" in value_text:
+                            raise ValueError(
+                                f"Invalid NUL in process environment variable {key_text!r}"
+                            )
+                        child_environment[key_text] = value_text
                 if dialog_watchdog:
                     from .RasDialogWatchdog import DialogWatchdog
                     _watchdog = DialogWatchdog()
-                    _watchdog.start()
+                    _watchdog.require_available()
 
                 # Choose execution method based on whether callback is provided
                 if stream_callback and bco_monitor:
                     # Use Popen for real-time monitoring
                     process = subprocess.Popen(
-                        cmd,
+                        process_command,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        cwd=str(compute_ras.project_folder),
-                        shell=True
+                        cwd=process_cwd,
+                        shell=process_shell,
+                        env=child_environment,
                     )
+                    _did_execute = True
                     if _watchdog:
                         _watchdog.add_pid(process.pid)
+                        try:
+                            _watchdog.start()
+                        except Exception:
+                            RasCmdr._kill_process_tree(process.pid)
+                            raise
 
                     # Monitor .bco file until process completes
                     # (BcoMonitor will call on_exec_message callback as messages appear)
+                    if _watchdog:
+                        bco_monitor.blocking_condition = (
+                            lambda: _watchdog.blocked_reason
+                        )
                     bco_monitor.monitor_until_signal(process)
 
-                    # Wait for process to complete (timeout_sec=None waits indefinitely).
-                    try:
-                        return_code = process.wait(timeout=timeout_sec)
-                    except subprocess.TimeoutExpired:
-                        RasCmdr._kill_process_tree(process.pid)
-                        raise RuntimeError(
-                            f"Plan {plan_number}: HEC-RAS execution exceeded "
-                            f"timeout_sec={timeout_sec}s; process tree killed"
-                        )
+                    RasCmdr._communicate_with_watchdog(
+                        process,
+                        _watchdog,
+                        timeout_sec,
+                        plan_number,
+                    )
+                    return_code = process.returncode
+
+                    if _watchdog and _watchdog.blocked_reason:
+                        raise RuntimeError(_watchdog.blocked_reason)
 
                     # Check if subprocess succeeded
                     if return_code != 0:
                         raise subprocess.CalledProcessError(return_code, cmd)
 
                 else:
-                    # Original behavior when no callback. When timeout_sec is None we
-                    # keep the simple blocking subprocess.run() (unchanged). When a
-                    # timeout is requested we use Popen so we can kill the full
-                    # cmd.exe -> Ras.exe -> RasUnsteady.exe tree on expiry (taskkill /T),
-                    # which targets only THIS run's processes (safe under parallelism).
-                    if timeout_sec is None:
-                        subprocess.run(cmd, check=True, shell=True, capture_output=True, text=True)
-                    else:
-                        _proc = subprocess.Popen(
-                            cmd,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            cwd=str(compute_ras.project_folder),
-                            shell=True,
-                            text=True,
-                        )
-                        if _watchdog:
-                            _watchdog.add_pid(_proc.pid)
+                    # Retain the launcher PID so modal supervision is scoped to
+                    # this run's process tree. Communication is polled in short
+                    # intervals even without a wall timeout so a structured
+                    # watchdog block cannot hang indefinitely.
+                    _proc = subprocess.Popen(
+                        process_command,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        cwd=process_cwd,
+                        shell=process_shell,
+                        text=True,
+                        env=child_environment,
+                    )
+                    _did_execute = True
+                    if _watchdog:
+                        _watchdog.add_pid(_proc.pid)
                         try:
-                            _out, _err = _proc.communicate(timeout=timeout_sec)
-                        except subprocess.TimeoutExpired:
+                            _watchdog.start()
+                        except Exception:
                             RasCmdr._kill_process_tree(_proc.pid)
-                            _proc.communicate()
-                            raise RuntimeError(
-                                f"Plan {plan_number}: HEC-RAS execution exceeded "
-                                f"timeout_sec={timeout_sec}s; process tree killed"
-                            )
-                        if _proc.returncode != 0:
-                            raise subprocess.CalledProcessError(_proc.returncode, cmd, _out, _err)
+                            raise
+                    _out, _err = RasCmdr._communicate_with_watchdog(
+                        _proc,
+                        _watchdog,
+                        timeout_sec,
+                        plan_number,
+                    )
+                    if _watchdog and _watchdog.blocked_reason:
+                        raise RuntimeError(_watchdog.blocked_reason)
+                    if _proc.returncode != 0:
+                        raise subprocess.CalledProcessError(
+                            _proc.returncode,
+                            cmd,
+                            _out,
+                            _err,
+                        )
 
                 end_time = time.time()
                 run_time = end_time - start_time
@@ -723,10 +1253,11 @@ class RasCmdr:
                         logger.info(f"Verification passed for plan {plan_number}")
                         _success = True
                     else:
-                        logger.error(
+                        _error = (
                             f"Verification failed for plan {plan_number}: 'Complete Process' not found in compute messages. "
                             f"See: https://ras-commander.readthedocs.io/user-guide/plan-execution/"
                         )
+                        logger.error(_error)
                         _success = False
                 else:
                     _success = True
@@ -736,6 +1267,7 @@ class RasCmdr:
                 run_time = end_time - start_time
                 logger.error(f"Error running plan: {plan_number}")
                 logger.error(f"Error message: {e.output}")
+                _error = str(e)
                 logger.info(f"Total run time for plan {plan_number}: {run_time:.2f} seconds")
 
                 # Read compute message files (.bco## for 5.x, .computeMsgs.txt/.comp_msgs.txt for 6.x+)
@@ -769,10 +1301,26 @@ class RasCmdr:
                 _success = False
         except Exception as e:
             logger.critical(f"Error in compute_plan: {str(e)}")
+            _error = str(e)
             _success = False
         finally:
             if _watchdog:
                 _watchdog.stop()
+            RasCmdr._remove_windows_project_drive(_product_drive_mapping)
+            if _long_path_shadow:
+                try:
+                    _execution_details.update(
+                        RasCmdr._synchronize_long_path_execution_shadow(
+                            _long_path_shadow
+                        )
+                    )
+                except Exception as shadow_error:
+                    _success = False
+                    _error = (
+                        "Long-path execution completed but synchronization "
+                        f"failed: {shadow_error}"
+                    )
+                    logger.error(_error)
 
             # Update the RAS object's dataframes ONLY if executing in original folder
             # When dest_folder is used, the original project is unchanged
@@ -800,7 +1348,12 @@ class RasCmdr:
                 except Exception as e_refresh:
                     logger.warning(f"Error refreshing DataFrames after compute_plan: {e_refresh}")
 
-        return ComputeResult(success=_success, results_df_row=_results_df_row)
+        return ComputeResult(
+            success=_success,
+            results_df_row=_results_df_row,
+            error=_error,
+            execution_details=_execution_details,
+        )
 
 
 
@@ -865,6 +1418,7 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``errors``: Per-plan structured diagnostics for failures.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -954,6 +1508,7 @@ class RasCmdr:
 
             # Initialize execution_results dict
             execution_results: Dict[str, bool] = {}
+            execution_errors: Dict[str, str] = {}
 
             # Filter out plans with existing results if skip_existing is True
             if skip_existing:
@@ -987,7 +1542,11 @@ class RasCmdr:
                             _results_df = ras_obj.results_df[mask].copy()
                 except Exception:
                     pass
-                return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+                return ComputeParallelResult(
+                    execution_results=execution_results,
+                    results_df=_results_df,
+                    errors=execution_errors,
+                )
 
             max_workers = min(max_workers, num_plans)
             logger.info(f"Adjusted max_workers to {max_workers} based on the number of plans to compute: {num_plans}")
@@ -1044,9 +1603,12 @@ class RasCmdr:
                         compute_result = future.result()
                         # Extract bool from ComputeResult for execution_results dict
                         execution_results[plan_num] = bool(compute_result)
+                        if not compute_result and compute_result.error:
+                            execution_errors[plan_num] = compute_result.error
                         logger.info(f"Plan {plan_num} executed in worker {worker_id}: {'Successful' if compute_result else 'Failed'}")
                     except Exception as e:
                         execution_results[plan_num] = False
+                        execution_errors[plan_num] = str(e)
                         logger.error(f"Plan {plan_num} failed in worker {worker_id}: {str(e)}")
 
             # Consolidate results: use dest_folder if provided, otherwise back to original folder
@@ -1151,7 +1713,11 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for parallel plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                errors=execution_errors,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_parallel: {str(e)}")
@@ -1211,6 +1777,7 @@ class RasCmdr:
             ComputeParallelResult: Result object backward compatible with Dict[str, bool].
                 ``execution_results``: Dict of plan numbers to success booleans.
                 ``results_df``: DataFrame with results_df rows for executed plans.
+                ``errors``: Per-plan structured diagnostics for failures.
                 Existing code like ``for plan, ok in results.items():`` still works.
                 When skip_existing=True, skipped plans return True.
                 When verify=True, plans failing verification return False.
@@ -1339,6 +1906,7 @@ class RasCmdr:
             )
 
             execution_results = {}
+            execution_errors = {}
             logger.info("Running selected plans sequentially...")
             for _, plan in ras_compute_plan_entries.iterrows():
                 current_plan_number = plan["plan_number"]
@@ -1356,12 +1924,15 @@ class RasCmdr:
                     )
                     # Extract bool from ComputeResult for execution_results dict
                     execution_results[current_plan_number] = bool(compute_result)
+                    if not compute_result and compute_result.error:
+                        execution_errors[current_plan_number] = compute_result.error
                     if compute_result:
                         logger.info(f"Successfully computed plan {current_plan_number}")
                     else:
                         logger.error(f"Failed to compute plan {current_plan_number}")
                 except Exception as e:
                     execution_results[current_plan_number] = False
+                    execution_errors[current_plan_number] = str(e)
                     logger.error(f"Error computing plan {current_plan_number}: {str(e)}")
                 finally:
                     end_time = time.time()
@@ -1419,7 +1990,11 @@ class RasCmdr:
             except Exception as e:
                 logger.debug(f"Could not extract results_df for test mode plans: {e}")
 
-            return ComputeParallelResult(execution_results=execution_results, results_df=_results_df)
+            return ComputeParallelResult(
+                execution_results=execution_results,
+                results_df=_results_df,
+                errors=execution_errors,
+            )
 
         except Exception as e:
             logger.critical(f"Error in compute_test_mode: {str(e)}")
@@ -1436,6 +2011,7 @@ class RasCmdr:
         num_cores: int = None,
         retry: bool = True,
         retry_delay_sec: int = 30,
+        process_environment: Optional[Mapping[str, Any]] = None,
     ) -> 'ComputeResult':
         """
         Execute a HEC-RAS plan using the native Linux RasUnsteady binary.
@@ -1461,7 +2037,7 @@ class RasCmdr:
             - {project}.b{plan_num} — boundary conditions file
             - {project}.x{geom_num} — cross-section preprocessor file
 
-        Compatible with HEC-RAS Linux versions 6.3.1, 6.4, 6.5, 6.6, 6.7.
+        Compatible with HEC-RAS Linux compute packages through 7.0.1.
         Auto-detects library subdirectory layout (libs/, libs/mkl/, libs/rhel_8/).
 
         The Linux RasUnsteady binary uses Fortran I/O conventions that require
@@ -1478,6 +2054,9 @@ class RasCmdr:
             num_cores (int, optional): Number of cores. If specified, updates plan file.
             retry (bool): Retry once on failure after retry_delay_sec (default True).
             retry_delay_sec (int): Seconds to wait before retry (default 30).
+            process_environment (Mapping[str, Any], optional): Environment
+                variables merged into the native solver process. ``LD_LIBRARY_PATH``
+                remains controlled by the selected HEC-RAS engine package.
 
         Returns:
             ComputeResult: Result object with success bool and results_df_row.
@@ -1592,7 +2171,7 @@ class RasCmdr:
         # Build LD_LIBRARY_PATH — auto-detect library subdirectories
         # HEC-RAS Linux versions have varying layouts:
         #   6.3.1-6.5: libs/, libs/mkl/
-        #   6.6-6.7:   libs/, libs/mkl/, libs/rhel_8/
+        #   6.6-7.0.1: libs/, libs/mkl/, libs/rhel_8/
         lib_base = ras_exe_dir / "libs"
         if not lib_base.exists():
             lib_base = ras_exe_dir.parent / "libs"
@@ -1649,12 +2228,34 @@ class RasCmdr:
         for attempt in range(1, max_attempts + 1):
             logger.info(f"Linux execution attempt {attempt}/{max_attempts} for plan {plan_num_str}")
 
+            input_preparation = RasCmdr._prepare_linux_unsteady_input(tmp_hdf)
+            logger.info(
+                "Prepared native-Linux input %s (stale Results removed=%s)",
+                tmp_hdf,
+                input_preparation["results_group_removed"],
+            )
+
             # Remove any leftover io.tmp.hdf from previous run
             io_tmp_hdf = project_dir / "io.tmp.hdf"
             if io_tmp_hdf.exists():
                 io_tmp_hdf.unlink()
 
             env = os.environ.copy()
+            if process_environment is not None:
+                if not isinstance(process_environment, Mapping):
+                    raise TypeError("process_environment must be a mapping")
+                for key, value in process_environment.items():
+                    key_text = str(key).strip()
+                    if not key_text or "=" in key_text or "\x00" in key_text:
+                        raise ValueError(
+                            f"Invalid process environment variable name: {key!r}"
+                        )
+                    value_text = str(value)
+                    if "\x00" in value_text:
+                        raise ValueError(
+                            f"Invalid NUL in process environment variable {key_text!r}"
+                        )
+                    env[key_text] = value_text
             env["LD_LIBRARY_PATH"] = ld_path
 
             log_path = project_dir / f"compute_linux_{plan_num_str}.log"
@@ -1676,11 +2277,22 @@ class RasCmdr:
                     end_time = time.time()
                     run_time = end_time - start_time
                     if rc == 0:
-                        success = True
-                        logger.info(
-                            f"RasUnsteady completed for plan {plan_num_str} "
-                            f"in {run_time:.1f}s (exit code 0)"
+                        completion = RasCmdr._inspect_linux_unsteady_completion(
+                            tmp_hdf,
+                            log_path,
                         )
+                        success = completion["passed"] is True
+                        if success:
+                            logger.info(
+                                f"RasUnsteady completed for plan {plan_num_str} "
+                                f"in {run_time:.1f}s (exit code 0)"
+                            )
+                        else:
+                            err_msg = (
+                                "RasUnsteady exited with code 0 but failed content "
+                                f"verification: {completion}"
+                            )
+                            logger.error(f"Plan {plan_num_str}: {err_msg}")
                     else:
                         try:
                             tail = log_path.read_text(errors='replace')[-500:]
@@ -1723,7 +2335,15 @@ class RasCmdr:
                     logger.debug(f"Could not extract results_df_row: {e}")
                     results_row = None
 
-                return ComputeResult(success=True, results_df_row=results_row)
+                return ComputeResult(
+                    success=True,
+                    results_df_row=results_row,
+                    execution_details={
+                        "linux_input_preparation": input_preparation,
+                        "linux_completion": completion,
+                        "solver_log": str(log_path),
+                    },
+                )
             else:
                 if attempt < max_attempts:
                     logger.info(f"Retrying in {retry_delay_sec}s...")
