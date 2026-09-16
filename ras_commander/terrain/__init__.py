@@ -22,6 +22,10 @@ Main Classes:
         - select_projects_for_coverage(): Newest project per sub-area, with a coverage report
         - download_tiles(): Download tiles with concurrent threads, optional
           coverage-aware project selection and per-tile provenance
+        - build_terrain_raster(): One gap-free GeoTIFF terrain in the project CRS,
+          with 10m/30m backfill, explicit vertical unit conversion, a
+          zero-nodata gate inside the buffered model extent, and a
+          single-source HEC-RAS terrain check
         - create_vrt(): Mosaic downloaded tiles into a VRT
 
     RasTerrainMod: Terrain modification analysis via pythonnet (Windows only)
@@ -68,7 +72,7 @@ See Also:
 
 from .RasTerrain import RasTerrain
 from ..ComputeResults import TerrainExportResult
-from .Usgs3depAws import Usgs3depAws
+from .Usgs3depAws import TerrainBuildError, Usgs3depAws
 from .RasTerrainModWriter import RasTerrainModification, RasTerrainModWriter
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
@@ -77,6 +81,7 @@ try:
     __all__ = [
         'RasTerrain',
         'Usgs3depAws',
+        'TerrainBuildError',
         'RasTerrainMod',
         'RasTerrainModification',
         'RasTerrainModWriter',
@@ -86,6 +91,7 @@ except ImportError:
     __all__ = [
         'RasTerrain',
         'Usgs3depAws',
+        'TerrainBuildError',
         'RasTerrainModification',
         'RasTerrainModWriter',
         'TerrainExportResult',

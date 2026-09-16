@@ -16,6 +16,8 @@ Key Features:
 - Multi-tile mosaicking for seamless coverage
 - Coverage-aware, newest-per-sub-area project selection (no silent gaps)
 - Virtual raster (VRT) creation for efficient processing
+- Single-raster, project-CRS terrain builds with prioritized backfill and a
+  zero-nodata gate inside the buffered model extent
 - Per-tile download provenance (source URL, project, ETag, Last-Modified, size)
 - Cloud Optimized GeoTIFF support for partial reads
 
@@ -41,11 +43,25 @@ Example:
     # Create VRT mosaic
     vrt = Usgs3depAws.create_vrt(tiles, "terrain_1m.vrt")
 
+    # Single-raster HEC-RAS terrain in the project CRS, gap-free inside the
+    # buffered model extent, with 10m/30m backfill only where 1m is missing
+    receipt = Usgs3depAws.build_terrain_raster(
+        "Terrain/terrain_epsg2277.tif",
+        project_crs="EPSG:2277",
+        geom_path="Model.g01",
+        hec_terrain_hdf="Terrain/hec/Terrain.hdf",
+    )
 """
 
+import json
+import math
 import re
+import shutil
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlparse
@@ -63,6 +79,30 @@ from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
+
+
+class TerrainBuildError(RuntimeError):
+    """
+    Raised when ``Usgs3depAws.build_terrain_raster()`` cannot deliver a valid
+    single-raster terrain.
+
+    Attributes:
+        reason_code: Stable machine-readable reason, one of the
+            ``Usgs3depAws.TERRAIN_REASON_*`` constants.
+        details: JSON-serializable context such as the nodata pixel count,
+            the bounds of the uncovered pixels, sample pixel-centre locations,
+            and the path of the failure receipt.
+    """
+
+    def __init__(
+        self,
+        reason_code: str,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(f"[{reason_code}] {message}")
+        self.reason_code = reason_code
+        self.details = details or {}
 
 
 class Usgs3depAws:
@@ -83,6 +123,31 @@ class Usgs3depAws:
         10: 22,  # 1/3 arc-second projects
         30: 23,  # 1 arc-second projects
     }
+
+    # Seamless 1-degree products used as terrain backfill:
+    # resolution -> (S3 product folder, product label)
+    SEAMLESS_PRODUCTS = {
+        10: ("13", "3dep_seamless_1_3_arc_second"),
+        30: ("1", "3dep_seamless_1_arc_second"),
+    }
+
+    # All 3DEP DEM products store NAVD88 heights in metres (CONUS).
+    SOURCE_VERTICAL_DATUM = "NAVD88"
+    SOURCE_VERTICAL_UNIT = "metre"
+
+    # Exact metre equivalents of the linear units a project CRS may use, kept
+    # as fractions so 1 m converts to exactly 3937/1200 US survey feet.
+    LINEAR_UNIT_METRES = {
+        "metre": Fraction(1),
+        "us survey foot": Fraction(1200, 3937),
+        "foot": Fraction(3048, 10000),
+    }
+
+    TERRAIN_RECEIPT_SCHEMA = "ras-commander/usgs-3dep-terrain-receipt"
+    TERRAIN_REASON_VALID = "terrain_single_raster_valid"
+    TERRAIN_REASON_NO_SOURCES = "terrain_no_source_coverage"
+    TERRAIN_REASON_AOI_NODATA = "terrain_aoi_nodata_after_backfill"
+    TERRAIN_REASON_HEC_MULTI_SOURCE = "hec_terrain_vrt_not_single_source"
 
     # Metadata URLs for each resolution (fallback)
     METADATA_URLS = {
@@ -1527,6 +1592,1222 @@ class Usgs3depAws:
         logger.info(f"VRT mosaic created: {output_vrt.name}")
         logger.debug(f"VRT mosaic output path: {output_vrt}")
         return output_vrt
+
+    @staticmethod
+    @log_call
+    def build_terrain_raster(
+        output_raster: Union[str, Path],
+        project_crs: str,
+        geom_path: Optional[Union[str, Path]] = None,
+        aoi_geometry: Optional[Any] = None,
+        *,
+        buffer_distance: float = 100.0,
+        buffer_units: str = "US survey foot",
+        vertical_unit: Optional[str] = None,
+        target_resolution: Optional[float] = None,
+        backfill_resolutions: Sequence[int] = (10, 30),
+        exclude_tile_ids: Optional[Sequence[str]] = None,
+        download_folder: Optional[Union[str, Path]] = None,
+        cache_folder: Optional[Union[str, Path]] = None,
+        resampling_method: str = "bilinear",
+        nodata: float = -9999.0,
+        src_nodata: Optional[float] = None,
+        max_workers: int = 3,
+        hecras_version: Optional[str] = None,
+        hec_terrain_hdf: Optional[Union[str, Path]] = None,
+        receipt_path: Optional[Union[str, Path]] = None,
+        overwrite: bool = False,
+        timeout_seconds: int = 7200,
+    ) -> Dict[str, Any]:
+        """
+        Build one gap-free GeoTIFF terrain in the project CRS for HEC-RAS.
+
+        RASMapper creates result rasters that mirror the structure of the
+        terrain VRT: when the terrain references several rasters, every result
+        output mirrors that multi-raster structure. This method therefore
+        delivers exactly ONE raster, already in the project CRS (so HEC-RAS
+        never reprojects), on one common grid, and verifies that the HEC-RAS
+        terrain built from it has a single source member.
+
+        Pipeline:
+
+        1. **AOI.** The buffered model extent in project CRS. From
+           ``geom_path`` it is the union of the model footprint
+           (``HdfProject.get_project_extent(..., geometry_type="footprint")``,
+           which supports text-only 1D geometry) and the FULL cross-section
+           cut lines, which can protrude beyond the edge-line footprint, then
+           buffered by an ABSOLUTE distance. Alternatively pass
+           ``aoi_geometry`` (project CRS), which is buffered the same way.
+        2. **Priority chain.** 3DEP 1m project-based DEMs selected with
+           ``download_tiles(project_selection="coverage")`` (newest project per
+           sub-area), then the seamless 1/3 arc-second (~10m) and 1
+           arc-second (~30m) products. A lower tier is downloaded only when
+           the higher tiers leave AOI pixels uncovered, and only for the
+           bounds of those pixels.
+        3. **Dominant resolution.** The native resolution of the tier that
+           contributes the most AOI area, converted to project CRS linear
+           units (1m in EPSG:2277 is 3.2808333333333333 US survey feet), unless
+           ``target_resolution`` overrides it.
+        4. **One composite.** A single HEC-RAS bundled ``gdalwarp.exe`` call
+           with every source ordered lowest priority first and highest last
+           (later valid pixels overwrite earlier ones), ``-t_srs``, ``-tr``,
+           ``-tap``, ``-te`` snapped outward, and a tiled, compressed GeoTIFF.
+        5. **Vertical units.** 3DEP heights are NAVD88 metres and reprojection
+           changes horizontal units only; the bundled GDAL 3.0.2 ``gdalwarp``
+           does not rescale Z even when given compound CRSs. Valid pixels are
+           therefore explicitly scaled into the project vertical unit (x
+           3.2808333333333333 for US survey feet).
+        6. **Hard gate.** Nodata pixels inside the buffered AOI polygon (not
+           its bounding rectangle; any pixel touching the polygon counts) must
+           be zero. If backfill is exhausted, ``TerrainBuildError`` is raised
+           with ``TERRAIN_REASON_AOI_NODATA``, the count, and the locations.
+           Terrain is never fabricated.
+        7. **Receipt.** Per tier: projects, tiles with provenance, contributed
+           AOI pixels and area; plus the chosen resolution and why, vertical
+           conversion, target CRS, grid origin, and the nodata-inside-AOI count.
+        8. **HEC-RAS handoff (optional).** With ``hec_terrain_hdf``, the terrain
+           is built by ``RasTerrain.create_terrain_hdf`` from the single raster
+           with stitching disabled, and the resulting Terrain.vrt must contain
+           exactly one source member.
+
+        Args:
+            output_raster: Output GeoTIFF path.
+            project_crs: Projected CRS of the HEC-RAS project, for example
+                ``"EPSG:2277"``. Required, because text-only geometry carries
+                no CRS of its own.
+            geom_path: Plain-text (``.g##``) or HDF geometry to derive the AOI
+                from. Provide exactly one of ``geom_path`` and ``aoi_geometry``.
+            aoi_geometry: Shapely geometry of the model extent in project CRS.
+            buffer_distance: Absolute AOI buffer. Default 100. Keyword-only.
+            buffer_units: Units of ``buffer_distance``: ``"US survey foot"``
+                (default), ``"foot"``, ``"metre"``, or ``"project"`` for the
+                project CRS linear unit. Keyword-only.
+            vertical_unit: Output elevation unit: ``"US survey foot"``,
+                ``"foot"``, or ``"metre"``. Default None uses the project CRS
+                linear unit. Keyword-only.
+            target_resolution: Cell size in project CRS units, overriding the
+                dominant-resolution rule. Keyword-only.
+            backfill_resolutions: Lower-priority tiers, in priority order,
+                from ``10`` and ``30``. Default ``(10, 30)``; ``()`` disables
+                backfill. Keyword-only.
+            exclude_tile_ids: Tile identifiers (filename stems) to withhold in
+                every tier. Keyword-only.
+            download_folder: Where source tiles are cached. Default is a
+                ``source-tiles`` folder beside the output. Keyword-only.
+            cache_folder: Tile index cache folder. Keyword-only.
+            resampling_method: gdalwarp resampling. Default ``"bilinear"``.
+                Keyword-only.
+            nodata: Output nodata value. Default -9999. Keyword-only.
+            src_nodata: Source nodata override. Default None uses each
+                source's own nodata metadata, which differs between 3DEP
+                products. Keyword-only.
+            max_workers: Concurrent tile downloads. Default 3. Keyword-only.
+            hecras_version: HEC-RAS version whose bundled GDAL and RasProcess
+                are used. Default None picks the newest install with gdalwarp
+                (and ``create_terrain_hdf``'s own default). Keyword-only.
+            hec_terrain_hdf: If given, build the HEC-RAS terrain HDF here and
+                assert its Terrain.vrt has exactly one source. Keyword-only.
+            receipt_path: Receipt JSON path. Default
+                ``<output stem>.terrain_receipt.json``. Keyword-only.
+            overwrite: Replace an existing output. Default False. Keyword-only.
+            timeout_seconds: Timeout for each gdalwarp call and for HEC-RAS
+                terrain creation. Default 7200. Keyword-only.
+
+        Returns:
+            The receipt dict, also written to ``receipt_path``.
+
+        Raises:
+            ValueError: For invalid arguments, a non-projected project CRS, or
+                an empty AOI.
+            FileExistsError: If the output exists and ``overwrite`` is False.
+            FileNotFoundError: If the HEC-RAS bundled gdalwarp.exe is missing.
+            RuntimeError: If gdalwarp fails.
+            TerrainBuildError: With ``TERRAIN_REASON_NO_SOURCES``,
+                ``TERRAIN_REASON_AOI_NODATA``, or
+                ``TERRAIN_REASON_HEC_MULTI_SOURCE``.
+
+        Example:
+            >>> receipt = Usgs3depAws.build_terrain_raster(
+            ...     "Terrain/maha_creek_epsg2277.tif",
+            ...     project_crs="EPSG:2277",
+            ...     geom_path="MAHA CREEK.g01",
+            ...     hec_terrain_hdf="Terrain/hec-6.6/Terrain.hdf",
+            ...     hecras_version="6.6",
+            ... )
+            >>> receipt["resolution"]["value"]
+            3.2808333333333333
+            >>> receipt["nodata"]["inside_aoi_count"]
+            0
+            >>> receipt["hec_terrain"]["source_member_count"]
+            1
+        """
+        output_raster = Path(output_raster)
+        receipt_path = (
+            Path(receipt_path)
+            if receipt_path is not None
+            else output_raster.with_name(f"{output_raster.stem}.terrain_receipt.json")
+        )
+
+        if output_raster.exists() and not overwrite:
+            raise FileExistsError(
+                f"Output raster already exists (pass overwrite=True): {output_raster}"
+            )
+
+        invalid_backfill = [res for res in backfill_resolutions if res not in Usgs3depAws.SEAMLESS_PRODUCTS]
+        if invalid_backfill:
+            raise ValueError(
+                "backfill_resolutions may only contain "
+                f"{sorted(Usgs3depAws.SEAMLESS_PRODUCTS)}, got {invalid_backfill}"
+            )
+
+        if target_resolution is not None and not target_resolution > 0:
+            raise ValueError(f"target_resolution must be positive, got {target_resolution}")
+
+        horizontal_unit, _ = Usgs3depAws._crs_linear_unit(project_crs)
+        vertical_unit = Usgs3depAws._normalize_linear_unit(vertical_unit or horizontal_unit)
+        vertical_scale_factor = float(1 / Usgs3depAws.LINEAR_UNIT_METRES[vertical_unit])
+
+        aoi, aoi_report = Usgs3depAws._build_terrain_aoi(
+            project_crs,
+            geom_path=geom_path,
+            aoi_geometry=aoi_geometry,
+            buffer_distance=buffer_distance,
+            buffer_units=buffer_units,
+        )
+
+        output_raster.parent.mkdir(parents=True, exist_ok=True)
+        download_folder = (
+            Path(download_folder)
+            if download_folder is not None
+            else output_raster.parent / "source-tiles"
+        )
+        work_dir = output_raster.parent / f".{output_raster.stem}.work"
+        if work_dir.exists():
+            shutil.rmtree(work_dir)
+        work_dir.mkdir(parents=True)
+
+        tiers: List[Dict[str, Any]] = [
+            {"tier": 1, "product": "3dep_1m_project", "requested_resolution": 1},
+        ] + [
+            {
+                "tier": position + 2,
+                "product": Usgs3depAws.SEAMLESS_PRODUCTS[resolution][1],
+                "requested_resolution": resolution,
+            }
+            for position, resolution in enumerate(backfill_resolutions)
+        ]
+
+        aoi_centroid = aoi.representative_point()
+        aoi_wgs84 = Usgs3depAws._geometry_to_wgs84(aoi, project_crs)
+
+        used_tiers: List[Dict[str, Any]] = []
+        analysis_resolution = target_resolution
+        gate: Optional[Dict[str, Any]] = None
+        composite_path: Optional[Path] = None
+        gdalwarp_path: Optional[Path] = None
+
+        try:
+            for tier in tiers:
+                if gate is not None and gate["nodata_pixel_count"] == 0:
+                    tier.update(status="not_required", tiles=[], projects=[])
+                    continue
+
+                tier_folder = download_folder / tier["product"]
+
+                if tier["requested_resolution"] == 1:
+                    tier_paths, tier_provenance = Usgs3depAws.download_tiles(
+                        aoi_wgs84.convex_hull,
+                        1,
+                        tier_folder,
+                        cache_folder,
+                        max_workers=max_workers,
+                        project_selection="coverage",
+                        return_provenance=True,
+                        exclude_tile_ids=exclude_tile_ids,
+                    )
+                else:
+                    if gate is None:
+                        request_bounds = aoi_wgs84.bounds
+                    else:
+                        request_bounds = Usgs3depAws._bounds_to_wgs84(
+                            gate["nodata_bounds"], project_crs
+                        )
+                    tier_paths, tier_provenance = Usgs3depAws._download_seamless_tiles(
+                        request_bounds,
+                        tier["requested_resolution"],
+                        tier_folder,
+                        max_workers=max_workers,
+                        exclude_tile_ids=exclude_tile_ids,
+                    )
+
+                tier["tiles"] = tier_provenance
+                tier["projects"] = sorted(
+                    {record["project_name"] for record in tier_provenance if record["project_name"]}
+                )
+                tier["project_folders"] = sorted(
+                    {record.get("project_folder") for record in tier_provenance if record.get("project_folder")}
+                )
+
+                if not tier_paths:
+                    tier["status"] = "no_sources"
+                    logger.warning(
+                        f"USGS 3DEP terrain tier {tier['tier']} ({tier['product']}) "
+                        "supplied no tiles"
+                    )
+                    continue
+
+                tier["paths"] = [Path(path) for path in tier_paths]
+                tier.update(
+                    Usgs3depAws._native_resolution_in_crs_units(
+                        tier["paths"][-1], project_crs, aoi_centroid
+                    )
+                )
+                tier["status"] = "used"
+                used_tiers.append(tier)
+
+                if analysis_resolution is None:
+                    analysis_resolution = tier["native_resolution_project_units"]
+
+                uncovered_before = None if gate is None else gate["nodata_pixel_count"]
+
+                composite_path, gdalwarp_path = Usgs3depAws._composite_terrain_sources(
+                    used_tiers,
+                    work_dir / f"composite_tier{tier['tier']}.tif",
+                    project_crs,
+                    analysis_resolution,
+                    aoi.bounds,
+                    resampling_method=resampling_method,
+                    src_nodata=src_nodata,
+                    nodata=nodata,
+                    hecras_version=hecras_version,
+                    timeout_seconds=timeout_seconds,
+                    previous_composite=composite_path,
+                )
+                gate = Usgs3depAws._count_nodata_in_aoi(composite_path, aoi, nodata)
+
+                if uncovered_before is None:
+                    uncovered_before = gate["aoi_pixel_count"]
+                tier["contributed_aoi_pixels"] = int(uncovered_before - gate["nodata_pixel_count"])
+                tier["analysis_resolution"] = analysis_resolution
+
+            if not used_tiers:
+                details = {"aoi": aoi_report}
+                Usgs3depAws._write_terrain_receipt(
+                    receipt_path,
+                    Usgs3depAws._terrain_receipt(
+                        "fail", Usgs3depAws.TERRAIN_REASON_NO_SOURCES, output_raster,
+                        project_crs, horizontal_unit, vertical_unit,
+                        vertical_scale_factor, aoi_report, tiers,
+                    ),
+                )
+                raise TerrainBuildError(
+                    Usgs3depAws.TERRAIN_REASON_NO_SOURCES,
+                    "No USGS 3DEP tier supplied any tile for the AOI",
+                    details,
+                )
+
+            aoi_pixel_count = gate["aoi_pixel_count"]
+            for tier in used_tiers:
+                tier["contributed_aoi_area"] = tier["contributed_aoi_pixels"] * analysis_resolution ** 2
+                tier["contributed_aoi_fraction"] = (
+                    tier["contributed_aoi_pixels"] / aoi_pixel_count if aoi_pixel_count else 0.0
+                )
+
+            dominant = max(
+                used_tiers,
+                key=lambda item: (item["contributed_aoi_pixels"], -item["tier"]),
+            )
+            if target_resolution is None:
+                resolution = dominant["native_resolution_project_units"]
+                resolution_reason = (
+                    f"native resolution of tier {dominant['tier']} ({dominant['product']}, "
+                    f"{dominant['native_resolution_source_units']} "
+                    f"{dominant['native_resolution_source_unit']}), which contributes the most "
+                    f"AOI area ({dominant['contributed_aoi_fraction']:.2%}), converted to "
+                    f"{horizontal_unit}"
+                )
+                chosen_by = "dominant_source"
+            else:
+                resolution = float(target_resolution)
+                resolution_reason = "caller override"
+                chosen_by = "override"
+
+            if not math.isclose(resolution, analysis_resolution, rel_tol=0.0, abs_tol=1e-9):
+                composite_path, gdalwarp_path = Usgs3depAws._composite_terrain_sources(
+                    used_tiers,
+                    work_dir / "composite_final.tif",
+                    project_crs,
+                    resolution,
+                    aoi.bounds,
+                    resampling_method=resampling_method,
+                    src_nodata=src_nodata,
+                    nodata=nodata,
+                    hecras_version=hecras_version,
+                    timeout_seconds=timeout_seconds,
+                    previous_composite=composite_path,
+                )
+                gate = Usgs3depAws._count_nodata_in_aoi(composite_path, aoi, nodata)
+
+            resolution_report = {
+                "value": resolution,
+                "units": horizontal_unit,
+                "chosen_by": chosen_by,
+                "reason": resolution_reason,
+                "dominant_tier": dominant["tier"],
+                "analysis_resolution": analysis_resolution,
+            }
+
+            if gate["nodata_pixel_count"] > 0:
+                receipt = Usgs3depAws._terrain_receipt(
+                    "fail", Usgs3depAws.TERRAIN_REASON_AOI_NODATA, output_raster,
+                    project_crs, horizontal_unit, vertical_unit,
+                    vertical_scale_factor, aoi_report, tiers,
+                    resolution=resolution_report, gate=gate,
+                    nodata=nodata, resampling_method=resampling_method,
+                    gdalwarp_path=gdalwarp_path,
+                )
+                Usgs3depAws._write_terrain_receipt(receipt_path, receipt)
+                raise TerrainBuildError(
+                    Usgs3depAws.TERRAIN_REASON_AOI_NODATA,
+                    f"{gate['nodata_pixel_count']} nodata pixel(s) remain inside the buffered "
+                    f"AOI after exhausting backfill; bounds {gate['nodata_bounds']}",
+                    {
+                        "nodata_pixel_count": gate["nodata_pixel_count"],
+                        "nodata_bounds": gate["nodata_bounds"],
+                        "nodata_samples": gate["nodata_samples"],
+                        "receipt_path": str(receipt_path),
+                    },
+                )
+
+            partial = output_raster.with_name(f"{output_raster.stem}.partial{output_raster.suffix}")
+            Usgs3depAws._scale_raster_values(
+                composite_path, partial, vertical_scale_factor, nodata, vertical_unit
+            )
+            partial.replace(output_raster)
+
+            final_gate = Usgs3depAws._count_nodata_in_aoi(output_raster, aoi, nodata)
+            if final_gate["nodata_pixel_count"] != gate["nodata_pixel_count"]:
+                raise RuntimeError(
+                    "Vertical scaling changed the nodata-inside-AOI count "
+                    f"({gate['nodata_pixel_count']} -> {final_gate['nodata_pixel_count']})"
+                )
+
+            receipt = Usgs3depAws._terrain_receipt(
+                "pass", Usgs3depAws.TERRAIN_REASON_VALID, output_raster,
+                project_crs, horizontal_unit, vertical_unit,
+                vertical_scale_factor, aoi_report, tiers,
+                resolution=resolution_report, gate=final_gate,
+                nodata=nodata, resampling_method=resampling_method,
+                gdalwarp_path=gdalwarp_path,
+            )
+
+            if hec_terrain_hdf is not None:
+                receipt["hec_terrain"] = Usgs3depAws._build_single_source_hec_terrain(
+                    output_raster,
+                    hec_terrain_hdf,
+                    project_crs,
+                    vertical_unit,
+                    hecras_version,
+                    timeout_seconds=timeout_seconds,
+                )
+                if receipt["hec_terrain"]["source_member_count"] != 1:
+                    receipt["status"] = "fail"
+                    receipt["reason_code"] = Usgs3depAws.TERRAIN_REASON_HEC_MULTI_SOURCE
+                    Usgs3depAws._write_terrain_receipt(receipt_path, receipt)
+                    raise TerrainBuildError(
+                        Usgs3depAws.TERRAIN_REASON_HEC_MULTI_SOURCE,
+                        "HEC-RAS Terrain.vrt has "
+                        f"{receipt['hec_terrain']['source_member_count']} source members; "
+                        "RASMapper results would mirror a multi-raster terrain",
+                        {"hec_terrain": receipt["hec_terrain"], "receipt_path": str(receipt_path)},
+                    )
+
+            Usgs3depAws._write_terrain_receipt(receipt_path, receipt)
+            logger.info(
+                f"USGS 3DEP terrain raster built: {output_raster.name} "
+                f"({resolution:.10g} {horizontal_unit}, 0 nodata pixels inside AOI)"
+            )
+            return receipt
+
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    @staticmethod
+    def _normalize_linear_unit(unit: str) -> str:
+        """
+        Normalize a linear unit name to a key of ``LINEAR_UNIT_METRES``.
+
+        Args:
+            unit: Unit name such as ``"US survey foot"``, ``"ftUS"``,
+                ``"foot"``, ``"ft"``, ``"metre"``, or ``"meter"``.
+
+        Returns:
+            ``"us survey foot"``, ``"foot"``, or ``"metre"``.
+
+        Raises:
+            ValueError: If the unit is not recognized.
+        """
+        key = str(unit).strip().lower().replace("_", " ")
+        aliases = {
+            "us survey foot": "us survey foot",
+            "us survey feet": "us survey foot",
+            "ftus": "us survey foot",
+            "us-ft": "us survey foot",
+            "foot us": "us survey foot",
+            "foot": "foot",
+            "feet": "foot",
+            "ft": "foot",
+            "international foot": "foot",
+            "metre": "metre",
+            "meter": "metre",
+            "metres": "metre",
+            "meters": "metre",
+            "m": "metre",
+        }
+        if key not in aliases:
+            raise ValueError(f"Unsupported linear unit: {unit!r}")
+        return aliases[key]
+
+    @staticmethod
+    def _crs_linear_unit(crs: Any) -> Tuple[str, Fraction]:
+        """
+        Return the normalized linear unit of a projected CRS and its metres.
+
+        Args:
+            crs: Anything ``pyproj.CRS.from_user_input`` accepts.
+
+        Returns:
+            ``(unit_key, metres_per_unit)``, using exact factors for metre,
+            US survey foot, and international foot.
+
+        Raises:
+            ValueError: If the CRS is not projected or its unit is unsupported.
+        """
+        from pyproj import CRS
+
+        crs = CRS.from_user_input(crs)
+        if not crs.is_projected:
+            raise ValueError(f"CRS must be projected, got {crs.name!r}")
+
+        unit = Usgs3depAws._normalize_linear_unit(crs.axis_info[0].unit_name)
+        return unit, Usgs3depAws.LINEAR_UNIT_METRES[unit]
+
+    @staticmethod
+    def _build_terrain_aoi(
+        project_crs: str,
+        geom_path: Optional[Union[str, Path]] = None,
+        aoi_geometry: Optional[Any] = None,
+        buffer_distance: float = 100.0,
+        buffer_units: str = "US survey foot",
+    ) -> Tuple[Any, Dict[str, Any]]:
+        """
+        Build the buffered model extent polygon in project CRS.
+
+        For ``geom_path`` the extent is the model footprint unioned with every
+        cross-section cut line before buffering, because the 1D footprint is
+        built from river edge lines and cross sections can protrude past it.
+
+        Args:
+            project_crs: Projected CRS of the project.
+            geom_path: Model geometry (``.g##`` or ``.g##.hdf``).
+            aoi_geometry: Model extent geometry in project CRS.
+            buffer_distance: Absolute buffer distance.
+            buffer_units: ``"project"`` or a unit name understood by
+                ``_normalize_linear_unit``.
+
+        Returns:
+            ``(aoi_polygon, aoi_report)``.
+
+        Raises:
+            ValueError: If not exactly one extent source is given, the buffer
+                is negative, or the AOI has no area.
+        """
+        from shapely.ops import unary_union
+
+        if (geom_path is None) == (aoi_geometry is None):
+            raise ValueError("Provide exactly one of geom_path or aoi_geometry")
+
+        _, project_unit_metres = Usgs3depAws._crs_linear_unit(project_crs)
+        if str(buffer_units).strip().lower() == "project":
+            distance = float(buffer_distance)
+            buffer_unit_label = "project"
+        else:
+            buffer_unit_label = Usgs3depAws._normalize_linear_unit(buffer_units)
+            distance = float(
+                Fraction(float(buffer_distance))
+                * Usgs3depAws.LINEAR_UNIT_METRES[buffer_unit_label]
+                / project_unit_metres
+            )
+
+        if distance < 0:
+            raise ValueError(f"buffer_distance must not be negative, got {buffer_distance}")
+
+        report: Dict[str, Any] = {
+            "source": "geometry" if geom_path is not None else "caller_geometry",
+            "geom_path": str(geom_path) if geom_path is not None else None,
+            "buffer_distance": float(buffer_distance),
+            "buffer_units": buffer_unit_label,
+            "buffer_distance_project_units": distance,
+        }
+
+        if geom_path is not None:
+            from ..geom.GeomParser import GeomParser
+            from ..hdf.HdfProject import HdfProject
+
+            footprint_gdf, _ = HdfProject.get_project_extent(
+                geom_path=geom_path,
+                fallback_to_plaintext=True,
+                geometry_type="footprint",
+                buffer_percent=0.0,
+            )
+            footprint_parts = [
+                geometry for geometry in footprint_gdf.geometry
+                if geometry is not None and not geometry.is_empty
+            ]
+
+            text_geom_path = Path(geom_path)
+            if text_geom_path.suffix.lower() == ".hdf":
+                text_geom_path = text_geom_path.with_suffix("")
+            cut_lines = []
+            if text_geom_path.exists():
+                cut_lines = [
+                    geometry for geometry in GeomParser.get_xs_cut_lines(text_geom_path).geometry
+                    if geometry is not None and not geometry.is_empty
+                ]
+
+            footprint = unary_union(footprint_parts) if footprint_parts else None
+            report["footprint_crs"] = str(footprint_gdf.crs) if footprint_gdf.crs else None
+            report["cross_section_count"] = len(cut_lines)
+            report["cross_sections_outside_footprint"] = sum(
+                1 for line in cut_lines if footprint is None or not footprint.covers(line)
+            )
+            extent = unary_union(footprint_parts + cut_lines)
+        else:
+            extent = aoi_geometry
+
+        aoi = extent.buffer(distance) if distance > 0 else extent.buffer(0)
+        if aoi.is_empty or aoi.area <= 0:
+            raise ValueError("The buffered AOI has no area")
+
+        report["area_project_units"] = aoi.area
+        report["bounds"] = list(aoi.bounds)
+        return aoi, report
+
+    @staticmethod
+    def _geometry_to_wgs84(geometry: Any, crs: str) -> Any:
+        """Densify and reproject a project-CRS geometry to EPSG:4326."""
+        import shapely
+
+        minx, miny, maxx, maxy = geometry.bounds
+        spacing = max(maxx - minx, maxy - miny) / 200.0 or 1.0
+        densified = shapely.segmentize(geometry, spacing)
+        return gpd.GeoSeries([densified], crs=crs).to_crs("EPSG:4326").iloc[0]
+
+    @staticmethod
+    def _bounds_to_wgs84(
+        bounds: Sequence[float],
+        crs: str,
+    ) -> Tuple[float, float, float, float]:
+        """Reproject project-CRS bounds to an enclosing EPSG:4326 envelope."""
+        from pyproj import Transformer
+
+        transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+        return tuple(transformer.transform_bounds(*bounds, densify_pts=21))
+
+    @staticmethod
+    def _seamless_tile_names(
+        bounds_wgs84: Sequence[float],
+        resolution: int,
+    ) -> List[str]:
+        """
+        List the seamless 1-degree tile ids covering WGS84 bounds.
+
+        Seamless 3DEP tiles are named by their NORTH-WEST corner, e.g.
+        ``USGS_13_n31w098`` covers latitude 30-31 and longitude -98 to -97.
+
+        Args:
+            bounds_wgs84: ``(min_lon, min_lat, max_lon, max_lat)``.
+            resolution: ``10`` (1/3 arc-second) or ``30`` (1 arc-second).
+
+        Returns:
+            Tile ids such as ``["USGS_13_n31w098"]``, north to south, west to
+            east.
+        """
+        token = Usgs3depAws.SEAMLESS_PRODUCTS[resolution][0]
+        min_lon, min_lat, max_lon, max_lat = bounds_wgs84
+        names = []
+
+        for north in range(math.floor(max_lat) + 1, math.floor(min_lat), -1):
+            for west in range(math.floor(min_lon), math.floor(max_lon) + 1):
+                lat_part = f"{'n' if north >= 0 else 's'}{abs(north):02d}"
+                lon_part = f"{'w' if west < 0 else 'e'}{abs(west):03d}"
+                names.append(f"USGS_{token}_{lat_part}{lon_part}")
+
+        return names
+
+    @staticmethod
+    def _download_seamless_tiles(
+        bounds_wgs84: Sequence[float],
+        resolution: int,
+        output_folder: Union[str, Path],
+        max_workers: int = 3,
+        exclude_tile_ids: Optional[Sequence[str]] = None,
+    ) -> Tuple[List[Path], List[Dict[str, Any]]]:
+        """
+        Download seamless 1/3 or 1 arc-second tiles covering WGS84 bounds.
+
+        Args:
+            bounds_wgs84: ``(min_lon, min_lat, max_lon, max_lat)``.
+            resolution: ``10`` or ``30``.
+            output_folder: Download folder (cached tiles are reused).
+            max_workers: Concurrent HEAD requests for provenance.
+            exclude_tile_ids: Tile ids to withhold.
+
+        Returns:
+            ``(tile_paths, provenance)``. Tiles that do not exist on S3 (for
+            example over open water) are skipped.
+        """
+        token, product = Usgs3depAws.SEAMLESS_PRODUCTS[resolution]
+        output_folder = Path(output_folder)
+        output_folder.mkdir(parents=True, exist_ok=True)
+        excluded = set(exclude_tile_ids or [])
+
+        downloaded: List[Tuple[str, Path]] = []
+        for tile_id in Usgs3depAws._seamless_tile_names(bounds_wgs84, resolution):
+            if tile_id in excluded:
+                logger.debug(f"Excluding USGS 3DEP tile by request: {tile_id}")
+                continue
+
+            folder = tile_id.split("_")[-1]
+            tile_url = f"{Usgs3depAws.S3_BASE_URL}/{token}/TIFF/current/{folder}/{tile_id}.tif"
+
+            if Usgs3depAws._get_remote_file_size(tile_url) is None:
+                logger.debug(f"USGS 3DEP seamless tile not available: {tile_url}")
+                continue
+
+            tile_path = Usgs3depAws._download_single_tile(tile_url, output_folder, False)
+            if tile_path:
+                downloaded.append((tile_url, Path(tile_path)))
+
+        provenance = Usgs3depAws._collect_tile_provenance(
+            [{"project_name": product, "project_year": None, "tiles": downloaded}],
+            max_workers=max_workers,
+        )
+        return [tile_path for _, tile_path in downloaded], provenance
+
+    @staticmethod
+    def _native_resolution_in_crs_units(
+        raster_path: Union[str, Path],
+        project_crs: str,
+        reference_point: Any,
+    ) -> Dict[str, Any]:
+        """
+        Convert a source raster's native cell size into project CRS units.
+
+        Projected sources convert by exact linear-unit ratio (1m becomes
+        3.2808333333333333 US survey feet). Geographic sources convert by the
+        geodesic length of one cell at ``reference_point``, averaged over both
+        axes.
+
+        Args:
+            raster_path: A source raster of the tier.
+            project_crs: Projected CRS of the project.
+            reference_point: Shapely point in project CRS, typically inside
+                the AOI.
+
+        Returns:
+            Dict with ``native_resolution_source_units``,
+            ``native_resolution_source_unit``, ``native_resolution_source_crs``,
+            and ``native_resolution_project_units``.
+        """
+        import rasterio
+        from pyproj import CRS, Transformer
+
+        with rasterio.open(raster_path) as src:
+            res_x, res_y = (abs(value) for value in src.res)
+            source_crs = CRS.from_wkt(src.crs.to_wkt())
+
+        _, project_unit_metres = Usgs3depAws._crs_linear_unit(project_crs)
+
+        if source_crs.is_projected:
+            source_unit, source_unit_metres = Usgs3depAws._crs_linear_unit(source_crs)
+            source_resolution = (res_x + res_y) / 2.0
+            project_resolution = float(
+                Fraction(source_resolution) * source_unit_metres / project_unit_metres
+            )
+        else:
+            source_unit = "degree"
+            source_resolution = (res_x + res_y) / 2.0
+            transformer = Transformer.from_crs(project_crs, source_crs, always_xy=True)
+            lon, lat = transformer.transform(reference_point.x, reference_point.y)
+            geod = source_crs.get_geod()
+            _, _, dx = geod.inv(lon, lat, lon + res_x, lat)
+            _, _, dy = geod.inv(lon, lat, lon, lat + res_y)
+            project_resolution = float(Fraction((dx + dy) / 2.0) / project_unit_metres)
+
+        return {
+            "native_resolution_source_units": source_resolution,
+            "native_resolution_source_unit": source_unit,
+            "native_resolution_source_crs": source_crs.to_string(),
+            "native_resolution_project_units": project_resolution,
+        }
+
+    @staticmethod
+    def _snap_bounds_outward(
+        bounds: Sequence[float],
+        resolution: float,
+    ) -> Tuple[float, float, float, float]:
+        """Snap bounds outward to whole multiples of ``resolution`` (as -tap does)."""
+        minx, miny, maxx, maxy = bounds
+        return (
+            math.floor(minx / resolution) * resolution,
+            math.floor(miny / resolution) * resolution,
+            math.ceil(maxx / resolution) * resolution,
+            math.ceil(maxy / resolution) * resolution,
+        )
+
+    @staticmethod
+    def _composite_terrain_sources(
+        tiers: Sequence[Dict[str, Any]],
+        output_path: Union[str, Path],
+        project_crs: str,
+        resolution: float,
+        aoi_bounds: Sequence[float],
+        resampling_method: str = "bilinear",
+        src_nodata: Optional[float] = None,
+        nodata: float = -9999.0,
+        hecras_version: Optional[str] = None,
+        timeout_seconds: int = 7200,
+        previous_composite: Optional[Union[str, Path]] = None,
+    ) -> Tuple[Path, Path]:
+        """
+        Composite every tier's sources in ONE HEC-RAS bundled gdalwarp call.
+
+        Sources are passed lowest priority first and highest last, so a valid
+        higher-priority pixel always overwrites lower-priority data.
+
+        Args:
+            tiers: Used tiers, highest priority first, each with ``paths``
+                (already oldest project first within the tier).
+            output_path: Composite GeoTIFF to write.
+            project_crs: Target CRS.
+            resolution: Target cell size in project CRS units.
+            aoi_bounds: AOI bounds in project CRS; snapped outward.
+            resampling_method: gdalwarp ``-r`` value.
+            src_nodata: Optional ``-srcnodata`` override.
+            nodata: ``-dstnodata`` value.
+            hecras_version: HEC-RAS version for GDAL discovery.
+            timeout_seconds: Subprocess timeout.
+            previous_composite: Earlier probe composite to delete first.
+
+        Returns:
+            ``(composite_path, gdalwarp_path)``
+
+        Raises:
+            FileNotFoundError: If HEC-RAS bundled gdalwarp.exe is not found.
+            RuntimeError: If gdalwarp fails or writes nothing.
+        """
+        from .RasTerrain import RasTerrain
+
+        output_path = Path(output_path)
+        if previous_composite is not None:
+            Path(previous_composite).unlink(missing_ok=True)
+
+        try:
+            gdalwarp = Usgs3depAws._find_gdalwarp_path(hecras_version)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                "Building a terrain raster requires HEC-RAS bundled gdalwarp.exe. "
+                f"{exc}"
+            ) from exc
+
+        sources = [
+            str(path)
+            for tier in reversed(list(tiers))
+            for path in tier["paths"]
+        ]
+        target_bounds = Usgs3depAws._snap_bounds_outward(aoi_bounds, resolution)
+
+        cmd = [
+            str(gdalwarp),
+            "-overwrite",
+            "-of", "GTiff",
+            "-ot", "Float32",
+            "-t_srs", project_crs,
+            "-tr", repr(float(resolution)), repr(float(resolution)),
+            "-tap",
+            "-te", *[repr(float(value)) for value in target_bounds],
+            "-r", resampling_method,
+        ]
+        if src_nodata is not None:
+            cmd += ["-srcnodata", repr(float(src_nodata))]
+        cmd += [
+            "-dstnodata", repr(float(nodata)),
+            "-wm", "1024",
+            "-multi",
+            "-wo", "NUM_THREADS=ALL_CPUS",
+            "-co", "TILED=YES",
+            "-co", "COMPRESS=DEFLATE",
+            "-co", "PREDICTOR=3",
+            "-co", "BIGTIFF=IF_SAFER",
+            *sources,
+            str(output_path),
+        ]
+        logger.debug(f"gdalwarp terrain composite command: {cmd}")
+
+        env = RasTerrain._build_hecras_terrain_env(gdalwarp.parents[2])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("gdalwarp timed out while compositing the terrain raster.") from exc
+        except OSError as exc:
+            raise RuntimeError(f"Failed to execute gdalwarp: {exc}") from exc
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"gdalwarp failed with code {result.returncode}. STDERR: {result.stderr}"
+            )
+        if not output_path.exists():
+            raise RuntimeError(f"gdalwarp completed but did not write {output_path}")
+
+        return output_path, gdalwarp
+
+    @staticmethod
+    def _count_nodata_in_aoi(
+        raster_path: Union[str, Path],
+        aoi: Any,
+        nodata: float,
+        max_samples: int = 10,
+        window_size: int = 4096,
+    ) -> Dict[str, Any]:
+        """
+        Count nodata pixels inside the AOI polygon, window by window.
+
+        A pixel is inside when it touches the AOI polygon (rasterized with
+        ``all_touched=True``), which is stricter than a centre-in-polygon
+        rule. Pixels inside the raster's bounding rectangle but outside the
+        polygon are ignored. NaN counts as nodata.
+
+        Args:
+            raster_path: Raster to check.
+            aoi: AOI polygon in the raster CRS.
+            nodata: Nodata value.
+            max_samples: Maximum nodata pixel-centre samples to report.
+            window_size: Processing window edge in pixels.
+
+        Returns:
+            Dict with ``aoi_pixel_count``, ``nodata_pixel_count``,
+            ``nodata_bounds`` (pixel-edge bounds of the uncovered pixels, or
+            None), ``nodata_samples`` (``[x, y]`` pixel centres), and ``rule``.
+        """
+        import numpy as np
+        import rasterio
+        from rasterio.features import geometry_mask
+        from rasterio.windows import Window
+
+        aoi_pixels = 0
+        nodata_pixels = 0
+        samples: List[List[float]] = []
+        nodata_bounds: Optional[List[float]] = None
+
+        with rasterio.open(raster_path) as src:
+            res_x, res_y = src.res
+            for row_off in range(0, src.height, window_size):
+                for col_off in range(0, src.width, window_size):
+                    window = Window(
+                        col_off,
+                        row_off,
+                        min(window_size, src.width - col_off),
+                        min(window_size, src.height - row_off),
+                    )
+                    window_transform = src.window_transform(window)
+                    inside = geometry_mask(
+                        [aoi],
+                        out_shape=(int(window.height), int(window.width)),
+                        transform=window_transform,
+                        all_touched=True,
+                        invert=True,
+                    )
+                    if not inside.any():
+                        continue
+
+                    data = src.read(1, window=window)
+                    missing = inside & ((data == np.float32(nodata)) | ~np.isfinite(data))
+                    aoi_pixels += int(inside.sum())
+                    count = int(missing.sum())
+                    if not count:
+                        continue
+
+                    nodata_pixels += count
+                    rows, cols = np.nonzero(missing)
+                    xs, ys = rasterio.transform.xy(window_transform, rows, cols)
+                    xs = np.asarray(xs, dtype=float)
+                    ys = np.asarray(ys, dtype=float)
+                    window_bounds = [
+                        float(xs.min() - res_x / 2), float(ys.min() - res_y / 2),
+                        float(xs.max() + res_x / 2), float(ys.max() + res_y / 2),
+                    ]
+                    if nodata_bounds is None:
+                        nodata_bounds = window_bounds
+                    else:
+                        nodata_bounds = [
+                            min(nodata_bounds[0], window_bounds[0]),
+                            min(nodata_bounds[1], window_bounds[1]),
+                            max(nodata_bounds[2], window_bounds[2]),
+                            max(nodata_bounds[3], window_bounds[3]),
+                        ]
+                    for x, y in zip(xs[: max_samples - len(samples)], ys[: max_samples - len(samples)]):
+                        samples.append([float(x), float(y)])
+
+        return {
+            "aoi_pixel_count": aoi_pixels,
+            "nodata_pixel_count": nodata_pixels,
+            "nodata_bounds": nodata_bounds,
+            "nodata_samples": samples,
+            "rule": "all_touched",
+        }
+
+    @staticmethod
+    def _scale_raster_values(
+        source_path: Union[str, Path],
+        output_path: Union[str, Path],
+        scale_factor: float,
+        nodata: float,
+        vertical_unit: str,
+        window_size: int = 4096,
+    ) -> Path:
+        """
+        Write a copy of a single-band raster with valid values scaled.
+
+        Nodata and non-finite pixels stay ``nodata``; every other pixel is
+        multiplied by ``scale_factor``. Georeferencing is copied unchanged.
+
+        Args:
+            source_path: Composite in source vertical units.
+            output_path: Scaled GeoTIFF to write.
+            scale_factor: Multiplier, e.g. 3.2808333333333333 for metres to
+                US survey feet.
+            nodata: Nodata value.
+            vertical_unit: Unit recorded on the output band.
+            window_size: Processing window edge in pixels.
+
+        Returns:
+            ``output_path``
+        """
+        import numpy as np
+        import rasterio
+        from rasterio.windows import Window
+
+        output_path = Path(output_path)
+
+        with rasterio.open(source_path) as src:
+            profile = src.profile.copy()
+            profile.update(
+                driver="GTiff",
+                dtype="float32",
+                nodata=nodata,
+                tiled=True,
+                blockxsize=256,
+                blockysize=256,
+                compress="deflate",
+                predictor=3,
+                BIGTIFF="IF_SAFER",
+            )
+            with rasterio.open(output_path, "w", **profile) as dst:
+                for row_off in range(0, src.height, window_size):
+                    for col_off in range(0, src.width, window_size):
+                        window = Window(
+                            col_off,
+                            row_off,
+                            min(window_size, src.width - col_off),
+                            min(window_size, src.height - row_off),
+                        )
+                        data = src.read(1, window=window)
+                        valid = (data != np.float32(nodata)) & np.isfinite(data)
+                        scaled = np.where(valid, data.astype("float64") * scale_factor, nodata)
+                        dst.write(scaled.astype("float32"), 1, window=window)
+                dst.units = (vertical_unit,)
+                dst.update_tags(
+                    1,
+                    VERTICAL_DATUM=Usgs3depAws.SOURCE_VERTICAL_DATUM,
+                    VERTICAL_UNIT=vertical_unit,
+                    VERTICAL_SCALE_FACTOR=repr(scale_factor),
+                )
+
+        return output_path
+
+    @staticmethod
+    def _count_vrt_source_members(vrt_path: Union[str, Path]) -> List[str]:
+        """
+        List the source rasters a GDAL VRT references.
+
+        Args:
+            vrt_path: VRT file.
+
+        Returns:
+            The ``SourceFilename`` values, one per source member.
+        """
+        root = ET.parse(Path(vrt_path)).getroot()
+        return [element.text or "" for element in root.iter("SourceFilename")]
+
+    @staticmethod
+    def _build_single_source_hec_terrain(
+        raster_path: Union[str, Path],
+        hec_terrain_hdf: Union[str, Path],
+        project_crs: str,
+        vertical_unit: str,
+        hecras_version: Optional[str] = None,
+        timeout_seconds: int = 7200,
+    ) -> Dict[str, Any]:
+        """
+        Build a HEC-RAS terrain from one raster and report its VRT members.
+
+        Args:
+            raster_path: The single terrain raster.
+            hec_terrain_hdf: Terrain HDF to create; its ``.vrt`` sibling is
+                inspected.
+            project_crs: CRS written to ``Projection.prj`` (ESRI WKT1).
+            vertical_unit: Terrain elevation unit.
+            hecras_version: HEC-RAS version for RasProcess.exe.
+            timeout_seconds: RasProcess.exe CreateTerrain timeout.
+
+        Returns:
+            Dict with ``hdf``, ``vrt``, ``projection_prj``,
+            ``source_member_count``, and ``source_members``.
+        """
+        from pyproj import CRS
+
+        from .RasTerrain import RasTerrain
+
+        hec_terrain_hdf = Path(hec_terrain_hdf)
+        hec_terrain_hdf.parent.mkdir(parents=True, exist_ok=True)
+        projection_prj = hec_terrain_hdf.parent / "Projection.prj"
+        projection_prj.write_text(CRS.from_user_input(project_crs).to_wkt("WKT1_ESRI"), encoding="utf-8")
+
+        kwargs: Dict[str, Any] = {
+            "input_rasters": [Path(raster_path)],
+            "output_hdf": hec_terrain_hdf,
+            "projection_prj": projection_prj,
+            "units": "Meters" if vertical_unit == "metre" else "Feet",
+            "stitch": False,
+            "timeout_seconds": timeout_seconds,
+        }
+        if hecras_version is not None:
+            kwargs["hecras_version"] = hecras_version
+
+        RasTerrain.create_terrain_hdf(**kwargs)
+
+        vrt_path = hec_terrain_hdf.with_suffix(".vrt")
+        members = Usgs3depAws._count_vrt_source_members(vrt_path) if vrt_path.exists() else []
+
+        return {
+            "hdf": str(hec_terrain_hdf),
+            "vrt": str(vrt_path),
+            "projection_prj": str(projection_prj),
+            "hecras_version": hecras_version,
+            "stitch": False,
+            "source_member_count": len(members),
+            "source_members": members,
+        }
+
+    @staticmethod
+    def _terrain_receipt(
+        status: str,
+        reason_code: str,
+        output_raster: Union[str, Path],
+        project_crs: str,
+        horizontal_unit: str,
+        vertical_unit: str,
+        vertical_scale_factor: float,
+        aoi_report: Dict[str, Any],
+        tiers: Sequence[Dict[str, Any]],
+        resolution: Optional[Dict[str, Any]] = None,
+        gate: Optional[Dict[str, Any]] = None,
+        nodata: Optional[float] = None,
+        resampling_method: Optional[str] = None,
+        gdalwarp_path: Optional[Union[str, Path]] = None,
+    ) -> Dict[str, Any]:
+        """Assemble the JSON-serializable terrain build receipt."""
+        output_raster = Path(output_raster)
+        grid = None
+        if status == "pass" and output_raster.exists():
+            import rasterio
+
+            with rasterio.open(output_raster) as src:
+                grid = {
+                    "origin_x": src.transform.c,
+                    "origin_y": src.transform.f,
+                    "resolution_x": src.res[0],
+                    "resolution_y": src.res[1],
+                    "width": src.width,
+                    "height": src.height,
+                    "bounds": list(src.bounds),
+                    "crs_wkt": src.crs.to_wkt() if src.crs else None,
+                }
+
+        tier_records = []
+        for tier in tiers:
+            record = {key: value for key, value in tier.items() if key != "paths"}
+            record.setdefault("status", "not_required")
+            record.setdefault("tiles", [])
+            record.setdefault("projects", [])
+            tier_records.append(record)
+
+        return {
+            "schema": Usgs3depAws.TERRAIN_RECEIPT_SCHEMA,
+            "version": "1.0.0",
+            "status": status,
+            "reason_code": reason_code,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "output_raster": str(output_raster),
+            "format": "GeoTIFF",
+            "single_raster": True,
+            "target_crs": project_crs,
+            "horizontal_unit": horizontal_unit,
+            "vertical": {
+                "datum": Usgs3depAws.SOURCE_VERTICAL_DATUM,
+                "source_unit": Usgs3depAws.SOURCE_VERTICAL_UNIT,
+                "target_unit": vertical_unit,
+                "scale_factor": vertical_scale_factor,
+                "method": "explicit_value_scaling",
+            },
+            "resolution": resolution,
+            "grid": grid,
+            "aoi": aoi_report,
+            "nodata": {
+                "value": nodata,
+                "inside_aoi_count": None if gate is None else gate["nodata_pixel_count"],
+                "aoi_pixel_count": None if gate is None else gate["aoi_pixel_count"],
+                "nodata_bounds": None if gate is None else gate["nodata_bounds"],
+                "nodata_samples": [] if gate is None else gate["nodata_samples"],
+                "rule": "all_touched",
+            },
+            "composite": {
+                "tool": str(gdalwarp_path) if gdalwarp_path else None,
+                "resampling": resampling_method,
+                "source_order": "lowest_priority_first",
+            },
+            "tiers": tier_records,
+            "hec_terrain": None,
+        }
+
+    @staticmethod
+    def _write_terrain_receipt(
+        receipt_path: Union[str, Path],
+        receipt: Dict[str, Any],
+    ) -> Path:
+        """Write a terrain receipt as indented JSON."""
+        receipt_path = Path(receipt_path)
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(json.dumps(receipt, indent=2, default=str), encoding="utf-8")
+        return receipt_path
 
     @staticmethod
     def _find_gdalbuildvrt_path(hecras_version: Optional[str] = None) -> Path:
