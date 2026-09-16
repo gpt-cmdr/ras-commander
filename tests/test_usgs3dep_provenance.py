@@ -118,6 +118,7 @@ def test_build_tile_provenance_captures_stable_identity(monkeypatch, tmp_path):
         "file_path": str(tile_path),
         "source_url": TILE_URL,
         "project_name": "PA_Example_2020_A20",
+        "project_folder": None,
         "project_year": 2020,
         "etag": "abc123",
         "last_modified": "Tue, 04 Feb 2025 18:03:11 GMT",
@@ -183,6 +184,7 @@ def test_download_tiles_returns_provenance_per_tile(monkeypatch, tmp_path):
     assert record["tile_id"] == "USGS_1M_18_x37y351_PA_Example_2020_A20"
     assert record["source_url"] == TILE_URL
     assert record["project_name"] == "PA_Example_2020_A20"
+    assert record["project_folder"] == "PA_Example_2020_A20"
     assert record["project_year"] == 2020
     assert record["etag"] == "etag-value"
     assert record["last_modified"] == "Tue, 04 Feb 2025 18:03:11 GMT"

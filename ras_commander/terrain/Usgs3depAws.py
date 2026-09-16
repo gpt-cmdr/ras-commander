@@ -593,73 +593,125 @@ class Usgs3depAws:
         return _cached_transformer(utm_zone)
 
     @staticmethod
-    def _parse_tile_bounds_from_filename(filename: str) -> Optional[Tuple[float, float, float, float]]:
+    def _parse_tile_bounds_from_filename(
+        filename: str,
+        utm_zone: Optional[int] = None,
+    ) -> Optional[Tuple[float, float, float, float]]:
         """
         Parse WGS84 bounds from USGS 3DEP 1m DEM filename (instant, no file I/O).
 
-        USGS 3DEP 1m tiles use a 10km × 10km UTM grid system with tile indices
-        encoded in the filename. This method provides ~10,000x speedup vs opening
-        remote files (500 microseconds vs 2-5 seconds per tile).
+        USGS 3DEP 1m tiles use a 10km x 10km UTM grid with the tile's
+        upper-left corner encoded in the filename: ``x`` is the west edge and
+        ``y`` is the NORTH edge, both in 10km units. For example
+        ``USGS_1M_14_x80y330_TX_Houston_B24.tif`` covers easting
+        800000-810000 and northing 3290000-3300000 (plus a 6m overlap). This
+        method provides ~10,000x speedup vs opening remote files.
+
+        Two naming schemes are recognized:
+
+        - ``USGS_1M_{zone}_x{X}y{Y}_...`` carries its UTM zone.
+        - ``USGS_one_meter_x{X}y{Y}_...`` (older projects) does not; pass
+          ``utm_zone`` for these, typically read once per project from one
+          tile's metadata.
 
         Args:
             filename: e.g., 'USGS_1M_10_x37y351_PA_Northcentral_2019_B19.tif'
+            utm_zone: UTM zone for filenames that do not encode one.
 
         Returns:
             (minx, miny, maxx, maxy) in WGS84 (EPSG:4326), or None if parsing fails
 
         Example:
-            >>> bounds = _parse_tile_bounds_from_filename('USGS_1M_10_x37y351_PA_...')
-            >>> print(bounds)
-            (-77.123, 40.456, -77.012, 40.543)
+            >>> Usgs3depAws._parse_tile_bounds_from_filename(
+            ...     'USGS_1M_14_x80y330_TX_Houston_B24.tif'
+            ... )
+            (-95.87..., 29.72..., -95.76..., 29.82...)
 
         Note:
-            Only works for USGS_1M_* files (1-meter products in UTM grid).
-            Returns None for other resolutions (10m, 30m use lat/lon grid).
+            Returns None for other products (10m and 30m use a lat/lon grid)
+            and for ``USGS_one_meter`` names when ``utm_zone`` is not given.
         """
-        import re
-        from pyproj import Transformer
-
         # Extract filename from path if needed
         if '/' in filename or '\\' in filename:
             filename = Path(filename).name
 
-        # Parse filename: USGS_1M_{zone}_x{X}y{Y}_{rest}.tif
-        pattern = r'USGS_1M_(\d+)_x(\d+)y(\d+)_'
-        match = re.search(pattern, filename)
-
-        if not match:
-            return None  # Not a 1m DEM or invalid format
+        zoned_match = re.search(r'USGS_1M_(\d+)_x(\d+)y(\d+)_', filename)
+        unzoned_match = re.search(r'USGS_one_meter_x(\d+)y(\d+)_', filename)
 
         try:
-            utm_zone = int(match.group(1))
-            x_index = int(match.group(2))
-            y_index = int(match.group(3))
+            if zoned_match:
+                zone = int(zoned_match.group(1))
+                x_index = int(zoned_match.group(2))
+                y_index = int(zoned_match.group(3))
+            elif unzoned_match and utm_zone is not None:
+                zone = int(utm_zone)
+                x_index = int(unzoned_match.group(1))
+                y_index = int(unzoned_match.group(2))
+            else:
+                return None  # Not a recognized 1m DEM name
 
             # Validate zone (CONUS: 10-19, Hawaii: 4-5)
-            if not (4 <= utm_zone <= 19):
-                logger.debug(f"UTM zone {utm_zone} outside expected range (4-5, 10-19)")
+            if not (4 <= zone <= 19):
+                logger.debug(f"UTM zone {zone} outside expected range (4-5, 10-19)")
                 return None
 
-            # Calculate UTM bounds (10km grid, meters)
-            TILE_SIZE_M = 10000  # 10km = 10,000 meters
+            tile_size_m = 10000
+            overlap_m = 6
 
-            utm_minx = x_index * TILE_SIZE_M
-            utm_maxx = (x_index + 1) * TILE_SIZE_M
-            utm_miny = y_index * TILE_SIZE_M
-            utm_maxy = (y_index + 1) * TILE_SIZE_M
+            # x is the west edge; y is the north edge.
+            utm_minx = x_index * tile_size_m - overlap_m
+            utm_maxx = (x_index + 1) * tile_size_m + overlap_m
+            utm_maxy = y_index * tile_size_m + overlap_m
+            utm_miny = (y_index - 1) * tile_size_m - overlap_m
 
-            # Get cached transformer for this zone
-            transformer = Usgs3depAws._get_transformer(utm_zone)
+            transformer = Usgs3depAws._get_transformer(zone)
 
-            # Transform corners to WGS84
-            minx, miny = transformer.transform(utm_minx, utm_miny)
-            maxx, maxy = transformer.transform(utm_maxx, utm_maxy)
+            # A UTM square is not axis-aligned in lon/lat, so take the
+            # envelope of all four transformed corners.
+            corners = [
+                transformer.transform(utm_minx, utm_miny),
+                transformer.transform(utm_minx, utm_maxy),
+                transformer.transform(utm_maxx, utm_miny),
+                transformer.transform(utm_maxx, utm_maxy),
+            ]
+            lons = [corner[0] for corner in corners]
+            lats = [corner[1] for corner in corners]
 
-            return (minx, miny, maxx, maxy)
+            return (min(lons), min(lats), max(lons), max(lats))
 
         except (ValueError, IndexError) as e:
             logger.debug(f"Error parsing tile coordinates from {filename}: {e}")
             return None
+
+    @staticmethod
+    def _get_tile_utm_zone(tile_url: str) -> Optional[int]:
+        """
+        Read the UTM zone of a remote 1m tile from its GeoTIFF header.
+
+        Used once per project whose tile names do not encode a zone, so the
+        remaining tiles can be located by filename.
+
+        Args:
+            tile_url: Direct URL to a TIFF tile
+
+        Returns:
+            UTM zone number, or None when the CRS is not a UTM projection or
+            the header cannot be read.
+        """
+        try:
+            import rasterio
+            from pyproj import CRS
+
+            with rasterio.open(f"/vsicurl/{tile_url}") as src:
+                utm_zone = CRS.from_wkt(src.crs.to_wkt()).utm_zone
+        except Exception as e:
+            logger.debug(f"Could not read UTM zone for {tile_url}: {e}")
+            return None
+
+        if not utm_zone:
+            return None
+
+        return int(re.match(r'(\d+)', utm_zone).group(1))
 
     @staticmethod
     def _get_project_tile_urls(project_name: str) -> Optional[List[str]]:
@@ -783,6 +835,7 @@ class Usgs3depAws:
         tile_path: Union[str, Path],
         project_name: Optional[str] = None,
         project_year: Optional[int] = None,
+        project_folder: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Build one provenance record for a downloaded or cached tile.
@@ -792,10 +845,13 @@ class Usgs3depAws:
             tile_path: Local path to the downloaded or cached tile
             project_name: USGS 3DEP project the tile belongs to
             project_year: Survey year of that project
+            project_folder: S3 StagedProducts project folder the tile was
+                read from, which can differ from the index collection name
 
         Returns:
             Dict with ``tile_id``, ``file_name``, ``file_path``,
-            ``source_url``, ``project_name``, ``project_year``, ``etag``,
+            ``source_url``, ``project_name``, ``project_folder``,
+            ``project_year``, ``etag``,
             ``last_modified``, ``content_length``, and ``local_size_bytes``.
             The remote header values are None when the HEAD request fails.
         """
@@ -812,6 +868,7 @@ class Usgs3depAws:
             'file_path': str(tile_path),
             'source_url': tile_url,
             'project_name': project_name,
+            'project_folder': project_folder,
             'project_year': project_year,
             'etag': remote_headers['etag'],
             'last_modified': remote_headers['last_modified'],
@@ -838,7 +895,13 @@ class Usgs3depAws:
             and tiles.
         """
         tasks = [
-            (tile_url, tile_path, group['project_name'], group['project_year'])
+            (
+                tile_url,
+                tile_path,
+                group['project_name'],
+                group['project_year'],
+                group.get('project_folder'),
+            )
             for group in project_groups
             for tile_url, tile_path in group['tiles']
         ]
@@ -965,6 +1028,7 @@ class Usgs3depAws:
         min_coverage_fraction: float = 0.999,
         min_project_area_fraction: float = 0.0,
         return_provenance: bool = False,
+        exclude_tile_ids: Optional[Sequence[str]] = None,
     ) -> Union[List[Path], Tuple[List[Path], List[Dict[str, Any]]]]:
         """
         Download all DEM tiles for a bounding box with concurrent downloads.
@@ -1009,14 +1073,19 @@ class Usgs3depAws:
                 when ``project_selection="newest"``. Keyword-only.
             return_provenance: If True, also return one provenance record per
                 downloaded tile. Default False. Keyword-only.
+            exclude_tile_ids: Tile identifiers (filename stems, for example
+                ``"USGS_1M_14_x80y330_TX_Houston_B24"``) that must not be
+                downloaded, such as known-bad tiles. Default None.
+                Keyword-only.
 
         Returns:
             List of paths to downloaded TIFF files, or, when
             ``return_provenance=True``, a ``(tile_paths, provenance)`` tuple.
             Each provenance record is a dict with ``tile_id``, ``file_name``,
             ``file_path``, ``source_url``, ``project_name``, ``project_year``,
-            ``etag``, ``last_modified``, ``content_length``, and
-            ``local_size_bytes``.
+            ``etag``, ``last_modified``, ``content_length``,
+            ``local_size_bytes``, and ``project_folder`` (the S3 project
+            folder, which can differ from the index collection name).
 
             In coverage mode the returned tiles are ordered oldest project
             first, so the newest tiles come last and win where projects
@@ -1068,6 +1137,8 @@ class Usgs3depAws:
                 "downloads. 10m and 30m direct download paths are not implemented "
                 "yet."
             )
+
+        excluded_tile_ids = set(exclude_tile_ids or [])
 
         valid_selection_modes = ("newest", "coverage")
         if project_selection not in valid_selection_modes:
@@ -1252,13 +1323,29 @@ class Usgs3depAws:
             # Find which tiles intersect our bbox
             logger.debug(f"Checking {len(tile_urls)} USGS 3DEP tiles for intersection")
             intersecting_urls = []
+            project_utm_zone: Optional[int] = None
 
             for tile_url in tile_urls:
                 filename = tile_url.split('/')[-1]
 
+                if Path(filename).stem in excluded_tile_ids:
+                    logger.debug(f"Excluding USGS 3DEP tile by request: {filename}")
+                    continue
+
                 try:
                     # Fast path: Parse bounds from filename (instant)
                     tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(filename)
+
+                    # Older 'USGS_one_meter' names omit the UTM zone: read it
+                    # once per project, then keep using the filename fast path.
+                    if tile_bounds is None and 'USGS_one_meter_' in filename:
+                        if project_utm_zone is None:
+                            project_utm_zone = Usgs3depAws._get_tile_utm_zone(tile_url)
+                        if project_utm_zone is not None:
+                            tile_bounds = Usgs3depAws._parse_tile_bounds_from_filename(
+                                filename,
+                                utm_zone=project_utm_zone,
+                            )
 
                     # Fallback: Open remote file if parsing fails (slow, 2-5 sec)
                     if tile_bounds is None:
@@ -1320,6 +1407,7 @@ class Usgs3depAws:
 
             downloaded_by_project.append({
                 'project_name': label or s3_folder,
+                'project_folder': s3_folder,
                 'project_year': Usgs3depAws._row_year(project_row),
                 'tiles': project_tiles,
             })
