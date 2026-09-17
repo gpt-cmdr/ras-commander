@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import time
 from typing import Any, Union
 
@@ -32,6 +33,7 @@ from ..RasSteady import RasSteady
 from ..hdf.HdfResultsPlan import HdfResultsPlan
 from ..results.ResultsParser import ResultsParser
 from .ExecutionContract import (
+    STORED_MAPS_OUTPUT_DIRECTORY,
     PreprocessPolicy,
     RasExecutionReceipt,
     RasExecutionRequest,
@@ -430,11 +432,23 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
     a non-empty plan HDF, a ``Complete Process`` compute message, no parsed
     compute errors. The solver runs only on an isolated source-tree copy.
 
+    When the request carries a ``stored_maps`` block, maps are generated only
+    after the steady results pass hydraulic validation, by
+    ``RasProcess.store_maps_at_steady_profiles`` on the runtime copy with a
+    freshly initialized project object, into ``<output>/maps``. The receipt's
+    ``stored_maps`` section records the requested block, ``status``
+    (``passed``, ``failed``, or ``skipped``), a reason code, elapsed seconds,
+    one row per product with paths relative to the output directory, and any
+    error. A mapping failure never changes ``solver_verified``,
+    ``hydraulic_validated``, or ``result_validation``. Receipt ``success``
+    requires hydraulic success and, when maps were requested, ``passed`` maps.
+
     Args:
         request_path: Path to a ``ras-commander-execution-request/v1`` JSON.
 
     Returns:
-        RasExecutionReceipt: The validated hydraulic execution evidence.
+        RasExecutionReceipt: The validated hydraulic (and stored-map) execution
+        evidence.
 
     Raises:
         ValueError: If request identity, source hashes, plan type, or isolation
@@ -602,7 +616,34 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
     if messages:
         message_path.write_text(messages, encoding="utf-8", newline="\n")
 
-    success = bool(compute_success and source_unchanged)
+    stored_maps = None
+    if request.stored_maps is not None:
+        if compute_success:
+            stored_maps = _run_stored_maps(
+                request,
+                runtime_root,
+                runtime_project,
+                output_root,
+                hdf_path,
+                result_hdf_digest,
+            )
+        else:
+            stored_maps = _stored_maps_section(
+                request,
+                "skipped",
+                "STORED_MAPS_SKIPPED_HYDRAULICS_NOT_VALIDATED",
+            )
+        if compute_success and stored_maps["status"] != "passed" and error is None:
+            error = (
+                f"Stored maps failed ({stored_maps['reason_code']}): "
+                f"{stored_maps['error']}"
+            )
+
+    success = bool(
+        compute_success
+        and source_unchanged
+        and (stored_maps is None or stored_maps["status"] == "passed")
+    )
     diagnostics = dict(diagnostics)
     diagnostics["source_validation"] = {
         "passed": True,
@@ -641,9 +682,156 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
         compute_messages_length=len(messages),
         compute_diagnostics=diagnostics,
         error=error,
+        stored_maps=stored_maps,
     )
     receipt.write(receipt_path)
     return receipt
+
+
+def _stored_maps_section(
+    request: RasExecutionRequest,
+    status: str,
+    reason_code: str,
+    *,
+    elapsed_seconds: float | None = None,
+    products: list[dict[str, Any]] | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Return one receipt ``stored_maps`` section."""
+    return {
+        "requested": request.stored_maps.to_dict(),
+        "status": status,
+        "reason_code": reason_code,
+        "elapsed_seconds": elapsed_seconds,
+        "output_directory": STORED_MAPS_OUTPUT_DIRECTORY,
+        "products": products or [],
+        "error": error,
+    }
+
+
+def _stored_map_products(frame: Any, output_root: Path) -> list[dict[str, Any]]:
+    """Convert the steady stored-map frame to receipt product rows."""
+    required = {"profile_index", "profile_name", "map_type", "primary_path", "file_count"}
+    missing = required - set(getattr(frame, "columns", ()))
+    if missing:
+        raise _StoredMapsError(
+            "STORED_MAPS_OUTPUT_INVALID",
+            "Stored-map frame is missing columns: " + ", ".join(sorted(missing)),
+        )
+    maps_root = (output_root / STORED_MAPS_OUTPUT_DIRECTORY).resolve()
+    products = []
+    for row in frame.itertuples(index=False):
+        primary_text = row.primary_path
+        if not isinstance(primary_text, (str, Path)) or not str(primary_text).strip():
+            raise _StoredMapsError(
+                "STORED_MAPS_PRODUCT_MISSING",
+                f"No primary file for {row.map_type} ({row.profile_name})",
+            )
+        primary = Path(primary_text)
+        if not primary.is_absolute():
+            primary = maps_root / primary
+        primary = primary.resolve()
+        try:
+            primary.relative_to(maps_root)
+        except ValueError as exc:
+            raise _StoredMapsError(
+                "STORED_MAPS_OUTPUT_OUTSIDE_RESULTS",
+                f"Stored-map product is outside {STORED_MAPS_OUTPUT_DIRECTORY}/: {primary}",
+            ) from exc
+        if not primary.is_file():
+            raise _StoredMapsError(
+                "STORED_MAPS_PRODUCT_MISSING",
+                f"Stored-map primary file is missing: {primary.name}",
+            )
+        products.append(
+            {
+                "profile_index": int(row.profile_index),
+                "profile_name": str(row.profile_name),
+                "map_type": str(row.map_type),
+                "primary_path": _relative(primary, output_root),
+                "file_count": int(row.file_count),
+            }
+        )
+    if not products:
+        raise _StoredMapsError(
+            "STORED_MAPS_NO_PRODUCTS", "StoreAllMaps returned no products"
+        )
+    return products
+
+
+class _StoredMapsError(RuntimeError):
+    """Stored-map failure with a stable receipt reason code."""
+
+    def __init__(self, reason_code: str, message: str) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+def _run_stored_maps(
+    request: RasExecutionRequest,
+    runtime_root: Path,
+    runtime_project: Path,
+    output_root: Path,
+    hdf_path: Path,
+    result_hdf_digest: str,
+) -> dict[str, Any]:
+    """Generate requested steady-profile maps on the validated runtime copy.
+
+    Never raises: every failure is returned as a ``failed`` section so the
+    hydraulic receipt fields are preserved.
+    """
+    from ..RasProcess import RasProcess
+
+    block = request.stored_maps
+    started = time.monotonic()
+    try:
+        ras_object = RasPrj()
+        ras_object.initialize(
+            runtime_root,
+            request.ras_executable,
+            prj_file=runtime_project,
+            load_results_summary=False,
+        )
+        frame = RasProcess.store_maps_at_steady_profiles(
+            request.plan_number,
+            profiles=None if block.profiles is None else list(block.profiles),
+            output_path=output_root / STORED_MAPS_OUTPUT_DIRECTORY,
+            map_types=list(block.map_types),
+            ras_object=ras_object,
+            timeout=block.timeout_seconds,
+            terrain_name=block.terrain_name,
+            inundation_boundary=block.inundation_boundary,
+        )
+        products = _stored_map_products(frame, output_root)
+        # The receipt's result HDF digest is the hydraulically validated
+        # bytes. Mapping must not have rewritten them.
+        if sha256_file(hdf_path) != result_hdf_digest:
+            raise _StoredMapsError(
+                "STORED_MAPS_RESULT_HDF_CHANGED",
+                "Stored-map generation changed the validated result HDF",
+            )
+    except _StoredMapsError as exc:
+        reason, message = exc.reason_code, str(exc)
+    except subprocess.TimeoutExpired as exc:
+        reason, message = "STORED_MAPS_TIMEOUT", f"{type(exc).__name__}: {exc}"
+    except Exception as exc:
+        logger.exception("Stored-map generation failed for %s", request.execution_id)
+        reason, message = "STORED_MAPS_FAILED", f"{type(exc).__name__}: {exc}"
+    else:
+        return _stored_maps_section(
+            request,
+            "passed",
+            "STORED_MAPS_COMPLETED",
+            elapsed_seconds=time.monotonic() - started,
+            products=products,
+        )
+    return _stored_maps_section(
+        request,
+        "failed",
+        reason,
+        elapsed_seconds=time.monotonic() - started,
+        error=message,
+    )
 
 
 def _validate_initial_output(

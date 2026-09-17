@@ -174,6 +174,67 @@ docker_result = RasPortableDocker.execute_request(request_path)
   and container image. Pass `verify_result_hdf_digest=True` after results cross
   a transfer boundary.
 
+### Stored maps after hydraulic validation
+
+A request can also ask for RASMapper steady-profile stored maps:
+
+```python
+request = RasExecutionRequest.create(
+    ...,  # the same arguments as above
+    stored_maps={
+        "terrain_name": "FIM 3DEP Terrain",
+        "profiles": None,            # every profile, or exact names / 0-based indexes
+        "map_types": ["depth"],      # default
+        "inundation_boundary": False,  # default
+        "timeout_seconds": 1800,     # default
+    },
+)
+```
+
+- The block is validated by `StoredMapsRequest`. It records its own schema
+  (`ras-commander-stored-maps-request/v1`) and rejects unknown fields. Without
+  the block, request and receipt JSON is exactly the original v1 contract, and
+  request digests don't change. Executors from before this block reject a
+  request that has one, because they don't accept unknown fields.
+- The executor runs `RasProcess.store_maps_at_steady_profiles()` only after
+  the steady results pass hydraulic validation. It runs on the runtime project
+  copy with a newly initialized `RasPrj` and writes to `<output>/maps`.
+- The receipt gets a `stored_maps` section with these fields:
+  - `requested`: the block from the request
+  - `status`: `passed`, `failed`, or `skipped`
+  - `reason_code`
+  - `elapsed_seconds`
+  - `output_directory` (always `maps`)
+  - `products`: one row per product, with `profile_index`, `profile_name`,
+    `map_type`, `primary_path` (relative to the output directory), and
+    `file_count`
+  - `error`
+- The reason codes are:
+
+  | Code | Meaning |
+  |---|---|
+  | `STORED_MAPS_COMPLETED` | Every requested product was produced. |
+  | `STORED_MAPS_SKIPPED_HYDRAULICS_NOT_VALIDATED` | Hydraulic validation did not pass, so maps were not run. |
+  | `STORED_MAPS_FAILED` | Map generation raised an error. |
+  | `STORED_MAPS_TIMEOUT` | Map generation ran past `timeout_seconds`. |
+  | `STORED_MAPS_OUTPUT_INVALID` | The product table returned is missing required columns. |
+  | `STORED_MAPS_NO_PRODUCTS` | No products were returned. |
+  | `STORED_MAPS_PRODUCT_MISSING` | A product's primary file is missing. |
+  | `STORED_MAPS_OUTPUT_OUTSIDE_RESULTS` | A product was written outside `maps/`. |
+  | `STORED_MAPS_RESULT_HDF_CHANGED` | Mapping changed the result HDF after it was validated. |
+
+- **Success rule:** a mapping failure never changes `solver_verified`,
+  `hydraulic_validated`, `result_validation`, or `result_hdf_sha256`. When maps
+  are requested, receipt `success` requires hydraulic success and a `passed`
+  `stored_maps` section. `validate_execution_receipt()` also checks that the
+  section matches the request and that every product's primary file exists
+  under the output directory.
+- **Timeouts:** each executor's time limit is
+  `timeout_seconds + stored_maps.timeout_seconds`
+  (`RasExecutionRequest.execution_timeout_seconds`). Each executor adds its own
+  margin on top of that: 120 s for Docker, 300 s for the Wine handoff, and
+  420 s for the Slurm step launcher. The launcher script is unchanged.
+
 ## Installation
 
 ```bash

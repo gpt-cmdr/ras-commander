@@ -443,7 +443,7 @@ def _validate_submission_files(submission: SlurmSubmission) -> None:
             and step.get("request_path") == relative
             and step.get("request_sha256") == request.digest
             and step.get("output_directory") == request.output_directory
-            and step.get("timeout_seconds") == request.timeout_seconds
+            and step.get("timeout_seconds") == request.execution_timeout_seconds
         ):
             raise ValueError("Slurm batch request digest or contract does not match")
 
@@ -533,7 +533,8 @@ class RasSlurm:
                 "request_path": relative,
                 "request_sha256": request.digest,
                 "output_directory": request.output_directory,
-                "timeout_seconds": request.timeout_seconds,
+                # Solver plus stored-map budget; the launcher adds its margin.
+                "timeout_seconds": request.execution_timeout_seconds,
             }
             for index, (request, relative) in enumerate(zip(requests, relative_paths))
         ]

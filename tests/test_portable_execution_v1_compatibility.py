@@ -57,7 +57,8 @@ def test_v1_request_fields_schema_and_digest_are_stable():
     request = RasExecutionRequest.from_dict(payload)
 
     assert payload["schema"] == REQUEST_SCHEMA == "ras-commander-execution-request/v1"
-    assert set(payload) == {item.name for item in fields(RasExecutionRequest)}
+    # The optional stored_maps field is omitted from v1 payloads.
+    assert set(payload) == {item.name for item in fields(RasExecutionRequest)} - {"stored_maps"}
     assert request.to_dict() == payload
     # The canonical digest is what receipts and Slurm steps bind to.
     assert request.digest == _load("execution_receipt.json")["request_sha256"]
@@ -69,7 +70,8 @@ def test_v1_receipt_fields_schema_and_validation_are_stable(tmp_path):
     receipt = RasExecutionReceipt(**payload)
 
     assert payload["schema"] == RECEIPT_SCHEMA == "ras-commander-execution-receipt/v1"
-    assert set(payload) == {item.name for item in fields(RasExecutionReceipt)}
+    # The optional stored_maps field is omitted from v1 payloads.
+    assert set(payload) == {item.name for item in fields(RasExecutionReceipt)} - {"stored_maps"}
     assert receipt.to_dict() == payload
     assert receipt.success and receipt.hydraulic_validated
     assert set(payload["compute_diagnostics"]) >= {
