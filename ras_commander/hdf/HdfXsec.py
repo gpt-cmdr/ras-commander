@@ -99,21 +99,36 @@ class HdfXsec:
             )
         return values
 
+    # Separated-layout datasets that independently anchor the cross-section row
+    # count of a HEC-RAS 5.0.x hybrid file (see ``_cross_section_layout``).
+    _HYBRID_ANCHORS = (
+        'Node Names',
+        'River Stations',
+        'Polyline Info',
+        'Station Elevation Info',
+    )
+    # Compound-layout row datasets that a hybrid file may carry stale.
+    _COMPOUND_ROW_DATASETS = ('Attributes', "Manning's n Info", 'Ineffective Info')
+
     @staticmethod
-    def _get_cross_section_count(hdf: h5py.File) -> int:
-        """Return the XS row count for compound or legacy separated schemas.
+    def _cross_section_layout(group: h5py.Group) -> Tuple[str, int, frozenset]:
+        """Return ``(layout, row_count, stale_datasets)`` for an XS group.
 
-        HEC-RAS 5.x geometry HDF files store cross-section identity and
-        hydraulic attributes in separate datasets instead of the compound
-        ``Attributes`` dataset used by newer releases.  A legacy schema is
-        recognized only when its three independent row anchors are present.
-        All feature-row datasets that are present must agree on row count.
+        ``layout`` is ``'compound'`` (compound ``Attributes`` table),
+        ``'legacy'`` (HEC-RAS 5.x separated datasets only), ``'hybrid'``, or
+        ``'none'`` when the group holds neither layout.
+
+        Some HEC-RAS 5.0.3 files hold both layouts: a stale compound
+        ``Attributes`` table (with its ``Manning's n Info`` and
+        ``Ineffective Info``) left from an earlier save, plus correct separated
+        datasets.  A file is treated as hybrid only when the separated anchors
+        ``Node Names``, ``River Stations``, ``Polyline Info`` and
+        ``Station Elevation Info`` are all present, agree among themselves, and
+        disagree with the compound table.  The compound-layout datasets whose
+        row count differs from the anchors are then returned as stale and must
+        not be read.  Files without the separated anchors, or whose compound
+        table agrees with them, keep the compound layout unchanged.
         """
-        path = '/Geometry/Cross Sections'
-        if path not in hdf:
-            return 0
-        group = HdfXsec._cross_section_group(hdf)
-
         if 'Attributes' in group:
             attributes = group['Attributes']
             if not isinstance(attributes, h5py.Dataset) or len(attributes.shape) != 1:
@@ -121,19 +136,70 @@ class HdfXsec:
                     f"Cross-section Attributes must be a one-dimensional dataset; "
                     f"found {getattr(attributes, 'shape', None)}"
                 )
-            row_count = int(attributes.shape[0])
-        else:
-            legacy_anchors = ('Node Names', 'River Stations', 'Polyline Info')
-            present = [name for name in legacy_anchors if name in group]
-            if not present:
-                return 0
-            if len(present) != len(legacy_anchors):
-                missing = sorted(set(legacy_anchors) - set(present))
-                raise ValueError(
-                    "Incomplete legacy cross-section schema; missing row anchors: "
-                    + ', '.join(missing)
-                )
-            row_count = int(group['Polyline Info'].shape[0])
+            compound_rows = int(attributes.shape[0])
+            anchors = HdfXsec._HYBRID_ANCHORS
+            if all(
+                name in group
+                and isinstance(group[name], h5py.Dataset)
+                and group[name].shape
+                for name in anchors
+            ):
+                anchor_rows = {int(group[name].shape[0]) for name in anchors}
+                if len(anchor_rows) == 1:
+                    separated_rows = anchor_rows.pop()
+                    if separated_rows != compound_rows:
+                        stale = frozenset(
+                            name
+                            for name in HdfXsec._COMPOUND_ROW_DATASETS
+                            if name in group
+                            and isinstance(group[name], h5py.Dataset)
+                            and group[name].shape
+                            and int(group[name].shape[0]) != separated_rows
+                        )
+                        logger.warning(
+                            "Ignoring stale compound cross-section datasets "
+                            f"({', '.join(sorted(stale))}; Attributes={compound_rows} rows) "
+                            f"in favour of {separated_rows} separated-layout rows"
+                        )
+                        return 'hybrid', separated_rows, stale
+            return 'compound', compound_rows, frozenset()
+
+        legacy_anchors = ('Node Names', 'River Stations', 'Polyline Info')
+        present = [name for name in legacy_anchors if name in group]
+        if not present:
+            return 'none', 0, frozenset()
+        if len(present) != len(legacy_anchors):
+            missing = sorted(set(legacy_anchors) - set(present))
+            raise ValueError(
+                "Incomplete legacy cross-section schema; missing row anchors: "
+                + ', '.join(missing)
+            )
+        return 'legacy', int(group['Polyline Info'].shape[0]), frozenset()
+
+    @staticmethod
+    def _get_cross_section_count(hdf: h5py.File) -> int:
+        """Return the XS row count for compound, legacy or hybrid schemas.
+
+        HEC-RAS 5.x geometry HDF files store cross-section identity and
+        hydraulic attributes in separate datasets instead of the compound
+        ``Attributes`` dataset used by newer releases.  A legacy schema is
+        recognized only when its three independent row anchors are present.
+        A hybrid file's stale compound datasets are excluded (see
+        ``_cross_section_layout``).  All other feature-row datasets that are
+        present must agree on row count.
+        """
+        path = '/Geometry/Cross Sections'
+        if path not in hdf:
+            return 0
+        group = HdfXsec._cross_section_group(hdf)
+        return HdfXsec._validated_cross_section_layout(group)[1]
+
+    @staticmethod
+    def _validated_cross_section_layout(group: h5py.Group) -> Tuple[str, int, frozenset]:
+        """Resolve the XS layout and require every live row dataset to agree."""
+        layout, row_count, stale = HdfXsec._cross_section_layout(group)
+        if layout == 'none':
+            return layout, 0, stale
 
         row_datasets = (
             'Polyline Info',
@@ -155,7 +221,7 @@ class HdfXsec:
         )
         inconsistent = []
         for name in row_datasets:
-            if name not in group:
+            if name not in group or name in stale:
                 continue
             dataset = group[name]
             if not isinstance(dataset, h5py.Dataset) or not dataset.shape:
@@ -169,7 +235,7 @@ class HdfXsec:
                 f"Cross-section row count mismatch (expected {row_count}): "
                 + ', '.join(inconsistent)
             )
-        return row_count
+        return layout, row_count, stale
 
     @staticmethod
     def _info_values_pair(
@@ -268,9 +334,14 @@ class HdfXsec:
     def _attribute_columns(
         group: h5py.Group,
         row_count: int,
+        layout: Optional[str] = None,
     ) -> Dict[str, np.ndarray]:
-        """Return normalized attribute columns for either supported XS schema."""
-        if 'Attributes' not in group:
+        """Return normalized attribute columns for any supported XS schema.
+
+        A ``'hybrid'`` layout reads the separated datasets and never the stale
+        compound ``Attributes`` table.
+        """
+        if layout == 'hybrid' or 'Attributes' not in group:
             return HdfXsec._legacy_cross_section_attributes(group, row_count)
         attributes = HdfXsec._dataset(group, 'Attributes')
         if len(attributes) != row_count or not attributes.dtype.names:
@@ -414,17 +485,35 @@ class HdfXsec:
             - Default Centerline: int - Default centerline flag
             - Last Edited: str - Last edit timestamp
 
+        Raises
+        ------
+        OSError, ValueError, KeyError
+            When the file cannot be opened or its cross-section tables cannot be
+            read consistently.  An empty GeoDataFrame is returned only when the
+            file has no ``/Geometry/Cross Sections`` group or that group holds
+            zero cross sections, so an empty result always means "not present".
+
         Notes
         -----
         The returned GeoDataFrame includes the coordinate system from the HDF file
         when available. All byte strings are converted to regular strings.
+
+        HEC-RAS 5.0.3 hybrid files that carry a stale compound ``Attributes``
+        table next to correct separated datasets are read from the separated
+        datasets, preferring ``Station Manning's n`` and ``Blocked Ineffective``
+        (see ``_cross_section_layout``).
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf:
+                if '/Geometry/Cross Sections' not in hdf:
+                    return gpd.GeoDataFrame()
                 group = HdfXsec._cross_section_group(hdf)
-                row_count = HdfXsec._get_cross_section_count(hdf)
+                layout, row_count, _stale = (
+                    HdfXsec._validated_cross_section_layout(group)
+                )
                 if row_count == 0:
                     return gpd.GeoDataFrame()
+                hybrid = layout == 'hybrid'
 
                 poly_info = HdfXsec._dataset(group, 'Polyline Info', columns=4)
                 poly_parts = HdfXsec._dataset(group, 'Polyline Parts', columns=2)
@@ -442,19 +531,27 @@ class HdfXsec:
                     row_count,
                     value_columns=2,
                 )
+                mann_names = (
+                    ("Manning's n Info", "Manning's n Values"),
+                    ("Station Manning's n Info", "Station Manning's n Values"),
+                )
+                if hybrid:
+                    # The compound-era Manning's n pair is stale in a hybrid file.
+                    mann_names = mann_names[::-1]
                 mann_info, mann_values = HdfXsec._info_values_pair(
                     group,
-                    ("Manning's n Info", "Station Manning's n Info"),
-                    ("Manning's n Values", "Station Manning's n Values"),
+                    tuple(info for info, _ in mann_names),
+                    tuple(values for _, values in mann_names),
                     row_count,
                     value_columns=2,
                 )
-                attributes = HdfXsec._attribute_columns(group, row_count)
+                attributes = HdfXsec._attribute_columns(group, row_count, layout)
 
                 modern_ineff = ('Ineffective Info', 'Ineffective Blocks')
                 legacy_ineff = ('Blocked Ineffective Info', 'Blocked Ineffective Values')
+                ineff_names = (legacy_ineff, modern_ineff) if hybrid else (modern_ineff, legacy_ineff)
                 ineff_info = ineff_values = None
-                for info_name, value_name in (modern_ineff, legacy_ineff):
+                for info_name, value_name in ineff_names:
                     if info_name in group or value_name in group:
                         ineff_info, ineff_values = HdfXsec._info_values_pair(
                             group,
@@ -666,8 +763,10 @@ class HdfXsec:
                 return result
 
         except Exception as e:
-            logger.error(f"Error processing cross-section data: {str(e)}")
-            return gpd.GeoDataFrame()
+            # Never report an unreadable table as "no cross sections": an empty
+            # frame is returned only when the file genuinely has none.
+            logger.error(f"Error processing cross-section data in {hdf_path}: {e}")
+            raise
 
     @staticmethod
     @log_call
