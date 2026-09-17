@@ -102,6 +102,13 @@ from .RasBco import BcoMonitor
 
 _LAZY_EXPORTS = {
     'RasDocker': ('.RasDocker', 'RasDocker'),
+    'RasSlurm': ('.RasSlurm', 'RasSlurm'),
+    'SlurmSiteConfig': ('.RasSlurm', 'SlurmSiteConfig'),
+    'SlurmTransportConfig': ('.RasSlurm', 'SlurmTransportConfig'),
+    'SlurmSubmission': ('.RasSlurm', 'SlurmSubmission'),
+    'SlurmStatus': ('.RasSlurm', 'SlurmStatus'),
+    'SlurmTaskAccounting': ('.RasSlurm', 'SlurmTaskAccounting'),
+    'SlurmCollection': ('.RasSlurm', 'SlurmCollection'),
     'ContainerResult': ('.RasDocker', 'ContainerResult'),
     'ContainerEvent': ('.RasDocker', 'ContainerEvent'),
     'ContainerBatchResult': ('.RasDocker', 'ContainerBatchResult'),
@@ -290,6 +297,9 @@ _REMOTE_EXPORTS = {
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results',
+    'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
+    'validate_execution_receipt',
+    'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
 }
 
 # DSS operations - lazy loaded to avoid importing pyjnius/Java until needed
@@ -464,6 +474,11 @@ __all__ = [
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results',
+    'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
+    'validate_execution_receipt',
+    'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
+    'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
+    'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',
 
     # DSS operations (lazy loaded)
     'RasDss',

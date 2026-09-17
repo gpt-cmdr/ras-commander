@@ -124,6 +124,56 @@ slowest worker's `max_runtime_minutes` plus a staging/copy-back margin. It then
 waits for already-started worker tasks before returning so those tasks cannot
 continue mutating copied project outputs after the API call has returned.
 
+## Portable Steady Execution
+
+Portable execution runs one prepared steady plan per request, always with one
+CPU core, inside a pinned container. Requests and receipts are versioned JSON
+(`ras-commander-execution-request/v1`, `ras-commander-execution-receipt/v1`),
+and every path in a request is relative to the request file's directory, so
+the same bundle runs through Docker or Slurm/Apptainer without changes.
+
+```python
+from ras_commander.remote import (
+    RasExecutionRequest,
+    RasPortableDocker,
+    validate_execution_receipt,
+)
+from ras_commander.RasSlurm import RasSlurm, SlurmSiteConfig, SlurmTransportConfig
+
+request = RasExecutionRequest.create(
+    execution_id="reach-001",
+    request_directory="bundles/reach-001",
+    source_project_path="input/Model.prj",
+    plan_number="02",
+    output_directory="results",
+    ras_executable=r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe",
+    container_identity="registry.example/hecras-steady@sha256:<64 hex>",
+)
+request_path = request.write("bundles/reach-001/request.json")
+docker_result = RasPortableDocker.execute_request(request_path)
+```
+
+- `RasExecutionRequest.create()` records the SHA-256 of the project file and
+  of the whole project tree. `read()` and `from_dict()` reject unknown fields.
+- In the container, `python -m ras_commander.remote.execute_request
+  execute-request /job/request.json` copies the project to
+  `<output>/runtime_project`, runs `RasCmdr.compute_plan(num_cores=1,
+  max_runtime=timeout_seconds)`, parses the compute messages, runs
+  `validate_steady_results`, and writes `<output>/execution_receipt.json`. On
+  Linux, a Windows `ras_executable` is run through Windows Python under Wine.
+  This needs the image variables `RAS_COMMANDER_WINE_PREFIX_SEED` and
+  `RAS_COMMANDER_WINE_PYTHON`, plus `RAS_COMMANDER_WINE_ARCH` (optional,
+  default `win64`). Each request gets its own copy of the Wine prefix.
+- `RasPortableDocker.execute_request()` and `execute_pool(max_concurrent=8)`
+  mount the bundle read-only and only the output directory writable.
+- `RasSlurm.render_submission()`, `stage()`, `submit()`, `status()`,
+  `cancel()`, `collect()`, and `submit_batch()` run one exclusive-node Slurm
+  allocation. `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`,
+  with `transfer_mode="rsync"` or `"scp"`.
+- `validate_execution_receipt()` checks that a receipt belongs to its request
+  and container image. Pass `verify_result_hdf_digest=True` after results cross
+  a transfer boundary.
+
 ## Installation
 
 ```bash

@@ -1,0 +1,3 @@
+# The Slurm launcher is staged byte-for-byte to Linux compute nodes and its
+# SHA-256 is recorded in each submission, so keep LF on every checkout.
+ras_commander/remote/portable_slurm_launcher.py text eol=lf
