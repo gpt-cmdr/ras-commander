@@ -328,11 +328,11 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     ``referenced`` maps optional-layer keys to booleans. Keys absent from it
     fall back to a conservative default (infiltration and soils: not expected).
 
-    Land cover / Manning's n follows the model type, not the reference (user
-    direction, 2026-09-16): a 2D model requires it; a 1D model never does,
-    because its cross sections carry their own n values, so a referenced but
-    undelivered layer is informational. Infiltration stays expected only when
-    a RASMapper file references it.
+    Land cover / Manning's n (user direction, 2026-09-16): a 1D model never
+    requires it, because its cross sections carry their own n values, so a
+    referenced but undelivered layer is informational. A 2D model requires it
+    only when the model references it. Infiltration likewise stays expected
+    only when a RASMapper file references it.
     """
     # A "mixed" study has at least one 2D project, so it expects what 2D expects.
     is_2d = dims in ("2D", "mixed")
@@ -348,7 +348,7 @@ def expected_elements(dims: str, regime: str, referenced: Optional[dict] = None)
     # and no projection, and calling those "needs external data" was wrong.
     return {
         "terrain": is_2d,
-        "land_cover": is_2d or (dims != "1D" and optional("land_cover", False)),
+        "land_cover": dims != "1D" and optional("land_cover", is_2d),
         "infiltration": optional("infiltration", False),
         "soils": optional("soils", False),
         "dss": optional("dss", unsteady),

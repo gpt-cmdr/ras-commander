@@ -239,9 +239,10 @@ def test_1d_referenced_land_cover_is_not_expected():
     assert not expected["land_cover"]
 
 
-def test_2d_requires_land_cover_even_when_unreferenced():
-    assert expected_elements("2D", "unsteady", {"land_cover": False})["land_cover"]
-    assert expected_elements("mixed", "steady", {"land_cover": False})["land_cover"]
+def test_2d_requires_land_cover_only_when_referenced():
+    assert expected_elements("2D", "unsteady", {"land_cover": True})["land_cover"]
+    assert not expected_elements("2D", "unsteady", {"land_cover": False})["land_cover"]
+    assert not expected_elements("mixed", "steady", {"land_cover": False})["land_cover"]
 
 
 def test_unknown_model_type_keeps_referenced_land_cover():
