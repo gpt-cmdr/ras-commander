@@ -49,6 +49,9 @@ from .AzureFrWorker import AzureFrWorker
 # Execution functions
 from .Execution import compute_parallel_remote, ExecutionResult, get_worker_status
 
+# Steady result validation
+from .PortableExecution import validate_steady_results
+
 __all__ = [
     # Base class
     'RasWorker',
@@ -69,4 +72,5 @@ __all__ = [
     'compute_parallel_remote',
     'ExecutionResult',
     'get_worker_status',
+    'validate_steady_results',
 ]

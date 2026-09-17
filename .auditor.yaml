@@ -228,6 +228,26 @@ exception_classes:
       Instantiation allowed for advanced custom configurations
 
 # ============================================================================
+# MODULE-LEVEL FUNCTION EXCEPTIONS (Static Class Pattern)
+# ============================================================================
+# Public functions intentionally exported as module-level callables rather
+# than static-class methods. Each still uses @log_call and Union[str, Path].
+exception_functions:
+  - function_name: validate_steady_results
+    module: ras_commander.remote.PortableExecution
+    reason: |
+      Stable top-level contract (``from ras_commander import validate_steady_results``)
+      consumed by fim-commander's local plan execution backend, and the same
+      module-level definition used by the portable execution entry point on the
+      c05a-mesh-depth line. Keeping it a function avoids a second spelling of
+      the same API when that line is reconciled with main.
+    category: execution_validation
+    standardize_input: |
+      Not applied: the function converts both paths with Path() and must fail
+      closed (reason code STEADY_RESULTS_UNREADABLE) instead of raising on
+      unresolvable inputs.
+
+# ============================================================================
 # AUDITOR RULES
 # ============================================================================
 rules:

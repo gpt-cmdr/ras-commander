@@ -176,6 +176,7 @@ _LAZY_EXPORTS = {
         )
     },
     'RasProcess': ('.RasProcess', 'RasProcess'),
+    'RasQualification': ('.RasQualification', 'RasQualification'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
     'RangeSpec': ('.RasPermutation', 'RangeSpec'),
@@ -288,7 +289,7 @@ _REMOTE_EXPORTS = {
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
-    'ExecutionResult', 'get_worker_status'
+    'ExecutionResult', 'get_worker_status', 'validate_steady_results',
 }
 
 # DSS operations - lazy loaded to avoid importing pyjnius/Java until needed
@@ -402,6 +403,7 @@ __all__ = [
     'ProjectPublicationError',
     'StageProjectResult', 'STAGE_PROJECT_TREE_FINGERPRINT_ALGORITHM',
     'inspect_project_assets', 'stage_project',
+    'RasQualification',
     'BoundaryMutationResult', 'BoundaryMutationError',
     'BoundaryStageOwnershipError', 'BoundarySelectorError',
     'BoundaryStaleEvidenceError', 'BoundaryFormatError',
@@ -461,7 +463,7 @@ __all__ = [
     'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
     'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
-    'ExecutionResult', 'get_worker_status',
+    'ExecutionResult', 'get_worker_status', 'validate_steady_results',
 
     # DSS operations (lazy loaded)
     'RasDss',
