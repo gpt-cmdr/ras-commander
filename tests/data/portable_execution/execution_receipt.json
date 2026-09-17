@@ -1,0 +1,95 @@
+{
+  "compute_diagnostics": {
+    "completed": true,
+    "diagnostics": [
+      {
+        "message": "The generated edge lines have self intersections, the interpolation surface may not generate correctly because of this.  See the points in the error layer.",
+        "reason_code": "hec_ras_edge_line_self_intersection",
+        "severity": "warning"
+      }
+    ],
+    "error_count": 0,
+    "first_error_line": null,
+    "fresh_result": {
+      "created_after_run_start": true,
+      "mtime_ns": 1767225610000000000,
+      "passed": true,
+      "prior_hdf": null,
+      "sha256": "40ff76ab5ee9caa9978c457fd69d9ff0d15f356fd990a66622bc5178e5d0a7ba",
+      "size_bytes": 28,
+      "verified_absent_before_compute": true
+    },
+    "has_errors": false,
+    "has_warnings": true,
+    "preprocessing": {
+      "candidate_outputs": [
+        "SAMPLE CREEK.c01",
+        "SAMPLE CREEK.g01.hdf"
+      ],
+      "effective_action": "explicit-clean-and-rebuild",
+      "generated_artifacts": [
+        {
+          "created_after_verified_absence": true,
+          "fresh_for_run": true,
+          "mtime_ns": 1767225605000000000,
+          "path": "SAMPLE CREEK.g01.hdf",
+          "size_bytes": 4096
+        }
+      ],
+      "passed": true,
+      "preexisting_artifacts": [],
+      "removed_artifacts": [],
+      "requested_policy": "rebuild",
+      "required_outputs": [
+        "SAMPLE CREEK.c01",
+        "SAMPLE CREEK.g01.hdf"
+      ],
+      "retained_artifacts_before": [],
+      "verified_absent_before_compute": [
+        "SAMPLE CREEK.c01",
+        "SAMPLE CREEK.g01.hdf"
+      ]
+    },
+    "source_validation": {
+      "execution_target": "isolated-runtime-copy",
+      "method": "single-pass-runtime-copy-and-hash",
+      "passed": true,
+      "post_compute_rehash": false
+    },
+    "warning_count": 1
+  },
+  "compute_messages_length": 889,
+  "compute_messages_sha256": null,
+  "container_identity": "sif:sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "error": null,
+  "execution_id": "run-0123456789abcdef",
+  "finished_at": "2026-01-01T00:00:10.000000Z",
+  "hydraulic_validated": true,
+  "request_sha256": "b10abac76cb45943911d98f1422e59a5ec92f3be4fb88e8de64cd16b0f2560f9",
+  "result_hdf_path": "runtime_project/SAMPLE CREEK.p02.hdf",
+  "result_hdf_sha256": "40ff76ab5ee9caa9978c457fd69d9ff0d15f356fd990a66622bc5178e5d0a7ba",
+  "result_validation": {
+    "authored_profile_count": 7,
+    "flow_mismatch_count": 0,
+    "flow_rows_compared": 2149,
+    "flow_rows_unmatched": 0,
+    "flow_tolerance_absolute": 0.01,
+    "flow_tolerance_relative": 1e-06,
+    "max_absolute_flow_mismatch": 0.003125000002910383,
+    "max_relative_flow_mismatch": 3.798043737555036e-08,
+    "passed": true,
+    "reason_codes": [],
+    "result_profile_count": 7,
+    "result_row_count": 2149
+  },
+  "runtime_container_identity": "sif:sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "runtime_project_path": "runtime_project",
+  "schema": "ras-commander-execution-receipt/v1",
+  "solver_verified": true,
+  "source_tree_sha256_after": "2222222222222222222222222222222222222222222222222222222222222222",
+  "source_tree_sha256_before": "2222222222222222222222222222222222222222222222222222222222222222",
+  "source_unchanged": true,
+  "started_at": "2026-01-01T00:00:00.000000Z",
+  "status": "succeeded",
+  "success": true
+}

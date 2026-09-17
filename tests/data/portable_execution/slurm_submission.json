@@ -1,0 +1,49 @@
+{
+  "batch_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "job_id": "14",
+  "launcher_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+  "launcher_version": "ras-portable-slurm-launcher/v1",
+  "remote_directory": "/scratch/example/runs/ras-0123456789ab",
+  "request_paths": [
+    "__SUBMISSION_DIRECTORY__/bundles/run-0123456789abcdef/request.json"
+  ],
+  "schema": "ras-commander-slurm-submission/v1",
+  "site": {
+    "account": null,
+    "apptainer_executable": "apptainer",
+    "apptainer_image": "/scratch/example/images/hecras-steady.sif",
+    "apptainer_image_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "container_identity": "sif:sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "environment": {},
+    "launcher_python_executable": "python3",
+    "memory_per_task": "3200M",
+    "modules": [],
+    "partition": "compute",
+    "python_executable": "python",
+    "qos": null,
+    "sacct_executable": "sacct",
+    "sbatch_executable": "sbatch",
+    "scancel_executable": "scancel",
+    "site_name": "example-hpc-1x3200m",
+    "slots_per_node": 1,
+    "slurm_memory": "3200M",
+    "squeue_executable": "squeue",
+    "srun_executable": "srun",
+    "time_limit": "12:00:00"
+  },
+  "submission_directory": "__SUBMISSION_DIRECTORY__",
+  "submission_id": "ras-0123456789ab",
+  "submit_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+  "transport": {
+    "hostname": "cluster.example",
+    "identity_file": null,
+    "mode": "ssh",
+    "port": 22,
+    "remote_scratch": "/scratch/example/runs",
+    "rsync_executable": "rsync",
+    "scp_executable": "scp",
+    "ssh_executable": "ssh",
+    "transfer_mode": "scp",
+    "username": "rasuser"
+  }
+}

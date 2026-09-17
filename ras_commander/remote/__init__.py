@@ -49,8 +49,39 @@ from .AzureFrWorker import AzureFrWorker
 # Execution functions
 from .Execution import compute_parallel_remote, ExecutionResult, get_worker_status
 
-# Steady result validation
+# Portable one-core steady execution contract and result validation.
+# ``PortableExecution.execute_request`` is intentionally not re-exported here:
+# ``ras_commander.remote.execute_request`` is the CLI submodule, and importing it
+# would rebind a same-named package attribute.
+from .ExecutionContract import (
+    PreprocessPolicy,
+    RasExecutionReceipt,
+    RasExecutionRequest,
+    validate_execution_receipt,
+)
 from .PortableExecution import validate_steady_results
+# Imported eagerly (stdlib-only dependencies) so the class, not the same-named
+# submodule, is the package attribute after ``import ...remote.RasPortableDocker``.
+from .RasPortableDocker import (
+    PortableDockerExecutionResult,
+    PortableDockerPoolResult,
+    RasPortableDocker,
+)
+
+# ras_commander.RasSlurm imports this package, so its names resolve lazily.
+_PORTABLE_SLURM_EXPORTS = {
+    'RasSlurm', 'SlurmCollection', 'SlurmSiteConfig', 'SlurmStatus',
+    'SlurmSubmission', 'SlurmTaskAccounting', 'SlurmTransportConfig',
+}
+
+
+def __getattr__(name):
+    """Resolve the portable Slurm adapter names on first access."""
+    from importlib import import_module
+
+    if name in _PORTABLE_SLURM_EXPORTS:
+        return getattr(import_module("..RasSlurm", __name__), name)
+    raise AttributeError(f"module 'ras_commander.remote' has no attribute '{name}'")
 
 __all__ = [
     # Base class
@@ -73,4 +104,20 @@ __all__ = [
     'ExecutionResult',
     'get_worker_status',
     'validate_steady_results',
+
+    # Portable one-core steady execution
+    'PreprocessPolicy',
+    'RasExecutionRequest',
+    'RasExecutionReceipt',
+    'validate_execution_receipt',
+    'RasPortableDocker',
+    'PortableDockerExecutionResult',
+    'PortableDockerPoolResult',
+    'RasSlurm',
+    'SlurmSiteConfig',
+    'SlurmTransportConfig',
+    'SlurmSubmission',
+    'SlurmStatus',
+    'SlurmTaskAccounting',
+    'SlurmCollection',
 ]

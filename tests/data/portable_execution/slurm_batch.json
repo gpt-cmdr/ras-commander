@@ -1,0 +1,45 @@
+{
+  "launcher": {
+    "path": "portable_slurm_launcher.py",
+    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "version": "ras-portable-slurm-launcher/v1"
+  },
+  "request_paths": [
+    "bundles/run-0123456789abcdef/request.json"
+  ],
+  "schema": "ras-commander-slurm-batch/v1",
+  "site": {
+    "account": null,
+    "apptainer_executable": "apptainer",
+    "apptainer_image": "/scratch/example/images/hecras-steady.sif",
+    "apptainer_image_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "container_identity": "sif:sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "environment": {},
+    "launcher_python_executable": "python3",
+    "memory_per_task": "3200M",
+    "modules": [],
+    "partition": "compute",
+    "python_executable": "python",
+    "qos": null,
+    "sacct_executable": "sacct",
+    "sbatch_executable": "sbatch",
+    "scancel_executable": "scancel",
+    "site_name": "example-hpc-1x3200m",
+    "slots_per_node": 1,
+    "slurm_memory": "3200M",
+    "squeue_executable": "squeue",
+    "srun_executable": "srun",
+    "time_limit": "12:00:00"
+  },
+  "steps": [
+    {
+      "execution_id": "run-0123456789abcdef",
+      "output_directory": "results",
+      "request_path": "bundles/run-0123456789abcdef/request.json",
+      "request_sha256": "b10abac76cb45943911d98f1422e59a5ec92f3be4fb88e8de64cd16b0f2560f9",
+      "step_name": "rc-000-b10abac76cb4",
+      "timeout_seconds": 3600
+    }
+  ],
+  "submission_id": "ras-0123456789ab"
+}
