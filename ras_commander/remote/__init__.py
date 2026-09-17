@@ -57,6 +57,7 @@ from .ExecutionContract import (
     PreprocessPolicy,
     RasExecutionReceipt,
     RasExecutionRequest,
+    StoredMapsRequest,
     validate_execution_receipt,
 )
 from .PortableExecution import validate_steady_results
@@ -109,6 +110,7 @@ __all__ = [
     'PreprocessPolicy',
     'RasExecutionRequest',
     'RasExecutionReceipt',
+    'StoredMapsRequest',
     'validate_execution_receipt',
     'RasPortableDocker',
     'PortableDockerExecutionResult',

@@ -301,7 +301,7 @@ _REMOTE_EXPORTS = {
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
-    'validate_execution_receipt',
+    'StoredMapsRequest', 'validate_execution_receipt',
     'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
 }
 
@@ -478,7 +478,7 @@ __all__ = [
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
-    'validate_execution_receipt',
+    'StoredMapsRequest', 'validate_execution_receipt',
     'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
     'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
     'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',

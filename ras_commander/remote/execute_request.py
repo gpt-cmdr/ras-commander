@@ -180,7 +180,7 @@ def _execute_with_wine(
             check=False,
             shell=False,
             env=environment,
-            timeout=request.timeout_seconds + 300,
+            timeout=request.execution_timeout_seconds + 300,
         )
         return completed.returncode
     finally:

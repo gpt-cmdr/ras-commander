@@ -316,7 +316,7 @@ class RasPortableDocker:
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=request.timeout_seconds + 120,
+                timeout=request.execution_timeout_seconds + 120,
                 shell=False,
             )
         except subprocess.TimeoutExpired as exc:
