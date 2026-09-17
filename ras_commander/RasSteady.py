@@ -7,6 +7,7 @@ All methods are static and are designed to be used without instantiation.
 from __future__ import annotations
 
 import copy
+import math
 import re
 from collections import OrderedDict
 from numbers import Number
@@ -28,6 +29,15 @@ class RasSteady:
     header, one ``River Rch & RM=`` flow-change block per station, one
     profile-specific ``Boundary for River Rch & Prof#=`` block per reach and
     profile, and optional DSS import metadata.
+
+    Numeric values (flows, known water surfaces, normal-depth slopes, and
+    rating-curve points) are written into HEC-RAS 8-character fields. Values
+    keep as many significant digits as fit, using HEC-RAS's own trimmed
+    decimal convention (for example ``  2680.8``, ``268.1531``, ``.0817947``;
+    no scientific notation). A value whose 8-character text would differ from
+    it by more than ``FIXED_WIDTH_RELATIVE_TOLERANCE`` (relative), including
+    magnitudes of 1e8 and above, raises ``ValueError`` before any file is
+    written.
     """
 
     NO_BOUNDARY = 0
@@ -89,6 +99,9 @@ class RasSteady:
             ("DSS Import FillOption", " 0"),
         ]
     )
+
+    FIXED_WIDTH_FIELD_WIDTH = 8
+    FIXED_WIDTH_RELATIVE_TOLERANCE = 1e-3
 
     _NUMBER_RE = re.compile(
         r"[-+]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+))(?:[Ee][-+]?\d+)?"
@@ -242,7 +255,9 @@ class RasSteady:
 
         The input is validated before any file is written. Flow-value counts,
         profile names, and profile-specific boundary values must match the
-        declared profile count.
+        declared profile count. Every numeric value must be representable in an
+        8-character HEC-RAS field within ``FIXED_WIDTH_RELATIVE_TOLERANCE``;
+        otherwise ``ValueError`` is raised and the file is left unchanged.
         """
         normalized = RasSteady._normalized_data(data)
         RasSteady.validate_flow_file_data(normalized)
@@ -984,11 +999,68 @@ class RasSteady:
 
     @staticmethod
     def _format_scalar(value: Any) -> str:
-        numeric = float(value)
-        text = f"{numeric:8g}"
-        if len(text) > 8:
-            text = f"{numeric:.7g}"
-        return text.rjust(8)
+        return RasSteady._format_fixed_width_field(value)
+
+    @staticmethod
+    def _format_fixed_width_field(value: Any) -> str:
+        """Return ``value`` right-justified in exactly one 8-character field.
+
+        Integers that fit are written without a decimal point. Other values use
+        the most decimal places that fit, with trailing zeros trimmed and the
+        leading ``0`` of a magnitude below one dropped only when that gains a
+        digit (HEC-RAS writes such values as ``.0055097``). Scientific notation
+        is never emitted.
+
+        Raises:
+            ValueError: If ``value`` is not a finite number, or if no
+                8-character text round-trips within
+                ``FIXED_WIDTH_RELATIVE_TOLERANCE`` (for example magnitudes of
+                1e8 and above, negatives of -1e7 and below, or values smaller
+                than about 1e-7).
+        """
+        width = RasSteady.FIXED_WIDTH_FIELD_WIDTH
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Steady flow field value must be numeric, got {value!r}"
+            ) from exc
+        if not math.isfinite(numeric):
+            raise ValueError(
+                f"Steady flow field value must be finite, got {value!r}"
+            )
+        if numeric == 0.0:
+            return "0".rjust(width)
+
+        text = None
+        if numeric.is_integer() and len(str(int(numeric))) <= width:
+            text = str(int(numeric))
+        else:
+            for decimals in range(width - 1, -1, -1):
+                candidate = f"{numeric:.{decimals}f}"
+                if "." in candidate:
+                    candidate = candidate.rstrip("0").rstrip(".")
+                if len(candidate) > width:
+                    if candidate.startswith("0."):
+                        candidate = candidate[1:]
+                    elif candidate.startswith("-0."):
+                        candidate = "-" + candidate[2:]
+                if len(candidate) <= width:
+                    text = candidate
+                    break
+
+        tolerance = RasSteady.FIXED_WIDTH_RELATIVE_TOLERANCE
+        if text is None or not math.isclose(
+            float(text), numeric, rel_tol=tolerance, abs_tol=0.0
+        ):
+            raise ValueError(
+                f"Value {numeric!r} cannot be written in an {width}-character "
+                "HEC-RAS steady flow field within relative tolerance "
+                f"{tolerance:g}"
+                + ("" if text is None else f" (nearest text {text!r})")
+                + "; round or rescale the value before writing"
+            )
+        return text.rjust(width)
 
     @staticmethod
     def _starts_new_block(line: str) -> bool:
