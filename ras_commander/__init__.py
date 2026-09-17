@@ -185,6 +185,9 @@ _LAZY_EXPORTS = {
     'RasProcess': ('.RasProcess', 'RasProcess'),
     'RasQualification': ('.RasQualification', 'RasQualification'),
     'ProjectionInfo': ('.RasProcess', 'ProjectionInfo'),
+    'StoredMapProductsIncompleteError': (
+        '.RasProcess', 'StoredMapProductsIncompleteError'
+    ),
     'RasPermutation': ('.RasPermutation', 'RasPermutation'),
     'RangeSpec': ('.RasPermutation', 'RangeSpec'),
     # Project staging and mutation results.
@@ -431,7 +434,7 @@ __all__ = [
     'TerrainExportResult',
     'RasGeometryCompute',
     'RasPreprocess',
-    'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
+    'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'StoredMapProductsIncompleteError', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',
     'RasBreakout1D', 'Breakout1DAssemblyResult',
     'Breakout1DDomainSelection', 'Breakout1DResult',

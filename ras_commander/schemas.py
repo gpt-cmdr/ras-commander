@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.15"
+SCHEMA_VERSION = "1.16"
 
 DATAFRAME_SCHEMAS = {
     "container_batch_summary": {
@@ -415,9 +415,10 @@ DATAFRAME_SCHEMAS = {
             {"name": "profile_name", "dtype": "str", "description": "Exact steady profile name stored in the result HDF."},
             {"name": "map_type", "dtype": "str", "description": "Canonical ras-commander product key."},
             {"name": "output_mode", "dtype": "str", "description": "Logical raster or polygon output mode."},
-            {"name": "primary_path", "dtype": "str", "description": "VRT for rasters or SHP for polygons."},
+            {"name": "primary_path", "dtype": "str | None", "description": "VRT for rasters or SHP for polygons; None when the product is missing."},
             {"name": "files", "dtype": "list[str]", "description": "All physical product files, including tiles or sidecars."},
             {"name": "file_count", "dtype": "int64", "description": "Number of physical files in files."},
+            {"name": "status", "dtype": "str", "description": "generated, or missing when StoreAllMaps did not produce the requested product."},
         ],
     },
     "project_asset_inventory": {

@@ -60,6 +60,20 @@ import numpy as np
 import pandas as pd
 
 
+class StoredMapProductsIncompleteError(RuntimeError):
+    """Raised when StoreAllMaps ran but did not produce every requested product.
+
+    Successfully generated products are preserved on disk before this error is
+    raised. ``frame`` holds the complete per-product DataFrame (including the
+    ``status`` column) and ``missing`` lists the missing product rows.
+    """
+
+    def __init__(self, message: str, frame: pd.DataFrame):
+        super().__init__(message)
+        self.frame = frame
+        self.missing = frame[frame["status"] != "generated"].to_dict(orient="records")
+
+
 @dataclass
 class ProjectionInfo:
     """
@@ -4651,6 +4665,7 @@ Step 5: Configure (optional — auto-detection usually works)
         *,
         terrain_name: Optional[str] = None,
         inundation_boundary: bool = True,
+        raise_on_missing: bool = True,
     ) -> pd.DataFrame:
         """Generate all selected steady-profile maps with one helper launch.
 
@@ -4681,20 +4696,33 @@ Step 5: Configure (optional — auto-detection usually works)
             timeout: Aggregate helper timeout in seconds.
             terrain_name: Optional registered RASMapper terrain to select.
             inundation_boundary: Generate one polygon for the final selected
-                profile. Defaults to True.
+                profile. Defaults to True. RASMapper names the polygon
+                ``Inundation Boundary (<profile> Value_<depth>).shp`` (the
+                specified depth is appended); both that and the configured
+                ``Inundation Boundary (<profile>).shp`` name are recognized.
+            raise_on_missing: When True (default), raise
+                :class:`StoredMapProductsIncompleteError` if any requested
+                product is missing after StoreAllMaps. Every product that was
+                generated is moved to ``output_path`` and kept on disk first;
+                the exception's ``frame`` carries the per-product status.
+                When False, return the frame with ``status="missing"`` rows.
 
         Returns:
             DataFrame with one row per logical profile/product and stable
             columns registered as ``steady_profile_stored_maps`` in
-            :mod:`ras_commander.schemas`.
+            :mod:`ras_commander.schemas`. ``status`` is ``"generated"`` or
+            ``"missing"``; ``primary_path`` is None for missing products.
+            ``attrs["missing_product_count"]`` counts missing rows.
 
         Raises:
             FileNotFoundError: If required project, HDF, mapper, runtime, or
                 terrain files are missing.
             ValueError: If the plan, selectors, products, or output filenames
                 are invalid or ambiguous.
-            RuntimeError: If StoreAllMaps fails or a requested product is
-                missing from the fresh outputs.
+            RuntimeError: If StoreAllMaps fails.
+            StoredMapProductsIncompleteError: If ``raise_on_missing`` is True
+                and a requested product is missing from the fresh outputs
+                (a ``RuntimeError`` subclass; generated outputs are preserved).
             subprocess.TimeoutExpired: If the aggregate StoreAllMaps helper
                 exceeds ``timeout``.
         """
@@ -4967,17 +4995,23 @@ Step 5: Configure (optional — auto-detection usually works)
                 key=lambda path: path.name.casefold(),
             )
             rows = []
+            missing_messages: List[str] = []
             for spec in configured_specs:
                 safe_profile = RasProcess._safe_stored_map_profile(
                     spec["profile_name"]
                 )
-                filename_base = (
-                    f"{spec['display_name']} ({safe_profile})"
-                ).casefold()
+                # RASMapper appends the specified depth to polygon names, e.g.
+                # "Inundation Boundary (flow_075 Value_0).shp", even though
+                # StoredFilename is "Inundation Boundary (flow_075).shp".
+                filename_pattern = re.compile(
+                    re.escape(f"{spec['display_name']} ({safe_profile}")
+                    + r"(?: Value_[^)]*)?\)",
+                    re.IGNORECASE,
+                )
                 associated = [
                     path
                     for path in produced_paths
-                    if path.name.casefold().startswith(filename_base)
+                    if filename_pattern.match(path.name)
                 ]
                 is_polygon = "Polygon" in spec["output_mode"]
                 primary_suffix = ".shp" if is_polygon else ".vrt"
@@ -4994,11 +5028,12 @@ Step 5: Configure (optional — auto-detection usually works)
                     for path in associated
                     if path.suffix.casefold() in {".tif", ".tiff"}
                 ]
-                if primary is None or (not is_polygon and not raster_tiles):
+                generated = primary is not None and (is_polygon or bool(raster_tiles))
+                if not generated:
                     expected = "SHP" if is_polygon else "VRT and TIFF tile(s)"
-                    raise RuntimeError(
-                        f"StoreAllMaps did not produce requested {expected} for "
-                        f"{spec['map_key']} profile {spec['profile_name']!r}"
+                    missing_messages.append(
+                        f"{expected} for {spec['map_key']} profile "
+                        f"{spec['profile_name']!r}"
                     )
                 rows.append(
                     {
@@ -5008,9 +5043,12 @@ Step 5: Configure (optional — auto-detection usually works)
                         "profile_name": str(spec["profile_name"]),
                         "map_type": str(spec["map_key"]),
                         "output_mode": "polygon" if is_polygon else "raster",
-                        "primary_path": str(primary.resolve()),
+                        "primary_path": (
+                            str(primary.resolve()) if generated else None
+                        ),
                         "files": [str(path.resolve()) for path in associated],
                         "file_count": len(associated),
+                        "status": "generated" if generated else "missing",
                     }
                 )
 
@@ -5026,10 +5064,11 @@ Step 5: Configure (optional — auto-detection usually works)
                     "primary_path",
                     "files",
                     "file_count",
+                    "status",
                 ],
             )
             frame.attrs["schema"] = (
-                "ras_commander.steady_profile_stored_maps.v1"
+                "ras_commander.steady_profile_stored_maps.v2"
             )
             frame.attrs["helper_launch_count"] = 1
             frame.attrs["elapsed_seconds"] = time.perf_counter() - started
@@ -5039,12 +5078,31 @@ Step 5: Configure (optional — auto-detection usually works)
             frame.attrs["configured_map_count"] = len(configured_specs)
             frame.attrs["generated_file_count"] = len(produced_paths)
             frame.attrs["runtime_provenance"] = runtime_provenance
+            frame.attrs["missing_product_count"] = len(missing_messages)
+            if missing_messages:
+                message = (
+                    f"StoreAllMaps did not produce {len(missing_messages)} of "
+                    f"{len(configured_specs)} requested product(s) for steady "
+                    f"plan {plan_num}: " + "; ".join(missing_messages[:10])
+                    + ("; ..." if len(missing_messages) > 10 else "")
+                    + f". {len(configured_specs) - len(missing_messages)} "
+                    "generated product(s) were preserved"
+                    + (
+                        f" in {resolved_output_path}"
+                        if resolved_output_path is not None
+                        else f" in {output_dir}"
+                    )
+                )
+                logger.error(message)
+                if raise_on_missing:
+                    raise StoredMapProductsIncompleteError(message, frame)
             logger.info(
                 "Steady-profile StoreAllMaps complete: plan=%s; profiles=%d; "
-                "configured_maps=%d; helper_launches=1; files=%d",
+                "configured_maps=%d; missing=%d; helper_launches=1; files=%d",
                 plan_num,
                 len(selected_profiles),
                 len(configured_specs),
+                len(missing_messages),
                 len(produced_paths),
             )
             return frame

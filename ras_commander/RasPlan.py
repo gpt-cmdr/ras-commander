@@ -1311,7 +1311,7 @@ class RasPlan:
         - 'UNET 1D Methodology' (str): 1D calculation methodology
         - 'UNET D2 Solver Type' (str): 2D solver type
         - 'UNET D2 Name' (str): Name of the 2D area
-        - 'Run RASMapper' (int): Flag to run RASMapper for floodplain mapping (-1 for off, 0 for on)
+        - 'Run RASMapper' (int): Flag to run RASMapper for floodplain mapping (-1 for on, 0 for off)
         
         Note: 
         Writing Multi line keys like 'Description' are not supported by this function.

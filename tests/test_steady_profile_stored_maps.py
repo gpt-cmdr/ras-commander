@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ras_commander import RasMap, RasProcess
+from ras_commander import RasMap, RasProcess, StoredMapProductsIncompleteError
 from ras_commander.schemas import DATAFRAME_SCHEMAS
 
 
@@ -99,13 +99,26 @@ def _configure_engine(monkeypatch, tmp_path, profile_names=("P1", "P2", "P3")):
     return ras_obj, rasmap_path, hdf_path
 
 
-def _write_configured_outputs(rasmap_path: Path, output_dir: Path) -> None:
+def _write_configured_outputs(
+    rasmap_path: Path,
+    output_dir: Path,
+    *,
+    polygon_value_suffix: bool = False,
+    skip_polygons: bool = False,
+) -> None:
     tree = ET.parse(rasmap_path)
     for parameters in tree.findall(".//MapParameters"):
         stored_filename = parameters.get("StoredFilename", "")
         filename = PureWindowsPath(stored_filename).name
         if not filename or filename == "Old.vrt":
             continue
+        is_polygon = "Polygon" in parameters.get("OutputMode", "")
+        if is_polygon and skip_polygons:
+            continue
+        if is_polygon and polygon_value_suffix:
+            # RASMapper appends the specified depth to polygon file names.
+            depth = parameters.get("ArrivalDepth", "0")
+            filename = filename.replace(").shp", f" Value_{depth}).shp")
         target = output_dir / filename
         target.write_text("primary", encoding="utf-8")
         if "Polygon" in parameters.get("OutputMode", ""):
@@ -184,8 +197,10 @@ def test_steady_profile_engine_bulk_configures_and_launches_once(
     assert frame.loc[frame["output_mode"] == "raster", "file_count"].eq(2).all()
     assert frame.loc[frame["output_mode"] == "polygon", "file_count"].eq(3).all()
     assert frame.attrs["schema"] == (
-        "ras_commander.steady_profile_stored_maps.v1"
+        "ras_commander.steady_profile_stored_maps.v2"
     )
+    assert frame["status"].eq("generated").all()
+    assert frame.attrs["missing_product_count"] == 0
     assert frame.attrs["helper_launch_count"] == 1
     assert frame.attrs["profile_count"] == 2
     assert frame.attrs["configured_map_count"] == 5
@@ -340,7 +355,7 @@ def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path)
             },
         ]
     )
-    frame.attrs["schema"] = "ras_commander.steady_profile_stored_maps.v1"
+    frame.attrs["schema"] = "ras_commander.steady_profile_stored_maps.v2"
     frame.attrs["helper_launch_count"] = 1
 
     def fake_engine(**kwargs):
@@ -543,3 +558,201 @@ def test_rasmap_selected_mode_accepts_boundary_flag_with_map_types(
     assert calls[0]["depth"] is True and calls[0]["inundation_boundary"] is True
     assert calls[0]["wse"] is False
     assert calls[1]["depth"] is True and calls[1]["inundation_boundary"] is False
+
+
+def _fake_steady_helper(monkeypatch, rasmap_path, output_dir, **write_options):
+    calls = []
+
+    def fake_helper(**kwargs):
+        calls.append(kwargs)
+        _write_configured_outputs(rasmap_path, output_dir, **write_options)
+        return subprocess.CompletedProcess(
+            args=["RasStoreMapHelper.exe"], returncode=0, stdout="", stderr=""
+        )
+
+    monkeypatch.setattr(ras_process_module, "run_store_all_maps_helper", fake_helper)
+    return calls
+
+
+def test_steady_profile_engine_recognizes_rasmapper_polygon_value_suffix(
+    monkeypatch,
+    tmp_path,
+):
+    """RASMapper writes 'Inundation Boundary (flow_075 Value_0).shp'."""
+    ras_obj, rasmap_path, _ = _configure_engine(
+        monkeypatch, tmp_path, profile_names=("flow_07", "flow_075")
+    )
+    _fake_steady_helper(
+        monkeypatch, rasmap_path, tmp_path / "PlanShort", polygon_value_suffix=True
+    )
+    destination = tmp_path / "maps"
+
+    frame = RasProcess.store_maps_at_steady_profiles(
+        "01",
+        output_path=destination,
+        map_types=("depth",),
+        fix_georef=False,
+        ras_object=ras_obj,
+    )
+
+    boundary = frame[frame["map_type"] == "inundation_boundary"].iloc[0]
+    assert boundary["status"] == "generated"
+    assert boundary["profile_name"] == "flow_075"
+    assert Path(boundary["primary_path"]).name == (
+        "Inundation Boundary (flow_075 Value_0).shp"
+    )
+    assert boundary["file_count"] == 3
+    assert frame["status"].eq("generated").all()
+    # A profile name that prefixes another must not claim its files.
+    depth_07 = frame[frame["profile_name"] == "flow_07"].iloc[0]
+    assert sorted(Path(path).name for path in depth_07["files"]) == [
+        "Depth (flow_07).Terrain.tif",
+        "Depth (flow_07).vrt",
+    ]
+
+
+def test_steady_profile_engine_preserves_outputs_when_a_product_is_missing(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, rasmap_path, _ = _configure_engine(monkeypatch, tmp_path)
+    original_rasmap = rasmap_path.read_bytes()
+    _fake_steady_helper(
+        monkeypatch, rasmap_path, tmp_path / "PlanShort", skip_polygons=True
+    )
+    destination = tmp_path / "maps"
+
+    with pytest.raises(StoredMapProductsIncompleteError) as excinfo:
+        RasProcess.store_maps_at_steady_profiles(
+            "01",
+            output_path=destination,
+            map_types=("depth",),
+            fix_georef=False,
+            ras_object=ras_obj,
+        )
+
+    error = excinfo.value
+    assert isinstance(error, RuntimeError)
+    assert "1 of 4 requested product(s)" in str(error)
+    assert "inundation_boundary profile 'P3'" in str(error)
+    assert "3 generated product(s) were preserved" in str(error)
+    assert error.frame["status"].tolist() == [
+        "generated",
+        "generated",
+        "generated",
+        "missing",
+    ]
+    assert [row["map_type"] for row in error.missing] == ["inundation_boundary"]
+    assert error.missing[0]["primary_path"] is None
+    preserved = sorted(path.name for path in destination.iterdir())
+    assert preserved == [
+        "Depth (P1).Terrain.tif",
+        "Depth (P1).vrt",
+        "Depth (P2).Terrain.tif",
+        "Depth (P2).vrt",
+        "Depth (P3).Terrain.tif",
+        "Depth (P3).vrt",
+    ]
+    generated = error.frame[error.frame["status"] == "generated"]
+    for files in generated["files"]:
+        assert all(Path(path).is_file() for path in files)
+    assert rasmap_path.read_bytes() == original_rasmap
+
+
+def test_steady_profile_engine_can_return_partial_frame_without_raising(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, rasmap_path, _ = _configure_engine(monkeypatch, tmp_path)
+    _fake_steady_helper(
+        monkeypatch, rasmap_path, tmp_path / "PlanShort", skip_polygons=True
+    )
+
+    frame = RasProcess.store_maps_at_steady_profiles(
+        "01",
+        output_path=tmp_path / "maps",
+        map_types=("depth",),
+        fix_georef=False,
+        ras_object=ras_obj,
+        raise_on_missing=False,
+    )
+
+    assert frame.attrs["missing_product_count"] == 1
+    assert frame["status"].value_counts().to_dict() == {
+        "generated": 3,
+        "missing": 1,
+    }
+
+
+@pytest.mark.parametrize("raise_on_error", [False, True])
+def test_rasmap_steady_profiles_reports_preserved_partial_outputs(
+    monkeypatch,
+    tmp_path,
+    raise_on_error,
+):
+    ras_obj, _, hdf_path = _write_steady_project(tmp_path)
+    depth_files = [
+        str(tmp_path / "Depth (P1).vrt"),
+        str(tmp_path / "Depth (P1).Terrain.tif"),
+    ]
+    common = {
+        "plan_number": "01",
+        "result_hdf_path": str(hdf_path),
+        "profile_index": 0,
+        "profile_name": "P1",
+    }
+    frame = pd.DataFrame(
+        [
+            {
+                **common,
+                "map_type": "depth",
+                "output_mode": "raster",
+                "primary_path": depth_files[0],
+                "files": depth_files,
+                "file_count": 2,
+                "status": "generated",
+            },
+            {
+                **common,
+                "map_type": "inundation_boundary",
+                "output_mode": "polygon",
+                "primary_path": None,
+                "files": [],
+                "file_count": 0,
+                "status": "missing",
+            },
+        ]
+    )
+    calls = []
+
+    def fake_engine(**kwargs):
+        calls.append(kwargs)
+        raise StoredMapProductsIncompleteError("1 missing", frame)
+
+    monkeypatch.setattr(
+        RasProcess,
+        "store_maps_at_steady_profiles",
+        staticmethod(fake_engine),
+    )
+    options = dict(
+        mode="steady_profiles",
+        map_types=["depth", "inundation_boundary"],
+        raise_on_error=raise_on_error,
+        ras_object=ras_obj,
+    )
+
+    if raise_on_error:
+        with pytest.raises(StoredMapProductsIncompleteError):
+            RasMap.store_all_maps("01", **options)
+        return
+
+    summary = RasMap.store_all_maps("01", **options)
+    plan = summary["plans"]["01"]
+    assert calls[0]["raise_on_missing"] is True
+    assert summary["success"] is False
+    assert plan["success"] is False
+    assert plan["error"] == "1 missing"
+    assert plan["files"] == depth_files
+    assert [row["status"] for row in plan["stored_maps"]] == ["generated", "missing"]
+    assert [row["map_type"] for row in plan["missing"]] == ["inundation_boundary"]
+    json.dumps(summary)

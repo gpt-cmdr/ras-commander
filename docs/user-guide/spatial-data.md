@@ -749,6 +749,15 @@ or shapefile sidecars, and performance metadata including configuration time,
 helper time, helper launch count, and generated file count. The original
 `.rasmap` is restored after success or failure.
 
+Each row has a `status` of `generated` or `missing`. If StoreAllMaps omits a
+requested product, every generated product is still moved to `output_path`
+and kept, and `StoredMapProductsIncompleteError` (a `RuntimeError`) is raised
+with the per-product frame in `error.frame`; pass `raise_on_missing=False` to
+receive the frame instead. `RasMap.store_all_maps` reports such a plan with
+`success=False` plus the preserved `files`, `stored_maps`, and `missing`.
+RASMapper names boundary polygons with the specified depth appended, for
+example `Inundation Boundary (flow_075 Value_0).shp`.
+
 #### Batch Processing All Plans
 
 ```python
