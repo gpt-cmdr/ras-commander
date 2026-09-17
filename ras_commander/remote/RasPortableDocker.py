@@ -189,6 +189,7 @@ class RasPortableDocker:
     """Static Docker execution API for independent prepared projects."""
 
     @staticmethod
+    @log_call
     def build_execute_command(
         request_path: Union[str, Path],
         *,
@@ -198,7 +199,30 @@ class RasPortableDocker:
         memory: Optional[str] = None,
         pull: str = "missing",
     ) -> tuple[str, ...]:
-        """Render a shell-free Docker command for one request bundle."""
+        """Render a shell-free, one-CPU Docker command for one request bundle.
+
+        The bundle directory is mounted read-only at ``/job`` and only the
+        request's output directory is mounted writable. The output directory
+        is created (empty) as a side effect.
+
+        Args:
+            request_path (Union[str, Path]): ``request.json`` inside its bundle.
+            image (Optional[str]): Image to run. Must equal the request's
+                immutable OCI ``container_identity``; defaults to it.
+            docker_executable (str): Docker CLI executable.
+            python_executable (str): Python executable inside the image.
+            memory (Optional[str]): Optional Docker ``--memory`` limit.
+            pull (str): Docker ``--pull`` policy: ``always``, ``missing``, or
+                ``never``.
+
+        Returns:
+            tuple[str, ...]: The Docker argument vector.
+
+        Raises:
+            ValueError: If the image differs from ``container_identity``, the
+                identity is a SIF digest, the output directory is not empty,
+                a mount path contains a comma, or the source project is missing.
+        """
         request_file = Path(request_path).resolve()
         request = RasExecutionRequest.read(request_file)
         source, output = request.resolve_paths(request_file)
@@ -357,7 +381,25 @@ class RasPortableDocker:
         memory: Optional[str] = None,
         pull: str = "missing",
     ) -> PortableDockerPoolResult:
-        """Execute independent project requests with bounded concurrency."""
+        """Execute independent project requests with bounded concurrency.
+
+        Args:
+            request_paths (Sequence[Union[str, Path]]): Request files; each
+                ``execution_id`` and output directory must be unique and no
+                output may overlap any request's source tree.
+            max_concurrent (int): Containers run at once (1-256).
+            image, docker_executable, python_executable, memory, pull: Passed
+                to :meth:`execute_request` for every request.
+
+        Returns:
+            PortableDockerPoolResult: Results keyed by ``execution_id`` in
+            request order. A request that raises is recorded as a failed
+            result rather than aborting the pool.
+
+        Raises:
+            ValueError: If ``max_concurrent`` is out of range, execution IDs
+                repeat, or output directories collide or overlap sources.
+        """
         if not isinstance(max_concurrent, int) or not 1 <= max_concurrent <= 256:
             raise ValueError("max_concurrent must be an integer from 1 through 256")
         paths = [Path(path).resolve() for path in request_paths]

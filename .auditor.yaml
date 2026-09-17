@@ -247,6 +247,56 @@ exception_functions:
       closed (reason code STEADY_RESULTS_UNREADABLE) instead of raising on
       unresolvable inputs.
 
+  - function_name: execute_request
+    module: ras_commander.remote.PortableExecution
+    reason: |
+      In-container entry point for one portable steady request, shared with the
+      c05a-mesh-depth line so that both lines have one definition to reconcile.
+      RasPortableDocker.execute_request and RasSlurm are the class-based callers.
+      Not re-exported from ras_commander.remote, where that name is the CLI module.
+    category: execution_contract
+    standardize_input: &portable_paths |
+      Not applied: request, receipt, bundle, and output paths are converted with
+      Path(...).resolve() and must be rejected (symbolic links, paths escaping
+      the request directory, mount delimiters) rather than normalized.
+
+  - function_name: validate_execution_receipt
+    module: ras_commander.remote.ExecutionContract
+    reason: |
+      Stateless check that binds a v1 receipt to its v1 request. Kept module-level
+      beside the request/receipt dataclasses so the JSON contract and its
+      validator live in one importable module used by Docker, Slurm, and callers.
+    category: execution_contract
+    standardize_input: *portable_paths
+
+  - function_name: sha256_file, sha256_tree, atomic_write_json, utc_now
+    module: ras_commander.remote.ExecutionContract
+    reason: |
+      Contract primitives imported by RasSlurm and PortableExecution and not
+      exported from ras_commander or ras_commander.remote. @log_call is omitted:
+      sha256_tree walks whole project trees and per-call debug logging adds noise
+      without caller value.
+    category: execution_contract
+    standardize_input: *portable_paths
+
+  - function_name: build_parser, main
+    module: ras_commander.remote.execute_request
+    reason: |
+      Command-line module run as `python -m ras_commander.remote.execute_request
+      execute-request <request.json>` by Docker and the Slurm launcher. main()
+      converts every exception to an exit code, so @log_call adds nothing.
+    category: cli
+
+  - function_name: run, main
+    module: ras_commander.remote.portable_slurm_launcher
+    reason: |
+      Standalone stdlib-only script copied byte-for-byte into each Slurm
+      submission (its SHA-256 is recorded in the batch and checked by sbatch).
+      It must not import ras_commander, so @log_call and @standardize_input
+      cannot be used, and its bytes are kept identical to the launcher used by
+      retained production submissions.
+    category: cli
+
 # ============================================================================
 # AUDITOR RULES
 # ============================================================================

@@ -474,7 +474,28 @@ class RasSlurm:
         site: SlurmSiteConfig,
         submission_id: Optional[str] = None,
     ) -> SlurmSubmission:
-        """Stage self-contained bundles and write a safe static sbatch script."""
+        """Stage self-contained bundles and write a safe static sbatch script.
+
+        Each request is copied to ``bundles/<execution_id>/request.json`` with
+        its project tree, so the submission directory holds no workstation
+        paths. Writes ``slurm_batch.json``, ``portable_slurm_launcher.py``,
+        ``submit.sbatch``, and ``slurm_submission.json``. Nothing is submitted.
+
+        Args:
+            request_paths (Sequence[Union[str, Path]]): Request files to run in
+                one exclusive-node allocation.
+            submission_directory (Union[str, Path]): Absent or empty directory.
+            site (SlurmSiteConfig): Scheduler, image, and memory settings.
+            submission_id (Optional[str]): Allocation name; random if omitted.
+
+        Returns:
+            SlurmSubmission: Rendered handle with ``transport.mode == "local"``.
+
+        Raises:
+            ValueError: If no requests are given, execution IDs or outputs
+                collide, a request's ``container_identity`` differs from the
+                site, or ``submission_directory`` is not empty.
+        """
         source_paths = tuple(Path(path).resolve() for path in request_paths)
         requests = tuple(RasExecutionRequest.read(path) for path in source_paths)
         if not source_paths:
@@ -612,7 +633,23 @@ class RasSlurm:
         submission: SlurmSubmission,
         transport: SlurmTransportConfig,
     ) -> SlurmSubmission:
-        """Stage locally or transfer the complete bundle with rsync over SSH."""
+        """Stage locally or transfer the complete bundle over SSH.
+
+        Args:
+            submission (SlurmSubmission): Handle from :meth:`render_submission`.
+            transport (SlurmTransportConfig): ``mode="local"`` validates
+                Apptainer bind paths in place; ``mode="ssh"`` creates
+                ``<remote_scratch>/<submission_id>`` (failing if it exists) and
+                copies with rsync or recursive scp per ``transfer_mode``.
+
+        Returns:
+            SlurmSubmission: Handle bound to ``transport``, rewritten to
+            ``slurm_submission.json``.
+
+        Raises:
+            ValueError: If rendered files no longer match their digests.
+            RuntimeError: If the remote ``mkdir`` or transfer fails.
+        """
         _validate_submission_files(submission)
         if transport.mode == "local":
             _validate_local_apptainer_paths(submission)
@@ -712,7 +749,20 @@ class RasSlurm:
     @staticmethod
     @log_call
     def submit(submission: SlurmSubmission) -> SlurmSubmission:
-        """Submit a staged batch without invoking a local shell."""
+        """Submit a staged batch without invoking a local shell.
+
+        Args:
+            submission (SlurmSubmission): Staged handle without a ``job_id``.
+
+        Returns:
+            SlurmSubmission: Handle with the numeric ``job_id``, rewritten to
+            ``slurm_submission.json``.
+
+        Raises:
+            ValueError: If files were tampered with, the handle already has a
+                job ID, or an SSH handle was not staged.
+            RuntimeError: If ``sbatch`` fails or returns a non-numeric ID.
+        """
         _validate_submission_files(submission)
         if submission.job_id is not None:
             raise ValueError("Submission already has a Slurm job_id")
@@ -775,7 +825,23 @@ class RasSlurm:
         transport: SlurmTransportConfig = SlurmTransportConfig(),
         submission_id: Optional[str] = None,
     ) -> SlurmSubmission:
-        """Render, stage, and submit one exclusive-node request pool."""
+        """Render, stage, and submit one exclusive-node request pool.
+
+        Args:
+            request_paths (Sequence[Union[str, Path]]): Request files.
+            submission_directory (Union[str, Path]): Absent or empty directory.
+            site (SlurmSiteConfig): Scheduler, image, and memory settings.
+            transport (SlurmTransportConfig): Local or SSH transport.
+            submission_id (Optional[str]): Allocation name; random if omitted.
+
+        Returns:
+            SlurmSubmission: Submitted handle with ``job_id``.
+
+        Raises:
+            ValueError: As raised by :meth:`render_submission`, :meth:`stage`,
+                and :meth:`submit`.
+            RuntimeError: As raised by :meth:`stage` and :meth:`submit`.
+        """
         rendered = RasSlurm.render_submission(
             request_paths,
             submission_directory,
@@ -787,7 +853,18 @@ class RasSlurm:
     @staticmethod
     @log_call
     def status(submission: SlurmSubmission) -> SlurmStatus:
-        """Read allocation and per-step state, exit, elapsed, and MaxRSS."""
+        """Read allocation and per-step state, exit, elapsed, and MaxRSS.
+
+        Args:
+            submission (SlurmSubmission): Submitted handle.
+
+        Returns:
+            SlurmStatus: ``NOT_SUBMITTED`` without a job ID; otherwise the
+            ``sacct`` records, with ``squeue`` state for active jobs.
+
+        Raises:
+            RuntimeError: If ``sacct`` fails and ``squeue`` reports no job.
+        """
         if submission.job_id is None:
             return SlurmStatus("NOT_SUBMITTED")
         command = RasSlurm._scheduler_command(
@@ -869,7 +946,17 @@ class RasSlurm:
     @staticmethod
     @log_call
     def cancel(submission: SlurmSubmission) -> bool:
-        """Cancel a submitted allocation through its configured transport."""
+        """Cancel a submitted allocation through its configured transport.
+
+        Args:
+            submission (SlurmSubmission): Submitted handle.
+
+        Returns:
+            bool: ``False`` if the handle has no job ID, otherwise ``True``.
+
+        Raises:
+            RuntimeError: If ``scancel`` fails.
+        """
         if submission.job_id is None:
             return False
         completed = subprocess.run(
@@ -888,7 +975,24 @@ class RasSlurm:
     @staticmethod
     @log_call
     def collect(submission: SlurmSubmission) -> SlurmCollection:
-        """Retrieve remote outputs only, then bind receipts to frozen requests."""
+        """Retrieve remote outputs only, then bind receipts to frozen requests.
+
+        For SSH transports each request's output directory is copied back and
+        result HDF digests are re-verified. Every receipt is checked with
+        :func:`validate_execution_receipt` against the SIF identity, and each
+        ``rc-###`` scheduler step must be ``COMPLETED`` with exit ``0:0``.
+
+        Args:
+            submission (SlurmSubmission): Submitted handle.
+
+        Returns:
+            SlurmCollection: Receipts (``None`` where invalid), per-request
+            errors, and scheduler accounting. Collection is best effort per
+            request; one failed transfer or receipt does not raise.
+
+        Raises:
+            ValueError: If rendered files no longer match their digests.
+        """
         _validate_submission_files(submission)
         receipts = {}
         errors = {}

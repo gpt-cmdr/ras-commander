@@ -192,6 +192,7 @@ def _execute_with_wine(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Return the ``execute-request`` command-line parser."""
     parser = argparse.ArgumentParser(prog="ras-commander")
     subparsers = parser.add_subparsers(dest="command", required=True)
     execute = subparsers.add_parser(

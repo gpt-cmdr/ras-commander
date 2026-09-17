@@ -81,7 +81,7 @@ def __getattr__(name):
 
     if name in _PORTABLE_SLURM_EXPORTS:
         return getattr(import_module("..RasSlurm", __name__), name)
-    raise AttributeError(f"module 'ras_commander.remote' has no attribute '{name}'")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     # Base class

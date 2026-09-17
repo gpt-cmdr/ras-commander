@@ -18,6 +18,7 @@ import re
 import tempfile
 from typing import Any, Mapping, Optional, Union
 
+from ..Decorators import log_call
 from ..RasUtils import RasUtils
 
 
@@ -407,6 +408,7 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+@log_call
 def validate_execution_receipt(
     request_path: Union[str, Path],
     receipt_path: Union[str, Path],
@@ -419,6 +421,27 @@ def validate_execution_receipt(
     Source bytes are not re-read: execution already validated them once before
     copying to its isolated runtime directory.  Result bytes are rehashed only
     when ``verify_result_hdf_digest`` is requested at a real transfer boundary.
+
+    Args:
+        request_path (Union[str, Path]): The request JSON the receipt answers.
+        receipt_path (Union[str, Path]): Must be the canonical
+            ``<output_directory>/execution_receipt.json`` for that request.
+        expected_runtime_identity (Optional[str]): Container identity the
+            executor is known to have run (for example ``sif:sha256:<digest>``).
+        verify_result_hdf_digest (bool): Rehash the result HDF bytes.
+
+    Returns:
+        RasExecutionReceipt: The validated receipt.
+
+    Raises:
+        ValueError: If the receipt path is not canonical, or its execution ID,
+            request digest, container identities, source-tree evidence, or
+            result HDF placement/digest do not match.
+
+    Examples:
+        >>> receipt = validate_execution_receipt(  # doctest: +SKIP
+        ...     "bundle/request.json", "bundle/results/execution_receipt.json"
+        ... )
     """
     request_file = Path(request_path).resolve()
     request = RasExecutionRequest.read(request_file)
