@@ -3735,7 +3735,13 @@ class RasMap:
             benefit_area: Optional single-plan benefit-area configuration.
             performance: Typed map-helper execution and memory policy.
             raise_on_error: Re-raise a per-plan runtime failure instead of
-                retaining it in the summary.
+                retaining it in the summary. For steady_profiles, a plan whose
+                StoreAllMaps run omitted some requested products is reported
+                with ``success=False``, ``error``, the preserved ``files``,
+                per-product ``stored_maps`` (each with ``status``), and
+                ``missing``; with ``raise_on_error=True`` the
+                :class:`~ras_commander.RasProcess.StoredMapProductsIncompleteError`
+                is re-raised after those products are preserved.
 
         Raises:
             ValueError: If the selected mode cannot honor an option, no plans
@@ -4146,6 +4152,7 @@ class RasMap:
                         inundation_boundary=bool(
                             map_flags.get("inundation_boundary")
                         ),
+                        raise_on_missing=True,
                     )
                     records = frame.to_dict(orient="records")
                     grouped_profiles = []
@@ -4215,6 +4222,32 @@ class RasMap:
                     "success": False,
                     "error": str(exc),
                 }
+                partial_frame = getattr(exc, "frame", None)
+                if isinstance(partial_frame, pd.DataFrame):
+                    # StoredMapProductsIncompleteError: the generated products
+                    # were preserved on disk, so report them with the missing
+                    # ones instead of discarding the file list.
+                    partial_records = json.loads(
+                        partial_frame.to_json(orient="records")
+                    )
+                    summary["plans"][plan_num].update(
+                        {
+                            "files": list(
+                                dict.fromkeys(
+                                    path
+                                    for record in partial_records
+                                    if record.get("status") == "generated"
+                                    for path in record["files"]
+                                )
+                            ),
+                            "stored_maps": partial_records,
+                            "missing": [
+                                record
+                                for record in partial_records
+                                if record.get("status") != "generated"
+                            ],
+                        }
+                    )
                 if raise_on_error:
                     raise
 

@@ -1021,6 +1021,11 @@ frame = RasProcess.store_maps_at_steady_profiles(
 )
 ```
 
+Rows carry `status` (`generated` or `missing`). When a requested product is
+missing, generated products are preserved and
+`StoredMapProductsIncompleteError` is raised with the full frame in
+`error.frame` (`raise_on_missing=False` returns the frame instead).
+
 Use `RasMap.store_all_maps(mode="steady_profiles", ...)` when a directly
 JSON-serializable project summary is preferred.
 
