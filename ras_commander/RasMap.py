@@ -3712,12 +3712,22 @@ class RasMap:
                 ``None`` selects all profiles; exact names and zero-based
                 indexes may be mixed in a sequence.
             timesteps, max_timesteps: Timestep selectors for ``timesteps`` mode.
-            map_types: One product name or a sequence of names. Do not combine
-                with individual product flags. Defaults are WSE/Depth/Velocity
-                for selected/all-plans and Depth only for timesteps.
+            map_types: One product name or a sequence of names. Exactly the
+                listed products are generated. Do not combine with individual
+                raster/product flags, except ``inundation_boundary`` (see
+                below). Defaults, when neither ``map_types`` nor any flag is
+                given, are WSE/Depth/Velocity for selected/all-plans, Depth
+                only for timesteps, and Depth plus one inundation boundary for
+                steady_profiles.
             wse, depth, velocity, froude, shear_stress, depth_x_velocity,
                 depth_x_velocity_sq, inundation_boundary, arrival_time,
-                duration, percent_inundated: Individual product flags.
+                duration, percent_inundated: Individual product flags. Once any
+                flag is given, only flags set to True are generated.
+                ``inundation_boundary`` may also be passed together with
+                ``map_types`` to add (True) or explicitly omit (False) the
+                boundary polygon; False conflicts with a ``map_types`` entry of
+                ``"inundation_boundary"``. For steady_profiles,
+                ``map_types=["depth"]`` therefore yields Depth rasters only.
             arrival_depth: Threshold for whole-simulation configured products.
             clear_existing, fix_georef: Configured-map execution controls.
             ras_version: Optional installed mapping-runtime version.
@@ -3913,9 +3923,16 @@ class RasMap:
             value is not None for value in requested_flags.values()
         )
         if map_types is not None:
-            if any(value is not None for value in requested_flags.values()):
+            # inundation_boundary is a polygon companion product, so it may be
+            # combined with map_types; the raster flags may not.
+            if any(
+                value is not None
+                for name, value in requested_flags.items()
+                if name != "inundation_boundary"
+            ):
                 raise ValueError(
-                    "map_types cannot be combined with individual map flags"
+                    "map_types cannot be combined with individual map flags "
+                    "(only inundation_boundary may be combined with map_types)"
                 )
             map_type_values = (map_types,) if isinstance(map_types, str) else map_types
             normalized_types = {
@@ -3926,12 +3943,28 @@ class RasMap:
             if unknown_types:
                 raise ValueError("unsupported map_types: " + ", ".join(unknown_types))
             map_flags = {name: name in normalized_types for name in supported_map_types}
+            if inundation_boundary is not None:
+                if (
+                    "inundation_boundary" in normalized_types
+                    and not inundation_boundary
+                ):
+                    raise ValueError(
+                        "inundation_boundary=False conflicts with "
+                        "map_types containing 'inundation_boundary'"
+                    )
+                map_flags["inundation_boundary"] = bool(inundation_boundary)
         elif any(value is not None for value in requested_flags.values()):
             map_flags = {name: bool(value) for name, value in requested_flags.items()}
         elif benefit_area is not None:
             # BenefitArea has configuration-dependent defaults in RasProcess.
             map_flags = dict(requested_flags)
-        elif resolved_mode in {"timesteps", "steady_profiles"}:
+        elif resolved_mode == "steady_profiles":
+            # Historic steady default: Depth plus one boundary polygon.
+            map_flags = {
+                name: name in {"depth", "inundation_boundary"}
+                for name in supported_map_types
+            }
+        elif resolved_mode == "timesteps":
             map_flags = {name: name == "depth" for name in supported_map_types}
         else:
             map_flags = {
@@ -4110,10 +4143,8 @@ class RasMap:
                         ras_version=ras_version,
                         timeout=timeout,
                         terrain_name=terrain_name,
-                        inundation_boundary=(
-                            True
-                            if inundation_boundary is None
-                            else bool(inundation_boundary)
+                        inundation_boundary=bool(
+                            map_flags.get("inundation_boundary")
                         ),
                     )
                     records = frame.to_dict(orient="records")

@@ -357,7 +357,7 @@ def test_rasmap_steady_profiles_mode_serializes_dataframe(monkeypatch, tmp_path)
         "01",
         mode="steady_profiles",
         profiles=[0],
-        map_types=("depth",),
+        map_types=("depth", "inundation_boundary"),
         ras_object=ras_obj,
     )
 
@@ -411,3 +411,135 @@ def test_rasmap_steady_profiles_mode_dispatches_flow_product(
 
     assert calls[0]["map_types"] == ["flow"]
     assert summary["success"] is True
+
+
+def _capture_steady_engine(monkeypatch):
+    calls = []
+
+    def fake_engine(**kwargs):
+        calls.append(kwargs)
+        return pd.DataFrame(
+            columns=[
+                "plan_number",
+                "result_hdf_path",
+                "profile_index",
+                "profile_name",
+                "map_type",
+                "output_mode",
+                "primary_path",
+                "files",
+                "file_count",
+            ]
+        )
+
+    monkeypatch.setattr(
+        RasProcess,
+        "store_maps_at_steady_profiles",
+        staticmethod(fake_engine),
+    )
+    return calls
+
+
+@pytest.mark.parametrize(
+    ("options", "expected_types", "expected_boundary"),
+    [
+        # map_types is exact: depth only means no boundary polygon.
+        ({"map_types": ["depth"]}, ["depth"], False),
+        ({"map_types": "depth"}, ["depth"], False),
+        ({"map_types": ["depth"], "inundation_boundary": False}, ["depth"], False),
+        ({"map_types": ["depth"], "inundation_boundary": True}, ["depth"], True),
+        (
+            {"map_types": ["depth", "inundation_boundary"], "inundation_boundary": True},
+            ["depth"],
+            True,
+        ),
+        # Individual flags select only what is set to True.
+        ({"depth": True}, ["depth"], False),
+        ({"depth": True, "inundation_boundary": True}, ["depth"], True),
+        # No selection keeps the historic steady default.
+        ({}, ["depth"], True),
+    ],
+)
+def test_rasmap_steady_profiles_inundation_boundary_selection(
+    monkeypatch,
+    tmp_path,
+    options,
+    expected_types,
+    expected_boundary,
+):
+    ras_obj, _, _ = _write_steady_project(tmp_path)
+    calls = _capture_steady_engine(monkeypatch)
+
+    summary = RasMap.store_all_maps(
+        "01",
+        mode="steady_profiles",
+        profiles=None,
+        output_path=tmp_path / "out",
+        terrain_name="FIM 3DEP Terrain",
+        ras_object=ras_obj,
+        **options,
+    )
+
+    assert summary["success"] is True
+    assert len(calls) == 1
+    assert calls[0]["map_types"] == expected_types
+    assert calls[0]["inundation_boundary"] is expected_boundary
+    assert calls[0]["terrain_name"] == "FIM 3DEP Terrain"
+
+
+def test_rasmap_steady_profiles_rejects_conflicting_boundary_selection(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _, _ = _write_steady_project(tmp_path)
+    calls = _capture_steady_engine(monkeypatch)
+
+    with pytest.raises(ValueError, match="conflicts"):
+        RasMap.store_all_maps(
+            "01",
+            mode="steady_profiles",
+            map_types=["depth", "inundation_boundary"],
+            inundation_boundary=False,
+            ras_object=ras_obj,
+        )
+    with pytest.raises(ValueError, match="only inundation_boundary"):
+        RasMap.store_all_maps(
+            "01",
+            mode="steady_profiles",
+            map_types=["depth"],
+            velocity=True,
+            ras_object=ras_obj,
+        )
+    assert calls == []
+
+
+def test_rasmap_selected_mode_accepts_boundary_flag_with_map_types(
+    monkeypatch,
+    tmp_path,
+):
+    ras_obj, _, _ = _write_steady_project(tmp_path)
+    calls = []
+
+    def fake_store_maps(**kwargs):
+        calls.append(kwargs)
+        return {"depth": [], "inundation_boundary": []}
+
+    monkeypatch.setattr(RasProcess, "store_maps", staticmethod(fake_store_maps))
+
+    RasMap.store_all_maps(
+        "01",
+        mode="selected",
+        map_types=["depth"],
+        inundation_boundary=True,
+        ras_object=ras_obj,
+    )
+    RasMap.store_all_maps(
+        "01",
+        mode="selected",
+        map_types=["depth"],
+        ras_object=ras_obj,
+    )
+
+    assert calls[0]["depth"] is True and calls[0]["inundation_boundary"] is True
+    assert calls[0]["wse"] is False
+    assert calls[1]["depth"] is True and calls[1]["inundation_boundary"] is False

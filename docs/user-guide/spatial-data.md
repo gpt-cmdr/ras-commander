@@ -731,6 +731,12 @@ summary = RasMap.store_all_maps(
 )
 ```
 
+`map_types` is exact: `map_types=("depth",)` generates Depth rasters only.
+Pass `inundation_boundary=True` (or list `"inundation_boundary"` in
+`map_types`) to add the boundary polygon; `inundation_boundary=False` omits it.
+With neither `map_types` nor any product flag, steady mode keeps its historic
+default of Depth plus one boundary polygon.
+
 The final selected profile is not assumed to be hydraulically highest for an
 arbitrary model. ras2fim constructs ascending discharge ladders, so its final
 profile is the highest ladder step. Exact names and zero-based indexes can be
