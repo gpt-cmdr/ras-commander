@@ -19,7 +19,16 @@ Main Classes:
 
     Usgs3depAws: USGS 3DEP elevation tile download from AWS S3
         - find_tiles_for_bbox(): Find tiles covering a bounding box
-        - download_tiles(): Download tiles with concurrent threads
+        - select_projects_for_coverage(): Newest project per sub-area, with a coverage report
+        - download_tiles(): Download tiles with concurrent threads, optional
+          coverage-aware project selection and per-tile provenance
+        - build_terrain_raster(): One gap-free GeoTIFF terrain in the project CRS,
+          with 10m/30m backfill, explicit vertical unit conversion, a
+          zero-nodata gate inside the buffered model extent, and a
+          single-source HEC-RAS terrain check
+        - plan_terrain_tiles(): Plan every tile a terrain build needs (network)
+        - prefetch_terrain_tiles(): Download plans' tiles once into a shared store
+        - create_vrt(): Mosaic downloaded tiles into a VRT
 
     RasTerrainMod: Terrain modification analysis via pythonnet (Windows only)
         - get_terrain_profile(): Sample terrain with modifications applied
@@ -65,7 +74,7 @@ See Also:
 
 from .RasTerrain import RasTerrain
 from ..ComputeResults import TerrainExportResult
-from .Usgs3depAws import Usgs3depAws
+from .Usgs3depAws import TerrainBuildError, Usgs3depAws
 from .RasTerrainModWriter import RasTerrainModification, RasTerrainModWriter
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
@@ -74,6 +83,7 @@ try:
     __all__ = [
         'RasTerrain',
         'Usgs3depAws',
+        'TerrainBuildError',
         'RasTerrainMod',
         'RasTerrainModification',
         'RasTerrainModWriter',
@@ -83,6 +93,7 @@ except ImportError:
     __all__ = [
         'RasTerrain',
         'Usgs3depAws',
+        'TerrainBuildError',
         'RasTerrainModification',
         'RasTerrainModWriter',
         'TerrainExportResult',

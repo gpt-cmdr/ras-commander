@@ -243,6 +243,148 @@ comparison = RasTerrainMod.compare_terrain_profiles(
 print(comparison[['station', 'existing_elevation', 'proposed_elevation', 'difference']])
 ```
 
+## Usgs3depAws
+
+USGS 3DEP elevation acquisition from the public AWS S3 bucket, plus VRT
+mosaicking with HEC-RAS bundled GDAL. Direct download currently covers the 1m
+project-based products; 10m and 30m are discovery only.
+
+### Discovery Methods
+
+- `download_tile_index(resolution, cache_folder=None)` - Download and cache the spatial metadata GeoPackage
+- `query_tiles_api(bbox, resolution, buffer_distance=0.0)` - Query the National Map tile index REST API
+- `find_tiles_for_bbox(bbox, resolution, cache_folder=None, buffer_distance=0.0)` - Projects intersecting a WGS84 extent
+- `list_projects_for_bbox(bbox, resolution, cache_folder=None, buffer_distance=0.0)` - Same, with `_year` parsed from project names
+- `select_projects_for_coverage(projects, bbox, min_coverage_fraction=0.999, min_project_area_fraction=0.0)` - Newest project per sub-area, plus a coverage report
+
+### Download Methods
+
+- `download_tiles(bbox, resolution, output_folder, cache_folder=None, overwrite_dest=False, max_workers=3, project_name=None, min_year=None, buffer_distance=0.0, *, project_selection="newest", min_coverage_fraction=0.999, min_project_area_fraction=0.0, return_provenance=False, exclude_tile_ids=None)` - Download the intersecting 1m tiles
+
+`project_selection` controls what happens when several projects intersect the
+extent:
+
+| Mode | Behavior |
+|------|----------|
+| `"newest"` (default) | Keeps only the single most recent project. Any sub-area that project does not cover is silently absent from the mosaic. |
+| `"coverage"` | Greedily covers the extent with the newest project available per sub-area, falls back to older projects only for the residual geometry, logs each project's contributed area, and warns when the extent cannot be fully covered. Tiles are returned oldest project first so the newest data wins on overlap in a `gdalbuildvrt` mosaic. |
+
+With `return_provenance=True` the call returns `(tile_paths, provenance)`, where
+each provenance record carries `tile_id`, `file_name`, `file_path`,
+`source_url`, `project_name`, `project_year`, `etag`, `last_modified`,
+`content_length`, and `local_size_bytes`. That is enough to record exactly which
+tiles a terrain was built from without re-hashing the rasters.
+
+### HEC-RAS Terrain Raster
+
+- `build_terrain_raster(output_raster, project_crs, geom_path=None, aoi_geometry=None, *, buffer_distance=100.0, buffer_units="US survey foot", vertical_unit=None, minimum_cell_size=5.0, target_resolution=None, backfill_resolutions=(10, 30), exclude_tile_ids=None, download_folder=None, cache_folder=None, resampling_method="bilinear", nodata=-9999.0, src_nodata=None, max_workers=3, hecras_version=None, hec_terrain_hdf=None, receipt_path=None, overwrite=False, timeout_seconds=7200, tile_plan=None, require_cached_tiles=False)` - Build one gap-free GeoTIFF terrain in the project CRS
+
+RASMapper creates result rasters that mirror the terrain VRT structure: when a
+terrain references several rasters, every result output mirrors that
+multi-raster structure. `build_terrain_raster()` therefore delivers exactly one
+raster, already in the project CRS so HEC-RAS never reprojects, and can prove
+the HEC-RAS terrain built from it has a single source member.
+
+| Step | Behavior |
+|------|----------|
+| AOI | Buffered model extent in the project CRS. From `geom_path` it is the model footprint (`HdfProject.get_project_extent(..., geometry_type="footprint")`, text-only 1D supported) unioned with the full cross-section cut lines, which can protrude past the edge-line footprint. The buffer is an absolute distance (default 100 US survey feet), not a percentage. A caller geometry (`aoi_geometry`, project CRS) is buffered the same way. The project CRS is always caller-supplied. |
+| Priority | 3DEP 1m project-based DEMs via `download_tiles(project_selection="coverage")` (newest project per sub-area), then seamless 1/3 arc-second (~10m), then 1 arc-second (~30m). A lower tier is downloaded only where higher tiers leave AOI pixels uncovered. |
+| Cell size | The dominant resolution is the native resolution of the tier contributing the most AOI area, converted to project units with exact fractions (1m is 3937/1200 = 3.2808333333333333 US survey feet). The cell size is `k * dominant_resolution` for the smallest integer `k >= 1` reaching `minimum_cell_size` (default 5 project units): 1m in EPSG:2277 gives k=2 and 6.5616666666666667 ftUS; a 10m source (32.8 ft) already meets the minimum, so k=1. `target_resolution` overrides the rule; a value that is not an integer multiple of the dominant resolution is snapped to the nearest multiple (at least 1x) with a logged warning. The receipt records `multiple`, `dominant_resolution`, `minimum_cell_size`, `requested_resolution`, `snapped`, `chosen_by`, and the resulting `value`. |
+| Composite | One HEC-RAS bundled `gdalwarp.exe` call, sources lowest priority first and highest last, bilinear resampling for every tier (`resampling_method`, default `"bilinear"`), `-t_srs`, `-tr`, `-tap`, `-te` snapped outward, tiled/compressed GeoTIFF with `BIGTIFF=IF_SAFER`. |
+| Vertical units | 3DEP heights are NAVD88 metres. Reprojection changes horizontal units only, and the bundled GDAL 3.0.2 `gdalwarp` does not rescale Z even with compound CRSs, so valid pixels are explicitly scaled (x 3.2808333333333333 for US survey feet). |
+| Gate | Nodata pixels inside the buffered AOI polygon (not its bounding rectangle; any touching pixel counts) must be zero. Otherwise `TerrainBuildError` is raised with `reason_code="terrain_aoi_nodata_after_backfill"`, the count, bounds, and sample locations. Terrain is never fabricated. |
+| Receipt | `<output stem>.terrain_receipt.json`: per-tier projects, tiles (URL, ETag, Last-Modified, size), contributed AOI pixels and area; the cell-size rule inputs and result; vertical datum, units, and factor; target CRS; grid origin and shape; nodata-inside-AOI count. |
+| HEC-RAS handoff | With `hec_terrain_hdf`, `RasTerrain.create_terrain_hdf` builds the terrain from the single raster with stitching disabled, and the resulting `Terrain.vrt` must have exactly one source member (`reason_code="hec_terrain_vrt_not_single_source"` otherwise). |
+
+```python
+from ras_commander.terrain import TerrainBuildError, Usgs3depAws
+
+try:
+    receipt = Usgs3depAws.build_terrain_raster(
+        "Terrain/maha_creek_navd88_ftus_epsg2277.tif",
+        project_crs="EPSG:2277",          # caller-asserted for text-only models
+        geom_path="MAHA CREEK.g01",
+        hecras_version="6.6",
+        hec_terrain_hdf="Terrain/hec-terrain-6.6/Terrain.hdf",
+    )
+except TerrainBuildError as error:
+    print(error.reason_code, error.details)
+else:
+    print(receipt["resolution"]["value"], receipt["hec_terrain"]["source_member_count"])
+```
+
+### Catalog Builds: Plan, Prefetch, Build Offline
+
+For many models that share one tile store (for example a catalog built in
+parallel in containers or on HPC nodes with no internet and a read-only store),
+split acquisition from building:
+
+- `plan_terrain_tiles(project_crs, geom_path=None, aoi_geometry=None, *, buffer_distance=100.0, buffer_units="US survey foot", backfill_resolutions=(10, 30), min_coverage_fraction=0.999, min_project_area_fraction=0.0, cache_folder=None, exclude_tile_ids=None)` - Network. Computes the same buffered AOI `build_terrain_raster()` uses (one shared routine) and every tile each tier needs, and returns a JSON-serializable plan.
+- `prefetch_terrain_tiles(plans, download_folder, *, max_workers=4, overwrite=False)` - Network, single writer. Deduplicates tiles by URL across any number of plans, downloads each once into `download_folder/<product>/<filename>`, keeps size-matched existing files, and returns a manifest.
+- `build_terrain_raster(..., tile_plan=plan, require_cached_tiles=True)` - No network. Uses the plan's AOI and tile lists and reads the store without writing to it.
+
+| Plan field | Content |
+|------------|---------|
+| `schema`, `version`, `created_at`, `project_crs` | Identity (`ras-commander/usgs-3dep-terrain-tile-plan`, `1.0.0`) |
+| `buffer` | Distance, units, and distance in project units |
+| `aoi` | `wkt` (full precision, project CRS), `wkt_sha256`, `bounds`, `bounds_wgs84`, and the AOI report (cross-section counts) |
+| `selection` | Coverage fractions, backfill resolutions, excluded tile ids |
+| `tiers` | Highest priority first. Each tier has `tier`, `product`, `resolution`, and `tiles`; each tile has `tile_id`, `url`, `filename`, `relative_path`, `product`, `tier_resolution`, `project`, `project_folder`, `year`, `etag`, `last_modified`, and `content_length` (from a HEAD request). Tier 1 lists coverage-selected 1m tiles in composite order and adds `coverage` (covered and uncovered fraction, uncovered area, and uncovered geometry WKT). Backfill tiers list EVERY seamless 1-degree tile intersecting the AOI, unconditionally, because interior 1m voids cannot be predicted from the index; tiles missing on S3 are listed under `unavailable_tiles`. |
+
+The prefetch manifest lists one entry per unique URL with `filename`,
+`relative_path`, `local_path`, `url`, `tier_resolutions`, `products`,
+`project`, `project_folder`, `year`, `etag`, `last_modified`,
+`content_length`, `local_size_bytes`, `status` (`downloaded`, `cached`, or
+`failed`), `error`, and `referenced_by_plans` (plan SHA-256 digests), plus
+`counts`. Failures are reported per tile rather than raised; a partial or
+size-mismatched download is removed so it can never pass as cached.
+
+With `tile_plan`, `build_terrain_raster()` does not recompute the AOI and does
+not query the tile index or S3 listings. `geom_path` and `aoi_geometry` must be
+omitted, `project_crs` must match the plan, and `backfill_resolutions` must be
+a subset of the planned tiers. With `require_cached_tiles=True` it never
+downloads, never writes into `download_folder`, and makes no HEAD or other
+network request. Every tile of every planned tier must already be in the
+store, otherwise `TerrainBuildError` is raised with
+`reason_code="terrain_tile_not_cached"` and the missing relative paths.
+`require_cached_tiles=True` without `tile_plan` is rejected. The receipt
+`build_mode` block records `offline`, `network_access`, the store folder, and
+the plan's SHA-256. Per-tile provenance comes from the plan, plus the local
+size and a `size_matches_plan` flag computed without network access. The
+cell-size rule, bilinear composite, single raster, zero-nodata gate, and
+single-member `Terrain.vrt` check are unchanged.
+
+```python
+import json
+from concurrent.futures import ProcessPoolExecutor
+from ras_commander.terrain import Usgs3depAws
+
+# 1. Plan (network), one plan per model
+plans = {name: Usgs3depAws.plan_terrain_tiles("EPSG:2277", geom_path=geom) for name, geom in models.items()}
+
+# 2. Prefetch once, single writer
+manifest = Usgs3depAws.prefetch_terrain_tiles(plans.values(), "tile-store", max_workers=8)
+assert manifest["counts"]["failed"] == 0
+
+# 3. Build offline in parallel against the read-only store
+def build(name):
+    return Usgs3depAws.build_terrain_raster(
+        f"terrain/{name}.tif", "EPSG:2277",
+        download_folder="tile-store", tile_plan=plans[name], require_cached_tiles=True,
+        hec_terrain_hdf=f"terrain/{name}/Terrain.hdf", hecras_version="6.6",
+    )
+
+with ProcessPoolExecutor() as pool:
+    receipts = list(pool.map(build, plans))
+```
+
+### Mosaic Methods
+
+- `create_vrt(tile_files, output_vrt, hecras_version=None)` - Build a VRT mosaic of downloaded tiles with HEC-RAS bundled `gdalbuildvrt.exe`
+
+`create_vrt()` inherits the source SRS and native cell size. Do not use a
+multi-raster VRT as a HEC-RAS terrain source; use `build_terrain_raster()`.
+
 ## Related Examples
 
 | Notebook | Description |

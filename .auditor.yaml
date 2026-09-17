@@ -183,6 +183,21 @@ exception_classes:
     instantiation_required: false
     note: Enum class, typically not instantiated directly
 
+  - class_name: TerrainBuildError
+    module: ras_commander.terrain.Usgs3depAws
+    reason: |
+      Exception raised by Usgs3depAws.build_terrain_raster() when a single-raster
+      terrain cannot be delivered. Carries a stable reason_code and JSON-serializable
+      details (nodata pixel count, uncovered bounds, sample locations, receipt path)
+      so callers can branch on the failure without parsing messages.
+    category: data_containers
+    instantiation_required: true
+    example: |
+      try:
+          Usgs3depAws.build_terrain_raster("terrain.tif", "EPSG:2277", geom_path="Model.g01")
+      except TerrainBuildError as error:
+          print(error.reason_code, error.details["nodata_pixel_count"])
+
   # ============================================================================
   # UTILITY CLASSES (State Required)
   # ============================================================================

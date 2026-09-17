@@ -34,7 +34,10 @@ geometry:
 - `RasMap.add_landcover_layer()` and `RasMap.add_soils_layer()` expect the
   geometry and buffer in the project CRS.
 - `Usgs3depAws` acquisition methods and `PrecipAorc` methods expect WGS84, so
-  their buffer distance is in decimal degrees.
+  their buffer distance is in decimal degrees. The exception is
+  `Usgs3depAws.build_terrain_raster()`, which takes the model geometry or an
+  AOI in the caller-supplied project CRS and an absolute buffer distance
+  (default 100 US survey feet).
 
 No CRS transformation is inferred from a Shapely geometry. Reproject a
 GeoSeries/GeoDataFrame to the workflow's documented CRS before passing it.
@@ -68,7 +71,9 @@ soils_hdf = RasMap.add_soils_layer(
 |----------|-----------------|
 | `RasMap.add_landcover_layer()` | Normalizes polygon or legacy bounds, applies a project-CRS buffer, then derives raster bounds. |
 | `RasMap.add_soils_layer()` | Uses the same normalization and buffer contract as land cover. |
-| `Usgs3depAws.query_tiles_api()`, `find_tiles_for_bbox()`, `list_projects_for_bbox()`, `download_tiles()` | Use the shared contract for WGS84 terrain acquisition; polygon intersection is preserved where the tile workflow supports it. |
+| `Usgs3depAws.query_tiles_api()`, `find_tiles_for_bbox()`, `list_projects_for_bbox()`, `download_tiles()`, `select_projects_for_coverage()` | Use the shared contract for WGS84 terrain acquisition; polygon intersection is preserved where the tile workflow supports it. `download_tiles(project_selection="coverage")` covers the normalized extent with the newest project available per sub-area instead of the single newest project. |
+| `Usgs3depAws.build_terrain_raster()` | Builds the AOI in the project CRS from the model footprint unioned with the full cross-section cut lines, applies an absolute buffer, and requires zero nodata pixels inside that buffered polygon in the single output raster. The default cell size is the smallest integer multiple of the dominant source resolution that is at least 5 project units. |
+| `Usgs3depAws.plan_terrain_tiles()`, `prefetch_terrain_tiles()` | `plan_terrain_tiles()` computes the same project-CRS AOI as `build_terrain_raster()` and records it as WKT in the plan; `build_terrain_raster(tile_plan=...)` reuses that AOI instead of recomputing it, so offline builds need neither geometry parsing nor network access. |
 | `PrecipAorc.download()`, `check_availability()`, `get_storm_catalog()`, `create_storm_plans()` | Normalize a WGS84 polygon/legacy extent and optional degree buffer before precipitation subsetting. |
 | `RasMap.add_infiltration_layer()` | Registration/combination only. Its raster extent comes from the prepared land-cover and soils inputs, so no artificial extent parameter is added. |
 | `RasMap.add_terrain_layer()` | Registration only for an existing terrain HDF; terrain acquisition owns the analysis extent. |
