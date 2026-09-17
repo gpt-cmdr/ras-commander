@@ -188,3 +188,160 @@ def test_rassteady_export_and_constants():
     assert RasSteady.KNOWN_WS == 1
     assert RasSteady.NORMAL_DEPTH == 3
     assert callable(RasSteady.read)
+
+
+# --- 8-character fixed-width fields ---------------------------------------
+
+_EDGE_VALUES = [
+    0.0818,
+    0.08179469,
+    1e-5,
+    -1e-5,
+    0.0,
+    -0.0,
+    12345678,
+    12345678.4,
+    -1234567,
+    -0.0123456,
+    268.153,
+    2680.8,
+    26220,
+    9999999.96,
+]
+
+
+@pytest.mark.parametrize("value", _EDGE_VALUES)
+def test_fixed_width_field_is_exactly_eight_characters(value):
+    text = RasSteady._format_fixed_width_field(value)
+
+    assert len(text) == RasSteady.FIXED_WIDTH_FIELD_WIDTH
+    assert "e" not in text.lower()
+    assert float(text) == pytest.approx(
+        value, rel=RasSteady.FIXED_WIDTH_RELATIVE_TOLERANCE, abs=0.0
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (268.153, " 268.153"),
+        (2680.8, "  2680.8"),
+        (26220, "   26220"),
+        (0.08179469, ".0817947"),
+        (0.0818, "  0.0818"),
+        (1e-5, " 0.00001"),
+        (12345678, "12345678"),
+        (-0.0123456, "-.012346"),
+        (0, "       0"),
+        (268.15312, "268.1531"),
+    ],
+)
+def test_fixed_width_field_uses_hec_ras_trimmed_decimals(value, expected):
+    assert RasSteady._format_fixed_width_field(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [1e9, 1e8, 123456789, -12345678, 1.23456e-7, 1.23456e-5, float("nan"), float("inf"), "x"],
+)
+def test_fixed_width_field_rejects_unrepresentable_values(value):
+    with pytest.raises(ValueError, match="8-character|finite|numeric"):
+        RasSteady._format_fixed_width_field(value)
+
+
+def test_edge_values_round_trip_through_flow_file(tmp_path: Path):
+    path = tmp_path / "Edge.f01"
+    flows = [float(value) for value in _EDGE_VALUES]
+    names = [f"PF {index + 1}" for index in range(len(flows))]
+
+    RasSteady.create_flow_file(
+        path,
+        flow_title="Edge values",
+        profile_names=names,
+        flow_changes=[
+            {"river": "River", "reach": "Reach", "station": "1000", "flows": flows}
+        ],
+        boundaries=[
+            RasSteady.boundary(
+                "River",
+                "Reach",
+                upstream=RasSteady.known_water_surface([1234.5678] * len(flows)),
+                downstream=RasSteady.normal_depth([0.000123456] * len(flows)),
+            )
+        ],
+    )
+
+    parsed = RasSteady.read_flow_file(path)
+    assert parsed["flow_changes"][0]["flows"] == pytest.approx(
+        flows, rel=RasSteady.FIXED_WIDTH_RELATIVE_TOLERANCE, abs=0.0
+    )
+    for boundary in parsed["boundaries"]:
+        assert boundary["upstream"]["known_ws"] == pytest.approx(1234.568)
+        assert boundary["downstream"]["slope"] == pytest.approx(0.0001235)
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            assert len(line) % 8 == 0
+        elif line.startswith(("Up Known WS=", "Dn Slope=")):
+            assert len(line.split("=", 1)[1]) == 8
+
+
+def test_small_proportional_flow_keeps_ten_per_line_column_alignment(tmp_path: Path):
+    """Regression: 0.08179469 was written as 10 characters and shifted columns."""
+    path = tmp_path / "Cedar.f01"
+    flows = [0.08179469, 268.153, 2680.8, 26220, 5.5, 71.25, 812.4, 1500, 9.75, 33333.3]
+    path.write_text(FIXTURE, encoding="utf-8")
+
+    RasSteady.update_flow_file(
+        path,
+        profile_names=[f"PF {index + 1}" for index in range(len(flows))],
+        flow_changes=[
+            {
+                "river": "CEDAR CREEK",
+                "reach": "Reach-1",
+                "station": "238994.0",
+                "flows": flows,
+            }
+        ],
+        boundaries=[
+            RasSteady.boundary(
+                "CEDAR CREEK",
+                "Reach-1",
+                upstream=RasSteady.critical_depth(),
+                downstream=RasSteady.normal_depth([0.001] * len(flows)),
+            )
+        ],
+    )
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    row = lines[lines.index("River Rch & RM=CEDAR CREEK,Reach-1,238994.0") + 1]
+    assert len(row) == 80
+    fields = [row[start : start + 8] for start in range(0, 80, 8)]
+    assert fields == [
+        ".0817947",
+        " 268.153",
+        "  2680.8",
+        "   26220",
+        "     5.5",
+        "   71.25",
+        "   812.4",
+        "    1500",
+        "    9.75",
+        " 33333.3",
+    ]
+    parsed = RasSteady.read_flow_file(path)
+    assert parsed["flow_changes"][0]["flows"] == pytest.approx(flows, rel=5e-6, abs=1e-6)
+
+
+def test_unrepresentable_flow_raises_before_writing(tmp_path: Path):
+    path = tmp_path / "Fixture.f01"
+    path.write_text(FIXTURE, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="8-character"):
+        RasSteady.update_flow_file(
+            path,
+            flow_changes=[
+                {"river": "Main River", "reach": "Upper Reach", "station": "5000", "flows": [1e9, 1, 2]}
+            ],
+        )
+
+    assert path.read_text(encoding="utf-8") == FIXTURE

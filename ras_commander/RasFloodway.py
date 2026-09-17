@@ -18,6 +18,7 @@ from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
 from .RasPrj import ras
+from .RasSteady import RasSteady
 
 logger = get_logger(__name__)
 
@@ -1127,7 +1128,8 @@ class RasFloodway:
                 new_wse = base_wse + starting_wse_deltas[target_index]
             else:
                 new_wse = base_wse
-            cloned[i] = f"Dn Known WS={RasFloodway._format_compact_value(new_wse)}\n"
+            known_ws = RasSteady._format_fixed_width_field(new_wse).strip()
+            cloned[i] = f"Dn Known WS={known_ws}\n"
 
         return cloned
 
@@ -1248,7 +1250,12 @@ class RasFloodway:
 
     @staticmethod
     def _format_fixed_values(values: Sequence[Any]) -> str:
-        return "".join(f"{RasFloodway._format_compact_value(value):>8}" for value in values)
+        return "".join(
+            " " * RasSteady.FIXED_WIDTH_FIELD_WIDTH
+            if value is None
+            else RasSteady._format_fixed_width_field(value)
+            for value in values
+        )
 
     @staticmethod
     def _format_compact_value(value: Any) -> str:
