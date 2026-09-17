@@ -229,11 +229,20 @@ request = RasExecutionRequest.create(
   `stored_maps` section. `validate_execution_receipt()` also checks that the
   section matches the request and that every product's primary file exists
   under the output directory.
+- **Receipt consistency:** a `passed` section must list exactly one row for
+  each requested profile and map type, plus a boundary row only when one was
+  requested. `skipped` appears exactly when hydraulic validation did not pass.
+- **`null` is rejected:** leave the block out instead of writing
+  `"stored_maps": null`.
 - **Timeouts:** each executor's time limit is
   `timeout_seconds + stored_maps.timeout_seconds`
   (`RasExecutionRequest.execution_timeout_seconds`). Each executor adds its own
   margin on top of that: 120 s for Docker, 300 s for the Wine handoff, and
-  420 s for the Slurm step launcher. The launcher script is unchanged.
+  420 s for the Slurm step launcher. The launcher script is unchanged. Only
+  the StoreAllMaps helper run itself is bounded by `stored_maps.timeout_seconds`. Setting
+  up the project, fixing georeferencing, and re-hashing the result HDF use the
+  executor margin. `SlurmSiteConfig.time_limit` is not checked against the step
+  budgets, so set it high enough for all of them.
 
 ## Installation
 

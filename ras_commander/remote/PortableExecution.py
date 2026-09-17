@@ -34,6 +34,7 @@ from ..hdf.HdfResultsPlan import HdfResultsPlan
 from ..results.ResultsParser import ResultsParser
 from .ExecutionContract import (
     STORED_MAPS_OUTPUT_DIRECTORY,
+    _validate_stored_maps_receipt,
     PreprocessPolicy,
     RasExecutionReceipt,
     RasExecutionRequest,
@@ -810,21 +811,28 @@ def _run_stored_maps(
                 "STORED_MAPS_RESULT_HDF_CHANGED",
                 "Stored-map generation changed the validated result HDF",
             )
-    except _StoredMapsError as exc:
-        reason, message = exc.reason_code, str(exc)
-    except subprocess.TimeoutExpired as exc:
-        reason, message = "STORED_MAPS_TIMEOUT", f"{type(exc).__name__}: {exc}"
-    except Exception as exc:
-        logger.exception("Stored-map generation failed for %s", request.execution_id)
-        reason, message = "STORED_MAPS_FAILED", f"{type(exc).__name__}: {exc}"
-    else:
-        return _stored_maps_section(
+        section = _stored_maps_section(
             request,
             "passed",
             "STORED_MAPS_COMPLETED",
             elapsed_seconds=time.monotonic() - started,
             products=products,
         )
+        # Apply the receipt contract here so an unexpected product row becomes
+        # a failed maps section instead of losing the hydraulic receipt.
+        try:
+            _validate_stored_maps_receipt(section)
+        except ValueError as exc:
+            raise _StoredMapsError("STORED_MAPS_OUTPUT_INVALID", str(exc)) from exc
+    except _StoredMapsError as exc:
+        reason, message = exc.reason_code, str(exc)
+    except (subprocess.TimeoutExpired, TimeoutError) as exc:
+        reason, message = "STORED_MAPS_TIMEOUT", f"{type(exc).__name__}: {exc}"
+    except Exception as exc:
+        logger.exception("Stored-map generation failed for %s", request.execution_id)
+        reason, message = "STORED_MAPS_FAILED", f"{type(exc).__name__}: {exc}"
+    else:
+        return section
     return _stored_maps_section(
         request,
         "failed",

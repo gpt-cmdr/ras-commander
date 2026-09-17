@@ -174,7 +174,7 @@ def _is_positive_int(value: Any) -> bool:
 
 def _relative_product_path(value: Any) -> str:
     """Validate a receipt product path relative to the request output root."""
-    if not _single_line(value) or "\\" in value:
+    if not _single_line(value) or "\\" in value or ":" in value:
         raise ValueError("Stored-map product path must be a relative POSIX path")
     path = PurePosixPath(value)
     if path.is_absolute() or ".." in path.parts or PureWindowsPath(value).drive:
@@ -260,7 +260,10 @@ class StoredMapsRequest:
         """Validate a ``stored_maps`` mapping, rejecting unknown fields."""
         if not isinstance(payload, Mapping):
             raise ValueError("stored_maps must be an object")
-        return cls(**dict(payload))
+        try:
+            return cls(**dict(payload))
+        except TypeError as exc:
+            raise ValueError(f"stored_maps fields do not match the contract: {exc}") from exc
 
     def to_dict(self) -> dict[str, Any]:
         """Return the canonical JSON-compatible block."""
@@ -273,6 +276,42 @@ class StoredMapsRequest:
             "terrain_name": self.terrain_name,
             "timeout_seconds": self.timeout_seconds,
         }
+
+
+def _require_complete_products(
+    requested: StoredMapsRequest, products: Any
+) -> None:
+    """Require one row for every requested profile/product and nothing extra."""
+    keys = [(row["profile_index"], row["map_type"]) for row in products]
+    if len(set(keys)) != len(keys):
+        raise ValueError("Stored-map products contain duplicate profile/product rows")
+    raster_rows = [row for row in products if row["map_type"] != "inundation_boundary"]
+    boundary_rows = [row for row in products if row["map_type"] == "inundation_boundary"]
+    if len(boundary_rows) != (1 if requested.inundation_boundary else 0):
+        raise ValueError("Stored-map inundation boundary rows do not match the request")
+    if {row["map_type"] for row in raster_rows} != set(requested.map_types):
+        raise ValueError("Stored-map product types do not match the request")
+    profile_sets = {
+        map_type: {
+            (row["profile_index"], row["profile_name"])
+            for row in raster_rows
+            if row["map_type"] == map_type
+        }
+        for map_type in requested.map_types
+    }
+    selected = next(iter(profile_sets.values()))
+    if any(profiles != selected for profiles in profile_sets.values()):
+        raise ValueError("Stored-map product types cover different profiles")
+    if requested.profiles is not None:
+        indexes = {index for index, _ in selected}
+        names = {name for _, name in selected}
+        for selector in requested.profiles:
+            if selector not in (indexes if isinstance(selector, int) else names):
+                raise ValueError(
+                    f"Stored-map products are missing requested profile {selector!r}"
+                )
+        if len(selected) > len(requested.profiles):
+            raise ValueError("Stored-map products include unrequested profiles")
 
 
 def _validate_stored_maps_receipt(section: Any) -> None:
@@ -310,6 +349,7 @@ def _validate_stored_maps_receipt(section: Any) -> None:
     if section["status"] == "passed":
         if not products or section["error"] is not None:
             raise ValueError("Passed stored_maps requires products and no error")
+        _require_complete_products(StoredMapsRequest.from_dict(section["requested"]), products)
         if any(
             PurePosixPath(row["primary_path"]).parts[0] != STORED_MAPS_OUTPUT_DIRECTORY
             for row in products
@@ -496,7 +536,11 @@ class RasExecutionRequest:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "RasExecutionRequest":
         """Validate and load a request mapping, rejecting unknown fields."""
-        return cls(**dict(payload))
+        values = dict(payload)
+        if "stored_maps" in values and values["stored_maps"] is None:
+            # Absence is the only v1 spelling; null would not round-trip.
+            raise ValueError("stored_maps must be omitted rather than null")
+        return cls(**values)
 
     @classmethod
     def read(cls, path: Union[str, Path]) -> "RasExecutionRequest":
@@ -585,6 +629,12 @@ class RasExecutionReceipt:
             _validate_stored_maps_receipt(self.stored_maps)
             if self.success and self.stored_maps["status"] != "passed":
                 raise ValueError("Successful receipt requires passed stored_maps")
+            hydraulic_success = bool(self.solver_verified and self.hydraulic_validated)
+            if (self.stored_maps["status"] == "skipped") == hydraulic_success:
+                raise ValueError(
+                    "stored_maps must be skipped exactly when hydraulic validation "
+                    "did not pass"
+                )
         if not _EXECUTION_ID.fullmatch(self.execution_id):
             raise ValueError("Invalid receipt execution_id")
         if self.status not in {"succeeded", "failed"}:

@@ -118,6 +118,7 @@ def test_request_with_block_round_trips_with_defaults(tmp_path):
         {"terrain_name": "T", "inundation_boundary": "yes"},
         {"terrain_name": "T", "timeout_seconds": 0},
         {"terrain_name": "T", "timeout_seconds": True},
+        None,
     ],
 )
 def test_stored_maps_block_is_strict(tmp_path, block):
@@ -504,3 +505,79 @@ def test_wine_handoff_timeout_includes_stored_maps_budget(tmp_path, monkeypatch)
 
     assert cli.main(["execute-request", str(request_path)]) == 0
     assert timeouts["delegate"] == 60 + 900 + 300
+
+
+def _one_row_store(name="PF 1", index=0, filename="Depth (PF 1).vrt", map_type="depth"):
+    def store(plan_number, **kwargs):
+        maps = Path(kwargs["output_path"])
+        maps.mkdir(parents=True, exist_ok=True)
+        (maps / filename).write_text("vrt")
+        return pd.DataFrame(
+            [
+                {
+                    "profile_index": index,
+                    "profile_name": name,
+                    "map_type": map_type,
+                    "primary_path": str(maps / filename),
+                    "file_count": 2,
+                }
+            ]
+        )
+
+    return store
+
+
+@pytest.mark.parametrize(
+    "store",
+    [
+        # Profile index 1 was requested but not returned.
+        _one_row_store(),
+        # A product type that was not requested.
+        _one_row_store(map_type="velocity"),
+    ],
+)
+def test_incomplete_or_unrequested_products_fail_without_losing_receipt(
+    tmp_path, monkeypatch, store
+):
+    path = _request(tmp_path)
+    _Harness(monkeypatch, store=store)
+
+    receipt = PortableExecution.execute_request(path)
+
+    assert receipt.stored_maps["status"] == "failed"
+    assert receipt.stored_maps["reason_code"] == "STORED_MAPS_OUTPUT_INVALID"
+    assert receipt.hydraulic_validated and not receipt.success
+    assert (path.parent / "results" / "execution_receipt.json").is_file()
+
+
+def test_builtin_timeout_error_is_a_timeout(tmp_path, monkeypatch):
+    path = _request(tmp_path)
+    _Harness(monkeypatch, store=_failing(TimeoutError("helper timed out")))
+
+    receipt = PortableExecution.execute_request(path)
+
+    assert receipt.stored_maps["reason_code"] == "STORED_MAPS_TIMEOUT"
+
+
+def test_receipt_ties_maps_status_to_hydraulic_flags(tmp_path, monkeypatch):
+    path = _request(tmp_path)
+    _Harness(monkeypatch, hydraulic_passed=False)
+    payload = PortableExecution.execute_request(path).to_dict()
+
+    inconsistent = json.loads(json.dumps(payload))
+    inconsistent["hydraulic_validated"] = True
+    with pytest.raises(ValueError, match="skipped exactly when"):
+        RasExecutionReceipt(**inconsistent)
+
+    colon = json.loads(json.dumps(payload))
+    colon["stored_maps"]["products"] = [
+        {
+            "profile_index": 0,
+            "profile_name": "PF 1",
+            "map_type": "depth",
+            "primary_path": "maps/Depth.tif:stream",
+            "file_count": 1,
+        }
+    ]
+    with pytest.raises(ValueError, match="relative POSIX"):
+        RasExecutionReceipt(**colon)
