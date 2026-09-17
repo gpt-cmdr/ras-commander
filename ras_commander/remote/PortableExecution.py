@@ -722,6 +722,11 @@ def _stored_map_products(frame: Any, output_root: Path) -> list[dict[str, Any]]:
     maps_root = (output_root / STORED_MAPS_OUTPUT_DIRECTORY).resolve()
     products = []
     for row in frame.itertuples(index=False):
+        if getattr(row, "status", "generated") != "generated":
+            raise _StoredMapsError(
+                "STORED_MAPS_PRODUCT_MISSING",
+                f"StoreAllMaps did not produce {row.map_type} ({row.profile_name})",
+            )
         primary_text = row.primary_path
         if not isinstance(primary_text, (str, Path)) or not str(primary_text).strip():
             raise _StoredMapsError(
@@ -781,9 +786,10 @@ def _run_stored_maps(
     Never raises: every failure is returned as a ``failed`` section so the
     hydraulic receipt fields are preserved.
     """
-    from ..RasProcess import RasProcess
+    from ..RasProcess import RasProcess, StoredMapProductsIncompleteError
 
     block = request.stored_maps
+    partial_products: list[dict[str, Any]] = []
     started = time.monotonic()
     try:
         ras_object = RasPrj()
@@ -826,6 +832,16 @@ def _run_stored_maps(
             raise _StoredMapsError("STORED_MAPS_OUTPUT_INVALID", str(exc)) from exc
     except _StoredMapsError as exc:
         reason, message = exc.reason_code, str(exc)
+    except StoredMapProductsIncompleteError as exc:
+        # RasProcess preserves generated products; record them as evidence.
+        reason, message = "STORED_MAPS_PRODUCT_MISSING", f"{type(exc).__name__}: {exc}"
+        try:
+            generated = exc.frame[exc.frame["status"] == "generated"]
+            if not generated.empty:
+                partial_products = _stored_map_products(generated, output_root)
+        except Exception:
+            logger.warning("Could not record partial stored-map products", exc_info=True)
+            partial_products = []
     except (subprocess.TimeoutExpired, TimeoutError) as exc:
         reason, message = "STORED_MAPS_TIMEOUT", f"{type(exc).__name__}: {exc}"
     except Exception as exc:
@@ -838,6 +854,7 @@ def _run_stored_maps(
         "failed",
         reason,
         elapsed_seconds=time.monotonic() - started,
+        products=partial_products,
         error=message,
     )
 

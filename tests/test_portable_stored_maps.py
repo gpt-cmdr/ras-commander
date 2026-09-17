@@ -581,3 +581,45 @@ def test_receipt_ties_maps_status_to_hydraulic_flags(tmp_path, monkeypatch):
     ]
     with pytest.raises(ValueError, match="relative POSIX"):
         RasExecutionReceipt(**colon)
+
+
+def test_incomplete_products_record_generated_partial_evidence(tmp_path, monkeypatch):
+    process_module = importlib.import_module("ras_commander.RasProcess")
+
+    def store(plan_number, **kwargs):
+        maps = Path(kwargs["output_path"])
+        maps.mkdir(parents=True)
+        (maps / "Depth (PF 1).vrt").write_text("vrt")
+        frame = pd.DataFrame(
+            [
+                {
+                    "profile_index": 0,
+                    "profile_name": "PF 1",
+                    "map_type": "depth",
+                    "primary_path": str(maps / "Depth (PF 1).vrt"),
+                    "file_count": 2,
+                    "status": "generated",
+                },
+                {
+                    "profile_index": 1,
+                    "profile_name": "PF 2",
+                    "map_type": "depth",
+                    "primary_path": None,
+                    "file_count": 0,
+                    "status": "missing",
+                },
+            ]
+        )
+        raise process_module.StoredMapProductsIncompleteError("missing PF 2", frame)
+
+    path = _request(tmp_path)
+    _Harness(monkeypatch, store=store)
+    receipt = PortableExecution.execute_request(path)
+
+    section = receipt.stored_maps
+    assert section["status"] == "failed"
+    assert section["reason_code"] == "STORED_MAPS_PRODUCT_MISSING"
+    assert [row["primary_path"] for row in section["products"]] == [
+        "maps/Depth (PF 1).vrt"
+    ]
+    assert receipt.hydraulic_validated and not receipt.success

@@ -219,7 +219,7 @@ request = RasExecutionRequest.create(
   | `STORED_MAPS_TIMEOUT` | Map generation ran past `timeout_seconds`. |
   | `STORED_MAPS_OUTPUT_INVALID` | The product table returned is missing required columns. |
   | `STORED_MAPS_NO_PRODUCTS` | No products were returned. |
-  | `STORED_MAPS_PRODUCT_MISSING` | A product's primary file is missing. |
+  | `STORED_MAPS_PRODUCT_MISSING` | A requested product was not produced (`StoredMapProductsIncompleteError`, or a primary file is missing). The products that were generated are still listed in `products`. |
   | `STORED_MAPS_OUTPUT_OUTSIDE_RESULTS` | A product was written outside `maps/`. |
   | `STORED_MAPS_RESULT_HDF_CHANGED` | Mapping changed the result HDF after it was validated. |
 
