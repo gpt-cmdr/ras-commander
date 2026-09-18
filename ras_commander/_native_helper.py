@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import subprocess
+import tempfile
 import threading
 from contextlib import contextmanager
 from importlib import resources
@@ -22,6 +23,30 @@ logger = get_logger(__name__)
 _NATIVE_PACKAGE = "ras_commander.native"
 _HELPER_EXE_NAME = "RasStoreMapHelper.exe"
 _HELPER_CS_NAME = "RasStoreMapHelper.cs"
+# Enables loadFromRemoteSources so the CLR can load the HEC-RAS mapping runtime
+# when the helper executable itself lives on a network filesystem.
+_HELPER_CONFIG_NAME = f"{_HELPER_EXE_NAME}.config"
+_REMOTE_FILESYSTEM_TYPES = frozenset(
+    {
+        "9p",
+        "afs",
+        "beegfs",
+        "ceph",
+        "cifs",
+        "fuse.sshfs",
+        "fuse.glusterfs",
+        "fuse.rclone",
+        "fuse.s3fs",
+        "gpfs",
+        "lustre",
+        "nfs",
+        "nfs3",
+        "nfs4",
+        "smb2",
+        "smb3",
+        "smbfs",
+    }
+)
 _IS_LINUX = platform.system() == "Linux"
 _MAPPING_RUNTIME_LIBRARIES = (
     "RasMapperLib.dll",
@@ -135,6 +160,94 @@ def _default_stage_dir() -> Path:
 
 def _resource(filename: str):
     return resources.files(_NATIVE_PACKAGE).joinpath(filename)
+
+
+def _linux_filesystem_type(path: Path) -> Optional[str]:
+    """Return the mounted filesystem type for ``path`` from /proc/self/mountinfo."""
+    try:
+        entries = Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+
+    try:
+        target = os.path.realpath(str(path))
+    except OSError:
+        target = str(path)
+
+    best_mount = ""
+    best_type = None
+    for entry in entries:
+        separator = entry.find(" - ")
+        if separator == -1:
+            continue
+        fields = entry[:separator].split()
+        remainder = entry[separator + 3 :].split()
+        if len(fields) < 5 or not remainder:
+            continue
+        mount_point = fields[4]
+        filesystem_type = remainder[0]
+        if target == mount_point or target.startswith(mount_point.rstrip("/") + "/"):
+            if len(mount_point) >= len(best_mount):
+                best_mount = mount_point
+                best_type = filesystem_type
+    return best_type
+
+
+def is_remote_path(path: Union[str, Path]) -> bool:
+    """Return whether ``path`` resides on a network filesystem.
+
+    A .NET Framework executable loaded from a network location cannot load its
+    dependencies unless ``loadFromRemoteSources`` is enabled, so the helper is
+    copied to local storage when this returns True. Windows UNC paths and
+    mapped network drives are remote; on Linux the mounted filesystem type
+    decides (NFS, CIFS/SMB, and similar).
+    """
+    candidate = Path(path)
+    try:
+        raw = os.path.abspath(str(candidate))
+    except (OSError, ValueError):
+        raw = str(candidate)
+
+    if platform.system() == "Windows":
+        if raw.upper().startswith("\\\\?\\UNC\\"):
+            return True
+        stripped = raw[4:] if raw.startswith("\\\\?\\") else raw
+        if stripped.startswith("\\\\"):
+            return True
+        drive = os.path.splitdrive(stripped)[0]
+        if not drive:
+            return False
+        try:
+            import ctypes
+
+            # DRIVE_REMOTE == 4
+            return ctypes.windll.kernel32.GetDriveTypeW(f"{drive}\\") == 4
+        except (AttributeError, OSError, ValueError):
+            return False
+
+    filesystem_type = _linux_filesystem_type(candidate)
+    if filesystem_type is None:
+        return False
+    return filesystem_type in _REMOTE_FILESYSTEM_TYPES
+
+
+def _local_stage_root(stage_dir: Optional[Union[str, Path]] = None) -> Optional[Path]:
+    """Return the first writable local directory usable for helper staging."""
+    candidates = []
+    if stage_dir is not None:
+        candidates.append(Path(stage_dir).expanduser())
+    candidates.append(_default_stage_dir())
+    candidates.append(Path(tempfile.gettempdir()) / "ras-commander" / "bin")
+
+    for candidate in candidates:
+        if is_remote_path(candidate):
+            continue
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        return candidate
+    return None
 
 
 def _helper_has_sibling_gdal(helper_path: Path) -> bool:
@@ -352,6 +465,44 @@ def packaged_helper_executable_path() -> Iterator[Path]:
 
 
 @contextmanager
+def packaged_helper_config_path() -> Iterator[Path]:
+    """Yield the packaged ``RasStoreMapHelper.exe.config`` path."""
+    with resources.as_file(_resource(_HELPER_CONFIG_NAME)) as config_path:
+        config_path = Path(config_path)
+        if not config_path.exists():
+            raise FileNotFoundError(
+                f"{_HELPER_CONFIG_NAME} not found in packaged resources at "
+                f"{config_path}"
+            )
+        yield config_path
+
+
+def _copy_helper_config(staged_helper: Path) -> Optional[Path]:
+    """Place the loadFromRemoteSources config beside a staged helper copy."""
+    destination = staged_helper.with_name(f"{staged_helper.name}.config")
+    try:
+        with packaged_helper_config_path() as config_path:
+            if (
+                destination.exists()
+                and destination.read_bytes() == config_path.read_bytes()
+            ):
+                return destination
+            shutil.copy2(config_path, destination)
+    except (FileNotFoundError, OSError) as exc:
+        logger.warning(
+            "Could not place %s beside the staged helper at %s: %s. Stored maps "
+            "may fail with HRESULT 0x80131515 when files are read over a "
+            "network filesystem.",
+            _HELPER_CONFIG_NAME,
+            staged_helper,
+            exc,
+        )
+        return None
+    logger.debug("Staged helper configuration to %s", destination)
+    return destination
+
+
+@contextmanager
 def packaged_helper_source_path() -> Iterator[Path]:
     """Yield the packaged helper C# source path."""
     with resources.as_file(_resource(_HELPER_CS_NAME)) as source_path:
@@ -400,6 +551,7 @@ def _stage_helper_executable_locked(
         if not staged_path.exists():
             shutil.copy2(helper_path, staged_path)
             logger.debug(f"Staged RasStoreMapHelper.exe to {staged_path}")
+        _copy_helper_config(staged_path)
         return staged_path
 
     hecras_dir = Path(hecras_dir)
@@ -410,6 +562,7 @@ def _stage_helper_executable_locked(
     if not staged_path.exists():
         shutil.copy2(helper_path, staged_path)
         logger.debug(f"Staged RasStoreMapHelper.exe to {staged_path}")
+    _copy_helper_config(staged_path)
 
     gdal_source = hecras_dir / "GDAL"
     if gdal_source.is_dir():
@@ -422,6 +575,45 @@ def _stage_helper_executable_locked(
         )
 
     return staged_path
+
+
+def _local_helper_executable(
+    helper_path: Path,
+    hecras_dir: Optional[Union[str, Path]] = None,
+    stage_dir: Optional[Union[str, Path]] = None,
+) -> Path:
+    """Return a helper path on local storage, copying it there when needed.
+
+    .NET Framework blocks dependency loads for an assembly that runs from a
+    network location (HRESULT 0x80131515), which is how a project or an
+    installation on an NFS/SMB mount previously broke stored maps.
+    """
+    if not is_remote_path(helper_path):
+        return helper_path
+
+    local_root = _local_stage_root(stage_dir)
+    if local_root is None:
+        logger.warning(
+            "RasStoreMapHelper is on a network filesystem (%s) and no local "
+            "staging directory is available; relying on %s to permit remote "
+            "assembly loads.",
+            helper_path,
+            _HELPER_CONFIG_NAME,
+        )
+        return helper_path
+
+    staged = stage_helper_executable(
+        helper_path,
+        stage_dir=local_root,
+        hecras_dir=hecras_dir,
+    )
+    logger.debug(
+        "Copied RasStoreMapHelper from network location %s to local staging "
+        "directory %s.",
+        helper_path,
+        staged,
+    )
+    return staged
 
 
 def _filter_helper_stderr(
@@ -638,6 +830,11 @@ def run_store_all_maps_helper(
                 "packaged helper has no sibling GDAL directory.",
                 helper_to_run,
             )
+        helper_to_run = _local_helper_executable(
+            helper_to_run,
+            hecras_dir=hecras_dir,
+            stage_dir=stage_dir_override,
+        )
 
         try:
             return _run_store_all_maps_once(

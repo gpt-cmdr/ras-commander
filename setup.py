@@ -79,6 +79,7 @@ setup(
             "InvokeRas5GeometryLandCover.ps1",
             "InvokeRas5LandCover.ps1",
             "RasStoreMapHelper.exe",
+            "RasStoreMapHelper.exe.config",
             "RasStoreMapHelper.cs",
             "RasMapperTerrainExportHelper.exe",
             "RasMapperTerrainExportHelper.cs",

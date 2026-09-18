@@ -474,3 +474,304 @@ def test_store_maps_helper_retry_warning_is_concise_debug_has_paths(
     assert any(
         str(helper) in message and str(staged) in message for message in debug_messages
     )
+
+
+# --- network-filesystem helper execution (HRESULT 0x80131515) --------------
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_packaged_helper_config_enables_load_from_remote_sources():
+    with _native_helper.packaged_helper_config_path() as config_path:
+        assert config_path.name == "RasStoreMapHelper.exe.config"
+        text = config_path.read_text(encoding="utf-8")
+
+    assert '<loadFromRemoteSources enabled="true" />' in text
+    assert '<supportedRuntime version="v4.0"' in text
+
+    with _native_helper.packaged_helper_executable_path() as helper_exe:
+        # The config must sit beside the executable to be honored by the CLR.
+        assert (helper_exe.parent / f"{helper_exe.name}.config").is_file()
+
+
+def test_helper_config_is_declared_for_packaging():
+    setup_text = (REPO_ROOT / "setup.py").read_text(encoding="utf-8")
+    manifest_text = (REPO_ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+
+    assert '"RasStoreMapHelper.exe.config",' in setup_text
+    assert (
+        "include ras_commander/native/RasStoreMapHelper.exe.config" in manifest_text
+    )
+
+
+@pytest.mark.parametrize("with_gdal", [False, True])
+def test_stage_helper_executable_places_config_next_to_helper(tmp_path, with_gdal):
+    hecras_dir = tmp_path / "hecras"
+    if with_gdal:
+        (hecras_dir / "GDAL").mkdir(parents=True)
+    else:
+        hecras_dir = None
+
+    with _native_helper.packaged_helper_executable_path() as helper_exe:
+        staged = _native_helper.stage_helper_executable(
+            helper_exe,
+            stage_dir=tmp_path / "stage",
+            hecras_dir=hecras_dir,
+        )
+
+    config = staged.with_name(f"{staged.name}.config")
+    assert config.is_file()
+    assert "loadFromRemoteSources" in config.read_text(encoding="utf-8")
+
+
+def test_is_remote_path_uses_linux_mount_type(monkeypatch, tmp_path):
+    monkeypatch.setattr(_native_helper.platform, "system", lambda: "Linux")
+    types = {}
+    monkeypatch.setattr(
+        _native_helper,
+        "_linux_filesystem_type",
+        lambda path: types.get(str(Path(path))),
+    )
+
+    nfs_path = tmp_path / "nfs" / "site-packages"
+    local_path = tmp_path / "local" / "bin"
+    types[str(nfs_path)] = "nfs4"
+    types[str(local_path)] = "ext4"
+
+    assert _native_helper.is_remote_path(nfs_path) is True
+    assert _native_helper.is_remote_path(local_path) is False
+    assert _native_helper.is_remote_path(tmp_path / "unknown") is False
+
+
+def test_linux_filesystem_type_reads_longest_matching_mount(monkeypatch, tmp_path):
+    mountinfo = tmp_path / "mountinfo"
+    mountinfo.write_text(
+        "22 1 0:20 / / rw,relatime shared:1 - ext4 /dev/sda1 rw\n"
+        "44 22 0:44 / /mnt/data rw,relatime shared:2 - nfs4 server:/export rw\n",
+        encoding="utf-8",
+    )
+    real_read_text = Path.read_text
+
+    def fake_read_text(self, *args, **kwargs):
+        if Path(self).as_posix().endswith("/proc/self/mountinfo"):
+            return real_read_text(mountinfo, *args, **kwargs)
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    monkeypatch.setattr(os.path, "realpath", lambda path: str(path))
+
+    assert _native_helper._linux_filesystem_type("/mnt/data/project") == "nfs4"
+    assert _native_helper._linux_filesystem_type("/opt/app") == "ext4"
+
+
+def test_local_stage_root_skips_remote_candidates(monkeypatch, tmp_path):
+    remote = tmp_path / "remote"
+    local = tmp_path / "local"
+    monkeypatch.setattr(
+        _native_helper,
+        "is_remote_path",
+        lambda path: Path(path) == remote,
+    )
+    monkeypatch.setattr(_native_helper, "_default_stage_dir", lambda: local)
+
+    assert _native_helper._local_stage_root(remote) == local
+    assert local.is_dir()
+
+
+def test_local_helper_executable_copies_helper_off_a_network_filesystem(
+    monkeypatch,
+    tmp_path,
+):
+    remote_helper = tmp_path / "nfs" / "site-packages" / "RasStoreMapHelper.exe"
+    remote_helper.parent.mkdir(parents=True)
+    remote_helper.write_bytes(b"helper")
+    local_root = tmp_path / "local-stage"
+    monkeypatch.setattr(
+        _native_helper,
+        "is_remote_path",
+        lambda path: str(remote_helper.parent) in str(path),
+    )
+    monkeypatch.setattr(_native_helper, "_default_stage_dir", lambda: local_root)
+
+    staged = _native_helper._local_helper_executable(remote_helper)
+
+    assert staged != remote_helper
+    assert staged.is_file()
+    assert local_root in staged.parents
+    assert staged.with_name(f"{staged.name}.config").is_file()
+
+
+def test_local_helper_executable_keeps_a_local_helper(monkeypatch, tmp_path):
+    helper = tmp_path / "RasStoreMapHelper.exe"
+    helper.write_bytes(b"helper")
+    monkeypatch.setattr(_native_helper, "is_remote_path", lambda _path: False)
+
+    assert _native_helper._local_helper_executable(helper) == helper
+
+
+def test_local_helper_executable_warns_when_no_local_root_exists(
+    monkeypatch,
+    tmp_path,
+    caplog,
+):
+    helper = tmp_path / "RasStoreMapHelper.exe"
+    helper.write_bytes(b"helper")
+    monkeypatch.setattr(_native_helper, "is_remote_path", lambda _path: True)
+    monkeypatch.setattr(_native_helper, "_local_stage_root", lambda _stage=None: None)
+    caplog.set_level(logging.WARNING, logger=LOGGER_NAME)
+
+    assert _native_helper._local_helper_executable(helper) == helper
+    assert any(
+        "RasStoreMapHelper.exe.config" in message
+        for message in _messages(caplog, logging.WARNING)
+    )
+
+
+def test_store_all_maps_runs_local_helper_with_original_project_paths(
+    monkeypatch,
+    tmp_path,
+):
+    """A project on a network share keeps its paths; only the helper moves."""
+    remote_project = tmp_path / "nfs" / "project"
+    remote_project.mkdir(parents=True)
+    rasmap_path = remote_project / "CEDAR CREEK.rasmap"
+    result_hdf_path = remote_project / "CEDAR CREEK.p02.hdf"
+    rasmap_path.write_text("<RASMapper />", encoding="utf-8")
+    result_hdf_path.write_bytes(b"")
+    remote_helper = tmp_path / "nfs" / "site-packages" / "RasStoreMapHelper.exe"
+    remote_helper.parent.mkdir(parents=True)
+    remote_helper.write_bytes(b"helper")
+    (remote_helper.parent / "GDAL").mkdir()
+    hecras_dir = tmp_path / "hecras"
+    (hecras_dir / "GDAL").mkdir(parents=True)
+    local_root = tmp_path / "local-stage"
+
+    class HelperPathContext:
+        def __enter__(self):
+            return remote_helper
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        _native_helper,
+        "packaged_helper_executable_path",
+        lambda: HelperPathContext(),
+    )
+    monkeypatch.setattr(
+        _native_helper,
+        "is_remote_path",
+        lambda path: str(tmp_path / "nfs") in str(path),
+    )
+    monkeypatch.setattr(_native_helper, "_default_stage_dir", lambda: local_root)
+    monkeypatch.setattr(_native_helper, "_IS_LINUX", False)
+    monkeypatch.setattr(
+        _native_helper,
+        "_hecras_gdal_subprocess_env",
+        lambda _path: {"PATH": "test"},
+    )
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(_native_helper.subprocess, "run", fake_run)
+
+    result = _native_helper.run_store_all_maps_helper(
+        hecras_dir=hecras_dir,
+        render_mode="horizontal",
+        rasmap_path=rasmap_path,
+        result_hdf_path=result_hdf_path,
+        working_dir=remote_project,
+    )
+
+    assert result.returncode == 0
+    # GDAL junction creation also shells out; the helper launch is the last call.
+    command = [
+        cmd for cmd, _kwargs in calls if str(cmd[0]).endswith("RasStoreMapHelper.exe")
+    ][-1]
+    launched_helper = Path(command[0])
+    assert local_root in launched_helper.parents
+    assert launched_helper.with_name(f"{launched_helper.name}.config").is_file()
+    # Project inputs are passed exactly as given, still on the network share.
+    assert command[1:] == [
+        str(hecras_dir),
+        "horizontal",
+        str(rasmap_path),
+        str(result_hdf_path),
+    ]
+    launch_kwargs = [
+        kwargs
+        for cmd, kwargs in calls
+        if str(cmd[0]).endswith("RasStoreMapHelper.exe")
+    ][-1]
+    assert launch_kwargs["cwd"] == str(remote_project)
+
+
+def test_store_all_maps_keeps_local_helper_untouched(monkeypatch, tmp_path):
+    """A fully local project must launch exactly as it did before."""
+    project = tmp_path / "project"
+    project.mkdir()
+    rasmap_path = project / "Demo.rasmap"
+    result_hdf_path = project / "Demo.p01.hdf"
+    rasmap_path.write_text("<RASMapper />", encoding="utf-8")
+    result_hdf_path.write_bytes(b"")
+    helper = tmp_path / "packaged" / "RasStoreMapHelper.exe"
+    helper.parent.mkdir()
+    helper.write_bytes(b"helper")
+    (helper.parent / "GDAL").mkdir()
+    hecras_dir = tmp_path / "hecras"
+    (hecras_dir / "GDAL").mkdir(parents=True)
+
+    class HelperPathContext:
+        def __enter__(self):
+            return helper
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        _native_helper,
+        "packaged_helper_executable_path",
+        lambda: HelperPathContext(),
+    )
+    monkeypatch.setattr(_native_helper, "is_remote_path", lambda _path: False)
+    monkeypatch.setattr(
+        _native_helper,
+        "_local_stage_root",
+        lambda _stage=None: (_ for _ in ()).throw(
+            AssertionError("local projects must not be staged")
+        ),
+    )
+    monkeypatch.setattr(_native_helper, "_IS_LINUX", False)
+    monkeypatch.setattr(
+        _native_helper,
+        "_hecras_gdal_subprocess_env",
+        lambda _path: {"PATH": "test"},
+    )
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(_native_helper.subprocess, "run", fake_run)
+
+    _native_helper.run_store_all_maps_helper(
+        hecras_dir=hecras_dir,
+        render_mode="horizontal",
+        rasmap_path=rasmap_path,
+        result_hdf_path=result_hdf_path,
+        working_dir=project,
+    )
+
+    assert calls[0][0] == [
+        str(helper),
+        str(hecras_dir),
+        "horizontal",
+        str(rasmap_path),
+        str(result_hdf_path),
+    ]
+    assert calls[0][1]["cwd"] == str(project)
