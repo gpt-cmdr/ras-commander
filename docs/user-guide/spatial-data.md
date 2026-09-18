@@ -876,6 +876,29 @@ MyRasModel/
     └── Velocity (Max).tif
 ```
 
+### Projects on Network Shares
+
+Stored maps work for projects reached over a network filesystem (an SMB/UNC
+share on Windows, an NFS mount inside a container, or a Wine drive backed by
+one). The project, terrain, and output paths are used exactly as given.
+
+The mapping helper itself is never executed from a network location. .NET
+Framework refuses to load the HEC-RAS mapping runtime for an assembly that runs
+from a remote path:
+
+```
+ERROR loading RasMapperLib: Could not load file or assembly
+'file:///C:\Program Files (x86)\HEC\HEC-RAS\6.6\RasMapperLib.dll' or one of
+its dependencies. Operation is not supported. (Exception from HRESULT: 0x80131515)
+```
+
+ras-commander copies `RasStoreMapHelper.exe` to local storage before launching
+it whenever the packaged or staged helper is on a network filesystem, and ships
+`RasStoreMapHelper.exe.config` (which enables `loadFromRemoteSources`) beside
+every copy as a second line of defense. Set
+`RAS_COMMANDER_MAP_HELPER_STAGE_DIR` to choose the staging directory; a remote
+value is skipped in favor of a local one.
+
 ## Raster BenefitArea
 
 `RasProcess.store_maps()` can treat a pre/post plan pair as a custom BenefitArea
