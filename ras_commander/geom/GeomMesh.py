@@ -50,7 +50,9 @@ Production Workflow (generate)
 Requires:
     - Windows (HEC-RAS / RasMapperLib is Windows-only)
     - pythonnet >= 3.0.5: pip install pythonnet
-    - HEC-RAS 6.6 installed (provides RasMapperLib.dll + GDAL)
+    - HEC-RAS 6.0 through 7.0.1 installed (provides RasMapperLib.dll + GDAL).
+      Before 6.6 there is no minimum face-length ratio escalation. See
+      docs/api/geometry.md, "HEC-RAS Version Support for Headless Mesh Generation".
     - HEC-RAS GDAL runtime, configured automatically before RasMapperLib loads
 
 All methods are static — no instantiation needed.
@@ -108,6 +110,12 @@ _HECRAS_SEARCH_PATHS = [
     Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.6"),
     Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.7 Beta 5"),
     Path(r"C:\Program Files\HEC\HEC-RAS\6.6"),
+    # Older releases are used only when nothing newer is installed.
+    *(
+        Path(root) / version
+        for version in ("6.5", "6.4.1", "6.3.1", "6.3", "6.2", "6.1", "6.0")
+        for root in (r"C:\Program Files (x86)\HEC\HEC-RAS", r"C:\Program Files\HEC\HEC-RAS")
+    ),
 ]
 
 _DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
@@ -130,7 +138,8 @@ def _find_hecras_dir() -> Path:
         if (p / "RasMapperLib.dll").exists():
             return p
     raise FileNotFoundError(
-        "HEC-RAS 6.6 not found. Searched: "
+        "No HEC-RAS 6.x or 7.x installation with RasMapperLib.dll found; pass "
+        "hecras_dir. Searched: "
         + ", ".join(str(p) for p in _HECRAS_SEARCH_PATHS)
     )
 
@@ -330,11 +339,12 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
                 "Cannot find private RegenerateMeshPoints on PointGenerator"
             )
 
+        # The parameter list grew across releases: 4 in 6.0-6.2, 6 in
+        # 6.3-6.3.1 (progress reporters), 7 from 6.4.1 (treatInactiveAsNotPresent).
+        args = [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
         method.Invoke(
             pg,
-            System.Array[System.Object](
-                [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
-            ),
+            System.Array[System.Object](args[: len(method.GetParameters())]),
         )
 
         mp = d2fa.Geometry.MeshPoints[fid]
@@ -390,9 +400,36 @@ def _build_breaklines(d2fa, ns: dict):
     return combined.CopyToMultiPartPolyline()
 
 
+def _meshfv2d_takes_min_face_ratio(ns: dict) -> bool:
+    """Return whether this RasMapperLib's MeshFV2D constructor takes minFaceLengthRatio.
+
+    HEC-RAS 6.6 added the parameter; 6.0-6.5 build the mesh from
+    (perimeter, points, breaklines, progress) only. Assumes the 6.6 form when
+    the constructor cannot be inspected.
+    """
+    cached = ns.get("_meshfv2d_takes_ratio")
+    if cached is None:
+        try:
+            import clr  # type: ignore
+
+            ctors = clr.GetClrType(ns["MeshFV2D"]).GetConstructors()
+            cached = any(
+                len(c.GetParameters()) == 5
+                and c.GetParameters()[4].ParameterType.Name == "Double"
+                for c in ctors
+            )
+        except Exception as exc:
+            logger.debug("Could not inspect MeshFV2D constructors: %s", exc)
+            cached = True
+        ns["_meshfv2d_takes_ratio"] = cached
+    return cached
+
+
 def _compute_mesh(perim, seeds, breaklines, ratio: float, ns: dict):
     """Create and return a MeshFV2D."""
-    return ns["MeshFV2D"](perim, seeds, breaklines, None, float(ratio))
+    if _meshfv2d_takes_min_face_ratio(ns):
+        return ns["MeshFV2D"](perim, seeds, breaklines, None, float(ratio))
+    return ns["MeshFV2D"](perim, seeds, breaklines, None)
 
 
 def _safe_non_virtual_cell_count(mesh) -> Optional[int]:
@@ -4122,7 +4159,11 @@ class GeomMesh:
             )
 
         if force:
-            result = d2fa.CreatePropertyTables(fid, None, False, None)
+            try:
+                result = d2fa.CreatePropertyTables(fid, None, False, None)
+            except TypeError:
+                # HEC-RAS 6.0-6.2: no perTaskReporters parameter.
+                result = d2fa.CreatePropertyTables(fid, None, False)
         else:
             result = d2fa.EnsurePropertyTables(False, True, False, None)
 
@@ -4331,7 +4372,9 @@ class GeomMesh:
                 None preserves existing values from the .g01 text.
             min_face_length_ratio: Initial ratio (0.05-0.25).
             max_iterations: Maximum fix-and-retry attempts.
-            hecras_dir: Override HEC-RAS installation directory.
+            hecras_dir: HEC-RAS installation whose RasMapperLib to load
+                (6.0 or later). Defaults to the newest installed release
+                found, regardless of the project's version.
             bl_spacing_near: Optional override for near spacing in project units.
                 If omitted, existing per-breakline values in the .g01 text
                 are preserved (read from geometry, not defaulted).
@@ -4526,6 +4569,10 @@ class GeomMesh:
             ratios = [r for r in _RATIO_LADDER if r >= min_face_length_ratio]
             if not ratios:
                 ratios = _RATIO_LADDER[:]
+            if not _meshfv2d_takes_min_face_ratio(ns):
+                # Before HEC-RAS 6.6 MeshFV2D has no minFaceLengthRatio, so
+                # ratio escalation cannot change the mesh.
+                ratios = ratios[:1]
 
             current_perim = perim
             current_seeds_pm = seeds_pm

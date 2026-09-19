@@ -1366,6 +1366,100 @@ class TestFixBcConflicts:
         assert GeomMesh.detect_bc_conflicts(str(multi_area_bc_conflict_hdf), cell_size=50.0) == []
 
 
+class TestRasMapperLibVersionCompat:
+    """RasMapperLib signatures that changed between HEC-RAS 6.0 and 6.6."""
+
+    @staticmethod
+    def _fake_clr(monkeypatch, ctor_param_types):
+        def ctor(types_):
+            params = [
+                types.SimpleNamespace(ParameterType=types.SimpleNamespace(Name=t))
+                for t in types_
+            ]
+            return types.SimpleNamespace(GetParameters=lambda: params)
+
+        clr_type = types.SimpleNamespace(
+            GetConstructors=lambda: [ctor(t) for t in ctor_param_types]
+        )
+        monkeypatch.setitem(
+            sys.modules, "clr", types.SimpleNamespace(GetClrType=lambda cls: clr_type)
+        )
+
+    def test_compute_mesh_passes_ratio_from_hec_ras_66(self):
+        calls = []
+        ns = {"MeshFV2D": lambda *args: calls.append(args), "_meshfv2d_takes_ratio": True}
+
+        geom_mesh_module._compute_mesh("perim", "seeds", "bl", 0.1, ns)
+
+        assert calls == [("perim", "seeds", "bl", None, 0.1)]
+
+    def test_compute_mesh_omits_ratio_before_hec_ras_66(self):
+        calls = []
+        ns = {"MeshFV2D": lambda *args: calls.append(args), "_meshfv2d_takes_ratio": False}
+
+        geom_mesh_module._compute_mesh("perim", "seeds", "bl", 0.1, ns)
+
+        assert calls == [("perim", "seeds", "bl", None)]
+
+    @pytest.mark.parametrize(
+        ("ctor_param_types", "expected"),
+        [
+            ([["String", "String", "ProgressReporter"],
+              ["Polygon", "IPoints", "Polyline", "ProgressReporter", "Double"]], True),
+            ([["String", "String", "ProgressReporter"],
+              ["Polygon", "IPoints", "Polyline", "ProgressReporter"]], False),
+        ],
+    )
+    def test_ratio_support_detected_from_constructors(
+        self, monkeypatch, ctor_param_types, expected
+    ):
+        self._fake_clr(monkeypatch, ctor_param_types)
+        ns = {"MeshFV2D": object()}
+
+        assert geom_mesh_module._meshfv2d_takes_min_face_ratio(ns) is expected
+        assert ns["_meshfv2d_takes_ratio"] is expected
+
+    def test_ratio_support_assumes_66_form_when_uninspectable(self, monkeypatch):
+        def boom(cls):
+            raise RuntimeError("no CLR")
+
+        monkeypatch.setitem(sys.modules, "clr", types.SimpleNamespace(GetClrType=boom))
+
+        assert geom_mesh_module._meshfv2d_takes_min_face_ratio({"MeshFV2D": object()}) is True
+
+    def test_compute_property_tables_falls_back_to_three_argument_form(
+        self, monkeypatch, tmp_path
+    ):
+        calls = []
+
+        class FakeD2FlowArea:
+            def FeatureCount(self):
+                return 1
+
+            def GetFeatureName(self, fid):
+                return "Area 1"
+
+            def CreatePropertyTables(self, *args):
+                calls.append(len(args))
+                if len(args) == 4:  # HEC-RAS 6.0-6.2 have no perTaskReporters
+                    raise TypeError("No method matches given arguments")
+                return True
+
+        fake_geom = types.SimpleNamespace(D2FlowArea=FakeD2FlowArea(), Terrain=object())
+        text_path = tmp_path / "model.g01"
+        monkeypatch.setattr(geom_mesh_module, "_resolve_geom_text_path", lambda *a, **k: text_path)
+        monkeypatch.setattr(geom_mesh_module, "_load_dlls", lambda *a, **k: None)
+        monkeypatch.setattr(
+            geom_mesh_module, "_ensure_hdf", lambda *a, **k: tmp_path / "model.g01.hdf"
+        )
+        monkeypatch.setattr(
+            geom_mesh_module, "_imports", lambda: {"RASGeometry": lambda path: fake_geom}
+        )
+
+        assert GeomMesh.compute_property_tables("01") is True
+        assert calls == [4, 3]
+
+
 class TestSaveMesh:
     """_save_mesh() must hold RASMapper's reload suppressor across the save (#361)."""
 

@@ -111,6 +111,11 @@ class RasPreprocess:
         started and all three prerequisite files are non-empty. The process-tree
         fallback supports releases that create an empty ``.bco`` file.
 
+        With HEC-RAS before 6.3, fails without launching HEC-RAS when the plan's
+        geometry HDF references a land-cover, infiltration, or sediment file that
+        does not exist. Those releases would otherwise skip the geometry and
+        write no 2D mesh.
+
         Args:
             plan_number: Plan number to preprocess (e.g., "01", 1).
             ras_object: Optional RasPrj instance. If None, uses global ras.
@@ -218,6 +223,26 @@ class RasPreprocess:
                 error=f"HEC-RAS executable not found: {ras_exe}",
                 elapsed_seconds=time.time() - start_time,
             )
+
+        # Before 6.3, HEC-RAS skips the geometry without an error when a
+        # referenced land-classification file is missing, leaving no 2D mesh
+        # in the plan HDF. Refuse to run rather than report that as success.
+        if RasPreprocess._skips_geometry_without_land_classification(ras_exe):
+            geom_hdf = project_folder / f"{project_name}.g{geometry_number}.hdf"
+            missing_files = RasPreprocess._missing_land_classification_files(geom_hdf)
+            if missing_files:
+                return PreprocessResult(
+                    success=False, plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    error=(
+                        f"Geometry g{geometry_number} references files that do not "
+                        f"exist: {'; '.join(missing_files)}. HEC-RAS "
+                        f"{Path(ras_exe).parent.name} skips the geometry when they "
+                        "are missing. Restore them or update the geometry's "
+                        "associations before preprocessing."
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
 
         supervision_error = RasPreprocess._tcu_supervision_availability_error()
         if supervision_error:
@@ -823,6 +848,51 @@ class RasPreprocess:
             if reason:
                 return reason
         return None
+
+    _LAND_CLASSIFICATION_ASSOCIATIONS = (
+        ("landcover", "land cover (Manning's n)"),
+        ("infiltration", "infiltration"),
+        ("sediment_soils", "sediment bed material"),
+    )
+
+    @staticmethod
+    def _skips_geometry_without_land_classification(ras_exe: Union[str, Path]) -> bool:
+        """Return whether this HEC-RAS release skips the geometry when a
+        referenced land-classification file is missing.
+
+        6.0-6.2 do; 6.3 and later still preprocess the mesh. The release is read
+        from the install folder name (e.g. ``...\\HEC-RAS\\6.2\\Ras.exe``); when it
+        cannot be determined, the check is applied.
+        """
+        match = re.search(r"(\d+)\.(\d+)", Path(str(ras_exe)).parent.name)
+        if match is None:
+            return True
+        return (int(match.group(1)), int(match.group(2))) < (6, 3)
+
+    @staticmethod
+    def _missing_land_classification_files(geom_hdf: Path) -> List[str]:
+        """Describe land-classification files the geometry HDF references but that do not exist.
+
+        Returns an empty list when the geometry HDF is absent or unreadable;
+        HEC-RAS then compiles the geometry from text and this check does not apply.
+        """
+        if not geom_hdf.is_file():
+            return []
+        try:
+            from ._geometry_association import read_geometry_association
+
+            association = read_geometry_association(geom_hdf)
+        except Exception as exc:
+            logger.debug(f"Could not read associations from {geom_hdf.name}: {exc}")
+            return []
+
+        missing = []
+        for key, label in RasPreprocess._LAND_CLASSIFICATION_ASSOCIATIONS:
+            resolved = association.get(f"{key}_hdf_path")
+            if resolved and not Path(resolved).is_file():
+                raw = association.get(f"{key}_raw_filename")
+                missing.append(f"{label} '{raw}' (resolved to {resolved})")
+        return missing
 
     @staticmethod
     def _tcu_supervision_availability_error() -> Optional[str]:

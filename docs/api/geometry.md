@@ -346,6 +346,70 @@ utilities.
 - `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
 - `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations.
 
+### HEC-RAS Version Support for Headless Mesh Generation
+
+`GeomMesh.generate()` and `GeomMesh.compute_property_tables()` support
+**HEC-RAS 6.0 through 7.0.1**, including the 6.7 betas. They run RASMapper's own
+mesh engine (`RasMapperLib.dll`) from the HEC-RAS installation they load, so
+each release produces its own RASMapper result.
+
+| HEC-RAS | Headless mesh generation | Notes |
+|---|---|---|
+| 6.6, 6.7 Beta 4, 6.7 Beta 5, 7.0, 7.0.1 | Supported | Full retry ladder, including minimum face-length ratio escalation. |
+| 6.3 – 6.5 | Supported | No minimum face-length ratio escalation (see below). |
+| 6.0 – 6.2 | Supported | As above. Preprocessing needs every land-cover, infiltration, and sediment file the geometry references (see below). |
+
+**Why older releases need different calls.** Two RasMapperLib members changed
+their parameters between releases, and `generate()` adapts to whichever form
+the loaded release has:
+
+| RasMapperLib member | 6.0 – 6.2 | 6.3 – 6.3.1 | 6.4.1 – 6.5 | 6.6 and later |
+|---|---|---|---|---|
+| `MeshFV2D(perimeter, points, breaklines, progress, ...)` constructor | 4 parameters | 4 | 4 | 5 (adds `minFaceLengthRatio`) |
+| `PointGenerator.RegenerateMeshPoints` (breakline-aware seeding) | 4 parameters | 6 (adds progress reporters) | 7 (adds `treatInactiveAsNotPresent`) | 7 |
+| `RASD2FlowArea.CreatePropertyTables` (used by `compute_property_tables`) | 3 parameters | 4 (adds per-task reporters) | 4 | 4 |
+
+Before 6.6, `MeshFV2D` has no minimum face-length ratio, so `generate()` skips
+the ratio-escalation step of its retry ladder. A mesh that 6.6 completes only
+after raising the ratio can therefore fail on 6.0 – 6.5; the other retry steps
+still apply.
+
+**Known limitations.**
+
+- **HEC-RAS 6.0 – 6.2 and missing referenced files.** If a land-cover,
+  infiltration, or sediment file referenced by the geometry is missing,
+  HEC-RAS 6.0 – 6.2 skip the geometry during preprocessing without an error,
+  and the plan HDF has no 2D mesh. With these releases,
+  `RasPreprocess.preprocess_plan()` checks for the files first and fails,
+  naming each missing file, instead of reporting success. HEC-RAS 6.3 and
+  later preprocess the mesh anyway, so the check does not apply to them.
+- **Property-table values differ by release.** `compute_property_tables()`
+  writes tables on every supported release, but HEC-RAS changed its
+  property-table computation over time. Values from 6.0 – 6.3.1 differ from
+  6.4.1 and later, which match each other.
+- **Terms and Conditions for Use.** A release must have its TCU accepted for
+  the current user before `Ras.exe` can preprocess headlessly.
+
+**Selecting the HEC-RAS version.** Without `hecras_dir`, `generate()` loads the
+newest installed release it finds (7.0.1, 7.0, 6.6, 6.7 Beta 5, then 6.5 down
+to 6.0), regardless of the project's version. Pass `hecras_dir` to pin the
+release. Only one RasMapperLib version can be loaded per Python process.
+
+**Linux / Wine.** The same behavior applies under Wine
+(`rascommander/hec-ras-wine-precompute_{version}` images). Loading
+RasMapperLib there also requires the `C:\Python311\GDAL` link to the HEC-RAS
+`GDAL` folder, prepared from the Linux side.
+
+**How this was tested.** `generate()` followed by
+`RasPreprocess.preprocess_plan()` on the Chippewa_2D example, with and without
+an added breakline and refinement region. Each run used one HEC-RAS release for
+both RasMapperLib and `Ras.exe`: natively on Windows for every release from 6.0
+to 7.0.1, and under Wine for 6.5, 6.6, and 7.0.1. On every release the mesh
+(357 cells, or 421 with the added features) and the written seed points were
+identical to 6.6, and preprocessing then succeeded.
+`compute_property_tables()` and `RasGeometryCompute.audit_reach_lengths()` were
+run on every release on the BaldEagleCrkMulti2D and Muncie examples.
+
 ### Refinement Region Methods
 
 - `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
