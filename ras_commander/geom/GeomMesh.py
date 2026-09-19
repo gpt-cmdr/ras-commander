@@ -12,7 +12,8 @@ coordinates from text and regenerates the mesh — overriding any HDF content.
 
 The HDF (.g##.hdf) is used only as a *temporary workspace*:
   - .NET RASGeometry loads geometry from HDF (perimeter, breaklines)
-  - geom.Save() writes cell centers to HDF so we can bulk-read via h5py
+  - geom.Save() writes cell centers to HDF so we can bulk-read via h5py;
+    _save_mesh() suppresses feature-table reloads around it, as RASMapper does
   - ras-commander does not generate .g##.hdf from .g## text; that remains
     a full HEC-RAS/Ras.exe responsibility
 
@@ -634,11 +635,20 @@ def _seeds_from_pointms_list(pts_list: list, ns: dict):
 
 
 def _save_mesh(geom, d2fa, fid: int, mesh, ns: dict) -> None:
-    """Persist MeshFV2D to geometry HDF."""
-    d2fa.SetMeshHasBeenRecomputed(fid, True)
-    d2fa.SetFeature(fid, mesh)
-    d2fa.SetMeshUpToDate(fid, True)
-    geom.Save()
+    """Persist MeshFV2D to geometry HDF.
+
+    RASGeometry.Save() writes the 2D Attributes table before it checks each
+    area's "Mesh Recomputed" flag. Without reload suppression those checks can
+    reload the old mesh from disk and skip SaveMesh, leaving the HDF unchanged
+    without an error (#361).
+    """
+    from ..dotnet.geometry_save import suppress_feature_table_reloads
+
+    with suppress_feature_table_reloads(geom):
+        d2fa.SetMeshHasBeenRecomputed(fid, True)
+        d2fa.SetFeature(fid, mesh)
+        d2fa.SetMeshUpToDate(fid, True)
+        geom.Save()
 
 
 def _douglas_peucker_polygon(perim, tolerance: float, ns: dict):
