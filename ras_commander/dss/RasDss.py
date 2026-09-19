@@ -166,7 +166,13 @@ class RasDss:
         candidates: List[Path] = []
 
         executable_home = RasDss._java_home_from_executable()
-        if executable_home is not None:
+        # On POSIX the `java` on PATH is the distribution's own choice and is the
+        # right first answer. On Windows it is not: the historical order (newest
+        # JDK under Program Files, then the HEC-bundled JREs) has been the
+        # selection for every existing install, and letting PATH win would let a
+        # stray or 32-bit `java.exe` silently change which JVM HEC Monolith
+        # loads. So Windows keeps its order and takes PATH only as a fallback.
+        if executable_home is not None and not system.startswith("win"):
             candidates.append(executable_home)
 
         if system.startswith("win"):
@@ -179,6 +185,8 @@ class RasDss:
             if hec_apps.exists():
                 candidates.extend(sorted(hec_apps.glob("*/*/jre"), reverse=True))
                 candidates.extend(sorted(hec_apps.glob("**/jre"), reverse=True))
+            if executable_home is not None:
+                candidates.append(executable_home)
             return candidates
 
         if system == "darwin":

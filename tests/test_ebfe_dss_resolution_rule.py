@@ -384,12 +384,16 @@ def test_dss_candidates_finds_the_sibling_and_ranks_by_proximity(tmp_path):
     cands, delivered = worker.dss_candidates(
         proj, r"..\MiddleTuleDraw_1112010402\MiddleTuleDraw.dss")
     assert delivered is True
-    assert [c["origin"] for c in cands] == ["delivered_elsewhere"] * 3
-    assert cands[0]["path"].replace("\\", "/").endswith(
+    # The name-based tiers, in proximity order, then the `delivered_by_record`
+    # tier appended on 2026-09-19 -- last, so this ordering is unchanged.
+    named = [c for c in cands if c["origin"] != "delivered_by_record"]
+    assert [c["origin"] for c in named] == ["delivered_elsewhere"] * 3
+    assert named[0]["path"].replace("\\", "/").endswith(
         "1112010403/Input/External DSS/MiddleTuleDraw.dss")
-    assert cands[0]["relative_from_project"] == r".\External DSS\MiddleTuleDraw.dss"
-    assert cands[-1]["path"].replace("\\", "/").endswith(
+    assert named[0]["relative_from_project"] == r".\External DSS\MiddleTuleDraw.dss"
+    assert named[-1]["path"].replace("\\", "/").endswith(
         "HMS Model/Rainfall/MiddleTuleDraw.dss")
+    assert cands[:len(named)] == named, "the record tier must come last"
 
 
 def _case_sensitive_fs(tmp_path):
@@ -418,11 +422,16 @@ def test_dss_candidates_reports_an_undelivered_basename(tmp_path):
     proj = _build_tree(tmp_path)
     cands, delivered = worker.dss_candidates(
         proj, r"..\..\..\..\HEC-HMS_v43\Spring\100YR.dss")
-    assert cands == []
     assert delivered is False
+    # No file of that name is delivered anywhere, so every name-based tier is
+    # empty; the last tier offers the other delivered files for a record-level
+    # look, and none of them is a copy of the file the reference names.
+    assert [c for c in cands if c["origin"] != "delivered_by_record"] == []
+    assert not any(c["path"].endswith("100YR.dss") for c in cands)
+    # With nothing to examine at all, the verdict is still a blocking acquisition.
     assert worker.decide_dss_boundary(
         r"..\..\..\..\HEC-HMS_v43\Spring\100YR.dss", "//A/B/PRECIP-EXCESS/D/5MIN/F/",
-        cands, delivered)["verdict"] == "acquisition"
+        [], delivered)["verdict"] == "acquisition"
 
 
 def test_model_root_is_the_study_root_not_the_project(tmp_path):
@@ -507,3 +516,99 @@ def test_member_ref_uses_the_reviews_own_shape():
     assert worker.dss_member_ref(IDX[0]) == (
         "12060204_Models.zip::Engineering Models/Hydraulic_Models/RAS_Submittal/"
         "NorthBosque_1/Input/Input_DSS/100yr.dss")
+
+
+# -- the final candidate tier: a record can live under another name ---------
+#
+# Every tier before this one searches by NAME, which assumes the reference names
+# the file the record is in. 11090201 shows it need not: all 14 of its
+# boundaries ask for "/BCLINE/TOC_Flow_Area: TOC_BC_OUT/STAGE/..." through a
+# reference to "Town_of_Taloga_Cana.dss" (700 entries, B-part absent), while the
+# delivered "townofcamargo.dss" (756 entries) holds it. Without the tier those
+# boundaries read "acquisition" -- the claim that FEMA did not ship the data,
+# made about data FEMA did ship.
+
+TOC_PATHNAME = "/BCLINE/TOC_Flow_Area: TOC_BC_OUT/STAGE/01Dec2019-01Jan2020/1Hour/1PAC/"
+TOC_CATALOG = ["/BCLINE/TOC_Flow_Area: TOC_BC_OUT/STAGE/01Dec2019/1Hour/1PAC/",
+               "/BCLINE/TOC_Flow_Area: TOC_BC_OUT/STAGE/01Jan2020/1Hour/1PAC/"]
+OTHER_CATALOG = ["/BCLINE/TAL_Flow_Area: TAL_BC_OUT/STAGE/01Dec2019/1Hour/1PAC/"]
+
+
+@pytest.mark.skipif(not hasattr(worker, "DSS_CANDIDATE_LIMIT"),
+                    reason="worker predates the delivered_by_record tier")
+def test_a_record_delivered_under_another_name_resolves_with_a_correction():
+    out = worker.decide_dss_boundary(
+        r".\DSS Inputs\Town_of_Taloga_Cana.dss", TOC_PATHNAME,
+        [cand("/work/p/Taloga/Input/DSS Inputs/Town_of_Taloga_Cana.dss",
+              "as_referenced", catalog=OTHER_CATALOG),
+         cand("/work/p/Camargo/Input/townofcamargo.dss",
+              "delivered_by_record", catalog=TOC_CATALOG)],
+        basename_delivered=True,
+    )
+    assert out["verdict"] == "resolved"
+    assert out["needs_path_correction"] is True
+    assert out["resolved_via"] == "delivered_by_record"
+    assert out["resolved_path"].endswith("townofcamargo.dss")
+
+
+@pytest.mark.skipif(not hasattr(worker, "DSS_CANDIDATE_LIMIT"),
+                    reason="worker predates the delivered_by_record tier")
+def test_the_tier_cannot_displace_a_better_named_candidate():
+    """It is last, so a file that really does hold the record under its own name
+    still wins and no correction is proposed."""
+    out = worker.decide_dss_boundary(
+        r".\DSS Inputs\Town_of_Taloga_Cana.dss", TOC_PATHNAME,
+        [cand("/work/p/Taloga/Input/DSS Inputs/Town_of_Taloga_Cana.dss",
+              "as_referenced", catalog=TOC_CATALOG),
+         cand("/work/p/Camargo/Input/townofcamargo.dss",
+              "delivered_by_record", catalog=TOC_CATALOG)],
+        basename_delivered=True,
+    )
+    assert out["verdict"] == "resolved" and out["needs_path_correction"] is False
+
+
+@pytest.mark.skipif(not hasattr(worker, "DSS_CANDIDATE_LIMIT"),
+                    reason="worker predates the delivered_by_record tier")
+def test_the_tier_still_needs_a_real_record_match():
+    """A delivered file that does not hold the pathname stays an acquisition;
+    the tier widens the search, it does not soften the rule."""
+    out = worker.decide_dss_boundary(
+        r".\DSS Inputs\Town_of_Taloga_Cana.dss", TOC_PATHNAME,
+        [cand("/work/p/Taloga/Input/DSS Inputs/Town_of_Taloga_Cana.dss",
+              "as_referenced", catalog=OTHER_CATALOG),
+         cand("/work/p/Other/other.dss", "delivered_by_record", catalog=OTHER_CATALOG)],
+        basename_delivered=True,
+    )
+    assert out["verdict"] == "acquisition" and out["blocking"] is True
+
+
+@pytest.mark.skipif(not hasattr(worker, "DSS_CANDIDATE_LIMIT"),
+                    reason="worker predates the delivered_by_record tier")
+def test_dss_candidates_offers_other_delivered_files_last(tmp_path):
+    """The producer's own ordering, on a real tree."""
+    project = tmp_path / "RAS Model" / "Taloga" / "Input"
+    (project / "DSS Inputs").mkdir(parents=True)
+    (project / "DSS Inputs" / "Town_of_Taloga_Cana.dss").write_bytes(b"x")
+    other = tmp_path / "RAS Model" / "Camargo" / "Input"
+    other.mkdir(parents=True)
+    (other / "townofcamargo.dss").write_bytes(b"x")
+    worker._DSS_DISK_INDEX.clear()
+    candidates, delivered = worker.dss_candidates(
+        project, r".\DSS Inputs\Town_of_Taloga_Cana.dss")
+    origins = [c["origin"] for c in candidates]
+    assert origins[0] == "as_referenced"
+    assert origins[-1] == "delivered_by_record"
+    assert candidates[-1]["path"].endswith("townofcamargo.dss")
+    assert delivered is True
+
+
+@pytest.mark.skipif(not hasattr(worker, "DSS_CANDIDATE_LIMIT"),
+                    reason="worker predates the delivered_by_record tier")
+def test_an_unfinished_search_holds_rather_than_claiming_absence():
+    """"absent from EVERY delivered candidate" is only honest if every candidate
+    was read. The largest affected study delivers 112 .dss files (12080002)."""
+    too_many = [{"path": "/work/p/%d.dss" % i, "origin": "delivered_by_record"}
+                for i in range(worker.DSS_CANDIDATE_LIMIT + 1)]
+    with pytest.raises(worker.DssCatalogUnreadable) as caught:
+        worker._dss_fill_catalogs(too_many, True)
+    assert "did not finish" in str(caught.value)
