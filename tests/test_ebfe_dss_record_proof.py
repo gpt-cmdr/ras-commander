@@ -240,3 +240,44 @@ def test_a_partly_verified_record_still_names_the_unverified_remainder():
     row = next(line for line in render_audit_markdown(bundle).splitlines()
                if line.startswith("| DSS boundary data |"))
     assert "28 could not be verified" in row, row
+
+
+# -- a corrected record is never mistaken for a re-run one ------------------
+
+REVERIFICATION = {
+    "schema": "ebfe-dss-reverification/v1",
+    "performed_utc": "2026-09-19T18:00:00Z",
+    "tool": "agent_tasks/ebfe_campaign/runtime/direct_v1/reverify_dss.py",
+    "tool_sha256": "0" * 64,
+    "corrected_from_audit_sha256": "abc123def4567890" + "0" * 48,
+    "why": ("the DSS record check was recorded from a failed catalog reader "
+            "(RasDss._configure_jvm did not discover a JVM on Linux)"),
+    "full_rerun_equivalent": False,
+    "boundaries_before": {"boundaries_checked": 35, "boundaries_resolved": 0,
+                          "boundaries_acquisition": 0, "boundaries_inferred": 35},
+    "boundaries_after": {"boundaries_checked": 35, "boundaries_resolved": 28,
+                         "boundaries_acquisition": 7, "boundaries_inferred": 0},
+}
+
+
+def test_a_record_corrected_in_place_says_so_in_the_document():
+    bundle = _bundle(
+        dss_reverification=dict(REVERIFICATION),
+        dss_verification={"boundaries_checked": 35, "boundaries_resolved": 28,
+                          "boundaries_acquisition": 7, "boundaries_inferred": 0,
+                          "provenance": "reverified_in_place"},
+        supporting_elements={"dss": {"state": "partial", "referenced": True}},
+    )
+    markdown = render_audit_markdown(bundle)
+    assert "## 7. Provenance and method" in markdown
+    section = markdown.split("## 7. Provenance and method", 1)[1]
+    assert "re-verified in place" in section
+    assert "not re-run" in section
+    assert "unverified 35 -> 0" in section
+    assert "Everything outside the DSS facts is as the original run left it" in section
+    assert "abc123def456" in section
+
+
+def test_a_normally_run_record_carries_no_such_claim():
+    markdown = render_audit_markdown(_bundle())
+    assert "re-verified in place" not in markdown

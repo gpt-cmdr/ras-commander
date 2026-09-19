@@ -1918,6 +1918,22 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
       + " -- a pass is only as strong as the family that ran")
     if unavailable:
         w(f"- Fields not available in this capture (schema v1): {', '.join(sorted(set(unavailable)))}")
+    # A record whose DSS facts were corrected in place is not a re-run record,
+    # and must never be read as one. The correction stamps itself; this is where
+    # a reader of the document meets it.
+    reverification = audit.get("dss_reverification") or {}
+    if reverification.get("schema"):
+        before = reverification.get("boundaries_before") or {}
+        after = reverification.get("boundaries_after") or {}
+        w(f"- **DSS boundaries re-verified in place on {reverification.get('performed_utc', '?')}**, "
+          f"not re-run: the record check was re-answered from the delivered DSS members "
+          f"because {reverification.get('why', 'the original reader failed')}. "
+          f"Resolved {before.get('boundaries_resolved', '?')} -> {after.get('boundaries_resolved', '?')}, "
+          f"acquisition {before.get('boundaries_acquisition', '?')} -> {after.get('boundaries_acquisition', '?')}, "
+          f"unverified {before.get('boundaries_inferred', '?')} -> {after.get('boundaries_inferred', '?')}. "
+          f"Everything outside the DSS facts is as the original run left it "
+          f"(`{reverification.get('tool', 'reverify_dss.py')}`, corrected from "
+          f"`{str(reverification.get('corrected_from_audit_sha256', '?'))[:12]}`).")
     w("")
     w("*This document is a recipe. It is executed against a fresh extraction of the raw "
       "archive; the extracted tree it was derived from has been discarded.*")
