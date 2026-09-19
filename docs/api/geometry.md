@@ -357,7 +357,7 @@ each release produces its own RASMapper result.
 |---|---|---|
 | 6.6, 6.7 Beta 4, 6.7 Beta 5, 7.0, 7.0.1 | Supported | Full retry ladder, including minimum face-length ratio escalation. |
 | 6.3 – 6.5 | Supported | No minimum face-length ratio escalation (see below). |
-| 6.0 – 6.2 | Supported | As above. Preprocessing needs every land-cover and sediment file the geometry references (see below). |
+| 6.0 – 6.2 | Supported | As above. Preprocessing needs every land-cover, infiltration, and sediment file the geometry references (see below). |
 
 **Why older releases need different calls.** Two RasMapperLib members changed
 their parameters between releases, and `generate()` adapts to whichever form
@@ -376,11 +376,13 @@ still apply.
 
 **Known limitations.**
 
-- **HEC-RAS 6.1 – 6.2 and missing referenced files.** If a land-cover or
-  sediment file referenced by the geometry is missing, HEC-RAS 6.1 and 6.2
-  skip the geometry during preprocessing without an error. The plan HDF then
-  has no 2D mesh. HEC-RAS 6.3 and later preprocess the mesh anyway. This is
-  HEC-RAS behavior and does not depend on how the mesh was generated.
+- **HEC-RAS 6.0 – 6.2 and missing referenced files.** If a land-cover,
+  infiltration, or sediment file referenced by the geometry is missing,
+  HEC-RAS 6.0 – 6.2 skip the geometry during preprocessing without an error,
+  and the plan HDF has no 2D mesh. With these releases,
+  `RasPreprocess.preprocess_plan()` checks for the files first and fails,
+  naming each missing file, instead of reporting success. HEC-RAS 6.3 and
+  later preprocess the mesh anyway, so the check does not apply to them.
 - **Property-table values differ by release.** `compute_property_tables()`
   writes tables on every supported release, but HEC-RAS changed its
   property-table computation over time. Values from 6.0 – 6.3.1 differ from

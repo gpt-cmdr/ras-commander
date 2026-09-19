@@ -1,8 +1,8 @@
 """preprocess_plan() must not report success when referenced land-classification files are missing.
 
-HEC-RAS 6.1-6.2 skip the geometry without an error when a land-cover,
+HEC-RAS 6.0-6.2 skip the geometry without an error when a land-cover,
 infiltration, or sediment file the geometry references is missing, so the
-plan HDF has no 2D mesh.
+plan HDF has no 2D mesh. 6.3 and later still preprocess the mesh.
 """
 
 import importlib
@@ -10,6 +10,7 @@ from pathlib import Path
 
 import h5py
 import pandas as pd
+import pytest
 
 from ras_commander.RasPreprocess import RasPreprocess
 
@@ -18,21 +19,23 @@ raspreprocess_module = importlib.import_module("ras_commander.RasPreprocess")
 
 
 class _FakeRas:
-    def __init__(self, project_folder: Path):
+    def __init__(self, project_folder: Path, ras_exe_path: Path):
         self.project_folder = project_folder
         self.project_name = "fixture"
-        self.ras_exe_path = project_folder / "Ras.exe"
+        self.ras_exe_path = ras_exe_path
         self.plan_df = pd.DataFrame([{"plan_number": "01", "Geom File": "g03"}])
 
     def check_initialized(self):
         return None
 
 
-def _seed_project(tmp_path: Path, geometry_attrs=None) -> _FakeRas:
+def _seed_project(tmp_path: Path, geometry_attrs=None, version="6.2") -> _FakeRas:
     project_folder = tmp_path / "project"
     project_folder.mkdir()
-    project = _FakeRas(project_folder)
-    project.ras_exe_path.write_bytes(b"fixture executable")
+    exe = tmp_path / "HEC-RAS" / version / "Ras.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"fixture executable")
+    project = _FakeRas(project_folder, exe)
     (project_folder / "fixture.prj").write_text("Proj Title=fixture\n", encoding="utf-8")
     (project_folder / "fixture.p01").write_text(
         "Plan Title=fixture\nGeom File=g03\n", encoding="utf-8"
@@ -52,14 +55,35 @@ def _forbid_launch(monkeypatch):
     monkeypatch.setattr(raspreprocess_module.subprocess, "Popen", popen)
 
 
-def test_missing_referenced_files_fail_before_launch(tmp_path, monkeypatch):
-    ras_obj = _seed_project(
-        tmp_path,
-        {
-            "Land Cover Filename": "..\\Chippewa\\Mannings_n.hdf",
-            "Sediment Bed Material Filename": "..\\Chippewa\\Sediment Materials.hdf",
-        },
+_CHIPPEWA_ATTRS = {
+    "Land Cover Filename": "..\\Chippewa\\Mannings_n.hdf",
+    "Sediment Bed Material Filename": "..\\Chippewa\\Sediment Materials.hdf",
+}
+
+
+@pytest.mark.parametrize(
+    ("version", "applies"),
+    [("6.0", True), ("6.2", True), ("6.3", False), ("6.3.1", False),
+     ("6.7 Beta 5", False), ("7.0.1", False), ("custom-build", True)],
+)
+def test_guard_applies_before_hec_ras_63(version, applies):
+    exe = Path("C:/Program Files (x86)/HEC/HEC-RAS") / version / "Ras.exe"
+    assert RasPreprocess._skips_geometry_without_land_classification(exe) is applies
+
+
+def test_missing_files_do_not_block_hec_ras_63_and_later(tmp_path, monkeypatch):
+    ras_obj = _seed_project(tmp_path, _CHIPPEWA_ATTRS, version="6.6")
+    monkeypatch.setattr(
+        RasPreprocess, "_tcu_supervision_availability_error", staticmethod(lambda: "stop-here")
     )
+
+    result = RasPreprocess.preprocess_plan("01", ras_object=ras_obj)
+
+    assert result.error == "stop-here"
+
+
+def test_missing_referenced_files_fail_before_launch(tmp_path, monkeypatch):
+    ras_obj = _seed_project(tmp_path, _CHIPPEWA_ATTRS)
     _forbid_launch(monkeypatch)
 
     result = RasPreprocess.preprocess_plan("01", ras_object=ras_obj)
@@ -67,6 +91,7 @@ def test_missing_referenced_files_fail_before_launch(tmp_path, monkeypatch):
     assert not result.success
     assert "land cover (Manning's n) '..\\Chippewa\\Mannings_n.hdf'" in result.error
     assert "sediment bed material '..\\Chippewa\\Sediment Materials.hdf'" in result.error
+    assert "HEC-RAS 6.2 skips the geometry" in result.error
     assert result.geometry_number == "03"
 
 
