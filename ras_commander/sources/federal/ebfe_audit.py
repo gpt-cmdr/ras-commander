@@ -58,6 +58,12 @@ __all__ = [
     "chained_dss_sequence",
     "format_chain",
     "CHAINED_DSS_NOTE",
+    "DSS_NAME_ONLY_REVIEW_METHODS",
+    "DSS_RECORD_PROVEN_REVIEW_METHODS",
+    "dss_verification_hold_reason",
+    "dss_verification_is_unverified",
+    "dss_review_is_record_proven",
+    "dss_review_may_drop_finding",
     "expected_elements",
     "study_critical_threshold",
     "actions_from_bundle",
@@ -161,6 +167,118 @@ CHAINED_DSS_NOTE = (
     "Requires sequential re-run of all chained sub-models "
     "(intermediate DSS results not delivered)"
 )
+
+#: Review methods that establish a DSS reference by *name* only. A name is not
+#: evidence that a file holds a record: 12060101's two delivered candidates hold
+#: 766 entries and not the requested B-part, and 11010008's four hold 19,986 and
+#: not the requested pathname. A rewrite justified by one of these alone is a
+#: guess, so the renderer refuses to honour it.
+DSS_NAME_ONLY_REVIEW_METHODS = frozenset({
+    "archive_member_match",
+    "exact_relative_path",
+})
+
+#: Review methods that read the target DSS catalog and proved the requested
+#: pathname is in it. Only these may retire a DSS finding.
+DSS_RECORD_PROVEN_REVIEW_METHODS = frozenset({
+    "dss_pathname_match",
+    "dss_record_match",
+})
+
+
+# ---------------------------------------------------------------------------
+# DSS verification: what counts as proof
+# ---------------------------------------------------------------------------
+
+def dss_verification_hold_reason(verification: dict) -> str:
+    """Why a DSS verification could not reach a verdict, in one clause.
+
+    The producer records the reader's own words under
+    ``dss_verification.inferred_reasons``; the corpus's dominant one is
+    ``catalog read failed: RuntimeError: Java not found``. Quoting it keeps the
+    real error in front of the reader rather than the word "inferred".
+    """
+    reasons = (verification or {}).get("inferred_reasons") or {}
+    if not isinstance(reasons, dict) or not reasons:
+        return "the DSS catalog could not be read"
+    worst = max(reasons.items(), key=lambda item: (int(item[1] or 0), str(item[0])))[0]
+    text = " ".join(str(worst).split())
+    return text[:200] if text else "the DSS catalog could not be read"
+
+
+def dss_verification_is_unverified(verification: dict) -> bool:
+    """True when boundaries were checked and none of them reached a verdict.
+
+    Such a record is a hold that a stale run wrote to disk instead of raising.
+    It is never a pass.
+    """
+    verification = verification or {}
+    checked = int(verification.get("boundaries_checked") or 0)
+    if not checked:
+        return False
+    return (int(verification.get("boundaries_inferred") or 0) > 0
+            and not int(verification.get("boundaries_resolved") or 0)
+            and not int(verification.get("boundaries_acquisition") or 0))
+
+
+def dss_review_is_record_proven(review: dict) -> bool:
+    """May this deficiency-review verdict retire or rewrite a DSS reference?
+
+    Only when something read the target DSS catalog and found the requested
+    pathname in it. A basename or archive-member match proves a file of that
+    NAME was delivered, which is the question the reference was never asking.
+
+    12050007 is the worked example. The producer could not read any catalog
+    (Java absent), so the review fell through to ``match_reference`` on the
+    basename, found ``.../1205000705_06/Input/1205000705_06.dss``, called the
+    finding an ``analysis_gap`` and rewrote the boundary onto it. The renderer
+    honoured the verdict, dropped the row, and the finding vanished -- with no
+    evidence that the file holds the record at all.
+    """
+    review = review or {}
+    method = str(review.get("method") or "")
+    if method in DSS_RECORD_PROVEN_REVIEW_METHODS:
+        return True
+    if method in DSS_NAME_ONLY_REVIEW_METHODS:
+        return False
+    # Unknown methods fail closed: a verdict whose provenance the renderer
+    # cannot name is not allowed to drop an engineer-facing finding.
+    return bool(review.get("record_proven"))
+
+
+def _dss_correction_is_record_proven(recipe: dict) -> bool:
+    """May this DSS ``path_correction`` be described to an engineer as resolved?
+
+    Only when whatever produced it read the target catalog. The worker's own
+    corrections carry ``verified_by == "dss_pathname"`` and ``confidence ==
+    "resolved"`` because ``decide_dss_boundary`` matched the pathname. A
+    deficiency-review correction built from an archive-member match carries
+    ``confidence: "inferred"`` and no ``verified_by``; it is a lead, not a
+    destination.
+    """
+    recipe = recipe or {}
+    if recipe.get("verified_by") == "dss_pathname":
+        return True
+    if recipe.get("record_proven"):
+        return True
+    return (recipe.get("confidence") == "resolved"
+            and dss_review_is_record_proven(recipe.get("review") or {"method": "dss_record_match"}))
+
+
+def dss_review_may_drop_finding(recipe: dict) -> bool:
+    """True when a recipe's ``analysis_gap`` may remove its repair action.
+
+    Applies the record-level gate to DSS surfaces only; other surfaces (a land
+    cover raster, a projection file) ARE settled by an archive-member match,
+    because there the question really is "was a file of that name delivered".
+    """
+    recipe = recipe or {}
+    review = recipe.get("review") or {}
+    if review.get("verdict") != "analysis_gap":
+        return False
+    if str(recipe.get("surface") or "") != "dss_pathname":
+        return True
+    return dss_review_is_record_proven(review)
 
 
 # ---------------------------------------------------------------------------
@@ -827,9 +945,13 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             # layer *is* in the delivery -- the capture looked in the wrong place.
             # Reporting it as an acquisition would hatch the study on the map for
             # data FEMA shipped (North Bosque's Manning's n, Lower Brazos's land
-            # cover). The review is the later, independent word; it wins.
+            # cover). The review is the later, independent word; it wins --
+            # except on ``dss``, where a delivered file of the right name is not
+            # evidence that it holds the record the boundary asks for.
             review = entry.get("review") or {}
-            if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+            if (review.get("verdict") == "analysis_gap"
+                    and entry.get("state") in ("no", "partial", "source_only")
+                    and (key != "dss" or dss_review_is_record_proven(review))):
                 evidence = str(review.get("evidence") or "")
                 member = evidence.split("::", 1)[1] if "::" in evidence else None
                 entry["state_as_captured"] = entry.get("state")
@@ -859,11 +981,19 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     # one locator-aware correction per reference.  The engineer-facing
     # supporting-data row must describe those reviewed destinations, not the
     # capture's placeholder path.
+    #
+    # Corrected 2026-09-19: only when the correction was proven at the record.
+    # A reviewer that matched a basename in the archive member index has shown a
+    # file of that name shipped and nothing about its contents, and this row
+    # would hand the engineer the exact path nothing read. Aransas (12100407)
+    # is that case: its twenty corrections were name matches made while the DSS
+    # catalog reader was failing, so the row stays with what the check said.
     reviewed_dss = [
         recipe for recipe in bundle.recipes
         if recipe.get("surface") == "dss_pathname"
         and recipe.get("origin") == "deficiency_review"
         and recipe.get("from") and recipe.get("to")
+        and _dss_correction_is_record_proven(recipe)
     ]
     if reviewed_dss:
         destinations = sorted({str(recipe["to"]) for recipe in reviewed_dss}, key=str.casefold)
@@ -907,25 +1037,38 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     # the DSS a boundary was authored for is in the delivery. The element
     # capture still says "no" when the file is not at the literal post-assembly
     # path -- Tule (11120104) had all 42 boundaries verified against delivered
-    # members and the row read "absent". Verification counts win; a captured
-    # "yes" is never downgraded here.
+    # members and the row read "absent". Verification counts win.
+    #
+    # ``inferred`` is NOT a finding and NOT a pass: it is a verdict the check
+    # could not reach. The worker now raises a hold rather than recording one
+    # (``DssCatalogUnreadable``), but 39 studies / 2,104 boundaries already on
+    # disk carry ``inferred`` because ``RasDss.get_catalog`` raised "Java not
+    # found" and the old code degraded silently. Such a record must never be
+    # read as a verified one, so an unverified boundary downgrades a captured
+    # "yes" here and the row says how many could not be checked.
     verification = audit.get("dss_verification") or {}
     checked = int(verification.get("boundaries_checked") or 0)
     captured_dss_state = out.get("dss", {}).get("state")
     acquisition_count = int(verification.get("boundaries_acquisition") or 0)
-    # A captured "yes" is downgraded only by reviewed acquisitions (the file the
-    # boundary needs is in no archive); an unverified ("inferred") boundary
-    # never downgrades it.
+    inferred_count = int(verification.get("boundaries_inferred") or 0)
     if checked and (captured_dss_state in ("no", "partial", None)
-                    or (captured_dss_state == "yes" and acquisition_count)):
+                    or (captured_dss_state == "yes"
+                        and (acquisition_count or inferred_count))):
         resolved = int(verification.get("boundaries_resolved") or 0)
         acquisition = acquisition_count
-        inferred = int(verification.get("boundaries_inferred") or 0)
+        inferred = inferred_count
         entry = dict(out.get("dss") or {})
         entry.setdefault("state_as_captured", entry.get("state"))
-        if acquisition and not resolved:
+        if inferred and not resolved and not acquisition:
+            # Nothing was established either way. Saying "Yes" here is the
+            # silent degradation this rule exists to stop.
+            entry["state"] = "unverified"
+            entry["note"] = (f"{inferred} of {checked} boundaries could not be verified: "
+                             + dss_verification_hold_reason(verification))
+        elif acquisition and not resolved:
             entry["state"] = "no"
-            entry["note"] = f"{acquisition} of {checked} boundaries need DSS that is not in the delivery"
+            entry["note"] = (f"{acquisition} of {checked} boundaries need DSS that is not in the delivery"
+                             + (f"; {inferred} could not be verified" if inferred else ""))
         elif resolved == checked:
             entry["state"] = "yes"
             entry["note"] = (f"{resolved} of {checked} boundaries verified against delivered DSS"
@@ -933,7 +1076,9 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         elif resolved and (acquisition or inferred):
             entry["state"] = "partial"
             entry["note"] = (f"{resolved} of {checked} boundaries verified; {acquisition} need DSS not in the delivery"
-                             + (f"; {inferred} unverified" if inferred else ""))
+                             + (f"; {inferred} could not be verified" if inferred else ""))
+        if inferred:
+            entry["boundaries_unverified"] = inferred
         out["dss"] = entry
 
     # A boundary whose DSS is the computed output of a model that IS in the
@@ -954,7 +1099,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             recipe for recipe in bundle.recipes
             if _recipe_targets_registered_element(bundle, recipe)
             and (recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition")
-            and (recipe.get("review") or {}).get("verdict") != "analysis_gap"
+            and not dss_review_may_drop_finding(recipe)
             and (Path(str(recipe.get("acquisition_target") or recipe.get("from")
                           or recipe.get("file") or "").replace("\\", "/")).name or "") not in chained
         ]
@@ -1150,8 +1295,13 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # original recipe ``analysis_gap`` and appends the corrected path
             # recipe.  Retaining both would falsely tell the engineer to
             # obtain a file that was delivered (Aransas 12100407).
+            #
+            # For a DSS surface that authority is bounded by what the review
+            # actually read. An ``archive_member_match`` proves a file of that
+            # NAME was delivered, not that it holds the requested record, so it
+            # may not drop the acquisition (12050007).
             review = recipe.get("review") or {}
-            if review.get("verdict") == "analysis_gap":
+            if dss_review_may_drop_finding(recipe):
                 continue
             # Worker rev i: the DSS a boundary was authored for is in no
             # delivered archive (reviewed "real" by the archive-member match).
@@ -1214,6 +1364,11 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             continue
         state = (delivered.get(ekey) or {}).get("state")
         if state in ("yes", "rebuilt", "not captured", "unknown", None):
+            continue
+        if state == "unverified":
+            # The check did not run. Asking an engineer to obtain a layer we
+            # never established was missing invents work; the supporting-data
+            # row and section 6 say the check is outstanding instead.
             continue
         if ekey == "dss" and (acquired_files or chain_rerun_files):
             continue    # the missing DSS files are already named one by one above
@@ -1287,11 +1442,15 @@ def _group_gaps(bundle: AuditBundle) -> dict:
         review = gap.get("review") or {}
         verdict = review.get("verdict") or "unreviewed"
         by_verdict[verdict] += 1
-        if verdict == "analysis_gap":
+        ext = Path(raw.replace("\\", "/")).suffix.lower()
+        # A ``.dss`` gap is retired only by record-level proof. A basename that
+        # matches an archive member says a file of that name was delivered; the
+        # gap is about a pathname inside it (12050007, 12060101, 11010008).
+        if verdict == "analysis_gap" and (
+                ext != ".dss" or dss_review_is_record_proven(review)):
             analysis_counts[raw] += 1
             analysis_evidence.setdefault(raw, str(review.get("evidence", "")))
             continue
-        ext = Path(raw.replace("\\", "/")).suffix.lower()
         if ext in (".dss",):
             group = "DSS boundary data"
         elif ext in (".tif", ".tiff", ".vrt", ".hdf") and "terrain" in raw.lower():
@@ -1320,7 +1479,9 @@ def _group_gaps(bundle: AuditBundle) -> dict:
     labels = dict(SUPPORTING_ELEMENTS)
     for ekey, entry in (bundle.audit.get("supporting_elements") or {}).items():
         review = (entry or {}).get("review") or {}
-        if review.get("verdict") == "analysis_gap" and entry.get("state") in ("no", "partial", "source_only"):
+        if (review.get("verdict") == "analysis_gap"
+                and entry.get("state") in ("no", "partial", "source_only")
+                and (ekey != "dss" or dss_review_is_record_proven(review))):
             label = labels.get(ekey, ekey)
             analysis_counts[f"{label} (layer)"] += int(entry.get("referenced_count") or 1)
             analysis_evidence.setdefault(f"{label} (layer)", str(review.get("evidence", "")))
@@ -1347,6 +1508,8 @@ def _yes_no(state: str) -> str:
         "source_only": "**Source rasters only** -- no Terrain.hdf; must be rebuilt",
         "requires_chain_rerun": ("**Requires sequential re-run of all chained sub-models** "
                                  "(intermediate DSS results not delivered)"),
+        "unverified": ("**Not verified** -- the check could not be run, so this row "
+                       "establishes nothing either way (see note)"),
         "rebuilt": "Rebuilt (stored with this audit)",
         "unknown": "Unknown",
         "not captured": "*not captured*",
@@ -1505,6 +1668,11 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         scope = f" ({len(projects)} project{'s' if len(projects) != 1 else ''})" if projects else ""
         parts.append(f"**{element}**{scope} -- {reason}")
     named = {str(item.get("element", "")).lower() for item in critical}
+    # A DSS acquisition the producer recorded while its own record check could
+    # not run is reported, not retired -- and not asserted flatly either. The
+    # qualifier is the difference between "FEMA did not ship this" and "we could
+    # not check, and this is what the run recorded".
+    _held = dss_verification_is_unverified(audit.get("dss_verification") or {})
     for a in actions:
         if a.kind != "acquisition":
             continue
@@ -1513,6 +1681,8 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
             continue
         named.add(base.lower())
         wording = "incomplete in the delivery" if a.reason == "partially_delivered" else "not in the delivery"
+        if _held and base.lower().startswith("dss boundary data"):
+            wording += " (unconfirmed: the DSS record check did not run)"
         parts.append(f"**{base}** -- {wording}")
     if parts:
         w(f"| Critical data missing | {'; '.join(parts)} |")
@@ -1537,10 +1707,28 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
               + (f", {bv['unreviewed']} not yet reviewed" if bv.get("unreviewed") else "") + " |")
         elif reported:
             w(f"| Reported gaps | {reported} -- *not yet independently reviewed; treat as provisional* |")
+    # A DSS verification that could not read a catalog is a HOLD the producer
+    # should have raised. Records written before that rule carry the hold as
+    # `inferred` boundaries, and this row is what stops a reader taking the
+    # study's DSS row as verified.
+    _ver = audit.get("dss_verification") or {}
+    _unverified = int(_ver.get("boundaries_inferred") or 0)
+    if _unverified and dss_verification_is_unverified(_ver):
+        w(f"| DSS boundary verification | **Did not run** -- "
+          f"{_unverified} of {int(_ver.get('boundaries_checked') or 0)} boundaries "
+          f"unverified: {_md_escape(dss_verification_hold_reason(_ver))} |")
     if blocking:
         first = blocking[0]
         w(f"| Most important | {_describe_action(first)} |")
     w("")
+    if _unverified and dss_verification_is_unverified(_ver):
+        w("**The DSS boundary check did not run for this study.** No boundary was "
+          "resolved and none was proven to need data from outside the delivery; the "
+          "record says only that the reader failed. Nothing in this document about "
+          "DSS boundary data is verified, and no DSS reference may be rewritten on "
+          "the strength of it. Re-run the audit's verification stage once the reader "
+          "works, then re-render.")
+        w("")
 
     # 2 -----------------------------------------------------------------
     w("## 2. Model inventory")

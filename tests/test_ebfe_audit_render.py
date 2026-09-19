@@ -869,6 +869,14 @@ def test_reviewed_analysis_gap_dss_acquisition_is_replaced_by_corrected_path_act
     acquisitions. Review found each authored DSS file in the delivery and
     appended the corrected path recipe, so the predecessor acquisition must
     not survive into the engineer-facing action list or critical verdict.
+
+    Corrected 2026-09-19. "Found" now has to mean found the RECORD. The review
+    that produced these corrections matched a basename in the archive member
+    index, which shows a file of that name was delivered and nothing about what
+    is inside it -- and where the reader worked, such files repeatedly did not
+    hold the requested pathname (12060101, 11010008). So the replacement holds
+    only for a record-proven review; a name match leaves the acquisition
+    standing, which is the case the second half of this test pins.
     """
     bundle = _two_d_unsteady(
         supporting_elements={
@@ -900,8 +908,9 @@ def test_reviewed_analysis_gap_dss_acquisition_is_replaced_by_corrected_path_act
         "acquisition_target": r"..\..\..\..\HEC-HMS_v43\Aransas\100YR.dss",
         "review": {
             "verdict": "analysis_gap",
-            "method": "archive_member_match",
-            "evidence": "original 100YR.dss delivered as Models.zip::_Final/DSS/100YR.dss",
+            "method": "dss_record_match",
+            "evidence": ("original 100YR.dss delivered as Models.zip::_Final/DSS/100YR.dss; "
+                         "its catalog holds //ARANSAS/PRECIP-INC/.../RUN:100YR/"),
         },
     }
     correction = {
@@ -925,6 +934,18 @@ def test_reviewed_analysis_gap_dss_acquisition_is_replaced_by_corrected_path_act
     assert "Critical data missing" not in markdown
     assert "Obtain `DSS boundary data" not in markdown
     assert "change `.\\DSS Inputs\\Aransas.dss` to `..\\DSS\\100YR.dss`" in markdown
+
+    # The same review, decided by NAME. 12050007 is where that went wrong: the
+    # finding was dropped and the engineer was sent to a file nothing had read.
+    acquisition["review"] = {
+        "verdict": "analysis_gap",
+        "method": "archive_member_match",
+        "evidence": "original 100YR.dss delivered as Models.zip::_Final/DSS/100YR.dss",
+    }
+    bundle.recipes = [acquisition, correction]
+    kinds = [a.kind for a in actions_from_bundle(bundle)]
+    assert kinds == ["path_correction", "acquisition"]
+    assert "Obtain `DSS boundary data (100YR.dss)" in render_audit_markdown(bundle)
 
 
 def test_path_corrections_with_same_values_but_different_files_are_not_deduplicated():
@@ -999,12 +1020,14 @@ def test_reviewed_dss_destinations_and_plan_hdf_list_replace_sampled_capture():
         ],
     }]
     bundle.recipes = [
+        # ``verified_by: dss_pathname`` is the record-level proof a DSS
+        # destination needs before this row may name it (2026-09-19).
         {"file": "Aransas.u01", "surface": "dss_pathname", "locator": "u01:9",
          "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\100YR.dss",
-         "origin": "deficiency_review"},
+         "origin": "deficiency_review", "verified_by": "dss_pathname"},
         {"file": "Aransas.u02", "surface": "dss_pathname", "locator": "u02:9",
          "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\500YR.dss",
-         "origin": "deficiency_review"},
+         "origin": "deficiency_review", "verified_by": "dss_pathname"},
         {"file": "Aransas.p09.hdf", "surface": "hdf_asset_attribute", "locator": "Geometry@x",
          "from": "old", "to": "new"},
         {"file": "Aransas.p10.hdf", "surface": "hdf_asset_attribute", "locator": "Geometry@x",
@@ -1022,11 +1045,20 @@ def test_reviewed_dss_destinations_and_plan_hdf_list_replace_sampled_capture():
 
 @pytest.mark.skipif(not Path(r"F:\eBFE\audit\12100407\_audit.json").is_file(), reason="Aransas audit unavailable")
 def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete():
+    """Corrected 2026-09-19: Aransas is one of the 39 held studies.
+
+    Its `dss_verification` reads 0 resolved, 0 acquisition, 14 inferred, every
+    reason "catalog read failed: RuntimeError: Java not found". Its twenty
+    reviewed DSS corrections were basename matches made while that reader was
+    failing, so they no longer retire the seven acquisitions the producer
+    recorded, and no longer supply the row's location. Registration scoping,
+    which is what this test is really about, is unchanged.
+    """
     bundle = load_audit_bundle(Path(r"F:\eBFE\audit\12100407"))
     actions = actions_from_bundle(bundle)
     dss_actions = [action for action in actions if action.evidence.endswith(":DSS File")]
-    assert len(actions) == 33
-    assert sum(action.blocking for action in actions) == 31
+    assert len(actions) == 40
+    assert sum(action.blocking for action in actions) == 38
     assert len(dss_actions) == 14
     assert not any(
         Path(action.target).name in {
@@ -1037,16 +1069,23 @@ def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete()
 
     markdown = render_audit_markdown(bundle)
     dss = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
-    assert "20 reviewed references resolve to 7 delivered DSS files" in dss
-    assert r".\DSS Inputs\Aransas.dss" not in dss
+    # The check did not run, so the row says so instead of naming destinations
+    # nothing read.
+    assert "Not verified" in dss
+    assert "14 of 14 boundaries could not be verified" in dss
+    assert "Java not found" in dss
+    assert "reviewed references resolve to" not in dss
+    assert "**Did not run**" in markdown
+    assert "The DSS boundary check did not run for this study." in markdown
+    # The producer's own acquisitions are reported, and qualified rather than
+    # asserted as a fact about the delivery.
+    assert "unconfirmed: the DSS record check did not run" in markdown
     for name in ("01__MINUS.dss", "10_ACE.dss", "100YR.dss", "100YR_PLUS.dss", "25YR.dss", "500YR.dss", "50YR.dss"):
-        assert name in dss
+        assert f"DSS boundary data ({name})" in markdown
     results = next(line for line in markdown.splitlines() if line.startswith("| Results (plan HDFs) |"))
     for number in ("09", "10", "11", "16", "17", "18", "19"):
         assert f"Aransas.p{number}.hdf" in results
     assert "7 plan HDFs" in results
-    assert "Critical data missing" not in markdown
-    assert "Obtain `DSS boundary data" not in markdown
 
 
 # -- chained models: one model's output DSS is the next model's boundary -----
@@ -1233,21 +1272,32 @@ def test_review_analysis_gap_cannot_rewrite_a_chained_boundary_onto_an_input_dss
 
 
 def test_ordinary_reviewed_analysis_gap_is_still_honoured():
-    """Aransas's HMS file really was delivered elsewhere; nothing here touches it."""
-    bundle = _chained_bundle(
-        r"..\..\HEC-HMS_v43\Aransas\100YR.dss",
-        ["//ARANSAS/PRECIP-INC/01JAN2020/15MIN/RUN:100YR/"],
-        "RAS Model/HECRAS_507",
-        [{"prj_file": "Aransas.prj", "project_folder": "/work/RAS Model/HECRAS_507"}],
-    )
-    bundle.recipes[0]["review"] = {"verdict": "analysis_gap", "method": "archive_member_match",
-                                   "evidence": "delivered as Models.zip::DSS/100YR.dss"}
-    actions = actions_from_bundle(bundle)
-    # The reviewed row leaves no per-file step of any kind: no upstream run and
-    # no "obtain 100YR.dss". The element row's own absence is a separate finding.
+    """Aransas's HMS file really was delivered elsewhere.
+
+    Corrected 2026-09-19: "really was delivered" has to be proven at the record,
+    not the filename. A ``dss_record_match`` leaves no per-file step of any kind
+    -- no chained re-run and no "obtain 100YR.dss". An ``archive_member_match``
+    proves only that a file of that name shipped, so the acquisition stands.
+    """
+    def reviewed(method):
+        bundle = _chained_bundle(
+            r"..\..\HEC-HMS_v43\Aransas\100YR.dss",
+            ["//ARANSAS/PRECIP-INC/01JAN2020/15MIN/RUN:100YR/"],
+            "RAS Model/HECRAS_507",
+            [{"prj_file": "Aransas.prj", "project_folder": "/work/RAS Model/HECRAS_507"}],
+        )
+        bundle.recipes[0]["review"] = {
+            "verdict": "analysis_gap", "method": method,
+            "evidence": "delivered as Models.zip::DSS/100YR.dss"}
+        return bundle, actions_from_bundle(bundle)
+
+    bundle, actions = reviewed("dss_record_match")
     assert not [a for a in actions if a.kind == "chained_model_rerun"]
     assert not [a for a in actions if "100YR.dss" in a.target]
     assert chained_dss_targets(bundle) == {}
+
+    bundle, actions = reviewed("archive_member_match")
+    assert [a.kind for a in actions if "100YR.dss" in a.target] == ["acquisition"]
 
 
 def test_dss_row_names_the_producing_model_rather_than_calling_the_data_absent():

@@ -79,6 +79,146 @@ class RasDss:
     _jvm_configured = False
     _monolith = None
 
+    #: Roots searched for a JAVA_HOME on Windows, in order. Each is globbed for
+    #: ``jre*`` / ``jdk*`` / ``jdk-*`` children, newest name first.
+    WINDOWS_JAVA_ROOTS = (
+        Path("C:/Program Files/Java"),
+        Path("C:/Program Files (x86)/Java"),
+    )
+    #: JREs bundled with HEC applications (HMS, RAS).
+    WINDOWS_HEC_ROOT = Path("C:/Program Files/HEC")
+
+    #: Roots searched on Linux and other POSIX platforms, in order. Distribution
+    #: packages land in ``/usr/lib/jvm`` (Debian/Ubuntu) or ``/usr/lib64/jvm``
+    #: and ``/usr/java`` (RHEL family); ``/opt`` covers hand-installed JDKs and
+    #: the layout most container images use.
+    POSIX_JAVA_ROOTS = (
+        Path("/usr/lib/jvm"),
+        Path("/usr/lib64/jvm"),
+        Path("/usr/java"),
+        Path("/opt/java"),
+        Path("/opt"),
+    )
+
+    #: Roots searched on macOS, in order.
+    MACOS_JAVA_ROOTS = (
+        Path("/Library/Java/JavaVirtualMachines"),
+        Path("/System/Library/Java/JavaVirtualMachines"),
+    )
+
+    @staticmethod
+    def _jvm_library_names(system: Optional[str] = None) -> tuple:
+        """Shared-library file names that mark a directory as a real JAVA_HOME."""
+        system = (system or sys.platform).lower()
+        if system.startswith("win"):
+            return ("jvm.dll",)
+        if system == "darwin":
+            return ("libjvm.dylib", "libjvm.so")
+        return ("libjvm.so",)
+
+    @staticmethod
+    def _has_jvm_lib(java_dir: Path, system: Optional[str] = None) -> bool:
+        """Does this directory contain a usable JVM shared library?"""
+        try:
+            for name in RasDss._jvm_library_names(system):
+                for _ in java_dir.rglob(name):
+                    return True
+        except (OSError, PermissionError):
+            return False
+        return False
+
+    @staticmethod
+    def _java_home_from_executable() -> Optional[Path]:
+        """``JAVA_HOME`` derived from the ``java`` on PATH.
+
+        The equivalent of ``readlink -f $(command -v java)``: on Debian and
+        Ubuntu ``/usr/bin/java`` is a symlink chain ending in
+        ``/usr/lib/jvm/java-17-openjdk-amd64/bin/java``, whose JAVA_HOME is the
+        parent of ``bin``. This is the branch that makes an installed JRE
+        visible without the operator setting anything.
+        """
+        import shutil
+
+        found = shutil.which("java")
+        if not found:
+            return None
+        try:
+            resolved = Path(found).resolve()
+        except (OSError, RuntimeError):
+            return None
+        if resolved.parent.name.lower() == "bin":
+            return resolved.parent.parent
+        return resolved.parent
+
+    @staticmethod
+    def _java_home_candidates(system: Optional[str] = None) -> List[Path]:
+        """Ordered JAVA_HOME candidates for this platform, before any JVM check.
+
+        Corrected 2026-09-19. This list used to hold Windows paths only, so on
+        Linux it was always empty and ``_configure_jvm`` raised "Java not found"
+        on hosts with a working OpenJDK. The eBFE audit's DSS record check
+        enters here, and 39 studies / 2,104 boundaries were recorded as
+        unverified because of it -- five hosts that each had OpenJDK 17
+        installed and each read DSS catalogs successfully at other times, in one
+        sweep launched without ``JAVA_HOME``.
+        """
+        system = (system or sys.platform).lower()
+        candidates: List[Path] = []
+
+        executable_home = RasDss._java_home_from_executable()
+        if executable_home is not None:
+            candidates.append(executable_home)
+
+        if system.startswith("win"):
+            for root in RasDss.WINDOWS_JAVA_ROOTS:
+                if not root.exists():
+                    continue
+                for pattern in ("jre*", "jdk*", "jdk-*"):
+                    candidates.extend(sorted(root.glob(pattern), reverse=True))
+            hec_apps = RasDss.WINDOWS_HEC_ROOT
+            if hec_apps.exists():
+                candidates.extend(sorted(hec_apps.glob("*/*/jre"), reverse=True))
+                candidates.extend(sorted(hec_apps.glob("**/jre"), reverse=True))
+            return candidates
+
+        if system == "darwin":
+            for root in RasDss.MACOS_JAVA_ROOTS:
+                if not root.exists():
+                    continue
+                for bundle in sorted(root.glob("*"), reverse=True):
+                    home = bundle / "Contents" / "Home"
+                    candidates.append(home if home.is_dir() else bundle)
+
+        for root in RasDss.POSIX_JAVA_ROOTS:
+            if not root.exists():
+                continue
+            for pattern in ("java-*", "jdk*", "jre*", "*"):
+                candidates.extend(sorted(root.glob(pattern), reverse=True))
+
+        # Preserve order while dropping the duplicates the overlapping globs
+        # above produce ("*" re-reports every "java-*" hit).
+        seen = set()
+        ordered: List[Path] = []
+        for candidate in candidates:
+            key = str(candidate)
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(candidate)
+        return ordered
+
+    @staticmethod
+    def _discover_java_home(system: Optional[str] = None) -> Optional[Path]:
+        """First candidate that is a directory holding a JVM library, or None."""
+        system = (system or sys.platform).lower()
+        for candidate in RasDss._java_home_candidates(system):
+            try:
+                if candidate.is_dir() and RasDss._has_jvm_lib(candidate, system):
+                    return candidate
+            except (OSError, PermissionError):
+                continue
+        return None
+
     @staticmethod
     def _ensure_monolith():
         """Ensure HEC Monolith is downloaded and available."""
@@ -130,46 +270,25 @@ class RasDss:
 
         print("Configuring Java VM for DSS operations...")
 
-        # Set JAVA_HOME if not already set
-        if 'JAVA_HOME' not in os.environ:
-            # Dynamically discover Java installations using glob patterns.
-            # Search standard Java install locations plus HEC application bundles.
-            java_search_roots = [
-                Path("C:/Program Files/Java"),
-                Path("C:/Program Files (x86)/Java"),
-            ]
-            java_candidates = []
-            for root in java_search_roots:
-                if root.exists():
-                    # Collect all jre* and jdk* directories, sorted newest first
-                    java_candidates.extend(sorted(root.glob("jre*"), reverse=True))
-                    java_candidates.extend(sorted(root.glob("jdk*"), reverse=True))
-                    java_candidates.extend(sorted(root.glob("jdk-*"), reverse=True))
-
-            # Also check JREs bundled with HEC applications (HMS, RAS, etc.)
-            hec_apps = Path("C:/Program Files/HEC")
-            if hec_apps.exists():
-                java_candidates.extend(sorted(hec_apps.glob("*/*/jre"), reverse=True))
-                java_candidates.extend(sorted(hec_apps.glob("**/jre"), reverse=True))
-
-            def _has_jvm_lib(java_dir: Path) -> bool:
-                """Check that a Java directory contains a usable JVM library."""
-                if os.name == 'nt':
-                    return bool(list(java_dir.rglob("jvm.dll")))
-                else:
-                    return bool(list(java_dir.rglob("libjvm.so")))
-
-            for java_home in java_candidates:
-                if java_home.is_dir() and _has_jvm_lib(java_home):
-                    os.environ['JAVA_HOME'] = str(java_home)
-                    print(f"  Found Java: {java_home}")
-                    break
-            else:
+        # Set JAVA_HOME if not already set. Discovery covers Windows, Linux and
+        # macOS; see _java_home_candidates for why the Linux branch exists.
+        if not os.environ.get('JAVA_HOME'):
+            java_home = RasDss._discover_java_home()
+            if java_home is None:
                 raise RuntimeError(
                     "Java not found. Please set JAVA_HOME environment variable "
                     "or install Java JDK/JRE.\n"
-                    "Download from: https://www.oracle.com/java/technologies/downloads/"
+                    "Searched: the `java` on PATH, "
+                    + ", ".join(str(root) for root in (
+                        RasDss.WINDOWS_JAVA_ROOTS + (RasDss.WINDOWS_HEC_ROOT,)
+                        if sys.platform.startswith("win")
+                        else (RasDss.MACOS_JAVA_ROOTS + RasDss.POSIX_JAVA_ROOTS
+                              if sys.platform == "darwin"
+                              else RasDss.POSIX_JAVA_ROOTS)))
+                    + "\nDownload from: https://www.oracle.com/java/technologies/downloads/"
                 )
+            os.environ['JAVA_HOME'] = str(java_home)
+            print(f"  Found Java: {java_home}")
 
         # Set classpath (must be done before first import from jnius)
         jnius_config.add_classpath(*classpath)
