@@ -18,7 +18,11 @@ from ras_commander.sources.federal.ebfe_audit import (
     SUPPORTING_ELEMENTS,
     AuditBundle,
     actions_from_bundle,
+    chained_dss_producer,
+    chained_dss_targets,
     classify_reference,
+    delivered_model_names,
+    dss_pathname_parts,
     escape_depth,
     expected_elements,
     load_audit_bundle,
@@ -1040,3 +1044,246 @@ def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete()
     assert "7 plan HDFs" in results
     assert "Critical data missing" not in markdown
     assert "Obtain `DSS boundary data" not in markdown
+
+
+# -- chained models: one model's output DSS is the next model's boundary -----
+#
+# Salt Fork Brazos (12050007) is the worked shape: 1205000705_06 reads
+# ``..\..\1205000701_02\Simulations\1205000701_02.dss``, the producing model is
+# in the same archive, and only its *input* DSS was delivered. Corpus-wide this
+# is 118 boundary pathnames across 14 studies -- 27 files in 8 of them once the
+# producer must also be delivered.
+
+def _chained_bundle(target, pathnames, project, models, **overrides):
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "note": ""}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 6, "boundaries_resolved": 0,
+            "boundaries_acquisition": 6, "boundaries_inferred": 0,
+            "acquisition_targets": [{"dss_file": target, "pathnames": list(pathnames)}],
+        },
+        **overrides,
+    )
+    bundle.models = models
+    bundle.recipes = [{
+        "file": "RAS Model/RAS_Submittal/1205000705_06/Input/1205000705_06.u07",
+        "surface": "dss_pathname", "locator": "1205000705_06.u07:158:DSS File",
+        "from": target, "to": None, "why": "missing_from_delivery",
+        "confidence": "acquisition", "kind": "acquisition", "acquisition_target": target,
+        "confidence_reason": "no A/B/C/E/F match from every delivered candidate (2 readable of 2)",
+        "blocking": True, "project": project,
+        "review": {"verdict": "real", "method": "archive_member_match"},
+    }]
+    return bundle
+
+
+_SALT_FORK_TARGET = r"..\..\1205000701_02\Simulations\1205000701_02.dss"
+_SALT_FORK_PATHNAMES = [
+    "/REFERENCE LINES/1205000701_02: 1205000701/FLOW/31Dec1999 - 11Jan2000/15Minute/01PCT/",
+    "/REFERENCE LINES/1205000701_02: 1205000701/FLOW/31Dec1999 - 11Jan2000/15Minute/02PCT/",
+]
+_SALT_FORK_CONSUMER = "RAS Model/RAS_Submittal/1205000705_06/Input"
+_SALT_FORK_MODELS = [
+    {"prj_file": "1205000701_02.prj", "project_folder": "/work/RAS Model/RAS_Submittal/1205000701_02/Input"},
+    {"prj_file": "1205000705_06.prj", "project_folder": "/work/RAS Model/RAS_Submittal/1205000705_06/Input"},
+]
+
+
+@pytest.mark.parametrize(
+    "pathname, a_part",
+    [
+        ("/REFERENCE LINES/1205000701_02: 1205000701/FLOW/31Dec1999/15Minute/01PCT/", "REFERENCE LINES"),
+        ("/BCLINE/1205000705_06: 1205000705_06/FLOW/01Dec1999/15Minute/01PCT/", "BCLINE"),
+        ("/SA CONNECTION/Dam_Discharge/FLOW/01Dec2019/1Hour/01PCT/", "SA CONNECTION"),
+        ("//FORT_SUPPLY_BEAVER/PRECIP-EXCESS/01JAN2020/6MIN/RUN:100YR/", ""),
+    ],
+)
+def test_dss_pathname_parts_reads_the_a_part(pathname, a_part):
+    assert dss_pathname_parts(pathname)[0] == a_part
+
+
+def test_a_windows_path_is_not_a_dss_pathname():
+    assert dss_pathname_parts(r"..\Simulations\x.dss") == ()
+    assert dss_pathname_parts(None) == ()
+
+
+def test_combined_project_names_every_model_it_contains():
+    """``1205000701_02`` is two models; ``1206010107_0809`` is three."""
+    names = delivered_model_names([
+        {"prj_file": "1205000701_02.prj", "project_folder": "/w/RAS_Submittal/1205000701_02/Input"},
+        {"prj_file": "Boggy_Elm_Fish.prj", "project_folder": "/w/RAS_Submittal/1206010107_0809/Input"},
+    ])
+    assert names["1205000701"] == "1205000701_02"
+    assert names["1205000702"] == "1205000701_02"
+    assert names["1206010108"] == "Boggy_Elm_Fish"
+    assert names["1206010109"] == "Boggy_Elm_Fish"
+    # Scaffolding is not a model name.
+    assert "input" not in names and "rassubmittal" not in names
+
+
+def test_chained_output_dss_with_delivered_producer_is_an_upstream_run_not_an_acquisition():
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
+    actions = actions_from_bundle(bundle)
+    runs = [a for a in actions if a.kind == "upstream_model_run"]
+    assert [a.target for a in runs] == ["DSS boundary data (1205000701_02.dss)"]
+    assert runs[0].source == "1205000701_02"
+    assert runs[0].blocking
+    assert not [a for a in actions if a.kind == "acquisition"]
+    markdown = render_audit_markdown(bundle)
+    assert ("| Runnable as delivered | **after repair (from the delivery alone, "
+            "including an upstream model run)** |") in markdown
+    # It is not "needs data", and it is not "Critical data missing".
+    assert "needs data not in the delivery" not in markdown
+    assert "Critical data missing" not in markdown
+    assert "Run the delivered upstream model `1205000701_02`" in markdown
+
+
+def test_upstream_run_is_never_something_to_obtain():
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
+    markdown = render_audit_markdown(bundle)
+    obtain = markdown.split("## 6. What you must obtain")[1].split("## 7.")[0]
+    assert "Obtain `DSS boundary data" not in obtain
+    assert "no file can be obtained that substitutes for running them" in obtain
+
+
+def test_chained_output_dss_without_a_delivered_producer_stays_a_blocking_acquisition():
+    """The rule must not weaken. Cross Bayou (11140304) reads Caddo Lake's
+    output and Caddo Lake is in no archive."""
+    target = r"..\..\CaddoLake\Final_Model\CaddoLake.dss"
+    bundle = _chained_bundle(
+        target, ["/BCLINE/CaddoLake: Outflow/FLOW/01Jan2020/1Hour/01PCT/"],
+        "RAS Model/RAS_Submittal/Input",
+        [{"prj_file": "CrossBayou.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Input"}],
+    )
+    actions = actions_from_bundle(bundle)
+    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (CaddoLake.dss)"]
+    assert "needs data not in the delivery" in render_audit_markdown(bundle)
+
+
+def test_meteorological_boundary_is_never_an_upstream_run():
+    """745 of the corpus's unresolved pathnames are HMS products. No HEC-RAS run
+    writes a PRECIP-EXCESS record, so no delivered model substitutes for one."""
+    target = r"..\..\HEC_HMS\Spring\100YR.dss"
+    bundle = _chained_bundle(
+        target, ["//SPRING/PRECIP-EXCESS/01JAN2020/6MIN/RUN:100YR/"],
+        "RAS Model/RAS_Submittal/Spring/Input",
+        [{"prj_file": "Spring.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Spring/Input"},
+         {"prj_file": "Upstream.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Upstream/Input"}],
+    )
+    actions = actions_from_bundle(bundle)
+    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (100YR.dss)"]
+
+
+def test_a_file_that_also_owes_a_meteorological_record_stays_an_acquisition():
+    """City of Shattuck (11100203): the same DSS is asked for SA CONNECTION
+    records and one PRECIP-EXCESS record. Running the upstream model cannot
+    supply the second, so the blocking acquisition stands."""
+    target = r"..\..\..\City_of_Shattuck_Wolf_Creek\RAS\Input\CityofShattuckWolfCreek.dss"
+    bundle = _chained_bundle(
+        target,
+        ["/SA CONNECTION/new_downstream/STAGE-HW/01Dec2019/1Hour/01PAC/",
+         "//FORT_SUPPLY_BEAVER/PRECIP-EXCESS/01JAN2020/6MIN/RUN:100YR/"],
+        "RAS Model/Hydraulic Models/Fort_Supply_Lake_Wolf_Creek/Input",
+        [{"prj_file": "CityofShattuckWolfCreek.prj",
+          "project_folder": "/work/RAS Model/Hydraulic Models/City_of_Shattuck_Wolf_Creek/Input"},
+         {"prj_file": "FortSupplyLakeWolfCreek.prj",
+          "project_folder": "/work/RAS Model/Hydraulic Models/Fort_Supply_Lake_Wolf_Creek/Input"}],
+    )
+    assert not [a for a in actions_from_bundle(bundle) if a.kind == "upstream_model_run"]
+
+
+def test_a_project_is_never_its_own_upstream_model():
+    """12060101 stages its inflow in a DSS named after the *consuming* project.
+    Matching the basename alone would nominate the consumer as its own producer."""
+    target = r".\DSS Inputs\1206010103LakeDutch.dss"
+    models = [
+        {"prj_file": "1206010101NorthLitt.prj", "project_folder": "/w/RAS_Submittal/1206010101_02/Input"},
+        {"prj_file": "1206010103LakeDutch.prj", "project_folder": "/w/RAS_Submittal/1206010103_04/Input"},
+    ]
+    bundle = _chained_bundle(
+        target, ["/REFERENCE LINES/North Croton Cre: 1206010102/FLOW/01Jan2020/1Hour/01PCT/"],
+        "/w/RAS_Submittal/1206010103_04/Input", models)
+    runs = [a for a in actions_from_bundle(bundle) if a.kind == "upstream_model_run"]
+    assert [a.source for a in runs] == ["1206010101NorthLitt"]
+
+
+def test_review_analysis_gap_cannot_rewrite_a_chained_boundary_onto_an_input_dss():
+    """The review matched the basename, declared "original HMS file is in the
+    delivery", and rewrote 12050007's Simulations reference onto the producer's
+    Input DSS -- which holds no REFERENCE LINES record. The finding then
+    vanished from the document. The A-part rule refuses that premise."""
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
+    bundle.recipes[0]["review"] = {
+        "verdict": "analysis_gap",
+        "method": "archive_member_match",
+        "evidence": "original 1205000701_02.dss delivered as Models.zip::"
+                    "RAS_Submittal/1205000701_02/Input/1205000701_02.dss",
+    }
+    actions = actions_from_bundle(bundle)
+    assert [a.kind for a in actions if a.kind == "upstream_model_run"] == ["upstream_model_run"]
+    assert "including an upstream model run" in render_audit_markdown(bundle)
+
+
+def test_ordinary_reviewed_analysis_gap_is_still_honoured():
+    """Aransas's HMS file really was delivered elsewhere; nothing here touches it."""
+    bundle = _chained_bundle(
+        r"..\..\HEC-HMS_v43\Aransas\100YR.dss",
+        ["//ARANSAS/PRECIP-INC/01JAN2020/15MIN/RUN:100YR/"],
+        "RAS Model/HECRAS_507",
+        [{"prj_file": "Aransas.prj", "project_folder": "/work/RAS Model/HECRAS_507"}],
+    )
+    bundle.recipes[0]["review"] = {"verdict": "analysis_gap", "method": "archive_member_match",
+                                   "evidence": "delivered as Models.zip::DSS/100YR.dss"}
+    actions = actions_from_bundle(bundle)
+    # The reviewed row leaves no per-file step of any kind: no upstream run and
+    # no "obtain 100YR.dss". The element row's own absence is a separate finding.
+    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert not [a for a in actions if "100YR.dss" in a.target]
+    assert chained_dss_targets(bundle) == {}
+
+
+def test_dss_row_names_the_producing_model_rather_than_calling_the_data_absent():
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
+    markdown = render_audit_markdown(bundle)
+    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    assert "Produced upstream" in row
+    assert "1205000701_02" in row
+    assert "**No**" not in row
+
+
+def test_upstream_run_executes_after_path_correction_and_before_acquisition():
+    assert ACTION_KINDS.index("upstream_model_run") > ACTION_KINDS.index("path_correction")
+    assert ACTION_KINDS.index("upstream_model_run") > ACTION_KINDS.index("reconstruction")
+    assert ACTION_KINDS.index("upstream_model_run") < ACTION_KINDS.index("acquisition")
+
+
+def test_an_outstanding_acquisition_still_outranks_an_upstream_run():
+    """11090102 needs five upstream runs and eight files nobody shipped. The
+    harsher verdict wins, and the DSS row reports both."""
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
+    bundle.audit["dss_verification"]["acquisition_targets"].append(
+        {"dss_file": r"..\..\HMS\100YR.dss",
+         "pathnames": ["//BASIN/PRECIP-INC/01Jan2020/15MIN/RUN:100YR/"]})
+    bundle.recipes.append({
+        "file": "RAS Model/RAS_Submittal/1205000705_06/Input/1205000705_06.u08",
+        "surface": "dss_pathname", "locator": "1205000705_06.u08:12:DSS File",
+        "from": r"..\..\HMS\100YR.dss", "to": None, "why": "missing_from_delivery",
+        "confidence": "acquisition", "kind": "acquisition",
+        "acquisition_target": r"..\..\HMS\100YR.dss",
+        "blocking": True, "project": _SALT_FORK_CONSUMER,
+        "review": {"verdict": "real", "method": "archive_member_match"},
+    })
+    actions = actions_from_bundle(bundle)
+    assert len([a for a in actions if a.kind == "upstream_model_run"]) == 1
+    assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (100YR.dss)"]
+    markdown = render_audit_markdown(bundle)
+    assert "| Runnable as delivered | **no -- needs data not in the delivery** |" in markdown
+    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    assert "computed output of 1205000701_02" in row

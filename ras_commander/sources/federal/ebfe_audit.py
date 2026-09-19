@@ -45,10 +45,15 @@ __all__ = [
     "ACTION_KINDS",
     "ACTION_ORDER",
     "SUPPORTING_ELEMENTS",
+    "RAS_PRODUCED_DSS_A_PARTS",
     "RepairAction",
     "AuditBundle",
     "escape_depth",
     "classify_reference",
+    "dss_pathname_parts",
+    "delivered_model_names",
+    "chained_dss_producer",
+    "chained_dss_targets",
     "expected_elements",
     "study_critical_threshold",
     "actions_from_bundle",
@@ -63,12 +68,16 @@ AUDIT_SCHEMA_VERSION = 2
 
 #: Action kinds, in the order they must execute. Extraction precedes movement,
 #: movement precedes path correction: a path cannot be corrected to point at a
-#: file that has not been unpacked and placed yet.
+#: file that has not been unpacked and placed yet. ``upstream_model_run`` comes
+#: after reconstruction because the upstream model needs its own terrain before
+#: it will run, and before ``acquisition`` because acquisition is the only step
+#: that reaches outside the delivery at all.
 ACTION_KINDS = (
     "recursive_extraction",
     "file_movement",
     "path_correction",
     "reconstruction",
+    "upstream_model_run",
     "acquisition",
 )
 ACTION_ORDER = {kind: index for index, kind in enumerate(ACTION_KINDS)}
@@ -98,6 +107,22 @@ REFERENCED_1D_LAND_COVER_NOTE = (
     "(1D; informational — cross-section n values allow recomputation)"
 )
 
+#: DSS A-parts only a HEC-RAS *simulation* writes. HEC-HMS writes basin and
+#: meteorological records (``PRECIP-INC``, ``PRECIP-EXCESS``, ``RAINFALL``,
+#: usually with an empty A-part); a gauge record names a stream. None of them
+#: can produce ``/REFERENCE LINES/``, ``/BCLINE/`` or ``/SA CONNECTION/`` --
+#: those exist only after a plan has been computed. This is what makes the
+#: chained-model case decidable without opening a single DSS file.
+RAS_PRODUCED_DSS_A_PARTS = frozenset({"REFERENCE LINES", "BCLINE", "SA CONNECTION"})
+
+#: Path segments that name the delivery's scaffolding rather than a model.
+_NON_MODEL_FOLDER_NAMES = frozenset({
+    "input", "inputs", "ras", "rasmodel", "model", "models", "hydraulicmodels",
+    "hydrologicmodels", "engineeringmodels", "rassubmittal", "rassubmittals",
+    "wspmodels", "hydraulicmodels1", "hydraulicmodels2", "work", "simulations",
+    "output", "outputs", "final", "finalmodel", "hh", "backup", "dss",
+})
+
 _SURFACE_TO_KIND = {
     "asset_relocation": "file_movement",
     "hdf_asset_attribute": "path_correction",
@@ -119,6 +144,10 @@ _ENGINEER_WORDS = {
     "nested_archive": "the file was still packed inside another archive",
     "not_delivered": "the file was not shipped at all",
     "partially_delivered": "part of the layer was not shipped",
+    "produced_by_delivered_upstream_model": (
+        "this boundary is the computed output of an upstream model that IS in the "
+        "delivery; the data exists nowhere until that model is run"
+    ),
 }
 
 
@@ -180,6 +209,194 @@ def classify_reference(
     if reconstruction_source_present:
         return "reconstruction", "not_delivered"
     return "acquisition", "not_delivered"
+
+
+# ---------------------------------------------------------------------------
+# Chained models: one model's output DSS is the next model's boundary
+# ---------------------------------------------------------------------------
+#
+# The corpus carries 118 unresolved boundary pathnames whose A-part is one HEC-RAS
+# writes -- REFERENCE LINES, BCLINE, SA CONNECTION -- across fourteen studies. They
+# are not missing data. They are the *computed output* of another model, and in
+# most of those studies that model is in the same archive.
+#
+# Two ways the old classification got this wrong, and both were wrong in the
+# engineer's face:
+#
+#   * The deficiency review matched the basename to a delivered file, declared
+#     "original HMS file is in the delivery; G5 rewrote to RAS output", and
+#     rewrote the reference onto the producer's *input* DSS -- which holds no
+#     REFERENCE LINES record and never will. Salt Fork Brazos (12050007) had
+#     ``..\..\1205000701_02\Simulations\1205000701_02.dss`` rewritten to
+#     ``..\..\1205000701_02\Input\1205000701_02.dss``, and the whole finding then
+#     disappeared from the document as a gap in our own analysis.
+#   * Where the record-level check did run, it reported an acquisition -- "needs
+#     data not in the delivery" -- for data FEMA shipped the means to produce.
+#
+# Neither the A-part rule nor the producer rule needs a DSS file opened, so both
+# hold for studies whose catalog could not be read at all.
+#
+# The rule does not weaken the existing one. A boundary whose producer is absent
+# stays a blocking acquisition, and nothing is ever rewritten onto an output DSS
+# to make it resolve.
+
+def dss_pathname_parts(pathname) -> tuple:
+    """Split a DSS pathname into its six parts, ``()`` when it is not one.
+
+    >>> dss_pathname_parts("/REFERENCE LINES/1205000701_02: 1205000701/FLOW/31Dec1999/15Minute/01PCT/")[0]
+    'REFERENCE LINES'
+    >>> dss_pathname_parts("//SUBBASIN/PRECIP-INC/01Jan2000/15Minute/RUN:100YR/")[0]
+    ''
+    >>> dss_pathname_parts("not a pathname")
+    ()
+    """
+    text = str(pathname or "")
+    if not text.startswith("/"):
+        return ()
+    parts = [piece.strip() for piece in text.split("/")[1:7]]
+    if len(parts) < 6:
+        parts.extend([""] * (6 - len(parts)))
+    return tuple(parts[:6])
+
+
+def _model_token(text) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+def _expand_model_ids(token: str) -> set:
+    """A combined project names several models: ``1205000701_02`` is both of them.
+
+    The convention throughout this corpus is a ten-digit model id followed by the
+    two-digit tails of its siblings -- ``1206010107_0809`` is 07, 08 and 09.
+
+    >>> sorted(_expand_model_ids("120500070102")) == sorted(
+    ...     {"120500070102", "1205000701", "1205000702"})
+    True
+    """
+    names = {token}
+    if token.isdigit() and len(token) >= 12 and (len(token) - 10) % 2 == 0:
+        base = token[:10]
+        names.add(base)
+        for index in range(10, len(token), 2):
+            names.add(base[:-2] + token[index:index + 2])
+    return names
+
+
+def _names_for_project(prj_file, project_folder) -> set:
+    """Every name by which one delivered project can be referred to."""
+    names: set = set()
+    stem = _model_token(Path(str(prj_file or "")).stem)
+    if stem:
+        names |= _expand_model_ids(stem)
+    for segment in str(project_folder or "").replace("\\", "/").split("/"):
+        token = _model_token(segment)
+        if not token or token in _NON_MODEL_FOLDER_NAMES:
+            continue
+        names |= _expand_model_ids(token)
+        trimmed = re.sub(r"^rassubmittals?", "", token)
+        if trimmed and trimmed != token:
+            names |= _expand_model_ids(trimmed)
+    return {name for name in names if len(name) >= 4}
+
+
+def delivered_model_names(models: Iterable) -> dict:
+    """``normalised name -> display label`` for every project in the delivery."""
+    out: dict = {}
+    for model in models or []:
+        if not isinstance(model, dict):
+            continue
+        label = Path(str(model.get("prj_file") or "")).stem or str(model.get("project_name") or "")
+        if not label:
+            continue
+        for name in _names_for_project(model.get("prj_file"), model.get("project_folder")):
+            out.setdefault(name, label)
+    return out
+
+
+def _unresolved_pathnames(bundle: "AuditBundle", recipe: dict) -> list:
+    """The pathnames recorded against the DSS file this recipe cannot reach.
+
+    The audit's ``dss_verification.acquisition_targets`` is per DSS file and is
+    preferred; a recipe's own ``acquisition_pathnames`` can aggregate several
+    files' records and is only the fallback.
+    """
+    target = str(recipe.get("acquisition_target") or recipe.get("from") or "")
+    targets = ((bundle.audit.get("dss_verification") or {}).get("acquisition_targets") or [])
+    for entry in targets:
+        if str(entry.get("dss_file") or "") == target:
+            return list(entry.get("pathnames") or [])
+    for entry in targets:
+        if str(entry.get("dss_file") or "").casefold() == target.casefold():
+            return list(entry.get("pathnames") or [])
+    return list(recipe.get("acquisition_pathnames") or [])
+
+
+def chained_dss_producer(bundle: "AuditBundle", recipe: dict) -> Optional[str]:
+    """The delivered model that computes this boundary, or ``None``.
+
+    ``None`` means the old classification stands: a boundary whose producer is
+    not in the delivery is still a blocking acquisition.
+    """
+    if recipe.get("surface") != "dss_pathname":
+        return None
+    parsed = [p for p in (dss_pathname_parts(p) for p in _unresolved_pathnames(bundle, recipe)) if p]
+    if not parsed:
+        return None
+    # Every record this file must supply has to be one only HEC-RAS writes. A
+    # file that also owes a meteorological record still owes data from outside.
+    if not all(part[0].upper() in RAS_PRODUCED_DSS_A_PARTS for part in parsed):
+        return None
+    target = str(recipe.get("acquisition_target") or recipe.get("from") or "")
+    stem = Path(target.replace("\\", "/")).stem
+    # The file's own name is the strongest evidence of which model writes it;
+    # the B-part is the fallback for a file named after something else. Salt
+    # Fork Brazos lists one model's reference-line records against several
+    # files, so taking the B-part first would misname the producer.
+    primary = sorted(_expand_model_ids(_model_token(stem))) if stem else []
+    secondary: set = set()
+    for part in parsed:
+        # B is "<flow area or reference line>: <model>" for a RAS output record.
+        for half in part[1].split(":"):
+            token = _model_token(half)
+            if token:
+                secondary |= _expand_model_ids(token)
+    candidates = primary + sorted(secondary - set(primary))
+    # The consuming project cannot be its own upstream model. Without this, a
+    # staged input DSS named after its own project (12060101's
+    # ``.\DSS Inputs\1206010103LakeDutch.dss``) would name the consumer.
+    consumer = _names_for_project(None, recipe.get("project"))
+    for model in bundle.models:
+        folder = _model_token(model.get("project_folder"))
+        against = _model_token(recipe.get("project"))
+        if folder and against and (folder.endswith(against) or against.endswith(folder)):
+            consumer |= _names_for_project(model.get("prj_file"), model.get("project_folder"))
+    delivered = delivered_model_names(bundle.models)
+    for name in candidates:
+        if len(name) >= 4 and name not in consumer and name in delivered:
+            return delivered[name]
+    return None
+
+
+def chained_dss_targets(bundle: "AuditBundle") -> dict:
+    """``basename -> producer label`` for every unresolved DSS the delivery can produce.
+
+    Deduplicated on the basename exactly as :func:`actions_from_bundle` dedupes
+    acquisitions, so the two always name the same set of files.
+    """
+    out: dict = {}
+    seen: set = set()
+    for recipe in bundle.recipes:
+        if not (recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition"):
+            continue
+        target = str(recipe.get("acquisition_target") or recipe.get("from") or recipe.get("file") or "")
+        base = Path(target.replace("\\", "/")).name or target
+        if not base or base in seen:
+            continue
+        producer = chained_dss_producer(bundle, recipe)
+        if producer:
+            seen.add(base)
+            out[base] = producer
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -621,6 +838,42 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
                              + (f"; {inferred} unverified" if inferred else ""))
         out["dss"] = entry
 
+    # A boundary whose DSS is the computed output of a model that IS in the
+    # delivery is not missing data. The row says which model produces it, and
+    # says "produced upstream" rather than "No", so the engineer is sent to a
+    # HEC-RAS run and not to FEMA. Chained files that the delivery cannot
+    # produce are unaffected and keep the row's absent state.
+    chained = chained_dss_targets(bundle)
+    if chained:
+        entry = dict(out.get("dss") or {})
+        entry.setdefault("state_as_captured", entry.get("state"))
+        producers = sorted(set(chained.values()), key=str.casefold)
+        files = sorted(chained, key=str.casefold)
+        shown = ", ".join(files[:3]) + (f" and {len(files) - 3} more" if len(files) > 3 else "")
+        outstanding = [
+            recipe for recipe in bundle.recipes
+            if _recipe_targets_registered_element(bundle, recipe)
+            and (recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition")
+            and (recipe.get("review") or {}).get("verdict") != "analysis_gap"
+            and (Path(str(recipe.get("acquisition_target") or recipe.get("from")
+                          or recipe.get("file") or "").replace("\\", "/")).name or "") not in chained
+        ]
+        note = (f"{len(files)} DSS file{'s' if len(files) != 1 else ''} the boundaries were "
+                f"authored against ({shown}) "
+                f"{'are' if len(files) != 1 else 'is'} the computed output of "
+                f"{', '.join(producers)} -- delivered, but not yet run")
+        if outstanding:
+            entry["note"] = (entry.get("note") or "") + ("; " if entry.get("note") else "") + note
+        else:
+            entry["state"] = "produced_upstream"
+            entry["note"] = note
+            # The reviewed destination is the producer's *input* DSS -- the file
+            # the basename match wrongly pointed at. Naming it here would hand
+            # the engineer the path that does not hold the record.
+            entry["location"] = ", ".join(producers)
+        entry["chained_producers"] = dict(chained)
+        out["dss"] = entry
+
     # "Delivered" terrain must mean the Terrain.hdf HEC-RAS opens, not merely the
     # rasters it could be built from. San Gabriel (12070205) ships DEM tiles for
     # all five projects and a Terrain.hdf for none of them; that is a
@@ -752,6 +1005,7 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     seen_moves = {(a.kind, a.target, a.from_value, a.to_value, None) for a in actions}
 
     acquired_files: set = set()
+    upstream_files: set = set()
     for recipe in bundle.recipes:
         if not _recipe_targets_registered_element(bundle, recipe):
             continue
@@ -760,6 +1014,30 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         raw_from = recipe.get("from") or ""
         raw_to = recipe.get("to")
         if recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition":
+            target_file = str(recipe.get("acquisition_target") or raw_from or recipe.get("file") or "")
+            base = Path(target_file.replace("\\", "/")).name or target_file
+            # One model's computed output is the next model's boundary. This is
+            # decided before the review is honoured, because the review's premise
+            # -- "original HMS file is in the delivery" -- is false by
+            # construction here: no HMS run and no relocation puts a
+            # /REFERENCE LINES/ or /BCLINE/ record into a file. Its correction
+            # rewrites the reference onto a delivered *input* DSS that does not
+            # hold the record and never will, and then deletes the finding.
+            producer = chained_dss_producer(bundle, recipe)
+            if producer:
+                if base in upstream_files:
+                    continue
+                upstream_files.add(base)
+                reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
+                actions.append(RepairAction(
+                    order=0, kind="upstream_model_run", target=f"DSS boundary data ({base})",
+                    reason="produced_by_delivered_upstream_model",
+                    evidence=(f"{recipe.get('locator', '')}: {reason_text}").strip(": "),
+                    source=producer, confidence="resolved", blocking=True,
+                    escape_depth=escape_depth(raw_from), from_value=raw_from or None,
+                    project=recipe.get("project"),
+                ))
+                continue
             # The independent review is authoritative over the producer's
             # provisional acquisition classification.  When it finds the
             # source file in the delivered archive, the reviewer marks the
@@ -774,8 +1052,6 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # Spring Creek carries 24 of these and still rendered "after
             # repair" because every dss_pathname recipe mapped to a path
             # correction. One acquisition per missing file, named.
-            target_file = str(recipe.get("acquisition_target") or raw_from or recipe.get("file") or "")
-            base = Path(target_file.replace("\\", "/")).name or target_file
             if base in acquired_files:
                 continue
             acquired_files.add(base)
@@ -833,8 +1109,10 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         state = (delivered.get(ekey) or {}).get("state")
         if state in ("yes", "rebuilt", "not captured", "unknown", None):
             continue
-        if ekey == "dss" and acquired_files:
+        if ekey == "dss" and (acquired_files or upstream_files):
             continue    # the missing DSS files are already named one by one above
+        if ekey == "dss" and state == "produced_upstream":
+            continue    # every boundary is satisfied by running a delivered model
         location = (delivered.get(ekey) or {}).get("location")
         note = (delivered.get(ekey) or {}).get("note") or ""
         if state == "source_only":
@@ -961,6 +1239,7 @@ def _yes_no(state: str) -> str:
         "no": "**No**",
         "partial": "**Partial** -- delivered, but incomplete (see note)",
         "source_only": "**Source rasters only** -- no Terrain.hdf; must be rebuilt",
+        "produced_upstream": "**Produced upstream** -- computed by a delivered model, not shipped",
         "rebuilt": "Rebuilt (stored with this audit)",
         "unknown": "Unknown",
         "not captured": "*not captured*",
@@ -984,6 +1263,9 @@ def _describe_action(action: RepairAction) -> str:
                 f"-- {what}.{climb}")
     if action.kind == "reconstruction":
         return f"Rebuild `{action.target}` from `{action.source}` -- {what}."
+    if action.kind == "upstream_model_run":
+        return (f"Run the delivered upstream model `{action.source}` to produce "
+                f"`{action.target}` -- {what}.")
     climb = (f" The reference climbed {action.escape_depth} level(s) above the model folder."
              if action.escape_depth and action.escape_depth > 0 else "")
     return f"Obtain `{action.target}` from outside the delivery -- {what}.{climb}"
@@ -1025,12 +1307,19 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # Then split repairs the engineer can do from the delivery alone from those
     # that need data FEMA did not ship -- that is the question they will ask.
     needs_external = any(a.kind == "acquisition" for a in actions)
+    # A chained boundary is not "data not in the delivery" -- FEMA shipped the
+    # model that produces it. It is also not runnable as delivered, and the
+    # campaign never recomputes a plan itself, so the extra burden is named
+    # rather than folded into the plain "after repair".
+    needs_upstream = any(a.kind == "upstream_model_run" for a in actions)
     if not total or loaded < total:
         runnable = "no -- one or more projects will not open"
     elif not actions:
         runnable = "yes"
     elif needs_external:
         runnable = "no -- needs data not in the delivery"
+    elif needs_upstream:
+        runnable = "after repair (from the delivery alone, including an upstream model run)"
     else:
         runnable = "after repair (from the delivery alone)"
 
@@ -1276,6 +1565,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w("## 6. What you must obtain")
     w("")
     acq = [a for a in actions if a.kind in ("acquisition", "reconstruction")]
+    upstream = [a for a in actions if a.kind == "upstream_model_run"]
     still_missing = grouped["groups"]
     if not acq and not still_missing:
         w("**Nothing external.** The delivery is self-contained once the steps in section 4 are applied.")
@@ -1286,6 +1576,13 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         for group, counter in still_missing.items():
             w(f"- **{group}**: {len(counter)} file(s) referenced by the model and not delivered. "
               f"See section 5 for the exact names.")
+    if upstream:
+        w("")
+        producers = sorted({str(a.source) for a in upstream}, key=str.casefold)
+        w(f"Nothing above covers the {len(upstream)} chained boundary file(s) produced by "
+          f"{', '.join(f'`{p}`' for p in producers)}. Those models are in this delivery; their "
+          f"output DSS is not, and no file can be obtained that substitutes for running them. "
+          f"See section 4.")
     w("")
 
     # 7 -----------------------------------------------------------------
