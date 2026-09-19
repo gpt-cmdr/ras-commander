@@ -50,7 +50,10 @@ Production Workflow (generate)
 Requires:
     - Windows (HEC-RAS / RasMapperLib is Windows-only)
     - pythonnet >= 3.0.5: pip install pythonnet
-    - HEC-RAS 6.6 installed (provides RasMapperLib.dll + GDAL)
+    - HEC-RAS 6.6 or later installed (provides RasMapperLib.dll + GDAL).
+      generate() uses the RasMapperLib MeshFV2D and RegenerateMeshPoints
+      signatures introduced in 6.6; 6.0-6.5 are not supported. See
+      docs/api/geometry.md, "HEC-RAS Version Support for Headless Mesh Generation".
     - HEC-RAS GDAL runtime, configured automatically before RasMapperLib loads
 
 All methods are static — no instantiation needed.
@@ -4331,7 +4334,9 @@ class GeomMesh:
                 None preserves existing values from the .g01 text.
             min_face_length_ratio: Initial ratio (0.05-0.25).
             max_iterations: Maximum fix-and-retry attempts.
-            hecras_dir: Override HEC-RAS installation directory.
+            hecras_dir: HEC-RAS installation whose RasMapperLib to load
+                (6.6 or later). Defaults to the newest installed release
+                found, regardless of the project's version.
             bl_spacing_near: Optional override for near spacing in project units.
                 If omitted, existing per-breakline values in the .g01 text
                 are preserved (read from geometry, not defaulted).

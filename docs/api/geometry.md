@@ -346,6 +346,45 @@ utilities.
 - `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
 - `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations.
 
+### HEC-RAS Version Support for Headless Mesh Generation
+
+`GeomMesh.generate()` supports **HEC-RAS 6.6 and later**: 6.6, the 6.7 betas,
+7.0, and 7.0.1. It runs RASMapper's own mesh engine (`RasMapperLib.dll`) from
+the HEC-RAS installation it loads, so the supported range is set by that
+library's API.
+
+| HEC-RAS | Headless mesh generation |
+|---|---|
+| 6.6, 6.7 Beta 4, 6.7 Beta 5, 7.0, 7.0.1 | Supported. Results are identical across these versions. |
+| 6.0 – 6.5 | Not supported. `generate()` returns `status="exception"` and leaves the geometry unchanged. |
+
+**Why 6.6 is the minimum.** `generate()` calls two RasMapperLib members whose
+parameters changed between releases:
+
+| RasMapperLib member | 6.0 – 6.2 | 6.3 – 6.3.1 | 6.4.1 – 6.5 | 6.6 and later |
+|---|---|---|---|---|
+| `MeshFV2D(perimeter, points, breaklines, progress, ...)` constructor | 4 parameters | 4 | 4 | 5 (adds `minFaceLengthRatio`) |
+| `PointGenerator.RegenerateMeshPoints` (breakline-aware seeding) | 4 parameters | 6 (adds progress reporters) | 7 (adds `treatInactiveAsNotPresent`) | 7 |
+
+`generate()` uses the 6.6 forms, so on 6.0 – 6.5 the mesh cannot be built.
+Before 6.4.1 the breakline-aware seeding also fails and `generate()` falls
+back to regular-interval seeding.
+
+**Selecting the HEC-RAS version.** Without `hecras_dir`, `generate()` loads the
+newest installed release it finds (7.0.1, 7.0, 6.6, then the 6.7 betas),
+regardless of the project's version. Pass `hecras_dir` to pin the release.
+Only one RasMapperLib version can be loaded per Python process.
+
+**Linux / Wine.** The same range applies under Wine
+(`rascommander/hec-ras-wine-precompute_{version}` images). Loading
+RasMapperLib there also requires the `C:\Python311\GDAL` link to the HEC-RAS
+`GDAL` folder, prepared from the Linux side.
+
+These results come from `generate()` followed by `RasPreprocess.preprocess_plan()`
+on the Chippewa_2D example, with and without an added breakline and refinement
+region. Each run used one HEC-RAS release for both RasMapperLib and `Ras.exe`,
+natively on Windows for 6.0 – 7.0.1 and under Wine for 6.5, 6.6, and 7.0.1.
+
 ### Refinement Region Methods
 
 - `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
