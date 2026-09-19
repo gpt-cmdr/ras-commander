@@ -1366,6 +1366,73 @@ class TestFixBcConflicts:
         assert GeomMesh.detect_bc_conflicts(str(multi_area_bc_conflict_hdf), cell_size=50.0) == []
 
 
+class TestSaveMesh:
+    """_save_mesh() must hold RASMapper's reload suppressor across the save (#361)."""
+
+    @pytest.fixture
+    def fake_net(self, monkeypatch):
+        events = []
+
+        class FeatureLayer:
+            def __init__(self, name):
+                self.name = name
+
+        class MultiLayerReloadSuppressor:
+            def __init__(self, layers):
+                events.append(("suppress", [layer.name for layer in layers]))
+
+            def Dispose(self):
+                events.append(("release",))
+
+        class NetList(list):
+            def __class_getitem__(cls, item):
+                return cls
+
+            def Add(self, value):
+                self.append(value)
+
+        fake_rasmapper = types.ModuleType("RasMapperLib")
+        fake_rasmapper.FeatureLayer = FeatureLayer
+        fake_rasmapper.MultiLayerReloadSuppressor = MultiLayerReloadSuppressor
+        fake_generic = types.ModuleType("System.Collections.Generic")
+        fake_generic.List = NetList
+        monkeypatch.setitem(sys.modules, "RasMapperLib", fake_rasmapper)
+        monkeypatch.setitem(sys.modules, "System.Collections.Generic", fake_generic)
+
+        d2fa = MagicMock()
+        for method in ("SetMeshHasBeenRecomputed", "SetFeature", "SetMeshUpToDate"):
+            getattr(d2fa, method).side_effect = (
+                lambda *args, _m=method: events.append((_m,))
+            )
+        geom = MagicMock()
+        geom.Layers = [FeatureLayer("D2FlowArea"), object(), FeatureLayer("BreakLines")]
+        geom.Save.side_effect = lambda: events.append(("Save",))
+        return events, geom, d2fa
+
+    def test_save_runs_inside_reload_suppressor(self, fake_net):
+        events, geom, d2fa = fake_net
+
+        geom_mesh_module._save_mesh(geom, d2fa, 0, object(), {})
+
+        assert events == [
+            ("suppress", ["D2FlowArea", "BreakLines"]),
+            ("SetMeshHasBeenRecomputed",),
+            ("SetFeature",),
+            ("SetMeshUpToDate",),
+            ("Save",),
+            ("release",),
+        ]
+
+    def test_suppressor_released_when_save_raises(self, fake_net):
+        events, geom, d2fa = fake_net
+        geom.Save.side_effect = RuntimeError("save failed")
+
+        with pytest.raises(RuntimeError, match="save failed"):
+            geom_mesh_module._save_mesh(geom, d2fa, 0, object(), {})
+
+        assert events[-1] == ("release",)
+
+
 class TestGenerate:
     """Test generate() normalization and persistence semantics."""
 
