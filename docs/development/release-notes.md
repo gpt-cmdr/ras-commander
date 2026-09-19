@@ -2,6 +2,61 @@
 
 ## Version History
 
+### v0.101.0 (September 2026)
+
+**RasMapperLib Saves Under Wine**
+
+- Fix `GeomMesh.generate()` under Wine, where it reported success but left the
+  geometry HDF unchanged and wrote stale perimeter-cell centers as 2D seed
+  points, so HEC-RAS preprocessing failed with "N point(s) detected outside
+  the perimeter of the 2D-area" (#361, #363).
+- Fix `RasGeometryCompute.audit_reach_lengths()` under Wine, where the
+  recomputed reach lengths were discarded before they were saved (#363).
+- Hold RASMapper's own `MultiLayerReloadSuppressor` over in-process geometry
+  edits and saves through the new
+  `ras_commander.dotnet.geometry_save.suppress_feature_table_reloads()`, so a
+  feature layer's file watcher can no longer reload stale data from disk
+  partway through `RASGeometry.Save()`. Results under Wine now match native
+  Windows for HEC-RAS 6.6 and 7.0.1.
+
+**Portable Steady Execution**
+
+- Add the portable container steady execution stack: the v1 request and
+  receipt contract, the in-container `execute_request` entry point with the
+  Linux-to-Wine handoff, `RasPortableDocker`, `RasSlurm`, and a stdlib-only
+  Slurm launcher (#358).
+- Add an optional `stored_maps` block to portable steady requests. Stored
+  steady-profile maps are generated only after the hydraulic results pass
+  validation, and the outcome is recorded in the receipt (#360).
+- Add `RasQualification.stage_project()`,
+  `RasQualification.project_tree_fingerprint()`, and
+  `validate_steady_results()` (#355).
+
+**Steady Flow Files and Stored Maps**
+
+- Keep every numeric field written to steady flow files within HEC-RAS's
+  8-character fixed-width columns (#356).
+- Treat `map_types` as exact for `RasMap.store_all_maps(mode="steady_profiles")`
+  and allow `inundation_boundary` to be combined with it, so callers can turn
+  off the inundation boundary polygon (#357).
+- Recognize RASMapper's inundation boundary file names that carry the
+  specified depth, and keep the map products that were produced when one is
+  missing (#359).
+- Run the stored-map helper from local storage when the project is on a
+  network filesystem, avoiding the .NET remote-assembly load failure
+  (`0x80131515`) (#362).
+
+**USGS 3DEP Terrain**
+
+- Select 3DEP projects by coverage, newest per area, instead of a single
+  newest project, closing silent coverage gaps (#354).
+- Add `Usgs3depAws.build_terrain_raster()` for one gap-free, project-CRS
+  GeoTIFF with prioritized backfill and explicit vertical unit conversion,
+  plus `plan_terrain_tiles()` and `prefetch_terrain_tiles()` for offline
+  builds from a shared tile store (#354).
+- Record per-tile download provenance, and locate 1 m tiles by their north
+  edge (#354).
+
 ### v0.100.0 (September 2026)
 
 **Text and HDF Geometry Extents**
