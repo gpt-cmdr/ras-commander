@@ -148,3 +148,50 @@ def test_java_library_names_are_platform_specific():
     assert RasDss._jvm_library_names("win32") == ("jvm.dll",)
     assert RasDss._jvm_library_names("linux") == ("libjvm.so",)
     assert "libjvm.dylib" in RasDss._jvm_library_names("darwin")
+
+
+# -- the two orderings, pinned together -------------------------------------
+
+def test_path_wins_on_posix_and_loses_on_windows_from_one_fixture(
+        monkeypatch, tmp_path):
+    """The ordering intent, with both platforms' candidates present at once.
+
+    The separate per-platform tests each fix one half, so neither would notice
+    if the two halves drifted into agreement. Here a `java` on PATH and an
+    installed-root JVM are both discoverable in the same fixture, and only the
+    platform decides which is chosen:
+
+    * POSIX takes PATH first -- the distribution's own answer, and the branch a
+      container needs (the fleet's hosts all have `/usr/lib/jvm/...-amd64`);
+    * Windows takes its installed roots first and PATH only as a fallback,
+      because the historical order has been the selection for every existing
+      install and a stray or 32-bit `java.exe` on PATH must not silently change
+      which JVM HEC Monolith loads.
+    """
+    import shutil
+
+    on_path = _make_jvm(tmp_path / "path", "jdk-on-path", library="libjvm.so")
+    monkeypatch.setattr(shutil, "which", lambda *_a, **_k: str(on_path / "bin" / "java"))
+
+    posix_root = tmp_path / "usr-lib-jvm"
+    installed_posix = _make_jvm(posix_root, "java-17-openjdk-amd64")
+    windows_root = tmp_path / "program-files-java"
+    installed_windows = _make_jvm(windows_root, "jdk-21", library="jvm.dll")
+    monkeypatch.setattr(RasDss, "POSIX_JAVA_ROOTS", (posix_root,))
+    monkeypatch.setattr(RasDss, "WINDOWS_JAVA_ROOTS", (windows_root,))
+    monkeypatch.setattr(RasDss, "WINDOWS_HEC_ROOT", tmp_path / "nothing-here")
+    monkeypatch.setattr(RasDss, "MACOS_JAVA_ROOTS", (tmp_path / "nothing-here",))
+
+    # Same fixture, opposite answers -- the platform is the only difference.
+    assert RasDss._discover_java_home("linux") == on_path
+    assert RasDss._discover_java_home("win32") == installed_windows
+
+    # And the orderings themselves, so a reordering is caught even if both
+    # candidates happen to resolve.
+    posix_order = RasDss._java_home_candidates("linux")
+    assert posix_order[0] == on_path
+    assert installed_posix in posix_order
+
+    windows_order = RasDss._java_home_candidates("win32")
+    assert windows_order[0] == installed_windows
+    assert windows_order[-1] == on_path, "PATH is the Windows fallback, never first"

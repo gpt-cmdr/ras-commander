@@ -606,7 +606,9 @@ def test_dss_candidates_offers_other_delivered_files_last(tmp_path):
                     reason="worker predates the delivered_by_record tier")
 def test_an_unfinished_search_holds_rather_than_claiming_absence():
     """"absent from EVERY delivered candidate" is only honest if every candidate
-    was read. The largest affected study delivers 112 .dss files (12080002)."""
+    was read. The bound is the corpus-wide maximum, because this is a producer
+    rule that runs on every study: 123 delivered .dss in 11010008, over all 186
+    audited studies. (12080002, at 112, is only the largest of the 39 affected.)"""
     too_many = [{"path": "/work/p/%d.dss" % i, "origin": "delivered_by_record"}
                 for i in range(worker.DSS_CANDIDATE_LIMIT + 1)]
     with pytest.raises(worker.DssCatalogUnreadable) as caught:
