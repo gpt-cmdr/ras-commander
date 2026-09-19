@@ -404,8 +404,7 @@ an added breakline and refinement region. Each run used one HEC-RAS release for
 both RasMapperLib and `Ras.exe`: natively on Windows for every release from 6.0
 to 7.0.1, and under Wine for 6.5, 6.6, and 7.0.1. On every release the mesh
 (357 cells, or 421 with the added features) and the written seed points were
-identical to 6.6. Preprocessing then succeeded on every release except 6.0,
-where it could not run because the TCU had not been accepted.
+identical to 6.6, and preprocessing then succeeded.
 `compute_property_tables()` and `RasGeometryCompute.audit_reach_lengths()` were
 run on every release on the BaldEagleCrkMulti2D and Muncie examples.
 
