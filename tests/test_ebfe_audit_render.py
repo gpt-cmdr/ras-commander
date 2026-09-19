@@ -1045,21 +1045,28 @@ def test_reviewed_dss_destinations_and_plan_hdf_list_replace_sampled_capture():
 
 @pytest.mark.skipif(not Path(r"F:\eBFE\audit\12100407\_audit.json").is_file(), reason="Aransas audit unavailable")
 def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete():
-    """Corrected 2026-09-19: Aransas is one of the 39 held studies.
+    """Aransas is one of the 39 studies whose DSS record check never ran.
 
-    Its `dss_verification` reads 0 resolved, 0 acquisition, 14 inferred, every
-    reason "catalog read failed: RuntimeError: Java not found". Its twenty
-    reviewed DSS corrections were basename matches made while that reader was
-    failing, so they no longer retire the seven acquisitions the producer
-    recorded, and no longer supply the row's location. Registration scoping,
-    which is what this test is really about, is unchanged.
+    It read 0 resolved / 0 acquisition / 14 inferred, every reason "catalog read
+    failed: RuntimeError: Java not found", and its twenty reviewed DSS
+    corrections were basename matches made while that reader was failing. This
+    test pinned the held state.
+
+    Updated 2026-09-19 after the check was re-answered from the delivered DSS
+    members: all 14 boundaries resolve against catalogs that were actually read,
+    so the row names its location instead of explaining a hold, and the fourteen
+    DSS actions are gone. The twenty `dss_pathname` acquisitions that remain in
+    the record belong to UNREGISTERED unsteady files (u03-u07), which is why
+    they do not appear here -- registration scoping is what this test is really
+    about, and it is unchanged in both directions.
     """
     bundle = load_audit_bundle(Path(r"F:\eBFE\audit\12100407"))
     actions = actions_from_bundle(bundle)
     dss_actions = [action for action in actions if action.evidence.endswith(":DSS File")]
-    assert len(actions) == 40
-    assert sum(action.blocking for action in actions) == 38
-    assert len(dss_actions) == 14
+    assert len(actions) == 26
+    assert sum(action.blocking for action in actions) == 24
+    # The boundaries resolved, so nothing is asked of the operator for them.
+    assert len(dss_actions) == 0
     assert not any(
         Path(action.target).name in {
             "Aransas.u03", "Aransas.u04", "Aransas.u05", "Aransas.u06", "Aransas.u07", "Backup.u01"
@@ -1069,17 +1076,20 @@ def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete()
 
     markdown = render_audit_markdown(bundle)
     dss = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
-    # The check did not run, so the row says so instead of naming destinations
-    # nothing read.
-    assert "Not verified" in dss
-    assert "14 of 14 boundaries could not be verified" in dss
-    assert "Java not found" in dss
-    assert "reviewed references resolve to" not in dss
-    assert "**Did not run**" in markdown
-    assert "The DSS boundary check did not run for this study." in markdown
-    # The producer's own acquisitions are reported, and qualified rather than
-    # asserted as a fact about the delivery.
-    assert "unconfirmed: the DSS record check did not run" in markdown
+    # The check ran, so the row states what was read rather than why it could not be.
+    assert "Not verified" not in dss
+    assert "Java not found" not in dss
+    assert r".\DSS Inputs\Aransas.dss" in dss
+    assert "1 referenced, 1 resolve" in dss
+    # Nothing is held any more ...
+    assert "**Did not run**" not in markdown
+    assert "The DSS boundary check did not run for this study." not in markdown
+    assert "unconfirmed: the DSS record check did not run" not in markdown
+    # ... and a corrected record says so on its face, so it is never mistaken
+    # for a re-run record.
+    assert "re-verified in place on 2026-09-19T23:25:13Z" in markdown
+    assert "not re-run" in markdown
+    # The producer's own acquisitions are still reported, now as established facts.
     for name in ("01__MINUS.dss", "10_ACE.dss", "100YR.dss", "100YR_PLUS.dss", "25YR.dss", "500YR.dss", "50YR.dss"):
         assert f"DSS boundary data ({name})" in markdown
     results = next(line for line in markdown.splitlines() if line.startswith("| Results (plan HDFs) |"))
