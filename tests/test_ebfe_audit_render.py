@@ -18,7 +18,10 @@ from ras_commander.sources.federal.ebfe_audit import (
     SUPPORTING_ELEMENTS,
     AuditBundle,
     actions_from_bundle,
+    CHAINED_DSS_NOTE,
+    chained_dss_chains,
     chained_dss_producer,
+    chained_dss_sequence,
     chained_dss_targets,
     classify_reference,
     delivered_model_names,
@@ -1121,31 +1124,31 @@ def test_combined_project_names_every_model_it_contains():
     assert "input" not in names and "rassubmittal" not in names
 
 
-def test_chained_output_dss_with_delivered_producer_is_an_upstream_run_not_an_acquisition():
+def test_chained_output_dss_with_delivered_producer_is_a_chain_rerun_not_an_acquisition():
     bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
                              _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
     actions = actions_from_bundle(bundle)
-    runs = [a for a in actions if a.kind == "upstream_model_run"]
+    runs = [a for a in actions if a.kind == "chained_model_rerun"]
     assert [a.target for a in runs] == ["DSS boundary data (1205000701_02.dss)"]
     assert runs[0].source == "1205000701_02"
     assert runs[0].blocking
     assert not [a for a in actions if a.kind == "acquisition"]
     markdown = render_audit_markdown(bundle)
     assert ("| Runnable as delivered | **after repair (from the delivery alone, "
-            "including an upstream model run)** |") in markdown
+            "including a sequential re-run of chained sub-models)** |") in markdown
     # It is not "needs data", and it is not "Critical data missing".
     assert "needs data not in the delivery" not in markdown
     assert "Critical data missing" not in markdown
-    assert "Run the delivered upstream model `1205000701_02`" in markdown
+    assert "Re-run the chained sub-model `1205000701_02`" in markdown
 
 
-def test_upstream_run_is_never_something_to_obtain():
+def test_chain_rerun_is_never_something_to_obtain():
     bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
                              _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
     markdown = render_audit_markdown(bundle)
     obtain = markdown.split("## 6. What you must obtain")[1].split("## 7.")[0]
     assert "Obtain `DSS boundary data" not in obtain
-    assert "no file can be obtained that substitutes for running them" in obtain
+    assert "no file can be obtained that substitutes for re-running" in obtain
 
 
 def test_chained_output_dss_without_a_delivered_producer_stays_a_blocking_acquisition():
@@ -1158,12 +1161,12 @@ def test_chained_output_dss_without_a_delivered_producer_stays_a_blocking_acquis
         [{"prj_file": "CrossBayou.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Input"}],
     )
     actions = actions_from_bundle(bundle)
-    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert not [a for a in actions if a.kind == "chained_model_rerun"]
     assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (CaddoLake.dss)"]
     assert "needs data not in the delivery" in render_audit_markdown(bundle)
 
 
-def test_meteorological_boundary_is_never_an_upstream_run():
+def test_meteorological_boundary_is_never_a_chain_rerun():
     """745 of the corpus's unresolved pathnames are HMS products. No HEC-RAS run
     writes a PRECIP-EXCESS record, so no delivered model substitutes for one."""
     target = r"..\..\HEC_HMS\Spring\100YR.dss"
@@ -1174,7 +1177,7 @@ def test_meteorological_boundary_is_never_an_upstream_run():
          {"prj_file": "Upstream.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Upstream/Input"}],
     )
     actions = actions_from_bundle(bundle)
-    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert not [a for a in actions if a.kind == "chained_model_rerun"]
     assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (100YR.dss)"]
 
 
@@ -1193,7 +1196,7 @@ def test_a_file_that_also_owes_a_meteorological_record_stays_an_acquisition():
          {"prj_file": "FortSupplyLakeWolfCreek.prj",
           "project_folder": "/work/RAS Model/Hydraulic Models/Fort_Supply_Lake_Wolf_Creek/Input"}],
     )
-    assert not [a for a in actions_from_bundle(bundle) if a.kind == "upstream_model_run"]
+    assert not [a for a in actions_from_bundle(bundle) if a.kind == "chained_model_rerun"]
 
 
 def test_a_project_is_never_its_own_upstream_model():
@@ -1207,7 +1210,7 @@ def test_a_project_is_never_its_own_upstream_model():
     bundle = _chained_bundle(
         target, ["/REFERENCE LINES/North Croton Cre: 1206010102/FLOW/01Jan2020/1Hour/01PCT/"],
         "/w/RAS_Submittal/1206010103_04/Input", models)
-    runs = [a for a in actions_from_bundle(bundle) if a.kind == "upstream_model_run"]
+    runs = [a for a in actions_from_bundle(bundle) if a.kind == "chained_model_rerun"]
     assert [a.source for a in runs] == ["1206010101NorthLitt"]
 
 
@@ -1225,8 +1228,8 @@ def test_review_analysis_gap_cannot_rewrite_a_chained_boundary_onto_an_input_dss
                     "RAS_Submittal/1205000701_02/Input/1205000701_02.dss",
     }
     actions = actions_from_bundle(bundle)
-    assert [a.kind for a in actions if a.kind == "upstream_model_run"] == ["upstream_model_run"]
-    assert "including an upstream model run" in render_audit_markdown(bundle)
+    assert [a.kind for a in actions if a.kind == "chained_model_rerun"] == ["chained_model_rerun"]
+    assert "including a sequential re-run of chained sub-models" in render_audit_markdown(bundle)
 
 
 def test_ordinary_reviewed_analysis_gap_is_still_honoured():
@@ -1242,7 +1245,7 @@ def test_ordinary_reviewed_analysis_gap_is_still_honoured():
     actions = actions_from_bundle(bundle)
     # The reviewed row leaves no per-file step of any kind: no upstream run and
     # no "obtain 100YR.dss". The element row's own absence is a separate finding.
-    assert not [a for a in actions if a.kind == "upstream_model_run"]
+    assert not [a for a in actions if a.kind == "chained_model_rerun"]
     assert not [a for a in actions if "100YR.dss" in a.target]
     assert chained_dss_targets(bundle) == {}
 
@@ -1252,18 +1255,18 @@ def test_dss_row_names_the_producing_model_rather_than_calling_the_data_absent()
                              _SALT_FORK_CONSUMER, _SALT_FORK_MODELS)
     markdown = render_audit_markdown(bundle)
     row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
-    assert "Produced upstream" in row
+    assert CHAINED_DSS_NOTE.split(" (")[0] in row
     assert "1205000701_02" in row
     assert "**No**" not in row
 
 
-def test_upstream_run_executes_after_path_correction_and_before_acquisition():
-    assert ACTION_KINDS.index("upstream_model_run") > ACTION_KINDS.index("path_correction")
-    assert ACTION_KINDS.index("upstream_model_run") > ACTION_KINDS.index("reconstruction")
-    assert ACTION_KINDS.index("upstream_model_run") < ACTION_KINDS.index("acquisition")
+def test_chain_rerun_executes_after_path_correction_and_before_acquisition():
+    assert ACTION_KINDS.index("chained_model_rerun") > ACTION_KINDS.index("path_correction")
+    assert ACTION_KINDS.index("chained_model_rerun") > ACTION_KINDS.index("reconstruction")
+    assert ACTION_KINDS.index("chained_model_rerun") < ACTION_KINDS.index("acquisition")
 
 
-def test_an_outstanding_acquisition_still_outranks_an_upstream_run():
+def test_an_outstanding_acquisition_still_outranks_a_chain_rerun():
     """11090102 needs five upstream runs and eight files nobody shipped. The
     harsher verdict wins, and the DSS row reports both."""
     bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
@@ -1281,9 +1284,166 @@ def test_an_outstanding_acquisition_still_outranks_an_upstream_run():
         "review": {"verdict": "real", "method": "archive_member_match"},
     })
     actions = actions_from_bundle(bundle)
-    assert len([a for a in actions if a.kind == "upstream_model_run"]) == 1
+    assert len([a for a in actions if a.kind == "chained_model_rerun"]) == 1
     assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data (100YR.dss)"]
     markdown = render_audit_markdown(bundle)
     assert "| Runnable as delivered | **no -- needs data not in the delivery** |" in markdown
     row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
-    assert "computed output of 1205000701_02" in row
+    assert "1205000701_02" in row
+
+
+def test_chained_targets_obey_the_same_registration_scope_as_the_actions():
+    """The DSS row and the action list must name the same files.
+
+    ``chained_dss_targets`` feeds the supporting-data row; ``actions_from_bundle``
+    builds the steps. Both are bounded by the captured ``.prj`` element
+    inventory (renderer dd83b4e14): a recipe for an unregistered ``.uNN`` is
+    delivered corpus residue, not a step required to run the project. Without
+    that filter on the targets the row would flip to "produced upstream" -- and
+    that state suppresses the element-level DSS acquisition -- while no upstream
+    run was ever emitted, so the boundary would vanish from the document and the
+    verdict would soften with nothing accounting for it.
+    """
+    models = [{
+        "prj_file": "1205000705_06.prj",
+        "project_folder": "/work/RAS Model/RAS_Submittal/1205000705_06/Input",
+        "elements": [{"type": "unsteady_flow", "number": "07", "registered": True}],
+    }, {
+        "prj_file": "1205000701_02.prj",
+        "project_folder": "/work/RAS Model/RAS_Submittal/1205000701_02/Input",
+        "elements": [{"type": "unsteady_flow", "number": "01", "registered": True}],
+    }]
+    bundle = _chained_bundle(_SALT_FORK_TARGET, _SALT_FORK_PATHNAMES,
+                             _SALT_FORK_CONSUMER, models)
+    # The only recipe naming this DSS lives in a .u01 that the .prj of
+    # 1205000705_06 does not register.
+    bundle.recipes[0]["file"] = "RAS Model/RAS_Submittal/1205000705_06/Input/1205000705_06.u01"
+
+    assert chained_dss_targets(bundle) == {}, "an unregistered element is not in scope"
+    actions = actions_from_bundle(bundle)
+    assert not [a for a in actions if a.kind == "chained_model_rerun"]
+    # The row keeps its absent state, and the element-level acquisition stands.
+    row = next(l for l in render_audit_markdown(bundle).splitlines()
+               if l.startswith("| DSS boundary data |"))
+    assert CHAINED_DSS_NOTE.split(" (")[0] not in row
+    assert [a.target for a in actions if a.kind == "acquisition"] == ["DSS boundary data"]
+
+    # The same recipe on a registered element is in scope, both ways.
+    bundle.recipes[0]["file"] = "RAS Model/RAS_Submittal/1205000705_06/Input/1205000705_06.u07"
+    assert chained_dss_targets(bundle) == {"1205000701_02.dss": "1205000701_02"}
+    assert [a.kind for a in actions_from_bundle(bundle) if a.kind == "chained_model_rerun"] == [
+        "chained_model_rerun"
+    ]
+
+
+# -- the chain is sequential, and may be several models deep -----------------
+#
+# A chained sub-model may itself read another chained sub-model's output. Four
+# of the fourteen affected studies are deeper than one: 11010008 and 11090102
+# are four deep, 12050007 and 12060101 three. So the requirement is a
+# *sequential re-run of the whole chain*, and what is absent is the
+# intermediate result -- not one model's output.
+
+def _multi_level_bundle():
+    """C reads B's output; B reads A's output. Re-running B alone is not enough."""
+    models = [
+        {"prj_file": "Alpha.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Alpha/Input"},
+        {"prj_file": "Bravo.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Bravo/Input"},
+        {"prj_file": "Charlie.prj", "project_folder": "/work/RAS Model/RAS_Submittal/Charlie/Input"},
+    ]
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "note": ""}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 2, "boundaries_resolved": 0,
+            "boundaries_acquisition": 2, "boundaries_inferred": 0,
+            "acquisition_targets": [
+                {"dss_file": r"..\..\Bravo\Simulations\Bravo.dss",
+                 "pathnames": ["/REFERENCE LINES/Bravo: Bravo/FLOW/01Jan2020/1Hour/01PCT/"]},
+                {"dss_file": r"..\..\Alpha\Simulations\Alpha.dss",
+                 "pathnames": ["/REFERENCE LINES/Alpha: Alpha/FLOW/01Jan2020/1Hour/01PCT/"]},
+            ],
+        },
+    )
+    bundle.models = models
+
+    def recipe(target, consumer, element):
+        return {"file": f"RAS Model/RAS_Submittal/{consumer}/Input/{consumer}.{element}",
+                "surface": "dss_pathname", "locator": f"{consumer}.{element}:9:DSS File",
+                "from": target, "to": None, "kind": "acquisition", "confidence": "acquisition",
+                "acquisition_target": target,
+                "project": f"RAS Model/RAS_Submittal/{consumer}/Input",
+                "review": {"verdict": "real", "method": "archive_member_match"}}
+
+    bundle.recipes = [recipe(r"..\..\Bravo\Simulations\Bravo.dss", "Charlie", "u01"),
+                      recipe(r"..\..\Alpha\Simulations\Alpha.dss", "Bravo", "u01")]
+    return bundle
+
+
+def test_a_chain_is_ordered_dependencies_first():
+    bundle = _multi_level_bundle()
+    assert chained_dss_targets(bundle) == {"Bravo.dss": "Bravo", "Alpha.dss": "Alpha"}
+    chains = chained_dss_chains(bundle)
+    # Producing B.dss means running A and then B, in that order.
+    assert chains["Bravo.dss"] == ["Alpha", "Bravo"]
+    assert chains["Alpha.dss"] == ["Alpha"]
+    assert chained_dss_sequence(bundle) == ["Alpha", "Bravo"]
+
+
+def test_a_multi_level_step_names_the_whole_sequence_in_order():
+    bundle = _multi_level_bundle()
+    actions = [a for a in actions_from_bundle(bundle) if a.kind == "chained_model_rerun"]
+    deep = next(a for a in actions if a.target == "DSS boundary data (Bravo.dss)")
+    assert deep.source == "Alpha -> Bravo"
+    markdown = render_audit_markdown(bundle)
+    assert "Re-run the chained sub-models in sequence (`Alpha` -> `Bravo`) to produce " \
+           "`DSS boundary data (Bravo.dss)`" in markdown
+    # A single-model chain keeps the singular form.
+    assert "Re-run the chained sub-model `Alpha` to produce `DSS boundary data (Alpha.dss)`" in markdown
+
+
+def test_a_cycle_names_the_models_without_claiming_an_order():
+    """No study in this corpus has one; an invented order would be a lie."""
+    bundle = _multi_level_bundle()
+    bundle.audit["dss_verification"]["acquisition_targets"].append(
+        {"dss_file": r"..\..\Charlie\Simulations\Charlie.dss",
+         "pathnames": ["/REFERENCE LINES/Charlie: Charlie/FLOW/01Jan2020/1Hour/01PCT/"]})
+    bundle.recipes.append({
+        "file": "RAS Model/RAS_Submittal/Alpha/Input/A.u01", "surface": "dss_pathname",
+        "locator": "Alpha.u01:9:DSS File", "from": r"..\..\Charlie\Simulations\Charlie.dss", "to": None,
+        "kind": "acquisition", "confidence": "acquisition",
+        "acquisition_target": r"..\..\Charlie\Simulations\Charlie.dss",
+        "project": "RAS Model/RAS_Submittal/Alpha/Input",
+        "review": {"verdict": "real", "method": "archive_member_match"},
+    })
+    assert chained_dss_sequence(bundle) == ["Alpha", "Bravo", "Charlie"]
+    for chain in chained_dss_chains(bundle).values():
+        assert chain == sorted(chain), "a cycle falls back to a named set, not an order"
+
+
+def test_the_dss_row_carries_the_wording_the_campaign_agreed():
+    bundle = _multi_level_bundle()
+    markdown = render_audit_markdown(bundle)
+    row = next(l for l in markdown.splitlines() if l.startswith("| DSS boundary data |"))
+    assert "**Requires sequential re-run of all chained sub-models** " \
+           "(intermediate DSS results not delivered)" in row
+    # The location column carries the sequence, not the review's wrong rewrite target.
+    assert "Alpha -> Bravo" in row
+    assert "Re-run in sequence: Alpha -> Bravo." in row
+    assert CHAINED_DSS_NOTE == ("Requires sequential re-run of all chained sub-models "
+                                "(intermediate DSS results not delivered)")
+
+
+def test_section_6_states_the_requirement_and_never_asks_for_a_file():
+    bundle = _multi_level_bundle()
+    obtain = render_audit_markdown(bundle).split("## 6. What you must obtain")[1].split("## 7.")[0]
+    assert CHAINED_DSS_NOTE in obtain
+    assert "`Alpha` -> `Bravo`" in obtain
+    assert "Obtain `DSS boundary data" not in obtain
+
+
+def test_the_verdict_names_the_sequential_re_run():
+    bundle = _multi_level_bundle()
+    markdown = render_audit_markdown(bundle)
+    assert ("| Runnable as delivered | **after repair (from the delivery alone, "
+            "including a sequential re-run of chained sub-models)** |") in markdown
+    assert "upstream model run" not in markdown

@@ -54,6 +54,10 @@ __all__ = [
     "delivered_model_names",
     "chained_dss_producer",
     "chained_dss_targets",
+    "chained_dss_chains",
+    "chained_dss_sequence",
+    "format_chain",
+    "CHAINED_DSS_NOTE",
     "expected_elements",
     "study_critical_threshold",
     "actions_from_bundle",
@@ -68,8 +72,8 @@ AUDIT_SCHEMA_VERSION = 2
 
 #: Action kinds, in the order they must execute. Extraction precedes movement,
 #: movement precedes path correction: a path cannot be corrected to point at a
-#: file that has not been unpacked and placed yet. ``upstream_model_run`` comes
-#: after reconstruction because the upstream model needs its own terrain before
+#: file that has not been unpacked and placed yet. ``chained_model_rerun`` comes
+#: after reconstruction because a chained sub-model needs its own terrain before
 #: it will run, and before ``acquisition`` because acquisition is the only step
 #: that reaches outside the delivery at all.
 ACTION_KINDS = (
@@ -77,7 +81,7 @@ ACTION_KINDS = (
     "file_movement",
     "path_correction",
     "reconstruction",
-    "upstream_model_run",
+    "chained_model_rerun",
     "acquisition",
 )
 ACTION_ORDER = {kind: index for index, kind in enumerate(ACTION_KINDS)}
@@ -144,11 +148,19 @@ _ENGINEER_WORDS = {
     "nested_archive": "the file was still packed inside another archive",
     "not_delivered": "the file was not shipped at all",
     "partially_delivered": "part of the layer was not shipped",
-    "produced_by_delivered_upstream_model": (
-        "this boundary is the computed output of an upstream model that IS in the "
-        "delivery; the data exists nowhere until that model is run"
+    "intermediate_results_not_delivered": (
+        "the intermediate DSS results are not in the delivery; they exist nowhere "
+        "until the chained sub-models are re-run in sequence"
     ),
 }
+
+#: What a chained boundary requires, in the engineer's words. One sentence, in
+#: the register of the 1D terrain and land-cover informational notes, because it
+#: says the same kind of thing: what the delivery does and does not settle.
+CHAINED_DSS_NOTE = (
+    "Requires sequential re-run of all chained sub-models "
+    "(intermediate DSS results not delivered)"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -377,15 +389,36 @@ def chained_dss_producer(bundle: "AuditBundle", recipe: dict) -> Optional[str]:
     return None
 
 
-def chained_dss_targets(bundle: "AuditBundle") -> dict:
-    """``basename -> producer label`` for every unresolved DSS the delivery can produce.
+def _consuming_model(bundle: "AuditBundle", recipe: dict) -> Optional[str]:
+    """The delivered model whose project reads this boundary."""
+    against = _model_token(recipe.get("project"))
+    if not against:
+        return None
+    best = None
+    for model in bundle.models:
+        folder = _model_token(model.get("project_folder"))
+        if folder and (folder.endswith(against) or against.endswith(folder)):
+            label = Path(str(model.get("prj_file") or "")).stem
+            if label and (best is None or len(folder) > best[0]):
+                best = (len(folder), label)
+    return best[1] if best else None
+
+
+def _chained_dss_records(bundle: "AuditBundle") -> list:
+    """One record per unresolved DSS file the delivery can produce.
 
     Deduplicated on the basename exactly as :func:`actions_from_bundle` dedupes
-    acquisitions, so the two always name the same set of files.
+    acquisitions, and bounded by the same ``.prj`` registration scope, so the
+    two always name the same set of files. Without the registration filter the
+    supporting-data row could report a producer for a boundary that generates
+    no step -- and, because the ``requires_chain_rerun`` state suppresses the
+    element-level DSS acquisition, the study would lose that finding entirely.
     """
-    out: dict = {}
+    out: list = []
     seen: set = set()
     for recipe in bundle.recipes:
+        if not _recipe_targets_registered_element(bundle, recipe):
+            continue
         if not (recipe.get("kind") == "acquisition" or recipe.get("confidence") == "acquisition"):
             continue
         target = str(recipe.get("acquisition_target") or recipe.get("from") or recipe.get("file") or "")
@@ -395,8 +428,73 @@ def chained_dss_targets(bundle: "AuditBundle") -> dict:
         producer = chained_dss_producer(bundle, recipe)
         if producer:
             seen.add(base)
-            out[base] = producer
+            out.append({"file": base, "producer": producer,
+                        "consumer": _consuming_model(bundle, recipe)})
     return out
+
+
+def chained_dss_targets(bundle: "AuditBundle") -> dict:
+    """``basename -> producer label`` for every unresolved DSS the delivery can produce."""
+    return {record["file"]: record["producer"] for record in _chained_dss_records(bundle)}
+
+
+def _chain_order(records: Iterable) -> tuple:
+    """``(order_for, sequence)`` -- what must be re-run, dependencies first.
+
+    A chained model may itself read another chained model's output: Lower
+    Brazos-San Gabriel (12050007) runs 1205000701_02 and 1205000703_04 before
+    1205000705_06 before 1205000707, and Current River (11010008) is four deep.
+    So the requirement is a *sequential re-run of the whole chain*, not one run,
+    and the order is derivable from which delivered model consumes which.
+
+    ``order_for`` maps each file to the ordered models that produce it. A cycle
+    -- which no study in this corpus has -- yields the models with no order
+    claimed rather than an invented one.
+    """
+    needs: dict = {}
+    for record in records:
+        needs.setdefault(record["consumer"], set()).add(record["producer"])
+
+    cycles = {"seen": False}
+
+    def walk(model, stack=()):
+        if model in stack:
+            cycles["seen"] = True
+            return []
+        ordered: list = []
+        for dependency in sorted(needs.get(model, ())):
+            for item in walk(dependency, stack + (model,)):
+                if item not in ordered:
+                    ordered.append(item)
+        if model not in ordered:
+            ordered.append(model)
+        return ordered
+
+    order_for = {record["file"]: walk(record["producer"]) for record in records}
+    sequence: list = []
+    for record in sorted(records, key=lambda r: str(r["file"]).casefold()):
+        for model in order_for[record["file"]]:
+            if model not in sequence:
+                sequence.append(model)
+    if cycles["seen"]:
+        order_for = {key: sorted(set(value), key=str.casefold) for key, value in order_for.items()}
+        sequence = sorted(set(sequence), key=str.casefold)
+    return order_for, sequence
+
+
+def chained_dss_chains(bundle: "AuditBundle") -> dict:
+    """``basename -> ordered models to re-run`` for each chained DSS file."""
+    return _chain_order(_chained_dss_records(bundle))[0]
+
+
+def chained_dss_sequence(bundle: "AuditBundle") -> list:
+    """Every chained sub-model of this study, in an order that can be re-run."""
+    return _chain_order(_chained_dss_records(bundle))[1]
+
+
+def format_chain(models: Iterable, tick: str = "`") -> str:
+    """``A -> B -> C``, the sequence as the documents and the sidebar print it."""
+    return " -> ".join(f"{tick}{model}{tick}" for model in models)
 
 
 # ---------------------------------------------------------------------------
@@ -839,15 +937,17 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         out["dss"] = entry
 
     # A boundary whose DSS is the computed output of a model that IS in the
-    # delivery is not missing data. The row says which model produces it, and
-    # says "produced upstream" rather than "No", so the engineer is sent to a
-    # HEC-RAS run and not to FEMA. Chained files that the delivery cannot
-    # produce are unaffected and keep the row's absent state.
-    chained = chained_dss_targets(bundle)
+    # delivery is not missing data. What is absent is the *intermediate* result,
+    # and the requirement is a sequential re-run of the whole chain -- which may
+    # be several models deep -- not one run. So the row names the sequence and
+    # says so, and the engineer is sent to HEC-RAS and not to FEMA. Chained
+    # files the delivery cannot produce keep the row's absent state.
+    records = _chained_dss_records(bundle)
+    chained = {record["file"]: record["producer"] for record in records}
     if chained:
+        sequence = _chain_order(records)[1]
         entry = dict(out.get("dss") or {})
         entry.setdefault("state_as_captured", entry.get("state"))
-        producers = sorted(set(chained.values()), key=str.casefold)
         files = sorted(chained, key=str.casefold)
         shown = ", ".join(files[:3]) + (f" and {len(files) - 3} more" if len(files) > 3 else "")
         outstanding = [
@@ -858,20 +958,22 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             and (Path(str(recipe.get("acquisition_target") or recipe.get("from")
                           or recipe.get("file") or "").replace("\\", "/")).name or "") not in chained
         ]
-        note = (f"{len(files)} DSS file{'s' if len(files) != 1 else ''} the boundaries were "
-                f"authored against ({shown}) "
-                f"{'are' if len(files) != 1 else 'is'} the computed output of "
-                f"{', '.join(producers)} -- delivered, but not yet run")
+        note = ((f"Re-run in sequence: {format_chain(sequence, tick='')}. "
+                 if len(sequence) > 1 else f"Re-run {format_chain(sequence, tick='')}. ")
+                + f"Produces {len(files)} DSS file{'s' if len(files) != 1 else ''} the "
+                  f"boundaries were authored against ({shown}).")
         if outstanding:
-            entry["note"] = (entry.get("note") or "") + ("; " if entry.get("note") else "") + note
+            entry["note"] = ((entry.get("note") or "") + ("; " if entry.get("note") else "")
+                             + CHAINED_DSS_NOTE + ". " + note)
         else:
-            entry["state"] = "produced_upstream"
+            entry["state"] = "requires_chain_rerun"
             entry["note"] = note
             # The reviewed destination is the producer's *input* DSS -- the file
             # the basename match wrongly pointed at. Naming it here would hand
             # the engineer the path that does not hold the record.
-            entry["location"] = ", ".join(producers)
+            entry["location"] = format_chain(sequence, tick='')
         entry["chained_producers"] = dict(chained)
+        entry["chained_sequence"] = list(sequence)
         out["dss"] = entry
 
     # "Delivered" terrain must mean the Terrain.hdf HEC-RAS opens, not merely the
@@ -1005,7 +1107,10 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
     seen_moves = {(a.kind, a.target, a.from_value, a.to_value, None) for a in actions}
 
     acquired_files: set = set()
-    upstream_files: set = set()
+    chain_rerun_files: set = set()
+    # A chained sub-model may itself read another's output, so the step names
+    # the whole sequence, not the one model nearest the boundary.
+    chains = chained_dss_chains(bundle)
     for recipe in bundle.recipes:
         if not _recipe_targets_registered_element(bundle, recipe):
             continue
@@ -1025,15 +1130,16 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # hold the record and never will, and then deletes the finding.
             producer = chained_dss_producer(bundle, recipe)
             if producer:
-                if base in upstream_files:
+                if base in chain_rerun_files:
                     continue
-                upstream_files.add(base)
+                chain_rerun_files.add(base)
                 reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
                 actions.append(RepairAction(
-                    order=0, kind="upstream_model_run", target=f"DSS boundary data ({base})",
-                    reason="produced_by_delivered_upstream_model",
+                    order=0, kind="chained_model_rerun", target=f"DSS boundary data ({base})",
+                    reason="intermediate_results_not_delivered",
                     evidence=(f"{recipe.get('locator', '')}: {reason_text}").strip(": "),
-                    source=producer, confidence="resolved", blocking=True,
+                    source=" -> ".join(chains.get(base) or [producer]),
+                    confidence="resolved", blocking=True,
                     escape_depth=escape_depth(raw_from), from_value=raw_from or None,
                     project=recipe.get("project"),
                 ))
@@ -1109,9 +1215,9 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
         state = (delivered.get(ekey) or {}).get("state")
         if state in ("yes", "rebuilt", "not captured", "unknown", None):
             continue
-        if ekey == "dss" and (acquired_files or upstream_files):
+        if ekey == "dss" and (acquired_files or chain_rerun_files):
             continue    # the missing DSS files are already named one by one above
-        if ekey == "dss" and state == "produced_upstream":
+        if ekey == "dss" and state == "requires_chain_rerun":
             continue    # every boundary is satisfied by running a delivered model
         location = (delivered.get(ekey) or {}).get("location")
         note = (delivered.get(ekey) or {}).get("note") or ""
@@ -1239,7 +1345,8 @@ def _yes_no(state: str) -> str:
         "no": "**No**",
         "partial": "**Partial** -- delivered, but incomplete (see note)",
         "source_only": "**Source rasters only** -- no Terrain.hdf; must be rebuilt",
-        "produced_upstream": "**Produced upstream** -- computed by a delivered model, not shipped",
+        "requires_chain_rerun": ("**Requires sequential re-run of all chained sub-models** "
+                                 "(intermediate DSS results not delivered)"),
         "rebuilt": "Rebuilt (stored with this audit)",
         "unknown": "Unknown",
         "not captured": "*not captured*",
@@ -1263,8 +1370,12 @@ def _describe_action(action: RepairAction) -> str:
                 f"-- {what}.{climb}")
     if action.kind == "reconstruction":
         return f"Rebuild `{action.target}` from `{action.source}` -- {what}."
-    if action.kind == "upstream_model_run":
-        return (f"Run the delivered upstream model `{action.source}` to produce "
+    if action.kind == "chained_model_rerun":
+        chain = [m for m in str(action.source or "").split(" -> ") if m]
+        if len(chain) > 1:
+            return (f"Re-run the chained sub-models in sequence ({format_chain(chain)}) "
+                    f"to produce `{action.target}` -- {what}.")
+        return (f"Re-run the chained sub-model `{action.source}` to produce "
                 f"`{action.target}` -- {what}.")
     climb = (f" The reference climbed {action.escape_depth} level(s) above the model folder."
              if action.escape_depth and action.escape_depth > 0 else "")
@@ -1308,18 +1419,20 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     # that need data FEMA did not ship -- that is the question they will ask.
     needs_external = any(a.kind == "acquisition" for a in actions)
     # A chained boundary is not "data not in the delivery" -- FEMA shipped the
-    # model that produces it. It is also not runnable as delivered, and the
-    # campaign never recomputes a plan itself, so the extra burden is named
-    # rather than folded into the plain "after repair".
-    needs_upstream = any(a.kind == "upstream_model_run" for a in actions)
+    # models that produce it, and what is absent is the intermediate result. It
+    # is also not runnable as delivered, and the campaign never recomputes a
+    # plan itself, so the extra burden is named rather than folded into the
+    # plain "after repair".
+    needs_chain_rerun = any(a.kind == "chained_model_rerun" for a in actions)
     if not total or loaded < total:
         runnable = "no -- one or more projects will not open"
     elif not actions:
         runnable = "yes"
     elif needs_external:
         runnable = "no -- needs data not in the delivery"
-    elif needs_upstream:
-        runnable = "after repair (from the delivery alone, including an upstream model run)"
+    elif needs_chain_rerun:
+        runnable = ("after repair (from the delivery alone, including a sequential "
+                    "re-run of chained sub-models)")
     else:
         runnable = "after repair (from the delivery alone)"
 
@@ -1565,7 +1678,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
     w("## 6. What you must obtain")
     w("")
     acq = [a for a in actions if a.kind in ("acquisition", "reconstruction")]
-    upstream = [a for a in actions if a.kind == "upstream_model_run"]
+    chain_rerun = [a for a in actions if a.kind == "chained_model_rerun"]
     still_missing = grouped["groups"]
     if not acq and not still_missing:
         w("**Nothing external.** The delivery is self-contained once the steps in section 4 are applied.")
@@ -1576,13 +1689,15 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         for group, counter in still_missing.items():
             w(f"- **{group}**: {len(counter)} file(s) referenced by the model and not delivered. "
               f"See section 5 for the exact names.")
-    if upstream:
+    if chain_rerun:
         w("")
-        producers = sorted({str(a.source) for a in upstream}, key=str.casefold)
-        w(f"Nothing above covers the {len(upstream)} chained boundary file(s) produced by "
-          f"{', '.join(f'`{p}`' for p in producers)}. Those models are in this delivery; their "
-          f"output DSS is not, and no file can be obtained that substitutes for running them. "
-          f"See section 4.")
+        sequence = chained_dss_sequence(bundle)
+        w(f"Nothing above covers the {len(chain_rerun)} chained boundary "
+          f"file{'s' if len(chain_rerun) != 1 else ''}. {CHAINED_DSS_NOTE}: "
+          f"{format_chain(sequence)}. "
+          f"{'Those models are' if len(sequence) != 1 else 'That model is'} in this delivery "
+          f"and no file can be obtained that substitutes for re-running "
+          f"{'them' if len(sequence) != 1 else 'it'}. See section 4.")
     w("")
 
     # 7 -----------------------------------------------------------------
