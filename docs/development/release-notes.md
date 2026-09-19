@@ -2,6 +2,37 @@
 
 ## Version History
 
+### v0.102.0 (September 2026)
+
+**Headless Mesh Generation on HEC-RAS 6.0 – 7.0.1**
+
+- `GeomMesh.generate()` now works with HEC-RAS 6.0 through 7.0.1, including
+  the 6.7 betas. Previously it required 6.6 or later and failed on 6.0 – 6.5
+  with a .NET "No method matches" error (#367).
+- Adapt to the RasMapperLib signatures that changed between releases: the
+  `MeshFV2D` constructor (minimum face-length ratio added in 6.6), the
+  breakline-aware `RegenerateMeshPoints` seeding (4, 6, or 7 parameters), and
+  `CreatePropertyTables`, so `GeomMesh.compute_property_tables()` also works on
+  6.0 – 6.2. Before 6.6 the minimum face-length ratio step of the retry ladder
+  is skipped because RasMapperLib has no such parameter.
+- Find HEC-RAS 6.0 – 6.5 when no newer release is installed, and replace the
+  misleading "HEC-RAS 6.6 not found" error.
+- Meshes and seed points are identical to 6.6 on every release tested, natively
+  on Windows and under Wine for 6.5, 6.6, and 7.0.1.
+
+**Preprocessing on HEC-RAS 6.0 – 6.2**
+
+- `RasPreprocess.preprocess_plan()` no longer reports success when HEC-RAS
+  6.0 – 6.2 skip the geometry because a referenced land-cover, infiltration,
+  or sediment file is missing. With those releases it now fails before launch
+  and names each missing file. HEC-RAS 6.3 and later are unaffected (#367).
+
+**Documentation**
+
+- Add "HEC-RAS Version Support for Headless Mesh Generation" to the geometry
+  API docs: supported releases, why each needs different calls, known
+  limitations, version selection, and Wine notes (#367).
+
 ### v0.101.0 (September 2026)
 
 **RasMapperLib Saves Under Wine**
