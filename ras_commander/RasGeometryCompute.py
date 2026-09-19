@@ -672,25 +672,31 @@ class RasGeometryCompute:
                     rasmap = RasGeometryCompute._resolve_rasmap(rasmap_path, work, ras_object)
                     geom = RasGeometryCompute._load_geometry(work, rasmap)
 
-                    fp_exists = RasGeometryCompute._layer_exists(work, _GROUP_FLOW_PATHS)
-                    if flow_paths == "existing":
-                        if not fp_exists:
-                            raise ValueError(
-                                "flow_paths='existing' but the geometry has no flow paths")
-                        used_existing_flow_paths = True
-                    elif flow_paths == "regenerate" or not fp_exists:
-                        geom.FlowPathLines.ComputeFlowPathLines()
-                    else:  # existing_or_generate and flow paths already present
-                        used_existing_flow_paths = True
+                    from .dotnet.geometry_save import suppress_feature_table_reloads
 
-                    from System.Collections.Generic import List  # type: ignore
-                    from System import Int32  # type: ignore
-                    xsids = List[Int32]()
-                    for i in range(int(geom.XS.FeatureCount())):
-                        xsids.Add(i)
-                    # ref RiverMap defaults to null -> HEC-RAS builds it internally.
-                    geom.ComputeReachLengthsForXSs(xsids, None)
-                    geom.Save()
+                    # Without reload suppression the flow-path write, or Save()
+                    # itself, can reload the XS table from disk and discard the
+                    # recomputed lengths before they are written (#361).
+                    with suppress_feature_table_reloads(geom):
+                        fp_exists = RasGeometryCompute._layer_exists(work, _GROUP_FLOW_PATHS)
+                        if flow_paths == "existing":
+                            if not fp_exists:
+                                raise ValueError(
+                                    "flow_paths='existing' but the geometry has no flow paths")
+                            used_existing_flow_paths = True
+                        elif flow_paths == "regenerate" or not fp_exists:
+                            geom.FlowPathLines.ComputeFlowPathLines()
+                        else:  # existing_or_generate and flow paths already present
+                            used_existing_flow_paths = True
+
+                        from System.Collections.Generic import List  # type: ignore
+                        from System import Int32  # type: ignore
+                        xsids = List[Int32]()
+                        for i in range(int(geom.XS.FeatureCount())):
+                            xsids.Add(i)
+                        # ref RiverMap defaults to null -> HEC-RAS builds it internally.
+                        geom.ComputeReachLengthsForXSs(xsids, None)
+                        geom.Save()
                 finally:
                     RasGeometryCompute._release_geometry(geom)
 

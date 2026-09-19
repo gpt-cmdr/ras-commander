@@ -382,6 +382,85 @@ def test_audit_reach_lengths_rejects_negative_tolerance(geom_file):
         RasGeometryCompute.audit_reach_lengths(geom_file, tolerance=-1.0)
 
 
+def test_audit_reach_lengths_computes_and_saves_inside_reload_suppressor(
+    monkeypatch, on_windows, tmp_path
+):
+    """The recompute and Save() must hold RASMapper's reload suppressor (#361)."""
+    import types
+    from contextlib import contextmanager
+
+    import pandas as pd
+
+    from ras_commander.hdf.HdfXsec import HdfXsec
+
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "model.prj").write_text("Proj Title=model\n")
+    geom_hdf = project / "model.g01.hdf"
+    geom_hdf.write_bytes(b"\x89HDF\r\n\x1a\n")
+
+    events = []
+
+    @contextmanager
+    def fake_suppress(geom):
+        events.append("suppress")
+        yield
+        events.append("release")
+
+    class _NetList(list):
+        def __class_getitem__(cls, item):
+            return cls
+
+        def Add(self, value):
+            self.append(value)
+
+    fake_system = types.ModuleType("System")
+    fake_system.Int32 = int
+    fake_generic = types.ModuleType("System.Collections.Generic")
+    fake_generic.List = _NetList
+    monkeypatch.setitem(sys.modules, "System", fake_system)
+    monkeypatch.setitem(sys.modules, "System.Collections.Generic", fake_generic)
+
+    class _FakeGeom:
+        class FlowPathLines:
+            @staticmethod
+            def ComputeFlowPathLines():
+                events.append("flow_paths")
+
+        class XS:
+            @staticmethod
+            def FeatureCount():
+                return 2
+
+        def ComputeReachLengthsForXSs(self, xsids, river_map):
+            events.append("reach_lengths")
+
+        def Save(self):
+            events.append("save")
+
+    xs = pd.DataFrame(
+        {"Len Left": [100.0, float("nan")], "Len Channel": [90.0, float("nan")],
+         "Len Right": [80.0, float("nan")]}
+    )
+    monkeypatch.setattr(
+        "ras_commander.dotnet.geometry_save.suppress_feature_table_reloads", fake_suppress
+    )
+    monkeypatch.setattr(HdfXsec, "get_cross_sections", staticmethod(lambda *a, **k: xs.copy()))
+    monkeypatch.setattr(RasGeometryCompute, "_ensure_clr", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasGeometryCompute, "_resolve_rasmap", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(RasGeometryCompute, "_layer_exists", staticmethod(lambda *a, **k: False))
+    monkeypatch.setattr(RasGeometryCompute, "_load_geometry", staticmethod(lambda *a, **k: _FakeGeom()))
+    monkeypatch.setattr(
+        RasGeometryCompute,
+        "_reach_length_diff",
+        staticmethod(lambda s, r, t: pd.DataFrame({"changed": [False], "invalid_recompute": [False]})),
+    )
+
+    RasGeometryCompute.audit_reach_lengths(geom_hdf)
+
+    assert events == ["suppress", "flow_paths", "reach_lengths", "save", "release"]
+
+
 def test_flow_path_policy_regenerate_when_overbanks_match():
     nan = float("nan")
     stored, recomputed = _diff_frames(

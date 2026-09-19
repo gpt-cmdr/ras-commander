@@ -637,30 +637,18 @@ def _seeds_from_pointms_list(pts_list: list, ns: dict):
 def _save_mesh(geom, d2fa, fid: int, mesh, ns: dict) -> None:
     """Persist MeshFV2D to geometry HDF.
 
-    Suppresses feature-table reloads while saving, as RASMapper's own save
-    paths do (RASGeometry.StopEditing / LoadSaveAllLayers). Each feature layer
-    watches the geometry HDF; RASGeometry.Save() writes the 2D Attributes table
-    before it checks each area's "Mesh Recomputed" flag, and those checks reload
-    the table from disk once the watcher has fired. The reload replaces the new
-    mesh with the old one, so SaveMesh is skipped and the HDF is left unchanged
-    without an error. Under Wine the watcher fires mid-save every time (#361).
+    RASGeometry.Save() writes the 2D Attributes table before it checks each
+    area's "Mesh Recomputed" flag. Without reload suppression those checks can
+    reload the old mesh from disk and skip SaveMesh, leaving the HDF unchanged
+    without an error (#361).
     """
-    from RasMapperLib import FeatureLayer, MultiLayerReloadSuppressor  # type: ignore
-    from System.Collections.Generic import List as NetList  # type: ignore
+    from ..dotnet.geometry_save import suppress_feature_table_reloads
 
-    layers = NetList[FeatureLayer]()
-    for layer in geom.Layers:
-        if isinstance(layer, FeatureLayer):
-            layers.Add(layer)
-
-    suppressor = MultiLayerReloadSuppressor(layers)
-    try:
+    with suppress_feature_table_reloads(geom):
         d2fa.SetMeshHasBeenRecomputed(fid, True)
         d2fa.SetFeature(fid, mesh)
         d2fa.SetMeshUpToDate(fid, True)
         geom.Save()
-    finally:
-        suppressor.Dispose()
 
 
 def _douglas_peucker_polygon(perim, tolerance: float, ns: dict):
