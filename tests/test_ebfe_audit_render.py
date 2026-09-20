@@ -1603,3 +1603,43 @@ def test_classification_does_not_depend_on_recipe_order():
     base.recipes = list(reversed(forward))
     second = [(a.kind, a.target) for a in actions_from_bundle(base)]
     assert first == second
+
+
+# -- a project-level DSS reference is not a boundary condition -------------
+
+def test_a_project_level_dss_reference_is_named_for_what_it_is():
+    """12050007 read "35 of 35 boundaries verified against delivered DSS" beside
+    "Obtain 04PCT.dss". Both were true, about different things: the boundary
+    check reads unsteady-flow boundary conditions, and those six rows are DSS
+    File entries in a .prj that it never examines. The facts were right and the
+    framing made them look contradictory, so the framing is what changed."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        dss_reference_scope, DSS_ACQUISITION_LABELS)
+    boundary = {"surface": "dss_pathname", "file": "m/A.u01",
+                "locator": "A.u01:150:DSS File"}
+    project = {"surface": "dss_pathname", "file": "m/A.prj",
+               "locator": "A.prj:39:DSS File"}
+    assert dss_reference_scope(boundary) == "boundary"
+    assert dss_reference_scope(project) == "project"
+    assert DSS_ACQUISITION_LABELS["boundary"] == "DSS boundary data"
+    assert "not a boundary condition" in DSS_ACQUISITION_LABELS["project"]
+
+
+def test_the_rendered_document_separates_the_two(tmp_path):
+    """The real record: the project-level references are named as such, and the
+    boundary count is explicitly said not to cover them."""
+    bundle = load_audit_bundle(Path(r"F:\eBFE\audit\12050007"))
+    markdown = render_audit_markdown(bundle)
+    assert "DSS references outside the boundary check" in markdown
+    assert "are not boundary conditions and were not examined by it" in markdown
+    assert "Obtain `DSS referenced by the project (not a boundary condition)" in markdown
+    # the verification line still states what it did establish
+    assert "35 of 35 boundaries verified against delivered DSS" in markdown
+
+
+def test_a_record_without_project_level_references_gains_no_extra_row():
+    """The qualifier appears only where it is true."""
+    bundle = load_audit_bundle(Path(r"F:\eBFE\audit\11130102"))
+    markdown = render_audit_markdown(bundle)
+    assert "DSS references outside the boundary check" not in markdown
+    assert "not a boundary condition" not in markdown

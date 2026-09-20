@@ -484,6 +484,53 @@ def delivered_model_names(models: Iterable) -> dict:
     return out
 
 
+#: Where a ``dss_pathname`` recipe's DSS reference was authored. The DSS
+#: boundary check reads unsteady-flow boundary conditions; a DSS File entry in a
+#: ``.prj`` is a PROJECT-level reference the check never examines. Calling both
+#: "DSS boundary data" made 12050007 read "35 of 35 boundaries verified against
+#: delivered DSS" beside "Obtain 04PCT.dss" -- two true statements about
+#: different things, presented as one list.
+#:
+#: Corpus-wide: 646 boundary-anchored acquisition rows and 17 project-anchored
+#: ones across 40 records; 4 records carry both shapes (08040206, 11060004,
+#: 11140307, 12050007) and one carries only the project shape.
+DSS_BOUNDARY_ANCHOR = re.compile(r"\.u\d+", re.I)
+DSS_PROJECT_ANCHOR = re.compile(r"\.prj(?![A-Za-z0-9])", re.I)
+
+
+def dss_reference_scope(recipe: dict) -> str:
+    """"boundary", "project" or "other" -- what this DSS reference is.
+
+    Decided from the file the reference was authored in, which is the only thing
+    that says whether the boundary check covers it.
+    """
+    recipe = recipe or {}
+    if str(recipe.get("surface") or "") != "dss_pathname":
+        return "other"
+    where = "%s|%s" % (recipe.get("file") or "", recipe.get("locator") or "")
+    if DSS_BOUNDARY_ANCHOR.search(where):
+        return "boundary"
+    if DSS_PROJECT_ANCHOR.search(where):
+        return "project"
+    return "other"
+
+
+#: What an engineer is being asked to obtain, by scope.
+DSS_ACQUISITION_LABELS = {
+    "boundary": "DSS boundary data",
+    "project": "DSS referenced by the project (not a boundary condition)",
+    "other": "DSS boundary data",
+}
+
+#: Appended to the evidence so the line says what established it.
+DSS_ACQUISITION_BASIS = {
+    "boundary": "established by the boundary check: no delivered DSS holds the "
+                "records this boundary needs",
+    "project": "a project-level DSS File reference; the DSS boundary check covers "
+               "boundary conditions and does not examine it",
+}
+
+
 def _unresolved_pathnames(bundle: "AuditBundle", recipe: dict) -> list:
     """The pathnames recorded against the DSS file this recipe cannot reach.
 
@@ -1404,8 +1451,13 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             if base in acquired_files:
                 continue
             acquired_files.add(base)
-            label = "DSS boundary data" if surface == "dss_pathname" else "Referenced file"
+            scope = dss_reference_scope(recipe)
+            label = (DSS_ACQUISITION_LABELS[scope] if surface == "dss_pathname"
+                     else "Referenced file")
             reason_text = str(recipe.get("confidence_reason") or recipe.get("why") or "")
+            basis = DSS_ACQUISITION_BASIS.get(scope) if surface == "dss_pathname" else None
+            if basis:
+                reason_text = (reason_text + " -- " + basis) if reason_text else basis
             actions.append(RepairAction(
                 order=0, kind="acquisition", target=f"{label} ({base})", reason="not_delivered",
                 evidence=(f"{recipe.get('locator', '')}: {reason_text}").strip(": "),
@@ -1810,6 +1862,19 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         w(f"| DSS boundary verification | **Did not run** -- "
           f"{_unverified} of {int(_ver.get('boundaries_checked') or 0)} boundaries "
           f"unverified: {_md_escape(dss_verification_hold_reason(_ver))} |")
+    # The boundary count covers BOUNDARY CONDITIONS. When the record also carries
+    # project-level DSS File references, say so here, so "N of N boundaries
+    # verified" is never read as covering references the check never examined.
+    _project_dss = sorted({
+        Path(str(r.get("acquisition_target") or r.get("from") or "").replace("\\", "/")).name
+        for r in bundle.recipes
+        if (r.get("kind") == "acquisition" or r.get("confidence") == "acquisition")
+        and dss_reference_scope(r) == "project"})
+    if _project_dss and int(_ver.get("boundaries_checked") or 0):
+        w("| DSS references outside the boundary check | "
+          f"{len(_project_dss)} project-level DSS reference(s) "
+          f"({_md_escape(', '.join(_project_dss[:4]))}) are not boundary conditions "
+          "and were not examined by it |")
     _never_ran = (not int(_ver.get("boundaries_checked") or 0)
                   and bool((delivered.get("dss") or {}).get("referenced")))
     if _never_ran:
