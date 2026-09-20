@@ -573,8 +573,8 @@ def _chained_dss_records(bundle: "AuditBundle") -> list:
     no step -- and, because the ``requires_chain_rerun`` state suppresses the
     element-level DSS acquisition, the study would lose that finding entirely.
     """
-    out: list = []
-    seen: set = set()
+    by_base: dict = {}
+    order: list = []
     for recipe in bundle.recipes:
         if not _recipe_targets_registered_element(bundle, recipe):
             continue
@@ -582,11 +582,25 @@ def _chained_dss_records(bundle: "AuditBundle") -> list:
             continue
         target = str(recipe.get("acquisition_target") or recipe.get("from") or recipe.get("file") or "")
         base = Path(target.replace("\\", "/")).name or target
-        if not base or base in seen:
+        if not base:
             continue
-        producer = chained_dss_producer(bundle, recipe)
-        if producer:
-            seen.add(base)
+        if base not in by_base:
+            order.append(base)
+        by_base.setdefault(base, []).append((recipe, chained_dss_producer(bundle, recipe)))
+    out: list = []
+    for base in order:
+        entries = by_base[base]
+        # Actions are deduplicated on the basename, so one name is one finding.
+        # Two references can share a name and disagree: Fort Supply (11100201)
+        # reads Rosston's SA-connection output as
+        # ``..\..\..\TownOfRoston_NewBorder\RAS\Input\TownOfRosston.dss`` while
+        # Rosston's own ``.\DSS Inputs\TownOfRosston.dss`` needs a PRECIP-EXCESS
+        # record no HEC-RAS run writes. A name is a chain re-run only when EVERY
+        # reference to it is producible; otherwise something under that name
+        # still has to be obtained, and the blocking acquisition stands. Testing
+        # every entry also makes the classification independent of recipe order.
+        if all(producer for _recipe, producer in entries):
+            recipe, producer = entries[0]
             out.append({"file": base, "producer": producer,
                         "consumer": _consuming_model(bundle, recipe)})
     return out
@@ -1349,8 +1363,11 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # /REFERENCE LINES/ or /BCLINE/ record into a file. Its correction
             # rewrites the reference onto a delivered *input* DSS that does not
             # hold the record and never will, and then deletes the finding.
-            producer = chained_dss_producer(bundle, recipe)
-            if producer:
+            # Membership in the pre-computed map, not a fresh per-recipe test:
+            # the step list, the supporting-data row and the webmap mirror must
+            # classify a name identically, and only one source of truth can
+            # guarantee that.
+            if base in chains:
                 if base in chain_rerun_files:
                     continue
                 chain_rerun_files.add(base)

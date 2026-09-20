@@ -1507,3 +1507,99 @@ def test_the_verdict_names_the_sequential_re_run():
     assert ("| Runnable as delivered | **after repair (from the delivery alone, "
             "including a sequential re-run of chained sub-models)** |") in markdown
     assert "upstream model run" not in markdown
+
+
+def test_one_name_is_one_finding_when_two_references_disagree():
+    """Fort Supply (11100201). Two different files share the basename
+    ``TownOfRosston.dss``: the neighbour's SA-connection output, which a
+    delivered model produces, and Rosston's own staged input, which needs a
+    PRECIP-EXCESS record no HEC-RAS run writes. Actions are deduplicated on the
+    basename, so one name is one finding -- and a name that still owes a
+    meteorological record is not producible. Classifying per recipe emitted
+    both, telling the engineer to re-run a model AND obtain the same file."""
+    models = [
+        {"prj_file": "TownOfRosston.prj",
+         "project_folder": "/work/RAS Model/Hydraulic Models/Town of Rosston - Beaver River/Input"},
+        {"prj_file": "Fort_Supply_Beaver.prj",
+         "project_folder": "/work/RAS Model/Hydraulic Models/Town of Fort Supply - Beaver River/Input"},
+    ]
+    chained_target = r"..\..\..\TownOfRoston_NewBorder\RAS\Input\TownOfRosston.dss"
+    own_target = r".\DSS Inputs\TownOfRosston.dss"
+    bundle = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "note": ""}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 2, "boundaries_resolved": 0,
+            "boundaries_acquisition": 2, "boundaries_inferred": 0,
+            "acquisition_targets": [
+                {"dss_file": chained_target,
+                 "pathnames": ["/SA CONNECTION/Dam_Discharge/FLOW-TOTAL/01Dec2019/1Hour/01PAC/"]},
+                {"dss_file": own_target,
+                 "pathnames": ["//FORT_SUPPLY_BEAVER/PRECIP-EXCESS/01JAN2020/6MIN/RUN:100YR/"]},
+            ],
+        },
+    )
+    bundle.models = models
+
+    def recipe(target, consumer, element):
+        return {"file": f"RAS Model/Hydraulic Models/{consumer}/Input/{element}",
+                "surface": "dss_pathname", "locator": f"{element}:9:DSS File",
+                "from": target, "to": None, "kind": "acquisition", "confidence": "acquisition",
+                "acquisition_target": target,
+                "project": f"RAS Model/Hydraulic Models/{consumer}/Input",
+                "review": {"verdict": "real", "method": "archive_member_match"}}
+
+    bundle.recipes = [
+        recipe(chained_target, "Town of Fort Supply - Beaver River", "Fort_Supply_Beaver.u06"),
+        recipe(own_target, "Town of Rosston - Beaver River", "TownOfRosston.u01"),
+    ]
+    actions = actions_from_bundle(bundle)
+    named = [a for a in actions if "TownOfRosston.dss" in a.target]
+    assert len(named) == 1, "one name, one finding"
+    assert named[0].kind == "acquisition"
+    assert named[0].blocking
+    assert chained_dss_targets(bundle) == {}
+    markdown = render_audit_markdown(bundle)
+    assert "needs data not in the delivery" in markdown
+    assert "Re-run the chained sub-model" not in markdown
+
+
+def test_classification_does_not_depend_on_recipe_order():
+    """The same evidence must decide the same way whichever row comes first."""
+    models = [
+        {"prj_file": "TownOfRosston.prj",
+         "project_folder": "/work/RAS Model/Hydraulic Models/Town of Rosston - Beaver River/Input"},
+        {"prj_file": "Fort_Supply_Beaver.prj",
+         "project_folder": "/work/RAS Model/Hydraulic Models/Town of Fort Supply - Beaver River/Input"},
+    ]
+    chained_target = r"..\..\..\TownOfRoston_NewBorder\RAS\Input\TownOfRosston.dss"
+    own_target = r".\DSS Inputs\TownOfRosston.dss"
+    base = _two_d_unsteady(
+        supporting_elements={"dss": {"state": "no", "location": None, "referenced": True, "note": ""}},
+        dss_verification={
+            "bridge_available": True, "boundaries_checked": 2, "boundaries_resolved": 0,
+            "boundaries_acquisition": 2, "boundaries_inferred": 0,
+            "acquisition_targets": [
+                {"dss_file": chained_target,
+                 "pathnames": ["/SA CONNECTION/Dam_Discharge/FLOW-TOTAL/01Dec2019/1Hour/01PAC/"]},
+                {"dss_file": own_target,
+                 "pathnames": ["//FORT_SUPPLY_BEAVER/PRECIP-EXCESS/01JAN2020/6MIN/RUN:100YR/"]},
+            ],
+        },
+    )
+    base.models = models
+
+    def recipe(target, consumer, element):
+        return {"file": f"RAS Model/Hydraulic Models/{consumer}/Input/{element}",
+                "surface": "dss_pathname", "locator": f"{element}:9:DSS File",
+                "from": target, "to": None, "kind": "acquisition", "confidence": "acquisition",
+                "acquisition_target": target,
+                "project": f"RAS Model/Hydraulic Models/{consumer}/Input",
+                "review": {"verdict": "real", "method": "archive_member_match"}}
+
+    forward = [recipe(chained_target, "Town of Fort Supply - Beaver River", "Fort_Supply_Beaver.u06"),
+               recipe(own_target, "Town of Rosston - Beaver River", "TownOfRosston.u01")]
+    base.recipes = forward
+    first = [(a.kind, a.target) for a in actions_from_bundle(base)]
+    base.recipes = list(reversed(forward))
+    second = [(a.kind, a.target) for a in actions_from_bundle(base)]
+    assert first == second
