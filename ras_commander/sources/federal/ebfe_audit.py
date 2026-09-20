@@ -63,6 +63,7 @@ __all__ = [
     "dss_verification_hold_reason",
     "dss_verification_is_unverified",
     "dss_review_is_record_proven",
+    "dss_review_settles_delivery",
     "dss_review_may_drop_finding",
     "expected_elements",
     "study_critical_threshold",
@@ -244,6 +245,46 @@ def dss_review_is_record_proven(review: dict) -> bool:
     # Unknown methods fail closed: a verdict whose provenance the renderer
     # cannot name is not allowed to drop an engineer-facing finding.
     return bool(review.get("record_proven"))
+
+
+#: Review methods that settle the ELEMENT question -- "was a DSS file delivered
+#: at the path this model references?" -- without settling the record question.
+#:
+#: Only ``exact_relative_path``, and the distinction is the whole point.
+#: ``resolve_exact`` builds the full expected member path from the referencing
+#: file's OWN delivered location plus the raw reference, normalises it, and
+#: requires whole-path equality (case-folded) against a UNIQUE delivered member.
+#: The basename lookup in front of it is a prefilter, not the test. So it proves
+#: exactly what the element row claims: a file is delivered where this model
+#: looks for it.
+#:
+#: ``archive_member_match`` is NOT here and never will be: it is "unique
+#: basename, or a >=2-segment suffix unique among several" -- the guessing that
+#: retired 12050007's boundaries onto a file nothing had read. It remains
+#: refused for every purpose.
+DSS_DELIVERY_SETTLING_REVIEW_METHODS = frozenset({"exact_relative_path"})
+
+
+def dss_review_settles_delivery(review: dict) -> bool:
+    """May this review settle whether the DSS element was DELIVERED?
+
+    Narrower than it looks, and deliberately separate from
+    ``dss_review_is_record_proven``: this answers only "is a file delivered at
+    the referenced path", never "does that file hold the requested pathname".
+    It may set the element state and nothing else -- it must never retire a
+    boundary, rewrite a reference, drop a finding or touch ``dss_verification``,
+    all of which continue to go through ``dss_review_is_record_proven``.
+
+    The two questions were conflated until 2026-09-19, which left 14 studies
+    hatched as though FEMA had not shipped DSS that is demonstrably delivered at
+    the exact referenced path. The codebase already drew this line for non-DSS
+    surfaces in ``dss_review_may_drop_finding``: "there the question really is
+    'was a file of that name delivered'".
+    """
+    review = review or {}
+    if dss_review_is_record_proven(review):
+        return True
+    return str(review.get("method") or "") in DSS_DELIVERY_SETTLING_REVIEW_METHODS
 
 
 def _dss_correction_is_record_proven(recipe: dict) -> bool:
@@ -951,13 +992,22 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             review = entry.get("review") or {}
             if (review.get("verdict") == "analysis_gap"
                     and entry.get("state") in ("no", "partial", "source_only")
-                    and (key != "dss" or dss_review_is_record_proven(review))):
+                    and (key != "dss" or dss_review_settles_delivery(review))):
                 evidence = str(review.get("evidence") or "")
                 member = evidence.split("::", 1)[1] if "::" in evidence else None
                 entry["state_as_captured"] = entry.get("state")
                 entry["state"] = "yes"
                 entry["location"] = member or entry.get("location")
                 entry["note"] = f"found by independent review: {evidence}" if evidence else "found by independent review"
+                if key == "dss" and not dss_review_is_record_proven(review):
+                    # Settled on DELIVERY evidence only: a member exists at the
+                    # exact referenced path. That is the element question and
+                    # nothing more -- no catalog was read, so no record in the
+                    # file was verified. Saying "Yes" without saying that is the
+                    # half-truth this rule was split to avoid.
+                    entry["record_verified"] = False
+                    entry["note"] += (" -- delivered at the referenced path; the boundary "
+                                      "records inside it were not verified")
             out[key] = entry
             continue
         # v1 fallbacks -- aggregate only, no location
@@ -1743,10 +1793,21 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         w(f"| DSS boundary verification | **Did not run** -- "
           f"{_unverified} of {int(_ver.get('boundaries_checked') or 0)} boundaries "
           f"unverified: {_md_escape(dss_verification_hold_reason(_ver))} |")
+    _never_ran = (not int(_ver.get("boundaries_checked") or 0)
+                  and bool((delivered.get("dss") or {}).get("referenced")))
+    if _never_ran:
+        w("| DSS boundary verification | **Did not run** -- no DSS boundary was examined |")
     if blocking:
         first = blocking[0]
         w(f"| Most important | {_describe_action(first)} |")
     w("")
+    if _never_ran:
+        w("**The DSS boundary check did not run for this study.** No DSS boundary was "
+          "examined, so nothing in this document establishes which records the "
+          "delivered DSS files hold. Where a DSS element reads \"Yes\" it means a "
+          "file is delivered at the path the model references -- the delivery "
+          "question -- and not that the boundary records inside it were verified.")
+        w("")
     if _unverified and dss_verification_is_unverified(_ver):
         w("**The DSS boundary check did not run for this study.** No boundary was "
           "resolved and none was proven to need data from outside the delivery; the "
