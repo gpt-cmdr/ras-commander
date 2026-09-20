@@ -496,6 +496,12 @@ def delivered_model_names(models: Iterable) -> dict:
 #: 11140307, 12050007) and one carries only the project shape.
 DSS_BOUNDARY_ANCHOR = re.compile(r"\.u\d+", re.I)
 DSS_PROJECT_ANCHOR = re.compile(r"\.prj(?![A-Za-z0-9])", re.I)
+#: A HEC-RAS PLAN file. Its DSS File entry is the plan's own DSS -- output
+#: and observed-data references -- not a boundary condition, which lives in
+#: the unsteady flow file. 60 such rows exist across 3 records (08040301,
+#: and two others); all are path corrections today, so none has yet become
+#: an "Obtain" line, but they were reaching the boundary label by fallback.
+DSS_PLAN_ANCHOR = re.compile(r"\.p\d+", re.I)
 
 
 def dss_reference_scope(recipe: dict) -> str:
@@ -512,6 +518,12 @@ def dss_reference_scope(recipe: dict) -> str:
         return "boundary"
     if DSS_PROJECT_ANCHOR.search(where):
         return "project"
+    if DSS_PLAN_ANCHOR.search(where):
+        return "plan"
+    # Nothing names where it was authored, so nothing establishes that the
+    # boundary check covers it. Falling back to "boundary" would make that claim
+    # by default; there are no such rows in the corpus today and this keeps it
+    # that way if one appears.
     return "other"
 
 
@@ -519,8 +531,12 @@ def dss_reference_scope(recipe: dict) -> str:
 DSS_ACQUISITION_LABELS = {
     "boundary": "DSS boundary data",
     "project": "DSS referenced by the project (not a boundary condition)",
-    "other": "DSS boundary data",
+    "plan": "DSS referenced by the plan (not a boundary condition)",
+    "other": "DSS referenced by the model (reference location not recorded)",
 }
+
+#: Scopes the DSS boundary check does not examine.
+DSS_SCOPES_OUTSIDE_BOUNDARY_CHECK = ("project", "plan")
 
 #: Appended to the evidence so the line says what established it.
 DSS_ACQUISITION_BASIS = {
@@ -528,6 +544,10 @@ DSS_ACQUISITION_BASIS = {
                 "records this boundary needs",
     "project": "a project-level DSS File reference; the DSS boundary check covers "
                "boundary conditions and does not examine it",
+    "plan": "a plan-level DSS File reference; the DSS boundary check covers "
+            "boundary conditions and does not examine it",
+    "other": "the file this reference was authored in is not recorded, so the DSS "
+             "boundary check cannot be said to cover it",
 }
 
 
@@ -1869,10 +1889,10 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
         Path(str(r.get("acquisition_target") or r.get("from") or "").replace("\\", "/")).name
         for r in bundle.recipes
         if (r.get("kind") == "acquisition" or r.get("confidence") == "acquisition")
-        and dss_reference_scope(r) == "project"})
+        and dss_reference_scope(r) in DSS_SCOPES_OUTSIDE_BOUNDARY_CHECK})
     if _project_dss and int(_ver.get("boundaries_checked") or 0):
         w("| DSS references outside the boundary check | "
-          f"{len(_project_dss)} project-level DSS reference(s) "
+          f"{len(_project_dss)} project- or plan-level DSS reference(s) "
           f"({_md_escape(', '.join(_project_dss[:4]))}) are not boundary conditions "
           "and were not examined by it |")
     _never_ran = (not int(_ver.get("boundaries_checked") or 0)

@@ -1643,3 +1643,20 @@ def test_a_record_without_project_level_references_gains_no_extra_row():
     markdown = render_audit_markdown(bundle)
     assert "DSS references outside the boundary check" not in markdown
     assert "not a boundary condition" not in markdown
+
+
+def test_a_plan_anchored_dss_reference_is_its_own_scope():
+    """A `.pNN` plan file's DSS File entry is the plan's own DSS, not a boundary
+    condition. 60 such rows across 3 records were reaching the boundary label by
+    fallback; the fallback itself no longer claims boundary coverage either."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        dss_reference_scope, DSS_ACQUISITION_LABELS,
+        DSS_SCOPES_OUTSIDE_BOUNDARY_CHECK)
+    plan = {"surface": "dss_pathname", "file": "m/A.p07",
+            "locator": "A.p07:91:DSS File"}
+    unknown = {"surface": "dss_pathname", "file": "m/A.xyz", "locator": "A.xyz:1:X"}
+    assert dss_reference_scope(plan) == "plan"
+    assert dss_reference_scope(unknown) == "other"
+    assert "not a boundary condition" in DSS_ACQUISITION_LABELS["plan"]
+    assert DSS_ACQUISITION_LABELS["other"] != "DSS boundary data"
+    assert DSS_SCOPES_OUTSIDE_BOUNDARY_CHECK == ("project", "plan")
