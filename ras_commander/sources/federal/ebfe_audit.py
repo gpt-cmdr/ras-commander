@@ -1073,10 +1073,36 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             entry["state"] = "yes"
             entry["note"] = (f"{resolved} of {checked} boundaries verified against delivered DSS"
                              + (" (path corrections required)" if verification.get("resolved_needing_path_correction") else ""))
-        elif resolved and (acquisition or inferred):
+        elif resolved and acquisition:
+            # Some boundaries were PROVEN to need data no delivered DSS holds.
+            # That is a real partial delivery, and any unverified remainder is
+            # reported beside it rather than folded into it.
             entry["state"] = "partial"
             entry["note"] = (f"{resolved} of {checked} boundaries verified; {acquisition} need DSS not in the delivery"
                              + (f"; {inferred} could not be verified" if inferred else ""))
+        elif resolved and inferred:
+            # Corrected 2026-09-19. This used to read "partial", which renders as
+            # "incomplete in the delivery: part of the layer was not shipped" --
+            # an assertion of non-delivery about boundaries the check never
+            # established. 12070104/LB_MA02 is the case: 21 checked, 14 resolved,
+            # 0 acquisition, 7 inferred, every one of the 7 "DSS file not found
+            # on disk", which the producer emits only when the delivery was NOT
+            # searched. Nothing there was shown to be missing.
+            #
+            # No `inferred` reason in this corpus is an acquisition. The producer
+            # already routes genuine non-delivery to `acquisition` when
+            # `basename_delivered is False`; the inferred reasons are "the
+            # delivery was not searched", a reader failure, "boundary carries no
+            # DSS pathname", or a miss against ONE target catalog -- and that
+            # last one may still resolve against another delivered file, which is
+            # exactly what the record tier proved for 28 of 12050007's boundaries.
+            #
+            # So a mixed record reports both parts and the unverified part stays
+            # a check that did not run.
+            entry["state"] = "unverified"
+            entry["note"] = (f"{resolved} of {checked} boundaries verified; "
+                             f"{inferred} could not be verified: "
+                             + dss_verification_hold_reason(verification))
         if inferred:
             entry["boundaries_unverified"] = inferred
         out["dss"] = entry
