@@ -287,23 +287,180 @@ def dss_review_settles_delivery(review: dict) -> bool:
     return str(review.get("method") or "") in DSS_DELIVERY_SETTLING_REVIEW_METHODS
 
 
-def _dss_correction_is_record_proven(recipe: dict) -> bool:
-    """May this DSS ``path_correction`` be described to an engineer as resolved?
+#: Worker/tool revision marker introduced with the ATTRIBUTED DSS proof marker.
+#: A record written before it cannot carry ``verified_reference`` and never
+#: will, so the gate keeps the older acceptance for those and only those.
+DSS_REFERENCE_ATTRIBUTION_MARKER = "dss-reference-attribution-v1"
 
-    Only when whatever produced it read the target catalog. The worker's own
-    corrections carry ``verified_by == "dss_pathname"`` and ``confidence ==
-    "resolved"`` because ``decide_dss_boundary`` matched the pathname. A
-    deficiency-review correction built from an archive-member match carries
-    ``confidence: "inferred"`` and no ``verified_by``; it is a lead, not a
-    destination.
+
+def _dss_basename(value) -> str:
+    """The filename a DSS reference names, comparable across path spellings."""
+    return str(value or "").replace("\\", "/").rsplit("/", 1)[-1].strip().casefold()
+
+
+def _dss_unsteady_number(value) -> str:
+    """The zero-padded unsteady-flow number a locator, filename or field carries.
+
+    ``""`` when there is none -- which is a refusal, not a wildcard, everywhere
+    this is compared.
+    """
+    text = str(value or "").strip()
+    match = re.search(r"\.u(\d{1,3})\b", text, re.IGNORECASE)
+    if match:
+        return match.group(1).lstrip("0").zfill(2)
+    return text.lstrip("0").zfill(2) if text.isdigit() else ""
+
+
+def _dss_project_tail(value) -> str:
+    """The model folder a project path ends in, comparable across work roots.
+
+    A recipe row records ``RAS Model/Hydraulic_Models/_Final/HECRAS_507`` while
+    the boundary it was derived from records the same folder under the runner's
+    work root. The last segment is the part both spellings agree on.
+    """
+    text = re.sub(r"[\\/]+", "/", str(value or "")).strip().rstrip("/").casefold()
+    return text.rsplit("/", 1)[-1]
+
+
+def _dss_correction_attribution(recipe: dict) -> Optional[dict]:
+    """The reference this row's ``verified_by`` marker was established FOR.
+
+    ``None`` when the row cannot say -- which is every row written before
+    ``dss-reference-attribution-v1``, because the marker was stamped uniformly
+    across a record's rows with nothing recording which reference the catalog
+    read had actually matched.
+
+    Aransas (12100407) is the worked example: twenty ``dss_pathname`` rows, all
+    twenty marked, ONE ``confidence_reason`` ("14 pathname(s) present in target
+    DSS"), ONE ``to``, ONE ``delivered_member`` (``100YR.dss``) -- and seven
+    different DSS files named across the rows. Only nine name ``100YR.dss``. A
+    row for ``500YR.dss`` carried proof derived from ``100YR.dss``, and six rows
+    were authored in ``.u`` files the record's ``models.jsonl`` does not list.
+
+    So an attribution has to survive four checks against the row's OWN identity,
+    and each check is a way the bare marker was wrong:
+
+    * every boundary names a pathname it found and the delivered file it was
+      found in -- otherwise no catalog was read for it;
+    * every boundary's reference is one this row rewrites (``from``, ``to``, or
+      the ``to`` the verification superseded) -- otherwise the proof is about
+      another file;
+    * every boundary sits in the unsteady-flow file this row's locator names --
+      otherwise it is another reference in the same model;
+    * every boundary sits in this row's project -- otherwise it is another model
+      in the same record.
+
+    ``found: False`` is an attribution too, and an honest one: the catalog was
+    read and the pathname was NOT in it. It proves the opposite of resolution,
+    so it never satisfies this gate.
     """
     recipe = recipe or {}
+    reference = recipe.get("verified_reference")
+    if not isinstance(reference, dict):
+        return None
+    if reference.get("found") is False:
+        return None
+    boundaries = reference.get("boundaries")
+    if not isinstance(boundaries, list) or not boundaries:
+        return None
+
+    forms = {_dss_basename(recipe.get(key))
+             for key in ("to", "from", "to_before_verification")}
+    forms.discard("")
+    unsteady = (_dss_unsteady_number(recipe.get("locator"))
+                or _dss_unsteady_number(recipe.get("file")))
+    project = _dss_project_tail(recipe.get("project"))
+
+    for boundary in boundaries:
+        if not isinstance(boundary, dict):
+            return None
+        if not str(boundary.get("dss_pathname") or "").strip():
+            return None
+        if not (str(boundary.get("delivered_member") or "").strip()
+                or str(boundary.get("delivered_path") or "").strip()):
+            return None
+        named = {_dss_basename(boundary.get("dss_file"))}
+        named.update(_dss_basename(form)
+                     for form in (boundary.get("reference_forms") or []))
+        named.discard("")
+        if not named or (forms and not (named & forms)):
+            return None
+        if unsteady and _dss_unsteady_number(boundary.get("unsteady_number")) != unsteady:
+            return None
+        if project and _dss_project_tail(boundary.get("project")) != project:
+            return None
+    return reference
+
+
+def _dss_attribution_revisions(audit: dict) -> str:
+    """Every recorded revision of something that may have written the marker.
+
+    The worker writes ``provenance.worker_revision``; ``reverify_dss.py`` writes
+    ``dss_reverification`` into a record whose worker revision is older than
+    itself, so its own revision has to be read too or a corrected record would
+    be judged by the revision of the tool that did not write its rows.
+    """
+    audit = audit or {}
+    provenance = audit.get("provenance") or {}
+    reverification = audit.get("dss_reverification") or {}
+    return " ".join(str(value or "") for value in (
+        provenance.get("worker_revision"),
+        reverification.get("tool_revision"),
+        reverification.get("worker_revision"),
+    ))
+
+
+def _dss_correction_is_record_proven(recipe: dict, revisions: str = "") -> bool:
+    """May this DSS ``path_correction`` be described to an engineer as resolved?
+
+    Only when whatever produced it read the target catalog FOR THIS REFERENCE.
+    ``verified_by == "dss_pathname"`` alone never proved that: it is stamped on
+    a row without recording which reference the read established, so it was
+    equally true of a row whose own reference nothing had looked at. The proof
+    is ``verified_reference`` -- see :func:`_dss_correction_attribution`.
+
+    A deficiency-review correction built from an archive-member match carries
+    ``confidence: "inferred"`` and no ``verified_by``; it is a lead, not a
+    destination, and that has not changed.
+
+    WHICH ROWS ARE TRUSTED BY INFERENCE, AND WHY THAT IS BOUNDED. 1,251 rows
+    across 49 records on the NAS carry the bare marker and can never carry an
+    attribution: the reads that produced them are not repeatable from the record
+    and re-running 49 studies to recover a provenance field is not proportionate.
+    For those the gate keeps the older acceptance. The bound is the revision
+    marker: any record whose worker or re-verification tool carries
+    ``dss-reference-attribution-v1`` MUST carry ``verified_reference`` on every
+    marked row, so the inference can never silently extend to new records, and a
+    record that claims the new revision while omitting the evidence is refused
+    rather than quietly accepted on the old path.
+
+    ``revisions`` is :func:`_dss_attribution_revisions` of the record. Omitting
+    it is the legacy path, so a caller that does not know the record's revision
+    can never tighten the gate by accident -- only a caller that does can.
+    """
+    recipe = recipe or {}
+    review = recipe.get("review")
     if recipe.get("verified_by") == "dss_pathname":
-        return True
+        if _dss_correction_attribution(recipe) is not None:
+            return True
+        if DSS_REFERENCE_ATTRIBUTION_MARKER not in str(revisions or ""):
+            return True
+        # The row claims a revision under which the marker MUST name its
+        # reference, and it does not. It can still be proven by evidence that
+        # names itself -- an explicit ``record_proven``, or a review whose method
+        # is recorded -- but never by the implicit "assume ``dss_record_match``"
+        # default below, which would re-admit through the back door exactly the
+        # claim just refused. Every one of the 1,251 legacy rows is
+        # ``confidence: "resolved"`` with no ``review``, so that default is not a
+        # theoretical hole.
+        return bool(recipe.get("record_proven")) or (
+            recipe.get("confidence") == "resolved"
+            and isinstance(review, dict)
+            and dss_review_is_record_proven(review))
     if recipe.get("record_proven"):
         return True
     return (recipe.get("confidence") == "resolved"
-            and dss_review_is_record_proven(recipe.get("review") or {"method": "dss_record_match"}))
+            and dss_review_is_record_proven(review or {"method": "dss_record_match"}))
 
 
 def dss_review_may_drop_finding(recipe: dict) -> bool:
@@ -1124,7 +1281,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         if recipe.get("surface") == "dss_pathname"
         and recipe.get("origin") == "deficiency_review"
         and recipe.get("from") and recipe.get("to")
-        and _dss_correction_is_record_proven(recipe)
+        and _dss_correction_is_record_proven(recipe, _dss_attribution_revisions(audit))
     ]
     if reviewed_dss:
         destinations = sorted({str(recipe["to"]) for recipe in reviewed_dss}, key=str.casefold)

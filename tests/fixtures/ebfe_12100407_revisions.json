@@ -1,0 +1,12 @@
+{
+  "provenance": {
+    "worker_revision": "20260909m"
+  },
+  "dss_reverification": {
+    "schema": "ebfe-dss-reverification/v1",
+    "performed_utc": "2026-09-19T23:25:13Z",
+    "tool": "agent_tasks/ebfe_campaign/runtime/direct_v1/reverify_dss.py",
+    "tool_sha256": "cd35977f9a1e272b67a300edd6baa6683c41f9ed60046cf2adc0bcebb0c764d1",
+    "worker_revision": "20260909m-retain-for-geometry-v1+semantic-g5-failclosed-candidate+nested-self-copy-v1+nested-distinct-model-v1+bundled-library-identity-v1+1d-support-informational-v1+library-required-v1+member-index-sealed-v1+dss-record-proof-v1+dss-record-tier-v1"
+  }
+}

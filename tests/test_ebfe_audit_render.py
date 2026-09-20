@@ -1043,6 +1043,39 @@ def test_reviewed_dss_destinations_and_plan_hdf_list_replace_sampled_capture():
     assert "2 plan HDFs" in results
 
 
+def test_a_bare_marker_stops_naming_destinations_once_the_record_can_attribute_it():
+    """The same two rows, against a record whose worker CAN name the reference a
+    catalog read established -- and did not. Two rows, two different DSS files,
+    one uniform marker: exactly the shape that let a row for ``500YR.dss`` carry
+    proof derived from ``100YR.dss`` in the real 12100407.
+    """
+    bundle = _two_d_unsteady(supporting_elements={
+        "dss": {
+            "state": "yes", "location": r".\DSS Inputs\Aransas.dss",
+            "referenced": True, "note": "1 referenced, 1 resolve",
+        },
+    })
+    bundle.audit["provenance"] = {
+        "worker_revision": "20260909m-retain-for-geometry-v1+dss-reference-attribution-v1"}
+    bundle.models = [{"prj_file": "Aransas.prj", "elements": [
+        {"type": "unsteady_flow", "number": "01", "registered": True},
+        {"type": "unsteady_flow", "number": "02", "registered": True},
+    ]}]
+    bundle.recipes = [
+        {"file": "Aransas.u01", "surface": "dss_pathname", "locator": "u01:9",
+         "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\100YR.dss",
+         "origin": "deficiency_review", "verified_by": "dss_pathname"},
+        {"file": "Aransas.u02", "surface": "dss_pathname", "locator": "u02:9",
+         "from": r".\DSS Inputs\Aransas.dss", "to": r"..\DSS\500YR.dss",
+         "origin": "deficiency_review", "verified_by": "dss_pathname"},
+    ]
+    markdown = render_audit_markdown(bundle)
+    dss = next(line for line in markdown.splitlines() if line.startswith("| DSS boundary data |"))
+    assert "reviewed references resolve to" not in dss
+    assert r"..\DSS\100YR.dss" not in dss
+    assert r"..\DSS\500YR.dss" not in dss
+
+
 @pytest.mark.skipif(not Path(r"F:\eBFE\audit\12100407\_audit.json").is_file(), reason="Aransas audit unavailable")
 def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete():
     """Aransas is one of the 39 studies whose DSS record check never ran.
@@ -1660,3 +1693,184 @@ def test_a_plan_anchored_dss_reference_is_its_own_scope():
     assert "not a boundary condition" in DSS_ACQUISITION_LABELS["plan"]
     assert DSS_ACQUISITION_LABELS["other"] != "DSS boundary data"
     assert DSS_SCOPES_OUTSIDE_BOUNDARY_CHECK == ("project", "plan")
+
+
+# -- the DSS proof marker has to name the reference it was established for ---
+#
+# `verified_by == "dss_pathname"` was read by `_dss_correction_is_record_proven`
+# as proof that the target DSS catalog had been read FOR THAT REFERENCE. It
+# proves no such thing: the marker is stamped across a record's rows without
+# recording which reference the read matched. The fixtures are the REAL rows of
+# Aransas (12100407), copied out of `F:\eBFE\audit\12100407` and trimmed only
+# of each boundary's bulky `candidates_considered` list -- a hand-made fixture
+# is how this defect kept passing a green suite.
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def _marker_fixture(name):
+    return [json.loads(line) for line
+            in (FIXTURES / name).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _aransas_marked_recipes():
+    return _marker_fixture("ebfe_12100407_marked_recipes.jsonl")
+
+
+def _aransas_boundaries():
+    return _marker_fixture("ebfe_12100407_boundaries.jsonl")
+
+
+def _aransas_revisions():
+    from ras_commander.sources.federal.ebfe_audit import _dss_attribution_revisions
+
+    return _dss_attribution_revisions(
+        json.loads((FIXTURES / "ebfe_12100407_revisions.json").read_text(encoding="utf-8")))
+
+
+def _aransas_row(unsteady):
+    return next(row for row in _aransas_marked_recipes()
+                if row["locator"].startswith("Aransas.u%s:" % unsteady))
+
+
+def _attribution(recipe, boundaries, found=True):
+    """The `verified_reference` the writers record, from real boundary rows."""
+    return {
+        "revision": "reverify-dss-v1+dss-reference-attribution-v1",
+        "found": found,
+        "locator": recipe.get("locator"),
+        "project": recipe.get("project"),
+        "boundaries": [{
+            "project": row.get("project"),
+            "unsteady_number": row.get("unsteady_number"),
+            "dss_file": row.get("dss_file"),
+            "reference_forms": [form for form in (row.get("dss_file"),
+                                                  row.get("correction_target"),
+                                                  row.get("resolved_relative")) if form],
+            "dss_pathname": row.get("dss_pathname"),
+            "delivered_path": row.get("resolved_path"),
+            "delivered_member": None,
+        } for row in boundaries],
+    }
+
+
+def test_the_real_marked_rows_say_nothing_about_their_own_reference():
+    """Twenty rows, all marked. One `confidence_reason`, one `to`, one
+    `delivered_member` -- and seven different DSS files named across them."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        _dss_basename, _dss_correction_attribution)
+
+    rows = _aransas_marked_recipes()
+    assert len(rows) == 20
+    assert all(row["verified_by"] == "dss_pathname" for row in rows)
+    assert len({row["confidence_reason"] for row in rows}) == 1
+    assert len({row["to"] for row in rows}) == 1
+    assert len({row["delivered_member"] for row in rows}) == 1
+    assert len({_dss_basename(row["from"]) for row in rows}) == 7
+    assert all(_dss_correction_attribution(row) is None for row in rows)
+
+
+def test_a_bare_marker_keeps_the_acceptance_it_had_before_attribution():
+    """The bound: 1,251 rows across 49 records can never carry an attribution."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions()
+    assert revisions.strip()
+    assert DSS_REFERENCE_ATTRIBUTION_MARKER not in revisions
+    assert all(_dss_correction_is_record_proven(row, revisions)
+               for row in _aransas_marked_recipes())
+
+
+def test_a_record_that_claims_the_attribution_revision_must_carry_it():
+    """A boundary, not a permanent exemption."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions() + " " + DSS_REFERENCE_ATTRIBUTION_MARKER
+    assert not any(_dss_correction_is_record_proven(row, revisions)
+                   for row in _aransas_marked_recipes())
+    # and the implicit "assume dss_record_match" fall-through does not re-admit
+    # it: every one of those rows is `confidence: "resolved"` with no `review`
+    rows = _aransas_marked_recipes()
+    assert all(row.get("confidence") == "resolved" and "review" not in row for row in rows)
+    recorded = dict(rows[0], review={"method": "dss_pathname_match"})
+    assert _dss_correction_is_record_proven(recorded, revisions)
+
+
+def test_an_attributed_marker_proves_the_row_that_names_its_own_boundaries():
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_attribution,
+        _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions() + " " + DSS_REFERENCE_ATTRIBUTION_MARKER
+    row = dict(_aransas_row("01"))
+    own = [b for b in _aransas_boundaries() if b["unsteady_number"] == "01"]
+    assert own
+    row["verified_reference"] = _attribution(row, own)
+    assert _dss_correction_attribution(row) is not None
+    assert _dss_correction_is_record_proven(row, revisions)
+
+
+@pytest.mark.parametrize("mutate,why", [
+    (lambda rows: rows, "another unsteady file"),
+    (lambda rows: [dict(b, dss_file=r"..\DSS\500YR.dss", correction_target=None,
+                        resolved_relative=None) for b in rows], "another DSS file"),
+    (lambda rows: [dict(b, project=b["project"] + "_OTHER") for b in rows],
+     "another project"),
+])
+def test_an_attribution_that_is_not_this_rows_proves_nothing(mutate, why):
+    """Six of the twenty rows were authored in `.u` files `models.jsonl` does not
+    list. Handed every real boundary in the record, such a row still cannot show
+    one of its own -- and neither can a row handed another file's or another
+    model's proof."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_attribution,
+        _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions() + " " + DSS_REFERENCE_ATTRIBUTION_MARKER
+    boundaries = _aransas_boundaries()
+    if why == "another unsteady file":
+        assert not [b for b in boundaries if b["unsteady_number"] == "04"]
+        row = dict(_aransas_row("04"))
+        rows = boundaries
+    else:
+        row = dict(_aransas_row("01"))
+        rows = [b for b in boundaries if b["unsteady_number"] == "01"]
+    row["verified_reference"] = _attribution(row, mutate(rows))
+    assert _dss_correction_attribution(row) is None, why
+    assert not _dss_correction_is_record_proven(row, revisions), why
+
+
+def test_an_attribution_that_names_no_catalog_read_proves_nothing():
+    """A boundary that names no pathname, or no file the pathname was found in,
+    records that something was consulted -- not that a catalog was read."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_attribution,
+        _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions() + " " + DSS_REFERENCE_ATTRIBUTION_MARKER
+    row = _aransas_row("01")
+    own = [b for b in _aransas_boundaries() if b["unsteady_number"] == "01"]
+    for field in ("dss_pathname", "delivered_path"):
+        reference = _attribution(row, own)
+        for boundary in reference["boundaries"]:
+            boundary[field] = None
+        candidate = dict(row, verified_reference=reference)
+        assert _dss_correction_attribution(candidate) is None, field
+        assert not _dss_correction_is_record_proven(candidate, revisions), field
+
+
+def test_a_read_that_did_not_find_the_pathname_never_proves_the_row():
+    """The acquisition rows carry the marker too. `found: false` is the honest
+    attribution for them, and it is the opposite of proof."""
+    from ras_commander.sources.federal.ebfe_audit import (
+        DSS_REFERENCE_ATTRIBUTION_MARKER, _dss_correction_attribution,
+        _dss_correction_is_record_proven)
+
+    revisions = _aransas_revisions() + " " + DSS_REFERENCE_ATTRIBUTION_MARKER
+    row = dict(_aransas_row("01"))
+    own = [b for b in _aransas_boundaries() if b["unsteady_number"] == "01"]
+    row["verified_reference"] = _attribution(row, own, found=False)
+    assert _dss_correction_attribution(row) is None
+    assert not _dss_correction_is_record_proven(row, revisions)
