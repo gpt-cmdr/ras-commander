@@ -9,6 +9,7 @@ classifier that turns a raw path into an action.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -1078,28 +1079,49 @@ def test_a_bare_marker_stops_naming_destinations_once_the_record_can_attribute_i
 
 @pytest.mark.skipif(not Path(r"F:\eBFE\audit\12100407\_audit.json").is_file(), reason="Aransas audit unavailable")
 def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete():
-    """Aransas is one of the 39 studies whose DSS record check never ran.
+    """Registration scoping: an unregistered unsteady file asks nothing of anyone.
 
-    It read 0 resolved / 0 acquisition / 14 inferred, every reason "catalog read
-    failed: RuntimeError: Java not found", and its twenty reviewed DSS
-    corrections were basename matches made while that reader was failing. This
-    test pinned the held state.
+    Aransas was one of the 39 studies whose DSS record check never ran. It read
+    0 resolved / 0 acquisition / 14 inferred, every reason "catalog read failed:
+    RuntimeError: Java not found", and its twenty reviewed DSS corrections were
+    basename matches made while that reader was failing.
 
-    Updated 2026-09-19 after the check was re-answered from the delivered DSS
-    members: all 14 boundaries resolve against catalogs that were actually read,
-    so the row names its location instead of explaining a hold, and the fourteen
-    DSS actions are gone. The twenty `dss_pathname` acquisitions that remain in
-    the record belong to UNREGISTERED unsteady files (u03-u07), which is why
-    they do not appear here -- registration scoping is what this test is really
-    about, and it is unchanged in both directions.
+    Rewritten 2026-09-21, after the correction pass was itself re-run with
+    per-reference attribution. The counts moved and the scoping did not, which
+    is the distinction this test exists to make:
+
+    * **14 DSS actions returned, and that is the record becoming honest.** Each
+      is a `path_correction` / `relocated_by_assembly` on a REGISTERED file
+      (u01, u02, u08...), one per reference, asking the engineer to repoint a
+      `DSS File` entry that assembly moved. The previous state emitted none of
+      them, because twenty rows had been stamped `resolved` with `to` already
+      rewritten on one file's evidence. Suppressing a needed repair is not the
+      same as not needing it.
+    * **The unregistered files still ask for nothing.** u03-u07 and Backup.u01
+      contribute 0 actions, unchanged in both directions. That is the property
+      under test, and the corrected record does not alter it.
+
+    Total actions moved 26 -> 33 and blocking 24 -> 31: +14 DSS, and 7 fewer
+    non-DSS. The 7 are attributed to the stage-3 deficiency review being
+    regenerated against the corrected record the same day, which withdrew 527
+    `analysis_gap` verdicts corpus-wide -- but WHICH 7 was not verified, because
+    the pre-image sidecar had already been removed. Treat the 33 as observed,
+    not as derived.
     """
     bundle = load_audit_bundle(Path(r"F:\eBFE\audit\12100407"))
     actions = actions_from_bundle(bundle)
     dss_actions = [action for action in actions if action.evidence.endswith(":DSS File")]
-    assert len(actions) == 26
-    assert sum(action.blocking for action in actions) == 24
-    # The boundaries resolved, so nothing is asked of the operator for them.
-    assert len(dss_actions) == 0
+    assert len(actions) == 33
+    assert sum(action.blocking for action in actions) == 31
+    # Every DSS action is a per-reference repointing of a registered file. A
+    # bare count would not catch these turning back into acquisitions, or into
+    # one shared action standing in for many references.
+    assert len(dss_actions) == 14
+    assert {action.kind for action in dss_actions} == {"path_correction"}
+    assert {action.reason for action in dss_actions} == {"relocated_by_assembly"}
+    assert len({action.evidence for action in dss_actions}) == len(dss_actions), (
+        "one action per reference; a shared action is the uniform-stamp defect"
+    )
     assert not any(
         Path(action.target).name in {
             "Aransas.u03", "Aransas.u04", "Aransas.u05", "Aransas.u06", "Aransas.u07", "Backup.u01"
@@ -1120,11 +1142,24 @@ def test_aransas_reviewed_render_is_registration_scoped_and_inventory_complete()
     assert "unconfirmed: the DSS record check did not run" not in markdown
     # ... and a corrected record says so on its face, so it is never mistaken
     # for a re-run record.
-    assert "re-verified in place on 2026-09-19T23:25:13Z" in markdown
+    # The property is that a corrected record SAYS it was corrected in place, so
+    # it is never mistaken for a re-run. Pinning the exact instant asserted the
+    # history instead, and broke the moment the record was legitimately
+    # re-verified again on 2026-09-21.
+    assert re.search(r"re-verified in place on \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", markdown)
     assert "not re-run" in markdown
-    # The producer's own acquisitions are still reported, now as established facts.
-    for name in ("01__MINUS.dss", "10_ACE.dss", "100YR.dss", "100YR_PLUS.dss", "25YR.dss", "500YR.dss", "50YR.dss"):
-        assert f"DSS boundary data ({name})" in markdown
+    # Seven DSS files were reported here as acquisitions -- 01__MINUS, 10_ACE,
+    # 100YR, 100YR_PLUS, 25YR, 500YR, 50YR. That claim came from the superseded
+    # correction, which stamped one file's evidence across references naming all
+    # seven. Re-run per reference on 2026-09-21, every one of them resolves
+    # against a delivered DSS, so the delivery supplies them and asking the
+    # engineer to obtain them would be wrong.
+    assert "| DSS boundary data | Yes | Yes |" in markdown
+    assert "1 referenced, 1 resolve" in dss
+    for name in ("01__MINUS.dss", "10_ACE.dss", "100YR.dss", "100YR_PLUS.dss",
+                 "25YR.dss", "500YR.dss", "50YR.dss"):
+        assert f"DSS boundary data ({name})" not in markdown, (
+            f"{name} resolves against the delivery; it must not be an acquisition")
     results = next(line for line in markdown.splitlines() if line.startswith("| Results (plan HDFs) |"))
     for number in ("09", "10", "11", "16", "17", "18", "19"):
         assert f"Aransas.p{number}.hdf" in results
@@ -1874,3 +1909,27 @@ def test_a_read_that_did_not_find_the_pathname_never_proves_the_row():
     row["verified_reference"] = _attribution(row, own, found=False)
     assert _dss_correction_attribution(row) is None
     assert not _dss_correction_is_record_proven(row, revisions)
+
+
+def test_case_only_duplicates_sort_the_same_way_every_process():
+    """A case-only duplicate must not leave the order to the hash seed.
+
+    `sorted(..., key=str.casefold)` ties on a pair like `Jones Creek.p01.hdf`
+    and `JONES CREEK.p01.hdf`. Python's sort is stable, so a tie preserves the
+    input order -- and the input was a SET, whose iteration order is seeded per
+    process. Two runs of the same render then produce different bytes at an
+    identical byte count. Found on the corpus 2026-09-21 (12030101, 11110207):
+    no verdict moved, but byte-for-byte re-render stopped being usable as a
+    reproducibility check, which is the control a corpus re-render leans on.
+    """
+    from ras_commander.sources.federal.ebfe_audit import _casefold_then_exact
+
+    pair = {"Jones Creek.p01.hdf", "JONES CREEK.p01.hdf"}
+    orderings = {tuple(sorted(pair, key=_casefold_then_exact)) for _ in range(64)}
+    assert len(orderings) == 1, orderings
+
+    # The key must still order case-insensitively; exactness is only the
+    # tiebreak, so unrelated names keep their human ordering.
+    names = ["beta.hdf", "Alpha.hdf", "ALPHA.hdf", "gamma.hdf"]
+    assert sorted(names, key=_casefold_then_exact) == [
+        "ALPHA.hdf", "Alpha.hdf", "beta.hdf", "gamma.hdf"]

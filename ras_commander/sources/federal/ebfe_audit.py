@@ -410,6 +410,22 @@ def _dss_attribution_revisions(audit: dict) -> str:
     ))
 
 
+def _casefold_then_exact(value: str) -> tuple:
+    """Sort key that is total, not merely case-insensitive.
+
+    ``key=str.casefold`` alone ties on a case-only duplicate -- a delivery
+    carrying both ``Jones Creek.p01.hdf`` and ``JONES CREEK.p01.hdf`` -- and
+    Python's sort is stable, so the output order becomes whatever order the
+    SET handed over. That is seeded per process, so the same record rendered
+    twice produces different bytes. Found 2026-09-21 on 12030101 and 11110207,
+    where a re-render differed from the stored document at an identical byte
+    count. No verdict or action count is affected, but it makes byte-for-byte
+    re-render useless as a reproducibility check, which is exactly the control
+    a corpus re-render relies on.
+    """
+    return (value.casefold(), value)
+
+
 def _dss_correction_is_record_proven(recipe: dict, revisions: str = "") -> bool:
     """May this DSS ``path_correction`` be described to an engineer as resolved?
 
@@ -874,8 +890,8 @@ def _chain_order(records: Iterable) -> tuple:
             if model not in sequence:
                 sequence.append(model)
     if cycles["seen"]:
-        order_for = {key: sorted(set(value), key=str.casefold) for key, value in order_for.items()}
-        sequence = sorted(set(sequence), key=str.casefold)
+        order_for = {key: sorted(set(value), key=_casefold_then_exact) for key, value in order_for.items()}
+        sequence = sorted(set(sequence), key=_casefold_then_exact)
     return order_for, sequence
 
 
@@ -1284,7 +1300,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         and _dss_correction_is_record_proven(recipe, _dss_attribution_revisions(audit))
     ]
     if reviewed_dss:
-        destinations = sorted({str(recipe["to"]) for recipe in reviewed_dss}, key=str.casefold)
+        destinations = sorted({str(recipe["to"]) for recipe in reviewed_dss}, key=_casefold_then_exact)
         entry = dict(out.get("dss") or {})
         entry["state"] = "yes"
         entry["location"] = ", ".join(destinations)
@@ -1316,7 +1332,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
             and _recipe_targets_registered_element(bundle, recipe)
         )
         if locations:
-            ordered = sorted(locations, key=str.casefold)
+            ordered = sorted(locations, key=_casefold_then_exact)
             results["location"] = ", ".join(ordered)
             results["note"] = f"{len(ordered)} plan HDF{'s' if len(ordered) != 1 else ''}"
             out["results_hdf"] = results
@@ -1407,7 +1423,7 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
         sequence = _chain_order(records)[1]
         entry = dict(out.get("dss") or {})
         entry.setdefault("state_as_captured", entry.get("state"))
-        files = sorted(chained, key=str.casefold)
+        files = sorted(chained, key=_casefold_then_exact)
         shown = ", ".join(files[:3]) + (f" and {len(files) - 3} more" if len(files) > 3 else "")
         outstanding = [
             recipe for recipe in bundle.recipes
