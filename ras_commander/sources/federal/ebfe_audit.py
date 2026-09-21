@@ -1708,6 +1708,24 @@ def actions_from_bundle(bundle: AuditBundle) -> list[RepairAction]:
             # never established was missing invents work; the supporting-data
             # row and section 6 say the check is outstanding instead.
             continue
+
+        if state == "not_applicable":
+            # The element does not apply to this model at all -- for DSS, that
+            # the model has no DSS-backed boundaries. It cannot then be missing.
+            #
+            # Added 2026-09-21. BIGSPRINGCREEKTRIB02_BLE carries
+            # `state: "not_applicable"` with the note "no DSS-backed boundaries"
+            # and `boundaries_checked: 0`, yet `referenced: True` from a single
+            # vestigial `.prj` pointer at `BIGSPRINGCRKTR02.dss`. Without this
+            # it became an acquisition, and that ONE unit set the whole
+            # 112-unit Escambia study to needs_data -- while its own document
+            # cited "no DSS-backed boundaries" as the evidence for needing DSS.
+            #
+            # Safe corpus-wide, measured rather than assumed: of 6,175
+            # `not_applicable` DSS entries across the corpus, ZERO have
+            # `boundaries_checked > 0`. The state never coincides with a model
+            # that actually uses the element.
+            continue
         if ekey == "dss" and (acquired_files or chain_rerun_files):
             continue    # the missing DSS files are already named one by one above
         if ekey == "dss" and state == "requires_chain_rerun":
