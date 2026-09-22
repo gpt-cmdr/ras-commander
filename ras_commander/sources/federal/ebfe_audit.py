@@ -2085,6 +2085,22 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
             str(p.get("project") or p.get("name") or ""): p
             for p in ((audit.get("terrain") or {}).get("projects") or []) if isinstance(p, dict)
         }
+        # This row asks the same question ``_delivered_elements`` asks above --
+        # does this project have the Terrain.hdf HEC-RAS opens? -- and it must
+        # get the same answer, from the same two sources. Testing only the
+        # capture's directory scan here left 12050002 and 11140301 rendering
+        # "after repair (from the delivery alone)" in the verdict row and
+        # "critical data missing: terrain" two rows below it, in the same
+        # document. A second copy of a rule is a second answer; this one now
+        # reads the member index through the same helpers the overlay uses.
+        critical_reviewed_member = reviewed_terrain_member(delivered.get("terrain"))
+
+        def _project_has_terrain_hdf(project_path: str) -> bool:
+            if terrain_projects.get(project_path, {}).get("terrain_hdf"):
+                return True
+            return bool(critical_reviewed_member
+                        and project_owns_member(project_path, critical_reviewed_member))
+
         kept = []
         for item in critical:
             element = str(item.get("element") or "")
@@ -2099,7 +2115,7 @@ def render_audit_markdown(bundle: AuditBundle) -> str:
                 continue
             if str(item.get("element")) == "terrain" and str(item.get("reason", "")).startswith("terrain_hdf_absent"):
                 named = [str(p) for p in (item.get("projects") or [])]
-                if named and all(terrain_projects.get(p, {}).get("terrain_hdf") for p in named):
+                if named and all(_project_has_terrain_hdf(p) for p in named):
                     continue
             kept.append(item)
         critical = kept
