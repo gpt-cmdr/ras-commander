@@ -1369,6 +1369,85 @@ class TestFixBcConflicts:
 class TestRasMapperLibVersionCompat:
     """RasMapperLib signatures that changed between HEC-RAS 6.0 and 6.6."""
 
+    @pytest.mark.parametrize("parameter_count", [4, 6, 7])
+    def test_regenerate_mesh_points_activates_every_refinement_region(
+        self, monkeypatch, parameter_count
+    ):
+        class FakeNetList(list):
+            @classmethod
+            def __class_getitem__(cls, _item):
+                return cls
+
+            def Add(self, value):
+                self.append(value)
+
+        class FakeArray:
+            @classmethod
+            def __class_getitem__(cls, _item):
+                return lambda values: values
+
+        system = types.ModuleType("System")
+        system.Int32 = int
+        system.Object = object
+        system.Array = FakeArray
+        reflection = types.ModuleType("System.Reflection")
+        reflection.BindingFlags = type(
+            "BindingFlags", (), {"Instance": 1, "NonPublic": 2}
+        )
+        collections = types.ModuleType("System.Collections")
+        generic = types.ModuleType("System.Collections.Generic")
+        generic.List = FakeNetList
+        monkeypatch.setitem(sys.modules, "System", system)
+        monkeypatch.setitem(sys.modules, "System.Reflection", reflection)
+        monkeypatch.setitem(sys.modules, "System.Collections", collections)
+        monkeypatch.setitem(sys.modules, "System.Collections.Generic", generic)
+
+        captured = {}
+
+        class Method:
+            @staticmethod
+            def GetParameters():
+                return [object()] * parameter_count
+
+            def Invoke(self, _target, args):
+                captured["args"] = args
+
+        class PointGenerator:
+            def __init__(self, _geometry):
+                pass
+
+            def GetType(self):
+                return MagicMock(GetMethod=MagicMock(return_value=Method()))
+
+        mesh_points = MagicMock()
+        mesh_points.PointMCount.return_value = 2
+        mesh_points.PointM.side_effect = [
+            MockPointM(1.0, 2.0),
+            MockPointM(3.0, 4.0),
+        ]
+        geometry = MagicMock()
+        geometry.D2FlowArea.FeatureCount.return_value = 1
+        geometry.D2FlowArea.Geometry.MeshPoints = {0: mesh_points}
+        geometry.BreakLines.FeatureCount.return_value = 2
+        geometry.SA2DStructures.FeatureCount.return_value = 0
+        geometry.MeshRegions.FeatureCount.return_value = 3
+
+        seeds = geom_mesh_module._generate_seeds_via_net(
+            "fixture.g01.hdf",
+            {
+                "RASGeometry": lambda _path: geometry,
+                "PointGenerator": PointGenerator,
+                "PointMs": MockPointMs,
+            },
+        )
+
+        assert list(captured["args"][0]) == [0, 1]
+        assert list(captured["args"][1]) == [0, 1, 2]
+        assert list(captured["args"][2]) == [0]
+        assert list(captured["args"][3]) == [0]
+        assert len(captured["args"]) == parameter_count
+        assert seeds.Count == 2
+
     @staticmethod
     def _fake_clr(monkeypatch, ctor_param_types):
         def ctor(types_):
@@ -1775,6 +1854,135 @@ def test_generate_smoke_persists_real_geometry(tmp_path):
         assert compiled_hdf_path.stat().st_mtime >= start_hdf_mtime
 
 
+@pytest.mark.integration
+@pytest.mark.destructive_copy
+@pytest.mark.slow
+@pytest.mark.skipif(
+    platform.system() != "Windows" or os.environ.get(HECRAS_INTEGRATION_ENV) != "1",
+    reason="Requires Windows, HEC-RAS, and explicit opt-in integration execution",
+)
+@pytest.mark.parametrize(
+    "use_rasmapper",
+    [True, False],
+    ids=["product_layer", "native_schema_fallback"],
+)
+def test_refinement_region_changes_density_on_rasexamples_chippewa(
+    tmp_path, use_rasmapper
+):
+    """Region-only A/B gate against a disposable real RasExamples project."""
+    from shapely.geometry import Point, Polygon, box
+
+    from ras_commander import RasExamples, init_ras_project
+
+    hecras_dir = Path(
+        os.environ.get(
+            "RAS_COMMANDER_HECRAS_DIR",
+            r"C:\Program Files (x86)\HEC\HEC-RAS\6.6",
+        )
+    )
+    ras_exe = hecras_dir / "Ras.exe"
+    if not ras_exe.is_file():
+        pytest.skip(f"HEC-RAS executable not found: {ras_exe}")
+
+    project = RasExamples.extract_project(
+        "Chippewa_2D",
+        output_path=tmp_path,
+        suffix=f"pytest_refinement_region_{use_rasmapper}",
+    )
+    ras = init_ras_project(
+        project,
+        ras_exe,
+        hide_intro=True,
+        accept_tcu=True,
+    )
+    geom_path = Path(
+        ras.geom_df.loc[ras.geom_df["geom_number"] == "01"].iloc[0]["full_path"]
+    )
+    hdf_path = Path(str(geom_path) + ".hdf")
+    mesh_name = "Perimeter 1"
+    base_spacing = 200.0
+    region_spacing = 40.0
+
+    base = GeomMesh.generate(
+        geom_path,
+        mesh_name=mesh_name,
+        cell_size=base_spacing,
+        hecras_dir=hecras_dir,
+        ras_object=ras,
+        recompile_via_rasexe=True,
+    )
+    assert base.ok
+    with h5py.File(str(hdf_path), "r") as hf:
+        area = hf[f"Geometry/2D Flow Areas/{mesh_name}"]
+        perimeter = Polygon(np.asarray(area["Perimeter"][:, :2], dtype=float))
+        base_centers = np.asarray(
+            area["Cells Center Coordinate"][:, :2], dtype=float
+        )
+
+    admissible = perimeter.buffer(-base_spacing)
+    region = None
+    for x, y in base_centers:
+        candidate = box(x - 800.0, y - 800.0, x + 800.0, y + 800.0)
+        if admissible.contains(candidate):
+            region = candidate
+            break
+    assert region is not None, "Chippewa fixture has no 1,600-ft interior square"
+
+    fid = GeomMesh.add_refinement_region(
+        geom_path,
+        list(region.exterior.coords),
+        spacing_dx=region_spacing,
+        name="pytest_refinement_region",
+        hecras_dir=hecras_dir,
+        ras_object=ras,
+        use_rasmapper=use_rasmapper,
+    )
+    assert fid == 0
+    product_regions = geom_mesh_module._mapper_refinement_regions(
+        hdf_path, hecras_dir
+    )
+    assert product_regions == [
+        {
+            "fid": 0,
+            "name": "pytest_refinement_region",
+            "spacing_dx": pytest.approx(region_spacing),
+            "spacing_dy": pytest.approx(region_spacing),
+            "point_count": 5,
+        }
+    ]
+
+    refined = GeomMesh.generate(
+        geom_path,
+        mesh_name=mesh_name,
+        cell_size=base_spacing,
+        hecras_dir=hecras_dir,
+        ras_object=ras,
+        recompile_via_rasexe=True,
+    )
+    assert refined.ok
+    assert refined.cell_count > base.cell_count * 4
+    with h5py.File(str(hdf_path), "r") as hf:
+        centers = np.asarray(
+            hf[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][:, :2],
+            dtype=float,
+        )
+    inside_mask = np.asarray([region.contains(Point(xy)) for xy in centers])
+    inside = centers[inside_mask]
+    outside = centers[~inside_mask]
+
+    def median_nn(points):
+        offsets = points[:, None, :] - points[None, :, :]
+        distances = np.sqrt(np.sum(offsets * offsets, axis=2))
+        np.fill_diagonal(distances, np.inf)
+        return float(np.median(distances.min(axis=1)))
+
+    inside_spacing = median_nn(inside)
+    outside_spacing = median_nn(outside)
+    assert len(inside) >= 1000
+    assert inside_spacing == pytest.approx(region_spacing, abs=1.0)
+    assert outside_spacing > inside_spacing * 2
+
+
 # ── Fixtures for name management / refinement region tests ──────────
 
 
@@ -1828,11 +2036,17 @@ def refinement_region_hdf(tmp_path):
         ("Name", "S32"),
         ("Spacing dx", "<f4"),
         ("Spacing dy", "<f4"),
+        ("Shift dx", "<f4"),
+        ("Shift dy", "<f4"),
+        ("Perimeter Spacing", "<f4"),
+        ("Near Spacing Repeats", "<i4"),
+        ("Far Spacing", "<f4"),
+        ("Protection Radius", "u1"),
     ])
     data = np.array([
-        (b"North", 50.0, 50.0),
-        (b"North", 75.0, 75.0),
-        (b"", 100.0, 100.0),
+        (b"North", 50.0, 50.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
+        (b"North", 75.0, 75.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
+        (b"", 100.0, 100.0, np.nan, np.nan, np.nan, 0, np.nan, 0),
     ], dtype=dt)
     # Three simple square polygons (5 pts each, closed rings)
     pts0 = np.array([[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]], dtype=np.float64)
@@ -1847,6 +2061,7 @@ def refinement_region_hdf(tmp_path):
         hf.create_dataset(f"{rr}/Polygon Info", data=info, **gzip_kw)
         hf.create_dataset(f"{rr}/Polygon Parts", data=parts, **gzip_kw)
         hf.create_dataset(f"{rr}/Polygon Points", data=all_pts, **gzip_kw)
+        geom_mesh_module._set_refinement_region_dataset_metadata(hf, rr)
     return geom_text, hdf_path
 
 
@@ -2107,6 +2322,19 @@ class TestRefinementRegions:
         ]
         with h5py.File(str(hdf_path), "r") as hf:
             assert np.array_equal(hf["Geometry/Sentinel"][:], [7, 8, 9])
+            rr = "Geometry/2D Flow Area Refinement Regions"
+            assert hf[f"{rr}/Attributes"].dtype.names == (
+                "Name",
+                "Spacing dx",
+                "Spacing dy",
+                "Shift dx",
+                "Shift dy",
+                "Perimeter Spacing",
+                "Near Spacing Repeats",
+                "Far Spacing",
+                "Protection Radius",
+            )
+            assert hf[f"{rr}/Polygon Info"].attrs["Feature Type"] == b"Polygon"
             points = hf[
                 "Geometry/2D Flow Area Refinement Regions/Polygon Points"
             ][:]
@@ -2187,6 +2415,42 @@ SAMPLE_POLYGON = [
 
 class TestAddRefinementRegion:
 
+    def test_product_geometry_routes_through_rasmapper(self, empty_geom_hdf, monkeypatch):
+        geom_text, hdf_path = empty_geom_hdf
+        captured = {}
+
+        def add_via_mapper(path, coords, spacing_dx, spacing_dy, name, hecras_dir):
+            captured.update(
+                path=path,
+                coords=np.asarray(coords),
+                spacing_dx=spacing_dx,
+                spacing_dy=spacing_dy,
+                name=name,
+                hecras_dir=hecras_dir,
+            )
+            return 4
+
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_add_refinement_region_via_mapper",
+            add_via_mapper,
+        )
+
+        fid = GeomMesh.add_refinement_region(
+            geom_text,
+            SAMPLE_POLYGON,
+            spacing_dx=25.0,
+            name="Product region",
+            use_rasmapper=True,
+        )
+
+        assert fid == 4
+        assert captured["path"] == hdf_path
+        assert captured["spacing_dx"] == 25.0
+        assert captured["spacing_dy"] == 25.0
+        assert captured["name"] == "Product region"
+        assert len(captured["coords"]) == 5
+
     def test_add_first_region_creates_group(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf
         fid = GeomMesh.add_refinement_region(
@@ -2216,9 +2480,27 @@ class TestAddRefinementRegion:
             assert hf[f"{rr}/Attributes"].dtype["Spacing dx"] == np.dtype("<f4")
             assert hf[f"{rr}/Attributes"].dtype["Spacing dy"] == np.dtype("<f4")
             assert hf[f"{rr}/Attributes"].dtype["Name"] == np.dtype("S32")
+            assert hf[f"{rr}/Attributes"].dtype.names == (
+                "Name",
+                "Spacing dx",
+                "Spacing dy",
+                "Shift dx",
+                "Shift dy",
+                "Perimeter Spacing",
+                "Near Spacing Repeats",
+                "Far Spacing",
+                "Protection Radius",
+            )
             assert hf[f"{rr}/Polygon Info"].dtype == np.dtype("int32")
             assert hf[f"{rr}/Polygon Parts"].dtype == np.dtype("int32")
             assert hf[f"{rr}/Polygon Points"].dtype == np.dtype("float64")
+            row = hf[f"{rr}/Attributes"][0]
+            assert np.isnan(row["Shift dx"])
+            assert np.isnan(row["Shift dy"])
+            assert np.isnan(row["Perimeter Spacing"])
+            assert row["Near Spacing Repeats"] == 0
+            assert np.isnan(row["Far Spacing"])
+            assert row["Protection Radius"] == 0
 
     def test_add_region_gzip_compression(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf
@@ -2250,6 +2532,9 @@ class TestAddRefinementRegion:
             assert parts.shape == (1, 2)
             assert parts[0, 0] == 0
             assert parts[0, 1] == 5
+            assert list(hf[f"{rr}/Polygon Points"].attrs["Column"]) == [b"X", b"Y"]
+            assert hf[f"{rr}/Polygon Points"].attrs["Row"] == b"Points"
+            assert hf[f"{rr}/Polygon Info"].attrs["Feature Type"] == b"Polygon"
 
     def test_add_multiple_regions_appends(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf
@@ -2279,6 +2564,12 @@ class TestAddRefinementRegion:
 
     def test_add_region_to_existing_fixture(self, refinement_region_hdf):
         geom_text, hdf_path = refinement_region_hdf
+        rr = "Geometry/2D Flow Area Refinement Regions"
+        with h5py.File(str(hdf_path), "r+") as hf:
+            rows = hf[f"{rr}/Attributes"][:]
+            rows["Perimeter Spacing"][0] = 88.0
+            rows["Protection Radius"][0] = 1
+            hf[f"{rr}/Attributes"][:] = rows
         fid = GeomMesh.add_refinement_region(
             geom_text, SAMPLE_POLYGON, spacing_dx=15.0, name="NewRegion",
         )
@@ -2287,6 +2578,10 @@ class TestAddRefinementRegion:
         assert len(regions) == 4
         assert regions[3]["name"] == "NewRegion"
         assert abs(regions[3]["spacing_dx"] - 15.0) < 0.01
+        with h5py.File(str(hdf_path), "r") as hf:
+            rows = hf[f"{rr}/Attributes"][:]
+            assert rows["Perimeter Spacing"][0] == pytest.approx(88.0)
+            assert rows["Protection Radius"][0] == 1
 
     def test_add_region_auto_closes_ring(self, empty_geom_hdf):
         geom_text, hdf_path = empty_geom_hdf

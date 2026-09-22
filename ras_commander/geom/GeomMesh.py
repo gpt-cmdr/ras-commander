@@ -32,8 +32,8 @@ Production Workflow (generate)
 5. **Load .NET geometry** — RASGeometry(hdf_path) → D2FlowArea → perimeter,
    breaklines (merged BreakLines + Regions + Structures via _build_breaklines).
 6. **Generate seeds** — Primary: RegenerateMeshPoints (private .NET method via
-   reflection) produces breakline-aware seeds. Fallback: PointGenerator.
-   GeneratePoints(perim, cell_size) for base-grid seeds.
+   reflection) produces breakline- and refinement-region-aware seeds.
+   Fallback: PointGenerator.GeneratePoints(perim, cell_size) for base-grid seeds.
 7. **Fix loop** (matches TryAutoFix tier ordering):
    - Tier 0: Diagnose short perimeter segments while preserving the exact
      authored perimeter
@@ -62,6 +62,7 @@ Ported from G:\\GH\\RASDecomp\\headless_mesh\\mesh_fix.py and mesh_bc_fix.py.
 
 from __future__ import annotations
 
+import math
 import os
 import platform
 import shutil
@@ -193,6 +194,7 @@ def _imports():
         Polyline,
         Polygon,
         Point2D,
+        PointM,
         PointMs,
     )
     from RasMapperLib.Mesh import MeshStatus  # type: ignore
@@ -207,6 +209,7 @@ def _imports():
         Polyline=Polyline,
         Polygon=Polygon,
         Point2D=Point2D,
+        PointM=PointM,
         PointMs=PointMs,
         MeshStatus=MeshStatus,
         PointGenerator=PointGenerator,
@@ -264,7 +267,7 @@ def _generate_seeds_safe(perim, cell_size: float, ns: dict):
 
 
 def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "PointMs":
-    """Generate breakline-aware seeds using RasMapperLib.PointGenerator.
+    """Generate breakline- and refinement-region-aware seeds via RAS Mapper.
 
     Calls the private RegenerateMeshPoints instance method via reflection,
     which internally runs the full EnforceBreaklines 5-step pipeline.
@@ -327,6 +330,9 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         for i in range(perim_count):
             perim_idx.Add(i)
         region_idx = NetList[System.Int32]()
+        region_count = geom.MeshRegions.FeatureCount()
+        for i in range(region_count):
+            region_idx.Add(i)
 
         pg = ns["PointGenerator"](geom)
         pg_type = pg.GetType()
@@ -355,7 +361,7 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         logger.debug(
             f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
             f"({bl_count} breaklines incl {len(struct_bl_fids)} struct, "
-            f"{perim_count} perimeters)"
+            f"{region_count} refinement regions, {perim_count} perimeters)"
         )
         return seeds_pm
     finally:
@@ -2742,6 +2748,204 @@ def _create_hdf_dataset(hf, key: str, data: "numpy.ndarray") -> None:
     )
 
 
+def _refinement_region_attribute_dtype():
+    """Return the complete Attributes record understood by RAS Mapper.
+
+    The earlier three-field writer (Name and X/Y spacing only) was readable by
+    h5py and ras-commander's own readers, but RAS Mapper silently ignored it.
+    This nine-field record is stable in native geometry HDFs from HEC-RAS
+    5.0.7 through 7.0.
+    """
+    import numpy as np
+
+    return np.dtype(
+        [
+            ("Name", "S32"),
+            ("Spacing dx", "<f4"),
+            ("Spacing dy", "<f4"),
+            ("Shift dx", "<f4"),
+            ("Shift dy", "<f4"),
+            ("Perimeter Spacing", "<f4"),
+            ("Near Spacing Repeats", "<i4"),
+            ("Far Spacing", "<f4"),
+            ("Protection Radius", "u1"),
+        ]
+    )
+
+
+def _refinement_region_attribute_rows(regions: Sequence[Mapping[str, Any]]):
+    """Build complete native Attributes rows for normalized regions."""
+    import numpy as np
+
+    dtype = _refinement_region_attribute_dtype()
+    return np.asarray(
+        [
+            (
+                str(region["name"]).encode("utf-8"),
+                np.float32(region["spacing_dx"]),
+                np.float32(region["spacing_dy"]),
+                np.float32(np.nan),
+                np.float32(np.nan),
+                np.float32(np.nan),
+                np.int32(0),
+                np.float32(np.nan),
+                np.uint8(0),
+            )
+            for region in regions
+        ],
+        dtype=dtype,
+    )
+
+
+def _coerce_refinement_region_attributes(attributes):
+    """Promote legacy/minimal rows without dropping native properties."""
+    import numpy as np
+
+    dtype = _refinement_region_attribute_dtype()
+    if attributes.dtype == dtype:
+        return attributes
+    promoted = np.zeros(len(attributes), dtype=dtype)
+    for field in ("Shift dx", "Shift dy", "Perimeter Spacing", "Far Spacing"):
+        promoted[field] = np.nan
+    for field in dtype.names:
+        if field in (attributes.dtype.names or ()):
+            promoted[field] = attributes[field]
+    return promoted
+
+
+def _set_refinement_region_dataset_metadata(hf, group_key: str) -> None:
+    """Write the semantic HDF metadata required by MeshRegionLayer."""
+    import numpy as np
+
+    info = hf[f"{group_key}/Polygon Info"]
+    parts = hf[f"{group_key}/Polygon Parts"]
+    points = hf[f"{group_key}/Polygon Points"]
+    info.attrs["Column"] = np.asarray(
+        [
+            b"Point Starting Index",
+            b"Point Count",
+            b"Part Starting Index",
+            b"Part Count",
+        ],
+        dtype="S20",
+    )
+    info.attrs["Feature Type"] = np.bytes_(b"Polygon")
+    info.attrs["Row"] = np.bytes_(b"Feature")
+    parts.attrs["Column"] = np.asarray(
+        [b"Point Starting Index", b"Point Count"], dtype="S20"
+    )
+    parts.attrs["Row"] = np.bytes_(b"Part")
+    points.attrs["Column"] = np.asarray([b"X", b"Y"], dtype="S1")
+    points.attrs["Row"] = np.bytes_(b"Points")
+
+
+def _mapper_refinement_regions(
+    hdf_path: Path,
+    hecras_dir: Optional[Union[str, Path]] = None,
+) -> list[dict[str, Any]]:
+    """Read refinement regions through the installed RAS Mapper product API."""
+    _load_dlls(hecras_dir)
+    ns = _imports()
+    geometry = ns["RASGeometry"](str(hdf_path))
+    regions = geometry.MeshRegions
+    records: list[dict[str, Any]] = []
+    for fid in range(int(regions.FeatureCount())):
+        row = regions.FeatureRow(fid)
+        polygon = regions.Polygon(fid)
+        records.append(
+            {
+                "fid": fid,
+                "name": str(regions.GetFeatureName(fid)),
+                "spacing_dx": float(row["Cell Size X"]),
+                "spacing_dy": float(row["Cell Size Y"]),
+                "point_count": int(polygon.Count) if polygon is not None else 0,
+            }
+        )
+    return records
+
+
+def _add_refinement_region_via_mapper(
+    hdf_path: Path,
+    coords,
+    spacing_dx: float,
+    spacing_dy: float,
+    name: str,
+    hecras_dir: Optional[Union[str, Path]] = None,
+) -> int:
+    """Create, save, and product-reload one native refinement region."""
+    import h5py
+
+    from ..dotnet.geometry_save import suppress_feature_table_reloads
+
+    _load_dlls(hecras_dir)
+    ns = _imports()
+    geometry = ns["RASGeometry"](str(hdf_path))
+    regions = geometry.MeshRegions
+    before_count = int(regions.FeatureCount())
+    attributes_key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+    with h5py.File(str(hdf_path), "r") as hf:
+        hdf_count = len(hf[attributes_key]) if attributes_key in hf else 0
+    if hdf_count != before_count:
+        raise RuntimeError(
+            "RAS Mapper and the geometry HDF disagree on the number of "
+            f"refinement regions ({before_count} vs {hdf_count}); refusing "
+            "to overwrite product-unreadable records."
+        )
+
+    backup = hdf_path.with_name(
+        f".{hdf_path.name}.rascommander-refinement-{uuid4().hex}.bak"
+    )
+    shutil.copy2(hdf_path, backup)
+    try:
+        with suppress_feature_table_reloads(geometry):
+            points = ns["PointMs"]()
+            for x, y in coords:
+                points.Add(ns["PointM"](float(x), float(y)))
+            row = regions.AddFeature(ns["Polygon"](points))
+            if row is None:
+                raise RuntimeError("RAS Mapper MeshRegions.AddFeature returned no row")
+            fid = int(row["FID"])
+            if fid != before_count:
+                raise RuntimeError(
+                    f"RAS Mapper added refinement FID {fid}; expected {before_count}."
+                )
+            row["Cell Size X"] = float(spacing_dx)
+            row["Cell Size Y"] = float(spacing_dy)
+            row["Near Repeats"] = 0
+            row["Enforce 1 Cell Protection Radius"] = False
+            regions.SetFeatureName(fid, str(name))
+            if regions.Save() is False:
+                raise RuntimeError("RAS Mapper failed to save the refinement-region layer")
+
+        persisted = _mapper_refinement_regions(hdf_path, hecras_dir)
+        with h5py.File(str(hdf_path), "r") as hf:
+            persisted_hdf_count = (
+                len(hf[attributes_key]) if attributes_key in hf else 0
+            )
+        if len(persisted) != before_count + 1 or persisted_hdf_count != len(persisted):
+            raise RuntimeError(
+                "RAS Mapper did not persist and reload the added refinement region "
+                f"(product={len(persisted)}, HDF={persisted_hdf_count})."
+            )
+        observed = persisted[fid]
+        if (
+            observed["name"] != str(name)
+            or not math.isclose(observed["spacing_dx"], spacing_dx, abs_tol=1e-5)
+            or not math.isclose(observed["spacing_dy"], spacing_dy, abs_tol=1e-5)
+            or observed["point_count"] < 4
+        ):
+            raise RuntimeError(
+                "RAS Mapper reloaded different refinement-region content: "
+                f"{observed!r}"
+            )
+        return fid
+    except Exception:
+        shutil.copy2(backup, hdf_path)
+        raise
+    finally:
+        backup.unlink(missing_ok=True)
+
+
 class GeomMesh:
     """
     Headless 2D mesh generation, repair, and BC conflict resolution.
@@ -3454,20 +3658,7 @@ class GeomMesh:
                 }
             )
 
-        attr_dtype = np.dtype(
-            [("Name", "S32"), ("Spacing dx", "<f4"), ("Spacing dy", "<f4")]
-        )
-        attributes = np.array(
-            [
-                (
-                    region["name"].encode("utf-8"),
-                    np.float32(region["spacing_dx"]),
-                    np.float32(region["spacing_dy"]),
-                )
-                for region in normalized
-            ],
-            dtype=attr_dtype,
-        )
+        attributes = _refinement_region_attribute_rows(normalized)
         info_rows = []
         part_rows = []
         point_arrays = []
@@ -3499,6 +3690,7 @@ class GeomMesh:
                     _create_hdf_dataset(hf, info_key, polygon_info)
                     _create_hdf_dataset(hf, parts_key, polygon_parts)
                     _create_hdf_dataset(hf, points_key, polygon_points)
+                    _set_refinement_region_dataset_metadata(hf, rr_group_key)
 
             with h5py.File(str(temp_path), "r") as hf:
                 if normalized:
@@ -3544,6 +3736,7 @@ class GeomMesh:
         name: str = "",
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object=None,
+        use_rasmapper: Optional[bool] = None,
     ) -> int:
         """
         Create a new refinement region in the compiled geometry HDF.
@@ -3552,11 +3745,10 @@ class GeomMesh:
         polygon boundaries during mesh generation.  They are stored
         exclusively in HDF — there is no .g## text representation.
 
-        The polygon, spacing, and name are written into four HDF
-        datasets under ``Geometry/2D Flow Area Refinement Regions/``
-        using the exact schema HEC-RAS expects: gzip-compressed
-        datasets with ``int32`` index arrays, ``float64`` coordinates,
-        and ``float32`` attribute values.
+        On Windows/Wine, real product geometry is authored through RAS
+        Mapper's ``MeshRegions`` feature layer and verified with a fresh
+        product reload. Synthetic or cross-platform fixtures use the complete
+        nine-field native HDF schema and polygon-table metadata.
 
         Args:
             geom_number: Geometry number or path to .g## text file.
@@ -3566,12 +3758,18 @@ class GeomMesh:
                 The ring is closed automatically if needed.
             spacing_dx: Cell spacing in the X direction (project
                 units, e.g. feet or metres).
-            spacing_dy: Cell spacing in the Y direction.  Defaults
-                to *spacing_dx* when ``None``.
+            spacing_dy: Stored Y-direction spacing. Defaults to *spacing_dx*
+                when ``None``. HEC-RAS 6.x stores this value, but its Mapper
+                manual says independent Y spacing is not implemented; use
+                equal X/Y spacing unless qualifying a newer product behavior.
             name: Region name stored in the HDF ``Name`` field
                 (max 32 bytes UTF-8).  Empty string is valid.
             hecras_dir: Override HEC-RAS installation directory.
             ras_object: Optional RasPrj instance.
+            use_rasmapper: Force product-backed authoring (True) or the
+                low-level native-schema writer (False). ``None`` selects the
+                product path for real geometry on Windows/Wine and retains the
+                low-level path for synthetic fixtures and non-Windows hosts.
 
         Returns:
             The 0-based FID of the newly created region.
@@ -3607,6 +3805,30 @@ class GeomMesh:
             ras_object=ras_object,
         )
 
+        if use_rasmapper is None:
+            with h5py.File(str(hdf_path), "r") as hf:
+                has_product_polygon_table = (
+                    "Geometry/2D Flow Areas/Polygon Points" in hf
+                )
+            use_rasmapper = platform.system() == "Windows" and (
+                hecras_dir is not None or has_product_polygon_table
+            )
+        if use_rasmapper:
+            new_fid = _add_refinement_region_via_mapper(
+                hdf_path,
+                coords,
+                float(spacing_dx),
+                float(spacing_dy),
+                str(name),
+                hecras_dir,
+            )
+            logger.info(
+                f"Added RAS Mapper refinement region FID {new_fid} "
+                f"(name='{name}', dx={spacing_dx}, dy={spacing_dy}, "
+                f"vertices={len(coords)}) → {hdf_path.name}"
+            )
+            return new_fid
+
         rr_group_key = "Geometry/2D Flow Area Refinement Regions"
         attr_key = f"{rr_group_key}/Attributes"
         info_key = f"{rr_group_key}/Polygon Info"
@@ -3618,18 +3840,19 @@ class GeomMesh:
         # Ensure valid UTF-8 after byte truncation
         name_bytes = name_bytes.decode("utf-8", errors="ignore").encode("utf-8")
 
-        # ── Attributes dtype matches HEC-RAS convention ─────────────
-        attr_dtype = np.dtype([
-            ("Name", "S32"),
-            ("Spacing dx", "<f4"),
-            ("Spacing dy", "<f4"),
-        ])
+        attr_dtype = _refinement_region_attribute_dtype()
 
         n_pts = len(coords)
-        new_attr_row = np.array(
-            [(name_bytes, np.float32(spacing_dx), np.float32(spacing_dy))],
-            dtype=attr_dtype,
+        new_attr_row = _refinement_region_attribute_rows(
+            [
+                {
+                    "name": name_bytes.decode("utf-8"),
+                    "spacing_dx": spacing_dx,
+                    "spacing_dy": spacing_dy,
+                }
+            ]
         )
+        coords_xy = np.asarray(coords[:, :2], dtype=np.float64)
 
         with h5py.File(str(hdf_path), "a") as hf:
             # ── Read existing data (if any) ─────────────────────────
@@ -3639,13 +3862,15 @@ class GeomMesh:
                 old_parts = hf[parts_key][:] if parts_key in hf else np.empty((0, 2), dtype=np.int32)
                 old_points = hf[points_key][:]
 
-                # Coerce existing Attributes to canonical dtype if needed
-                if old_attrs.dtype != attr_dtype:
-                    coerced = np.empty(len(old_attrs), dtype=attr_dtype)
-                    for fname in attr_dtype.names:
-                        if fname in old_attrs.dtype.names:
-                            coerced[fname] = old_attrs[fname]
-                    old_attrs = coerced
+                old_attrs = _coerce_refinement_region_attributes(old_attrs)
+
+                if old_points.ndim != 2 or old_points.shape[1] not in (2, 3):
+                    raise ValueError(
+                        "Refinement-region Polygon Points must have two or "
+                        f"three columns, got shape {old_points.shape}."
+                    )
+                if old_points.shape[1] == 3:
+                    old_points = old_points[:, :2]
 
                 existing_n = len(old_attrs)
                 total_old_pts = len(old_points)
@@ -3673,7 +3898,11 @@ class GeomMesh:
             new_parts_row = np.array([[0, n_pts]], dtype=np.int32)
             merged_parts = np.vstack([old_parts, new_parts_row]) if total_old_parts > 0 else new_parts_row
 
-            merged_points = np.vstack([old_points, coords]) if total_old_pts > 0 else coords
+            merged_points = (
+                np.vstack([old_points, coords_xy])
+                if total_old_pts > 0
+                else coords_xy
+            )
 
             # ── Delete-and-recreate (matches RASDecomp pattern) ─────
             for key in (attr_key, info_key, parts_key, points_key):
@@ -3684,6 +3913,7 @@ class GeomMesh:
             _create_hdf_dataset(hf, info_key, merged_info)
             _create_hdf_dataset(hf, parts_key, merged_parts)
             _create_hdf_dataset(hf, points_key, merged_points)
+            _set_refinement_region_dataset_metadata(hf, rr_group_key)
 
         logger.info(
             f"Added refinement region FID {new_fid} "

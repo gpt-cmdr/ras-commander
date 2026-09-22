@@ -2,6 +2,37 @@
 
 ## Version History
 
+### Unreleased
+
+**Refinement-Region Authoring and Mesh Density (#369)**
+
+- Author real geometry through RAS Mapper's native `MeshRegions` layer on
+  Windows/Wine, with a same-file backup and a fresh product reload before
+  success is reported. The portable/synthetic fallback now writes all nine
+  native Attributes fields and the semantic polygon dataset metadata instead
+  of the incomplete three-field record that RAS Mapper silently ignored.
+- Pass every active refinement-region FID to
+  `PointGenerator.RegenerateMeshPoints`; previously the region argument was
+  always empty, so valid regions still had no effect on seed density.
+- Add a region-only `RasExamples` Chippewa_2D integration gate. A 200-ft base
+  mesh becomes a locally 40-ft mesh, with product reload and measured
+  inside-polygon nearest-neighbor spacing asserted. Native Windows results are
+  identical on installed HEC-RAS 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.5, 6.6, and
+  6.7 Beta 5; 6.4/6.4.1 was not locally installed for qualification. HEC-RAS
+  6.6 also passes under Wine 11.0 on CLB07 for both the product-layer writer
+  and the native-schema fallback: 2,118 generated computation points, 4,376
+  faces, 1,600 centers inside the region at 40-ft median nearest-neighbor
+  spacing, and 122.327 ft outside. The Wine runner prepares the documented
+  task-local `C:\Python311\GDAL` link from Linux before loading RAS Mapper.
+
+Implementation provenance: an anticipatory version of these corrections was
+preserved in July on the unmerged `codex/h-native-mesh-authoring` branch
+([commit `9a963aa37`](https://github.com/gpt-cmdr/ras-commander/commit/9a963aa3781729a9d0db31fe0c3206c3e3566c78)).
+That work was never opened as a PR or merged because refinement-region
+authoring had not yet been needed directly. This release ports only the focused
+authoring, schema, activation, and regression-test changes rather than the
+branch's larger native-host experiment.
+
 ### v0.102.0 (September 2026)
 
 **Headless Mesh Generation on HEC-RAS 6.0 – 7.0.1**
