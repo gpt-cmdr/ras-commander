@@ -65,6 +65,9 @@ __all__ = [
     "dss_review_is_record_proven",
     "dss_review_settles_delivery",
     "dss_review_may_drop_finding",
+    "MEMBER_RESOLVING_REVIEW_METHODS",
+    "reviewed_terrain_member",
+    "project_owns_member",
     "expected_elements",
     "study_critical_threshold",
     "actions_from_bundle",
@@ -285,6 +288,75 @@ def dss_review_settles_delivery(review: dict) -> bool:
     if dss_review_is_record_proven(review):
         return True
     return str(review.get("method") or "") in DSS_DELIVERY_SETTLING_REVIEW_METHODS
+
+
+#: Review methods that resolve a referenced layer to a NAMED archive member.
+#: Both consult the delivery's member index and come back with one member:
+#: ``exact_relative_path`` resolves the reference against its own referencing
+#: file's delivered location, and ``archive_member_match`` accepts a basename
+#: only when exactly one member in the whole delivery carries it. Either one
+#: can be printed as an archive-and-member pair an engineer can open. A scan of
+#: an extracted directory tree names nothing and proves nothing about the
+#: archive, which is the distinction ``reviewed_terrain_member`` exists to keep.
+MEMBER_RESOLVING_REVIEW_METHODS = frozenset({"exact_relative_path", "archive_member_match"})
+
+
+def reviewed_terrain_member(entry: dict) -> str:
+    """The archive member an independent review resolved the terrain to, if any.
+
+    Returns the member path, or ``""``. Two conditions, both load-bearing:
+
+    * The review must have named a member the review overlay accepted, which is
+      what ``state_as_captured`` records. A review nobody acted on is not
+      evidence.
+    * That member must be an ``.hdf``. This overlay exists to insist that
+      "delivered" terrain means the Terrain.hdf HEC-RAS opens and not the
+      rasters it could be built from, so a review that resolved to a raster
+      cannot be what overrides it. CONECUH_RIVER_TRIB_31_BLE is the case that
+      made this explicit: its terrain reference resolves, by exact relative
+      path, to ``100yr_2D/WSE (Max).vrt`` -- a water-surface RESULT raster the
+      capture itself classified ``ambiguous``. Accepting it would have reported
+      a delivered terrain for a study that ships none.
+    """
+    entry = entry or {}
+    if entry.get("state") != "yes" or "state_as_captured" not in entry:
+        return ""
+    review = entry.get("review") or {}
+    if review.get("verdict") != "analysis_gap":
+        return ""
+    if str(review.get("method") or "") not in MEMBER_RESOLVING_REVIEW_METHODS:
+        return ""
+    evidence = str(review.get("evidence") or "")
+    if "::" not in evidence:
+        return ""
+    member = evidence.split("::", 1)[1].split(" - ")[0].strip()
+    return member if member.lower().endswith(".hdf") else ""
+
+
+def project_owns_member(project_path: str, member: str) -> bool:
+    """Is this archive member inside this project's own folder?
+
+    The review is a STUDY-level statement -- it resolves one reference -- while
+    the overlay below is a PER-PROJECT count. A member found for one project is
+    not evidence about another, and conflating the two is how 11090106 and
+    12110101 looked like defects when they are not: 11090106's review resolved a
+    ``.tif`` under ``RAS_Submittal_1109010601``, which already has its
+    Terrain.hdf, while the project actually lacking terrain is
+    ``RAS_Submittal_1109010602``; 12110101's resolved an ``.hdf`` under
+    ``RAS_Submittal_1211010101`` while ``RAS_Submittal_1211010103`` is the one
+    without. In both the overlay is right and the review is off-target.
+
+    The project's own folder is the last segment of its recorded path, or the
+    one before it when the path ends in the RAS working subfolder -- the same
+    segment rule the deficiency reviewer uses to scope a delivery to an area.
+    """
+    segments = [s for s in str(project_path or "").replace("\\", "/").split("/") if s]
+    if not segments:
+        return False
+    own = segments[-1]
+    if own.lower() in ("input", "simulation", "simulations", "model") and len(segments) > 1:
+        own = segments[-2]
+    return ("/" + own.casefold() + "/") in ("/" + str(member or "").casefold() + "/")
 
 
 #: Worker/tool revision marker introduced with the ATTRIBUTED DSS proof marker.
@@ -1455,9 +1527,23 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
     # rasters it could be built from. San Gabriel (12070205) ships DEM tiles for
     # all five projects and a Terrain.hdf for none of them; that is a
     # reconstruction step, not a delivered terrain, and the verdict must say so.
+    #
+    # The overlay's input is ``terrain.projects[].terrain_hdf``, the capture's
+    # scan of an EXTRACTED directory tree. The review's input is the archive
+    # member index. Where they disagree about a project, the member index wins:
+    # on 12050002 the scan recorded ``terrain_hdf: []`` for BlackWaterDraw_1
+    # while ``Hydraulic_Models_1.zip::BlackWaterDraw_1/Terrain/BWD1.hdf`` --
+    # 183,969,226 bytes, root attribute ``File Type = HEC Terrain`` -- was in
+    # the index the whole time, and the study rendered ``needs_data`` on a layer
+    # FEMA shipped. But the review names ONE member, so it may only clear the
+    # project that member belongs to; see ``project_owns_member``.
     projects = terrain.get("projects") or []
     if projects and out.get("terrain", {}).get("state") in ("yes", "partial"):
-        hdf_absent = [p for p in projects if isinstance(p, dict) and not p.get("terrain_hdf")]
+        reviewed_member = reviewed_terrain_member(out.get("terrain"))
+        hdf_absent = [p for p in projects
+                      if isinstance(p, dict) and not p.get("terrain_hdf")
+                      and not (reviewed_member
+                               and project_owns_member(p.get("project"), reviewed_member))]
         rasters_present = [p for p in hdf_absent if p.get("raster")]
         if hdf_absent and len(hdf_absent) == len(projects):
             out["terrain"] = {
@@ -1467,10 +1553,19 @@ def _delivered_elements(bundle: AuditBundle) -> dict:
                          f"projects; no Terrain.hdf for any -- build with RasProcess CreateTerrain"),
             }
         elif hdf_absent:
+            # ``projects_delivered``/``projects_total`` carry the polarity the
+            # note cannot. The note counts what is ABSENT; every other element's
+            # note ("N of M projects yes; K no") counts what is DELIVERED, and
+            # the renderer scraped both with one regex and printed the absent
+            # count as the delivered one on four of six terrain records. The
+            # numbers a message prints are now read from named fields, so a
+            # future rewording cannot land on the wrong side of the polarity.
             out["terrain"] = {
                 "state": "partial",
                 "location": out["terrain"].get("location"),
                 "note": f"Terrain.hdf absent for {len(hdf_absent)} of {len(projects)} projects",
+                "projects_total": len(projects),
+                "projects_delivered": len(projects) - len(hdf_absent),
             }
     return out
 
