@@ -400,19 +400,60 @@ release. Only one RasMapperLib version can be loaded per Python process.
 RasMapperLib there also requires the `C:\Python311\GDAL` link to the HEC-RAS
 `GDAL` folder, prepared from the Linux side.
 
-**How this was tested.** `generate()` followed by
-`RasPreprocess.preprocess_plan()` on the Chippewa_2D example, with and without
-an added breakline and refinement region. Each run used one HEC-RAS release for
-both RasMapperLib and `Ras.exe`: natively on Windows for every release from 6.0
-to 7.0.1, and under Wine for 6.5, 6.6, and 7.0.1. On every release the mesh
-(357 cells, or 421 with the added features) and the written seed points were
-identical to 6.6, and preprocessing then succeeded.
-`compute_property_tables()` and `RasGeometryCompute.audit_reach_lengths()` were
-run on every release on the BaldEagleCrkMulti2D and Muncie examples.
+**How refinement regions were tested.** A region-only A/B test uses the real
+`RasExamples` Chippewa_2D project: a 200-ft base mesh (357 cells), followed by a
+1,600-ft-square refinement region requesting 40-ft spacing. RAS Mapper must
+reload the authored region before regeneration, the refined mesh must contain
+2,118 cells, and median nearest-neighbor spacing inside the region must be
+40 ft. Native Windows produced the same result on every locally installed 6.x
+runtime: 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.5, 6.6, and 6.7 Beta 5. A 6.4/6.4.1
+installation was not available for this qualification. The private
+`RegenerateMeshPoints` API was also reflected independently in each process:
+`activeRegions` is parameter 2 in every tested release; only the documented
+trailing argument count changes.
+
+HEC-RAS 6.6 was also qualified under Wine 11.0 on CLB07 using the pinned
+`rascommander/hec-ras-wine-precompute_6.6` runtime. Both the RAS Mapper
+product-layer writer and the native-schema fallback produced 2,118 generated
+computation points (also the HDF `Cell Count`), 2,209 compiled cell-center
+rows, 4,376 faces, and 1,600 centers inside the region at exactly 40-ft median
+nearest-neighbor spacing; outside-region spacing was 122.327 ft. The run used
+an isolated writable prefix and the Linux-side `C:\Python311\GDAL` link noted
+above.
+
+### HEC-RAS Refinement-Region Caveats
+
+- **Independent Y spacing is not implemented by HEC-RAS.** RAS Mapper stores
+  both X and Y spacing, but the 6.6 Mapper manual labels Cell Spacing Y as
+  "not implemented yet." `spacing_dy` is preserved for schema fidelity; do
+  not interpret a different Y value as verified anisotropic refinement.
+- **HEC-RAS 6.2 GUI row reordering.** HEC documented that reordering the
+  Refinement Region Editor table could create duplicate regions and deleting
+  those duplicates could crash. The documented workaround was the feature
+  `Send...` command; HEC lists the defect as fixed in 6.3. ras-commander does
+  not drive that GUI reorder path.
+- **HEC-RAS 6.4 breakline interactions.** HEC fixed lost properties after
+  splitting breaklines, incorrect one-cell protection-radius behavior when
+  breakline/region inclusion was disabled, and some breaklines that failed to
+  enforce. Prefer 6.4 or later for models combining these behaviors.
+- **HEC-RAS 6.6 perimeter-loss symptom.** HEC documented exceptional cases in
+  which a 2D perimeter disappeared and the mesh stopped updating or selecting.
+  Product-backed authoring therefore backs up the geometry HDF and requires a
+  fresh RAS Mapper reload before reporting success.
+- **HEC-RAS 6.7 betas.** Beta 2/3 had an initial mesh-recompute
+  "Unknown Error"/arithmetic-overflow issue. Beta 5 passes the region-only
+  qualification above, but a stable release is preferable for production.
+
+See HEC's official [6.2 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/6.2),
+[6.3 fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.3/resolved-issues),
+[6.4 fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4/resolved-issues),
+[6.6 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/6.6),
+[7.0's archived beta fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/7.0/resolved-issues),
+and the [6.6 Mapper manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/geometry-data/2d-flow-areas).
 
 ### Refinement Region Methods
 
-- `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon to an existing compiled geometry HDF.
+- `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon through RAS Mapper on Windows/Wine, with backup and product-reload verification. The portable fallback writes the complete native nine-field HDF record and semantic polygon metadata.
 - `add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)` - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through `add_refinement_region()`, and return FID/name/spacing mappings.
 - `replace_refinement_regions(geom_number, regions, expected_existing_names=..., ...)` - Atomically replace or remove the complete HDF refinement-region collection, with an optional optimistic-concurrency guard.
 - `get_refinement_regions(geom_number)` - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.
