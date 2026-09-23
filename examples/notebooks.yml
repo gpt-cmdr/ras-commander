@@ -1508,17 +1508,23 @@ notebooks:
   executed_cells: 13
 - id: 231_pipe_network_mesh_generation
   filename: 231_pipe_network_mesh_generation.ipynb
-  title: Pipe Network Mesh Generation
+  title: 'Headless Mesh Generation: Pipe Networks and Refinement Regions'
   series: 200
   series_name: Geometry & Calibration
-  summary: 'This notebook demonstrates headless mesh generation on a project with **pipe networks**. The
-    Davis example project (HEC-RAS Pipes beta) contains:'
-  tags: []
+  summary: Headlessly regenerate a pipe-connected Davis mesh, then author and visually verify a 40-foot
+    refinement region on the Chippewa 2D fixture.
+  tags:
+  - 2d
+  - mesh
+  - refinement-regions
+  - pipes
   difficulty: intermediate
   est_runtime: null
-  data_project: null
+  data_project: Chippewa_2D
   functions_used:
+  - GeomMesh.add_refinement_region
   - GeomMesh.generate
+  - GeomMesh.get_refinement_regions
   - HdfMesh.get_mesh_areas
   - HdfMesh.get_mesh_cell_polygons
   - HdfPipe.get_pipe_conduits
@@ -1531,8 +1537,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 13
-  executed_cells: 13
+  code_cells: 14
+  executed_cells: 14
 - id: 232_weise_2d_sediment_mesh_sensitivity
   filename: 232_weise_2d_sediment_mesh_sensitivity.ipynb
   title: '2D Mesh Cell-Size Sensitivity for Sediment Transport - Second Case: Weise Flume'
