@@ -90,6 +90,15 @@ class RasEbfeModels:
         "https://ebfedata.s3.amazonaws.com/12070205_SanGabriel/"
         "12070205_Models.zip"
     )
+    _AUSTIN_OYSTER_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12040205_AustinOyster/"
+        "12040205_Models.zip"
+    )
+    _AUSTIN_OYSTER_SOURCE_SIZE = 24_083_078_085
+    _AUSTIN_OYSTER_SOURCE_ETAG = "cacc1f6de4d01d273f319dcf6514c9a2-2871"
+    _AUSTIN_OYSTER_OUTER_MEMBER_COUNT = 48
+    _AUSTIN_OYSTER_SUBMITTAL_MEMBER_COUNT = 4
+    _AUSTIN_OYSTER_COMPONENT_MEMBER_COUNT = 102
     _DOUBLE_MOUNTAIN_FORK_BRAZOS_SOURCE_BASE = (
         "https://ebfedata.s3-us-west-2.amazonaws.com/"
         "12050004_DoubleMountainForkBrazos/Models"
@@ -253,6 +262,9 @@ class RasEbfeModels:
         "north-galveston": "north-galveston-bay",
         "north-galveston-bay": "north-galveston-bay",
         "12040203": "north-galveston-bay",
+        "austin-oyster": "austin-oyster",
+        "austinoyster": "austin-oyster",
+        "12040205": "austin-oyster",
         "upper-guadalupe": "upper-guadalupe",
         "upgu": "upper-guadalupe",
         "12100201": "upper-guadalupe",
@@ -321,6 +333,85 @@ class RasEbfeModels:
             "ras_version": "5.0.7",
             "default_kwargs": {"extract_ras_nested": True},
             "notes": "Compound HMS plus nested 2D RAS delivery.",
+        },
+        "austin-oyster": {
+            "study_area": "AustinOyster_12040205",
+            "huc8": "12040205",
+            "organizer": "organize_austin_oyster",
+            "download_subdir": "12040205_AustinOyster",
+            "output_name": "AustinOyster_12040205",
+            "ras_version": "5.0.7",
+            "delivered_ras_version": "5.0.7",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _AUSTIN_OYSTER_SOURCE_URL,
+            "file_size_bytes": _AUSTIN_OYSTER_SOURCE_SIZE,
+            "notes": (
+                "One 2D unsteady HEC-RAS 5.0.7 project. The delivered terrain "
+                "is complete and contains no terrain-modification groups. "
+                "Reassembly audits 28 HDF association attributes and applies "
+                "only missing path values, plus one RAS Mapper projection "
+                "correction; two LocalAppData XML "
+                "basemap references remain display-only and nonblocking. "
+                "Plan 08 (1PAC) is qualified through unsteady computation "
+                "start on an isolated copy; full-plan completion was not "
+                "claimed."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "project_count": 1,
+                "project": "AustinOyster",
+                "plans": ["03", "04", "05", "06", "07", "08", "09"],
+                "geometry": "02",
+                "unsteady_files": [
+                    "01", "02", "03", "04", "05", "06", "07"
+                ],
+                "required_validation_level": "unsteady_start",
+                "validation_status": "qualified",
+                "validation_level": "unsteady_start",
+                "hec_ras_executed": True,
+                "validation_scope": "isolated_copy",
+                "qualified_plan": {
+                    "project": "AustinOyster",
+                    "plan": "08",
+                    "title": "1PAC",
+                },
+                "qualification_record": (
+                    "agent_tasks/2026-09-23_austin_oyster_"
+                    "record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "runnable_after_repair",
+                "terrain_required": True,
+                "terrain_source_complete": True,
+                "terrain_modification_layers": [],
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12040205_Models.zip",
+                    "url": _AUSTIN_OYSTER_SOURCE_URL,
+                    "size_bytes": _AUSTIN_OYSTER_SOURCE_SIZE,
+                    "etag": _AUSTIN_OYSTER_SOURCE_ETAG,
+                    # The dedicated organizer owns the three nested extraction
+                    # levels and their exact member contracts.
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [
+                    {
+                        "value": (
+                            "%LocalAppData%\\HEC\\Mapping\\506\\XML\\"
+                            "Google Map.xml"
+                        ),
+                        "count": 1,
+                        "classification": "display_only",
+                    },
+                    {
+                        "value": (
+                            "%LocalAppData%\\HEC\\Mapping\\506\\XML\\"
+                            "Google Hybrid.xml"
+                        ),
+                        "count": 1,
+                        "classification": "display_only",
+                    },
+                ],
+            },
         },
         "upper-guadalupe": {
             "study_area": "UpperGuadalupe_12100201",
@@ -882,7 +973,7 @@ class RasEbfeModels:
                         metadata=RasEbfeModels.get_model_metadata(key),
                         extracted=True,
                     )
-                elif str(meta.get("huc8")) == "12050004":
+                elif str(meta.get("huc8")) in {"12040205", "12050004"}:
                     # The dedicated organizer builds in a sibling staging
                     # directory and preserves this interrupted target during
                     # atomic promotion.
@@ -918,6 +1009,8 @@ class RasEbfeModels:
         metadata: Dict[str, Any],
     ) -> bool:
         """Return whether an existing organized target has complete evidence."""
+        if str(metadata.get("huc8")) == "12040205":
+            return RasEbfeModels._austin_oyster_is_reusable(organized_target)
         if str(metadata.get("huc8")) == "12050004":
             return RasEbfeModels._double_mountain_fork_brazos_is_reusable(
                 organized_target
@@ -1902,6 +1995,606 @@ Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
             docs_copied=docs_copied,
         )
         return output_folder
+
+    @staticmethod
+    def _ensure_austin_oyster_asset(
+        source_root: Path, asset: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Download or validate the immutable Austin--Oyster source archive."""
+        source_root = Path(source_root)
+        source_root.mkdir(parents=True, exist_ok=True)
+        destination = source_root / str(asset["name"])
+        if not destination.is_file():
+            RasEbfeModels._download_file(
+                str(asset["url"]),
+                destination,
+                description="Austin-Oyster models (22.4 GB)",
+                expected_size_bytes=asset.get("size_bytes"),
+                expected_etag=asset.get("etag"),
+            )
+        return RasEbfeModels._validate_source_asset_identity(
+            destination,
+            expected_size_bytes=asset.get("size_bytes"),
+            expected_etag=asset.get("etag"),
+        )
+
+    @staticmethod
+    @log_call
+    def organize_austin_oyster(
+        downloaded_folder: Optional[Path] = None,
+        output_folder: Optional[Path] = None,
+    ) -> Path:
+        """Reassemble the audited Austin--Oyster 2D delivery without computing.
+
+        The retained 22.4 GB FEMA object is identity-checked by its exact size
+        and multipart ETag sidecar. Its nested archives are CRC-audited, then a
+        concise active workspace is assembled in a sibling temporary directory.
+        All 28 audited HDF association attributes are checked. Only absent or
+        empty attributes are written; path-equivalent delivered values are
+        preserved. The audited RAS Mapper projection relocation/rewrite is
+        applied separately and actual mutations are reported in the manifest.
+        """
+        source_root = Path(
+            downloaded_folder or "./ebfe_downloads/12040205_AustinOyster"
+        ).resolve()
+        output_folder = Path(
+            output_folder or "./ebfe_organized/AustinOyster_12040205"
+        )
+        archive = source_root / "12040205_Models.zip"
+        meta = RasEbfeModels._MODEL_REGISTRY["austin-oyster"]
+        asset = meta["extra"]["source_assets"][0]
+
+        if RasEbfeModels._austin_oyster_is_reusable(
+            output_folder, source_root=source_root
+        ):
+            return output_folder
+
+        source_identity = RasEbfeModels._ensure_austin_oyster_asset(
+            source_root, asset
+        )
+        source_sidecar = json.loads(
+            RasEbfeModels._source_sidecar_path(archive).read_text(encoding="utf-8")
+        )
+        if source_sidecar.get("source") != asset["url"]:
+            raise RuntimeError(
+                "Austin-Oyster source sidecar URL does not match the catalogued "
+                "FEMA source."
+            )
+        source_files = [archive, RasEbfeModels._source_sidecar_path(archive)]
+        source_state = {
+            str(path): (path.stat().st_size, path.stat().st_mtime_ns)
+            for path in source_files
+        }
+
+        with zipfile.ZipFile(archive, "r") as outer:
+            outer_members = RasEbfeModels._validated_zip_members(outer)
+            outer_file_count = sum(
+                not member.is_dir() for member, _relative in outer_members
+            )
+            outer_directory_count = len(outer_members) - outer_file_count
+            if outer_file_count != RasEbfeModels._AUSTIN_OYSTER_OUTER_MEMBER_COUNT:
+                raise RuntimeError(
+                    "Austin-Oyster source contract mismatch: expected "
+                    f"{RasEbfeModels._AUSTIN_OYSTER_OUTER_MEMBER_COUNT} outer "
+                    f"file members, found {outer_file_count} "
+                    f"({outer_directory_count} directory entries)."
+                )
+
+        output_folder.parent.mkdir(parents=True, exist_ok=True)
+        working = Path(tempfile.mkdtemp(
+            prefix=f".{output_folder.name}.assembling-",
+            dir=output_folder.parent,
+        ))
+        scratch = working / ".source-extraction"
+        try:
+            outer_root = scratch / "outer"
+            outer_audit = RasEbfeModels._extract_zip_verified(
+                archive, outer_root, "Austin-Oyster outer archive"
+            )
+            submittals = [
+                path for path in outer_root.rglob("RAS_Submittal.zip")
+                if path.is_file()
+            ]
+            if len(submittals) != 1:
+                raise RuntimeError(
+                    "Austin-Oyster requires exactly one nested RAS_Submittal.zip; "
+                    f"found {len(submittals)}."
+                )
+            submittal_root = scratch / "submittal"
+            RasEbfeModels._extract_zip_verified(
+                submittals[0], submittal_root, "Austin-Oyster RAS submittal"
+            )
+            with zipfile.ZipFile(submittals[0], "r") as submittal_archive:
+                submittal_members = RasEbfeModels._validated_zip_members(
+                    submittal_archive
+                )
+            submittal_file_count = sum(
+                not member.is_dir()
+                for member, _relative in submittal_members
+            )
+            submittal_directory_count = (
+                len(submittal_members) - submittal_file_count
+            )
+            if submittal_file_count != RasEbfeModels._AUSTIN_OYSTER_SUBMITTAL_MEMBER_COUNT:
+                raise RuntimeError(
+                    "Austin-Oyster RAS_Submittal contract mismatch: expected "
+                    f"{RasEbfeModels._AUSTIN_OYSTER_SUBMITTAL_MEMBER_COUNT} "
+                    f"file members, found {submittal_file_count} "
+                    f"({submittal_directory_count} directory entries)."
+                )
+            component_names = ("Input", "LandCover", "Output", "Terrain")
+            components = {}
+            component_audits = {}
+            component_member_counts = {}
+            component_directory_counts = {}
+            for name in component_names:
+                matches = [
+                    path for path in submittal_root.rglob(f"{name}.zip")
+                    if path.is_file()
+                ]
+                if len(matches) != 1:
+                    raise RuntimeError(
+                        f"Austin-Oyster requires exactly one {name}.zip; "
+                        f"found {len(matches)}."
+                    )
+                with zipfile.ZipFile(matches[0], "r") as component_archive:
+                    validated_members = RasEbfeModels._validated_zip_members(
+                        component_archive
+                    )
+                component_member_counts[name] = sum(
+                    not member.is_dir()
+                    for member, _relative in validated_members
+                )
+                component_directory_counts[name] = (
+                    len(validated_members) - component_member_counts[name]
+                )
+                destination = scratch / name
+                component_audits[name] = RasEbfeModels._extract_zip_verified(
+                    matches[0], destination, f"Austin-Oyster {name} component"
+                )
+                components[name] = destination
+            component_member_count = sum(component_member_counts.values())
+            if component_member_count != RasEbfeModels._AUSTIN_OYSTER_COMPONENT_MEMBER_COUNT:
+                raise RuntimeError(
+                    "Austin-Oyster component contract mismatch: expected "
+                    f"{RasEbfeModels._AUSTIN_OYSTER_COMPONENT_MEMBER_COUNT} "
+                    f"files, found {component_member_count}."
+                )
+
+            ras_root = working / "RAS Model" / "AustinOyster"
+            input_root = ras_root / "Input"
+            for name in ("Input", "LandCover", "Terrain"):
+                destination = input_root if name == "Input" else ras_root / name
+                RasEbfeModels._copy_austin_oyster_component(
+                    components[name], destination, expected_wrapper=name
+                )
+
+            moved = RasEbfeModels._relocate_austin_oyster_outputs(
+                components["Output"], input_root
+            )
+            projection_asset_relocations = (
+                RasEbfeModels._relocate_austin_oyster_projection(input_root)
+            )
+            repair = RasEbfeModels._repair_austin_oyster_paths(input_root)
+            repair["projection_asset_relocations"] = (
+                projection_asset_relocations
+            )
+            reference_audit = RasEbfeModels._audit_austin_oyster_workspace(
+                ras_root
+            )
+            if not reference_audit["static_path_closure"]:
+                raise RuntimeError(
+                    "Austin-Oyster static reference closure failed: "
+                    f"{reference_audit['errors']}"
+                )
+
+            active_paths = [path for path in ras_root.rglob("*") if path.is_file()]
+            too_long = [
+                str(path) for path in active_paths
+                if len(str(output_folder / path.relative_to(working)))
+                > RasEbfeModels._WINDOWS_PATH_WARNING_LENGTH
+            ]
+            if too_long:
+                raise RuntimeError(
+                    "Austin-Oyster active workspace exceeds the 240-character "
+                    f"path contract: {too_long[:3]}"
+                )
+
+            for folder_name in ("Documentation", "agent"):
+                (working / folder_name).mkdir(parents=True, exist_ok=True)
+            manifest = {
+                "schema_version": 1,
+                "study": "Austin-Oyster",
+                "huc8": "12040205",
+                "source_program": "fema_ebfe",
+                "delivered_ras_version": "5.0.7",
+                "qualified_ras_version": "5.0.7",
+                "source_identity": source_identity,
+                "outer_member_count": outer_file_count,
+                "outer_directory_count": outer_directory_count,
+                "submittal_member_count": submittal_file_count,
+                "submittal_directory_count": submittal_directory_count,
+                "component_member_count": component_member_count,
+                "outer_extraction": outer_audit,
+                "component_extractions": component_audits,
+                "component_member_counts": component_member_counts,
+                "component_directory_counts": component_directory_counts,
+                "project": {
+                    "name": "AustinOyster",
+                    "folder": str(
+                        output_folder.resolve()
+                        / "RAS Model" / "AustinOyster" / "Input"
+                    ),
+                    "plans": [f"{number:02d}" for number in range(3, 10)],
+                    "geometry": "02",
+                    "unsteady_files": [f"{number:02d}" for number in range(1, 8)],
+                },
+                "output_assets_relocated": moved,
+                "path_repairs": repair,
+                "actual_explicit_corrections": (
+                    repair["hdf_attribute_updates"]
+                    + repair["rasmap_projection_updates"]
+                ),
+                "audited_hdf_attribute_surface": 28,
+                "reference_audit": reference_audit,
+                "required_validation_level": "unsteady_start",
+                "validation_status": "pending",
+                "hec_ras_executed": False,
+                "terrain_source_complete": True,
+                "terrain_modification_layers": [],
+                "source_objects_immutable": True,
+                "nonblocking_unresolved_references": deepcopy(
+                    meta["extra"]["nonblocking_unresolved_references"]
+                ),
+                "completed_utc": datetime.now(timezone.utc).isoformat(),
+            }
+            manifest_path = working / "agent" / "austin_oyster_manifest.json"
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+            )
+            (working / "agent" / "model_log.md").write_text(
+                "# Austin-Oyster (12040205) organization log\n\n"
+                "One HEC-RAS 5.0.7 2D unsteady project was assembled from "
+                "the delivered nested archives. Fourteen model outputs were "
+                "relocated into Input. All 28 audited HDF association "
+                f"attributes were checked: {repair['hdf_attribute_updates']} "
+                "absent/empty attributes were written and "
+                f"{repair['hdf_attributes_already_correct']} path-equivalent "
+                "delivered attributes were preserved. One RAS Mapper "
+                "projection path was corrected. The "
+                "delivered terrain is complete and has no modification groups. "
+                "Two LocalAppData XML basemap references remain display-only. "
+                "No HEC-RAS computation was performed; unsteady validation is "
+                "pending.\n",
+                encoding="utf-8",
+            )
+            shutil.rmtree(scratch)
+
+            final_source_state = {
+                str(path): (path.stat().st_size, path.stat().st_mtime_ns)
+                for path in source_files
+            }
+            if final_source_state != source_state:
+                raise RuntimeError(
+                    "Austin-Oyster source objects changed during organization."
+                )
+            RasEbfeModels._finalize_austin_oyster_output(working, output_folder)
+        except Exception:
+            if working.exists():
+                shutil.rmtree(working)
+            raise
+        return output_folder
+
+    @staticmethod
+    def _copy_austin_oyster_component(
+        source: Path, destination: Path, expected_wrapper: str
+    ) -> None:
+        """Copy one verified component while stripping one matching wrapper."""
+        source = Path(source)
+        children = [
+            path for path in source.iterdir()
+            if path.name != RasEbfeModels._EXTRACTION_RECEIPT_NAME
+        ]
+        copy_root = source
+        if (
+            len(children) == 1
+            and children[0].is_dir()
+            and children[0].name.casefold() == expected_wrapper.casefold()
+        ):
+            copy_root = children[0]
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in copy_root.iterdir():
+            if item.name == RasEbfeModels._EXTRACTION_RECEIPT_NAME:
+                continue
+            target = destination / item.name
+            if target.exists():
+                raise RuntimeError(
+                    f"Austin-Oyster component collision at {target}"
+                )
+            if item.is_dir():
+                shutil.copytree(item, target)
+            else:
+                shutil.copy2(item, target)
+
+    @staticmethod
+    def _relocate_austin_oyster_outputs(output_root: Path, input_root: Path) -> List[str]:
+        """Move exactly the seven IC and seven plan-result assets into Input."""
+        expected = {
+            *(f"AustinOyster.IC.O{number:02d}" for number in range(3, 10)),
+            *(f"AustinOyster.p{number:02d}.hdf" for number in range(3, 10)),
+        }
+        discovered: Dict[str, List[Path]] = {name: [] for name in expected}
+        for path in Path(output_root).rglob("*"):
+            if path.is_file() and path.name in expected:
+                discovered[path.name].append(path)
+        invalid_counts = {
+            name: len(paths)
+            for name, paths in discovered.items()
+            if len(paths) != 1
+        }
+        if invalid_counts:
+            raise RuntimeError(
+                "Austin-Oyster Output contract mismatch; every required "
+                "basename must occur exactly once. Invalid counts: "
+                f"{dict(sorted(invalid_counts.items()))}"
+            )
+        moved = []
+        for name in sorted(expected):
+            destination = input_root / name
+            if destination.exists():
+                raise RuntimeError(f"Austin-Oyster output collision: {destination}")
+            shutil.copy2(discovered[name][0], destination)
+            moved.append(name)
+        return moved
+
+    @staticmethod
+    def _relocate_austin_oyster_projection(input_root: Path) -> int:
+        """Move the delivered root-level projection to its standardized folder."""
+        projection_name = (
+            "NAD_1983_2011_StatePlane_Texas_South_Central_"
+            "FIPS_4204_FtUS.prj"
+        )
+        input_root = Path(input_root)
+        source = input_root / projection_name
+        destination = input_root / "Projection" / projection_name
+        if not source.is_file():
+            raise RuntimeError(
+                "Austin-Oyster delivered projection is missing from its exact "
+                f"Input archive location: {source}"
+            )
+        if destination.exists():
+            raise RuntimeError(
+                "Austin-Oyster projection relocation would overwrite an "
+                f"existing asset: {destination}"
+            )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(source, destination)
+        return 1
+
+    @staticmethod
+    def _repair_austin_oyster_paths(input_root: Path) -> Dict[str, int]:
+        """Apply only the audited 28 HDF attributes and one rasmap repair."""
+        try:
+            import h5py
+        except ImportError as exc:
+            raise RuntimeError("h5py is required to repair Austin-Oyster") from exc
+
+        updates = 0
+        checked = 0
+        already_correct = 0
+
+        def normalized_asset_path(raw_value: Any) -> str:
+            text = str(raw_value).strip().replace("/", "\\")
+            return re.sub(r"\\+", r"\\", text).casefold()
+        targets = (
+            ("Geometry", "Land Cover Filename", "..\\LandCover\\Landcover.tif"),
+            ("Geometry", "Terrain Filename", "..\\Terrain\\Terrain.hdf"),
+            (
+                "Geometry/2D Flow Areas/Perimeter 1",
+                "Land Cover Filename",
+                "..\\LandCover\\Landcover.tif",
+            ),
+            (
+                "Geometry/2D Flow Areas/Perimeter 1",
+                "Terrain Filename",
+                "..\\Terrain\\Terrain.hdf",
+            ),
+        )
+        for number in range(3, 10):
+            hdf_path = input_root / f"AustinOyster.p{number:02d}.hdf"
+            with h5py.File(hdf_path, "r+") as hdf:
+                for group_name, attr_name, value in targets:
+                    if group_name not in hdf:
+                        raise RuntimeError(
+                            f"Missing audited HDF group {group_name!r} in {hdf_path.name}"
+                        )
+                    group = hdf[group_name]
+                    previous = group.attrs.get(attr_name)
+                    if isinstance(previous, bytes):
+                        previous = previous.decode("utf-8", errors="replace")
+                    checked += 1
+                    if previous is None or not str(previous).strip():
+                        group.attrs[attr_name] = value
+                        updates += 1
+                    elif normalized_asset_path(previous) == normalized_asset_path(value):
+                        already_correct += 1
+                    else:
+                        raise RuntimeError(
+                            "Austin-Oyster audited HDF pre-state conflict for "
+                            f"{hdf_path.name}:{group_name}:{attr_name}; expected "
+                            "an absent/empty or path-equivalent attribute, found "
+                            f"{previous!r}."
+                        )
+        if checked != 28 or updates + already_correct != 28:
+            raise RuntimeError(
+                "Expected 28 Austin-Oyster HDF attributes to be classified; "
+                f"checked {checked}, changed {updates}, and preserved "
+                f"{already_correct}."
+            )
+
+        rasmaps = list(input_root.glob("*.rasmap"))
+        if len(rasmaps) != 1:
+            raise RuntimeError(
+                f"Expected one Austin-Oyster rasmap, found {len(rasmaps)}"
+            )
+        text = rasmaps[0].read_text(encoding="utf-8")
+        pattern = re.compile(
+            r"[.][/\\](?P<name>NAD_[^\"'\r\n>]+[.]prj)",
+            re.IGNORECASE,
+        )
+        text, projection_updates = pattern.subn(
+            lambda match: f"./Projection/{match.group('name')}",
+            text,
+        )
+        if projection_updates != 1:
+            raise RuntimeError(
+                "Expected exactly one Austin-Oyster rasmap projection repair, "
+                f"found {projection_updates}"
+            )
+        rasmaps[0].write_text(text, encoding="utf-8")
+        return {
+            "hdf_attributes_checked": checked,
+            "hdf_attribute_updates": updates,
+            "hdf_attributes_already_correct": already_correct,
+            "rasmap_projection_updates": projection_updates,
+        }
+
+    @staticmethod
+    def _audit_austin_oyster_workspace(ras_root: Path) -> Dict[str, Any]:
+        """Verify the exact active-file and association contract."""
+        try:
+            import h5py
+        except ImportError as exc:
+            raise RuntimeError("h5py is required to audit Austin-Oyster") from exc
+        input_root = Path(ras_root) / "Input"
+        errors = []
+        required = [input_root / "AustinOyster.prj", input_root / "AustinOyster.g02"]
+        required.extend(input_root / f"AustinOyster.p{n:02d}" for n in range(3, 10))
+        required.extend(input_root / f"AustinOyster.u{n:02d}" for n in range(1, 8))
+        required.extend(input_root / f"AustinOyster.IC.O{n:02d}" for n in range(3, 10))
+        required.extend(input_root / f"AustinOyster.p{n:02d}.hdf" for n in range(3, 10))
+        required.extend([
+            Path(ras_root) / "Terrain" / "Terrain.hdf",
+            Path(ras_root) / "LandCover" / "Landcover.tif",
+        ])
+        rasmaps = list(input_root.glob("*.rasmap"))
+        if len(rasmaps) == 1:
+            rasmap_text = rasmaps[0].read_text(encoding="utf-8")
+            projection_refs = re.findall(
+                r"[.]?/Projection/(?P<name>NAD_[^\"'\r\n>]+[.]prj)",
+                rasmap_text,
+                flags=re.IGNORECASE,
+            )
+            if len(projection_refs) != 1:
+                errors.append("rasmap projection reference")
+            else:
+                required.append(input_root / "Projection" / projection_refs[0])
+        else:
+            errors.append("exactly one rasmap")
+        errors.extend(str(path) for path in required if not path.is_file())
+        expected_values = {
+            "Land Cover Filename": "..\\LandCover\\Landcover.tif",
+            "Terrain Filename": "..\\Terrain\\Terrain.hdf",
+        }
+        for number in range(3, 10):
+            hdf_path = input_root / f"AustinOyster.p{number:02d}.hdf"
+            if not hdf_path.is_file():
+                continue
+            with h5py.File(hdf_path, "r") as hdf:
+                for group_name in ("Geometry", "Geometry/2D Flow Areas/Perimeter 1"):
+                    for attr_name, expected in expected_values.items():
+                        actual = hdf[group_name].attrs.get(attr_name)
+                        if isinstance(actual, bytes):
+                            actual = actual.decode("utf-8")
+                        normalized_actual = re.sub(
+                            r"\\+", r"\\", str(actual).replace("/", "\\")
+                        ).casefold()
+                        normalized_expected = re.sub(
+                            r"\\+", r"\\", expected.replace("/", "\\")
+                        ).casefold()
+                        if normalized_actual != normalized_expected:
+                            errors.append(f"{hdf_path.name}:{group_name}:{attr_name}")
+        return {
+            "static_path_closure": not errors,
+            "errors": errors,
+            "project_count": 1,
+            "plan_count": 7,
+            "relocated_output_count": 14,
+            "nonblocking_xml_reference_count": 2,
+        }
+
+    @staticmethod
+    def _austin_oyster_is_reusable(
+        output_folder: Path, source_root: Optional[Path] = None
+    ) -> bool:
+        """Revalidate manifest, source identity, and active reference closure."""
+        output_folder = Path(output_folder)
+        manifest_path = output_folder / "agent" / "austin_oyster_manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (
+                manifest.get("huc8") != "12040205"
+                or manifest.get("validation_status") != "pending"
+                or manifest.get("hec_ras_executed") is not False
+                or manifest.get("outer_member_count")
+                != RasEbfeModels._AUSTIN_OYSTER_OUTER_MEMBER_COUNT
+                or manifest.get("submittal_member_count")
+                != RasEbfeModels._AUSTIN_OYSTER_SUBMITTAL_MEMBER_COUNT
+                or manifest.get("component_member_count")
+                != RasEbfeModels._AUSTIN_OYSTER_COMPONENT_MEMBER_COUNT
+            ):
+                return False
+            repairs = manifest.get("path_repairs", {})
+            hdf_checked = repairs.get("hdf_attributes_checked")
+            hdf_changed = repairs.get("hdf_attribute_updates")
+            hdf_preserved = repairs.get("hdf_attributes_already_correct")
+            projection_changed = repairs.get("rasmap_projection_updates")
+            if (
+                hdf_checked != 28
+                or not isinstance(hdf_changed, int)
+                or not isinstance(hdf_preserved, int)
+                or hdf_changed + hdf_preserved != 28
+                or projection_changed != 1
+                or repairs.get("projection_asset_relocations") != 1
+                or manifest.get("actual_explicit_corrections")
+                != hdf_changed + projection_changed
+            ):
+                return False
+            audit = RasEbfeModels._audit_austin_oyster_workspace(
+                output_folder / "RAS Model" / "AustinOyster"
+            )
+            if not audit["static_path_closure"]:
+                return False
+            retained_source = Path(
+                source_root or Path(manifest["source_identity"]["path"]).parent
+            )
+            asset = RasEbfeModels._MODEL_REGISTRY["austin-oyster"]["extra"]["source_assets"][0]
+            RasEbfeModels._validate_source_asset_identity(
+                retained_source / asset["name"],
+                expected_size_bytes=asset["size_bytes"],
+                expected_etag=asset["etag"],
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+        return True
+
+    @staticmethod
+    def _finalize_austin_oyster_output(
+        working: Path, output_folder: Path
+    ) -> Optional[Path]:
+        """Promote a completed build atomically, preserving an old target."""
+        backup = None
+        if output_folder.exists():
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
+            backup = output_folder.parent / f"{output_folder.name}.interrupted-{timestamp}"
+            os.replace(output_folder, backup)
+        try:
+            os.replace(working, output_folder)
+        except Exception:
+            if backup is not None and backup.exists() and not output_folder.exists():
+                os.replace(backup, output_folder)
+            raise
+        return backup
 
     @staticmethod
     @log_call
@@ -6071,8 +6764,21 @@ projects point to that single organized target. See
             or parts[0].endswith(":")
         ):
             raise ValueError(f"Unsafe ZIP member path: {member.filename!r}")
-        if os.name == "nt" and any(":" in part for part in parts):
-            raise ValueError(f"Invalid Windows ZIP member path: {member.filename!r}")
+        reserved = {
+            "con", "prn", "aux", "nul",
+            *(f"com{number}" for number in range(1, 10)),
+            *(f"lpt{number}" for number in range(1, 10)),
+        }
+        for part in parts:
+            stem = part.split(".", 1)[0].casefold()
+            if (
+                ":" in part
+                or part.endswith((".", " "))
+                or stem in reserved
+            ):
+                raise ValueError(
+                    f"Invalid portable ZIP member path: {member.filename!r}"
+                )
 
         unix_mode = member.external_attr >> 16
         if unix_mode & 0o170000 == 0o120000:
@@ -6088,7 +6794,9 @@ projects point to that single organized target. See
         targets = set()
         for member in archive.infolist():
             relative = RasEbfeModels._zip_member_relative_path(member)
-            target_key = os.path.normcase(str(relative))
+            # Organized eBFE deliveries are Windows workspaces. Enforce the
+            # Windows collision domain on every platform used by CI.
+            target_key = relative.as_posix().casefold()
             if target_key in targets and not member.is_dir():
                 raise ValueError(
                     f"Duplicate ZIP extraction target: {member.filename!r}"

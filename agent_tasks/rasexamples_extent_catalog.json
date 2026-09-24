@@ -351,6 +351,22 @@
       "notes": "One HUC8-level discovery entry represents 197 Alabama BLE 1D steady projects in eight source basins. The exact landing outline is the union of all 197 model footprints; the staged combined geometry contains 197 centerlines and model extents, 5,365 cross sections, and 394 bank lines. No hydraulic computation has been run, so this is source and geometry evidence only."
     },
     {
+      "id": "austin-oyster-12040205",
+      "title": "Austin–Oyster",
+      "source_family": "FEMA eBFE/BLE delivery",
+      "crs": "EPSG:6588",
+      "geometry_hdf": "source_projects/ebfe_organized/AustinOyster_12040205/RAS Model/AustinOyster/Input/AustinOyster.g02.hdf",
+      "extent_output": "project-extents/austin-oyster-12040205.geojson",
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-23_austin_oyster_record_of_deficiencies.md",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-23_austin_oyster_record_of_deficiencies.md",
+      "notes": "One FEMA eBFE 2D-unsteady project covers the Austin–Oyster HUC8. Plan p08 (1PAC) passed the bounded two-core pre-compute workflow and reached unsteady-solver startup; this is source-qualification evidence, not a completed-result or hydraulic-qualification claim."
+    },
+    {
       "id": "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
       "title": "Upper Guadalupe UPGU1",
       "source_family": "FEMA eBFE/BLE delivery",
