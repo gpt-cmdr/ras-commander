@@ -344,7 +344,15 @@ utilities.
 
 - `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
 - `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
-- `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations.
+- `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations. A missing or broken land-cover link emits a non-fatal warning because HEC-RAS may still return success while populating every cell with the 2D area's scalar default.
+
+Before property-table generation, use
+`RasMap.list_geometry_associations()` to inspect every compiled geometry and
+`RasMap.validate_geometry_associations()` to require the exact terrain and
+land-cover paths needed by the workflow. Registration in `.rasmap` does not
+prove that a geometry HDF is associated. After preprocessing, validate the
+temporary plan HDF; after computation, repeat the check on the final plan HDF
+with `HdfLandCover.audit_final_mannings_n()` and explicit cell-center criteria.
 
 ### HEC-RAS Version Support for Headless Mesh Generation
 

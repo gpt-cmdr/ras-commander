@@ -77,6 +77,7 @@ import subprocess
 import warnings
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from numbers import Number
 from pathlib import Path
 import pandas as pd
 import shutil
@@ -108,6 +109,49 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
 
 logger = get_logger(__name__)
+
+_GEOMETRY_ASSOCIATION_LAYER_KEYS = {
+    "terrain": "terrain_hdf_path",
+    "landcover": "landcover_hdf_path",
+    "infiltration": "infiltration_hdf_path",
+    "sediment_soils": "sediment_soils_hdf_path",
+}
+_GEOMETRY_ASSOCIATION_COLUMNS = [
+    "geom_number",
+    "geom_path",
+    "geom_hdf_path",
+    "geom_hdf_exists",
+    "plan_numbers",
+    "has_2d_mesh",
+    "has_spatial_mannings",
+    *[
+        column
+        for layer in _GEOMETRY_ASSOCIATION_LAYER_KEYS
+        for column in (
+            f"{layer}_associated",
+            f"{layer}_raw_filename",
+            f"{layer}_layer_name",
+            f"{layer}_hdf_path",
+            f"{layer}_path_exists",
+        )
+    ],
+    "inspection_status",
+    "inspection_error",
+]
+
+
+def _geometry_has_spatial_mannings_authoring(geom_path: Path) -> bool:
+    """Return whether geometry text contains non-empty spatial-n authoring."""
+    try:
+        content = geom_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if re.search(r"(?m)^LCMann Region (?:Name|Table|Polygon)=", content):
+        return True
+    return any(
+        int(match.group(1)) > 0
+        for match in re.finditer(r"(?m)^LCMann Table=\s*(\d+)\s*$", content)
+    )
 
 
 def _resolve_native_hecras_version(
@@ -1081,7 +1125,7 @@ class RasMap:
     @staticmethod
     @log_call
     def set_geometry_association(
-        geom_number: Union[str, Path],
+        geom_number: Union[str, Number, Path],
         terrain_hdf_path: Optional[Union[str, Path]] = None,
         landcover_hdf_path: Optional[Union[str, Path]] = None,
         infiltration_hdf_path: Optional[Union[str, Path]] = None,
@@ -1109,7 +1153,7 @@ class RasMap:
     @staticmethod
     @log_call
     def get_geometry_association(
-        geom_number: Union[str, Path],
+        geom_number: Union[str, Number, Path],
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object=None,
         resolve_paths: bool = True,
@@ -1125,6 +1169,247 @@ class RasMap:
             ras_object=ras_object,
             resolve_paths=resolve_paths,
         )
+
+    @staticmethod
+    @log_call
+    def list_geometry_associations(
+        geom_number: Optional[Union[str, Number]] = None,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Inventory live compiled-HDF associations for project geometries.
+
+        A layer registered in ``.rasmap`` is not necessarily associated with a
+        compiled geometry. This method reads each ``.g##.hdf`` directly and
+        returns one row per geometry, with every referencing plan collected in
+        ``plan_numbers``. It does not cache association state on ``geom_df`` or
+        ``plan_df``.
+
+        Args:
+            geom_number: Optional geometry number to select. When omitted, all
+                project geometries are inspected.
+            ras_object: Optional initialized :class:`RasPrj` instance.
+
+        Returns:
+            DataFrame described by the ``geometry_associations`` schema.
+        """
+        from ._geometry_association import read_geometry_association
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        geom_df = getattr(ras_obj, "geom_df", None)
+        if geom_df is None:
+            geom_df = ras_obj.get_geom_entries()
+        selected = geom_df.copy()
+
+        if geom_number is not None:
+            normalized = RasUtils.normalize_ras_number(geom_number)
+            selected = selected.loc[
+                selected["geom_number"].astype(str).str.zfill(2).eq(normalized)
+            ]
+            if selected.empty:
+                available = sorted(
+                    geom_df["geom_number"].astype(str).str.zfill(2).tolist()
+                )
+                raise ValueError(
+                    f"Geometry {normalized!r} was not found. Available: {available}"
+                )
+
+        plans_by_geometry: dict[str, list[str]] = {}
+        plan_df = getattr(ras_obj, "plan_df", None)
+        if plan_df is not None:
+            for _, plan_row in plan_df.iterrows():
+                raw_geometry = plan_row.get("geometry_number")
+                if pd.isna(raw_geometry) or str(raw_geometry).strip() == "":
+                    raw_geometry = plan_row.get("Geom File")
+                if pd.isna(raw_geometry) or str(raw_geometry).strip() == "":
+                    continue
+                try:
+                    geometry_key = RasUtils.normalize_ras_number(raw_geometry)
+                    plan_key = RasUtils.normalize_ras_number(
+                        plan_row.get("plan_number")
+                    )
+                except (TypeError, ValueError):
+                    continue
+                plans_by_geometry.setdefault(geometry_key, []).append(plan_key)
+
+        records = []
+        for _, geom_row in selected.iterrows():
+            geometry_key = RasUtils.normalize_ras_number(
+                geom_row.get("geom_number")
+            )
+            geom_path = Path(str(geom_row.get("full_path")))
+            raw_hdf_path = geom_row.get("hdf_path")
+            geom_hdf_path = (
+                Path(str(raw_hdf_path))
+                if raw_hdf_path is not None and not pd.isna(raw_hdf_path)
+                else Path(str(geom_path) + ".hdf")
+            )
+            raw_has_2d = geom_row.get("has_2d_mesh")
+            has_2d_mesh = (
+                None if pd.isna(raw_has_2d) else bool(raw_has_2d)
+            )
+            record = {
+                "geom_number": geometry_key,
+                "geom_path": str(geom_path),
+                "geom_hdf_path": str(geom_hdf_path),
+                "geom_hdf_exists": geom_hdf_path.exists(),
+                "plan_numbers": tuple(
+                    sorted(set(plans_by_geometry.get(geometry_key, [])))
+                ),
+                "has_2d_mesh": has_2d_mesh,
+                "has_spatial_mannings": _geometry_has_spatial_mannings_authoring(
+                    geom_path
+                ),
+                "inspection_status": "missing_hdf",
+                "inspection_error": (
+                    None
+                    if geom_hdf_path.exists()
+                    else f"Geometry HDF not found: {geom_hdf_path}"
+                ),
+            }
+            for layer in _GEOMETRY_ASSOCIATION_LAYER_KEYS:
+                record.update(
+                    {
+                        f"{layer}_associated": False,
+                        f"{layer}_raw_filename": None,
+                        f"{layer}_layer_name": None,
+                        f"{layer}_hdf_path": None,
+                        f"{layer}_path_exists": False,
+                    }
+                )
+
+            if geom_hdf_path.exists():
+                try:
+                    association = read_geometry_association(
+                        geom_hdf_path,
+                        resolve_paths=True,
+                    )
+                    for layer, path_key in _GEOMETRY_ASSOCIATION_LAYER_KEYS.items():
+                        raw_key = path_key.replace(
+                            "_hdf_path",
+                            "_raw_filename",
+                        )
+                        layer_key = path_key.replace(
+                            "_hdf_path",
+                            "_layer_name",
+                        )
+                        associated_path = association.get(path_key)
+                        raw_filename = association.get(raw_key)
+                        record.update(
+                            {
+                                f"{layer}_associated": bool(
+                                    raw_filename or associated_path
+                                ),
+                                f"{layer}_raw_filename": raw_filename,
+                                f"{layer}_layer_name": association.get(layer_key),
+                                f"{layer}_hdf_path": associated_path,
+                                f"{layer}_path_exists": bool(
+                                    associated_path
+                                    and Path(associated_path).exists()
+                                ),
+                            }
+                        )
+                    record["inspection_status"] = "available"
+                    record["inspection_error"] = None
+                except Exception as exc:
+                    record["inspection_status"] = "failed"
+                    record["inspection_error"] = str(exc)
+            records.append(record)
+
+        return pd.DataFrame.from_records(
+            records,
+            columns=_GEOMETRY_ASSOCIATION_COLUMNS,
+        )
+
+    @staticmethod
+    @log_call
+    def validate_geometry_associations(
+        geom_number: Optional[Union[str, Number]] = None,
+        required_layers: Sequence[str] = ("terrain", "landcover"),
+        require_existing_paths: bool = True,
+        raise_on_failure: bool = True,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Validate required compiled-geometry layer associations.
+
+        ``.rasmap`` registration is deliberately not accepted as proof of an
+        association. Use this before property-table generation, then inspect a
+        temporary plan HDF before compute and the final plan HDF afterward.
+        """
+        aliases = {
+            "land_cover": "landcover",
+            "mannings": "landcover",
+            "mannings_n": "landcover",
+            "sediment": "sediment_soils",
+        }
+        if isinstance(required_layers, str):
+            required_layers = (required_layers,)
+        normalized_layers = tuple(
+            aliases.get(str(layer).strip().lower(), str(layer).strip().lower())
+            for layer in required_layers
+        )
+        unknown = sorted(
+            set(normalized_layers) - set(_GEOMETRY_ASSOCIATION_LAYER_KEYS)
+        )
+        if unknown:
+            raise ValueError(
+                "Unsupported required_layers: "
+                + ", ".join(unknown)
+                + ". Expected terrain, landcover, infiltration, or "
+                "sediment_soils."
+            )
+
+        report = RasMap.list_geometry_associations(
+            geom_number=geom_number,
+            ras_object=ras_object,
+        ).copy()
+        missing_values = []
+        broken_values = []
+        passed_values = []
+        reason_values = []
+        for row in report.itertuples(index=False):
+            missing = tuple(
+                layer
+                for layer in normalized_layers
+                if not bool(getattr(row, f"{layer}_associated"))
+            )
+            broken = tuple(
+                layer
+                for layer in normalized_layers
+                if bool(getattr(row, f"{layer}_associated"))
+                and not bool(getattr(row, f"{layer}_path_exists"))
+            ) if require_existing_paths else ()
+            reasons = []
+            if row.inspection_status != "available":
+                reasons.append(row.inspection_error or row.inspection_status)
+            if missing:
+                reasons.append("missing required layers: " + ", ".join(missing))
+            if broken:
+                reasons.append("broken association paths: " + ", ".join(broken))
+            missing_values.append(missing)
+            broken_values.append(broken)
+            passed_values.append(not reasons)
+            reason_values.append("; ".join(reasons))
+
+        report["missing_required_layers"] = missing_values
+        report["broken_association_layers"] = broken_values
+        report["passed"] = passed_values
+        report["failure_reason"] = reason_values
+
+        if raise_on_failure and (
+            report.empty or not bool(report["passed"].all())
+        ):
+            details = (
+                "; ".join(
+                    f"g{row.geom_number}: {row.failure_reason}"
+                    for row in report.itertuples(index=False)
+                    if not row.passed
+                )
+                if not report.empty
+                else "no project geometries were found"
+            )
+            raise RuntimeError(f"Geometry association validation failed: {details}")
+        return report
 
     @staticmethod
     @log_call

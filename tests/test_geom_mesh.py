@@ -1296,6 +1296,43 @@ class TestGeometryAssociation:
                 terrain_hdf_path=missing_terrain,
             )
 
+    def test_partial_update_preserves_omitted_association(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        geom_hdf_path = self._make_geometry_hdf(tmp_path)
+        terrain = self._make_artifact(tmp_path / "Terrain" / "Terrain50.hdf")
+        landcover_a = self._make_artifact(
+            tmp_path / "Land Classification" / "LandCoverA.hdf"
+        )
+        landcover_b = self._make_artifact(
+            tmp_path / "Land Classification" / "LandCoverB.hdf"
+        )
+        _install_fake_rasmapper_scripting(monkeypatch)
+        monkeypatch.setattr(
+            geom_mesh_module,
+            "_load_dlls",
+            lambda hecras_dir=None: None,
+        )
+
+        GeomMesh.set_geometry_association(
+            geom_hdf_path,
+            terrain_hdf_path=terrain,
+            landcover_hdf_path=landcover_a,
+        )
+        GeomMesh.set_geometry_association(
+            geom_hdf_path,
+            landcover_hdf_path=landcover_b,
+        )
+
+        association = GeomMesh.get_geometry_association(geom_hdf_path)
+        assert Path(association["terrain_hdf_path"]).resolve() == terrain.resolve()
+        assert (
+            Path(association["landcover_hdf_path"]).resolve()
+            == landcover_b.resolve()
+        )
+
 
 class TestDetectBcConflicts:
     """Test BC conflict detection using synthetic HDF."""
@@ -1507,7 +1544,7 @@ class TestRasMapperLibVersionCompat:
         assert geom_mesh_module._meshfv2d_takes_min_face_ratio({"MeshFV2D": object()}) is True
 
     def test_compute_property_tables_falls_back_to_three_argument_form(
-        self, monkeypatch, tmp_path
+        self, monkeypatch, tmp_path, caplog
     ):
         calls = []
 
@@ -1535,8 +1572,10 @@ class TestRasMapperLibVersionCompat:
             geom_mesh_module, "_imports", lambda: {"RASGeometry": lambda path: fake_geom}
         )
 
-        assert GeomMesh.compute_property_tables("01") is True
+        with caplog.at_level(logging.WARNING):
+            assert GeomMesh.compute_property_tables("01") is True
         assert calls == [4, 3]
+        assert "Property-table completion alone does not prove" in caplog.text
 
 
 class TestSaveMesh:

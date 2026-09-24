@@ -1,3 +1,5 @@
+import os
+import platform
 import shutil
 from pathlib import Path
 
@@ -13,6 +15,7 @@ Polygon = shapely_geometry.Polygon
 
 
 REGION_NAME = "Flat Area"
+HECRAS_INTEGRATION_ENV = "RAS_COMMANDER_RUN_HECRAS_INTEGRATION"
 
 
 @pytest.fixture(scope="module")
@@ -297,3 +300,123 @@ def test_set_mannings_region_polygons_roundtrips_through_preprocessor(tmp_path):
     roundtrip = region_match.iloc[0].geometry
     assert roundtrip.hausdorff_distance(expected) <= 1e-4
     assert roundtrip.area == pytest.approx(expected.area, rel=1e-9, abs=1e-3)
+
+
+@pytest.mark.integration
+@pytest.mark.destructive_copy
+@pytest.mark.slow
+@pytest.mark.skipif(
+    platform.system() != "Windows"
+    or os.environ.get(HECRAS_INTEGRATION_ENV) != "1",
+    reason="Requires Windows, HEC-RAS 6.6, and explicit integration opt-in",
+)
+def test_mannings_region_reaches_solver_cells_after_explicit_association(tmp_path):
+    """Issue #370 regression against a disposable real Muncie project."""
+    import numpy as np
+
+    from ras_commander import (
+        GeomMesh,
+        HdfLandCover,
+        RasExamples,
+        RasMap,
+        RasPlan,
+        RasPreprocess,
+        RasPrj,
+        init_ras_project,
+    )
+
+    project_path = Path(
+        RasExamples.extract_project(
+            "Muncie",
+            output_path=tmp_path,
+            suffix="pytest_issue370_association",
+        )
+    )
+    ras = RasPrj()
+    init_ras_project(
+        project_path,
+        ras_version="6.6",
+        ras_object=ras,
+        hide_intro=True,
+        accept_tcu=True,
+    )
+
+    geom_path = project_path / "Muncie.g04"
+    geom_hdf = project_path / "Muncie.g04.hdf"
+    terrain_hdf = project_path / "Terrain" / "TerrainWithChannel.hdf"
+    landcover_hdf = project_path / "LandCover" / "LandCoverUserShapefile.hdf"
+    target_n = 0.123
+
+    regions = HdfLandCover.get_mannings_region_polygons(geom_hdf)
+    flat_area = regions.loc[
+        regions["Name"].astype(str).str.strip().eq(REGION_NAME),
+        ["Name", "geometry"],
+    ]
+    assert len(flat_area) == 1
+    GeomLandCover.set_mannings_region_polygons(geom_path, flat_area)
+
+    regional_table = GeomLandCover.get_region_mannings_n(geom_path)
+    regional_table = regional_table.loc[
+        regional_table["Region Name"].eq(REGION_NAME)
+    ].copy()
+    regional_table["MainChannel"] = target_n
+    GeomLandCover.set_region_mannings_n(geom_path, regional_table)
+
+    missing = RasMap.validate_geometry_associations(
+        geom_number="04",
+        required_layers=("terrain", "landcover"),
+        raise_on_failure=False,
+        ras_object=ras,
+    )
+    assert missing.loc[0, "missing_required_layers"] == (
+        "terrain",
+        "landcover",
+    )
+
+    RasMap.set_geometry_association(
+        "04",
+        terrain_hdf_path=terrain_hdf,
+        landcover_hdf_path=landcover_hdf,
+        ras_object=ras,
+    )
+    validated = RasMap.validate_geometry_associations(
+        geom_number="04",
+        required_layers=("terrain", "landcover"),
+        ras_object=ras,
+    )
+    assert bool(validated.loc[0, "passed"])
+    assert GeomMesh.compute_property_tables(
+        "04",
+        mesh_name="2D Interior Area",
+        force=True,
+        ras_object=ras,
+    )
+
+    plan_path = RasPlan.get_plan_path("04", ras_object=ras)
+    RasPlan.update_run_flags(
+        plan_path,
+        geometry_preprocessor=True,
+        ras_object=ras,
+    )
+    preprocess = RasPreprocess.preprocess_plan(
+        "04",
+        ras_object=ras,
+        max_wait=600,
+        clear_existing=True,
+        fix_line_endings=True,
+    )
+    assert preprocess
+
+    audit = HdfLandCover.audit_final_mannings_n(
+        preprocess.tmp_hdf_path,
+        mesh_name="2D Interior Area",
+        minimum_cell_distinct_values=2,
+        expected_cell_values=[target_n],
+        require_complete_geometry=False,
+    )
+    assert bool(audit.loc[0, "passed"])
+    assert audit.loc[0, "missing_expected_cell_values"] == ()
+    assert any(
+        np.isclose(value, target_n)
+        for value in audit.loc[0, "cell_distinct_values"]
+    )

@@ -4,6 +4,31 @@
 
 ### Unreleased
 
+**Geometry Association Preflight and Manning Diagnostics (#370)**
+
+- Add `RasMap.list_geometry_associations()` for a live, one-row-per-geometry
+  inventory of compiled-HDF terrain, land-cover, infiltration, and sediment
+  associations, including every referencing plan and resolved-path health.
+  Add `RasMap.validate_geometry_associations()` for explicit preflight gates;
+  `.rasmap` layer registration is not treated as a geometry association.
+- Make partial `RasMap.set_geometry_association()` updates verify that omitted
+  associations survive the native HEC-RAS command. Ambiguous implicit
+  selection among multiple registered classification layers now warns and
+  recommends an exact path.
+- Warn before both property-table entry points when the compiled geometry has
+  no land-cover association or references a missing file. HEC-RAS can report
+  property-table and plan-compute success in this condition while silently
+  falling back to the 2D area's scalar Manning value.
+- Extend `HdfLandCover.audit_final_mannings_n()` with independent cell-center
+  and face-value requirements. This permits the solver-authoritative
+  `Cells Center Manning's n` array to be a required pre- and post-compute gate
+  instead of inferring success from face tables.
+- Qualify the missing-association and explicit-association cases end to end on
+  Muncie with HEC-RAS 6.6 under Wine 11.0 on CLB07. The missing case completed
+  without a relevant HEC-RAS message and remained uniformly 0.06; the explicit
+  association preserved terrain and propagated 0.123 into the temporary and
+  final plan HDFs.
+
 **Refinement-Region Authoring and Mesh Density (#369)**
 
 - Author real geometry through RAS Mapper's native `MeshRegions` layer on

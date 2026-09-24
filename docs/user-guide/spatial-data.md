@@ -192,6 +192,35 @@ print(landcover_layers[[
 
 HEC-RAS stores layer availability in the `.rasmap` file, but compiled geometry and plan/result HDF files also carry `/Geometry` attributes that record which terrain, land-cover, infiltration, and sediment bed-material layers are associated with a geometry.
 
+### Project-Wide Inventory and Validation
+
+Inspect the live compiled-HDF state across every geometry rather than copying
+association columns into `geom_df` or `plan_df`, where they could become stale:
+
+```python
+from ras_commander import RasMap
+
+inventory = RasMap.list_geometry_associations(ras_object=ras)
+print(inventory[[
+    "geom_number",
+    "plan_numbers",
+    "terrain_hdf_path",
+    "landcover_hdf_path",
+    "landcover_path_exists",
+]])
+
+preflight = RasMap.validate_geometry_associations(
+    geom_number="04",
+    required_layers=("terrain", "landcover"),
+    require_existing_paths=True,
+    ras_object=ras,
+)
+```
+
+The validator reads each `.g##.hdf` directly. A land-cover layer visible in
+`.rasmap` does not satisfy the gate unless the geometry HDF contains a valid
+`Land Cover Filename` association.
+
 Use `RasMap.get_hdf_geometry_association()` for read-only QA/QC:
 
 ```python
@@ -224,7 +253,9 @@ Common returned keys include:
 
 ### Writing Geometry Associations
 
-Use `RasMap.associate_geometry_layers()` to write HEC-style `/Geometry` association attributes to an existing compiled geometry HDF.
+Use `RasMap.set_geometry_association()` when the exact association paths are
+known. Omitted layer arguments preserve their existing associations and that
+preservation is verified after the native HEC-RAS call.
 
 ```python
 from pathlib import Path
@@ -235,8 +266,7 @@ geometry_hdf = project_path / "MyModel.g01.hdf"
 terrain_hdf = project_path / "Terrain" / "ExistingTerrain.hdf"
 landcover_hdf = project_path / "Land Classification" / "LandCover.hdf"
 
-RasMap.associate_geometry_layers(
-    project_path,
+RasMap.set_geometry_association(
     geometry_hdf,
     terrain_hdf_path=terrain_hdf,
     landcover_hdf_path=landcover_hdf,
@@ -248,10 +278,15 @@ print(updated["landcover_hdf_path"])
 ```
 
 !!! warning "Existing compiled geometry HDF required"
-    `RasMap.associate_geometry_layers()` updates attributes on an existing `.g##.hdf`. It does not compile a plain-text `.g##` file into HDF and does not create missing geometry datasets. Treat true `.g##` to `.g##.hdf` generation as HEC-RAS/Ras.exe behavior unless a native endpoint is explicitly available.
+    Association setters update an existing `.g##.hdf`. They do not compile a plain-text `.g##` file into HDF and do not create missing geometry datasets. Treat true `.g##` to `.g##.hdf` generation as HEC-RAS/Ras.exe behavior unless a native endpoint is explicitly available.
 
-!!! tip "Layer name resolution"
-    When possible, ras-commander resolves `Terrain Layername`, `Land Cover Layername`, and `Infiltration Layername` from the `.rasmap` catalog. If the layer cannot be found in `.rasmap`, it falls back to the file stem.
+`RasMap.associate_geometry_layers()` remains a project-path convenience
+wrapper. Pass exact paths in new workflows. If more than one registered layer
+matches an omitted classification argument, implicit selection warns because
+the first registered layer is not a reliable hydraulic choice.
+
+!!! warning "Successful property tables are not proof of Manning propagation"
+    HEC-RAS may complete property tables and a plan computation with no land-cover association, emit no useful runtime message, and populate `Cells Center Manning's n` with the 2D area's scalar default. Inspect the temporary plan HDF before compute and the final plan HDF afterward. Manual review in RAS Mapper remains advisable.
 
 ### Native RasProcess Reference Validator
 

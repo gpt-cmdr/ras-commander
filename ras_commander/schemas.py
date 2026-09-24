@@ -29,7 +29,35 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.16"
+SCHEMA_VERSION = "1.17"
+
+_GEOMETRY_ASSOCIATION_COLUMNS = [
+    {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
+    {"name": "geom_path", "dtype": "str", "description": "Plain-text geometry path."},
+    {"name": "geom_hdf_path", "dtype": "str", "description": "Expected compiled geometry HDF path."},
+    {"name": "geom_hdf_exists", "dtype": "bool", "description": "Whether the compiled geometry HDF exists."},
+    {"name": "plan_numbers", "dtype": "tuple[str, ...]", "description": "Plans that reference this geometry."},
+    {"name": "has_2d_mesh", "dtype": "bool | None", "description": "Project metadata indication that the geometry contains a 2D flow area."},
+    {"name": "has_spatial_mannings", "dtype": "bool", "description": "Whether geometry text contains a non-empty base or regional LCMann definition."},
+    *[
+        column
+        for layer, description in (
+            ("terrain", "terrain"),
+            ("landcover", "land-cover/Manning's n"),
+            ("infiltration", "infiltration"),
+            ("sediment_soils", "sediment bed-material"),
+        )
+        for column in (
+            {"name": f"{layer}_associated", "dtype": "bool", "description": f"Whether the geometry HDF stores a {description} association."},
+            {"name": f"{layer}_raw_filename", "dtype": "str | None", "description": f"Raw HEC-RAS {description} filename attribute."},
+            {"name": f"{layer}_layer_name", "dtype": "str | None", "description": f"Stored HEC-RAS {description} layer name."},
+            {"name": f"{layer}_hdf_path", "dtype": "str | None", "description": f"Resolved {description} HDF path."},
+            {"name": f"{layer}_path_exists", "dtype": "bool", "description": f"Whether the resolved {description} path exists."},
+        )
+    ],
+    {"name": "inspection_status", "dtype": "str", "description": "available, missing_hdf, or failed."},
+    {"name": "inspection_error", "dtype": "str | None", "description": "Geometry-HDF inspection diagnostic."},
+]
 
 DATAFRAME_SCHEMAS = {
     "container_batch_summary": {
@@ -581,6 +609,30 @@ DATAFRAME_SCHEMAS = {
             {"name": "geometry_metadata_valid", "dtype": "boolean", "description": "Whether geometry metadata was successfully classified."},
             {"name": "geometry_metadata_error", "dtype": "str | None", "description": "Diagnostic retained when HDF or text metadata inspection failed or fell back."},
         ],
+    },
+    "geometry_associations": {
+        "description": "Live compiled-HDF terrain and classification associations, one row per project geometry.",
+        "accessor": "RasMap.list_geometry_associations(...)",
+        "source": "RasMap.list_geometry_associations()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": _GEOMETRY_ASSOCIATION_COLUMNS,
+        "note": "Values are read live and are intentionally not cached on geom_df or plan_df.",
+    },
+    "geometry_association_validation": {
+        "description": "Live geometry-association inventory with required-layer validation results.",
+        "accessor": "RasMap.validate_geometry_associations(...)",
+        "source": "RasMap.validate_geometry_associations()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            *_GEOMETRY_ASSOCIATION_COLUMNS,
+            {"name": "missing_required_layers", "dtype": "tuple[str, ...]", "description": "Required association types absent from the compiled geometry HDF."},
+            {"name": "broken_association_layers", "dtype": "tuple[str, ...]", "description": "Associated layer paths that do not resolve to existing HDF files."},
+            {"name": "passed", "dtype": "bool", "description": "Whether every requested association validation gate passed."},
+            {"name": "failure_reason", "dtype": "str", "description": "Human-readable validation failures, or an empty string on success."},
+        ],
+        "note": "Values are read live and are intentionally not cached on geom_df or plan_df.",
     },
     "boundaries_df": {
         "description": "One row per boundary condition across the project's unsteady flow files.",
