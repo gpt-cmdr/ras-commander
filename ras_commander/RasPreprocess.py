@@ -72,6 +72,14 @@ class RasPreprocess:
         "process tree. ras-commander refused to continue without a scoped "
         "first-run TCU check."
     )
+    _UNSTEADY_PROCESS_NAMES = frozenset(
+        {
+            "rasunsteady",
+            "rasunsteady.exe",
+            "rasunsteady64",
+            "rasunsteady64.exe",
+        }
+    )
 
     @staticmethod
     def _ras_compute_command_line(
@@ -1040,7 +1048,7 @@ class RasPreprocess:
             except Exception:
                 pass
             if any(
-                str(candidate).casefold() in {"rasunsteady", "rasunsteady.exe"}
+                str(candidate).casefold() in RasPreprocess._UNSTEADY_PROCESS_NAMES
                 for candidate in candidates
             ):
                 return True

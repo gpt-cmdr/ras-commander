@@ -350,7 +350,54 @@ def test_alabama_ble_corpus_is_one_exact_discovery_entry() -> None:
     assert "groupId" not in profiles.split(f'"{project_id}"', 1)[1].split("},", 1)[0]
     assert "AL03130002" in page
     assert page.count("Alabama Middle Chattahoochee–Lake Harding BLE") == 1
-    assert "20260912Talabama-ble-corpus01" in page
+    assert "20260924Taustin-oyster01" in page
+
+
+def test_austin_oyster_is_one_exact_source_qualification_candidate() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    profiles = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-profiles.js"
+    ).read_text(encoding="utf-8")
+    supplement_source = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-supplements.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    supplement = json.loads(supplement_source.removeprefix(prefix).removesuffix(";\n"))
+    project_id = "austin-oyster-12040205"
+    features = [item for item in supplement["features"] if item["id"] == project_id]
+
+    assert len(features) == 1
+    feature = features[0]
+    geometry = shape(feature["geometry"])
+    assert geometry.geom_type == "Polygon"
+    assert geometry.is_valid
+    assert not geometry.equals(box(*feature["bbox"]))
+    assert list(geometry.bounds) == feature["bbox"]
+    assert feature["properties"]["crsDefinition"] == "EPSG:6588"
+    assert feature["properties"]["status"] == "Source qualification candidate"
+    assert feature["properties"]["viewerType"] == "Qualification candidate"
+    assert all(
+        not feature["properties"][field]
+        for field in (
+            "webmap",
+            "manifest",
+            "projectManifest",
+            "landingGeometryPmtiles",
+            "landingGeometryProfile",
+        )
+    )
+    assert (
+        feature["properties"]["landingExtentSource"] == "Exact model footprint"
+    )
+    assert "HdfProject.get_project_extent" in feature["properties"]["extentSource"]
+    assert feature["properties"]["details"].startswith("https://")
+    assert feature["properties"]["recordOfDeficiencies"].startswith("https://")
+    assert "reached unsteady-solver startup" in feature["properties"]["notes"]
+    assert profiles.count(f'"{project_id}"') == 1
+    assert "HEC-RAS 5.0.7 source; unsteady-start validated" in profiles
+    assert "20260924Taustin-oyster01" in page
 
 
 def test_embedded_catalog_retains_api_derived_project_footprints() -> None:

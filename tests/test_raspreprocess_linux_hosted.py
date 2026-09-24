@@ -233,6 +233,78 @@ def test_unsteady_signal_requires_owned_process_and_all_artifacts(
     assert not RasPreprocess._unsteady_compute_started(12345, *artifacts)
 
 
+def test_unsteady_signal_recognizes_507_64_bit_process_names(
+    tmp_path,
+    monkeypatch,
+):
+    artifacts = [
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+    ]
+    for path in artifacts:
+        path.write_bytes(b"ready")
+
+    class Child:
+        def __init__(self, name, executable):
+            self._name = name
+            self._executable = executable
+
+        def name(self):
+            return self._name
+
+        def cmdline(self):
+            return [self._executable]
+
+    class Root:
+        child = None
+
+        def children(self, recursive):
+            assert recursive is True
+            return [self.child]
+
+    import psutil
+
+    root = Root()
+    monkeypatch.setattr(psutil, "Process", lambda _pid: root)
+
+    root.child = Child("RasUnsteady64.exe", r"C:\HEC-RAS\5.0.7\RasUnsteady64.exe")
+    assert RasPreprocess._unsteady_compute_started(12345, *artifacts)
+
+    root.child = Child("rasUnsteady64", r"C:\HEC-RAS\5.0.7\rasUnsteady64")
+    assert RasPreprocess._unsteady_compute_started(12345, *artifacts)
+
+
+def test_unsteady_signal_rejects_similar_64_bit_process_names(
+    tmp_path,
+    monkeypatch,
+):
+    artifacts = [
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+    ]
+    for path in artifacts:
+        path.write_bytes(b"ready")
+
+    class Child:
+        def name(self):
+            return "RasUnsteady64.exe.helper"
+
+        def cmdline(self):
+            return [r"C:\HEC-RAS\5.0.7\NotRasUnsteady64.exe"]
+
+    class Root:
+        def children(self, recursive):
+            assert recursive is True
+            return [Child()]
+
+    import psutil
+
+    monkeypatch.setattr(psutil, "Process", lambda _pid: Root())
+    assert not RasPreprocess._unsteady_compute_started(12345, *artifacts)
+
+
 def test_unsteady_signal_rejects_unrelated_descendant(tmp_path, monkeypatch):
     artifacts = [
         tmp_path / "fixture.p01.tmp.hdf",

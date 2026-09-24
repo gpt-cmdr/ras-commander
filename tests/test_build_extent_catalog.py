@@ -144,6 +144,30 @@ def test_alabama_ble_catalog_has_one_corpus_candidate() -> None:
     assert "197 Alabama BLE 1D steady projects" in project["notes"]
 
 
+def test_austin_oyster_catalog_has_one_unsteady_start_candidate() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+    project_id = "austin-oyster-12040205"
+    projects = [item for item in config["projects"] if item["id"] == project_id]
+
+    assert len(projects) == 1
+    project = projects[0]
+    assert project["crs"] == "EPSG:6588"
+    assert project["geometry_hdf"] == (
+        "source_projects/ebfe_organized/AustinOyster_12040205/RAS Model/"
+        "AustinOyster/Input/AustinOyster.g02.hdf"
+    )
+    assert project["status"] == "Source qualification candidate"
+    assert project["viewer_type"] == "Qualification candidate"
+    assert all(
+        not project[field] for field in ("webmap", "manifest", "project_manifest")
+    )
+    assert project["details"].startswith("https://")
+    assert project["record_of_deficiencies"].startswith("https://")
+    assert project["details"] == project["record_of_deficiencies"]
+    assert "reached unsteady-solver startup" in project["notes"]
+    assert "completed-result" in project["notes"]
+
+
 def test_write_javascript_catalog_preserves_exact_project_footprint(
     tmp_path: Path,
 ) -> None:

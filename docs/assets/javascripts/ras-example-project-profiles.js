@@ -129,6 +129,11 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
       version: "Delivered plan metadata: 135 at 6.20, 2 at 6.31, and 60 unspecified",
       summary: "A single HUC8-level discovery entry for 197 Alabama BLE projects across eight source basins. Its outline is the union of the individual model footprints; selecting it can load one combined geometry archive containing 197 model extents and centerlines, 5,365 cross sections, and 394 bank lines after that archive is published. No plan computation or result-viewer qualification is claimed.",
     },
+    "austin-oyster-12040205": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 5.0.7 source; unsteady-start validated",
+      summary: "One regional 2D project covers the Austin–Oyster HUC8 with seven frequency and sensitivity plans. Plan p08 (1PAC) passed the bounded two-core pre-compute workflow and reached unsteady-solver startup. The delivered terrain is present and has no terrain-modification groups; this candidate does not claim completed results or hydraulic qualification.",
+    },
     "baldeaglecrkmulti2d-baldeaglecrkmulti2d-remote-7-0-20260628-212722-1d3b97ab": {
       modelType: "1D/2D unsteady dam-break",
       version: "HEC-RAS 7.0 (rerun)",

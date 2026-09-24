@@ -125,6 +125,7 @@ Current built-in organizers include:
 | Slug | HUC8 | Delivery Notes |
 |---|---:|---|
 | `spring-creek` | 12040102 | Single 2D model with nested final archive. |
+| `austin-oyster` | 12040205 | One HEC-RAS 5.07 2D unsteady project with seven plans. The compiled terrain, land cover, DSS inputs, projection, RASMapper file, geometry HDF, and seven result HDFs are delivered; deterministic reconstruction is required before runtime qualification. |
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
 | `upper-guadalupe` | 12100201 | Four cascaded 2D watershed models. |
 | `san-gabriel` | 12070205 | Five-project DSS fan-in covering the Round Rock and Florence ras2fim-2d test area. Unsteady-start validated; shared compiled terrain was not provided. |
@@ -136,6 +137,36 @@ Current built-in organizers include:
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
 | `lake-maurepas` | 08070204 | Louisiana 2D model archive. |
 | `lower-brazos` | 12070104 | Very large component delivery; manifest-only by default. |
+
+### Austin–Oyster reconstruction boundary
+
+The `austin-oyster` source entry covers eBFE HUC8 `12040205`. The public
+archive contains one HEC-RAS 5.07 2D unsteady project with seven registered
+plans. Its load-bearing terrain, land cover, seven DSS inputs, projection,
+RASMapper configuration, geometry HDF, and seven plan/result HDFs are present.
+The delivered `Terrain.hdf` contains no terrain-modification groups, matching
+the absence of modification layers in the delivered `.rasmap`; the organizer
+must preserve that evidence rather than rebuild or substitute terrain.
+
+Reconstruction expands the nested archive chain, relocates fourteen delivered
+`Output` assets plus the projection file, and corrects one RASMapper projection
+path. The organizer also checks all twenty-eight terrain/land-cover attributes
+in the seven plan HDFs. Independent reconstruction found all 28 attributes
+already path-equivalent, so it preserved their delivered bytes and performed
+zero HDF mutations. The eBFE webmap's count of 29 describes its proposed
+metadata-repair surface, not the mutations actually required by the archive.
+
+The two independently reviewed missing references are the optional local
+basemap definitions `Google Map.xml` and `Google Hybrid.xml`. They affect only
+RASMapper display and are not hydraulic inputs. The audit's static `RasCheck`
+sample ran against plan `p03` and recorded one error; it did not start or run
+HEC-RAS computation. Independent CEWS validation subsequently preprocessed
+plan `p08` (`1PAC`) with HEC-RAS 5.0.7 and two cores, reached an owned
+`RasUnsteady64.exe` child with the complete fresh artifact set, and stopped at
+the intended solver-start boundary in 64.9 seconds. This qualifies source
+assembly and unsteady startup, not completed results. The durable
+[Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-23_austin_oyster_record_of_deficiencies.md)
+preserves the evidence boundary and the CEWS staging location.
 
 ### Alabama BLE watershed corpora
 
