@@ -150,6 +150,24 @@ class RasEbfeModels:
             "Terrain (1).upgu34.tif",
         ],
     }
+    _PEDERNALES_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12090206_Pedernales/"
+        "12090206_Models.zip"
+    )
+    _PEDERNALES_SOURCE_SIZE = 138_116_094
+    _PEDERNALES_SOURCE_ETAG = "b73ad7fff398baa8132d40296a0e30ee-9"
+    _CIBOLO_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12100304_Cibolo/"
+        "12100304_Models.zip"
+    )
+    _CIBOLO_SOURCE_SIZE = 38_827_758_483
+    _CIBOLO_SOURCE_ETAG = "7d88e8a2b047780c8df9fd486c7bb34d-4629"
+    _MEDINA_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12100302_Medina/"
+        "12100302_Models.zip"
+    )
+    _MEDINA_SOURCE_SIZE = 52_085_665_792
+    _MEDINA_SOURCE_ETAG = "5474dc597ff3a2fb4418a59807a439ff-6210"
     _DOUBLE_MOUNTAIN_FORK_BRAZOS_SOURCE_BASE = (
         "https://ebfedata.s3-us-west-2.amazonaws.com/"
         "12050004_DoubleMountainForkBrazos/Models"
@@ -319,6 +337,12 @@ class RasEbfeModels:
         "upper-guadalupe": "upper-guadalupe",
         "upgu": "upper-guadalupe",
         "12100201": "upper-guadalupe",
+        "pedernales": "pedernales",
+        "12090206": "pedernales",
+        "cibolo": "cibolo",
+        "12100304": "cibolo",
+        "medina": "medina",
+        "12100302": "medina",
         "san-gabriel": "san-gabriel",
         "sangabriel": "san-gabriel",
         "12070205": "san-gabriel",
@@ -540,6 +564,226 @@ class RasEbfeModels:
                         "classification": "display_only",
                     },
                 ],
+            },
+        },
+        "pedernales": {
+            "study_area": "Pedernales_12090206",
+            "huc8": "12090206",
+            "organizer": "organize_pedernales",
+            "download_subdir": "12090206_Pedernales",
+            "output_name": "Pedernales_12090206",
+            "ras_version": "6.6",
+            "delivered_ras_version": "4.1.0",
+            "model_type": ModelType.STEADY_1D,
+            "source_url": _PEDERNALES_SOURCE_URL,
+            "file_size_bytes": _PEDERNALES_SOURCE_SIZE,
+            "notes": (
+                "A 530-project 1D steady BLE corpus. The dedicated adapter "
+                "preserves full relative-path project identities, assembles "
+                "all current p01/g01/f01 chains, and classifies terrain as "
+                "not applicable rather than missing. All 530 selected p01 "
+                "plans completed in isolated two-core HEC-RAS 6.6 runs."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_1d",
+                "project_count": 530,
+                "canonical_plan": "01",
+                "plan_number": "01",
+                "top_level_project_count": 529,
+                "nested_project_count": 1,
+                "plan_timeout_seconds": 600,
+                "required_validation_level": "steady_plan_completion",
+                "validation_status": "qualified",
+                "validation_level": "steady_plan_completion",
+                "hec_ras_executed": True,
+                "validation_scope": "isolated_copy",
+                "qualified_plan": {
+                    "plan": "01",
+                    "project_count": 530,
+                    "passed_project_count": 530,
+                    "execution_version": "6.6",
+                    "num_cores": 2,
+                },
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_pedernales_"
+                    "record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "repairable_from_delivery",
+                "terrain_required": False,
+                "terrain_source_complete": None,
+                "downstream_usable": True,
+                "reproducible": True,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12090206_Models.zip",
+                    "url": _PEDERNALES_SOURCE_URL,
+                    "size_bytes": _PEDERNALES_SOURCE_SIZE,
+                    "etag": _PEDERNALES_SOURCE_ETAG,
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [{
+                    "value": "PEDERNALES RIVER.p02 -> .\\_XsOutData\\PEDERNALES RIVER.g02",
+                    "classification": "inactive_delete_plan",
+                }],
+            },
+        },
+        "cibolo": {
+            "study_area": "Cibolo_12100304",
+            "huc8": "12100304",
+            "organizer": "organize_cibolo",
+            "download_subdir": "12100304_Cibolo",
+            "output_name": "Cibolo_12100304",
+            "ras_version": "5.0.7",
+            "delivered_ras_version": "5.0.7",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _CIBOLO_SOURCE_URL,
+            "file_size_bytes": _CIBOLO_SOURCE_SIZE,
+            "notes": (
+                "One 2D unsteady project with delivered terrain, land cover, "
+                "and hydrology. The dedicated adapter expands the nested "
+                "final archive and repairs only audited active paths. Plan 14 "
+                "reached owned unsteady-solver startup in an isolated two-core "
+                "HEC-RAS 5.0.7 copy."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_2d",
+                "project_count": 1,
+                "project": "Cibolo",
+                "canonical_plan_contract": {
+                    "project": "Cibolo",
+                    "plan": "14",
+                    "geometry": "05",
+                    "unsteady": "02",
+                    "title": "Cibolo100YR",
+                },
+                "required_validation_level": "unsteady_start",
+                "validation_status": "qualified",
+                "validation_level": "unsteady_start",
+                "validation_scope": "isolated_copy",
+                "hec_ras_executed": True,
+                "qualified_plan": {
+                    "project": "Cibolo",
+                    "plan": "14",
+                    "geometry": "05",
+                    "unsteady": "02",
+                    "title": "Cibolo100YR",
+                    "execution_version": "5.0.7",
+                    "num_cores": 2,
+                },
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_cibolo_record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "repairable_from_delivery",
+                "terrain_required": True,
+                "terrain_source_complete": True,
+                "downstream_usable": True,
+                "reproducible": True,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12100304_Models.zip",
+                    "url": _CIBOLO_SOURCE_URL,
+                    "size_bytes": _CIBOLO_SOURCE_SIZE,
+                    "etag": _CIBOLO_SOURCE_ETAG,
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [
+                    {"kind": "backup_only", "count": 2},
+                    {"kind": "display_only", "count": 3},
+                ],
+            },
+        },
+        "medina": {
+            "study_area": "Medina_12100302",
+            "huc8": "12100302",
+            "organizer": "organize_medina",
+            "download_subdir": "12100302_Medina",
+            "output_name": "Medina_12100302",
+            "ras_version": "6.4.1",
+            "delivered_ras_version": "6.4.1",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _MEDINA_SOURCE_URL,
+            "file_size_bytes": _MEDINA_SOURCE_SIZE,
+            "notes": (
+                "Five 2D unsteady projects. Four contain their compiled "
+                "terrain and supporting source inputs; Upper Medina "
+                "Headwaters is blocked because its referenced modified "
+                "Terrain.hdf was not delivered."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_2d",
+                "project_count": 5,
+                "projects": {
+                    "Leon1": {
+                        "plan": "01",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "Leon2": {
+                        "plan": "03",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "Leon3": {
+                        "plan": "02",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "MiddleLowerMedina": {
+                        "project": "MLM",
+                        "plan": "03",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "UpperMedinaHeadwaters": {
+                        "project": "UpperMedinaHW",
+                        "plan": "04",
+                        "terrain_source_complete": False,
+                        "validation_status": "blocked_source_gap",
+                        "validation_level": None,
+                        "hec_ras_executed": False,
+                    },
+                },
+                "required_validation_level": "unsteady_start",
+                "validation_status": "blocked_source_gap",
+                "validation_level": "partial_unsteady_start",
+                "validation_scope": "isolated_copy",
+                "hec_ras_executed": True,
+                "qualified_project_count": 4,
+                "blocked_project_count": 1,
+                "execution_version": "6.4.1",
+                "num_cores": 2,
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_medina_record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "critical_source_gap",
+                "terrain_required": True,
+                "terrain_source_complete": False,
+                "downstream_usable": False,
+                "reproducible": False,
+                "known_deficiencies": [{
+                    "project": "UpperMedinaHeadwaters",
+                    "kind": "missing_modified_terrain_hdf",
+                    "severity": "critical",
+                }],
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12100302_Models.zip",
+                    "url": _MEDINA_SOURCE_URL,
+                    "size_bytes": _MEDINA_SOURCE_SIZE,
+                    "etag": _MEDINA_SOURCE_ETAG,
+                    "extract": False,
+                }],
             },
         },
         "san-gabriel": {
@@ -1094,7 +1338,7 @@ class RasEbfeModels:
                         extracted=True,
                     )
                 elif str(meta.get("huc8")) in {
-                    "12040205", "12050004", "12100201"
+                    "12040205", "12050004", "12100201",
                 }:
                     # The dedicated organizer builds in a sibling staging
                     # directory and preserves this interrupted target during
@@ -1139,6 +1383,33 @@ class RasEbfeModels:
             return RasEbfeModels._double_mountain_fork_brazos_is_reusable(
                 organized_target
             )
+        if str(metadata.get("huc8")) == "12090206":
+            from .ebfe_pedernales import pedernales_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "pedernales_manifest.json"
+            )
+            if source is None:
+                return False
+            return pedernales_is_reusable(organized_target, source)
+        if str(metadata.get("huc8")) == "12100304":
+            from .ebfe_cibolo import cibolo_output_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "cibolo_manifest.json"
+            )
+            if source is None:
+                return False
+            return cibolo_output_is_reusable(organized_target, source)
+        if str(metadata.get("huc8")) == "12100302":
+            from .ebfe_medina import medina_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "medina_manifest.json"
+            )
+            if source is None:
+                return False
+            return medina_is_reusable(organized_target, source)
         model_log = organized_target / "agent" / "model_log.md"
         ras_root = organized_target / "RAS Model"
         if not model_log.is_file() or not ras_root.is_dir():
@@ -1155,6 +1426,33 @@ class RasEbfeModels:
         if expected_count is not None:
             return len(projects) == int(expected_count)
         return bool(projects)
+
+    @staticmethod
+    def _organized_source_path(
+        organized_target: Path, manifest_name: str
+    ) -> Optional[Path]:
+        """Return the source path sealed into a dedicated organizer manifest."""
+        try:
+            manifest = json.loads(
+                (organized_target / "agent" / manifest_name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            identity = manifest.get("source_identity") or manifest.get(
+                "source_asset"
+            )
+            if not isinstance(identity, dict):
+                return None
+            value = identity.get("path")
+            if value is not None:
+                return Path(str(value))
+            sidecar = identity.get("sidecar")
+            suffix = ".ebfe-source.json"
+            if isinstance(sidecar, str) and sidecar.endswith(suffix):
+                return Path(sidecar[: -len(suffix)])
+            return None
+        except (KeyError, OSError, TypeError, json.JSONDecodeError):
+            return None
 
     @staticmethod
     @log_call
@@ -1226,6 +1524,64 @@ class RasEbfeModels:
             verbose=verbose, show_progress=show_progress,
         ):
             return organizer(**call_kwargs)
+
+    @staticmethod
+    @log_call
+    def organize_pedernales(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize the complete 530-project Pedernales 1D BLE corpus."""
+        from .ebfe_pedernales import organize_pedernales
+
+        return organize_pedernales(
+            downloaded_folder=downloaded_folder,
+            output_folder=output_folder,
+        )
+
+    @staticmethod
+    @log_call
+    def organize_cibolo(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize Cibolo's nested 2D unsteady delivery."""
+        from .ebfe_cibolo import SOURCE_NAME, organize_cibolo_delivery
+
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12100304_Cibolo"
+        ).resolve()
+        archive = source if source.suffix.lower() == ".zip" else source / SOURCE_NAME
+        if not archive.is_file():
+            RasEbfeModels.download_source_asset(
+                "cibolo", "models", archive.parent
+            )
+        destination = Path(
+            output_folder or "./ebfe_organized/Cibolo_12100304"
+        )
+        return organize_cibolo_delivery(archive, destination)
+
+    @staticmethod
+    @log_call
+    def organize_medina(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize Medina's recoverable delivery and preserve its source gap."""
+        from .ebfe_medina import SOURCE_NAME, organize_medina
+
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12100302_Medina"
+        ).resolve()
+        archive = source if source.suffix.lower() == ".zip" else source / SOURCE_NAME
+        if not archive.is_file():
+            RasEbfeModels.download_source_asset(
+                "medina", "models", archive.parent
+            )
+        destination = Path(
+            output_folder or "./ebfe_organized/Medina_12100302"
+        )
+        return organize_medina(archive, destination)
 
     @staticmethod
     @log_call

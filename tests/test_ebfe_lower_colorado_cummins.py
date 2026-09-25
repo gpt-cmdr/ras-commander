@@ -61,10 +61,10 @@ def test_ebfe_list_models_honors_model_type_version_and_tags():
     assert "lower-colorado-cummins" in source_ids
     assert "rio-hondo" in source_ids
     assert all(metadata.model_type == ModelType.STEADY_1D for metadata in steady)
-    assert [
+    assert {
         metadata.source_id
         for metadata in RasEbfeModels.list_models(hecras_version="4.1.0")
-    ] == ["lower-colorado-cummins"]
+    } == {"pedernales", "lower-colorado-cummins"}
     compact = RasEbfeModels.available_models()["lower-colorado-cummins"]
     assert compact["ras_version"] == "6.6"
     assert compact["delivered_ras_version"] == "4.1.0"

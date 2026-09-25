@@ -8,7 +8,7 @@ import shutil
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,6 @@ from ras_commander import (
 from ras_commander.callbacks import FileLoggerCallback
 from ras_commander.results.ResultsParser import ResultsParser
 from ras_commander.sources.base import ModelMetadata, ModelType
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EBFE_ROOT = Path(
@@ -147,6 +146,25 @@ def should_include_project(
         return needle in folder.lower() or needle in name.lower()
 
     return True
+
+
+def partition_projects(
+    projects: list[dict[str, Any]],
+    partition_count: int,
+    partition_index: int,
+) -> list[dict[str, Any]]:
+    """Select one stable round-robin shard of a sorted project corpus."""
+    if partition_count < 1:
+        raise ValueError("partition_count must be at least 1")
+    if partition_index < 0 or partition_index >= partition_count:
+        raise ValueError(
+            "partition_index must be between 0 and partition_count - 1"
+        )
+    return [
+        project
+        for index, project in enumerate(projects)
+        if index % partition_count == partition_index
+    ]
 
 
 def selected_plans(ras_obj: RasPrj, requested_plan: str | None) -> list[str]:
@@ -349,7 +367,7 @@ def run_plan(
                     plan_number,
                     ras_object=ras_obj,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - preserve timeout cleanup evidence
                 timeout_state["error"] = str(exc)
 
         timeout_timer = None
@@ -404,7 +422,7 @@ def run_plan(
                 "elapsed_seconds": round(time.time() - plan_started, 2),
             }
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - emit a per-plan failure receipt
         record.update(
             {
                 "success": False,
@@ -485,7 +503,7 @@ def run_project(
             if record["plans"] and all(plan.get("success") for plan in record["plans"])
             else "failed"
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - emit a per-project failure receipt
         record["status"] = "failed"
         record["error"] = str(exc)
     finally:
@@ -606,6 +624,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--project-filter", default=None)
     parser.add_argument("--start-after", default=None)
+    parser.add_argument("--partition-count", type=int, default=1)
+    parser.add_argument("--partition-index", type=int, default=0)
     parser.add_argument(
         "--plan",
         default=None,
@@ -644,7 +664,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     ensure_console_output_safe()
     args = parse_args()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     if args.study:
         metadata = RasEbfeModels.get_model_metadata(args.study)
         include_nested_projects = apply_study_defaults(args, metadata)
@@ -681,6 +701,11 @@ def main() -> int:
             state,
         )
     ]
+    selected_projects = partition_projects(
+        selected_projects,
+        args.partition_count,
+        args.partition_index,
+    )
     if args.limit is not None:
         selected_projects = selected_projects[: args.limit]
 
@@ -700,7 +725,7 @@ def main() -> int:
                 output_dir,
                 args,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - preserve batch progress after one failure
             record = {
                 "project_name": project_info.get("project_name"),
                 "project_folder": rel_path(Path(project_info["folder"])),

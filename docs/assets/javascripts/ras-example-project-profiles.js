@@ -173,6 +173,51 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
       groupId: "upper-guadalupe",
       variantLabel: "UPGU4",
     },
+    "pedernales-12090206": {
+      modelType: "530-model 1D steady BLE corpus",
+      version: "HEC-RAS 4.1 source; 530/530 qualified with HEC-RAS 6.6",
+      summary: "One HUC8-level discovery entry represents 530 independent Pedernales 1D steady projects. Its map outline is the exact union of every active geometry footprint, using compiled geometry HDF where delivered and RAS Commander's plain-text fallback otherwise. All 530 selected plan-01 runs passed in isolated two-core HEC-RAS 6.6 copies; no completed-result viewer or hosted geometry archive is claimed.",
+    },
+    "cibolo-12100304": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 5.0.7 source; unsteady-start validated",
+      summary: "One seven-plan Cibolo project with delivered terrain, land cover, hydrology, and geometry. The portable organizer closes the active p14 source references, and p14 reached owned unsteady-solver startup in an isolated two-core copy. No completed-result viewer is claimed.",
+    },
+    "medina-leon1-12100302": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.4.1 source; unsteady-start validated",
+      summary: "Leon1 has delivered channel-modified terrain and supporting land cover, infiltration, and soils. Selected plan p01 reached owned unsteady-solver startup in an isolated two-core copy.",
+      groupId: "medina",
+      variantLabel: "Leon1",
+    },
+    "medina-leon2-12100302": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.4.1 source; unsteady-start validated",
+      summary: "Leon2 has delivered channel-modified terrain and supporting land cover, infiltration, and soils. Selected plan p03 reached owned unsteady-solver startup in an isolated two-core copy.",
+      groupId: "medina",
+      variantLabel: "Leon2",
+    },
+    "medina-leon3-12100302": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.4.1 source; unsteady-start validated",
+      summary: "Leon3 has delivered channel-modified terrain and supporting land cover, infiltration, and soils. Selected plan p02 reached owned unsteady-solver startup in an isolated two-core copy.",
+      groupId: "medina",
+      variantLabel: "Leon3",
+    },
+    "medina-middle-lower-medina-12100302": {
+      modelType: "2D unsteady",
+      version: "HEC-RAS 6.4.1 source; unsteady-start validated",
+      summary: "Middle/Lower Medina (MLM) has delivered channel-modified terrain and supporting land cover, infiltration, and soils. Selected plan p03 reached owned unsteady-solver startup in an isolated two-core copy.",
+      groupId: "medina",
+      variantLabel: "Middle/Lower Medina",
+    },
+    "medina-upper-medina-headwaters-12100302": {
+      modelType: "2D unsteady — blocked source",
+      version: "HEC-RAS 6.4.1 source; critical terrain gap",
+      summary: "Upper Medina Headwaters has a valid delivered model footprint, but the public delivery omits the compiled modified Terrain.hdf required by its active 2D geometry. The model is blocked, non-repeatable, and not downstream-usable.",
+      groupId: "medina",
+      variantLabel: "Upper Medina Headwaters — BLOCKED",
+    },
   },
   groups: {
     "double-mountain-fork-brazos": {
@@ -198,6 +243,14 @@ window.RAS_EXAMPLE_PROJECT_PROFILES = {
       version: "HEC-RAS 6.3.1 source; partially qualified",
       summary: "Four adjoining 2D models divide the Upper Guadalupe watershed into a cascading regional system. All four portable sources and modified-terrain triplets are present; fresh unsteady-start evidence applies only to UPGU1.",
       recordOfDeficiencies: "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md",
+    },
+    "medina": {
+      title: "Medina Model Suite",
+      sourceLabel: "FEMA eBFE/BLE delivery",
+      modelType: "Five 2D unsteady models",
+      version: "HEC-RAS 6.4.1 source; four unsteady-start qualified, one blocked",
+      summary: "Five exact model polygons show the Medina delivery as one grouped study. Leon1, Leon2, Leon3, and Middle/Lower Medina include their compiled channel-modified terrain and reached owned unsteady-solver startup. Upper Medina Headwaters is explicitly blocked because its required compiled modified terrain is absent.",
+      recordOfDeficiencies: "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_medina_record_of_deficiencies.md",
     },
   },
 };

@@ -1,5 +1,5 @@
-from pathlib import Path
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
@@ -9,8 +9,9 @@ from ras_commander.sources import RasEbfeModels
 from ras_commander.sources.base import ModelType
 from scripts.ebfe_steady_plan_batch import (
     apply_study_defaults,
-    expected_profiles_for_project,
     expected_hdf_path,
+    expected_profiles_for_project,
+    partition_projects,
     resolve_study_paths,
     run_plan,
     selected_plans,
@@ -104,6 +105,23 @@ def test_selected_plans_preserves_legacy_all_plans_default():
     assert selected_plans(ras_obj, "02") == ["02"]
 
 
+def test_partition_projects_is_stable_and_complete():
+    projects = [{"folder": Path(str(index))} for index in range(10)]
+
+    shards = [partition_projects(projects, 3, index) for index in range(3)]
+
+    assert [[item["folder"].name for item in shard] for shard in shards] == [
+        ["0", "3", "6", "9"],
+        ["1", "4", "7"],
+        ["2", "5", "8"],
+    ]
+    assert sorted(item["folder"].name for shard in shards for item in shard) == [
+        str(index) for index in range(10)
+    ]
+    with pytest.raises(ValueError, match="partition_index"):
+        partition_projects(projects, 3, 3)
+
+
 def test_study_defaults_are_catalogued_and_reject_nonsteady_studies():
     args = SimpleNamespace(
         plan=None,
@@ -124,6 +142,22 @@ def test_study_defaults_are_catalogued_and_reject_nonsteady_studies():
     metadata.model_type = ModelType.UNSTEADY_2D
     with pytest.raises(ValueError, match="only STEADY_1D"):
         apply_study_defaults(args, metadata)
+
+
+def test_pedernales_defaults_select_only_current_plan_and_nested_project():
+    args = SimpleNamespace(
+        plan=None,
+        expected_profiles=None,
+        include_nested_projects=False,
+        plan_timeout_seconds=None,
+    )
+    metadata = RasEbfeModels.get_model_metadata("12090206")
+
+    assert apply_study_defaults(args, metadata) is True
+    assert args.plan == "01"
+    assert args.plan_timeout_seconds == 600
+    assert metadata.extra["top_level_project_count"] == 529
+    assert metadata.extra["nested_project_count"] == 1
 
 
 def test_catalogued_profile_exception_uses_stable_project_key(tmp_path):
