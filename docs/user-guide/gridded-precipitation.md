@@ -270,36 +270,61 @@ from ras_commander import RasUnsteady
 
 ### Gridded Precipitation (Rain-on-Grid)
 
-For 2D models with spatially distributed rainfall:
+For 2D models with spatially distributed rainfall, prepare a NetCDF with
+`time`, `y`, and `x` coordinates and a precipitation variable. The raster must
+use a projected coordinate system compatible with the model; EPSG:5070 is the
+standard SHG choice for CONUS precipitation products.
 
 ```python
-# 1. Retrieve AORC in gridded format
-aorc_grid = PrecipAorc.retrieve_aorc_data(
-    watershed=watershed_boundary,
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    return_grid=True  # Keep spatial structure
-)
-
-# 2. Export to GDAL Raster format (HEC-RAS compatible)
-# HEC-RAS will interpolate the 4 km grid to mesh cells internally
-PrecipAorc.export_to_gdal_raster(
-    aorc_grid,
-    output_folder="C:/Projects/MyModel/precipitation",
-    format="GeoTIFF"  # or "HFA" for ERDAS Imagine
-)
-
-# 3. Configure unsteady file for gridded precipitation
-from ras_commander import RasUnsteady
+from ras_commander import RasPreprocess, RasUnsteady
 
 RasUnsteady.set_gridded_precipitation(
-    unsteady_file="MyModel.u01",
-    precip_folder="precipitation",
-    start_datetime="2018-05-15 00:00"
+    unsteady_file="03",
+    netcdf_path="Precipitation/aorc_may2018_shg.nc",
+    dataset_name="APCP_surface",
+    interpolation="Bilinear",
+    units="mm",
+    value_type="amount",
+    first_timestep_hours=1.0,
+    ratio=1.0,
 )
+
+prepared = RasPreprocess.preprocess_plan("05", max_wait=600)
+if not prepared:
+    raise RuntimeError(prepared.error)
 ```
 
-**Note**: You do not need to resample AORC grids to match mesh cell size. HEC-RAS internally interpolates gridded precipitation data to 2D mesh cells during simulation.
+Choose `value_type` from the source data's meaning:
+
+- `"rate"`: depth per hour. Each band is multiplied by its interval duration.
+- `"amount"`: depth delivered during each interval.
+- `"cumulative"`: a running depth total that requires no accumulation.
+
+`first_timestep_hours` is the import dialog's **First Timestep Duration**. When
+it is omitted, the first band establishes time zero and is not delivered;
+`ras-commander` warns if that drops nonzero precipitation. `units` describes
+the source values, not the HEC-RAS project's unit system. HEC-RAS performs that
+conversion, so incorrectly labelling inches as millimeters (or the reverse)
+silently scales rainfall by 25.4.
+
+The two HDF layouts serve different stages:
+
+1. `set_gridded_precipitation()` writes the native source payload under
+   `Event Conditions/Meteorology/Precipitation/Imported Raster Data` in the
+   unsteady-flow HDF.
+2. Windows/Wine preprocessing transforms that source into the shallow
+   `Precipitation/Values` and `Precipitation/Timestamp` datasets in the
+   temporary plan HDF. These are the datasets read by the solver.
+3. A completed final plan HDF is the post-compute source of truth.
+
+Do not move or duplicate `Imported Raster Data/Values` manually. A successful
+`PreprocessResult` confirms that HEC-RAS created the solver-facing datasets; an
+imported payload alone is not a complete precompute. Review the HEC-RAS runtime
+messages and the resulting rainfall/results maps as part of normal model QA.
+
+You do not need to resample AORC grids to match mesh cell size. HEC-RAS
+interpolates the gridded precipitation to 2D cells during preprocessing and
+simulation.
 
 ## Model Calibration Workflow
 

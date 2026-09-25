@@ -4,6 +4,32 @@
 
 ### Unreleased
 
+**Native Gridded-Precipitation Authoring and Precompute Readiness (#371)**
+
+- Add `RasPrecipHdf`, a focused writer for HEC-RAS's native
+  `Precipitation/Imported Raster Data` payload. Grids are normalized to
+  north-up/west-first order, regular square cells are required, dataset chunking
+  follows native HEC-RAS specimens, and invalid inputs are rejected before the
+  HDF is changed.
+- Make `RasUnsteady.set_gridded_precipitation()` fail fast for missing files,
+  dependencies, and variables; create a missing `.u##.hdf`; write the HDF
+  before changing the `.u##` text; and expose source `units`, `value_type`,
+  `first_timestep_hours`, and precipitation `ratio`. Rate, interval-amount, and
+  cumulative inputs are now converted explicitly instead of assuming an hourly
+  rate and silently discarding the first band.
+- Require solver-ready precipitation during `RasPreprocess.preprocess_plan()`.
+  For a gridded-rain plan, the early `.bco` marker is no longer sufficient:
+  preprocessing waits for the owned `RasUnsteady` process and the materialized
+  plan-HDF `Precipitation/Values` and `Timestamp` datasets. An
+  `Imported Raster Data` payload by itself is reported as incomplete rather
+  than being returned as a successful Linux precompute.
+- Qualify the complete public-API workflow on CLB07 with HEC-RAS 6.6 under
+  Wine 11.0 and the native Linux solver. Both a 7-by-25 test payload and the
+  reported 76-by-1190 dimensions materialized correctly and were read by the
+  solver with no precipitation errors. The native `Imported Raster Data`
+  group is the correct authoring location; HEC-RAS preprocessing creates the
+  shallower solver-facing datasets.
+
 **Refinement-Region Authoring and Mesh Density (#369)**
 
 - Author real geometry through RAS Mapper's native `MeshRegions` layer on

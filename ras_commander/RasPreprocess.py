@@ -25,22 +25,21 @@ import shutil
 import subprocess
 import sys
 import time
+from numbers import Number
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from numbers import Number
-
+from ._legal_dialogs import (
+    TCU_BLOCKING_ERROR,
+    TCU_DIALOG_TITLE,
+    legal_dialog_blocking_reason,
+)
 from .ComputeResults import GeometryPreprocessResult, PreprocessResult
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasBco import BcoMonitor
 from .RasPlan import RasPlan
 from .RasPrj import ras
-from ._legal_dialogs import (
-    TCU_BLOCKING_ERROR,
-    TCU_DIALOG_TITLE,
-    legal_dialog_blocking_reason,
-)
 
 logger = get_logger(__name__)
 
@@ -198,6 +197,13 @@ class RasPreprocess:
         x_file = project_folder / f"{project_name}.x{geometry_number}"
         plan_file = project_folder / f"{project_name}.p{plan_num}"
         prj_file = project_folder / f"{project_name}.prj"
+        requires_gridded_precipitation = (
+            RasPreprocess._plan_uses_gridded_precipitation(
+                plan_file,
+                project_folder,
+                project_name,
+            )
+        )
 
         hdf_state_before = None
         if hdf_file.is_file():
@@ -338,16 +344,20 @@ class RasPreprocess:
                 RasPreprocess._detect_first_run_tcu_dialog(process.pid)
             ),
             alternate_signal_condition=lambda: (
-                RasPreprocess._unsteady_compute_started(
+                RasPreprocess._preprocessing_ready(
                     process.pid,
                     tmp_hdf,
                     b_file,
                     x_file,
                     artifact_baseline=artifact_baseline,
+                    require_materialized_gridded_precipitation=(
+                        requires_gridded_precipitation
+                    ),
                 )
             ),
             alternate_signal_description=(
-                "owned RasUnsteady.exe startup with complete preprocessing artifacts"
+                "owned RasUnsteady.exe startup with solver-ready preprocessing "
+                "artifacts"
             ),
         )
 
@@ -373,6 +383,55 @@ class RasPreprocess:
                 error=blocked_reason,
                 elapsed_seconds=time.time() - start_time,
             )
+
+        # The BCO marker is written before the owned RasUnsteady process is
+        # guaranteed to have started. That distinction matters for gridded
+        # precipitation: Ras.exe materializes Imported Raster Data as the
+        # shallow Precipitation/Values and Timestamp datasets during the
+        # transition to the solver. Killing on the earlier BCO marker can
+        # leave a plausible-looking .tmp.hdf that the solver cannot read.
+        if (
+            signal_detected
+            and signal_source == "bco"
+            and requires_gridded_precipitation
+            and process.poll() is None
+        ):
+            readiness_deadline = start_time + float(max_wait)
+            while process.poll() is None and time.time() < readiness_deadline:
+                if RasPreprocess._preprocessing_ready(
+                    process.pid,
+                    tmp_hdf,
+                    b_file,
+                    x_file,
+                    artifact_baseline=artifact_baseline,
+                    require_materialized_gridded_precipitation=True,
+                ):
+                    signal_source = "owned_process_artifacts"
+                    logger.info(
+                        "Gridded precipitation readiness confirmed by owned "
+                        "RasUnsteady startup and complete preprocessing artifacts"
+                    )
+                    break
+                time.sleep(0.1)
+
+            if signal_source == "bco":
+                if process.poll() is None:
+                    RasPreprocess._terminate_process_tree(process)
+                return PreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    signal_source="timeout",
+                    timed_out=True,
+                    error=(
+                        "HEC-RAS reported the BCO computation-start marker, but "
+                        "the owned RasUnsteady process and complete preprocessing "
+                        "artifacts were not observed before the preprocessing "
+                        f"timeout ({int(max_wait)} seconds). Gridded precipitation "
+                        "requires the later solver-start readiness gate."
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
 
         # Terminate process tree
         process_was_running = process.poll() is None
@@ -451,6 +510,32 @@ class RasPreprocess:
                 error=f"Preprocessing did not generate: {', '.join(missing)}",
                 elapsed_seconds=time.time() - start_time,
             )
+
+        if requires_gridded_precipitation:
+            materialized, detail = (
+                RasPreprocess._validate_materialized_gridded_precipitation(
+                    tmp_hdf
+                )
+            )
+            if not materialized:
+                return PreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    tmp_hdf_path=tmp_hdf,
+                    b_file_path=b_file,
+                    x_file_path=x_file,
+                    signal_source=signal_source,
+                    full_result_copied=full_result_copied,
+                    error=(
+                        "Gridded precipitation is configured, but HEC-RAS "
+                        "preprocessing did not create solver-ready "
+                        "Event Conditions/Meteorology/Precipitation/Values and "
+                        f"Timestamp datasets in {tmp_hdf.name}: {detail}. "
+                        "Imported Raster Data alone is not solver-ready."
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
 
         # Fix line endings on .x file for Linux compatibility
         if fix_line_endings:
@@ -1004,6 +1089,126 @@ class RasPreprocess:
                 ) from e
             logger.debug(f"Could not enumerate visible window titles: {e}")
             return []
+
+    @staticmethod
+    def _plan_uses_gridded_precipitation(
+        plan_file: Path,
+        project_folder: Path,
+        project_name: str,
+    ) -> bool:
+        """Return whether a plan's active unsteady file enables gridded rain.
+
+        This is intentionally read from the text inputs that HEC-RAS consumes,
+        rather than inferred from an existing sidecar or temporary HDF. A stale
+        HDF can be the artifact that preprocessing is supposed to replace.
+        """
+        try:
+            plan_text = Path(plan_file).read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+            match = re.search(
+                r"^Flow File\s*=\s*[uU](\d{1,2})\s*$",
+                plan_text,
+                flags=re.MULTILINE,
+            )
+            if match is None:
+                return False
+            unsteady_number = match.group(1).zfill(2)
+            unsteady_file = (
+                Path(project_folder)
+                / f"{project_name}.u{unsteady_number}"
+            )
+            if not unsteady_file.is_file():
+                return False
+
+            precipitation_mode = ""
+            met_mode = ""
+            with unsteady_file.open(
+                "r",
+                encoding="utf-8",
+                errors="ignore",
+            ) as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if stripped.startswith("Precipitation Mode="):
+                        precipitation_mode = stripped.split("=", 1)[1].strip()
+                    elif stripped.startswith("Met BC=Precipitation|Mode="):
+                        met_mode = stripped.split("=", 2)[-1].strip()
+            return (
+                precipitation_mode.casefold() == "enable"
+                and met_mode.casefold() == "gridded"
+            )
+        except OSError as exc:
+            logger.debug(
+                "Could not inspect gridded precipitation readiness for %s: %s",
+                Path(plan_file).name,
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _validate_materialized_gridded_precipitation(
+        tmp_hdf: Path,
+    ) -> Tuple[bool, str]:
+        """Validate the solver-facing precipitation datasets in a temp HDF."""
+        values_path = "Event Conditions/Meteorology/Precipitation/Values"
+        timestamp_path = "Event Conditions/Meteorology/Precipitation/Timestamp"
+        try:
+            import h5py
+
+            with h5py.File(tmp_hdf, "r") as hdf:
+                missing = [
+                    path
+                    for path in (values_path, timestamp_path)
+                    if path not in hdf
+                ]
+                if missing:
+                    return False, "missing " + ", ".join(missing)
+                values = hdf[values_path]
+                timestamps = hdf[timestamp_path]
+                if values.ndim != 2 or not all(values.shape):
+                    return False, f"invalid Values shape {values.shape}"
+                if timestamps.ndim != 1 or not timestamps.shape[0]:
+                    return False, f"invalid Timestamp shape {timestamps.shape}"
+                if values.shape[0] != timestamps.shape[0]:
+                    return (
+                        False,
+                        "Values and Timestamp lengths differ "
+                        f"({values.shape[0]} != {timestamps.shape[0]})",
+                    )
+        except Exception as exc:
+            return False, f"could not inspect {Path(tmp_hdf).name}: {exc}"
+        return True, "ready"
+
+    @staticmethod
+    def _preprocessing_ready(
+        root_pid: int,
+        tmp_hdf: Path,
+        b_file: Path,
+        x_file: Path,
+        artifact_baseline: Optional[
+            Dict[Path, Optional[Tuple[int, int]]]
+        ] = None,
+        require_materialized_gridded_precipitation: bool = False,
+    ) -> bool:
+        """Return whether owned preprocessing artifacts are solver-ready."""
+        if not RasPreprocess._unsteady_compute_started(
+            root_pid,
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        ):
+            return False
+        if not require_materialized_gridded_precipitation:
+            return True
+        materialized, _detail = (
+            RasPreprocess._validate_materialized_gridded_precipitation(
+                tmp_hdf
+            )
+        )
+        return materialized
 
     @staticmethod
     def _unsteady_compute_started(
