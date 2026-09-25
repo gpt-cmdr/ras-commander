@@ -333,6 +333,34 @@ class RasPreprocess:
                 elapsed_seconds=time.time() - start_time,
             )
 
+        if requires_gridded_precipitation:
+            alternate_signal_condition = lambda: (
+                RasPreprocess._materialized_gridded_precipitation_ready(
+                    tmp_hdf,
+                    b_file,
+                    x_file,
+                    artifact_baseline=artifact_baseline,
+                )
+            )
+            alternate_signal_description = (
+                "fresh preprocessing artifacts with materialized gridded "
+                "precipitation"
+            )
+        else:
+            alternate_signal_condition = lambda: (
+                RasPreprocess._unsteady_compute_started(
+                    process.pid,
+                    tmp_hdf,
+                    b_file,
+                    x_file,
+                    artifact_baseline=artifact_baseline,
+                )
+            )
+            alternate_signal_description = (
+                "owned RasUnsteady.exe startup with complete preprocessing "
+                "artifacts"
+            )
+
         # Monitor .bco file for preprocessing completion signal
         monitor = BcoMonitor(
             project_path=project_folder,
@@ -343,29 +371,19 @@ class RasPreprocess:
             blocking_condition=lambda: (
                 RasPreprocess._detect_first_run_tcu_dialog(process.pid)
             ),
-            alternate_signal_condition=lambda: (
-                RasPreprocess._preprocessing_ready(
-                    process.pid,
-                    tmp_hdf,
-                    b_file,
-                    x_file,
-                    artifact_baseline=artifact_baseline,
-                    require_materialized_gridded_precipitation=(
-                        requires_gridded_precipitation
-                    ),
-                )
-            ),
-            alternate_signal_description=(
-                "owned RasUnsteady.exe startup with solver-ready preprocessing "
-                "artifacts"
-            ),
+            alternate_signal_condition=alternate_signal_condition,
+            alternate_signal_description=alternate_signal_description,
         )
 
         signal_detected = monitor.monitor_until_signal(process)
         blocked_reason = getattr(monitor, "blocked_reason", None)
         monitor_source = getattr(monitor, "signal_source", None)
         signal_source = (
-            "owned_process_artifacts"
+            (
+                "materialized_gridded_precipitation"
+                if requires_gridded_precipitation
+                else "owned_process_artifacts"
+            )
             if monitor_source == "alternate"
             else monitor_source
         )

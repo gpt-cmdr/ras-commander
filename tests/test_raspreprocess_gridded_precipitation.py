@@ -167,6 +167,49 @@ def test_bco_readiness_does_not_require_short_lived_solver_process(tmp_path):
     )
 
 
+def test_alternate_signal_accepts_fresh_materialized_precipitation(
+    tmp_path,
+    monkeypatch,
+):
+    ras = _seed_project(tmp_path, gridded=True)
+    process = _RunningProcess()
+    terminated = []
+
+    class Monitor:
+        blocked_reason = None
+        signal_source = None
+
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, **kwargs):
+            self.alternate_signal_condition = kwargs[
+                "alternate_signal_condition"
+            ]
+
+        def monitor_until_signal(self, _process):
+            _write_artifacts(tmp_path, materialized=True)
+            detected = self.alternate_signal_condition()
+            assert detected is True
+            self.signal_source = "alternate"
+            return detected
+
+    _patch_launch(monkeypatch, Monitor, process, terminated)
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras,
+        max_wait=2,
+        clear_existing=False,
+        fix_line_endings=False,
+    )
+
+    assert result.success is True
+    assert result.signal_source == "materialized_gridded_precipitation"
+    assert terminated == [process]
+
+
 def test_bco_signal_waits_for_materialized_precipitation_before_termination(
     tmp_path,
     monkeypatch,
@@ -250,7 +293,7 @@ def test_preprocess_rejects_imported_only_precipitation_payload(
     )
 
     assert result.success is False
-    assert result.signal_source == "owned_process_artifacts"
+    assert result.signal_source == "materialized_gridded_precipitation"
     assert result.tmp_hdf_path == tmp_path / "fixture.p01.tmp.hdf"
     assert "Imported Raster Data alone is not solver-ready" in result.error
     assert "Precipitation/Values" in result.error
