@@ -3785,10 +3785,12 @@ notebooks:
   - HdfMesh.get_mesh_areas
   - HdfProject.get_project_bounds_latlon
   - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasPlan.update_plan_intervals
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_gridded_precipitation
   - ras.plan_df
