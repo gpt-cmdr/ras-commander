@@ -373,11 +373,14 @@
       "crs": "EPSG:2278",
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU1/UPGU1.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a.geojson",
-      "status": "RASMapper-style viewer",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a%2Fviewer%2Fmanifest.json%3Fv%3D20260723Tvector-results01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/viewer/manifest.json?v=20260723Tvector-results01",
-      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a/project.json",
-      "notes": "Upper Guadalupe FEMA eBFE/BLE 2D-unsteady model with seven completed plans, high-zoom mesh delivery, consolidated terrain, raw HDF element results, and complete RASMapper Stored Map sets."
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md#upgu1",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md",
+      "notes": "UPGU1 is the upstream project in the four-model Upper Guadalupe cascade. Its fresh two-core p01 run reached owned unsteady-solver startup; this is source-start evidence, not a completed-result claim."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
@@ -386,11 +389,14 @@
       "crs": "EPSG:2278",
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU2/UPGU2.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b.geojson",
-      "status": "RASMapper-style viewer",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b%2Fviewer%2Fmanifest.json%3Fv%3D20260723Tvector-results01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/viewer/manifest.json?v=20260723Tvector-results01",
-      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b/project.json",
-      "notes": "Upper Guadalupe FEMA eBFE/BLE 2D-unsteady model with seven completed plans, high-zoom mesh delivery, consolidated terrain, raw HDF element results, and complete RASMapper Stored Map sets."
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md#upgu2",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md",
+      "notes": "UPGU2 is the second project in the four-model Upper Guadalupe cascade. Property-table rebuilding was observed, but the receipt records natural completion without owned solver-start evidence, so qualification is not established."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
@@ -399,11 +405,14 @@
       "crs": "EPSG:2278",
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU3/UPGU3.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4.geojson",
-      "status": "RASMapper-style viewer",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4%2Fviewer%2Fmanifest.json%3Fv%3D20260723Tvector-results01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/viewer/manifest.json?v=20260723Tvector-results01",
-      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4/project.json",
-      "notes": "Upper Guadalupe FEMA eBFE/BLE 2D-unsteady model with seven completed plans, high-zoom mesh delivery, consolidated terrain, raw HDF element results, and complete RASMapper Stored Map sets."
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md#upgu3",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md",
+      "notes": "UPGU3 is the third project in the four-model Upper Guadalupe cascade. Its portable source and modified-terrain triplet are staged, but fresh solver-start qualification was not attempted."
     },
     {
       "id": "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
@@ -412,11 +421,14 @@
       "crs": "EPSG:2278",
       "geometry_hdf": "source_projects/ebfe_organized/UpperGuadalupe_12100201/RAS Model/UPGU4/UPGU4.g01.hdf",
       "extent_output": "project-extents/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f.geojson",
-      "status": "RASMapper-style viewer",
-      "webmap": "../example-project-viewer/?manifest=https%3A%2F%2Frascommander.info%2Fdata%2Frasexamples%2Fhec-ras-7.0%2Fprojects%2Fupper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f%2Fviewer%2Fmanifest.json%3Fv%3D20260723Tvector-results01",
-      "manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/viewer/manifest.json?v=20260723Tvector-results01",
-      "project_manifest": "https://rascommander.info/data/rasexamples/hec-ras-7.0/projects/upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f/project.json",
-      "notes": "Upper Guadalupe FEMA eBFE/BLE 2D-unsteady model with seven completed plans, high-zoom mesh delivery, consolidated terrain, raw HDF element results, complete RASMapper Stored Map sets, and large-project streaming validation."
+      "status": "Source qualification candidate",
+      "viewer_type": "Qualification candidate",
+      "webmap": "",
+      "manifest": "",
+      "project_manifest": "",
+      "details": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md#upgu4",
+      "record_of_deficiencies": "https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md",
+      "notes": "UPGU4 is the downstream project in the four-model Upper Guadalupe cascade. Its portable source and channel-and-polygon-modified terrain are staged, but fresh solver-start qualification was not attempted."
     }
   ]
 }
