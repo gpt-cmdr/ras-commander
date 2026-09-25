@@ -46,7 +46,8 @@ FEMA's Estimated Base Flood Elevation (eBFE) database provides valuable Base Lev
 ## The Solution: RasEbfeModels
 
 The `RasEbfeModels` class solves this problem by applying delivery-format
-normalization that transforms broken eBFE archives into runnable HEC-RAS models.
+normalization that transforms inconsistent eBFE archives into portable source
+candidates with explicit validation boundaries.
 
 ### Quick Start
 
@@ -66,17 +67,14 @@ organized = RasEbfeModels.organize_model(
     "upper-guadalupe",
     download_root=workspace / "raw",
     output_root=workspace / "organized",
-    validate_dss=True
+    validate_dss=False,
 )
 
-# Use immediately - no manual fixes needed
-init_ras_project(organized / "RAS Model/UPGU1", "6.5")
+# Open the organized source with its authored engine
+init_ras_project(organized / "RAS Model/UPGU1", "6.3.1")
 
-# Opens without errors
-# No "DSS path needs correction" dialog
-# Terrain and land cover load from local folders
-# Pre-run results are accessible from project folders
-# Ready for automation and preprocessor validation
+# Organization is not a completed-result claim. Use the documented bounded
+# pre-compute workflow before describing a source as unsteady-start qualified.
 ```
 
 **Time**: 15 minutes vs 60-120 minutes manual fixes
@@ -127,7 +125,7 @@ Current built-in organizers include:
 | `spring-creek` | 12040102 | Single 2D model with nested final archive. |
 | `austin-oyster` | 12040205 | One HEC-RAS 5.07 2D unsteady project with seven plans. The compiled terrain, land cover, DSS inputs, projection, RASMapper file, geometry HDF, and seven result HDFs are delivered; deterministic reconstruction is required before runtime qualification. |
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
-| `upper-guadalupe` | 12100201 | Four cascaded 2D watershed models. |
+| `upper-guadalupe` | 12100201 | Four cascaded HEC-RAS 6.3.1 2D watershed models with complete modified-terrain triplets. Fresh `p01` source-run qualification is tracked in the [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md). |
 | `san-gabriel` | 12070205 | Five-project DSS fan-in covering the Round Rock and Florence ras2fim-2d test area. Unsteady-start validated; shared compiled terrain was not provided. |
 | `eleven-point` | 11010011 | Small split-delivery 2D model archive; organized, path-audited, results-ready, and geometry-preprocessor validated with HEC-RAS 6.6. |
 | `spring-river` | 11010010 | Distinct Spring HUC model archive using `SpringRiver_11010010` naming to avoid confusion with `spring-creek` / `SpringCreek_12040102`. |
@@ -539,40 +537,45 @@ RAS_Submittal archive in place.
 ### Upper Guadalupe (12100201) - Pattern 3b
 
 **Model Type**: 4 cascaded 2D watershed models
-**Size**: 55 GB
+**Source size**: 58,575,220,457 bytes
 **Models**: UPGU1 → UPGU2 → UPGU3 → UPGU4 (hydraulic cascade)
 **Plans**: 28 total (7 AEP frequencies × 4 models)
-**DSS**: 10,248 pathnames validated
+**DSS**: 10 delivered files; 21 live upstream-to-downstream references checked
 
 **Usage**:
 ```python
 from ras_commander.sources import RasEbfeModels
-from ras_commander import init_ras_project, RasCmdr, RasPrj
+from ras_commander import RasCmdr, RasPreprocess, RasPrj, init_ras_project
 
 # Organize (applies delivery normalization across all 4 models)
 organized = RasEbfeModels.organize_upper_guadalupe(
     downloaded_folder,
-    validate_dss=True  # Validates 10,248 pathnames
+    validate_dss=False,
 )
 
-# Execute cascade (upstream to downstream)
+# Bounded source qualification (upstream to downstream)
 for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
     ras_obj = RasPrj()
-    init_ras_project(organized / "RAS Model" / model, "6.5", ras_object=ras_obj)
-    RasCmdr.compute_plan("01", ras_object=ras_obj, num_cores=4)
+    init_ras_project(organized / "RAS Model" / model, "6.3.1", ras_object=ras_obj)
+    result = RasPreprocess.preprocess_plan("01", ras_object=ras_obj)
+    assert result.success
+    RasCmdr.cancel_plan_exact("01", ras_object=ras_obj)
 ```
 
 **Fixes Applied**:
-- 56 HDF files (~41 GB) moved into project folders
-- 4 Terrain folders (~15.7 GB) moved into project folders
+- 56 delivered Output assets placed at their expected Input locations in the staged copy
+- 4 complete terrain triplets staged without replacing their channel or polygon modifications
 - DSS assets copied into per-project `DSS Inputs/` folders and references rewritten
 - Land cover copied into per-project `Land Cover/` folders
-- Projection copied or generated under per-project `Projection/` folders
+- The one delivered shared projection copied under each project `Projection/` folder
 - `.rasmap` terrain, land cover, and projection paths rewritten to local folders
 
-**Validated**: UPGU1, UPGU2, and UPGU3 passed geometry-preprocessor validation
-with a 1-hour timeout. UPGU4 produced preprocessor artifacts but exceeded the
-1-hour cap and remains an explicit long-runtime validation item.
+**Current qualification gate**: historical preprocessor artifacts do not replace
+fresh source-run evidence. UPGU1 `p01` reached owned unsteady-solver startup in
+an isolated two-core run. UPGU2's receipt records `natural_completion` without
+owned solver-start evidence after property-table rebuilding was observed, and UPGU3–UPGU4 were not run;
+those three projects therefore remain unqualified in the
+[Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md).
 
 **Example Notebook**: `examples/952_ebfe_upper_guadalupe_cascade.ipynb`
 
@@ -732,27 +735,29 @@ NorthGalvestonBay_12040203/
 @staticmethod
 @log_call
 def organize_upper_guadalupe(
-    downloaded_folder: Path,
-    output_folder: Optional[Path] = None,
-    validate_dss: bool = True
+    downloaded_folder: Optional[Union[str, Path]] = None,
+    output_folder: Optional[Union[str, Path]] = None,
+    validate_dss: bool = False
 ) -> Path
 ```
 
 **Organizes**: Upper Guadalupe (12100201) - Pattern 3b
 
 **Parameters**:
-- `downloaded_folder`: Path to extracted 12100201_UpperGuadalupe_Models folder
+- `downloaded_folder`: Optional path to the retained ZIP or an extracted delivery;
+  when omitted, the pinned FEMA object is downloaded
 - `output_folder`: Output location (default: ./ebfe_organized/UpperGuadalupe_12100201/)
-- `validate_dss`: Run DSS validation (default: True, validates 10,248 pathnames)
+- `validate_dss`: Optionally inventory the ten staged DSS files (default: False)
 
-**Returns**: Path to organized model with 4 runnable cascaded HEC-RAS projects
+**Returns**: Path to the four-project organized source candidate. Organization
+alone is not a runtime or full-completion claim.
 
 **Fixes Applied** (x 4 models):
-1. Moves 56 HDF files (~41 GB) INTO project folders
-2. Moves 4 Terrain folders (~15.7 GB) INTO project folders
+1. Places 56 delivered Output assets at their expected Input locations in the staged copy
+2. Stages all four complete terrain triplets while preserving their terrain modifications
 3. Copies DSS assets into per-project `DSS Inputs/` folders and rewrites references
 4. Copies land-cover assets into per-project `Land Cover/` folders
-5. Copies or creates project CRS files under per-project `Projection/` folders
+5. Materializes the one delivered shared CRS file under each project `Projection/` folder
 6. Rewrites `.rasmap` terrain, land cover, and projection references
 7. Creates comprehensive agent/model_log.md
 
@@ -760,17 +765,17 @@ def organize_upper_guadalupe(
 ```
 UpperGuadalupe_12100201/
 └── RAS Model/
-    ├── UPGU1/  # Upstream watershed (runnable)
-    ├── UPGU2/  # Receives UPGU1 flow via DSS (runnable)
-    ├── UPGU3/  # Receives UPGU2 flow via DSS (runnable)
-    └── UPGU4/  # Downstream watershed (runnable)
+    ├── UPGU1/  # Upstream source project
+    ├── UPGU2/  # Receives UPGU1 flow via DSS
+    ├── UPGU3/  # Receives UPGU2 flow via DSS
+    └── UPGU4/  # Downstream source project
 ```
 
 **Cascade Execution** (sequential required):
 ```python
 for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
     ras_obj = RasPrj()
-    init_ras_project(organized / "RAS Model" / model, "6.5", ras_object=ras_obj)
+    init_ras_project(organized / "RAS Model" / model, "6.3.1", ras_object=ras_obj)
     RasCmdr.compute_plan("01", ras_object=ras_obj, num_cores=4)
     # Upstream results feed downstream via DSS
 ```
@@ -832,7 +837,7 @@ All organized models use the same structure:
 
 ### DSS Pathname Validation
 
-All organize methods include comprehensive DSS validation:
+Organizers can optionally inventory DSS catalogs when `validate_dss=True`:
 
 ```python
 from ras_commander.dss import RasDss
@@ -845,7 +850,9 @@ for dss_file in dss_files:
         # Invalid pathnames documented in agent/model_log.md
 ```
 
-**Upper Guadalupe Achievement**: 10,248 pathnames validated, 100% valid ✓
+Upper Guadalupe's required source gate is narrower and reproducible: ten DSS
+files exist, 28 project-local precipitation references resolve, and all 21
+cross-project transfer references remain live rather than copied snapshots.
 
 ### Path Existence Validation
 
@@ -904,9 +911,9 @@ Complete working examples demonstrating each model:
 
 **Demonstrates**:
 - Organizing Pattern 3b (cascaded watersheds)
-- Massive scale fixes (57 GB moved, 96 corrections)
-- 10,248 DSS pathname validation
-- Cascaded model execution (UPGU1→2→3→4)
+- Large split-folder source assembly
+- Project-local precipitation and live transfer-DSS validation
+- Cascaded model ordering (UPGU1→2→3→4)
 - Gridded precipitation DSS
 - Pre-run results extraction
 
@@ -1004,10 +1011,11 @@ RasCmdr.compute_plan("01")  # Hangs on "DSS path needs correction" dialog
 ### With Path Corrections
 
 ```python
-# Automation WORKS - no GUI interruptions
-organized = RasEbfeModels.organize_upper_guadalupe(source, validate_dss=True)
-init_ras_project(organized / "RAS Model/UPGU1", "6.5")
-RasCmdr.compute_plan("01", num_cores=4)  # Runs to completion
+# Portable assembly and bounded solver-start qualification
+organized = RasEbfeModels.organize_upper_guadalupe(source, validate_dss=False)
+init_ras_project(organized / "RAS Model/UPGU1", "6.3.1")
+result = RasPreprocess.preprocess_plan("01")
+assert result.success  # Solver-start evidence; not full-plan completion
 ```
 
 ## Testing and Validation
@@ -1028,7 +1036,12 @@ Current validation is tracked in the repository-level
 - Rio Hondo: 253 1D steady reach projects passed sequential geometry preprocessor validation, and 253/253 steady plans computed successfully in `steady_plan_validation_20260424_160022.json`.
 - Spring Creek: 2D geometry preprocessor passed.
 - North Galveston Bay: nested download/extract/organize path passed geometry preprocessor validation; delivered HMS project loads through hms-commander.
-- Upper Guadalupe: UPGU1, UPGU2, and UPGU3 passed; UPGU4 requires the 7200-second validation record because its geometry preprocessor can exceed one hour.
+- Upper Guadalupe: UPGU1 `p01` reached owned unsteady-solver startup in a fresh
+  two-core isolated run. UPGU2's receipt records `natural_completion` without
+  owned solver-start evidence after its property-table rebuild was observed,
+  and UPGU3–UPGU4 were not attempted, so
+  those three remain unqualified. Supplied plan HDFs are publication artifacts,
+  not fresh execution evidence.
 - San Gabriel: all five selected 1% plans reached the unsteady-computation
   phase through ras-commander. This is `unsteady_start` compute evidence only.
   The required compiled terrain and terrain-modification payloads are `Not
@@ -1053,16 +1066,14 @@ Current eBFE notebooks `950`-`957` execute against the shared
 refreshed after delivery-format updates, and notebook QA confirmed no error
 outputs in the eBFE notebook set.
 
-### DSS Validation Scale
+### Upper Guadalupe active-reference audit
 
-**Largest validation ever**:
-- Model: Upper Guadalupe
-- DSS files: 10
-- Total pathnames: 10,248
-- Validation rate: 100% (0 errors)
-- Breakdown:
-  - Gridded precipitation: 6,720 pathnames
-  - Boundary conditions: 3,528 pathnames
+- 10 delivered DSS files
+- 28 project-local precipitation references
+- 21 live cascade-transfer references
+- 28 plan geometry/unsteady bindings
+- 224 fixed-length HDF association attributes
+- 12 terrain payload files and 5 terrain-modification groups
 
 ## Why This Matters
 

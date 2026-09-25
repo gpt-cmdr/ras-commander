@@ -168,6 +168,54 @@ def test_austin_oyster_catalog_has_one_unsteady_start_candidate() -> None:
     assert "completed-result" in project["notes"]
 
 
+def test_upper_guadalupe_catalog_has_four_linked_source_candidates() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    projects = [
+        item
+        for item in config["projects"]
+        if item["id"].startswith("upper-guadalupe-ras-model-upgu")
+    ]
+    expected_ids = [
+        "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
+        "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
+        "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
+        "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
+    ]
+    assert [project["id"] for project in projects] == expected_ids
+    assert all(
+        project["status"] == "Source qualification candidate"
+        for project in projects
+    )
+    assert all(
+        project["viewer_type"] == "Qualification candidate"
+        for project in projects
+    )
+    assert all(
+        not project[field]
+        for project in projects
+        for field in ("webmap", "manifest", "project_manifest")
+    )
+    assert [project["details"].rsplit("#", 1)[-1] for project in projects] == [
+        f"upgu{number}" for number in range(1, 5)
+    ]
+    assert all(
+        project["record_of_deficiencies"].endswith(
+            "2026-09-25_upper_guadalupe_record_of_deficiencies.md"
+        )
+        for project in projects
+    )
+    assert "reached owned unsteady-solver startup" in projects[0]["notes"]
+    assert "qualification is not established" in projects[1]["notes"]
+    assert all(
+        "qualification was not attempted" in project["notes"]
+        for project in projects[2:]
+    )
+    assert [Path(project["geometry_hdf"]).name for project in projects] == [
+        f"UPGU{number}.g01.hdf" for number in range(1, 5)
+    ]
+
+
 def test_write_javascript_catalog_preserves_exact_project_footprint(
     tmp_path: Path,
 ) -> None:

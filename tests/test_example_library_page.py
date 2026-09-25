@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from shapely.geometry import box, shape
 from shapely.ops import unary_union
 
@@ -228,7 +229,10 @@ def test_double_mountain_fork_brazos_candidate_profile_and_rod_are_validated() -
     assert "Polygons (1)" in rod
     assert "4/4 plans reached unsteady computation" in rod
     assert "native-qualification-20260911-2024" in rod
-    assert "qualification pending" not in profiles.lower()
+    dmf_profiles = profiles.split(
+        '"double-mountain-fork-brazos-dmf1-12050004"', 1
+    )[1].split('"middle-chattahoochee-lake-harding-al03130002"', 1)[0]
+    assert "qualification pending" not in dmf_profiles.lower()
 
 
 def test_double_mountain_fork_brazos_exact_candidate_footprints_are_discoverable() -> (
@@ -350,7 +354,7 @@ def test_alabama_ble_corpus_is_one_exact_discovery_entry() -> None:
     assert "groupId" not in profiles.split(f'"{project_id}"', 1)[1].split("},", 1)[0]
     assert "AL03130002" in page
     assert page.count("Alabama Middle Chattahoochee–Lake Harding BLE") == 1
-    assert "20260924Taustin-oyster01" in page
+    assert "20260925Tupper-guadalupe02" in page
 
 
 def test_austin_oyster_is_one_exact_source_qualification_candidate() -> None:
@@ -397,7 +401,92 @@ def test_austin_oyster_is_one_exact_source_qualification_candidate() -> None:
     assert "reached unsteady-solver startup" in feature["properties"]["notes"]
     assert profiles.count(f'"{project_id}"') == 1
     assert "HEC-RAS 5.0.7 source; unsteady-start validated" in profiles
-    assert "20260924Taustin-oyster01" in page
+    assert "20260925Tupper-guadalupe02" in page
+
+
+def test_upper_guadalupe_is_one_group_with_four_exact_project_links() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    profiles = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-profiles.js"
+    ).read_text(encoding="utf-8")
+    catalog_source = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-projects-data.js"
+    ).read_text(encoding="utf-8")
+    rod = (
+        ROOT / "agent_tasks" / "2026-09-25_upper_guadalupe_record_of_deficiencies.md"
+    ).read_text(encoding="utf-8")
+    config = json.loads(
+        (ROOT / "agent_tasks" / "rasexamples_extent_catalog.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    prefix = "window.RAS_EXAMPLE_PROJECTS = "
+    catalog = json.loads(catalog_source.removeprefix(prefix).removesuffix(";\n"))
+    expected_ids = [
+        "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
+        "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
+        "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
+        "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
+    ]
+    configured = [
+        item for item in config["projects"] if item["id"] in expected_ids
+    ]
+    features = [
+        feature for feature in catalog["features"] if feature["id"] in expected_ids
+    ]
+
+    assert [item["id"] for item in configured] == expected_ids
+    assert [feature["id"] for feature in features] == expected_ids
+    assert all(
+        feature["properties"]["status"] == "Source qualification candidate"
+        for feature in features
+    )
+    assert all(
+        feature["properties"]["viewerType"] == "Qualification candidate"
+        for feature in features
+    )
+    assert all(
+        not feature["properties"].get(field)
+        for feature in features
+        for field in ("webmap", "manifest", "projectManifest")
+    )
+    assert all(
+        "2026-09-25_upper_guadalupe_record_of_deficiencies.md"
+        in feature["properties"]["details"]
+        for feature in features
+    )
+    assert [item["details"].rsplit("#", 1)[-1] for item in configured] == [
+        f"upgu{number}" for number in range(1, 5)
+    ]
+    assert all(f"### UPGU{number}" in rod for number in range(1, 5))
+    assert profiles.count('groupId: "upper-guadalupe"') == 4
+    assert profiles.count('title: "Upper Guadalupe Model Suite"') == 1
+    assert "2026-09-25_upper_guadalupe_record_of_deficiencies.md" in profiles
+    assert "fresh unsteady-start evidence applies only to UPGU1" in profiles
+    assert "owned unsteady-solver startup" in profiles
+    assert "not solver-start qualified" in profiles
+    assert page.count("FEMA Upper Guadalupe eBFE (12100201)") == 1
+    assert "20260925Tupper-guadalupe02" in page
+
+    geometries = [shape(feature["geometry"]) for feature in features]
+    assert all(geometry.geom_type == "Polygon" for geometry in geometries)
+    assert all(geometry.is_valid for geometry in geometries)
+    assert all(
+        not geometry.equals(box(*feature["bbox"]))
+        for feature, geometry in zip(features, geometries, strict=True)
+    )
+    assert all(
+        list(geometry.bounds) == feature["bbox"]
+        for feature, geometry in zip(features, geometries, strict=True)
+    )
+    assert list(unary_union(geometries).bounds) == pytest.approx([
+        -99.69714999942667,
+        29.796267715490476,
+        -98.17561174692321,
+        30.26653385380409,
+    ])
 
 
 def test_embedded_catalog_retains_api_derived_project_footprints() -> None:
