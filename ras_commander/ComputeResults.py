@@ -925,6 +925,42 @@ class GeometryLayerResult:
 
 
 @dataclass
+class PrecipRasterImportResult:
+    """Result of :meth:`RasPrecipHdf.write_gridded_precip_raster`.
+
+    Failures raise rather than returning ``success=False``. This object reports
+    the outcome of a completed write, dry run, or idempotent skip.
+    """
+
+    success: bool
+    unsteady_hdf_path: Path
+    met_variable: str
+    shape: Tuple[int, int]
+    units: str
+    values_chunks: Tuple[int, int]
+    vertical_chunks: Tuple[int, int]
+    created_hdf: bool = False
+    skipped: bool = False
+    dry_run: bool = False
+    elapsed_seconds: float = 0.0
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        if self.dry_run:
+            status = "DRY-RUN"
+        elif self.skipped:
+            status = "SKIPPED"
+        else:
+            status = "SUCCESS"
+        return (
+            f"PrecipRasterImportResult({status}, variable={self.met_variable!r}, "
+            f"shape={self.shape}, units={self.units!r})"
+        )
+
+
+@dataclass
 class GeometryCompleteResult:
     """
     Result of RasGeometryCompute.compute_geometry() (RASGeometry.CompleteForComputations).
