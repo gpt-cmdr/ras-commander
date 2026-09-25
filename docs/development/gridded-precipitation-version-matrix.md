@@ -52,6 +52,11 @@ The repeatable native harness is
   interval values, the solver finished, cumulative rainfall was nonzero, and
   the hydraulic response was nonempty. This qualifies the translated route,
   not GeoTIFF as a vendor-native meteorology source.
+- A clean HEC-RAS 6.6 RasExamples DSS rerun on that same Wine profile remained
+  in the main RAS window and produced no fresh preprocessing artifact before
+  the 300-second public-API timeout. Because the GeoTIFF route completed on the
+  same executable/profile, this is a DSS-route or fixture-access compatibility
+  gap, not a general Wine-runtime or gridded-precipitation failure.
 - The native NetCDF/GRIB cross-version semantic matrix is still open. The
   current evidence PR must not advertise or guard combinations that have only
   documentation evidence.
@@ -125,6 +130,7 @@ maximum of `0.1145427823`, 144,528 nonzero values, and nonzero water surfaces.
 | 6.4.1 on CLB07/Wine 11 | Native registered profile: `RasTcu.accept()` cannot find an accepted donor. Mixed accepted profile: `RasMapper Component did not load` / `ActiveX component can't create object` | Not reached | Exact-profile provisioning/COM blocker; no precipitation claim |
 | 6.5 | No fresh result materialized before HEC-owned `Error: Unexpected error; quitting` dialog | Not reached | Confirmed startup/install/runtime failure on this host |
 | 6.6 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
+| 6.6 on CLB07/Wine 11, native DSS | No fresh artifact before the 300-second public-API timeout on a clean 6.6 RasExamples copy | Not reached | Unqualified Wine DSS route; same executable/profile succeeds for translated GeoTIFF |
 | 6.6 on CLB07/Wine 11, translated GeoTIFF | Four exact interval rows materialized at 10:00, 11:00, 12:00, and 13:00; `Processing` and `Finished Processing Precipitation` | `Finished Unsteady Flow Simulation`; final cumulative max `0.1157457530` in over 18,066 cells; final hydraulic depth max `9.7182655334` ft over 7,576 wet cells | Qualified for the feature-snapshot GeoTIFF-to-NetCDF/native-HDF route |
 | 6.7 Beta 5 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Historical beta evidence only |
 | 7.0 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
@@ -242,9 +248,10 @@ messages, precipitation maps, timing, units, and hydraulic response.
    evidence; retain its value/timing/CRS/nodata acceptance tests. Qualify WPC
    QPF and other encodings separately rather than generalizing from GeoTIFF.
 6. **Wine qualification PR:** retain the 6.6 translated-GeoTIFF evidence and
-   add a clean DSS rerun. Resolve 6.4.1 exact-profile TCU provisioning and COM
-   registration before making any 6.4.1 precipitation claim. Keep Windows and
-   Wine claims separate.
+   diagnose the clean 6.6 DSS preprocessing timeout before making a Wine DSS
+   claim. Resolve 6.4.1 exact-profile TCU provisioning and COM registration
+   before making any 6.4.1 precipitation claim. Keep Windows and Wine claims
+   separate.
 7. **Product/notebook PRs:** requalify AORC, MRMS, HRRR, WPC, Atlas 14, and
    NEXRAD/DSS using the common semantics and routing layer, then commit cleaned
    notebooks plus compact receipts rather than model outputs.

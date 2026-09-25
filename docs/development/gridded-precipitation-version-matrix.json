@@ -73,6 +73,29 @@
     },
     "scope_note": "Qualifies the ras-commander translation feature snapshot on Wine 11 / HEC-RAS 6.6 only; it is not a direct-vendor or cross-version GeoTIFF claim."
   },
+  "wine_dss_qualification": {
+    "status": "preprocess_failed",
+    "platform": "CLB07 CT212 / Wine 11",
+    "hec_ras_version": "6.6",
+    "project": "Clean RasExamples 6.6 BaldEagleCrkMulti2D",
+    "route": "native HEC-DSS gridded precipitation",
+    "executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+    "tcu_acceptance": {
+      "method": "RasTcu.accept",
+      "gui_interaction": false,
+      "before": "accepted",
+      "accept_result": "already-accepted",
+      "after": "accepted"
+    },
+    "preprocess": {
+      "success": false,
+      "elapsed_seconds": 300.0419330596924,
+      "signal_source": "timeout",
+      "temporary_hdf_exists": false,
+      "error": "Preprocessing timed out after 300 seconds before a readiness signal"
+    },
+    "scope_note": "The same executable/profile qualified the translated GeoTIFF route; classify this as an unqualified Wine DSS route or fixture-access gap, not a general Wine or precipitation failure."
+  },
   "schema_inspection": {
     "method": "focused UTF-16 string comparison; no vendor-source decompilation",
     "searched_strings": [
@@ -322,6 +345,7 @@
       "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
       "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
       "wine": "Translated GeoTIFF feature snapshot qualified end to end: exact 4 x 408 interval values; final cumulative maximum 0.1157457530 inches over 18066 cells; final hydraulic depth maximum 9.7182655334 feet over 7576 cells.",
+      "wine_dss": "A clean RasExamples 6.6 DSS preprocessing attempt timed out after 300 seconds with no fresh temporary HDF; the solver was not reached.",
       "limitations": ["WPC QPF GRIB2 requires DSS translation"]
     },
     {
