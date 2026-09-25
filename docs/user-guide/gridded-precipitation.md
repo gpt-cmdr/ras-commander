@@ -294,6 +294,37 @@ if not prepared:
     raise RuntimeError(prepared.error)
 ```
 
+For callers that already have validated arrays, `RasPrecipHdf` exposes the
+lower-level native writer used by `set_gridded_precipitation()`:
+
+```python
+from ras_commander import RasPrecipHdf
+
+values, x, y = RasPrecipHdf.orient_north_up(values, x, y)
+left, top, cell_size, rows, columns = RasPrecipHdf.get_grid_from_coords(x, y)
+cumulative, times_out = RasPrecipHdf.convert_to_cumulative(
+    values,
+    times,
+    value_type="amount",
+    first_timestep_hours=1.0,
+)
+result = RasPrecipHdf.write_gridded_precip_raster(
+    "MyModel.u03.hdf",
+    cumulative,
+    times_out,
+    left,
+    top,
+    cell_size,
+    projection=wkt,
+    units="mm",
+    overwrite=True,
+)
+```
+
+The matching `.u##` text still needs a precipitation meteorology block. Prefer
+`RasUnsteady.set_gridded_precipitation()` unless the lower-level payload API is
+specifically required.
+
 Choose `value_type` from the source data's meaning:
 
 - `"rate"`: depth per hour. Each band is multiplied by its interval duration.
@@ -325,6 +356,10 @@ messages and the resulting rainfall/results maps as part of normal model QA.
 You do not need to resample AORC grids to match mesh cell size. HEC-RAS
 interpolates the gridded precipitation to 2D cells during preprocessing and
 simulation.
+
+See `examples/924_mrms_netcdf_rain_on_grid.ipynb` for a complete workflow that
+checks the temporary plan HDF, computes the model, inspects final per-cell
+rainfall and hydraulic response, and displays review figures.
 
 ## Model Calibration Workflow
 

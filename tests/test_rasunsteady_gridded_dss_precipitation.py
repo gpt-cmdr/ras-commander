@@ -139,6 +139,34 @@ def test_absolute_dss_path_outside_unsteady_folder_is_preserved(tmp_path):
     assert config["hdf_attributes"]["DSS Filename"] == str(absolute_dss)
 
 
+def test_configure_gridded_dss_accepts_string_and_safe_resolves_project_path(
+    tmp_path, monkeypatch
+):
+    from ras_commander import RasUnsteady, RasUtils
+
+    unsteady_file = _write_unsteady_file(
+        tmp_path / "mapped_drive.u01",
+        "Flow Title=Mapped Drive\nProgram Version=6.60\n",
+    )
+    resolved = []
+
+    def tracked_safe_resolve(path):
+        resolved.append(Path(path))
+        return Path(path)
+
+    monkeypatch.setattr(RasUtils, "safe_resolve", staticmethod(tracked_safe_resolve))
+
+    RasUnsteady.configure_gridded_dss_precipitation(
+        unsteady_file=str(unsteady_file),
+        dss_filename="Precipitation/precip.dss",
+        dss_pathname=BALD_EAGLE_DSS_PATHNAME,
+    )
+
+    assert resolved == [unsteady_file]
+    config = RasUnsteady.get_met_precipitation_config(unsteady_file)
+    assert config["dss_filename"] == ".\\Precipitation\\precip.dss"
+
+
 def test_invalid_gridded_dss_interpolation_raises(tmp_path):
     from ras_commander import RasUnsteady
 

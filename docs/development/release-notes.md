@@ -29,6 +29,17 @@
   solver with no precipitation errors. The native `Imported Raster Data`
   group is the correct authoring location; HEC-RAS preprocessing creates the
   shallower solver-facing datasets.
+- Restore the remaining safeguards from the earlier unmerged feature branch:
+  AORC storm-plan creation now validates each caller-supplied NetCDF before
+  cloning, gridded DSS configuration preserves mapped-drive paths with
+  `RasUtils.safe_resolve()`, and unreadable precipitation sidecars emit a
+  diagnostic warning instead of being silently ignored.
+- Expand notebook 924 into an explicit authoring/precompute/postcompute
+  qualification. A Windows HEC-RAS 7.0 run materialized a 5-by-30 source grid,
+  produced positive cumulative rainfall in 18,066 mesh cells, and produced a
+  nonzero hydraulic response. The finalized code also requalified on CLB07
+  with HEC-RAS 6.6/Wine 11.0, materializing aligned 7-by-25 `Values` and
+  7-element `Timestamp` datasets.
 
 **Refinement-Region Authoring and Mesh Density (#369)**
 

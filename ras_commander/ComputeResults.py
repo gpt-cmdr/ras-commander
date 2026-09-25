@@ -792,8 +792,10 @@ class PreprocessResult:
         x_file_path: Path to the generated .x## file, or None on failure.
         elapsed_seconds: Wall-clock time for preprocessing.
         signal_source: ``bco``, ``owned_process_artifacts``,
-            ``natural_completion``, ``full_result_copy``, ``timeout``, or a
-            blocking-condition identifier.
+            ``materialized_gridded_precipitation``,
+            ``bco_materialized_precipitation``, ``natural_completion``,
+            ``full_result_copy``, ``timeout``, or a blocking-condition
+            identifier.
         full_result_copied: Whether a naturally completed ``p##.hdf`` supplied
             the temporary HDF fallback.
         timed_out: Whether preprocessing exceeded its bounded wait.

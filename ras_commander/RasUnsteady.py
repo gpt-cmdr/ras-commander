@@ -333,23 +333,6 @@ class RasUnsteady:
         )
 
     @staticmethod
-    def _netcdf_interval_hours(times: Any) -> np.ndarray:
-        """Return per-row interval hours for instantaneous-rate NetCDF rasters."""
-        timestamps = pd.to_datetime(times)
-        n_times = len(timestamps)
-        interval_hours = np.zeros(n_times, dtype=np.float32)
-        if n_times <= 1:
-            return interval_hours
-
-        deltas = (timestamps[1:] - timestamps[:-1]).total_seconds() / 3600.0
-        deltas = np.asarray(deltas, dtype=np.float32)
-        if not np.all(np.isfinite(deltas)) or np.any(deltas <= 0):
-            raise ValueError("NetCDF precipitation times must be strictly increasing")
-
-        interval_hours[1:] = deltas
-        return interval_hours
-
-    @staticmethod
     def _fixed_width_data_line_count(record_count: int) -> int:
         """Return the number of 10-field fixed-width rows used by an inline table."""
         return (record_count + 9) // 10
@@ -3277,8 +3260,10 @@ class RasUnsteady:
                         key: RasUnsteady._decode_hdf_attr_value(value)
                         for key, value in hdf_file[precip_path].attrs.items()
                     }
-        except Exception:
-            pass
+        except (OSError, KeyError, ValueError) as exc:
+            logger.warning(
+                f"Could not read precipitation attributes from {hdf_path.name}: {exc}"
+            )
 
     @staticmethod
     def _detect_line_ending(lines: List[str]) -> str:
@@ -5484,7 +5469,7 @@ class RasUnsteady:
     @staticmethod
     @log_call
     def configure_gridded_dss_precipitation(
-        unsteady_file: Path,
+        unsteady_file: Union[str, Path],
         dss_filename: str,
         dss_pathname: str,
         interpolation: str = "",
@@ -5497,7 +5482,7 @@ class RasUnsteady:
 
         Parameters
         ----------
-        unsteady_file : Path
+        unsteady_file : str or Path
             Path to the unsteady flow file (.u##).
         dss_filename : str
             DSS filename for the gridded precipitation source. Relative values
@@ -5519,7 +5504,11 @@ class RasUnsteady:
         unsteady_path = Path(unsteady_file)
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
-        unsteady_path = unsteady_path.resolve()
+        # Path.resolve() can turn mapped drives into UNC paths that HEC-RAS cannot
+        # read. This path also anchors the relative DSS filename written to .u##.
+        from .RasUtils import RasUtils
+
+        unsteady_path = RasUtils.safe_resolve(unsteady_path)
 
         dss_pathname = str(dss_pathname).strip()
         if not dss_pathname:

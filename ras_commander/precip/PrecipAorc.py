@@ -938,6 +938,16 @@ class PrecipAorc:
                 else:
                     logger.debug(f"Download disabled for storm {storm_id}; using {precip_file}")
 
+                # Validate before cloning. set_gridded_precipitation also raises for
+                # a missing NetCDF, but by then an orphaned unsteady clone would have
+                # been left in the project.
+                full_precip_path = ras_obj.project_folder / precip_file
+                if not full_precip_path.exists():
+                    raise FileNotFoundError(
+                        f"Precipitation file not found for storm {storm_id}: "
+                        f"{full_precip_path}"
+                    )
+
                 # 2. Clone unsteady file
                 logger.debug(f"Cloning unsteady file for storm {storm_id}")
                 new_unsteady = RasPlan.clone_unsteady(

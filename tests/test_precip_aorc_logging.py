@@ -242,6 +242,11 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
         ]
     )
 
+    # download_data=False means the caller supplies these NetCDF files.
+    (tmp_path / "Precipitation").mkdir()
+    for name in ("storm_20200101.nc", "storm_20200203.nc"):
+        (tmp_path / "Precipitation" / name).write_bytes(b"")
+
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         results = aorc_module.PrecipAorc.create_storm_plans(
             storm_catalog=storm_catalog,
@@ -266,3 +271,49 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
     assert str(tmp_path / "Precipitation") in debug_text
     assert "Cloning unsteady file for storm 1" in debug_text
     assert "Configuring gridded precipitation for storm 2" in debug_text
+
+
+def test_create_storm_plans_missing_netcdf_fails_before_cloning(monkeypatch, tmp_path):
+    aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
+    rasplan_module = importlib.import_module("ras_commander.RasPlan")
+
+    class FakeRasProject:
+        project_folder = tmp_path
+
+        def check_initialized(self):
+            return None
+
+    template = tmp_path / "project.p06"
+    template.write_text("Flow File=u01\nHDF Write Time Slices=0\n", encoding="utf-8")
+    clones = []
+
+    monkeypatch.setattr(
+        rasplan_module.RasPlan,
+        "get_plan_path",
+        lambda plan_number, ras_object=None: template if str(plan_number) == "06" else None,
+    )
+    monkeypatch.setattr(
+        rasplan_module.RasPlan,
+        "clone_unsteady",
+        lambda *args, **kwargs: clones.append(args) or "02",
+    )
+
+    storm_catalog = pd.DataFrame([{
+        "storm_id": 1,
+        "start_time": pd.Timestamp("2020-01-01 01:00"),
+        "sim_start": pd.Timestamp("2020-01-01 00:00"),
+        "sim_end": pd.Timestamp("2020-01-01 04:00"),
+        "total_depth_in": 1.25,
+    }])
+
+    results = aorc_module.PrecipAorc.create_storm_plans(
+        storm_catalog=storm_catalog,
+        bounds=(-78.0, 40.0, -77.0, 42.0),
+        template_plan="06",
+        ras_object=FakeRasProject(),
+        download_data=False,
+    )
+
+    assert results["status"].iloc[0].startswith("error")
+    assert "not found" in results["status"].iloc[0]
+    assert clones == []
