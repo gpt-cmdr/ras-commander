@@ -19,8 +19,9 @@
   rate and silently discarding the first band.
 - Require solver-ready precipitation during `RasPreprocess.preprocess_plan()`.
   For a gridded-rain plan, the early `.bco` marker is no longer sufficient:
-  preprocessing waits for the owned `RasUnsteady` process and the materialized
-  plan-HDF `Precipitation/Values` and `Timestamp` datasets. An
+  preprocessing waits for fresh, complete artifacts and the materialized
+  plan-HDF `Precipitation/Values` and `Timestamp` datasets; the no-BCO
+  fallback still requires an owned `RasUnsteady` process. An
   `Imported Raster Data` payload by itself is reported as incomplete rather
   than being returned as a successful Linux precompute.
 - Qualify the complete public-API workflow on CLB07 with HEC-RAS 6.6 under

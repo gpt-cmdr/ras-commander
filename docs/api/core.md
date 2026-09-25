@@ -456,9 +456,10 @@ contains the authored source payload under
 `Event Conditions/Meteorology/Precipitation/Imported Raster Data`; HEC-RAS
 preprocessing must materialize the solver-facing `Precipitation/Values` and
 `Precipitation/Timestamp` datasets in the temporary plan HDF. The `.bco`
-marker can precede that handoff, so `preprocess_plan()` waits for the owned
-solver process and validates both materialized datasets before reporting
-success. Treat a failed `PreprocessResult` as a failed precompute; do not launch
+marker can precede that handoff, so `preprocess_plan()` waits for fresh,
+complete preprocessing artifacts and validates both materialized datasets
+before reporting success. The no-BCO fallback still requires an owned solver
+process. Treat a failed `PreprocessResult` as a failed precompute; do not launch
 the native solver with an incomplete temporary HDF.
 
 `run_ras_geom_preprocess()` performs the matching vendor geometry-preprocessor

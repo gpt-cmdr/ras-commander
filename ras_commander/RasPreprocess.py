@@ -398,18 +398,16 @@ class RasPreprocess:
         ):
             readiness_deadline = start_time + float(max_wait)
             while process.poll() is None and time.time() < readiness_deadline:
-                if RasPreprocess._preprocessing_ready(
-                    process.pid,
+                if RasPreprocess._materialized_gridded_precipitation_ready(
                     tmp_hdf,
                     b_file,
                     x_file,
                     artifact_baseline=artifact_baseline,
-                    require_materialized_gridded_precipitation=True,
                 ):
-                    signal_source = "owned_process_artifacts"
+                    signal_source = "bco_materialized_precipitation"
                     logger.info(
-                        "Gridded precipitation readiness confirmed by owned "
-                        "RasUnsteady startup and complete preprocessing artifacts"
+                        "Gridded precipitation readiness confirmed by fresh "
+                        "preprocessing artifacts and materialized solver datasets"
                     )
                     break
                 time.sleep(0.1)
@@ -425,10 +423,9 @@ class RasPreprocess:
                     timed_out=True,
                     error=(
                         "HEC-RAS reported the BCO computation-start marker, but "
-                        "the owned RasUnsteady process and complete preprocessing "
-                        "artifacts were not observed before the preprocessing "
-                        f"timeout ({int(max_wait)} seconds). Gridded precipitation "
-                        "requires the later solver-start readiness gate."
+                        "fresh preprocessing artifacts with materialized gridded "
+                        "precipitation were not observed before the preprocessing "
+                        f"timeout ({int(max_wait)} seconds)."
                     ),
                     elapsed_seconds=time.time() - start_time,
                 )
@@ -1182,6 +1179,56 @@ class RasPreprocess:
         return True, "ready"
 
     @staticmethod
+    def _preprocessing_artifacts_ready(
+        tmp_hdf: Path,
+        b_file: Path,
+        x_file: Path,
+        artifact_baseline: Optional[
+            Dict[Path, Optional[Tuple[int, int]]]
+        ] = None,
+    ) -> bool:
+        """Return whether all preprocessing artifacts exist and are fresh."""
+        artifacts = (Path(tmp_hdf), Path(b_file), Path(x_file))
+        if any(
+            not path.is_file() or path.stat().st_size == 0
+            for path in artifacts
+        ):
+            return False
+        if artifact_baseline is not None:
+            for path in artifacts:
+                before = artifact_baseline.get(path)
+                if (
+                    before is not None
+                    and RasPreprocess._artifact_state(path) == before
+                ):
+                    return False
+        return True
+
+    @staticmethod
+    def _materialized_gridded_precipitation_ready(
+        tmp_hdf: Path,
+        b_file: Path,
+        x_file: Path,
+        artifact_baseline: Optional[
+            Dict[Path, Optional[Tuple[int, int]]]
+        ] = None,
+    ) -> bool:
+        """Return whether fresh artifacts contain solver-ready gridded rain."""
+        if not RasPreprocess._preprocessing_artifacts_ready(
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        ):
+            return False
+        materialized, _detail = (
+            RasPreprocess._validate_materialized_gridded_precipitation(
+                tmp_hdf
+            )
+        )
+        return materialized
+
+    @staticmethod
     def _preprocessing_ready(
         root_pid: int,
         tmp_hdf: Path,
@@ -1221,17 +1268,13 @@ class RasPreprocess:
         ] = None,
     ) -> bool:
         """Return True when this launch owns a ready unsteady compute process."""
-        artifacts = (Path(tmp_hdf), Path(b_file), Path(x_file))
-        if any(
-            not path.is_file() or path.stat().st_size == 0
-            for path in artifacts
+        if not RasPreprocess._preprocessing_artifacts_ready(
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
         ):
             return False
-        if artifact_baseline is not None:
-            for path in artifacts:
-                before = artifact_baseline.get(path)
-                if before is not None and RasPreprocess._artifact_state(path) == before:
-                    return False
 
         try:
             import psutil

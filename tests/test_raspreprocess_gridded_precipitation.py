@@ -153,7 +153,21 @@ def test_preprocessing_readiness_waits_for_materialized_precipitation(
     )
 
 
-def test_bco_signal_waits_for_owned_unsteady_start_before_termination(
+def test_bco_readiness_does_not_require_short_lived_solver_process(tmp_path):
+    _write_artifacts(tmp_path, materialized=True)
+    assert RasPreprocess._materialized_gridded_precipitation_ready(
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+        artifact_baseline={
+            tmp_path / "fixture.p01.tmp.hdf": None,
+            tmp_path / "fixture.b01": None,
+            tmp_path / "fixture.x03": None,
+        },
+    )
+
+
+def test_bco_signal_waits_for_materialized_precipitation_before_termination(
     tmp_path,
     monkeypatch,
 ):
@@ -184,7 +198,7 @@ def test_bco_signal_waits_for_owned_unsteady_start_before_termination(
     _patch_launch(monkeypatch, Monitor, process, terminated)
     monkeypatch.setattr(
         RasPreprocess,
-        "_preprocessing_ready",
+        "_materialized_gridded_precipitation_ready",
         staticmethod(ready),
     )
 
@@ -197,7 +211,7 @@ def test_bco_signal_waits_for_owned_unsteady_start_before_termination(
     )
 
     assert result.success is True
-    assert result.signal_source == "owned_process_artifacts"
+    assert result.signal_source == "bco_materialized_precipitation"
     assert readiness_checks == [True]
     assert terminated == [process]
 
