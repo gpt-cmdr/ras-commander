@@ -180,6 +180,31 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _establish_tcu_state(
+    executable: Path,
+    *,
+    accept_tcu: bool,
+) -> dict[str, Any]:
+    """Record exact-runtime TCU state and optional public-API acceptance.
+
+    ``RasTcu.accept`` is called only when the qualification operator supplies
+    ``--accept-tcu``.  The receipt deliberately calls this API registry
+    acceptance and never implies that a vendor GUI control was clicked.
+    """
+    before = RasTcu.status(ras_version=str(executable))
+    acceptance = None
+    if accept_tcu:
+        acceptance = RasTcu.accept(ras_version=str(executable))
+    after = RasTcu.status(ras_version=str(executable))
+    return {
+        "method": "RasTcu.accept" if accept_tcu else "status_only",
+        "gui_interaction": False,
+        "before": _json_safe(before),
+        "accept_result": _json_safe(acceptance),
+        "after": _json_safe(after),
+    }
+
+
 def _stage_project(source_project: Path, workspace: Path, label: str) -> Path:
     stage = workspace / label
     if stage.exists():
@@ -254,6 +279,8 @@ def qualify(
     workspace: Path,
     max_runtime: float,
     num_cores: int,
+    accept_tcu: bool = False,
+    fix_line_endings: bool = False,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
         "label": label,
@@ -266,9 +293,10 @@ def qualify(
         record.update(status="not_run", reason="executable_missing")
         return record
 
-    tcu = RasTcu.status(ras_version=str(executable))
-    record["tcu"] = _json_safe(tcu)
-    if not bool(tcu):
+    tcu_receipt = _establish_tcu_state(executable, accept_tcu=accept_tcu)
+    record["tcu_acceptance"] = tcu_receipt
+    record["tcu"] = tcu_receipt["after"]
+    if tcu_receipt["after"].get("accepted") is not True:
         record.update(status="not_run", reason="tcu_acceptance_not_confirmed")
         return record
 
@@ -287,12 +315,19 @@ def qualify(
         end,
         ras_object=ras,
     )
+    RasPlan.update_run_flags(
+        RasPlan.get_plan_path(plan_number, ras_object=ras),
+        geometry_preprocessor=True,
+        unsteady_flow_simulation=True,
+        ras_object=ras,
+    )
 
     preprocess = RasPreprocess.preprocess_plan(
         plan_number,
         ras_object=ras,
         max_wait=max_runtime,
         clear_existing=True,
+        fix_line_endings=fix_line_endings,
     )
     record["preprocess"] = _json_safe(preprocess)
     tmp_hdf_path = Path(
@@ -362,6 +397,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-runtime", type=float, default=300.0)
     parser.add_argument("--num-cores", type=int, default=2)
     parser.add_argument(
+        "--accept-tcu",
+        action="store_true",
+        help=(
+            "Explicitly establish exact-runtime acceptance through the public "
+            "RasTcu.accept() API and record before/after state. This records "
+            "registry acceptance, not a GUI interaction."
+        ),
+    )
+    parser.add_argument(
+        "--fix-line-endings",
+        action="store_true",
+        help=(
+            "Normalize staged HEC-RAS text inputs to CRLF through the public "
+            "RasPreprocess API. Required by some Wine runtime profiles."
+        ),
+    )
+    parser.add_argument(
         "--supply-wmic-shim",
         action="store_true",
         help=(
@@ -400,6 +452,8 @@ def main() -> int:
                     workspace=workspace,
                     max_runtime=args.max_runtime,
                     num_cores=args.num_cores,
+                    accept_tcu=args.accept_tcu,
+                    fix_line_endings=args.fix_line_endings,
                 )
                 record["qualification_wmic_shim"] = (
                     "process_local_cim" if wmic_shim else None

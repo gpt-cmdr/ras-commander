@@ -103,4 +103,3 @@ def test_real_projected_hrrr_grib2_normalizes_and_authors_native_hdf(tmp_path):
             "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values"
         ][...]
     assert float(np.nanmax(imported)) > 0.0
-

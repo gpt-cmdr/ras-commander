@@ -47,4 +47,3 @@ def test_notebook_code_compiles_and_outputs_are_stripped():
         compile(source, f"{NOTEBOOK_PATH.name}:cell-{index}", "exec")
         assert cell.get("execution_count") is None
         assert not cell.get("outputs")
-

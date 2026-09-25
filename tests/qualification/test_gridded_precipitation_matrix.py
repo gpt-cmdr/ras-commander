@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import h5py
@@ -13,9 +14,19 @@ from scripts.qualification.gridded_precipitation_matrix import (
     CUMULATIVE_PRECIPITATION,
     PRECIPITATION_GROUP,
     WATER_SURFACE,
+    _establish_tcu_state,
     _inspect_hdf,
     _qualification_wmic_shim,
 )
+
+
+@dataclass(frozen=True)
+class _TcuStatus:
+    accepted: bool
+    reason: str
+    version: str = "6.0"
+    install_dir: str = r"C:\HEC-RAS\6.0"
+    registry_key: str = r"Software\HEC-RAS\6.0"
 
 
 def test_inspect_hdf_records_precipitation_hydraulics_and_messages(
@@ -105,3 +116,42 @@ def test_disabled_wmic_shim_does_not_change_path() -> None:
         assert os.environ.get("PATH", "") == original_path
 
     assert os.environ.get("PATH", "") == original_path
+
+
+def test_establish_tcu_state_records_public_api_acceptance(monkeypatch) -> None:
+    statuses = iter(
+        [_TcuStatus(False, "no-vb6-subtree"), _TcuStatus(True, "accepted")]
+    )
+    monkeypatch.setattr(
+        "scripts.qualification.gridded_precipitation_matrix.RasTcu.status",
+        lambda **_kwargs: next(statuses),
+    )
+    monkeypatch.setattr(
+        "scripts.qualification.gridded_precipitation_matrix.RasTcu.accept",
+        lambda **_kwargs: _TcuStatus(True, "accepted"),
+    )
+
+    receipt = _establish_tcu_state(Path(r"C:\HEC-RAS\6.0\Ras.exe"), accept_tcu=True)
+
+    assert receipt["method"] == "RasTcu.accept"
+    assert receipt["gui_interaction"] is False
+    assert receipt["before"]["accepted"] is False
+    assert receipt["accept_result"]["accepted"] is True
+    assert receipt["after"]["accepted"] is True
+
+
+def test_establish_tcu_state_status_only_never_calls_accept(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "scripts.qualification.gridded_precipitation_matrix.RasTcu.status",
+        lambda **_kwargs: _TcuStatus(True, "accepted"),
+    )
+    monkeypatch.setattr(
+        "scripts.qualification.gridded_precipitation_matrix.RasTcu.accept",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected accept")),
+    )
+
+    receipt = _establish_tcu_state(Path(r"C:\HEC-RAS\6.0\Ras.exe"), accept_tcu=False)
+
+    assert receipt["method"] == "status_only"
+    assert receipt["accept_result"] is None
+    assert receipt["after"]["accepted"] is True

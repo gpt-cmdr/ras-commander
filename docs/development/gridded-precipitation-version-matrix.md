@@ -28,11 +28,30 @@ The repeatable native harness is
   qualification-only replacement for the removed Windows `wmic CPU get`
   command. Their unmodified failures are host compatibility failures, not
   precipitation failures.
-- HEC-RAS 6.0 and the CLB07/Wine 6.4.1 profile remain blocked by first-run
-  vendor Terms and Conditions state. This audit did not automate user assent.
-- HEC-RAS 6.5 exits through an HEC-owned `Unexpected error; quitting` dialog on
-  this Windows host, including from a clean short-path stage. That result is
-  inconclusive and must not be described as a precipitation defect.
+- The exact 6.3 and 6.3.1 releases retain ras-commander's existing
+  process-local WMIC compatibility path from earlier host evidence. The DSS
+  qualification runs summarized here did not need that fallback, so that fact
+  is recorded separately rather than presented as evidence that the safeguard
+  can be removed or generalized to hypothetical patch releases.
+- For HEC-RAS 6.0, `RasTcu.accept()` and `RasTcu.status()` both report the
+  exact installed runtime accepted, without GUI interaction, but launching the
+  same executable still raises the vendor TCU modal. This API-registry/runtime
+  disagreement blocks execution before precipitation preprocessing.
+- The CLB07/Wine 6.4.1 cache has two independent profile blockers: its native,
+  correctly registered prefix has no accepted donor available to
+  `RasTcu.accept()`, while a mixed accepted profile reaches 6.4.1 but cannot
+  create its RAS Mapper ActiveX component. Neither result is precipitation
+  evidence.
+- HEC-RAS 6.5 exits through an HEC-owned VB dialog titled `Error` whose body is
+  `Unexpected error; quitting` on this Windows host, including from a clean
+  short-path stage. The exact executable path and hash were confirmed. That is
+  a startup/install/runtime failure and must not be described as a
+  precipitation defect.
+- A feature-snapshot GeoTIFF translation route executed end to end on
+  CLB07/Wine 11 with HEC-RAS 6.6: native preprocessing materialized the exact
+  interval values, the solver finished, cumulative rainfall was nonzero, and
+  the hydraulic response was nonempty. This qualifies the translated route,
+  not GeoTIFF as a vendor-native meteorology source.
 - The native NetCDF/GRIB cross-version semantic matrix is still open. The
   current evidence PR must not advertise or guard combinations that have only
   documentation evidence.
@@ -49,15 +68,15 @@ The repeatable native harness is
 | 5.0.5 | 2018-06 | Unsupported | Same 5.x family evidence |
 | 5.0.6 | 2018-11 | Unsupported | Same 5.x family evidence |
 | 5.0.7 | 2019-03 | Unsupported | Official examples plus focused binary-schema comparison |
-| 6.0 | 2021-05-28 | Introduced | Official documentation and fixture/schema evidence; native run blocked |
+| 6.0 | 2021-05-28 | Introduced | Official documentation and fixture/schema evidence; native run blocked by TCU API/runtime disagreement |
 | 6.1 | 2021-09-21 | Available with limitations | Windows DSS run qualified with host-compatibility shim |
 | 6.2 | 2022-03-11 | Available with limitations | Windows DSS run qualified with host-compatibility shim |
-| 6.3 | 2022-08-25 | Available with timing limitation | Windows DSS run qualified |
-| 6.3.1 | 2022-09-30 | Available with timing limitation | Windows DSS run qualified |
+| 6.3 | 2022-08-25 | Available with timing limitation | Windows DSS run qualified; exact-release process-local WMIC fallback retained from earlier host evidence |
+| 6.3.1 | 2022-09-30 | Available with timing limitation | Windows DSS run qualified; exact-release process-local WMIC fallback retained from earlier host evidence |
 | 6.4 | 2023-06-05 | Documented | No current local runtime; superseded by official 6.4.1 download |
-| 6.4.1 | 2023-06-22 | Documented | CLB07/Wine runtime inventoried; execution blocked |
-| 6.5 | 2024-02-02 | Documented | Native attempt inconclusive due host/runtime failure |
-| 6.6 | 2024-09-30 | Supported and qualified for tested DSS route | Windows end-to-end execution |
+| 6.4.1 | 2023-06-22 | Documented | CLB07/Wine runtime inventoried; exact-profile TCU/COM blockers prevent precipitation execution |
+| 6.5 | 2024-02-02 | Documented | Native attempt fails in HEC/VB startup before model processing |
+| 6.6 | 2024-09-30 | Supported and qualified for tested DSS route; translated GeoTIFF route qualified | Windows DSS plus CLB07/Wine 11 GeoTIFF end-to-end execution |
 | 6.7 Beta 5 | 2025-10 | Historical beta only | Windows end-to-end execution; no stable support claim |
 | 7.0 | 2026-04-17 | Supported and qualified for tested DSS route | Windows end-to-end execution |
 | 7.0.1 | 2026-06-02 | Supported and qualified for tested DSS route | Windows end-to-end execution |
@@ -97,15 +116,16 @@ maximum of `0.1145427823`, 144,528 nonzero values, and nonzero water surfaces.
 
 | Version | Integrated precipitation preprocessing | Solver/result | Classification |
 |---|---|---|---|
-| 6.0 | Not run: actual first-run TCU dialog | Not run | Legal-state blocker, not product evidence |
+| 6.0 | `RasTcu.accept()` reports exact-runtime acceptance, but the same executable raises the actual TCU dialog | Not run | ras-commander TCU registry/runtime compatibility blocker, not precipitation evidence |
 | 6.1 | `Processing` and `Finished Processing Precipitation`; fresh temporary HDF contains the expected `3 x 268830` values | Raw run reaches solver then fails because WMIC is absent. With process-local CIM shim: verified finish, cumulative max `0.1145427823`, 126,462 nonzero values over 8 output times, nonzero WSE | Precipitation passes; host compatibility fails without shim |
 | 6.2 | Same expected materialization and precipitation messages | Raw WMIC failure; shimmed run verified, 144,528 nonzero cumulative values over 9 output times, nonzero WSE | Precipitation passes; host compatibility fails without shim |
-| 6.3 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified with documented period-average limitation |
-| 6.3.1 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified with documented period-average limitation |
+| 6.3 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified with documented period-average limitation; exact-release WMIC fallback available when the host lacks WMIC |
+| 6.3.1 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified with documented period-average limitation; exact-release WMIC fallback available when the host lacks WMIC |
 | 6.4 | No executable | Not run | Missing runtime |
-| 6.4.1 on CLB07/Wine 11 | Not run: acceptance not established for exact profile | Not run | Legal-state blocker; no Wine precipitation claim |
-| 6.5 | No fresh result materialized before HEC-owned unexpected-error dialog | Not reached | Host/runtime or installation inconclusive |
+| 6.4.1 on CLB07/Wine 11 | Native registered profile: `RasTcu.accept()` cannot find an accepted donor. Mixed accepted profile: `RasMapper Component did not load` / `ActiveX component can't create object` | Not reached | Exact-profile provisioning/COM blocker; no precipitation claim |
+| 6.5 | No fresh result materialized before HEC-owned `Error: Unexpected error; quitting` dialog | Not reached | Confirmed startup/install/runtime failure on this host |
 | 6.6 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
+| 6.6 on CLB07/Wine 11, translated GeoTIFF | Four exact interval rows materialized at 10:00, 11:00, 12:00, and 13:00; `Processing` and `Finished Processing Precipitation` | `Finished Unsteady Flow Simulation`; final cumulative max `0.1157457530` in over 18,066 cells; final hydraulic depth max `9.7182655334` ft over 7,576 wet cells | Qualified for the feature-snapshot GeoTIFF-to-NetCDF/native-HDF route |
 | 6.7 Beta 5 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Historical beta evidence only |
 | 7.0 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
 | 7.0.1 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
@@ -115,7 +135,40 @@ legacy engine, using read-only Windows CIM queries in a temporary process-local
 `PATH`. It does not change the HEC-RAS executable or project. The unmodified
 failure emitted an empty `systemInfo.txt` followed by Intel Fortran severe
 error 24. This evidence supports a separate ras-commander host-compatibility
-fix; it is not a precipitation-format workaround.
+fix; it is not a precipitation-format workaround. The controlled rerun used
+the shim only for 6.1 and 6.2. HEC-RAS 6.3 and 6.3.1 qualified in this matrix
+without it, while the library retains its earlier evidence-backed fallback for
+those two exact releases. No shim claim is extrapolated to 6.3.2 or another
+untested patch release.
+
+### CLB07/Wine 6.6 translated GeoTIFF evidence
+
+The direct Wine run used the HEC-RAS 6.6 RasExamples `BaldEagleCrkMulti2D`
+project and three deterministic, asymmetric, single-band GeoTIFF interval
+amounts. The feature snapshot translated those files to its cached NetCDF plus
+native unsteady-HDF representation, then public `RasPreprocess` and `RasCmdr`
+APIs performed preprocessing and compute. The HEC-RAS executable SHA-256 was
+`a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134`.
+`RasTcu.accept()` returned `already-accepted`; no GUI interaction occurred.
+
+The temporary plan HDF contained exactly four `4 x 408` interval rows:
+
+| Timestamp | Exact interval values (inches) | Counts |
+|---|---|---|
+| `09Aug2024 10:00:00.000` | `0.0` | 408 |
+| `09Aug2024 11:00:00.000` | `0.01968505047`, `0.03937010095` | 204, 204 |
+| `09Aug2024 12:00:00.000` | `0.00984252524`, `0.03937010095` | 192, 216 |
+| `09Aug2024 13:00:00.000` | `0.00393700646` or its float32 rounding neighbor, `0.03937010095` | 272, 136 |
+
+The final HDF reported `Processing Precipitation data`, `Finished Processing
+Precipitation data`, `Finished Unsteady Flow Simulation`, and `Complete
+Process`, with no precipitation error. Final cell cumulative rainfall reached
+`0.1157457530` inches in 18,066 cells; final hydraulic depth reached
+`9.7182655334` feet in 7,576 cells. The final HDF SHA-256 was
+`0be34dbaf339192b44bee51134c50a3a0d31ba5980aa0c12c1e72a1d1d449afe`.
+These results qualify this translation route on Wine 11 / HEC-RAS 6.6; they do
+not imply native HEC-RAS GeoTIFF meteorology support or support on other
+versions.
 
 ## Format matrix
 
@@ -125,7 +178,7 @@ fix; it is not a precipitation-format workaround.
 | GDAL NetCDF | Documented from 6.0 | Documentation/schema evidence in this branch | Run rate, interval-amount, cumulative, first-step, units, orientation, and timing matrix before cross-version claim |
 | GDAL GRIB/GRIB2 | Documented from 6.0 | Real filtered NOAA HRRR GRIB2 decoded and authored to native HDF; native executable preprocessing remains open | Qualify native preprocessing across representative encodings; never equate GDAL readability or ras-commander translation with native HEC-RAS support |
 | WPC QPF GRIB2 | Vendor-known compression incompatibility through 7.0.1 | Supported with translation | Convert with HEC-Vortex or HEC-MetVue to validated DSS |
-| GeoTIFF precipitation series | Not documented as a native meteorology source | Supported through ras-commander translation; qualified on Windows 6.6 | Explicit timestamps/units/semantics → content-addressed NetCDF plus native HDF payload; do not describe this as native HEC-RAS GeoTIFF support |
+| GeoTIFF precipitation series | Not documented as a vendor-native meteorology source | Supported through ras-commander translation; qualified on Windows and CLB07/Wine 11 with HEC-RAS 6.6 | Explicit timestamps/units/semantics → content-addressed NetCDF plus native HDF payload; never advertise direct vendor GeoTIFF ingestion |
 | Imported Raster Data HDF | Internal RAS materialization | Issue #371 implementation/test concern | Treat as internal solver-facing payload, not an external input-format promise |
 
 ## Version-specific defects and limitations
@@ -152,7 +205,7 @@ and the later release's resolved-issues entry, not the color/status word alone.
 | 727 Atlas 14 | Atlas 14 grid to NetCDF to native rain-on-grid | All 20 code cells executed; compute plus rainfall-rate figures | Retain as the design-storm canonical example; add temporary-HDF and manual-message/map review checks |
 | 722 Atlas 14 | Legacy/conceptual mix of raw edits, gridded setup, and uniform comparison | 29 code cells, no committed outputs | Replace with a concise link/migration explanation to 727; do not keep raw text mutation as canonical |
 | 728 DSS window extension | Existing DSS grid and `configure_gridded_dss_precipitation()` | 8 code cells, no committed outputs | Execute against a small fixture and verify the extended DSS time window plus pre/post HDF totals |
-| 729 GeoTIFF | Explicit GeoTIFF series translated to durable NetCDF plus native HDF | Windows 6.6 opt-in RasExamples test passed authoring, temporary-HDF validation, compute, and final rainfall/hydraulics | Retain as the canonical GeoTIFF example; add Wine evidence before making a Wine-specific GeoTIFF claim |
+| 729 GeoTIFF | Explicit GeoTIFF series translated to durable NetCDF plus native HDF | Windows and CLB07/Wine 11 HEC-RAS 6.6 passed authoring, temporary-HDF validation, compute, and final rainfall/hydraulics | Retain as the canonical GeoTIFF example and keep Windows/Wine evidence release-specific |
 | 900/901 AORC | AORC NetCDF and `set_gridded_precipitation()` | Nearly all cells executed; bulk plan creation/compute | Add explicit units/value semantics, first-timestep checks, temporary-HDF rainfall, final totals, hydraulic response, and manual diagnostics reminder |
 | 914 historical validation | AORC NetCDF direct route | All 21 cells executed and computes | Remove stale suggestion that API setup may require manual authoring; add the same semantic/pre/post checks while retaining manual review |
 | 924 MRMS | MRMS NetCDF direct route | Strong code contract but 12 code cells have no committed outputs | Re-execute after core writer lands; retain cumulative/rate and hydraulic visual checks; add temporary-HDF assertion and manual review reminder |
@@ -184,12 +237,14 @@ messages, precipitation maps, timing, units, and hydraulic response.
    cumulative depth, first timestep, inches/millimeters, orientation, nodata,
    temporary HDF, messages, final rainfall, and hydraulics.
 5. **Translation adapter PR:** establish a canonical precipitation cube,
-   first-class GeoTIFF/GRIB-to-NetCDF ingestion, and an explicit DSS route for
-   products RAS cannot read natively. Qualify WPC QPF through the documented
-   Vortex/MetVue-to-DSS path.
-6. **Wine qualification PR:** after the exact CLB07 profile has documented
-   user acceptance, qualify 6.4.1 and 6.6 using the same public-API protocol.
-   Keep Windows and Wine claims separate.
+   first-class GeoTIFF/GRIB-to-NetCDF ingestion, and explicit translation
+   routes. The GeoTIFF feature now has direct HEC-RAS 6.6 Windows and Wine
+   evidence; retain its value/timing/CRS/nodata acceptance tests. Qualify WPC
+   QPF and other encodings separately rather than generalizing from GeoTIFF.
+6. **Wine qualification PR:** retain the 6.6 translated-GeoTIFF evidence and
+   add a clean DSS rerun. Resolve 6.4.1 exact-profile TCU provisioning and COM
+   registration before making any 6.4.1 precipitation claim. Keep Windows and
+   Wine claims separate.
 7. **Product/notebook PRs:** requalify AORC, MRMS, HRRR, WPC, Atlas 14, and
    NEXRAD/DSS using the common semantics and routing layer, then commit cleaned
    notebooks plus compact receipts rather than model outputs.
