@@ -496,10 +496,11 @@ def test_set_gridded_precipitation_writes_units_ratio_and_creates_hdf(tmp_path):
     u01, ras_object = _project(tmp_path)
     _two_cell_netcdf(tmp_path)
 
-    RasUnsteady.set_gridded_precipitation(
+    result = RasUnsteady.set_gridded_precipitation(
         u01, "Precipitation/storm.nc", interpolation="Nearest", ras_object=ras_object,
         units="in", value_type="amount", first_timestep_hours=0.1, ratio=1.0,
     )
+    assert result is None
 
     text = u01.read_text(encoding="utf-8")
     assert "Met BC=Precipitation|Gridded Source=GDAL Raster File(s)" in text

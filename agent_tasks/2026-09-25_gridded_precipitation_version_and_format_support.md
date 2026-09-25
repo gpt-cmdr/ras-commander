@@ -129,7 +129,7 @@ Prepare small fixtures with known values for each confirmed format:
 - regular projected NetCDF with rate values;
 - regular projected NetCDF with interval-amount values;
 - GRIB/GRIB2 equivalent where supported;
-- GeoTIFF/time-series equivalent if supported;
+- GeoTIFF time series through an explicit ras-commander-to-NetCDF/HDF adapter;
 - gridded HEC-DSS with explicit pathname and metadata; and
 - the native imported-raster HDF payload used by issue #371.
 
@@ -215,7 +215,8 @@ Expected format families to investigate include:
 - HEC-DSS gridded precipitation;
 - GDAL-backed NetCDF;
 - GRIB and GRIB2;
-- GeoTIFF or other GDAL rasters exposed by HEC-RAS; and
+- GeoTIFF as a first-class ras-commander ingestion format, without claiming
+  undocumented native HEC-RAS support, plus other confirmed GDAL rasters; and
 - HEC-RAS's internal imported-raster HDF representation.
 
 Do not advertise a generic GDAL format merely because GDAL itself can read it;

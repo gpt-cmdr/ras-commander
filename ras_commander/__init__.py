@@ -148,6 +148,19 @@ _LAZY_EXPORTS = {
     'RasMapValidation': ('.RasMapValidation', 'RasMapValidation'),
     'RasGeometryCompute': ('.RasGeometryCompute', 'RasGeometryCompute'),
     'RasPrecipHdf': ('.RasPrecipHdf', 'RasPrecipHdf'),
+    'PrecipCapabilities': ('.precip', 'PrecipCapabilities'),
+    'GriddedPrecipitationCapabilities': (
+        '.precip', 'GriddedPrecipitationCapabilities'
+    ),
+    **{
+        name: ('.precip', name)
+        for name in (
+            'GriddedPrecipitationImportResult', 'PrecipitationCube',
+            'PrecipitationNetcdfResult', 'RasPrecipGrid',
+            'PrecipitationSource', 'QualificationRoute',
+            'QualificationStatus', 'TimingStatus',
+        )
+    },
     'RasGuiAutomation': ('.RasGuiAutomation', 'RasGuiAutomation'),
     'RasScreenshot': ('.RasScreenshot', 'RasScreenshot'),
     'RasBreach': ('.RasBreach', 'RasBreach'),
@@ -435,6 +448,11 @@ __all__ = [
     'FlowPathPolicyResult',
     'TerrainExportResult',
     'RasGeometryCompute', 'RasPrecipHdf',
+    'PrecipCapabilities', 'GriddedPrecipitationCapabilities',
+    'GriddedPrecipitationImportResult', 'PrecipitationCube',
+    'PrecipitationNetcdfResult', 'RasPrecipGrid',
+    'PrecipitationSource', 'QualificationRoute',
+    'QualificationStatus', 'TimingStatus',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'StoredMapProductsIncompleteError', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',

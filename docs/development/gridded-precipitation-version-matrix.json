@@ -78,8 +78,8 @@
       "format": "GDAL GRIB/GRIB2",
       "first_documented_release": "6.0",
       "vendor_route": "native with product-specific limitations",
-      "qualification": "Official documentation only in this matrix branch",
-      "notes": "Do not infer that every GDAL-readable encoding works in HEC-RAS. WPC QPF GRIB2 compression is a documented exception through 7.0.1."
+      "qualification": "Real projected NOAA HRRR GRIB2 decoded and authored to native HDF; native HEC-RAS preprocessing not yet qualified",
+      "notes": "The opt-in live test filters APCP from NOAA NOMADS, selects an explicit GRIB message, validates a positive precipitation cube, and verifies native HDF authoring. Do not infer that every GDAL-readable encoding works in HEC-RAS. WPC QPF GRIB2 compression is a documented exception through 7.0.1."
     },
     {
       "format": "WPC QPF GRIB2",
@@ -91,9 +91,9 @@
     {
       "format": "GeoTIFF precipitation time series",
       "first_documented_release": null,
-      "vendor_route": null,
-      "qualification": "Unsupported",
-      "notes": "HEC-RAS documentation examined for 6.0-7.0.1 limits GDAL meteorological precipitation to NetCDF or GRIB. GeoTIFF support for terrain or other Mapper layers is not precipitation support."
+      "vendor_route": "ras-commander translation to NetCDF plus native HDF materialization",
+      "qualification": "Supported with translation; qualified on Windows HEC-RAS 6.6",
+      "notes": "Explicit timestamps, units, temporal semantics, CRS, affine grid, and NoData policy are validated before a content-addressed HEC-compatible NetCDF and equivalent HDF payload are written. The Bald Eagle p06 RasExamples qualification imported a 4-by-17-by-24 cumulative cube (maximum 3 mm), validated fresh temporary-HDF rainfall, completed compute, and verified positive final per-cell rainfall and hydraulics. Native HEC-RAS GeoTIFF support is not claimed."
     },
     {
       "format": "Imported Raster Data HDF",

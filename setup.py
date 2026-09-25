@@ -142,7 +142,16 @@ setup(
         # unqualified native source build.
         'ebfe': ['zipfile-deflate64; python_version < "3.11"'],
         # Precipitation enhancements
-        'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
+        'precip': [
+            'xarray',
+            'h5netcdf',
+            'scipy',
+            'rasterio',
+            'pyproj',
+            'zarr>=2.14.0',
+            's3fs>=2023.0.0',
+            'netCDF4>=1.6.0',
+        ],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
         # GeoParquet support without the rest of the full feature stack.
         'geoparquet': ['pyarrow>=14.0'],

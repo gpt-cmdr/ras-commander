@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*140 notebooks indexed - 124 with runtime data, 16 without.*
+*141 notebooks indexed - 124 with runtime data, 17 without.*
 
 ## 100s - Initialization & Execution
 
@@ -146,6 +146,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
 | [727 - Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS](../notebooks/727_atlas14_gridded_rain_on_grid_hecras.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/727_atlas14_gridded_rain_on_grid_hecras.ipynb) | 16.5 min |
 | [728 - Extending Gridded DSS Forcing Through the Simulation Window](../notebooks/728_extend_gridded_dss_forcing_window.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/728_extend_gridded_dss_forcing_window.ipynb) | N/A |
+| [729 - Direct GeoTIFF Gridded Rain-on-Grid](../notebooks/729_direct_geotiff_gridded_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/729_direct_geotiff_gridded_rain_on_grid.ipynb) | N/A |
 | [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance

@@ -18,7 +18,9 @@ The repeatable native harness is
   but not this gridded meteorology feature.
 - HEC documents two native source families from 6.0 onward: gridded HEC-DSS
   and GDAL raster input limited to NetCDF or GRIB. GeoTIFF support elsewhere in
-  RAS Mapper is not evidence for a precipitation time-series route.
+  RAS Mapper is not evidence for a native precipitation time-series route;
+  ras-commander supports GeoTIFF by normalizing it to durable NetCDF plus the
+  equivalent native HDF payload.
 - The official Bald Eagle gridded-DSS example executed end to end on Windows
   6.3, 6.3.1, 6.6, 7.0, and 7.0.1. The installed 6.7 Beta 5 also executed, but
   remains prerelease historical evidence rather than a stable support target.
@@ -121,9 +123,9 @@ fix; it is not a precipitation-format workaround.
 |---|---|---|---|
 | HEC-DSS grid | Documented from 6.0 | Executed on selected 6.x/7.x Windows releases | Preserve DSS pathname, units, and period semantics; validate temporary and final HDF |
 | GDAL NetCDF | Documented from 6.0 | Documentation/schema evidence in this branch | Run rate, interval-amount, cumulative, first-step, units, orientation, and timing matrix before cross-version claim |
-| GDAL GRIB/GRIB2 | Documented from 6.0 | Documentation evidence in this branch | Qualify representative encodings; never equate generic GDAL readability with HEC-RAS support |
+| GDAL GRIB/GRIB2 | Documented from 6.0 | Real filtered NOAA HRRR GRIB2 decoded and authored to native HDF; native executable preprocessing remains open | Qualify native preprocessing across representative encodings; never equate GDAL readability or ras-commander translation with native HEC-RAS support |
 | WPC QPF GRIB2 | Vendor-known compression incompatibility through 7.0.1 | Supported with translation | Convert with HEC-Vortex or HEC-MetVue to validated DSS |
-| GeoTIFF precipitation series | Not documented as a meteorology source | Unsupported for advertising | Do not infer support from terrain/Mapper GeoTIFF features |
+| GeoTIFF precipitation series | Not documented as a native meteorology source | Supported through ras-commander translation; qualified on Windows 6.6 | Explicit timestamps/units/semantics → content-addressed NetCDF plus native HDF payload; do not describe this as native HEC-RAS GeoTIFF support |
 | Imported Raster Data HDF | Internal RAS materialization | Issue #371 implementation/test concern | Treat as internal solver-facing payload, not an external input-format promise |
 
 ## Version-specific defects and limitations
@@ -150,6 +152,7 @@ and the later release's resolved-issues entry, not the color/status word alone.
 | 727 Atlas 14 | Atlas 14 grid to NetCDF to native rain-on-grid | All 20 code cells executed; compute plus rainfall-rate figures | Retain as the design-storm canonical example; add temporary-HDF and manual-message/map review checks |
 | 722 Atlas 14 | Legacy/conceptual mix of raw edits, gridded setup, and uniform comparison | 29 code cells, no committed outputs | Replace with a concise link/migration explanation to 727; do not keep raw text mutation as canonical |
 | 728 DSS window extension | Existing DSS grid and `configure_gridded_dss_precipitation()` | 8 code cells, no committed outputs | Execute against a small fixture and verify the extended DSS time window plus pre/post HDF totals |
+| 729 GeoTIFF | Explicit GeoTIFF series translated to durable NetCDF plus native HDF | Windows 6.6 opt-in RasExamples test passed authoring, temporary-HDF validation, compute, and final rainfall/hydraulics | Retain as the canonical GeoTIFF example; add Wine evidence before making a Wine-specific GeoTIFF claim |
 | 900/901 AORC | AORC NetCDF and `set_gridded_precipitation()` | Nearly all cells executed; bulk plan creation/compute | Add explicit units/value semantics, first-timestep checks, temporary-HDF rainfall, final totals, hydraulic response, and manual diagnostics reminder |
 | 914 historical validation | AORC NetCDF direct route | All 21 cells executed and computes | Remove stale suggestion that API setup may require manual authoring; add the same semantic/pre/post checks while retaining manual review |
 | 924 MRMS | MRMS NetCDF direct route | Strong code contract but 12 code cells have no committed outputs | Re-execute after core writer lands; retain cumulative/rate and hydraulic visual checks; add temporary-HDF assertion and manual review reminder |
@@ -180,9 +183,10 @@ messages, precipitation maps, timing, units, and hydraulic response.
    releases needed to prove schema transitions. Cover rate, interval amount,
    cumulative depth, first timestep, inches/millimeters, orientation, nodata,
    temporary HDF, messages, final rainfall, and hydraulics.
-5. **Translation adapter PR:** establish a canonical precipitation cube and
-   explicit DSS translation route. Qualify WPC QPF and other encodings RAS
-   cannot read natively; do not add GeoTIFF unless HEC execution proves it.
+5. **Translation adapter PR:** establish a canonical precipitation cube,
+   first-class GeoTIFF/GRIB-to-NetCDF ingestion, and an explicit DSS route for
+   products RAS cannot read natively. Qualify WPC QPF through the documented
+   Vortex/MetVue-to-DSS path.
 6. **Wine qualification PR:** after the exact CLB07 profile has documented
    user acceptance, qualify 6.4.1 and 6.6 using the same public-API protocol.
    Keep Windows and Wine claims separate.

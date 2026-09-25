@@ -182,3 +182,50 @@ def test_invalid_gridded_dss_interpolation_raises(tmp_path):
             dss_pathname=BALD_EAGLE_DSS_PATHNAME,
             interpolation="Kriging",
         )
+
+
+def test_hec_ras_61_rejects_retained_dss_ratio_before_mutation(tmp_path):
+    from ras_commander import RasUnsteady
+
+    unsteady_file = _write_unsteady_file(
+        tmp_path / "ratio.u01",
+        "Flow Title=Ratio\n"
+        "Program Version=6.10\n"
+        "Met BC=Precipitation|Ratio=1.25\n",
+    )
+    before = unsteady_file.read_bytes()
+
+    with pytest.raises(ValueError, match="does not apply that ratio"):
+        RasUnsteady.configure_gridded_dss_precipitation(
+            unsteady_file,
+            "rain.dss",
+            BALD_EAGLE_DSS_PATHNAME,
+        )
+
+    assert unsteady_file.read_bytes() == before
+    assert not Path(str(unsteady_file) + ".hdf").exists()
+
+
+def test_hec_ras_61_explicit_unit_dss_ratio_clears_retained_value(tmp_path):
+    from ras_commander import RasUnsteady
+
+    unsteady_file = _write_unsteady_file(
+        tmp_path / "ratio.u01",
+        "Flow Title=Ratio\n"
+        "Program Version=6.10\n"
+        "Met BC=Precipitation|Ratio=1.25\n",
+    )
+
+    RasUnsteady.configure_gridded_dss_precipitation(
+        unsteady_file,
+        "rain.dss",
+        BALD_EAGLE_DSS_PATHNAME,
+        ratio=1.0,
+    )
+
+    text = unsteady_file.read_text(encoding="utf-8")
+    assert text.count("Met BC=Precipitation|Ratio=") == 1
+    assert "Met BC=Precipitation|Ratio=1\n" in text
+    with h5py.File(Path(str(unsteady_file) + ".hdf"), "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(1.0)

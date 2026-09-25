@@ -44,7 +44,7 @@ import math
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import Any, Literal, Optional, Sequence, Tuple, Union
 
 from .ComputeResults import PrecipRasterImportResult
 from .Decorators import log_call
@@ -247,6 +247,59 @@ class RasPrecipHdf:
         if clean in _IN_LABELS:
             return "in"
         return None
+
+    @staticmethod
+    @log_call
+    def classify_temporal_units(
+        label: Optional[str],
+    ) -> Literal["depth", "rate_per_hour", "rate_other", "unknown"]:
+        """Classify a precipitation-units label without losing its time basis.
+
+        HEC-RAS and precipitation products use several equivalent spellings for
+        hourly rates (for example ``mm/hr``, ``mmph``, and ``mm h^-1``).  Depth
+        inference alone intentionally removes that suffix, so callers that must
+        validate temporal semantics should use this classifier first.
+        """
+        if label is None:
+            return "unknown"
+        clean = str(label).strip().lower().replace(" ", "")
+        if not clean:
+            return "unknown"
+
+        normalized_rate_units = {
+            value.replace(" ", "") for value in _RATE_UNITS
+        }
+        if clean in normalized_rate_units or any(
+            clean.endswith(suffix) and len(clean) > len(suffix)
+            for suffix in _PER_HOUR_SUFFIXES
+        ):
+            return "rate_per_hour"
+
+        other_rate_suffixes = (
+            "/second",
+            "/sec",
+            "/s",
+            "second-1",
+            "second^-1",
+            "sec-1",
+            "sec^-1",
+            "s-1",
+            "s^-1",
+            "/day",
+            "/d",
+            "day-1",
+            "day^-1",
+            "d-1",
+            "d^-1",
+        )
+        if any(
+            clean.endswith(suffix) and len(clean) > len(suffix)
+            for suffix in other_rate_suffixes
+        ):
+            return "rate_other"
+        if RasPrecipHdf.infer_depth_units(label) is not None:
+            return "depth"
+        return "unknown"
 
     @staticmethod
     @log_call

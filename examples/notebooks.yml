@@ -3238,6 +3238,42 @@ notebooks:
   excluded: false
   code_cells: 8
   executed_cells: 0
+- id: 729_direct_geotiff_gridded_rain_on_grid
+  filename: 729_direct_geotiff_gridded_rain_on_grid.ipynb
+  title: Direct GeoTIFF Gridded Rain-on-Grid
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Author projected precipitation GeoTIFFs, validate temporary plan-HDF rainfall, compute Bald
+    Eagle, and inspect final rainfall and hydraulics
+  tags:
+  - precipitation
+  - geotiff
+  - rain-on-grid
+  - validation
+  difficulty: intermediate
+  est_runtime: null
+  data_project: BaldEagleCrkMulti2D
+  functions_used:
+  - HdfMesh.get_mesh_areas
+  - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasPlan.update_plan_intervals
+  - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
+  - RasUnsteady.get_gridded_precipitation_capabilities
+  - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.set_gridded_precipitation_geotiff
+  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
+  hec_refs:
+  - HEC-RAS 2D Modeling User's Manual - Global Boundary Conditions
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 730_raster_processing_performance_profiling
   filename: 730_raster_processing_performance_profiling.ipynb
   title: Raster Processing Performance Profiling

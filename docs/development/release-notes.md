@@ -4,6 +4,60 @@
 
 ### Unreleased
 
+**Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
+
+- Add first-class `RasUnsteady.set_gridded_precipitation_geotiff()` support for
+  one multiband GeoTIFF or a timestamped sequence of single-band GeoTIFFs.
+  Inputs are normalized to cumulative precipitation, written to a validated
+  content-addressed project NetCDF, and materialized through the native HDF
+  writer. The `.u##` references the durable NetCDF rather than advertising
+  GeoTIFF as a vendor-native HEC-RAS meteorology source.
+- Add the same explicit normalization route for projected GRIB/GRIB2 through
+  `set_gridded_precipitation_grib()`. WPC QPF's vendor-documented compression
+  limitation remains routed through HEC-Vortex/HEC-MetVue to DSS when the local
+  GDAL stack cannot decode it.
+- Exercise the GRIB route with a real filtered NOAA HRRR GRIB2 precipitation
+  record, including explicit message selection and positive-value native HDF
+  authoring. This is format-decoding/authoring evidence; native HEC-RAS GRIB
+  preprocessing remains documentation-backed until its executable matrix is
+  complete.
+- Require explicit timestamps, units, and rate/amount/cumulative semantics;
+  validate CRS, affine orientation, square cells, band counts, monotonic time,
+  nonnegative precipitation, and consistent grids. NoData fails by default and
+  is converted to dry cells only with `nodata_policy="zero"`.
+- Validate raster and GRIB unit metadata as temporal semantics as well as depth
+  units, including HEC-RAS rate spellings such as `mmph` and GDAL's
+  `GRIB_UNIT`; reject rate/amount mismatches and non-hourly rates that require
+  an explicit conversion.
+- Make the persistent cache genuinely semantic: source paths no longer affect
+  identity, and reuse verifies values, time/x/y coordinates, CRS, transform,
+  units, and temporal type before accepting an existing NetCDF.
+- Add `PrecipCapabilities` and
+  `RasUnsteady.get_gridded_precipitation_capabilities()` so HEC-RAS 5.x is
+  rejected for global gridded meteorology and the 6.0-6.1 ratio and
+  6.0-6.3.1 period-average timing defects are visible to callers.
+- Make source/route qualification fail closed for invalid combinations and
+  retain exact release-level evidence rather than extrapolating to patch
+  releases that were not tested.
+- Apply the HEC-RAS 6.0-6.1 ratio safeguard to DSS as well as raster inputs,
+  including retained text settings, while allowing `ratio=1.0` to clear an
+  ineffective value. Preserve the established
+  `set_gridded_precipitation()` `None` return contract; the new source-specific
+  adapters provide structured result objects.
+- Extend the process-local WMIC compatibility shim from HEC-RAS 6.3 to the
+  executable-evidence-backed 6.1-6.3 family. This repairs modern-Windows solver
+  startup without modifying HEC-RAS or the caller's environment.
+- Add notebook 729 and an opt-in RasExamples qualification test. A native
+  Windows HEC-RAS 6.6 run imported a deterministic 4-by-17-by-24 cumulative
+  GeoTIFF-derived cube, materialized fresh temporary-plan-HDF rainfall,
+  completed the Bald Eagle p06 simulation, and produced positive final
+  per-cell precipitation and hydraulic results. The notebook preserves the
+  source, precompute, rainfall, and hydraulic figures for manual review.
+- Qualify the same public GeoTIFF workflow end to end on CLB07 with HEC-RAS
+  6.6 under Wine 11.0: preprocessing emitted the expected four solver rows,
+  runtime messages contained no precipitation error, and the final HDF held
+  positive cumulative rainfall and hydraulic depth across the mesh.
+
 **Native Gridded-Precipitation Authoring and Precompute Readiness (#371)**
 
 - Add `RasPrecipHdf`, a focused writer for HEC-RAS's native

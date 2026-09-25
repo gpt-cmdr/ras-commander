@@ -11,6 +11,7 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - AbmHyetographGrid - Per-pixel Alternating Block Method hyetograph grids (NetCDF for HEC-RAS rain-on-grid)
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
 - PrecipMrms - MRMS QPE catalog, download, HEC-Vortex DSS conversion, direct hyetograph/NetCDF, and MP4 animation helpers
+- RasPrecipGrid - Explicit GeoTIFF/GRIB normalization to durable HEC-RAS NetCDF
 - QPF (Quantitative Precipitation Forecast) - NWS forecasts (future)
 
 The primary workflow is:
@@ -210,6 +211,20 @@ from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
 from .AbmHyetographGrid import AbmHyetographGrid
 from .VortexCli import VortexCli
+from .PrecipCapabilities import (
+    GriddedPrecipitationCapabilities,
+    PrecipCapabilities,
+    PrecipitationSource,
+    QualificationRoute,
+    QualificationStatus,
+    TimingStatus,
+)
+from .RasPrecipGrid import (
+    GriddedPrecipitationImportResult,
+    PrecipitationCube,
+    PrecipitationNetcdfResult,
+    RasPrecipGrid,
+)
 
 # Import from hms-commander (HMS-equivalent hyetograph generation)
 try:
@@ -237,6 +252,16 @@ __all__ = [
     'PrecipMrms',                  # MRMS QPE catalog, download, DSS/direct processing, and animation
     'StormGenerator',
     'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
+    'GriddedPrecipitationCapabilities',
+    'PrecipCapabilities',
+    'PrecipitationSource',
+    'QualificationRoute',
+    'QualificationStatus',
+    'TimingStatus',
+    'GriddedPrecipitationImportResult',
+    'PrecipitationCube',
+    'PrecipitationNetcdfResult',
+    'RasPrecipGrid',
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
     'Atlas14Variance',             # Spatial variance analysis for precipitation
     'AbmHyetographGrid',           # Per-pixel ABM hyetograph grid generation (NetCDF for HEC-RAS rain-on-grid)

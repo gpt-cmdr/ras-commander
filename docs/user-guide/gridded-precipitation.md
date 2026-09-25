@@ -294,6 +294,91 @@ if not prepared:
     raise RuntimeError(prepared.error)
 ```
 
+### Direct GeoTIFF and GRIB inputs
+
+GeoTIFF is supported as a ras-commander ingestion format. HEC-RAS does not
+document precipitation GeoTIFF time series as a native meteorological source,
+so ras-commander validates the rasters, creates a durable project-local NetCDF,
+and materializes the same cumulative values in the unsteady HDF. The model
+therefore remains usable through normal HEC-RAS save and preprocessing cycles.
+
+```python
+from ras_commander import RasUnsteady
+
+result = RasUnsteady.set_gridded_precipitation_geotiff(
+    unsteady_file="03",
+    geotiff_paths=[
+        "Precipitation/mrms_20240901_1200.tif",
+        "Precipitation/mrms_20240901_1300.tif",
+    ],
+    timestamps=["2024-09-01 12:00", "2024-09-01 13:00"],
+    units="mm",
+    value_type="amount",
+    first_timestep_hours=1.0,
+    nodata_policy="error",
+    ratio=1.0,
+)
+
+print(result.cache_path)   # persistent HEC-compatible NetCDF
+print(result.cache_hash)   # semantic/content identity
+print(result.hdf_result)   # native HDF import receipt
+```
+
+A single multiband GeoTIFF is also accepted when `timestamps` contains one
+entry per selected band. A file sequence uses one band per file by default;
+for multiband sequences, `bands=[1, 2]` applies the same selection to every
+file and `bands=[[1], [2]]` supplies one selection per file.
+Generic filename or TIFF-tag timestamp guessing is deliberately avoided;
+product-specific MRMS or forecast adapters may parse their own authoritative
+metadata and then pass explicit timestamps here.
+
+Projected GRIB and GRIB2 use the equivalent
+`RasUnsteady.set_gridded_precipitation_grib()` entry point. HEC-RAS documents
+native NetCDF and GRIB meteorology beginning in 6.0, but not every
+GDAL-readable GRIB encoding is accepted by HEC-RAS. In particular, WPC QPF
+GRIB2 remains a documented exception through 7.0.1; use HEC-Vortex or
+HEC-MetVue to translate that product to DSS when direct GDAL decoding is not
+available.
+
+The GRIB adapter is covered by an opt-in live test that downloads a filtered,
+projected NOAA HRRR GRIB2 precipitation record, selects an explicit message,
+normalizes it, and verifies the authored native HDF payload. Native HEC-RAS
+GRIB preprocessing remains separately classified as documentation-backed—not
+cross-version-qualified—until the executable matrix is complete.
+
+Both raster entry points require a projected, north-up, unrotated regular grid
+with square cells. Missing CRS, angular grids, changing transforms, negative or
+decreasing precipitation, ambiguous timestamps, and NoData are rejected before
+the unsteady file is modified. `nodata_policy="zero"` must be explicit when
+masked pixels truly represent dry cells.
+
+The default cache name depends only on source bytes and declared semantics, so
+moving an unchanged source does not create a new cache identity. Cache reuse
+revalidates precipitation values, timestamps, x/y coordinates, CRS, transform,
+units, and semantic type; a changed or corrupted cache is rebuilt.
+
+Use the capability API before building multi-version workflows:
+
+```python
+capabilities = RasUnsteady.get_gridded_precipitation_capabilities("6.3.1")
+print(capabilities.native_sources)       # DSS, NetCDF, GRIB
+print(capabilities.ras_commander_inputs) # plus GeoTIFF ingestion
+print(capabilities.notes)
+```
+
+Existing gridded DSS records remain supported through
+`RasUnsteady.configure_gridded_dss_precipitation()`. Its optional `ratio`
+argument is governed by the same capability policy. HEC-RAS 6.0-6.1 do not
+apply that multiplier, so ras-commander rejects a non-unit value and also
+detects an ineffective retained ratio before changing the model. Pass
+`ratio=1.0` to clear that setting, and pre-scale the source intentionally when
+one of those releases must be used.
+
+The established NetCDF `set_gridded_precipitation()` API continues to return
+`None` for backward compatibility. The new GeoTIFF and GRIB entry points return
+`GriddedPrecipitationImportResult`, including the selected translation route,
+qualification status, cache identity, and native HDF import receipt.
+
 For callers that already have validated arrays, `RasPrecipHdf` exposes the
 lower-level native writer used by `set_gridded_precipitation()`:
 
@@ -357,9 +442,11 @@ You do not need to resample AORC grids to match mesh cell size. HEC-RAS
 interpolates the gridded precipitation to 2D cells during preprocessing and
 simulation.
 
-See `examples/924_mrms_netcdf_rain_on_grid.ipynb` for a complete workflow that
-checks the temporary plan HDF, computes the model, inspects final per-cell
-rainfall and hydraulic response, and displays review figures.
+See `examples/729_direct_geotiff_gridded_rain_on_grid.ipynb` for the complete
+GeoTIFF translation workflow and `examples/924_mrms_netcdf_rain_on_grid.ipynb`
+for the direct MRMS NetCDF route. Both check the temporary plan HDF, compute
+the model, inspect final per-cell rainfall and hydraulic response, and display
+review figures.
 
 ## Model Calibration Workflow
 
