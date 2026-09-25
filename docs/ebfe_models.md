@@ -130,6 +130,9 @@ Current built-in organizers include:
 | `eleven-point` | 11010011 | Small split-delivery 2D model archive; organized, path-audited, results-ready, and geometry-preprocessor validated with HEC-RAS 6.6. |
 | `spring-river` | 11010010 | Distinct Spring HUC model archive using `SpringRiver_11010010` naming to avoid confusion with `spring-creek` / `SpringCreek_12040102`. |
 | `lower-colorado-cummins` | 12090301 | 2,378 HEC-RAS 4.1.0 1D steady reach projects, each containing plan 01. There are 2,377 seven-profile projects and one delivered six-profile project. The delivery has 2,332 projects at the usual river/reach depth and 46 valid projects nested under intermediate reach groups; terrain is not required. |
+| `pedernales` | 12090206 | 530 HEC-RAS 4.1.0-era 1D steady projects. Eight misplaced delivered result/preprocessor assets are copied to their referenced projects; terrain is not applicable, not missing. All 530 selected plan-01 runs passed in isolated two-core HEC-RAS 6.6 copies. |
+| `cibolo` | 12100304 | One HEC-RAS 5.0.7 2D unsteady project. Terrain, land cover, seven DSS inputs, and the projection are delivered; plan 14 reached owned unsteady-solver startup in an isolated two-core copy. |
+| `medina` | 12100302 | Five HEC-RAS 6.4.1 2D unsteady projects. Four have complete modified terrain and reached owned unsteady-solver startup; UpperMedinaHeadwaters is blocked by an undelivered load-bearing modified `Terrain.hdf`. Land cover, infiltration, and soils are delivered for all five projects. |
 | `rio-hondo` | 13060008 | 1D steady BLE reach-model collection. |
 | `amite` | 08070202 | Louisiana component delivery with terrain rebuild handling for CRS mismatches. |
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
@@ -165,6 +168,73 @@ the intended solver-start boundary in 64.9 seconds. This qualifies source
 assembly and unsteady startup, not completed results. The durable
 [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-23_austin_oyster_record_of_deficiencies.md)
 preserves the evidence boundary and the CEWS staging location.
+
+### Pedernales, Cibolo, and Medina source boundaries
+
+The `pedernales`, `cibolo`, and `medina` entries use dedicated, fail-closed
+organizers. They bind the public FEMA object to its expected URL, byte size,
+and retained multipart ETag; validate the recoverable ZIP members; and apply
+only the study's audited repairs in a staged copy. Fresh organizer manifests
+remain pending until their own copies run; durable registry qualification is
+recorded separately from reviewed RAS Commander receipts.
+
+```python
+from pathlib import Path
+
+from ras_commander.sources import RasEbfeModels
+
+root = Path(r"H:\Testing\eBFE")
+for slug, huc8 in (
+    ("pedernales", "12090206"),
+    ("cibolo", "12100304"),
+    ("medina", "12100302"),
+):
+    organized = RasEbfeModels.organize_model(
+        slug,
+        download_root=root / huc8 / "raw",
+        output_root=root / huc8 / "organized",
+    )
+```
+
+Pedernales is a corpus of 530 independent 1D steady projects. The organizer
+selects each project's `p01`/`g01`/`f01` chain and copies eight misplaced,
+delivered assets to the three projects that reference them. No model in the
+corpus references terrain. Terrain is therefore **not applicable**, and its
+absence must not be reported as a delivery gap. All 530 path-identified `p01`
+plans completed in isolated two-core HEC-RAS 6.6 runs. This establishes
+corpus runnability in 6.6; it does not claim numerical equivalence with the
+unavailable authored 4.10 engine. See the
+[Pedernales Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_pedernales_record_of_deficiencies.md).
+
+Cibolo is one 2D unsteady project inside a nested `_Final.zip`. The organizer
+stages the delivered compiled terrain, component rasters, VRT, Manning's-n
+land-cover HDF/raster, projection, and seven DSS files. It rewrites the seven
+active DSS references and one RASMapper projection reference. Terrain and
+land cover are delivered and are not rebuilt. The canonical 1% test is plan
+`p14`, geometry `g05`, and unsteady-flow file `u02`. That plan reached owned
+unsteady-solver startup with two cores in HEC-RAS 5.0.7. See the
+[Cibolo Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_cibolo_record_of_deficiencies.md).
+
+Medina contains Leon1, Leon2, Leon3, MiddleLowerMedina, and
+UpperMedinaHeadwaters. Land cover, infiltration, and soils are delivered for
+all five projects. Four projects also contain the compiled modified terrain
+used by their active geometry. UpperMedinaHeadwaters does not: its required
+`Terrain.hdf`, including the referenced
+`UpperMedinaHW_TerrainModifications` group, is absent. This is a critical,
+load-bearing source gap that blocks downstream use of that project. Separately,
+the public ZIP ends inside `UpperMedinaHW.p01.hdf`; that member is a supplied
+result HDF, so the publisher truncation is a recoverable delivery defect, not
+the hydraulic-source blocker. Leon1, Leon2, Leon3, and MiddleLowerMedina each
+reached owned unsteady-solver startup with two cores in HEC-RAS 6.4.1; this
+does not change UpperMedinaHeadwaters' blocked status. See the
+[Medina Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_medina_record_of_deficiencies.md).
+
+For large 2D studies, keep the authoritative organized source and durable
+receipts on the CEWS H: data library, but make bounded execution copies on a
+fixed local disk. Cibolo and Medina repeatedly exceeded the startup wait when
+preprocessing directly from H:, while unchanged local I: copies reached the
+same RAS Commander gate. This is an execution-tier rule, not permission to
+move or modify the authoritative delivery.
 
 ### Alabama BLE watershed corpora
 

@@ -489,6 +489,138 @@ def test_upper_guadalupe_is_one_group_with_four_exact_project_links() -> None:
     ])
 
 
+def test_pedernales_is_one_exact_530_model_corpus_entry() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    profiles = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-profiles.js"
+    ).read_text(encoding="utf-8")
+    supplement_source = (
+        ROOT
+        / "docs"
+        / "assets"
+        / "javascripts"
+        / "ras-example-project-supplements.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    supplement = json.loads(supplement_source.removeprefix(prefix).removesuffix(";\n"))
+    project_id = "pedernales-12090206"
+    features = [item for item in supplement["features"] if item["id"] == project_id]
+
+    assert len(features) == 1
+    feature = features[0]
+    geometry = shape(feature["geometry"])
+    assert geometry.geom_type == "MultiPolygon"
+    assert geometry.is_valid
+    assert not geometry.equals(box(*feature["bbox"]))
+    assert list(geometry.bounds) == feature["bbox"]
+    assert feature["bbox"] == pytest.approx(
+        [-99.333429740989, 30.097184696581284, -98.05629526827822, 30.459610125321067]
+    )
+    assert feature["properties"]["landingExtentSource"] == (
+        "Exact union of 530 active model footprints"
+    )
+    assert "Union of 530 HdfProject.get_project_extent" in (
+        feature["properties"]["extentSource"]
+    )
+    assert all(
+        not feature["properties"][field]
+        for field in (
+            "webmap",
+            "manifest",
+            "projectManifest",
+            "landingGeometryPmtiles",
+            "landingGeometryProfile",
+        )
+    )
+    assert profiles.count(f'"{project_id}"') == 1
+    assert "530-model 1D steady BLE corpus" in profiles
+    assert "one exact union outline and one table row" in page
+    assert page.count("FEMA Pedernales eBFE (12090206)") == 1
+    assert "20260925Tpedernales-cibolo-medina02" in page
+
+
+def test_cibolo_and_medina_exact_dashboard_entries_are_grouped_correctly() -> None:
+    page = (ROOT / "docs" / "examples" / "example-projects.md").read_text(
+        encoding="utf-8"
+    )
+    profiles = (
+        ROOT / "docs" / "assets" / "javascripts" / "ras-example-project-profiles.js"
+    ).read_text(encoding="utf-8")
+    supplement_source = (
+        ROOT
+        / "docs"
+        / "assets"
+        / "javascripts"
+        / "ras-example-project-supplements.js"
+    ).read_text(encoding="utf-8")
+    prefix = "window.RAS_EXAMPLE_PROJECT_SUPPLEMENTS = "
+    supplement = json.loads(supplement_source.removeprefix(prefix).removesuffix(";\n"))
+    by_id = {feature["id"]: feature for feature in supplement["features"]}
+
+    cibolo = by_id["cibolo-12100304"]
+    cibolo_geometry = shape(cibolo["geometry"])
+    assert cibolo_geometry.geom_type == "Polygon"
+    assert cibolo_geometry.is_valid
+    assert not cibolo_geometry.equals(box(*cibolo["bbox"]))
+    assert list(cibolo_geometry.bounds) == cibolo["bbox"]
+    assert cibolo["properties"]["crsDefinition"] == "EPSG:2278"
+    assert all(
+        not cibolo["properties"][field]
+        for field in ("webmap", "manifest", "projectManifest")
+    )
+
+    medina_ids = [
+        "medina-leon1-12100302",
+        "medina-leon2-12100302",
+        "medina-leon3-12100302",
+        "medina-middle-lower-medina-12100302",
+        "medina-upper-medina-headwaters-12100302",
+    ]
+    medina = [by_id[project_id] for project_id in medina_ids]
+    geometries = [shape(feature["geometry"]) for feature in medina]
+    assert all(geometry.geom_type == "Polygon" for geometry in geometries)
+    assert all(geometry.is_valid for geometry in geometries)
+    assert all(
+        not geometry.equals(box(*feature["bbox"]))
+        for feature, geometry in zip(medina, geometries, strict=True)
+    )
+    assert all(
+        list(geometry.bounds) == feature["bbox"]
+        for feature, geometry in zip(medina, geometries, strict=True)
+    )
+    assert list(unary_union(geometries).bounds) == pytest.approx(
+        [-99.59062442992771, 29.148980516486763, -98.40305457755368, 29.96342500081802]
+    )
+    assert all(
+        not feature["properties"][field]
+        for feature in medina
+        for field in ("webmap", "manifest", "projectManifest")
+    )
+    assert medina[-1]["properties"]["status"] == "Critical source gap — blocked"
+    assert medina[-1]["properties"]["viewerType"] == "Blocked source model"
+    assert "not downstream-usable" in medina[-1]["properties"]["notes"]
+    assert profiles.count('groupId: "medina"') == 5
+    assert profiles.count('title: "Medina Model Suite"') == 1
+    assert all(
+        feature["properties"]["status"] == "Qualified: unsteady start"
+        for feature in medina[:4]
+    )
+    assert all(
+        "owned unsteady-solver startup" in feature["properties"]["notes"]
+        for feature in medina[:4]
+    )
+    assert "HEC-RAS 5.0.7 source; unsteady-start validated" in profiles
+    assert profiles.count(
+        "HEC-RAS 6.4.1 source; unsteady-start validated"
+    ) == 4
+    assert 'variantLabel: "Upper Medina Headwaters — BLOCKED"' in profiles
+    assert page.count("FEMA Cibolo eBFE (12100304)") == 1
+    assert page.count("FEMA Medina eBFE (12100302)") == 1
+    assert "missing compiled modified terrain is a critical 2D source" in page
+
+
 def test_embedded_catalog_retains_api_derived_project_footprints() -> None:
     source = (
         ROOT / "docs" / "assets" / "javascripts" / "ras-example-projects-data.js"
