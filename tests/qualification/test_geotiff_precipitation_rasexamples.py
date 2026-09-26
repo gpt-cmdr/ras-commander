@@ -84,11 +84,12 @@ def _gridded_plan(ras):
 def test_geotiff_precipitation_preprocesses_and_computes_on_rasexamples(tmp_path):
     if os.environ.get("RUN_RAS_PRECIP_QUALIFICATION") != "1":
         pytest.skip("set RUN_RAS_PRECIP_QUALIFICATION=1 for native HEC-RAS run")
+    ras_version = os.environ.get("RAS_PRECIP_QUALIFICATION_VERSION", "6.6")
 
     previous_zip = RasExamples._zip_file_path
     previous_folders = RasExamples._folder_df
     try:
-        RasExamples.get_example_projects("6.6")
+        RasExamples.get_example_projects(ras_version)
         project_path = RasExamples.extract_project(
             "BaldEagleCrkMulti2D",
             output_path=tmp_path,
@@ -100,7 +101,7 @@ def test_geotiff_precipitation_preprocesses_and_computes_on_rasexamples(tmp_path
 
     ras = init_ras_project(
         project_path,
-        ras_version="6.6",
+        ras_version=ras_version,
         load_results_summary=False,
     )
     plan_row = _gridded_plan(ras)
@@ -137,8 +138,14 @@ def test_geotiff_precipitation_preprocesses_and_computes_on_rasexamples(tmp_path
     assert import_result.cache_path.is_file()
     assert import_result.shape == expected_cumulative.shape
     assert import_result.source_format == "geotiff"
-    assert import_result.hec_ras_version == "6.6"
-    assert import_result.route_qualification == "qualified_windows_and_wine"
+    assert import_result.hec_ras_version == ras_version
+    assert import_result.route_qualification.startswith("qualified")
+    unsteady_text = (
+        Path(ras.project_folder) / f"{ras.project_name}.u{unsteady_number}"
+    ).read_text(encoding="utf-8", errors="replace")
+    assert "Met BC=Evapotranspiration|Mode=None" in unsteady_text
+    assert "Met BC=Air Density|Mode=Constant" in unsteady_text
+    assert "Met BC=Air Pressure|Mode=Constant" in unsteady_text
 
     RasPlan.update_simulation_date(
         plan_number,

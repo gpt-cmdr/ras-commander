@@ -300,6 +300,9 @@ def test_direct_geotiff_api_writes_durable_netcdf_and_native_hdf(tmp_path):
     text = unsteady.read_text(encoding="utf-8")
     assert "Gridded Source=GDAL Raster File(s)" in text
     assert "Gridded GDAL Group=precipitation" in text
+    assert "Met BC=Evapotranspiration|Mode=None" in text
+    assert "Met BC=Air Density|Mode=Constant" in text
+    assert "Met BC=Air Pressure|Mode=Constant" in text
     assert ".nc" in text
     assert ".tif" not in text
 

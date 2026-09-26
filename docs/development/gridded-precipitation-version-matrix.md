@@ -52,6 +52,11 @@ The repeatable native harness is
   interval values, the solver finished, cumulative rainfall was nonzero, and
   the hydraulic response was nonempty. This qualifies the translated route,
   not GeoTIFF as a vendor-native meteorology source.
+- The same deterministic GeoTIFF translation route executed end to end on
+  native Windows with HEC-RAS 7.0 after completing the required gridded
+  meteorology modes. Preprocessing materialized all four expected frames, the
+  solver reported no event-condition error, and final rainfall and hydraulic
+  metrics matched the established 6.6 qualification.
 - The prior HEC-RAS 6.6 Wine DSS timeout was a launcher environment defect.
   Removing `WINEDLLOVERRIDES='mscoree,mshtml='` allowed preprocessing in 13.3
   seconds and verified compute completion, with final rainfall and WSE matching
@@ -84,7 +89,7 @@ The repeatable native harness is
 | 6.5 | 2024-02-02 | Documented | Native attempt fails in HEC/VB startup before model processing |
 | 6.6 | 2024-09-30 | Supported and qualified for tested DSS route; translated GeoTIFF route qualified | Windows DSS plus CLB07/Wine 11 GeoTIFF end-to-end execution |
 | 6.7 Beta 5 | 2025-10 | Historical beta only | Windows end-to-end execution; no stable support claim |
-| 7.0 | 2026-04-17 | Supported and qualified for tested DSS route | Windows end-to-end execution |
+| 7.0 | 2026-04-17 | Supported and qualified for tested DSS and translated GeoTIFF routes | Windows end-to-end execution |
 | 7.0.1 | 2026-06-02 | Supported and qualified for tested DSS route | Windows end-to-end execution |
 
 HEC withdrew 5.0.2 because of a critical simplified-breach defect. The
@@ -134,7 +139,7 @@ maximum of `0.1145427823`, 144,528 nonzero values, and nonzero water surfaces.
 | 6.6 on CLB07/Wine 11, native DSS | Preprocessing completed in 13.3 seconds after removing the disabling DLL override; 3 x 268830 values | Verified completion; final cumulative max 0.11454278230667114 in, 144528 nonzero entries; WSE max 923.1984252929688 ft | Qualified; rainfall and WSE metrics match Windows 6.6 exactly |
 | 6.6 on CLB07/Wine 11, translated GeoTIFF | Four exact interval rows materialized at 10:00, 11:00, 12:00, and 13:00; `Processing` and `Finished Processing Precipitation` | `Finished Unsteady Flow Simulation`; final cumulative max `0.1157457530` in over 18,066 cells; final hydraulic depth max `9.7182655334` ft over 7,576 wet cells | Qualified for the feature-snapshot GeoTIFF-to-NetCDF/native-HDF route |
 | 6.7 Beta 5 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Historical beta evidence only |
-| 7.0 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
+| 7.0 | Expected materialization and precipitation messages; translated GeoTIFF route completed required meteorology modes and materialized all four expected frames | `Finished Unsteady Flow Simulation`; translated-route final cumulative maximum `0.1157457530` in and hydraulic-depth maximum `9.7182655334` ft | DSS and translated GeoTIFF routes qualified on Windows |
 | 7.0.1 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
 
 The 6.1/6.2 controlled rerun supplies only the CPU fields requested by the
@@ -191,6 +196,16 @@ These results qualify this translation route on Wine 11 / HEC-RAS 6.6; they do
 not imply native HEC-RAS GeoTIFF meteorology support or support on other
 versions.
 
+The issue #324 implementation was requalified on the same CLB07 route on 26
+September 2026. The authored file contained all three required modes in one
+contiguous `Met BC=` block. Preprocessing completed in 3.60 seconds, the
+simulation completed without an event-condition error, and the final rainfall
+and hydraulic metrics matched the prior qualification. The retained compact
+receipt SHA-256 is
+`ba36c065802fe46edba4292076e3a83a1df3c92556af14c4fd62926d8cde502e`;
+the requalified final HDF SHA-256 is
+`278115f26937d64810faa6175229a502e2fb90dbb8c03efe6d525879bf91928b`.
+
 ## Format matrix
 
 | Source or representation | Vendor support | Qualification state | Required treatment |
@@ -199,7 +214,7 @@ versions.
 | GDAL NetCDF | Documented from 6.0 | Documentation/schema evidence in this branch | Run rate, interval-amount, cumulative, first-step, units, orientation, and timing matrix before cross-version claim |
 | GDAL GRIB/GRIB2 | Documented from 6.0 | Real filtered NOAA HRRR GRIB2 decoded and authored to native HDF; native executable preprocessing remains open | Qualify native preprocessing across representative encodings; never equate GDAL readability or ras-commander translation with native HEC-RAS support |
 | WPC QPF GRIB2 | Vendor-known compression incompatibility through 7.0.1 | Fully executed qpkit/pydsstools translation and HEC-RAS 7.0 qualification on the 26 September 2026 00Z cycle | Crop in the GRIB's native projection, verify the crop, translate to validated DSS, then inspect temporary/final HDF values; do not use qpkit 0.1.0's unreliable `QPFGridOptions.extents` mask |
-| GeoTIFF precipitation series | Not documented as a vendor-native meteorology source | Supported through ras-commander translation; qualified on Windows and CLB07/Wine 11 with HEC-RAS 6.6 | Explicit timestamps/units/semantics → content-addressed NetCDF plus native HDF payload; never advertise direct vendor GeoTIFF ingestion |
+| GeoTIFF precipitation series | Not documented as a vendor-native meteorology source | Supported through ras-commander translation; qualified on Windows 6.6/7.0 and CLB07/Wine 11 with HEC-RAS 6.6 | Explicit timestamps/units/semantics → content-addressed NetCDF plus native HDF payload; never advertise direct vendor GeoTIFF ingestion |
 | Imported Raster Data HDF | Internal RAS materialization | Issue #371 implementation/test concern | Treat as internal solver-facing payload, not an external input-format promise |
 
 ## Version-specific defects and limitations

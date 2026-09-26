@@ -229,6 +229,18 @@ class RasUnsteady:
         _MET_PRECIP_MANAGED_PREFIXES
         + ("Met BC=Precipitation|",)
     )
+    _GRIDDED_REQUIRED_MET_MODES: Tuple[Tuple[str, str], ...] = (
+        ("Evapotranspiration", "None"),
+        ("Air Density", "Constant"),
+        ("Air Pressure", "Constant"),
+    )
+    _MET_HEADER_PREFIXES: Tuple[str, ...] = (
+        "Met Point Raster Parameters=",
+        "Precipitation Mode=",
+        "Wind Mode=",
+        "Air Density Mode=",
+        "Wave Mode=",
+    )
 
     @staticmethod
     def _find_precipitation_variable(
@@ -3341,6 +3353,102 @@ class RasUnsteady:
                     pass
 
     @staticmethod
+    def _complete_gridded_meteorology_block(
+        lines: List[str],
+    ) -> Tuple[List[str], Tuple[str, ...]]:
+        """Complete and order the HEC-RAS gridded-meteorology text block.
+
+        HEC-RAS 7.0 can exit successfully after ``Error processing event
+        conditions`` when gridded precipitation is enabled but one of the
+        baseline evapotranspiration, air-density, or air-pressure ``Mode``
+        records is absent.  RAS-authored gridded files make those modes
+        explicit.  Existing nonblank choices remain authoritative; only
+        absent or blank records receive the RAS defaults.
+
+        HEC-RAS also expects every ``Met BC=`` record to remain contiguous and
+        to follow the top-level meteorology headers (through ``Wave Mode=``
+        when present).  Preserve the relative order of all existing ``Met
+        BC=`` records while restoring that block position.
+
+        Returns
+        -------
+        tuple
+            Updated lines and the variables whose missing/blank modes were
+            completed.
+        """
+        newline = RasUnsteady._detect_line_ending(lines)
+        had_terminal_newline = bool(
+            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
+        )
+        completed: List[str] = []
+
+        for met_type, default_mode in RasUnsteady._GRIDDED_REQUIRED_MET_MODES:
+            prefix = f"Met BC={met_type}|Mode="
+            mode_index = next(
+                (i for i, line in enumerate(lines) if line.startswith(prefix)),
+                None,
+            )
+            if mode_index is not None:
+                existing_mode = lines[mode_index][len(prefix):].strip()
+                if existing_mode:
+                    continue
+                lines[mode_index] = f"{prefix}{default_mode}{newline}"
+                completed.append(met_type)
+                continue
+
+            family_prefix = f"Met BC={met_type}|"
+            family_index = next(
+                (i for i, line in enumerate(lines) if line.startswith(family_prefix)),
+                None,
+            )
+            if family_index is None:
+                family_index = 1 + max(
+                    (
+                        i
+                        for i, line in enumerate(lines)
+                        if line.startswith("Met BC=")
+                    ),
+                    default=-1,
+                )
+            lines.insert(family_index, f"{prefix}{default_mode}{newline}")
+            completed.append(met_type)
+
+        met_bc_lines = [line for line in lines if line.startswith("Met BC=")]
+        non_met_lines = [line for line in lines if not line.startswith("Met BC=")]
+        header_index = max(
+            (
+                i
+                for i, line in enumerate(non_met_lines)
+                if line.startswith(RasUnsteady._MET_HEADER_PREFIXES)
+            ),
+            default=-1,
+        )
+        if header_index >= 0:
+            insert_index = header_index + 1
+        else:
+            insert_index = RasUnsteady._get_default_met_insert_index(non_met_lines)
+
+        ordered_lines = (
+            non_met_lines[:insert_index]
+            + met_bc_lines
+            + non_met_lines[insert_index:]
+        )
+
+        # Moving a record that carried the terminal-newline state must not
+        # transfer that state into the middle of the file. Rebuild only record
+        # separators, preserving every record's content verbatim.
+        records = [line.rstrip("\r\n") for line in ordered_lines]
+        return (
+            [
+                record + newline
+                if index < len(records) - 1 or had_terminal_newline
+                else record
+                for index, record in enumerate(records)
+            ],
+            tuple(completed),
+        )
+
+    @staticmethod
     def _replace_met_precipitation_keys(
         unsteady_path: Path,
         desired_entries: List[Tuple[str, str]],
@@ -3402,7 +3510,22 @@ class RasUnsteady:
             + desired_lines
             + filtered_lines[insert_index:]
         )
+        completed_modes: Tuple[str, ...] = ()
+        if any(
+            key == "Met BC=Precipitation|Mode"
+            and str(value).strip().casefold() == "gridded"
+            for key, value in desired_entries
+        ):
+            updated_lines, completed_modes = (
+                RasUnsteady._complete_gridded_meteorology_block(updated_lines)
+            )
         RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
+        if completed_modes:
+            logger.info(
+                "Completed required gridded meteorology modes in %s: %s",
+                unsteady_path.name,
+                ", ".join(completed_modes),
+            )
 
     @staticmethod
     def _normalize_met_precipitation_mode(mode: Optional[str]) -> str:
@@ -3488,7 +3611,9 @@ class RasUnsteady:
         ``Met BC=Precipitation|...`` state as a single block, removing stale
         mode/source keys from prior Constant, Point, DSS, GDAL, or legacy GDAL
         Datasetname states. Unrecognized precipitation keys such as
-        ``Expanded View`` are preserved.
+        ``Expanded View`` are preserved. Gridded mode also completes the
+        required evapotranspiration, air-density, and air-pressure mode
+        records without replacing explicit nonblank choices.
 
         Parameters
         ----------
@@ -5620,7 +5745,9 @@ class RasUnsteady:
         Configure a .u## file to reference gridded DSS precipitation.
 
         This helper wires an existing DSS grid file into the HEC-RAS unsteady
-        flow configuration. It does not write DSS data.
+        flow configuration. It does not write DSS data. The required
+        evapotranspiration, air-density, and air-pressure mode records are
+        completed without replacing explicit nonblank choices.
 
         Parameters
         ----------
@@ -5768,6 +5895,9 @@ class RasUnsteady:
         ratio: Optional[float] = None,
     ) -> None:
         """Configure NetCDF gridded precipitation and update its native HDF.
+
+        The required evapotranspiration, air-density, and air-pressure mode
+        records are completed without replacing explicit nonblank choices.
 
         Parameters
         ----------
@@ -6149,6 +6279,9 @@ class RasUnsteady:
             gdal_group_updated = True
 
         RasUnsteady._apply_precipitation_ratio_line(lines, ratio, unsteady_path)
+        lines, completed_modes = RasUnsteady._complete_gridded_meteorology_block(
+            lines
+        )
 
         # Write the payload before the text. HEC-RAS rebuilds the rest of the
         # .u##.hdf from the text on its next save and copies this payload forward,
@@ -6170,6 +6303,13 @@ class RasUnsteady:
         # Write the updated file
         with open(unsteady_path, 'w', encoding='utf-8', errors='replace', newline='\r\n') as f:
             f.writelines(lines)
+
+        if completed_modes:
+            logger.info(
+                "Completed required gridded meteorology modes in %s: %s",
+                unsteady_path.name,
+                ", ".join(completed_modes),
+            )
 
         dataset_suffix = f", dataset={dataset_name}" if dataset_name else ""
         logger.info(
@@ -6206,6 +6346,8 @@ class RasUnsteady:
         content-addressed project-local NetCDF, then that durable NetCDF and the
         equivalent native HDF payload are configured together. Later HEC-RAS
         saves and preprocessing therefore retain a vendor-supported GDAL source.
+        The required evapotranspiration, air-density, and air-pressure mode
+        records are completed without replacing explicit nonblank choices.
 
         A single GeoTIFF may contain one or more selected bands. A sequence uses
         one band per file by default; pass one common band list or one band list
