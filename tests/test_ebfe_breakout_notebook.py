@@ -23,9 +23,15 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
         'GeomBcLines.add_bc_lines(',
         'RasUnsteady.replace_2d_boundary_locations(',
         'RasUnsteady.set_boundary_inline_hydrograph(',
+        'RasUnsteady.set_flow_hydrograph_slope(',
         'RasUnsteady.set_normal_depth_boundary(',
         'RasNetworkConflation.classify_edges(',
         'RasBreakout2D.preflight(',
+        'RasBreakout2D.review_parent_boundary_flux(',
+        'RasPlan.clone_unsteady(',
+        'RasPlan.clone_plan(',
+        'RasCmdr.compute_plan(',
+        'HdfResultsMesh.get_mesh_max_depth(',
         'HdfResultsMesh.get_mesh_max_ws(',
     )
     assert all(call in source for call in required_calls)
@@ -36,6 +42,11 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
     assert "David Maidement" not in source
     assert "Andy Carter" not in source
     assert "Jacob" not in source
+    assert "ras2fim" not in source.lower()
+    assert "FIM library" not in source
+    assert "flow_ladder" in source
+    assert "rating_curve" in source
+    assert "depth_results" in source
     assert "manual diagnostics" in source
 
 
@@ -50,4 +61,4 @@ def test_austin_bayou_breakout_notebook_is_executed_clean_and_visual():
         output.output_type == "display_data"
         and "image/png" in output.get("data", {})
         for output in outputs
-    ) >= 3
+    ) >= 6

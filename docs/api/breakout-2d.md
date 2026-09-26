@@ -161,10 +161,12 @@ derived from existing HDF data, not new model results.
 hydraulic forcing from parent face flow. The executed Austin Bayou SH 35
 [example notebook](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb)
 continues from a reviewed compact child and demonstrates the separate APIs for
-resetting its two geometry-backed boundary locations, writing an internal flow
-hydrograph and downstream Normal Depth condition, auditing native external-face
-ownership, classifying intersecting NextGen flowpaths, and comparing the child
-and parent maximum WSE at USGS 08078400.
+resetting its two geometry-backed boundary locations, writing a wide external
+flow boundary, auditing native external-face ownership, and classifying
+intersecting NextGen flowpaths. It then sums parent face flux at both child
+cuts, derives an upstream flow envelope and preliminary downstream stage-flow
+relationship, creates and computes one plan per 1,000-cfs ladder step, and
+retains a comparable maximum-inundation map for every result.
 
 That reviewed downstream workflow must:
 
