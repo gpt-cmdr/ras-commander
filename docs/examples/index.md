@@ -9,7 +9,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*141 notebooks indexed - 129 with runtime data, 12 without.*
+*139 notebooks indexed - 127 with runtime data, 12 without.*
 
 ## Selected Workflow Contracts
 
@@ -219,17 +219,17 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | Runtime requirements | Archive download/cache and Python HDF/geospatial dependencies; Installed HEC-RAS only for the optional geometry-preprocessor stage |
     | Evidence scope | Delivered-result inspection is distinct from newly executed model verification; RUN_GEOMETRY_PREPROCESSOR defaults to False. |
 
-??? info "959 - eBFE 2D Breakout Geometry Preparation"
+??? info "959 - Austin Bayou SH 35 2D Breakout and NextGen Validation"
 
     [Open notebook](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md)
 
     | Contract | Scope |
     | --- | --- |
-    | Inputs | Pure-2D parent project and proposed contained child domain; Parent mesh and result HDF |
-    | Operations | Preflight and clone plan components; Trim/remesh geometry; Review parent-face flux |
-    | Outputs | Prepared child geometry; Unchanged unsteady-file evidence; Candidate flux zones |
-    | Runtime requirements | Windows native geometry dependencies and installed HEC-RAS; default configuration 6.6; Retained Upper Guadalupe parent artifacts |
-    | Evidence scope | Geometry preparation and unassigned flux review do not author child boundary conditions or establish a completed child solve. |
+    | Inputs | Public Austin Bayou SH35 completed child fixture; Optional organized Austin–Oyster parent model and retained results; NextGen v2.2 flowpaths |
+    | Operations | Inspect native boundary-face ownership; Conflate and screen the reach-derived domain; Author external boundaries in isolated copies; Build parent-derived flow plateaus and review diagnostics |
+    | Outputs | Boundary and domain evidence; Flow-ladder plans and retained hydraulic diagnostics; Focused parent/child gauge-location comparison |
+    | Runtime requirements | Installed compatible HEC-RAS for native preprocessing and new solves; Organized parent required for optional parent-derived checks; not downloaded automatically |
+    | Evidence scope | Retained child and focused hydraulic diagnostics demonstrate the stated example. Compact constant-flow domain omits tributary inflow and does not substitute for watershed-preserving rainfall modeling or complete engineering validation. |
 
 ??? info "962 - Cloud Optimized GeoTIFF Results Export with ras2cng"
 
@@ -438,16 +438,16 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [950 - Using eBFE Models: Spring Creek 2D Analysis](../notebooks/950_ebfe_spring_creek.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb) | 4 s |
-| [951 - Using eBFE Models: North Galveston Bay HMS + RAS Integration](../notebooks/951_ebfe_north_galveston_bay.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/951_ebfe_north_galveston_bay.ipynb) | 3 s |
-| [952 - Using eBFE Models: Upper Guadalupe Cascaded Watersheds](../notebooks/952_ebfe_upper_guadalupe_cascade.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/952_ebfe_upper_guadalupe_cascade.ipynb) | 12 s |
-| [953 - Using eBFE Models: Rio Hondo 1D Steady Collection](../notebooks/953_ebfe_rio_hondo_steady_collection.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/953_ebfe_rio_hondo_steady_collection.ipynb) | 9 s |
-| [954 - Using eBFE Models: Lake Maurepas Validation](../notebooks/954_ebfe_lake_maurepas_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/954_ebfe_lake_maurepas_validation.ipynb) | 3 s |
-| [955 - Using eBFE Models: Tickfaw Results-Ready Validation](../notebooks/955_ebfe_tickfaw_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/955_ebfe_tickfaw_validation.ipynb) | 3 s |
-| [956 - NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch](../notebooks/956_hydrofabric_conflation_visual_qa.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/956_hydrofabric_conflation_visual_qa.ipynb) | 5 s |
-| [957 - Using eBFE Models: Spring River Validation](../notebooks/957_ebfe_spring_river_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | N/A |
-| [958 - Model Sources: Unified Discovery, Download & Visualization](../notebooks/958_model_sources_showcase.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb) | N/A |
-| [959 - Austin Bayou SH 35: 2D breakout, NextGen conflation, boundary authoring, and validation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | 3.2 min |
+| [950 - Using eBFE Models: Spring Creek 2D Analysis](../notebooks/950_ebfe_spring_creek.md)<br>FEMA eBFE/BLE organization and validation | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/950_ebfe_spring_creek.ipynb) | 4 s |
+| [951 - Using eBFE Models: North Galveston Bay HMS + RAS Integration](../notebooks/951_ebfe_north_galveston_bay.md)<br>Organize a compound North Galveston Bay HMS/RAS delivery and inspect its model paths; file discovery does not establish executable coupling. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/951_ebfe_north_galveston_bay.ipynb) | 3 s |
+| [952 - Using eBFE Models: Upper Guadalupe Cascaded Watersheds](../notebooks/952_ebfe_upper_guadalupe_cascade.md)<br>This notebook demonstrates working with cascaded watershed models from FEMA eBFE/BLE database. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/952_ebfe_upper_guadalupe_cascade.ipynb) | 12 s |
+| [953 - Using eBFE Models: Rio Hondo 1D Steady Collection](../notebooks/953_ebfe_rio_hondo_steady_collection.md)<br>This notebook demonstrates the Rio Hondo (`13060008`) eBFE/BLE 1D steady model collection. The delivery is different from the large 2D eBFE examples: it contains hundreds of small 1D steady HEC-RAS projects, and results HDF files are gen... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/953_ebfe_rio_hondo_steady_collection.ipynb) | 9 s |
+| [954 - Using eBFE Models: Lake Maurepas Validation](../notebooks/954_ebfe_lake_maurepas_validation.md)<br>This notebook validates the organized Lake Maurepas eBFE delivery format. It is intentionally scoped to the delivery-readiness gate: organize the source archive, confirm ras-commander can initialize the local HEC-RAS project, review the... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/954_ebfe_lake_maurepas_validation.ipynb) | 3 s |
+| [955 - Using eBFE Models: Tickfaw Results-Ready Validation](../notebooks/955_ebfe_tickfaw_validation.md)<br>This notebook validates the organized Tickfaw eBFE delivery as a full 2D example with source-provided result HDFs. It confirms local organization, reviews the saved ras-commander geometry-preprocessor evidence, and checks that plan resul... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/955_ebfe_tickfaw_validation.ipynb) | 3 s |
+| [956 - NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch](../notebooks/956_hydrofabric_conflation_visual_qa.md)<br>Visually audits generic HEC-RAS-to-network conflation with the NextGen v2.2 adapter on the Texas Lower Colorado-Cummins SHILOH BRANCH model, including native flowpath and catchment IDs, candidate ranks, score components, explicit resolution states, HUC intersections, and cross-section measures. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/956_hydrofabric_conflation_visual_qa.ipynb) | 5 s |
+| [957 - Using eBFE Models: Spring River Validation](../notebooks/957_ebfe_spring_river_validation.md)<br>This notebook validates the organized Spring River eBFE delivery as a results-ready HEC-RAS 6.1 example. It uses the shared delivery workspace, reviews the saved audit evidence, optionally executes a fresh geometry-preprocessor validatio... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | N/A |
+| [958 - Model Sources: Unified Discovery, Download & Visualization](../notebooks/958_model_sources_showcase.md)<br>Discover and download representative models from several public catalogs, initialize each project, and optionally capture native RAS Mapper review images. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb) | N/A |
+| [959 - Austin Bayou SH 35 2D Breakout and NextGen Validation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md)<br>Inspect the Austin Bayou completed child, conflate a NextGen reach, author external boundaries, and review a parent-derived flow ladder and focused parent/child comparison. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | 3.2 min |
 
 ## 960s - Cloud-Native Export
 

@@ -4422,9 +4422,8 @@ notebooks:
   title: Austin Bayou SH 35 2D Breakout and NextGen Validation
   series: 950
   series_name: eBFE Delivery Validation
-  summary: Reproduce the compact Austin Bayou SH 35 firehose breakout from a public RasExamples fixture,
-    validate it against the FEMA parent at USGS 08078400, classify intersecting NextGen v2.2 flowpaths,
-    verify native boundary-face ownership, and re-author its upstream and downstream boundaries.
+  summary: Inspect the Austin Bayou completed child, conflate a NextGen reach, author external boundaries,
+    and review a parent-derived flow ladder and focused parent/child comparison.
   tags:
   - 2d
   - breakout
@@ -4462,6 +4461,25 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
+  input_families:
+  - Public Austin Bayou SH35 completed child fixture
+  - Optional organized Austin–Oyster parent model and retained results
+  - NextGen v2.2 flowpaths
+  operations:
+  - Inspect native boundary-face ownership
+  - Conflate and screen the reach-derived domain
+  - Author external boundaries in isolated copies
+  - Build parent-derived flow plateaus and review diagnostics
+  outputs:
+  - Boundary and domain evidence
+  - Flow-ladder plans and retained hydraulic diagnostics
+  - Focused parent/child gauge-location comparison
+  runtime_requirements:
+  - Installed compatible HEC-RAS for native preprocessing and new solves
+  - Organized parent required for optional parent-derived checks; not downloaded automatically
+  evidence_scope: Retained child and focused hydraulic diagnostics demonstrate the stated example. Compact
+    constant-flow domain omits tributary inflow and does not substitute for watershed-preserving rainfall
+    modeling or complete engineering validation.
   code_cells: 15
   executed_cells: 14
 - id: 960_cloud_native_geometry_export
