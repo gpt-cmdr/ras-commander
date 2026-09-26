@@ -12,7 +12,7 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
 - Core helpers: `HdfBase`, `HdfUtils`, `HdfPlan`
 - Geometry readers: `HdfMesh`, `HdfXsec`, `HdfBndry`, `HdfStruc`, `HdfHydraulicTables`
 - Project extent / footprint: `HdfProject`
-- Results readers: `HdfResultsPlan`, `HdfResultsMesh`, `HdfResultsXsec`, `HdfResultsBreach`, `HdfResultsSediment`
+- Results readers: `HdfResultsPlan`, `HdfResultsMesh`, `HdfResultView`, `HdfResultsXsec`, `HdfResultsBreach`, `HdfResultsSediment`
 - Infrastructure and land surface: `HdfPipe`, `HdfPump`, `HdfInfiltration`, `HdfLandCover`
 - Plotting and analysis: `HdfPlot`, `HdfResultsPlot`, `HdfBenefitAreas`, `HdfChannelCapacity`, `HdfFluvialPluvial`
 
@@ -66,6 +66,12 @@ This file is the canonical local instruction file for `ras_commander/hdf/`.
   `region_name` parameters for selective face application (precedence:
   `face_ids` > `region_name` > `polygon` > all faces).
 - 2D results extraction: `HdfResultsMesh`
+- Large 2D result access: `HdfResultsMesh.get_mesh_timeseries(...,
+  return_type="view")` returns an immutable `HdfResultView`;
+  `iter_mesh_timeseries()` emits untruncated bounded batches; and
+  `get_mesh_summary_values()` returns native summary values without Shapely
+  geometry. Eager results remain the default. A view owns no persistent HDF
+  handle and validates its source fingerprint whenever it reads.
 - 2D mobile-bed (sediment) results: `HdfResultsSediment` (`is_sediment_plan()`, `get_sediment_mesh_areas()`, `get_cell_bed_change()`/`get_cell_bed_elevation()`/`get_active_layer_grain_class()` -> GeoDataFrame, `get_bed_change_volumes()` -> erosion/deposition/net volume per area, `get_cell_bed_change_timeseries()` -> xr.DataArray). Reads the `Sediment Bed` output block; per-cell arrays align with computed `Cells Surface Area` (zero-area ghost cells drop out of volume integrals). Covered by `examples/230_mesh_sensitivity_analysis.ipynb`.
 - 1D cross section geometry and results: `HdfXsec`, `HdfResultsXsec`
 - 1D river edge lines: `HdfXsec.get_river_edge_lines()` (stored `Geometry/River Edge Lines`);

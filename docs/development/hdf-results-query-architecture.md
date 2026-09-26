@@ -41,9 +41,18 @@ stable. Batches are time-major because HEC-RAS commonly stores 2D results as
 `(time, spatial_element)` with one-timestep chunks.
 
 The default batch target is 16 MiB of values. Callers can set an explicit row
-count or byte target. The source dtype is preserved unless a conversion is
-requested. Full-period max, min, mean, and argmax reductions use the same
-bounded iterator and ignore NaN/infinite samples.
+count or byte target. Materialization preserves the source dtype unless a
+conversion is requested. Full-period max, min, mean, and argmax reductions use
+the same bounded iterator and ignore NaN/infinite samples. Integer source data
+is promoted to Float64 for value reductions; an explicit reduction dtype must
+be floating point so nonfinite filtering cannot be corrupted by an integer
+cast. Argmax always returns source time indexes as Int64.
+
+Eager conversion reads the selected slab once and trims it in memory.
+Streaming, reductions, and `shape` use a bounded active-window scan when
+`truncate=True`; all-zero selections keep their full selected time extent.
+The public `iter_mesh_timeseries()` convenience iterator is deliberately
+untruncated so it emits every selected source timestep exactly once.
 
 ## Representative qualification
 
@@ -59,6 +68,12 @@ pass is only a cold-cache candidate—the operating-system cache was not flushed
 | Eager whole-array then slice | 1.284 s | 1.306 s | 315 / 318 MiB |
 | Bounded raw maximum | 1.360 s | 1.358 s | 51.7 / 51.2 MiB |
 | Eager raw maximum | 1.380 s | 1.351 s | 403 / 374 MiB |
+
+A post-review rerun added the public default eager `truncate=True` scenario
+after restoring its single-read implementation. It completed in 1.318/1.323 s
+with 371/365 MiB peak RSS delta, eliminating the 2.95 s double-read regression
+identified during independent QAQC. Direct/eager slice checksums and
+bounded/eager maximum checksums remained identical.
 
 The direct and eager timestep checksums matched. The bounded and eager raw
 maximum checksums also matched. These timings are directional rather than a

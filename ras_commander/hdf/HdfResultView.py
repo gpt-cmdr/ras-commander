@@ -2,34 +2,44 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Any, Iterator, Optional, SupportsIndex, Union
 
 import h5py
 import numpy as np
 import pandas as pd
 import xarray as xr
+from numpy.typing import DTypeLike
 
+from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 
-Selection = Optional[Union[int, slice]]
+Selection = Optional[Union[SupportsIndex, slice]]
+
+logger = get_logger(__name__)
 
 
 def _normalized_slice(selection: Selection, size: int, label: str) -> slice:
     """Normalize an integer or forward slice while preserving the dimension."""
     if selection is None:
         return slice(0, size, 1)
-    if isinstance(selection, bool):
+    if isinstance(selection, (bool, np.bool_)):
         raise TypeError(f"{label} selection must be an integer or slice")
-    if isinstance(selection, int):
-        index = selection + size if selection < 0 else selection
+    if not isinstance(selection, slice):
+        try:
+            index = operator.index(selection)
+        except TypeError as exc:
+            raise TypeError(
+                f"{label} selection must be an integer or slice"
+            ) from exc
+        index = index + size if index < 0 else index
         if index < 0 or index >= size:
             raise IndexError(f"{label} index {selection} is out of range for {size}")
         return slice(index, index + 1, 1)
-    if not isinstance(selection, slice):
-        raise TypeError(f"{label} selection must be an integer or slice")
     start, stop, step = selection.indices(size)
     if step <= 0:
         raise ValueError(f"{label} selection must use a positive slice step")
@@ -77,8 +87,19 @@ class HdfResultView:
 
     @property
     def shape(self) -> tuple[int, ...]:
-        """Return the selected logical shape without reading result values."""
+        """Return the shape that materialization will produce.
+
+        A ``truncate=True`` view performs the same bounded active-window scan
+        used by batch iteration and reduction so this property remains
+        consistent with ``to_numpy()`` and ``to_xarray()``.
+        """
         time_slice, spatial_slice = self._selections()
+        if self.truncate and _slice_size(time_slice):
+            with self._open_source() as hdf_file:
+                time_slice, spatial_slice = self._effective_selections(
+                    hdf_file[self.dataset_path]
+                )
+            self._validate_source_fingerprint()
         result = (_slice_size(time_slice),)
         if spatial_slice is not None:
             result += (_slice_size(spatial_slice),)
@@ -89,6 +110,7 @@ class HdfResultView:
         """Return the source NumPy dtype."""
         return np.dtype(self.source_dtype)
 
+    @log_call
     def select(
         self,
         *,
@@ -99,7 +121,24 @@ class HdfResultView:
 
         Integer selections preserve their dimension as a length-one slice.
         Selections use source indexes rather than indexes relative to a prior
-        selection, which keeps serialized views unambiguous.
+        selection, which keeps serialized views unambiguous. Passing ``None``
+        preserves an existing selection; use a full ``slice(None)`` to reset
+        that dimension.
+
+        Args:
+            time: Python/NumPy integer or positive-step slice in source time
+                coordinates.
+            spatial: Python/NumPy integer or positive-step slice in source
+                cell/face coordinates.
+
+        Returns:
+            A new immutable view over the same fingerprinted source.
+
+        Raises:
+            TypeError: If a selection is not integer-like or a slice.
+            IndexError: If an integer selection is outside the source extent.
+            ValueError: If a slice step is nonpositive or a spatial selection
+                is supplied for a one-dimensional dataset.
         """
         time_value = self.time_selection if time is None else time
         spatial_value = self.spatial_selection if spatial is None else spatial
@@ -115,30 +154,74 @@ class HdfResultView:
             spatial_selection=spatial_value,
         )
 
-    def to_numpy(self, dtype=None) -> np.ndarray:
-        """Materialize only the selected values as a NumPy array."""
+    @log_call
+    def to_numpy(self, dtype: Optional[DTypeLike] = None) -> np.ndarray:
+        """Materialize only the selected values as a NumPy array.
+
+        The eager path reads the selected HDF slab once. When truncation is
+        enabled, leading and trailing zero-only rows are trimmed in memory;
+        an all-zero selection retains its full time extent for compatibility.
+
+        Args:
+            dtype: Optional NumPy-compatible output dtype.
+
+        Returns:
+            Selected result values with a stable time dimension.
+
+        Raises:
+            FileNotFoundError: If the source path no longer exists.
+            KeyError: If the source dataset was removed.
+            RuntimeError: If the source fingerprint, shape, or dtype changed.
+        """
         with self._open_source() as hdf_file:
             dataset = hdf_file[self.dataset_path]
-            time_slice, spatial_slice = self._effective_selections(dataset)
+            time_slice, spatial_slice = self._selections()
             key = (
                 time_slice
                 if spatial_slice is None
                 else (time_slice, spatial_slice)
             )
             values = np.asarray(dataset[key])
+            if self.truncate:
+                values, time_slice = self._trim_materialized(values, time_slice)
         self._validate_source_fingerprint()
         if dtype is not None:
             values = values.astype(dtype, copy=False)
         return values
 
-    def to_xarray(self, dtype=None) -> xr.DataArray:
-        """Materialize the selection as a labeled xarray DataArray."""
+    @log_call
+    def to_xarray(self, dtype: Optional[DTypeLike] = None) -> xr.DataArray:
+        """Materialize the selection as a labeled xarray DataArray.
+
+        Result values are read once. Truncation is evaluated over the selected
+        spatial subset, so a subset can have a narrower active time window than
+        the complete mesh.
+
+        Args:
+            dtype: Optional NumPy-compatible output dtype.
+
+        Returns:
+            DataArray labeled by timestamps and source cell/face identifiers.
+
+        Raises:
+            FileNotFoundError: If the source path no longer exists.
+            KeyError: If a required source dataset was removed.
+            RuntimeError: If the source fingerprint, shape, or dtype changed.
+        """
         with self._open_source() as hdf_file:
             dataset = hdf_file[self.dataset_path]
-            time_slice, spatial_slice = self._effective_selections(dataset)
-            result = self._read_dataarray(
+            time_slice, spatial_slice = self._selections()
+            key = (
+                time_slice
+                if spatial_slice is None
+                else (time_slice, spatial_slice)
+            )
+            values = np.asarray(dataset[key])
+            if self.truncate:
+                values, time_slice = self._trim_materialized(values, time_slice)
+            result = self._build_dataarray(
                 hdf_file,
-                dataset,
+                values,
                 time_slice,
                 spatial_slice,
                 dtype=dtype,
@@ -146,12 +229,43 @@ class HdfResultView:
         self._validate_source_fingerprint()
         return result
 
-    def to_pandas(self, dtype=None) -> Union[pd.Series, pd.DataFrame]:
-        """Materialize the selection using xarray's pandas representation."""
+    @log_call
+    def to_pandas(
+        self,
+        dtype: Optional[DTypeLike] = None,
+    ) -> Union[pd.Series, pd.DataFrame]:
+        """Materialize the selection using xarray's pandas representation.
+
+        Args:
+            dtype: Optional NumPy-compatible output dtype.
+
+        Returns:
+            Series for one-dimensional sources or DataFrame for two-dimensional
+            sources.
+
+        Raises:
+            FileNotFoundError: If the source path no longer exists.
+            RuntimeError: If the source changed after view creation.
+        """
         return self.to_xarray(dtype=dtype).to_pandas()
 
-    def to_arrow(self, dtype=None):
-        """Materialize the selection as an optional PyArrow table."""
+    @log_call
+    def to_arrow(self, dtype: Optional[DTypeLike] = None) -> Any:
+        """Materialize the selection as an optional PyArrow table.
+
+        Args:
+            dtype: Optional NumPy-compatible output dtype.
+
+        Returns:
+            A PyArrow Table in long form, with time, optional spatial
+            identifier, and value columns. ``Any`` is used as the static return
+            annotation so importing ras-commander does not require PyArrow.
+
+        Raises:
+            ImportError: If PyArrow is not installed.
+            FileNotFoundError: If the source path no longer exists.
+            RuntimeError: If the source changed after view creation.
+        """
         try:
             import pyarrow as pa
         except ImportError as exc:  # pragma: no cover - environment dependent
@@ -164,18 +278,53 @@ class HdfResultView:
         ).reset_index()
         return pa.Table.from_pandas(frame, preserve_index=False)
 
+    @log_call
     def iter_batches(
         self,
         *,
         batch_size: Optional[int] = None,
         max_chunk_bytes: int = 16 * 1024 * 1024,
-        dtype=None,
+        dtype: Optional[DTypeLike] = None,
     ) -> Iterator[xr.DataArray]:
-        """Yield time-major xarray batches from one read-only HDF handle."""
+        """Return a generator of time-major batches from one HDF handle.
+
+        Args:
+            batch_size: Optional explicit number of selected timesteps per
+                batch.
+            max_chunk_bytes: Target value bytes per batch when ``batch_size``
+                is omitted.
+            dtype: Optional NumPy-compatible output dtype used in byte sizing
+                and conversion.
+
+        Returns:
+            Generator yielding labeled xarray DataArray batches. The generator
+            logs and validates completion when exhausted or closed.
+
+        Raises:
+            ValueError: If a batch limit is nonpositive.
+            FileNotFoundError: If the source path no longer exists.
+            RuntimeError: If the source changes before or during consumption.
+        """
         if batch_size is not None and batch_size <= 0:
             raise ValueError("batch_size must be positive")
         if max_chunk_bytes <= 0:
             raise ValueError("max_chunk_bytes must be positive")
+
+        return self._iter_batches_generator(
+            batch_size=batch_size,
+            max_chunk_bytes=max_chunk_bytes,
+            dtype=dtype,
+        )
+
+    def _iter_batches_generator(
+        self,
+        *,
+        batch_size: Optional[int],
+        max_chunk_bytes: int,
+        dtype: Optional[DTypeLike],
+    ) -> Iterator[xr.DataArray]:
+        """Own the read handle and completion log while batches are consumed."""
+        logger.debug("Starting iter_batches consumption")
 
         try:
             with self._open_source() as hdf_file:
@@ -191,7 +340,8 @@ class HdfResultView:
                     if spatial_slice is None
                     else max(1, _slice_size(spatial_slice))
                 )
-                row_bytes = max(1, spatial_count * dataset.dtype.itemsize)
+                target_dtype = np.dtype(dtype or dataset.dtype)
+                row_bytes = max(1, spatial_count * target_dtype.itemsize)
                 rows = batch_size or max(1, max_chunk_bytes // row_bytes)
                 selected_count = len(indexes)
 
@@ -213,23 +363,46 @@ class HdfResultView:
                     )
         finally:
             self._validate_source_fingerprint()
+            logger.debug("Finished iter_batches consumption")
 
+    @log_call
     def reduce(
         self,
         operation: str,
         *,
         max_chunk_bytes: int = 16 * 1024 * 1024,
-        dtype=None,
+        dtype: Optional[DTypeLike] = None,
     ) -> xr.DataArray:
         """Reduce the selected time axis with bounded memory.
 
         Supported operations are ``max``, ``min``, ``mean``, and ``argmax``.
         NaN and infinite samples are ignored. ``argmax`` returns source time
         indexes and uses ``-1`` for a spatial element with no finite samples.
+        An explicit ``dtype`` must be floating point so NaN/infinite filtering
+        cannot be destroyed by a pre-reduction integer cast.
+
+        Args:
+            operation: One of ``max``, ``min``, ``mean``, or ``argmax``.
+            max_chunk_bytes: Maximum target value bytes per source batch.
+            dtype: Optional floating-point computation/output dtype.
+
+        Returns:
+            DataArray over the selected spatial dimension, or a scalar
+            DataArray for a one-dimensional source. Argmax values are source
+            time indexes and use ``-1`` when no finite sample exists.
+
+        Raises:
+            ValueError: If the operation or chunk target is invalid.
+            TypeError: If the source is nonnumeric or ``dtype`` is not floating
+                point.
+            FileNotFoundError: If the source path no longer exists.
+            RuntimeError: If the source changes after view creation.
         """
         operation = str(operation).lower()
         if operation not in {"max", "min", "mean", "argmax"}:
             raise ValueError("operation must be max, min, mean, or argmax")
+        if max_chunk_bytes <= 0:
+            raise ValueError("max_chunk_bytes must be positive")
 
         with self._open_source() as hdf_file:
             dataset = hdf_file[self.dataset_path]
@@ -240,9 +413,16 @@ class HdfResultView:
             else:
                 spatial_count = _slice_size(spatial_slice)
 
-            source_dtype = np.dtype(dtype or dataset.dtype)
-            if not np.issubdtype(source_dtype, np.number):
+            dataset_dtype = np.dtype(dataset.dtype)
+            if not np.issubdtype(dataset_dtype, np.number):
                 raise TypeError("bounded reductions require a numeric dataset")
+            requested_dtype = np.dtype(dtype) if dtype is not None else None
+            if requested_dtype is not None and not np.issubdtype(
+                requested_dtype,
+                np.floating,
+            ):
+                raise TypeError("reduction dtype must be a floating-point dtype")
+            source_dtype = requested_dtype or dataset_dtype
             reduction_dtype = (
                 source_dtype
                 if np.issubdtype(source_dtype, np.floating)
@@ -371,11 +551,29 @@ class HdfResultView:
                 first = batch_first if first is None else min(first, batch_first)
                 last = batch_last if last is None else max(last, batch_last)
         if first is None:
-            return (
-                slice(time_slice.start, time_slice.start, time_slice.step),
-                spatial_slice,
-            )
+            return time_slice, spatial_slice
         return slice(first, last + time_slice.step, time_slice.step), spatial_slice
+
+    @staticmethod
+    def _trim_materialized(
+        values: np.ndarray,
+        time_slice: slice,
+    ) -> tuple[np.ndarray, slice]:
+        """Trim active rows from one eager read while retaining all-zero data."""
+        active = (
+            values != 0
+            if values.ndim == 1
+            else np.any(values != 0, axis=1)
+        )
+        positions = np.flatnonzero(active)
+        if not len(positions):
+            return values, time_slice
+        first_position = int(positions[0])
+        last_position = int(positions[-1])
+        trimmed = values[first_position:last_position + 1]
+        start = time_slice.start + first_position * time_slice.step
+        stop = time_slice.start + (last_position + 1) * time_slice.step
+        return trimmed, slice(start, stop, time_slice.step)
 
     def _iter_numpy_batches(
         self,
@@ -415,6 +613,24 @@ class HdfResultView:
     ) -> xr.DataArray:
         key = time_slice if spatial_slice is None else (time_slice, spatial_slice)
         values = np.asarray(dataset[key])
+        return self._build_dataarray(
+            hdf_file,
+            values,
+            time_slice,
+            spatial_slice,
+            dtype=dtype,
+        )
+
+    def _build_dataarray(
+        self,
+        hdf_file,
+        values: np.ndarray,
+        time_slice: slice,
+        spatial_slice: Optional[slice],
+        *,
+        dtype: Optional[DTypeLike],
+    ) -> xr.DataArray:
+        """Build the established labeled result schema from materialized values."""
         if dtype is not None:
             values = values.astype(dtype, copy=False)
         raw_times = np.asarray(hdf_file[self.time_path][time_slice])
@@ -445,6 +661,9 @@ class HdfResultView:
         if tuple(hdf_file[self.dataset_path].shape) != self.source_shape:
             hdf_file.close()
             raise RuntimeError("HDF result dataset shape changed after view creation")
+        if hdf_file[self.dataset_path].dtype.str != self.source_dtype:
+            hdf_file.close()
+            raise RuntimeError("HDF result dataset dtype changed after view creation")
         return hdf_file
 
     def _validate_source_fingerprint(self) -> None:
