@@ -79,23 +79,37 @@ HdfUtils for common operations. Methods use @log_call decorator for logging and
 
 """
 
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    overload,
+)
+
+import geopandas as gpd
+import h5py
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from .._rasmap_schema import rasmap_dataframe_is_usable
-import xarray as xr
-from pathlib import Path
-import h5py
-from typing import Union, List, Optional, Dict, Any, Tuple, Iterator
-from .HdfMesh import HdfMesh
-from .HdfResultView import HdfResultView, Selection
-from .HdfBase import HdfBase
-from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
-import geopandas as gpd
+from .HdfBase import HdfBase
+from .HdfMesh import HdfMesh
+from .HdfResultView import HdfResultView, Selection
+from .HdfUtils import HdfUtils
 
 logger = get_logger(__name__)
+
+HdfInput = Union[int, str, Path, h5py.File]
+
 
 class HdfResultsMesh:
     """
@@ -131,7 +145,7 @@ class HdfResultsMesh:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_mesh_summary_values(
-        hdf_path: Path,
+        hdf_path: HdfInput,
         var: str,
         round_to: str = "100ms",
     ) -> pd.DataFrame:
@@ -146,6 +160,10 @@ class HdfResultsMesh:
             DataFrame with mesh name, cell or face identifier, value, and an
             optional time column. HDF dataset attributes are retained in
             ``DataFrame.attrs``. No Shapely geometry is constructed.
+
+        Raises:
+            ValueError: If the summary data cannot be read or has an unexpected
+                shape.
         """
         try:
             with h5py.File(hdf_path, "r") as hdf_file:
@@ -162,30 +180,24 @@ class HdfResultsMesh:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_mesh_summary(
-        hdf_path: Path,
+        hdf_path: HdfInput,
         var: str,
         round_to: str = "100ms",
     ) -> gpd.GeoDataFrame:
-        """
-        Get spatial summary output for a mesh variable.
+        """Get spatial summary output for a mesh variable.
 
         Args:
-            hdf_path (Path): Path to the HDF file
-            mesh_name (str): Name of the mesh
-            var (str): Variable to retrieve (see valid options below)
-            truncate (bool): Whether to truncate trailing zeros (default True)
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            var: HEC-RAS summary-output variable name, such as
+                ``"Maximum Water Surface"``.
+            round_to: Time rounding specification for paired time rows.
 
         Returns:
-            xr.DataArray: DataArray with dimensions:
-                - time: Timestamps
-                - face_id/cell_id: IDs for faces/cells
-                And attributes:
-                - units: Variable units
-                - mesh_name: Name of mesh
-                - variable: Variable name
+            GeoDataFrame with mesh name, cell or face identifier, summary
+            values, optional summary times, and cell/face geometry.
 
-        Valid variables include:
-            "Water Surface", "Face Velocity", "Cell Velocity X"...
+        Raises:
+            ValueError: If the summary or geometry cannot be read.
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
@@ -196,32 +208,60 @@ class HdfResultsMesh:
             raise ValueError(f"Failed to get summary output: {str(e)}")
 
     @staticmethod
-    @log_call
-    @standardize_input(file_type='plan_hdf')
+    @overload
     def get_mesh_timeseries(
-        hdf_path: Path,
+        hdf_path: HdfInput,
         mesh_name: str,
         var: str,
         truncate: bool = True,
         *,
         time_selection: Selection = None,
         spatial_selection: Selection = None,
-        return_type: str = "xarray",
+        return_type: Literal["xarray"] = "xarray",
+    ) -> xr.DataArray: ...
+
+    @staticmethod
+    @overload
+    def get_mesh_timeseries(
+        hdf_path: HdfInput,
+        mesh_name: str,
+        var: str,
+        truncate: bool = True,
+        *,
+        time_selection: Selection = None,
+        spatial_selection: Selection = None,
+        return_type: Literal["view"],
+    ) -> HdfResultView: ...
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_mesh_timeseries(
+        hdf_path: HdfInput,
+        mesh_name: str,
+        var: str,
+        truncate: bool = True,
+        *,
+        time_selection: Selection = None,
+        spatial_selection: Selection = None,
+        return_type: Literal["xarray", "view"] = "xarray",
     ) -> Union[xr.DataArray, HdfResultView]:
         """
         Get timeseries output for a specific mesh and variable.
 
         Args:
-            hdf_path (Path): Path to the HDF file
-            mesh_name (str): Name of the mesh
-            var (str): Variable to retrieve (see valid options below)
-            truncate (bool): Whether to truncate leading/trailing zero-only
-                rows (default True). Lazy views defer that bounded scan until
-                values are requested.
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            mesh_name: Name of the 2D flow area.
+            var: HEC-RAS time-series variable to retrieve.
+            truncate: Whether to truncate leading/trailing zero-only
+                rows (default True). An all-zero selection retains its full
+                time extent. Eager materialization reads once and trims in
+                memory; lazy views defer the bounded scan until needed.
             time_selection: Source-coordinate integer or forward slice applied
                 before materialization.
             spatial_selection: Source-coordinate integer or forward slice of
-                cells/faces applied before materialization.
+                cells/faces applied before materialization. Truncation is
+                evaluated over this selected spatial subset.
             return_type: ``"xarray"`` (default) or opt-in ``"view"``.
 
         Returns:
@@ -239,7 +279,15 @@ class HdfResultsMesh:
                     - variable: Variable name
 
                 When to use: Single variable extraction for focused analysis.
-                For multiple variables, use get_mesh_cells_timeseries() → Dict[str, Dataset].
+                For multiple variables, use ``get_mesh_cells_timeseries()``
+                which returns ``Dict[str, Dataset]``.
+
+        Raises:
+            ValueError: If the variable or return type is invalid.
+            TypeError: If a selection is not integer-like or a slice.
+            IndexError: If an integer selection is outside the source extent.
+            FileNotFoundError: If a lazy view's source is moved before use.
+            RuntimeError: If a lazy view's source changes after creation.
 
         Valid variables include:
             "Water Surface", "Face Velocity", "Cell Velocity X"...
@@ -262,7 +310,7 @@ class HdfResultsMesh:
     @log_call
     @standardize_input(file_type='plan_hdf')
     def iter_mesh_timeseries(
-        hdf_path: Path,
+        hdf_path: HdfInput,
         mesh_name: str,
         var: str,
         *,
@@ -271,11 +319,33 @@ class HdfResultsMesh:
         batch_size: Optional[int] = None,
         max_chunk_bytes: int = 16 * 1024 * 1024,
     ) -> Iterator[xr.DataArray]:
-        """Yield bounded, time-major batches for one mesh result variable.
+        """Yield untruncated, bounded time-major batches for one mesh variable.
 
         The returned iterator owns one read-only HDF handle for the duration of
         iteration. Each batch uses the established xarray DataArray schema.
-        Geometry is not constructed.
+        Geometry is not constructed. The iterator deliberately does not trim
+        leading or trailing zero-only rows so every selected source timestep is
+        emitted exactly once.
+
+        Args:
+            hdf_path: Plan number, plan-result HDF path, or open HDF handle.
+            mesh_name: Name of the 2D flow area.
+            var: HEC-RAS time-series variable name.
+            time_selection: Source-coordinate integer or forward slice.
+            spatial_selection: Source-coordinate integer or forward slice of
+                cells or faces.
+            batch_size: Optional explicit number of timesteps per batch.
+            max_chunk_bytes: Byte target used when ``batch_size`` is omitted.
+
+        Returns:
+            Iterator of labeled xarray DataArray batches.
+
+        Raises:
+            ValueError: If the variable, selection, or batch sizing is invalid.
+            TypeError: If a selection is not integer-like or a slice.
+            IndexError: If an integer selection is outside the source extent.
+            FileNotFoundError: If the source is moved before iteration.
+            RuntimeError: If the source changes after iterator creation.
         """
         view = HdfResultsMesh._get_mesh_result_view(
             hdf_path,
@@ -292,7 +362,7 @@ class HdfResultsMesh:
 
     @staticmethod
     def _get_mesh_result_view(
-        hdf_path: Path,
+        hdf_path: HdfInput,
         mesh_name: str,
         var: str,
         *,

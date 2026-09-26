@@ -103,6 +103,14 @@ def _run_worker(args) -> int:
         def operation():
             with h5py.File(args.hdf_path, "r") as hdf_file:
                 return hdf_file[dataset_path][:][args.time_index]
+    elif args.scenario == "eager_api_truncate":
+        def operation():
+            return HdfResultsMesh.get_mesh_timeseries(
+                args.hdf_path,
+                args.mesh_name,
+                args.variable,
+                truncate=True,
+            ).values
     elif args.scenario == "eager_max":
         def operation():
             with h5py.File(args.hdf_path, "r") as hdf_file:
@@ -136,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
             "direct_slice",
             "bounded_max",
             "eager_slice",
+            "eager_api_truncate",
             "eager_max",
         ),
         help=argparse.SUPPRESS,
@@ -156,7 +165,7 @@ def main() -> int:
 
     scenarios = ["view_create", "direct_slice", "bounded_max"]
     if args.include_eager:
-        scenarios.extend(["eager_slice", "eager_max"])
+        scenarios.extend(["eager_slice", "eager_api_truncate", "eager_max"])
     rows = []
     for scenario in scenarios:
         for repeat in range(args.repeats):

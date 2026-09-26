@@ -21,6 +21,7 @@ When working with HEC-RAS results, read them from HDF5 files (`.p##.hdf`). Use t
 | `HdfMesh` | 2D mesh geometry extraction |
 | `HdfResultsPlan` | General results (WSE, velocity) |
 | `HdfResultsMesh` | Mesh cell time series |
+| `HdfResultView` | Lazy selections, bounded batches, and reductions over one mesh result dataset |
 | `HdfResultsBreach` | Breach progression data |
 | `HdfStruc` | Structure data (bridges, culverts) |
 | `HdfHydraulicTables` | Cross section property tables |
@@ -58,6 +59,16 @@ cells = HdfMesh.get_mesh_cell_points(plan_number, ras_object=ras)
 
 # Get time series for specific cells
 ts = HdfResultsMesh.get_mesh_cells_timeseries(plan_number, ras_object=ras)
+
+# Opt-in lazy/bounded access for a large single mesh variable
+view = HdfResultsMesh.get_mesh_timeseries(
+    plan_number,
+    "2D Area",
+    "Water Surface",
+    truncate=False,
+    return_type="view",
+)
+maximum = view.reduce("max")
 ```
 
 ## Common Patterns

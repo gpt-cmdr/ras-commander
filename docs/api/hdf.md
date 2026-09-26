@@ -131,11 +131,12 @@ removed before v1.2.0:
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`
 - `get_mesh_max_face_v(hdf_path)` - Maximum face velocity
-- `get_mesh_timeseries(hdf_path, mesh, var, *, time_selection=None,
+- `get_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, return_type="xarray")` - Eager time series with
   source-coordinate HDF slicing, or an opt-in lazy `HdfResultView`
-- `iter_mesh_timeseries(hdf_path, mesh, var, *, batch_size=None,
-  max_chunk_bytes=16777216)` - Stream bounded, time-major xarray batches
+- `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
+  spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
+  untruncated, bounded, time-major xarray batches
 - `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers
   without constructing Shapely geometry
 - `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
@@ -164,6 +165,19 @@ nanosecond modification time before and after the read, detecting ordinary
 source replacement or modification. Available operations are `to_xarray()`, `to_numpy()`,
 `to_pandas()`, optional `to_arrow()`, `iter_batches()`, `select()`, and bounded
 `reduce("max"|"min"|"mean"|"argmax")`.
+
+For `truncate=True`, eager conversion reads the selected HDF slab once and
+trims zero-only leading/trailing rows in memory. Lazy `shape`, batching, and
+reductions perform a bounded scan when the active window is needed. An all-zero
+selection retains its full time extent, matching the historical eager API.
+Truncation is evaluated over the selected spatial subset. `select(time=None)`
+preserves a prior selection; pass `slice(None)` to reset it. NumPy and Python
+integer indexes are both accepted. An explicit reduction `dtype` must be a
+floating-point dtype so NaN/infinite filtering remains valid.
+
+`iter_mesh_timeseries()` is intentionally untruncated: it emits every selected
+source timestep once, in time-major batches. This makes batch reassembly
+deterministic and avoids a hidden preliminary scan.
 
 ```python
 from ras_commander import HdfResultsMesh

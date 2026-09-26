@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pickle
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 import h5py
@@ -204,6 +205,136 @@ def test_lazy_truncation_matches_existing_eager_contract(tmp_path):
     np.testing.assert_allclose(result.values, values[1:4], equal_nan=True)
 
 
+def test_truncation_retains_all_zero_selection_and_shape(tmp_path):
+    hdf_path, _ = _write_result_hdf(tmp_path / "all_zero.p01.hdf")
+    dataset_path = f"{TIME_BASE}/2D Flow Areas/{MESH_NAME}/Water Surface"
+    with h5py.File(hdf_path, "a") as hdf_file:
+        hdf_file[dataset_path][:] = 0.0
+
+    with h5py.File(hdf_path, "r") as hdf_file:
+        legacy = HdfResultsMesh._get_mesh_timeseries_output(
+            hdf_file,
+            MESH_NAME,
+            "Water Surface",
+            truncate=True,
+        )
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        return_type="view",
+    )
+
+    assert view.shape == (5, 4)
+    assert view.to_numpy().shape == view.shape
+    np.testing.assert_array_equal(view.to_xarray().values, legacy.values)
+
+
+def test_truncated_shape_matches_materialized_shape(tmp_path):
+    hdf_path, _ = _write_result_hdf(tmp_path / "shape.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        return_type="view",
+    )
+
+    assert view.shape == (3, 4)
+    assert view.to_numpy().shape == view.shape
+
+
+def test_eager_truncation_reads_selected_values_once(tmp_path, monkeypatch):
+    hdf_path, _ = _write_result_hdf(tmp_path / "single_read.p01.hdf")
+    reads = []
+    original = h5py.Dataset.__getitem__
+
+    def record_read(dataset, key):
+        if dataset.name.endswith("/Water Surface"):
+            reads.append(key)
+        return original(dataset, key)
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", record_read)
+    result = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=True,
+        spatial_selection=slice(0, 2),
+    )
+
+    assert result.shape == (3, 2)
+    assert reads == [(slice(0, 5, 1), slice(0, 2, 1))]
+
+
+def test_numpy_integer_and_argmax_indexes_can_select_time(tmp_path):
+    hdf_path, values = _write_result_hdf(tmp_path / "numpy_index.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        return_type="view",
+    )
+    argmax = view.reduce("argmax")
+    source_index = argmax.values[0]
+
+    assert isinstance(source_index, np.integer)
+    selected = view.select(time=source_index).to_numpy()
+    np.testing.assert_allclose(
+        selected,
+        values[int(source_index):int(source_index) + 1],
+        equal_nan=True,
+    )
+
+
+@pytest.mark.parametrize("operation", ["max", "min", "mean", "argmax"])
+def test_reduction_rejects_integer_dtype_before_nonfinite_cast(
+    tmp_path,
+    operation,
+):
+    hdf_path, _ = _write_result_hdf(tmp_path / "integer_dtype.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        return_type="view",
+    )
+
+    with pytest.raises(TypeError, match="floating-point dtype"):
+        view.reduce(operation, dtype=np.int32)
+
+
+def test_float_reduction_dtype_preserves_nonfinite_filtering(tmp_path):
+    hdf_path, _ = _write_result_hdf(tmp_path / "float_dtype.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        return_type="view",
+    )
+
+    minimum = view.reduce("min", dtype=np.float32)
+    mean = view.reduce("mean", dtype=np.float32)
+    np.testing.assert_allclose(minimum.values, [0.0, 0.0, 0.0, 0.0])
+    np.testing.assert_allclose(mean.values, [1.4, 1.25, 3.25, 2.0])
+
+
+def test_reduction_rejects_nonpositive_chunk_target(tmp_path):
+    hdf_path, _ = _write_result_hdf(tmp_path / "chunk_target.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        return_type="view",
+    )
+
+    with pytest.raises(ValueError, match="max_chunk_bytes must be positive"):
+        view.reduce("max", max_chunk_bytes=0)
+
+
 def test_geometry_free_summary_matches_spatial_summary_values(tmp_path):
     hdf_path, _ = _write_result_hdf(tmp_path / "summary.p01.hdf")
 
@@ -286,6 +417,35 @@ def test_view_is_pickleable_and_detects_source_changes(tmp_path):
         stream.write(b"changed")
     with pytest.raises(RuntimeError, match="source changed"):
         restored.to_numpy()
+
+
+def test_view_detects_dataset_dtype_change_even_with_refreshed_stat(tmp_path):
+    hdf_path, _ = _write_result_hdf(tmp_path / "dtype_change.p01.hdf")
+    view = HdfResultsMesh.get_mesh_timeseries(
+        hdf_path,
+        MESH_NAME,
+        "Water Surface",
+        truncate=False,
+        return_type="view",
+    )
+    with h5py.File(hdf_path, "a") as hdf_file:
+        values = np.nan_to_num(
+            hdf_file[view.dataset_path][:],
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        ).astype(np.int32)
+        del hdf_file[view.dataset_path]
+        hdf_file.create_dataset(view.dataset_path, data=values)
+    stat = hdf_path.stat()
+    stale_metadata = replace(
+        view,
+        source_size=stat.st_size,
+        source_mtime_ns=stat.st_mtime_ns,
+    )
+
+    with pytest.raises(RuntimeError, match="dataset dtype changed"):
+        stale_metadata.to_numpy()
 
 
 def test_view_arrow_conversion_uses_long_labeled_rows(tmp_path):

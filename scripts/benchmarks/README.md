@@ -4,8 +4,10 @@
 
 `benchmark_hdf_result_reads.py` compares lazy-view creation, one-timestep direct
 slicing, and bounded maximum reduction in isolated child processes. Add
-`--include-eager` to measure the whole-array baselines; this can require several
-times the on-disk dataset size in available memory. The source HDF is read-only.
+`--include-eager` to measure the whole-array baselines and the public default
+`truncate=True` eager path; this can require several times the on-disk dataset
+size in available memory. The source HDF is read-only. The harness uses
+`psutil`, which is installed with ras-commander's core dependencies.
 
 ```powershell
 .venv\Scripts\python.exe scripts/benchmarks/benchmark_hdf_result_reads.py `
