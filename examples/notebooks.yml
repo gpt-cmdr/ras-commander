@@ -3078,12 +3078,12 @@ notebooks:
   executed_cells: 24
 - id: 722_gridded_precipitation_atlas14
   filename: 722_gridded_precipitation_atlas14.ipynb
-  title: Gridded Precipitation for Rain-on-Grid 2D Modeling
+  title: 'Gridded Precipitation with Atlas 14: Current Workflow'
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: This notebook demonstrates **gridded precipitation (rain-on-grid)** workflows for 2D HEC-RAS
-    models using HMS-validated precipitation methods. Unlike hydrograph boundary conditions, gridded precipitation
-    applies directly to mesh cells.
+  summary: Migration guide to the implemented Atlas 14 workflow in notebook 727, with capability lookup
+    and links to GeoTIFF, MRMS, and HRRR examples. Retires obsolete placeholder APIs and raw meteorology
+    edits.
   tags:
   - 2d
   - precipitation
@@ -3091,27 +3091,11 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
-  - HdfMesh.get_mesh_area_names
-  - HdfMesh.get_mesh_areas
-  - HdfMesh.get_mesh_cell_points
-  - HdfMesh.get_mesh_cell_polygons
-  - HdfResultsMesh.get_mesh_max_ws
-  - RasCmdr.compute_plan
-  - RasExamples.extract_project
-  - RasPlan.clone_plan
-  - RasPlan.clone_unsteady
-  - RasPlan.set_unsteady
-  - RasUnsteady.set_gridded_precipitation
-  - RasUnsteady.set_precipitation_hyetograph
-  - ras.geom_df
-  - ras.plan_df
-  - ras.project_folder
-  - ras.project_name
-  - ras.results_df
+  - RasUnsteady.get_gridded_precipitation_capabilities
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 29
+  code_cells: 1
   executed_cells: 0
 - id: 723_storm_generator_abm_validation
   filename: 723_storm_generator_abm_validation.ipynb
@@ -3197,6 +3181,7 @@ notebooks:
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_gate_openings
   - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_constant_precipitation
@@ -3209,8 +3194,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 20
-  executed_cells: 20
+  code_cells: 21
+  executed_cells: 19
 - id: 728_extend_gridded_dss_forcing_window
   filename: 728_extend_gridded_dss_forcing_window.ipynb
   title: Extending Gridded DSS Forcing Through the Simulation Window
@@ -3368,6 +3353,7 @@ notebooks:
   - HdfProject.get_project_bounds_latlon
   - RasCmdr.compute_parallel
   - RasExamples.extract_project
+  - RasPreprocess.preprocess_plan
   - RasUsgsCore.retrieve_flow_data
   - ras.get_plan_entries
   - ras.plan_df
@@ -3377,8 +3363,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 23
-  executed_cells: 22
+  code_cells: 24
+  executed_cells: 21
 - id: 901_aorc_precipitation_catalog
   filename: 901_aorc_precipitation_catalog.ipynb
   title: AORC Precipitation Catalog for HEC-RAS Rain-on-Grid Models
@@ -3395,6 +3381,7 @@ notebooks:
   - HdfProject.get_project_bounds_latlon
   - RasCmdr.compute_parallel
   - RasExamples.extract_project
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_gate_openings
   - RasUnsteady.set_gate_openings
   - RasUtils.remove_with_retry
@@ -3407,8 +3394,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 18
-  executed_cells: 17
+  code_cells: 19
+  executed_cells: 16
 - id: 910_usgs_gauge_catalog
   filename: 910_usgs_gauge_catalog.ipynb
   title: USGS Gauge Catalog Generation
@@ -3526,13 +3513,16 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - HdfProject.get_project_bounds_latlon
+  - HdfResultsPlan.get_compute_messages_hdf_only
   - HdfResultsXsec.get_ref_lines_timeseries
   - HdfResultsXsec.get_xsec_timeseries
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
+  - RasPlan.get_plan_path
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.set_gridded_precipitation
   - RasUtils.remove_with_retry
   - ras.boundaries_df
@@ -3540,8 +3530,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 21
-  executed_cells: 21
+  code_cells: 22
+  executed_cells: 19
 - id: 915_realtime_forecast_workflow
   filename: 915_realtime_forecast_workflow.ipynb
   title: Real-Time Forecast Workflow with ras-commander
@@ -3599,6 +3589,7 @@ notebooks:
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.configure_gridded_dss_precipitation
   - RasUnsteady.get_gate_openings
   - RasUnsteady.get_inline_hydrograph_boundaries
@@ -3612,8 +3603,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
-  executed_cells: 12
+  code_cells: 13
+  executed_cells: 11
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
   title: MRMS QPE Rain-on-Grid Workflow

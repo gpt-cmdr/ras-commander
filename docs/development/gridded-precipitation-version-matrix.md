@@ -52,11 +52,12 @@ The repeatable native harness is
   interval values, the solver finished, cumulative rainfall was nonzero, and
   the hydraulic response was nonempty. This qualifies the translated route,
   not GeoTIFF as a vendor-native meteorology source.
-- A clean HEC-RAS 6.6 RasExamples DSS rerun on that same Wine profile remained
-  in the main RAS window and produced no fresh preprocessing artifact before
-  the 300-second public-API timeout. Because the GeoTIFF route completed on the
-  same executable/profile, this is a DSS-route or fixture-access compatibility
-  gap, not a general Wine-runtime or gridded-precipitation failure.
+- The prior HEC-RAS 6.6 Wine DSS timeout was a launcher environment defect.
+  Removing `WINEDLLOVERRIDES='mscoree,mshtml='` allowed preprocessing in 13.3
+  seconds and verified compute completion, with final rainfall and WSE matching
+  Windows 6.6 exactly. Short-path and fresh-profile controls retaining that
+  override still timed out. The experiment isolated the combined override;
+  disabling `mscoree` is the likely .NET startup mechanism, not separately proven.
 - The native NetCDF/GRIB cross-version semantic matrix is still open. The
   current evidence PR must not advertise or guard combinations that have only
   documentation evidence.
@@ -130,7 +131,7 @@ maximum of `0.1145427823`, 144,528 nonzero values, and nonzero water surfaces.
 | 6.4.1 on CLB07/Wine 11 | Native registered profile: `RasTcu.accept()` cannot find an accepted donor. Mixed accepted profile: `RasMapper Component did not load` / `ActiveX component can't create object` | Not reached | Exact-profile provisioning/COM blocker; no precipitation claim |
 | 6.5 | No fresh result materialized before HEC-owned `Error: Unexpected error; quitting` dialog | Not reached | Confirmed startup/install/runtime failure on this host |
 | 6.6 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
-| 6.6 on CLB07/Wine 11, native DSS | No fresh artifact before the 300-second public-API timeout on a clean 6.6 RasExamples copy | Not reached | Unqualified Wine DSS route; same executable/profile succeeds for translated GeoTIFF |
+| 6.6 on CLB07/Wine 11, native DSS | Preprocessing completed in 13.3 seconds after removing the disabling DLL override; 3 x 268830 values | Verified completion; final cumulative max 0.11454278230667114 in, 144528 nonzero entries; WSE max 923.1984252929688 ft | Qualified; rainfall and WSE metrics match Windows 6.6 exactly |
 | 6.6 on CLB07/Wine 11, translated GeoTIFF | Four exact interval rows materialized at 10:00, 11:00, 12:00, and 13:00; `Processing` and `Finished Processing Precipitation` | `Finished Unsteady Flow Simulation`; final cumulative max `0.1157457530` in over 18,066 cells; final hydraulic depth max `9.7182655334` ft over 7,576 wet cells | Qualified for the feature-snapshot GeoTIFF-to-NetCDF/native-HDF route |
 | 6.7 Beta 5 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Historical beta evidence only |
 | 7.0 | Expected materialization and precipitation messages | `Finished Unsteady Flow Simulation`; expected rain and WSE | Qualified on Windows |
@@ -146,6 +147,20 @@ the shim only for 6.1 and 6.2. HEC-RAS 6.3 and 6.3.1 qualified in this matrix
 without it, while the library retains its earlier evidence-backed fallback for
 those two exact releases. No shim claim is extrapolated to 6.3.2 or another
 untested patch release.
+
+### CLB07/Wine 6.6 native DSS control and successful rerun
+
+The successful final plan HDF SHA-256 is
+`6f8aa85125809c10393e47ed7c2f412203a2121db4e0b116493ca7ea7516e106`.
+The executable SHA-256 remains
+`a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134`.
+Evidence receipts `wine66-dss-short.json`, `wine66-dss-fresh.json`, and
+`wine66-dss-dotnet.json` and the diagnosis are retained in the research
+worktree's ignored `working/` directory. The successful isolated model is
+on CLB07 CT212 at `/mnt/scratch/dss-dotnet-20260925/6.6/`.
+The comparison establishes matching rainfall/WSE summary metrics, not a
+bitwise comparison of all hydraulic arrays. No other release is qualified
+by this test.
 
 ### CLB07/Wine 6.6 translated GeoTIFF evidence
 
@@ -206,6 +221,16 @@ and the later release's resolved-issues entry, not the color/status word alone.
 
 ## Downstream workflow audit
 
+The table below records the initial audit. PR #376 follow-up changes retired
+722's obsolete authoring cells, added explicit temporal semantics and
+temporary-HDF checks to 727/900/901/914/916, corrected 924's precompute depth
+label, and clarified the scope of 915/917/926. A fresh Windows 6.6 execution
+of 729 passed after the cache transform correction. A RasExamples regression
+verifies AORC's first nonzero interval in the authored HDF. Full live-product
+reruns for each changed notebook and the remaining cross-version semantic
+matrix are still separate qualification tasks; old outputs are not evidence
+for newly changed source cells.
+
 | Notebook | Current route | Current evidence | Required requalification |
 |---|---|---|---|
 | 727 Atlas 14 | Atlas 14 grid to NetCDF to native rain-on-grid | All 20 code cells executed; compute plus rainfall-rate figures | Retain as the design-storm canonical example; add temporary-HDF and manual-message/map review checks |
@@ -247,9 +272,9 @@ messages, precipitation maps, timing, units, and hydraulic response.
    routes. The GeoTIFF feature now has direct HEC-RAS 6.6 Windows and Wine
    evidence; retain its value/timing/CRS/nodata acceptance tests. Qualify WPC
    QPF and other encodings separately rather than generalizing from GeoTIFF.
-6. **Wine qualification PR:** retain the 6.6 translated-GeoTIFF evidence and
-   diagnose the clean 6.6 DSS preprocessing timeout before making a Wine DSS
-   claim. Resolve 6.4.1 exact-profile TCU provisioning and COM registration
+6. **Wine qualification PR:** retain the 6.6 translated-GeoTIFF and native DSS
+   evidence, including the resolved disabling-DLL-override control. Resolve
+   6.4.1 exact-profile TCU provisioning and COM registration
    before making any 6.4.1 precipitation claim. Keep Windows and Wine claims
    separate.
 7. **Product/notebook PRs:** requalify AORC, MRMS, HRRR, WPC, Atlas 14, and

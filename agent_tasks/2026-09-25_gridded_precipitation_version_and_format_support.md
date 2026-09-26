@@ -12,6 +12,26 @@ documented, validated translation path such as an HEC-DSS grid.
 
 ## Current Baseline: Issue #371
 
+### PR #376 review follow-up (2026-09-25)
+
+- API audit found and fixed GDAL GeoTransform ordering and beta qualification
+  inheritance. An independent rasterio reopen verifies transform/extent/CRS/values.
+- AORC storm-plan creation now preserves the first hourly amount explicitly;
+  a real RasExamples clone/authoring regression verifies the resulting HDF.
+- Guide examples now use implemented APIs. Notebook 722 redirects to 727;
+  727/900/901/914/916 add precompute checks; 924 corrects its interval-depth
+  figure label; 915/917/926 describe their actual scope. Changed code-cell
+  outputs are cleared until reexecution rather than presented as fresh evidence.
+- Notebook 729 reran successfully on Windows 6.6 after the transform fix.
+- Native Wine DSS 6.6 now passes on CLB07: removing the launcher's combined
+  disabling `WINEDLLOVERRIDES='mscoree,mshtml='` setting resolved the timeout.
+  Final rainfall and WSE summary metrics match Windows 6.6. The experiment
+  isolated that combined override, not individual DLL entries.
+- Still open: full live NOAA product reruns for changed notebooks; 728's
+  extended-DSS model qualification; a WPC model run beyond catalog/plot;
+  remaining native NetCDF/GRIB temporal matrix and blocked 6.0/6.4.1/6.5 hosts.
+  Do not infer all-format/all-version qualification from the representative runs.
+
 The `fix/371-native-gridded-precip-hdf` branch provides the first reliable
 baseline:
 

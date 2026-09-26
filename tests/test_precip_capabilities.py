@@ -115,10 +115,20 @@ def test_route_qualification_does_not_overstate_format_evidence():
     capabilities = PrecipCapabilities.for_version("6.6")
 
     assert capabilities.qualification_for("dss") == "qualified_windows_and_wine"
+    assert any("WINEDLLOVERRIDES" in note for note in capabilities.notes)
     assert capabilities.qualification_for("netcdf") == "qualified_windows_and_wine"
+    assert capabilities.qualification_for("netcdf", route="native_hdf") == "qualified_windows_and_wine"
+    assert capabilities.qualification_for("netcdf", route="native") == "documented"
     assert capabilities.qualification_for("geotiff") == "qualified_windows_and_wine"
     assert capabilities.qualification_for("grib") == "documented"
     assert capabilities.qualification_for("grib", route="native") == "documented"
+
+
+@pytest.mark.parametrize("version", ["6.6 Beta 1", "7.0 Beta 1"])
+def test_prereleases_never_inherit_stable_runtime_qualification(version):
+    capabilities = PrecipCapabilities.for_version(version)
+    for source in ("dss", "netcdf", "geotiff", "grib"):
+        assert capabilities.qualification_for(source) == "historical_beta"
 
 
 def test_qualification_evidence_is_exact_to_tested_release():
@@ -131,12 +141,40 @@ def test_qualification_evidence_is_exact_to_tested_release():
     )
 
 
+@pytest.mark.parametrize("path", [
+    "C:/profiles/.wine-5.0.7/drive_c/HEC/6.6/Ras.exe",
+    r"C:\profiles\v2.1\HEC\6.6\Ras.exe",
+])
+def test_executable_version_ignores_ancestor_numbers(path):
+    assert PrecipCapabilities.for_version(path).version == "6.6"
+    assert PrecipCapabilities.resolve(ras_object=SimpleNamespace(ras_version=path)).version == "6.6"
+
+
+def test_resolved_runtime_parent_precedes_raw_version_and_keeps_beta():
+    project = SimpleNamespace(ras_exe_path="C:/HEC/6.6 Beta 1/Ras.exe", ras_version="5.0.7")
+    cap = PrecipCapabilities.resolve(ras_object=project)
+    assert cap.qualification_for("netcdf") == "historical_beta"
+
+
+def test_stable_looking_directory_preserves_matching_explicit_beta_identity():
+    project = SimpleNamespace(ras_exe_path="C:/HEC/6.6/Ras.exe", ras_version="6.6 Beta 1")
+    assert PrecipCapabilities.resolve(ras_object=project).qualification_for("netcdf") == "historical_beta"
+
+
+def test_unparseable_executable_parent_falls_back_to_unsteady_header(tmp_path):
+    unsteady = tmp_path / "Model.u01"
+    unsteady.write_text("Program Version=6.60\n")
+    project = SimpleNamespace(ras_version="C:/v5.0.7/custom/Ras.exe")
+    cap = RasUnsteady._gridded_precipitation_capabilities(unsteady, project)
+    assert cap.version == "6.6"
+
+
 @pytest.mark.parametrize("version", ["6.3", "6.3.1"])
 def test_63_host_shim_and_qualification_are_consistent(version):
     capabilities = PrecipCapabilities.for_version(version)
 
     assert capabilities.requires_wmic_compatibility
-    assert capabilities.native_dss_qualification == "qualified_windows_with_host_shim"
+    assert capabilities.native_dss_qualification == "qualified_windows"
 
 
 def test_unknown_route_qualification_fails_closed():

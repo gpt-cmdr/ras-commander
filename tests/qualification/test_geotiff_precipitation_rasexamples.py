@@ -138,7 +138,7 @@ def test_geotiff_precipitation_preprocesses_and_computes_on_rasexamples(tmp_path
     assert import_result.shape == expected_cumulative.shape
     assert import_result.source_format == "geotiff"
     assert import_result.hec_ras_version == "6.6"
-    assert import_result.route_qualification == "qualified_windows"
+    assert import_result.route_qualification == "qualified_windows_and_wine"
 
     RasPlan.update_simulation_date(
         plan_number,

@@ -608,7 +608,7 @@ class RasPrecipGrid:
                 if spatial_attrs.get("crs_wkt") != cube.crs_wkt:
                     return False
                 expected_transform = " ".join(
-                    str(float(value)) for value in tuple(cube.transform)[:6]
+                    str(float(value)) for value in cube.transform.to_gdal()
                 )
                 if spatial_attrs.get("GeoTransform") != expected_transform:
                     return False
@@ -693,7 +693,7 @@ class RasPrecipGrid:
             attrs={
                 "spatial_ref": cube.crs_wkt,
                 "crs_wkt": cube.crs_wkt,
-                "GeoTransform": " ".join(str(float(value)) for value in tuple(cube.transform)[:6]),
+                "GeoTransform": " ".join(str(float(value)) for value in cube.transform.to_gdal()),
             },
         )
         dataset = xr.Dataset(

@@ -2,15 +2,30 @@ from pathlib import Path
 import shutil
 from types import SimpleNamespace
 
-import h5py
 import numpy as np
 import pandas as pd
 import pytest
-import rasterio
-from rasterio.transform import Affine, from_origin
 
-from ras_commander import RasUnsteady
-from ras_commander.precip import RasPrecipGrid
+h5py = pytest.importorskip("h5py")
+rasterio = pytest.importorskip("rasterio")
+from rasterio.transform import Affine, from_origin  # noqa: E402 - optional dependency checked above
+
+from ras_commander import RasUnsteady  # noqa: E402
+from ras_commander.precip import RasPrecipGrid  # noqa: E402
+
+
+def test_invalid_interpolation_fails_before_raster_io_or_cache(tmp_path):
+    unsteady = tmp_path / "GeoTiffRain.u01"
+    unsteady.write_text("Flow Title=Rain\nProgram Version=6.60\n")
+    before = unsteady.read_bytes()
+    with pytest.raises(ValueError, match="interpolation"):
+        RasUnsteady.set_gridded_precipitation_geotiff(
+            unsteady, tmp_path / "nonexistent.tif", timestamps=["2024-01-01"],
+            units="mm", value_type="amount", interpolation="Kriging",
+            ras_object=_dummy_project(tmp_path),
+        )
+    assert unsteady.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [unsteady]
 
 
 def _write_tiff(
@@ -158,6 +173,14 @@ def test_geotiff_cache_is_content_addressed_validated_and_reused(tmp_path):
     assert second.reused is True
     assert destination.is_file()
     assert not list(destination.parent.glob("*.partial.nc"))
+
+    # Independent GDAL reader: x/y coordinates can hide malformed GeoTransform
+    # metadata from our native HDF writer, so verify the exported raster itself.
+    with rasterio.open(f'NETCDF:"{destination}":precipitation') as reopened:
+        assert reopened.transform == cube.transform
+        assert reopened.crs == rasterio.crs.CRS.from_wkt(cube.crs_wkt)
+        assert reopened.bounds == rasterio.transform.array_bounds(2, 2, cube.transform)
+        np.testing.assert_array_equal(reopened.read(reopened.count), cube.values[-1])
 
 
 def test_semantic_hash_and_default_cache_survive_source_relocation(tmp_path):

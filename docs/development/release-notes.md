@@ -6,6 +6,19 @@
 
 **Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
 
+- Correct the translated NetCDF GeoTransform to GDAL ordering, with an
+  independent rasterio reopen check for transform, CRS, extent, and values.
+- Preserve AORC's first hourly accumulation in `create_storm_plans()` by
+  passing explicit amount/mm/one-hour semantics; add a RasExamples HDF regression.
+- Refresh precipitation documentation to use implemented APIs. Retire the
+  obsolete notebook 722 authoring cells in favor of 727; add temporary-HDF
+  checks to Atlas 14, AORC, historical-event, and HRRR workflows, correct the
+  MRMS precompute plot label, and clarify uniform-boundary/WPC example scope.
+- Qualify native DSS on CLB07/Wine 11 with HEC-RAS 6.6. The prior timeout was
+  caused by the harness's disabling DLL override; removing the combined
+  `mscoree,mshtml` override restored preprocessing and verified computation.
+- Prevent beta versions from inheriting stable-release qualification.
+
 - Add first-class `RasUnsteady.set_gridded_precipitation_geotiff()` support for
   one multiband GeoTIFF or a timestamped sequence of single-band GeoTIFFs.
   Inputs are normalized to cumulative precipitation, written to a validated

@@ -17,6 +17,21 @@ def _write_unsteady_file(path: Path, content: str) -> Path:
     return path
 
 
+def test_hdf_failure_does_not_advertise_new_dss_configuration(tmp_path, monkeypatch):
+    from ras_commander import RasUnsteady
+
+    path = _write_unsteady_file(tmp_path / "Model.u01", "Flow Title=Rain\nProgram Version=6.60\n")
+    before = path.read_bytes()
+
+    def locked_hdf(**kwargs):
+        raise PermissionError("HDF locked by another application")
+
+    monkeypatch.setattr(RasUnsteady, "_update_gridded_dss_precipitation_hdf", locked_hdf)
+    with pytest.raises(PermissionError, match="HDF locked"):
+        RasUnsteady.configure_gridded_dss_precipitation(path, "rain.dss", "/A/B/PRECIP///F/", ratio=1.0)
+    assert path.read_bytes() == before
+
+
 def test_configures_official_baldeagle_gridded_dss_structure_and_round_trips(tmp_path):
     from ras_commander import RasUnsteady
 

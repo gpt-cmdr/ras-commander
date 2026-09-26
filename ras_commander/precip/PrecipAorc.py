@@ -962,7 +962,11 @@ class PrecipAorc:
                 RasUnsteady.set_gridded_precipitation(
                     unsteady_file=new_unsteady,
                     netcdf_path=precip_file,
-                    ras_object=ras_obj
+                    ras_object=ras_obj,
+                    dataset_name="APCP_surface",
+                    units="mm",
+                    value_type="amount",
+                    first_timestep_hours=1.0,
                 )
 
                 # 4. Clone plan file

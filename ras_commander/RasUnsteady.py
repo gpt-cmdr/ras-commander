@@ -5367,21 +5367,27 @@ class RasUnsteady:
         """Resolve precipitation capabilities from the runtime or file header."""
         from .precip import PrecipCapabilities
 
-        version = getattr(ras_object, "ras_version", None) if ras_object is not None else None
-        if version is None:
+        try:
+            capabilities = PrecipCapabilities.resolve(ras_object=ras_object)
+        except ValueError:
+            capabilities = None
+        if capabilities is None:
             with open(unsteady_path, "r", encoding="utf-8", errors="replace") as source:
                 for line in source:
                     if line.startswith("Program Version="):
                         version = line.split("=", 1)[1].strip()
+                        try:
+                            capabilities = PrecipCapabilities.for_version(version)
+                        except ValueError:
+                            pass
                         break
-        if version is None:
+        if capabilities is None:
             logger.warning(
                 "Could not resolve HEC-RAS version for %s; gridded-precipitation "
                 "version safeguards were not applied",
                 unsteady_path.name,
             )
             return None
-        capabilities = PrecipCapabilities.for_version(version)
         capabilities.require_global_gridded()
         return capabilities
 
@@ -5703,6 +5709,15 @@ class RasUnsteady:
             ("Met BC=Precipitation|Gridded DSS Pathname", dss_pathname),
         ])
 
+        # Match the raster route: a locked/invalid HDF must fail before text
+        # advertises a new forcing configuration.
+        hdf_path = RasUnsteady._update_gridded_dss_precipitation_hdf(
+            unsteady_path=unsteady_path,
+            dss_filename=dss_filename_str,
+            dss_pathname=dss_pathname,
+            interpolation=interpolation_value,
+            ratio=ratio,
+        )
         RasUnsteady._replace_met_precipitation_keys(
             unsteady_path,
             desired_entries,
@@ -5716,14 +5731,6 @@ class RasUnsteady:
                 lines, ratio, unsteady_path
             )
             RasUnsteady._atomic_write_lines(unsteady_path, lines)
-
-        hdf_path = RasUnsteady._update_gridded_dss_precipitation_hdf(
-            unsteady_path=unsteady_path,
-            dss_filename=dss_filename_str,
-            dss_pathname=dss_pathname,
-            interpolation=interpolation_value,
-            ratio=ratio,
-        )
 
         logger.info(
             f"Configured gridded DSS precipitation in {unsteady_path.name}: "
@@ -6200,7 +6207,8 @@ class RasUnsteady:
         one band per file by default; pass one common band list or one band list
         per file for multiband sequences. Timestamps and units are always
         explicit; filenames and non-standard TIFF tags are never used to guess
-        time.
+        time. Amount and rate timestamps are interval-ending; the selected
+        first-timestep duration places the start of the first interval.
 
         Parameters
         ----------
@@ -6264,6 +6272,7 @@ class RasUnsteady:
             ratio=ratio,
             value_type=value_type,
         )
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
         cube = RasPrecipGrid.from_geotiff(
             geotiff_paths,
             timestamps=timestamps,
@@ -6352,7 +6361,8 @@ class RasUnsteady:
         """Configure projected GRIB/GRIB2 precipitation through a durable NetCDF.
 
         Raster bands are read through GDAL/rasterio with caller-supplied
-        timestamps, units, and temporal semantics. The normalized cumulative
+        interval-ending timestamps (for amounts/rates), depth units, and
+        temporal semantics. The normalized cumulative
         cube is cached as HEC-RAS-compatible NetCDF and materialized into the
         unsteady HDF. This is also the safe route for GRIB encodings that GDAL
         can read but HEC-RAS cannot import directly.
@@ -6385,6 +6395,7 @@ class RasUnsteady:
             ratio=ratio,
             value_type=value_type,
         )
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
         cube = RasPrecipGrid.from_grib(
             grib_paths,
             timestamps=timestamps,
