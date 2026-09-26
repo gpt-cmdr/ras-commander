@@ -74,6 +74,11 @@ for plan, success in results.items():
 
 ## Extract HDF Results
 
+Use a computed unsteady plan HDF with the result family you need. The 2D
+example requires mesh results; the 1D example requires cross-section time
+series. A mixed 1D/2D plan can contain both. These calls read retained output
+without executing HEC-RAS.
+
 ```python
 from ras_commander import HdfResultsMesh, HdfResultsXsec
 
@@ -85,11 +90,16 @@ max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
 print(max_wse.head())
 
 # Extract cross-section results (1D)
-xsec_wse = HdfResultsXsec.get_xsec_timeseries(hdf_path, "Water Surface")
+xsec_results = HdfResultsXsec.get_xsec_timeseries(hdf_path)
+xsec_wse = xsec_results["Water_Surface"]  # DataArray: time × cross_section
 print(xsec_wse.head())
 ```
 
 ## Modify Plan Parameters
+
+These calls update the initialized project's plan text in place. Use a working
+copy, and select geometry `02` only if it exists in that project. Saving plan
+parameters does not execute the plan or refresh its retained results.
 
 ```python
 from ras_commander import RasPlan
@@ -101,10 +111,10 @@ RasPlan.set_num_cores("01", 4)
 RasPlan.set_geom("01", "02")  # Use geometry file g02
 
 # Update computation interval
-RasPlan.set_computation_interval("01", "5MIN")
+RasPlan.update_plan_intervals("01", computation_interval="5MIN")
 
 # Update description
-RasPlan.set_description("01", "Modified run with 5-minute interval")
+RasPlan.update_plan_description("01", "Modified run with 5-minute interval")
 ```
 
 ## Work with Example Projects

@@ -1278,7 +1278,7 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     # Encroachment Method
     "FW_EM_01": {
         "message": "Fixed encroachment stations (Method 1) used at RS {station}",
-        "help_text": "Method 1 requires justification for FEMA submittals.",
+        "help_text": "Review the selected stations and computed profiles. USACE Example 6 uses Method 1 for final refinement after Method 4 trials; Method 1 use alone is not a defect.",
         "type": MessageType.FWCHECK
     },
     "FW_EM_02": {
@@ -1297,10 +1297,8 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.FWCHECK
     },
     "FW_EM_05": {
-        "message": "Encroachment Method 5 (target surcharge) used at RS {station} with target {target} ft",
-        "help_text": "Method 5 iterates to achieve a target surcharge. Verify the target value "
-                     "matches regulatory requirements (typically 1.0 ft for FEMA). Iteration "
-                     "tolerance and convergence should be reviewed.",
+        "message": "Encroachment Method 5 (target WSE increase and maximum energy change) used at RS {station}",
+        "help_text": "Review both authored targets, calculated WSE and energy changes, iteration convergence, and encroachment stations. This diagnostic does not read or verify both target values.",
         "type": MessageType.FWCHECK
     },
     "FW_EM_06": {
@@ -1319,31 +1317,29 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     },
     "FW_EM_08": {
         "message": "Encroachment iteration limit ({iterations}) may be insufficient at RS {station}",
-        "help_text": "Methods 4 and 5 use iterative optimization. If the iteration limit is too low, "
-                     "the solution may not converge to optimal encroachment stations. Consider "
-                     "increasing the iteration limit if convergence issues are observed.",
+        "help_text": "Method 5 uses iteration. A configured limit below 10 is a screening heuristic, not evidence of nonconvergence. Review actual solver diagnostics before changing the limit. Method 4 requires user-run trials rather than this Method 5 iteration.",
         "type": MessageType.FWCHECK
     },
 
     # Surcharge
     "FW_SC_01": {
-        "message": "Surcharge ({sc} ft) exceeds allowable ({max} ft) at RS {station}",
-        "help_text": "Surcharge exceeds the regulatory limit. Floodway must be adjusted.",
+        "message": "Surcharge ({sc} ft) exceeds configured limit ({max} ft) at RS {station}",
+        "help_text": "Review profile pairing, discharge, boundary conditions, and computed WSE against the study-specific criterion before revising encroachments. The configured threshold is not a legal determination.",
         "type": MessageType.FWCHECK
     },
     "FW_SC_02": {
         "message": "Negative surcharge ({sc} ft) at RS {station} - WSE decreased",
-        "help_text": "Floodway WSE is lower than base flood. Verify encroachments.",
+        "help_text": "Review flow regime, boundary conditions, losses, profile pairing, and numerical diagnostics. A negative value alone does not justify narrower encroachments.",
         "type": MessageType.FWCHECK
     },
     "FW_SC_03": {
-        "message": "Zero surcharge at RS {station}",
-        "help_text": "No change in WSE at this location.",
+        "message": "Near-zero surcharge at RS {station} (absolute value < 0.005 ft)",
+        "help_text": "The computed difference is within the checker near-zero tolerance; this does not establish hydraulic or regulatory acceptance.",
         "type": MessageType.FWCHECK
     },
     "FW_SC_04": {
-        "message": "Surcharge ({sc} ft) is within 0.01 ft of limit at RS {station}",
-        "help_text": "Surcharge is very close to the regulatory limit.",
+        "message": "Surcharge ({sc} ft) is within 0.01 ft of configured limit at RS {station}",
+        "help_text": "Review precision and study criteria. This informational diagnostic can accompany an exceedance error because it includes both sides of the configured limit.",
         "type": MessageType.FWCHECK
     },
 
@@ -1394,7 +1390,7 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     # Boundary Condition
     "FW_BC_01": {
         "message": "Floodway starting WSE differs from base flood",
-        "help_text": "Starting WSE should typically match between profiles.",
+        "help_text": "Review the downstream boundary assumptions. USACE Example 6 intentionally raises the floodway boundary WSE to account for downstream encroachment; equality is not a universal requirement.",
         "type": MessageType.FWCHECK
     },
     "FW_BC_02": {
@@ -1719,8 +1715,7 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     },
     "FW_SW_02": {
         "message": "Starting WSE difference ({diff} ft) between base ({base_wse}) and floodway ({fw_wse}) profiles exceeds threshold",
-        "help_text": "Large starting WSE difference may affect floodway analysis results. "
-                     "Starting conditions should be consistent between base flood and floodway profiles.",
+        "help_text": "Review the downstream boundary assumptions and sensitivity. USACE Example 6 intentionally uses a higher floodway starting WSE; a difference is a review flag, not proof of invalid input.",
         "type": MessageType.FWCHECK
     },
     "FW_SW_03": {
@@ -1755,9 +1750,8 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.FWCHECK
     },
     "FW_SW_08": {
-        "message": "Starting WSE ({start_wse} ft) differs from computed WSE ({computed_wse} ft) by {diff} ft at RS {station}",
-        "help_text": "The specified starting WSE differs significantly from the computed WSE at the downstream boundary. "
-                     "Large differences may indicate boundary condition issues or hydraulic control effects.",
+        "message": "Base/floodway WSE-drop difference ({diff} ft) over the first two sorted sections exceeds threshold at RS {station}",
+        "help_text": "This compares computed WSE changes between two sections, not a specified boundary elevation against a computed one. Confirm physical station order, boundary assumptions, and hydraulic controls before interpreting this heuristic.",
         "type": MessageType.FWCHECK
     },
 
@@ -1767,40 +1761,28 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
     #   Method 1: Fixed encroachment stations
     #   Method 2: Fixed top widths
     #   Method 3: Fixed percentage of conveyance reduction
-    #   Method 4: Target surcharge (most common for FEMA)
-    #   Method 5: Target width reduction
+    #   Method 4: Target WSE increase
+    #   Method 5: Target WSE increase and maximum energy change
     # -------------------------------------------------------------------------
 
     # FW_SW_02M1 - Starting WSE Method 1 (fixed stations) specific check
     "FW_SW_02M1": {
-        "message": "Method 1 (fixed stations): Starting WSE diff ({diff} ft) at RS {station} - fixed stations may not properly account for starting WSE variation",
-        "help_text": "Method 1 uses fixed encroachment stations which do not automatically adjust "
-                     "based on hydraulic conditions. When the starting WSE differs between base flood "
-                     "and floodway profiles, the fixed stations may produce inappropriate surcharge. "
-                     "Consider using Method 4 or 5 for better hydraulic balance, or manually verify "
-                     "that the fixed stations produce acceptable surcharge with the given starting WSE.",
+        "message": "Method 1 (fixed stations): Starting WSE diff ({diff} ft) at RS {station}; review boundary assumptions and resulting surcharge",
+        "help_text": "Method 1 specifies stations directly and is used for final refinement in USACE Example 6. Evaluate the computed profile with the intended downstream boundary; changing methods is not a general remedy.",
         "type": MessageType.FWCHECK
     },
 
     # FW_SW_02M4 - Starting WSE Method 4 (target surcharge) specific check
     "FW_SW_02M4": {
-        "message": "Method 4 (target surcharge): Starting WSE diff ({diff} ft) at RS {station} may affect target surcharge ({target} ft) iteration",
-        "help_text": "Method 4 iterates to achieve a target surcharge (typically 1.0 ft for FEMA). "
-                     "When the starting WSE differs significantly from the base flood, the iteration "
-                     "must account for this difference when computing encroachment positions. Large "
-                     "starting WSE differences may cause convergence issues or unexpected encroachment "
-                     "patterns. Verify the floodway boundary is physically reasonable.",
+        "message": "Method 4 (target WSE increase): Starting WSE diff ({diff} ft) at RS {station}; review boundary assumptions and trial results",
+        "help_text": "Method 4 selects stations from a target WSE increase using conveyance. The computed rise can differ from that target; review successive user-run trials and the intended downstream boundary. This diagnostic does not verify the authored target.",
         "type": MessageType.FWCHECK
     },
 
-    # FW_SW_02M5 - Starting WSE Method 5 (target width reduction) specific check
+    # FW_SW_02M5 - Starting WSE Method 5 (target WSE increase and maximum energy change) specific check
     "FW_SW_02M5": {
-        "message": "Method 5 (target width reduction): Starting WSE diff ({diff} ft) at RS {station} may affect width reduction target ({target_pct}%)",
-        "help_text": "Method 5 iterates to achieve a target top width reduction. When starting WSE "
-                     "differs between profiles, the effective floodplain width changes, potentially "
-                     "affecting the iteration convergence. Large starting WSE differences may cause "
-                     "the width reduction target to be difficult to achieve or produce irregular "
-                     "floodway boundaries.",
+        "message": "Method 5 (target WSE increase and maximum energy change): Starting WSE diff ({diff} ft) at RS {station}; review both targets and boundary assumptions",
+        "help_text": "Method 5 iterates using a target WSE increase and maximum energy change. Review both authored targets and calculated profiles, including convergence and the intended downstream boundary. This diagnostic does not verify the authored targets.",
         "type": MessageType.FWCHECK
     },
 
@@ -1858,11 +1840,8 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
 
     # FW_SW_05M4 - Starting WSE consistency Method 4
     "FW_SW_05M4": {
-        "message": "Method 4 (target surcharge): Starting WSE varies between {profile1} ({wse1} ft) and {profile2} ({wse2} ft) at RS {station} - iteration adjusted",
-        "help_text": "Method 4 (target surcharge) will iterate to achieve the target surcharge "
-                     "regardless of the starting WSE. However, when starting WSE varies significantly "
-                     "between profiles at the boundary, the resulting encroachment stations will "
-                     "differ. This is expected behavior but should be verified for consistency.",
+        "message": "Method 4 (target WSE increase): Computed WSE varies between {profile1} ({wse1} ft) and {profile2} ({wse2} ft) at RS {station}",
+        "help_text": "Different trial profiles may intentionally use different targets or boundary assumptions. Method 4 does not automatically iterate to enforce an exact computed rise; review the authored inputs and resulting profiles.",
         "type": MessageType.FWCHECK
     },
 

@@ -1,281 +1,191 @@
-# Floodway Check: Floodway Analysis Validation
+# Floodway Check: Experimental Steady-Flow Diagnostics
 
-The Floodway Check validates floodway encroachment analysis for FEMA Flood Insurance Studies.
+`RasCheck.check_floodways()` compares two computed steady profiles and returns
+`CheckResults.messages` plus a per-section `floodway_summary`. It does not
+establish regulatory compliance or hydraulic acceptance. Supply profiles from
+the same model with compatible discharge, geometry, units, and boundary assumptions.
+The current checker assumes **feet**; it does not convert SI results.
 
-## Overview
+## Qualification and coverage
 
-Floodway analysis determines the channel required to convey the base flood (typically 1% annual chance) without increasing water surface elevations above an allowable surcharge limit. This check examines:
+**The floodway authoring and check workflow is experimental.** Notebook 223 was
+withdrawn from the example gallery pending qualification. Its historical outputs
+are not evidence that the complete workflow is correct. The API remains available
+for development on disposable copies, with these known limitations:
 
-1. **Surcharge (SC)** - Surcharge values against FEMA/state limits
-2. **Encroachment Method (EM)** - Appropriate encroachment method usage
-3. **Starting WSE (SW)** - Starting water surface elevation consistency
-4. **Discharge (DC)** - Discharge matching between profiles
-5. **Structure (ST)** - Floodway analysis at structures
-6. **Width (WD)** - Floodway width validation
+- `RasFloodway.parse_encroachments()` collapses blank fixed-width fields in legacy
+  multi-profile encroachment records. Reproducing the parse on the untouched
+  official Example 6 plan 02 shifts methods and target values; round-tripping
+  records through the same parser is not sufficient validation.
+- The checker's encroachment accessor does not read the separate `Encroachment
+  Station Left` and `Encroachment Station Right` datasets under `Additional
+  Variables` in the inspected Example 6 plan HDF. Width and associated structure
+  checks therefore do not run for that layout.
+- That accessor does not supply an `encr_method` column. Method-specific diagnostics
+  listed below are implemented branches, but their detection path is unqualified;
+  absence of those messages does not confirm method suitability.
+- Missing results, missing profile names, unsupported datasets, and some helper
+  failures can return empty or partial results. There is no complete coverage
+  receipt. Verify the summary is populated and contains every expected section.
+- Starting-WSE checks infer a downstream section by sorting station identifiers;
+  they are screening heuristics for compatible subcritical reaches, not a general
+  boundary-condition audit. Review station order and hydraulic regime explicitly.
 
-## FEMA Floodway Requirements
+The retained Example 6 HDF was inspected for two profiles and 24 steady result
+rows during the September 2026 review. No new solver run or successful authoring
+qualification is claimed by this repair. Restoring the notebook requires independent
+input-record readback, complete section/profile matching, fresh solver evidence,
+and review of WSE, energy, flow regime, and structure behavior. Keep source models
+immutable and retain both diagnostics and the actual executed notebook outputs.
 
-Under 44 CFR 60.3, the regulatory floodway must:
+### Separate 2D authoring status
 
-- Carry the 1% annual chance flood
-- Not increase the base flood elevation (BFE) more than a specified surcharge
-- Default federal surcharge limit is **1.0 foot**
-- Many states have more restrictive requirements
+Notebook 311 was also withdrawn. Its `RasEncroachments` GIS authoring route is
+separate from the steady-flow parser above. The retained HEC-RAS 6.6 run reported
+completion booleans, but no native unsteady encroachment result arrays and zero
+maximum-WSE differences for all 13,093 compared rows. This evidence does not
+establish that the solver applied the authored regions/zones. The APIs remain
+available as experimental input-authoring helpers; file/layer readback and a
+completed base simulation do not qualify the hydraulic encroachment workflow.
 
-## State-Specific Surcharge Limits
+## HEC-RAS method reference
 
-| State | Surcharge Limit | Notes |
-|-------|----------------|-------|
-| Default (FEMA) | 1.0 ft | Standard federal limit |
-| Wisconsin | 0.01 ft | Essentially zero rise |
-| Illinois | 0.1 ft | Strict urban standards |
-| Indiana | 0.1 ft | |
-| Michigan | 0.1 ft | |
-| New Jersey | 0.2 ft | |
-| Minnesota | 0.5 ft | |
-| Ohio | 0.5 or 1.0 ft | Varies by jurisdiction |
+| Method | Input / meaning | Review context |
+|--------|-----------------|----------------|
+| 1 | User-specified left and right encroachment stations | Used for final refinement in USACE Example 6 after trial methods; use alone is not a warning |
+| 2 | Fixed top width | Review the resulting stations and hydraulic response |
+| 3 | Specified percentage reduction in conveyance | Review conveyance distribution and the resulting hydraulic response |
+| 4 | Target increase in water surface elevation (WSE) | Determines stations using conveyance at the raised WSE; computed rise may differ from the input target, so the user reviews successive trials |
+| 5 | Target WSE increase plus maximum energy change | Iterative search; review both targets, convergence, and computed WSE/energy changes |
 
-```python
-from ras_commander.check import get_state_surcharge_limit
+The method definitions follow the
+[USACE Steady Flow Floodway Encroachment Analysis manual](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/6.3/performing-a-floodplain-encroachment-analysis/steady-flow-floodway-encroachment-analysis).
+The trial-to-final Method 1 sequence is demonstrated in
+[USACE Floodway Determination, Example 6](https://www.hec.usace.army.mil/confluence/rasdocs/rasappguide/latest/floodway-determination-example-6).
+In particular, Method 5 is not a width-reduction target. A Method 4 target is not
+itself a guaranteed computed surcharge. Method selection, target values, and
+acceptance criteria remain study-specific engineering decisions.
 
-# Get state-specific limit
-limit = get_state_surcharge_limit('IL')  # Returns 0.1
-limit = get_state_surcharge_limit('TX')  # Returns 1.0 (default)
-```
+## Configured thresholds
 
-## Message Reference
+The public wrapper defaults to `surcharge=1.0` ft. This is a **software default**,
+not a determination of the applicable limit. The legacy
+`get_state_surcharge_limit()` helper returns a stored lookup (for example, `IL`
+returns `0.1` and `TX` returns `1.0`); those entries have not been audited against
+current state or local requirements. This page does not prescribe state limits.
+Obtain the study's governing criterion and record its source before running checks.
 
-### Surcharge Messages (FW_SC_*)
+Several fields in `ValidationThresholds.floodway` are not wired into these
+predicates: `surcharge_max_ft`, `surcharge_warning_percent`,
+`discharge_tolerance_percent`, `min_floodway_width_ft`, and
+`acceptable_encroachment_methods`. Changing them does not change the corresponding
+hard-coded screening rules below. Use the explicit surcharge argument for the
+surcharge comparison. The starting-WSE difference thresholds are used.
 
-#### FW_SC_01 - Surcharge Exceeds Limit
+## Message reference
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ERROR |
-| **Message** | Surcharge ({surcharge} ft) exceeds allowable limit ({limit} ft) at RS {station} |
-| **Cause** | Computed surcharge exceeds FEMA/state maximum |
-| **Resolution** | Widen floodway encroachments to reduce surcharge. May need to adjust encroachment at multiple sections |
+The following table records the IDs and severities constructed by the public
+checker's helpers, with predicates summarized from `check_floodways.py`. It is
+checked against the code and `messages.py` by a focused regression test. **A listed
+branch does not imply that its required input was found or the branch ran.**
+`SC` uses `s = floodway WSE - base WSE` and the explicitly supplied `limit`.
+All length/elevation thresholds in this table are in feet.
 
-#### FW_SC_02 - Surcharge Approaching Limit
+| ID | Severity | Implemented condition / meaning |
+|----|----------|---------------------------------|
+| FW_SC_01 | ERROR | `s > limit` |
+| FW_SC_02 | WARNING | `s < -0.01`; negative surcharge |
+| FW_SC_03 | INFO | `abs(s) < 0.005`; near-zero surcharge |
+| FW_SC_04 | INFO | `s > 0` and `abs(s - limit) < 0.01`; includes either side of limit and can coexist with FW_SC_01 |
+| FW_Q_01 | WARNING | Absolute discharge difference exceeds 1% of a positive base discharge |
+| FW_Q_02 | WARNING | Floodway discharge exceeds 1.01 times base discharge |
+| FW_Q_03 | WARNING | Adjacent sorted-section discharge change exceeds both 2% of previous positive flow and 50 cfs; inspect tributaries and losses |
+| FW_EM_01 | INFO | Method 1 detected; fixed stations are not inherently unsuitable |
+| FW_EM_02 | WARNING | Method is zero and both encroachment stations are missing at a non-structure section |
+| FW_EM_03 | INFO | Multiple positive methods detected within a reach |
+| FW_EM_04 | WARNING | No encroachment at a non-structure section; same missing-input predicate as FW_EM_02 |
+| FW_EM_05 | INFO | Method 5 detected; targets are not verified by this message |
+| FW_EM_06 | WARNING | Encroachment method detected at a structure; review treatment |
+| FW_EM_07 | WARNING | Detected Method 4/5 inward encroachment distances beyond positive banks have an asymmetry ratio greater than 5:1 |
+| FW_EM_08 | WARNING | Method 5 is detected and a read iteration limit is below 10; heuristic, not observed nonconvergence |
+| FW_WD_01 | ERROR | Right minus left encroachment station is zero or negative |
+| FW_WD_02 | WARNING | Left encroachment is right of a positive left bank station |
+| FW_WD_03 | WARNING | Right encroachment is left of a positive right bank station |
+| FW_WD_04 | WARNING | Encroachment width is less than a positive channel width |
+| FW_WD_05 | WARNING | Lateral station change divided by station-identifier difference exceeds 0.10 (fallback length if parsing fails); review units/order before interpretation |
+| FW_ST_01 | WARNING | Structure encroachment differs from adjacent section encroachment |
+| FW_ST_02 | ERROR | Encroachment lies inside positive bridge abutment stations |
+| FW_ST_03 | WARNING | Both encroachment stations are missing at a structure |
+| FW_BC_02 | INFO | Slope boundary type detected |
+| FW_BC_03 | INFO | Known-WSE boundary type detected |
+| FW_SW_01 | INFO | Computed WSE reported at the inferred downstream section |
+| FW_SW_02 | WARNING | Absolute base/floodway WSE difference exceeds `starting_wse_diff_threshold_ft` (default 0.5) |
+| FW_SW_02M1 | WARNING | FW_SW_02 with Method 1 detected |
+| FW_SW_02M4 | WARNING | FW_SW_02 with Method 4 detected; review trial results and boundary assumptions |
+| FW_SW_02M5 | WARNING | FW_SW_02 with Method 5 detected; review both targets and boundary assumptions |
+| FW_SW_03 | ERROR | Floodway WSE below the section minimum channel elevation |
+| FW_SW_03M1 | ERROR | FW_SW_03 with Method 1 detected |
+| FW_SW_03M4 | ERROR | FW_SW_03 with Method 4 detected |
+| FW_SW_04 | INFO | Floodway WSE above the higher sampled bank elevation |
+| FW_SW_04M1 | INFO | FW_SW_04 with Method 1 detected |
+| FW_SW_04M4 | INFO | FW_SW_04 with Method 4 detected |
+| FW_SW_05 | WARNING | Other profiles differ from floodway WSE beyond the starting-WSE threshold at the same section |
+| FW_SW_05M1 | WARNING | FW_SW_05 with Method 1 detected |
+| FW_SW_05M4 | INFO | FW_SW_05 with Method 4 detected |
+| FW_SW_06 | WARNING | Computed Froude number is at least 1.0 at the inferred downstream section |
+| FW_SW_07 | ERROR | Reported depth or WSE minus channel minimum is negative |
+| FW_SW_08 | WARNING | Difference between base and floodway WSE drops over the first two sorted sections exceeds `starting_wse_computed_diff_ft` (default 1.0); does not compare against a specified boundary value |
+| FW_LW_01 | WARNING | Lateral weir present; activity requires result review |
+| FW_LW_02 | WARNING | Available lateral-weir flow exceeds 5% of main-channel flow |
 
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Surcharge ({surcharge} ft) is within 10% of limit ({limit} ft) at RS {station} |
-| **Cause** | Surcharge near maximum allowable |
-| **Resolution** | Consider adjusting encroachments to provide additional margin |
+The checker also delegates permanent ineffective-flow screening to the structure
+checker (`ST_IF_05`). Additional `FW_ST_*` templates exist in `messages.py`, but the
+separate extended structure helper is not called by this public entry point.
+`FW_DC_*` and the formerly described asymmetric-width/discontinuity IDs were
+incorrect documentation, not emitted messages from this implementation.
 
-#### FW_SC_03 - Negative Surcharge
+## Interpreting diagnostics
 
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO |
-| **Message** | Negative surcharge ({surcharge} ft) at RS {station} - floodway WSE below base flood |
-| **Cause** | Floodway water surface is lower than base flood |
-| **Resolution** | This is acceptable but indicates encroachments could potentially be narrower |
+A negative surcharge can involve changes in losses, flow regime, boundary
+conditions, or numerical behavior; it is not automatic permission to narrow the
+floodway. Near-zero surcharge is likewise not a certificate of a conservative
+or acceptable result. Review the matched profiles and diagnostics together.
 
-#### FW_SC_04 - Zero Surcharge
+A higher floodway downstream WSE can be intentional. USACE Example 6 uses a
+one-foot higher floodway starting WSE to represent downstream encroachment.
+Therefore, a starting-WSE difference is a review flag; enforcing identical values
+would not reproduce that example. Review reach extent, downstream assumptions,
+structures, transitions, and the computed energy/WSE profiles.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO |
-| **Message** | Zero surcharge at RS {station} |
-| **Cause** | No rise in water surface from encroachment |
-| **Resolution** | Indicates conservative floodway at this location |
-
-### Encroachment Method Messages (FW_EM_*)
-
-HEC-RAS provides five encroachment methods:
-
-| Method | Description | Usage |
-|--------|-------------|-------|
-| 1 | User-specified stations | Manual encroachment |
-| 2 | Equal conveyance reduction | Symmetric encroachment |
-| 3 | Target surcharge | Automatic to target rise |
-| 4 | Target width | Specified width |
-| 5 | Optimize | Optimize for target criteria |
-
-#### FW_EM_01 - Method 1 Usage
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Encroachment Method 1 (manual) used at RS {station} |
-| **Cause** | Manual station specification requires verification |
-| **Resolution** | Method 1 should only be used where automated methods don't apply. Document reasoning |
-
-#### FW_EM_02 - Method Inconsistency
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Encroachment method changes from {method1} to {method2} at RS {station} |
-| **Cause** | Different methods used at adjacent sections |
-| **Resolution** | Consistent methodology is preferred. Justify method changes |
-
-#### FW_EM_03 - Encroachment Inside Channel
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ERROR |
-| **Message** | Encroachment station ({encr_sta}) is inside channel bank ({bank_sta}) at RS {station} |
-| **Cause** | Floodway encroaches into main channel |
-| **Resolution** | Floodway should not encroach into the main channel. Adjust encroachment limits |
-
-### Starting WSE Messages (FW_SW_*)
-
-#### FW_SW_01 - Base/Floodway Starting WSE Mismatch
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ERROR |
-| **Message** | Starting WSE difference ({diff} ft) between base ({base_wse}) and floodway ({fw_wse}) profiles exceeds threshold |
-| **Cause** | Downstream boundary conditions don't match |
-| **Resolution** | Both profiles should have the same starting WSE at the downstream boundary |
-
-#### FW_SW_02 - Computed vs Specified Starting WSE
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Computed starting WSE ({computed}) differs from specified ({specified}) by {diff} ft |
-| **Cause** | Boundary condition produces different WSE than specified |
-| **Resolution** | Review boundary condition. May indicate backwater effects |
-
-#### FW_SW_03 - Starting WSE Above Bank
-
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO |
-| **Message** | Starting WSE ({wse}) exceeds bank elevation ({bank}) at downstream boundary |
-| **Cause** | Out-of-bank flow at boundary |
-| **Resolution** | Verify this is expected. May affect floodway delineation |
-
-### Discharge Messages (FW_DC_*)
-
-#### FW_DC_01 - Discharge Mismatch
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ERROR |
-| **Message** | Base flood discharge ({q_base}) doesn't match floodway discharge ({q_fw}) at RS {station} |
-| **Cause** | Floodway analysis must use identical discharge to base flood |
-| **Resolution** | Verify both profiles use the same flow data |
-
-#### FW_DC_02 - Discharge Tolerance Exceeded
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Discharge difference ({pct}%) exceeds {tolerance}% tolerance at RS {station} |
-| **Cause** | Small differences may indicate data issues |
-| **Resolution** | Review flow data entry for both profiles |
-
-### Structure Messages (FW_ST_*)
-
-#### FW_ST_01 - Surcharge at Structure
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | High surcharge ({surcharge} ft) at structure {name} |
-| **Cause** | Structures often control surcharge |
-| **Resolution** | Structures may require the full opening for floodway. Review structure floodway requirements |
-
-#### FW_ST_02 - Encroachment at Structure
-
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO |
-| **Message** | No encroachment applied at structure {name} |
-| **Cause** | Structure opening defines effective floodway |
-| **Resolution** | Normal for structures. Opening width typically equals floodway width |
-
-#### FW_ST_03 - Structure Controls Surcharge
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Structure {name} controls maximum surcharge for reach |
-| **Cause** | Maximum surcharge in reach occurs at structure |
-| **Resolution** | Structures often control floodway. Verify structure analysis is correct |
-
-### Width Messages (FW_WD_*)
-
-#### FW_WD_01 - Narrow Floodway
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Floodway width ({width} ft) is less than channel width ({channel} ft) at RS {station} |
-| **Cause** | Floodway narrower than channel |
-| **Resolution** | Floodway width should generally equal or exceed channel width |
-
-#### FW_WD_02 - Width Discontinuity
-
-| Field | Value |
-|-------|-------|
-| **Severity** | WARNING |
-| **Message** | Large floodway width change ({pct}%) between RS {station_us} ({width_us} ft) and RS {station_ds} ({width_ds} ft) |
-| **Cause** | Abrupt width change |
-| **Resolution** | Gradual transitions are preferred. Review for reasonableness |
-
-#### FW_WD_03 - Asymmetric Encroachment
-
-| Field | Value |
-|-------|-------|
-| **Severity** | INFO |
-| **Message** | Highly asymmetric encroachment at RS {station}: left={left} ft, right={right} ft |
-| **Cause** | Unequal encroachment on left and right |
-| **Resolution** | May be appropriate for asymmetric floodplains. Document reasoning |
-
-## Running Floodway Checks
+## Running the available checks
 
 ```python
-from ras_commander.check import RasCheck, get_state_surcharge_limit
+from pathlib import Path
+from ras_commander.check import RasCheck, create_custom_thresholds
 
-# Get state-specific surcharge limit
-surcharge_limit = get_state_surcharge_limit('TX')  # 1.0 ft
-
-# Run floodway check
-results = RasCheck.check_floodways(
-    plan_hdf,
-    geom_hdf,
-    base_profile='100yr',        # Base flood profile name
-    floodway_profile='Floodway', # Floodway profile name
-    surcharge=surcharge_limit    # Maximum allowable surcharge
-)
-
-# Review results
-for msg in results.messages:
-    if msg.severity.value == 'ERROR':
-        print(f"{msg.message_id}: {msg.message}")
-```
-
-## Customizing Floodway Thresholds
-
-```python
-from ras_commander.check import create_custom_thresholds, RasCheck
-
-# Create thresholds for Illinois (0.1 ft surcharge)
-il_thresholds = create_custom_thresholds({
-    'floodway.surcharge_max_ft': 0.1,
-    'floodway.discharge_tolerance_percent': 2.0,  # Stricter discharge matching
-    'floodway.min_floodway_width_ft': 20.0,       # Minimum width
+# Replace with your HDFs and exact computed profile names.
+plan_hdf = Path("working/model.p01.hdf")
+geom_hdf = Path("working/model.g01.hdf")
+review_limit_ft = 1.0  # Example configuration; establish the study criterion first.
+thresholds = create_custom_thresholds({
+    "floodway.starting_wse_diff_threshold_ft": 0.5,
 })
-
-# Run checks with Illinois standards
 results = RasCheck.check_floodways(
     plan_hdf, geom_hdf,
-    base_profile='100yr',
-    floodway_profile='Floodway',
-    surcharge=0.1,
-    thresholds=il_thresholds
+    base_profile="PF#1",
+    floodway_profile="PF#2",
+    surcharge=review_limit_ft,
+    thresholds=thresholds,
 )
+if results.floodway_summary.empty:
+    raise RuntimeError("No matched profile evidence; floodway review is incomplete")
+print(results.floodway_summary)
+for message in results.messages:
+    print(message.message_id, message.severity.value, message.message)
+# Independently compare expected section identities with the summary.
+# Messages and populated rows do not establish complete check coverage.
 ```
 
-## References
-
-- 44 CFR 60.3 - National Flood Insurance Program Regulations
-- FEMA Guidelines and Specifications for Flood Hazard Mapping Partners
-- HEC-RAS User's Manual, Chapter 8: Performing a Floodway Analysis
+The public `RasCheck` wrapper accepts **`surcharge`**. The lower-level
+`CheckFloodways.check_floodways()` and `RasFloodway.check_floodways()` accept
+**`surcharge_limit`**; use the keyword belonging to the called API.

@@ -5,12 +5,12 @@ Generate the table-based "Example Notebooks" index page for the docs.
 This script regenerates ``docs/examples/index.md`` as a set of per-section
 markdown tables (one row per example notebook). For each notebook it emits:
 
-* Notebook  - display title linked to the rendered docs page
+* Notebook  - curated title and task summary linked to the rendered docs page
               (``../notebooks/<name>.md`` which mkdocs serves at /notebooks/<name>/)
 * Source    - link to the source ``.ipynb`` on GitHub
 * Runtime   - total cell-execution wall time summed from the notebook's
               per-cell ``metadata.execution`` timestamps, or ``N/A`` when the
-              notebook was committed without execution outputs.
+              notebook has no usable recorded timing metadata.
 
 It is meant to run during the docs build, AFTER
 ``.claude/scripts/prepare_notebooks_for_docs.py`` (which converts the
@@ -20,7 +20,8 @@ so it runs under a bare ``python3``.
 It ALSO emits the gallery data surface (docs overhaul Workstream 1, W1.2):
 
 * ``docs/examples/index.json`` -- structured gallery data grouped by series
-  (title, summary, tags, difficulty, runtime, data_project, thumbnail per
+  (title, summary, tags, difficulty, runtime, data_project, thumbnail, and optional
+  input_families/operations/outputs/runtime_requirements/evidence_scope per
   notebook), consumed by the filterable card gallery (W4.1) and by agents.
 * ``docs/assets/thumbs/<id>.png`` -- a thumbnail per notebook, copied from the
   first figure of the rendered notebook when available.
@@ -40,9 +41,11 @@ branch) references notebooks that do not exist on ``main``. Sourcing from disk
 guarantees the table reflects exactly the notebooks that ship with the build:
 every ``.ipynb`` present, with no phantom rows.
 
-Per-notebook display titles come from the notebook's first markdown ``# `` H1;
-if absent, the filename is prettified (numeric prefix dropped, underscores ->
-spaces, Title Case). Sections are grouped by the leading integer in the
+Per-notebook display titles prefer curated metadata, then the notebook's first
+markdown ``# `` H1; if absent, the filename is prettified (numeric prefix dropped,
+underscores -> spaces, Title Case). Explicitly curated functional contracts are
+shown in collapsed details and passed unchanged to JSON; missing fields remain
+omitted. Sections are grouped by the leading integer in the
 filename prefix, bucketed into ``100s``/``200s``/.../``900s``.
 
 Usage:
@@ -69,6 +72,52 @@ from _docs_notebook_common import (  # noqa: E402
 )
 
 GITHUB_BLOB_BASE = "https://github.com/gpt-cmdr/ras-commander/blob/main/examples"
+
+FUNCTIONAL_FIELDS = {
+    "input_families": "Inputs",
+    "operations": "Operations",
+    "outputs": "Outputs",
+    "runtime_requirements": "Runtime requirements",
+    "evidence_scope": "Evidence scope",
+}
+
+
+def _table_text(value: str) -> str:
+    """Keep curated prose inside a single Markdown table cell."""
+    return " ".join(value.split()).replace("|", "\\|")
+
+
+def render_functional_contracts(metadata: dict) -> str:
+    """Render only explicitly curated contracts; no automatic evidence labels."""
+    blocks = []
+    for name, meta in sorted(metadata.items()):
+        if meta.get("excluded") or not any(meta.get(key) for key in FUNCTIONAL_FIELDS):
+            continue
+        rows = []
+        for key, label in FUNCTIONAL_FIELDS.items():
+            if key not in meta:
+                continue
+            value = meta[key]
+            text = "; ".join(value) if isinstance(value, list) else value
+            rows.append(f"| {label} | {_table_text(text)} |")
+        title = numbered_title(name, meta.get("title", name))
+        blocks.append(
+            f'??? info "{title.replace(chr(34), chr(39))}"\n\n'
+            f"    [Open notebook](../notebooks/{name}.md)\n\n"
+            "    | Contract | Scope |\n    | --- | --- |\n"
+            + "\n".join("    " + row for row in rows)
+        )
+    if not blocks:
+        return ""
+    return (
+        "## Selected Workflow Contracts\n\n"
+        "These optional contracts are curated in `examples/notebooks.yml` and "
+        "published unchanged in [the catalog JSON](index.json). An omitted "
+        "field means it has not been curated. Runtime requirements describe "
+        "what the workflow needs; recorded runtime measures a saved execution. "
+        "Evidence scope describes the example's limits, not a support badge.\n\n"
+        + "\n\n".join(blocks) + "\n\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +226,7 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
     Returns ``(markdown, total_rows, rows_with_runtime)``.
     """
     notebooks = sorted(examples_dir.glob("*.ipynb"))
+    metadata = load_yml_meta(examples_dir.parent)
 
     grouped: dict = {}
     section_order: List[Tuple[int, str]] = []
@@ -186,8 +236,11 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
 
     for nb_path in notebooks:
         name = nb_path.stem
+        meta = metadata.get(name, {})
+        if meta.get("excluded"):
+            continue
         nb = load_notebook(nb_path)
-        title = numbered_title(name, derive_title(nb_path, nb))
+        title = numbered_title(name, meta.get("title") or derive_title(nb_path, nb))
         seconds = compute_runtime_seconds(nb)
         runtime = format_runtime(seconds)
         if seconds is not None:
@@ -201,6 +254,8 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
             section_order.append(key)
 
         notebook_link = f"[{title}](../notebooks/{name}.md)"
+        if meta.get("summary"):
+            notebook_link += f"<br>{_table_text(meta['summary'])}"
         source_link = f"[.ipynb]({GITHUB_BLOB_BASE}/{name}.ipynb)"
         grouped[key].append((name, f"| {notebook_link} | {source_link} | {runtime} |"))
 
@@ -223,9 +278,15 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
         "# Example Notebooks\n\n"
         "These are the canonical, runnable examples for ras-commander. Each row "
         "links to the rendered documentation page and to the source `.ipynb` on "
-        "GitHub. **Runtime** is the summed cell-execution wall time captured the "
-        "last time the notebook was executed (`N/A` means the notebook was "
-        "committed without execution outputs).\n\n"
+        "GitHub. **Runtime** uses recorded notebook wall time when available, "
+        "otherwise summed cell timings. `N/A` means no usable timing metadata; "
+        "it does not mean outputs are absent. Saved outputs and runtime alone "
+        "do not establish that the central workflow or hydraulic checks passed. "
+        "Read each notebook's results and limitations.\n\n"
+
+        "Choose an operation through the [capability map](../capabilities.md), "
+        "or use the summaries below to compare examples by task. "
+        "Selected workflows include expandable input/output contracts.\n\n"
         "See [Example Projects](example-projects.md) for the CRS-valid source "
         "catalog and MapLibre review contract for ras2cng-exported model "
         "bundles.\n\n"
@@ -241,7 +302,8 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
         f"data, {total_rows - rows_with_runtime} without.*\n"
     )
 
-    markdown = intro + summary + "\n" + "\n\n".join(section_blocks) + "\n"
+    markdown = (intro + summary + "\n" + render_functional_contracts(metadata)
+                + "\n\n".join(section_blocks) + "\n")
     return markdown, total_rows, rows_with_runtime
 
 
@@ -354,6 +416,7 @@ def build_gallery(
                 copy_file=copy_thumbnails,
             ),
             "url": f"../notebooks/{name}.md",
+            **{key: meta[key] for key in FUNCTIONAL_FIELDS if key in meta},
         })
         total += 1
     for g in groups.values():

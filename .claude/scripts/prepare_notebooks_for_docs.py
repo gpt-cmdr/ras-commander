@@ -18,6 +18,8 @@ This is run during ReadTheDocs pre_build step.
 """
 
 import os
+import json
+from urllib.parse import unquote, urlsplit
 import re
 import shutil
 import subprocess
@@ -42,29 +44,45 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
     notebooks = list(examples_dir.glob("*.ipynb"))
     print(f"Converting {len(notebooks)} notebooks to markdown...")
 
+    scripts_dir = Path(__file__).resolve().parent
+    env = os.environ.copy()
+    env['PYTHONPATH'] = str(scripts_dir) + os.pathsep + env.get('PYTHONPATH', '')
     # Use batch mode - much faster than one-by-one
     # nbconvert can process multiple files in one call
     result = subprocess.run(
         [
             sys.executable, "-m", "jupyter", "nbconvert",
             "--to", "markdown",
+            "--config", str(scripts_dir / "nbconvert_docs_config.py"),
             "--output-dir", str(output_dir),
         ] + [str(nb) for nb in notebooks],
         capture_output=True,
-        text=True
+        text=True, env=env
     )
 
     if result.returncode != 0:
-        print(f"  Some errors during conversion:")
-        print(f"  {result.stderr[:500]}")
+        raise RuntimeError(
+            f"Notebook conversion failed (exit {result.returncode}); "
+            f"refusing to publish partial or stale output.\n{result.stderr[-4000:]}"
+        )
 
     # Show conversion output
     for line in result.stderr.split('\n'):
         if 'Converting' in line or 'Writing' in line:
             print(f"  {line.strip()}")
 
-    # Count results
-    md_files = list(output_dir.glob("*.md"))
+    # Count only this source set. Existing files cannot hide a missing conversion.
+    md_files = [output_dir / f"{notebook.stem}.md" for notebook in notebooks]
+    missing = [path.name for path in md_files if not path.is_file()]
+    if missing:
+        raise RuntimeError(f"Missing converted notebooks: {', '.join(missing)}")
+    # Disposable build mirrors survive git reset with ignored rendered pages.
+    # Remove only numbered notebook Markdown that no longer has a source; keep
+    # hand-copied README/AGENTS and assets. This also lets retirement redirects win.
+    expected_names = {path.name for path in md_files}
+    for stale in output_dir.glob("*.md"):
+        if re.match(r"^\d+_", stale.name) and stale.name not in expected_names:
+            stale.unlink()
     print(f"Created {len(md_files)} markdown files")
 
     # Preserve committed notebook figures referenced from Markdown cells.
@@ -78,6 +96,25 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
             dirs_exist_ok=True,
         )
         print("Copied notebook assets")
+
+    # Copy only existing, explicitly linked local image assets (not whole model/output dirs).
+    root = examples_dir.resolve()
+    for notebook in notebooks:
+        data = json.loads(notebook.read_text(encoding='utf-8'))
+        for cell in data.get('cells', []):
+            if cell.get('cell_type') != 'markdown':
+                continue
+            source = cell.get('source', '')
+            source = ''.join(source) if isinstance(source, list) else source
+            for target in re.findall(r'!\[[^\]]*\]\(([^\s)]+)', source):
+                url = urlsplit(target)
+                if url.scheme or url.netloc:
+                    continue
+                asset = (root / unquote(url.path)).resolve()
+                if asset.is_relative_to(root) and asset.is_file():
+                    dest = output_dir / asset.relative_to(root)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(asset, dest)
 
     return len(md_files)
 

@@ -2,6 +2,30 @@
 
 RAS Commander provides three modes for executing HEC-RAS plans, each optimized for different workflows.
 
+## Execution Capabilities and Return Values
+
+| Entry point | Run arrangement | `stream_callback` | `max_runtime` | `verify` | Return |
+|---|---|---|---|---|---|
+| `compute_plan()` | One plan; call in a loop for serial monitoring | Supported | Supported, seconds | Supported | `ComputeResult` |
+| `compute_test_mode()` | Serial plans in a copied project | Not accepted | Not accepted | Supported | `ComputeParallelResult` |
+| `compute_parallel()` | Independent worker folders | Not accepted | Not accepted | Supported | `ComputeParallelResult` |
+
+`ComputeResult` supports existing boolean checks: `bool(result)` is
+`result.success`. Its `completion_verified` is `None` when verification was not
+requested, or a boolean when checked; `results_df_row` can be `None`.
+`execution_details` records available execution and artifact evidence.
+
+`ComputeParallelResult` preserves mapping access (`results[plan]`, `.items()`,
+`.values()`). `bool(results)` only means the mapping has entries; use
+`bool(results) and all(results.values())` to require a nonempty set of successful
+plans. Its `results_df` can be empty, and `execution_details_by_plan` keeps the
+available per-plan evidence. See the [execution API reference](../api/core.md#rascmdr).
+
+Execution success and optional completion verification do not establish hydraulic
+acceptability. Check the selected result family, model diagnostics, and study
+criteria separately. Completion can verify even when later artifact handling
+fails and the overall result reports failure.
+
 ## Lean Batch Installation
 
 Batch workers that only need project inventory, plan computation, computation
@@ -265,8 +289,8 @@ new_plan = RasPlan.clone_plan("01", new_plan_shortid="Modified Run")
 
 # Change parameters
 RasPlan.set_num_cores(new_plan, 4)
-RasPlan.set_computation_interval(new_plan, "5MIN")
-RasPlan.set_description(new_plan, "Run with finer timestep")
+RasPlan.update_plan_intervals(new_plan, computation_interval="5MIN")
+RasPlan.update_plan_description(new_plan, "Run with finer timestep")
 
 # Execute modified plan
 success = RasCmdr.compute_plan(new_plan)
@@ -645,7 +669,6 @@ from ras_commander.callbacks import (
     ConsoleCallback,      # Print to console
     FileLoggerCallback,   # Log to file
     ProgressBarCallback,  # Show progress bar (requires tqdm)
-    SynchronizedCallback  # Thread-safe wrapper for parallel execution
 )
 
 # Console callback
@@ -666,13 +689,12 @@ Create custom callbacks for specialized monitoring:
 from ras_commander.callbacks import ExecutionCallback
 
 class ErrorDetectionCallback(ExecutionCallback):
-    """Callback that stops execution on first error."""
+    """Print messages containing error or warning keywords for review."""
 
-    def on_exec_message(self, message):
+    def on_exec_message(self, plan_number, message):
         # Check for error keywords
         if any(kw in message.upper() for kw in ['ERROR', 'FAILED', 'UNSTABLE']):
             print(f"❌ ERROR DETECTED: {message}")
-            # Could raise exception, send alert, etc.
         elif 'warning' in message.lower():
             print(f"⚠ WARNING: {message}")
         else:
@@ -685,46 +707,49 @@ RasCmdr.compute_plan("01", stream_callback=ErrorDetectionCallback())
 
 ### Callback Methods
 
-Custom callbacks can implement these methods:
+Custom callbacks can implement the hooks they need. Prep hooks bracket plan
+setup (including requested preprocessor-file clearing and core settings), not
+the engine's full geometry preprocessing. Message callbacks are notifications;
+printing an error does not stop computation or establish result validity.
 
 ```python
+from ras_commander.callbacks import ExecutionCallback
+
 class MyCallback(ExecutionCallback):
-    def on_start(self, plan_number):
-        """Called when execution starts."""
-        print(f"Starting plan {plan_number}")
+    def on_prep_start(self, plan_number):
+        print(f"Preparing plan {plan_number}")
 
-    def on_exec_message(self, message):
-        """Called for each HEC-RAS message during execution."""
-        print(f"HEC-RAS: {message}")
+    def on_prep_complete(self, plan_number):
+        print(f"Plan {plan_number} setup complete")
 
-    def on_complete(self, success):
-        """Called when execution completes."""
-        if success:
-            print("✓ Execution completed successfully")
-        else:
-            print("✗ Execution failed")
+    def on_exec_start(self, plan_number, command):
+        print(f"Launching plan {plan_number}")
 
-    def on_error(self, error):
-        """Called if exception occurs."""
-        print(f"Exception: {error}")
+    def on_exec_message(self, plan_number, message):
+        print(f"Plan {plan_number}: {message}")
+
+    def on_exec_complete(self, plan_number, success, duration):
+        print(f"Plan {plan_number}: success={success}, duration={duration:.1f}s")
+
+    def on_verify_result(self, plan_number, verified):
+        # Called for completion verification when verify=True
+        print(f"Plan {plan_number}: completion verified={verified}")
 ```
 
-### Parallel Execution with Callbacks
+### Monitor Several Plans Serially
 
-Use `SynchronizedCallback` wrapper for thread-safe logging:
+`compute_parallel()` and `compute_test_mode()` do not accept `stream_callback`.
+`SynchronizedCallback` can protect a callback shared by caller-managed threads,
+but does not add a parameter to either API. For monitored serial execution:
 
 ```python
-from ras_commander.callbacks import ConsoleCallback, SynchronizedCallback
+from ras_commander import RasCmdr
+from ras_commander.callbacks import ConsoleCallback
 
-# Wrap callback for thread safety
-safe_callback = SynchronizedCallback(ConsoleCallback(verbose=True))
-
-# Use with parallel execution
-results = RasCmdr.compute_parallel(
-    plan_number=["01", "02", "03"],
-    max_workers=3,
-    stream_callback=safe_callback  # Thread-safe logging
-)
+callback = ConsoleCallback(verbose=True)
+for plan in ["01", "02", "03"]:
+    result = RasCmdr.compute_plan(plan, stream_callback=callback, verify=True)
+    print(plan, result.success, result.completion_verified)
 ```
 
 ### Post-Execution Message Review

@@ -52,20 +52,21 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r docs/requirements-docs.txt
-          pip install -e .
+          CI=1 pip install -e .
 
       - name: Prepare notebooks for docs
         run: |
           # Pre-convert notebooks to markdown (30x faster than mkdocs-jupyter)
           python .claude/scripts/prepare_notebooks_for_docs.py
-          # Copy supporting files
-          cp examples/README.md docs/notebooks/ || true
-          cp examples/AGENTS.md docs/notebooks/ || true
 
       - name: Generate cognitive infrastructure docs
         run: |
           python .claude/scripts/generate_cognitive_docs.py
 
+      - name: Generate examples catalog
+        run: |
+          python .claude/scripts/generate_examples_index.py
+
       - name: Build and deploy documentation
         run: |
-          mkdocs gh-deploy --force
+          mkdocs gh-deploy --strict --force

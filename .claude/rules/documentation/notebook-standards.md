@@ -9,6 +9,9 @@ paths: examples/**
 **Auto-loads**: Yes (all code)
 **Path-Specific**: Relevant to `examples/*.ipynb`
 
+Shared requirements live in [examples/AGENTS.md](../../../examples/AGENTS.md).
+This rule supplies authoring examples and must remain consistent with that contract.
+
 ## Overview
 
 Treat example notebooks in `examples/` as serving a dual purpose:
@@ -34,7 +37,7 @@ using ras-commander.
 
 **Why Required**:
 - Notebook-to-markdown conversion preserves the first H1 as the page title
-- Missing H1 → title becomes filename ("01_basic_usage")
+- Missing H1 → title becomes filename ("101_project_initialization")
 - H1 provides context in documentation site
 
 ### Title Best Practices
@@ -51,7 +54,7 @@ using ras-commander.
 ```markdown
 # Example  # Too generic
 # Test  # Unclear purpose
-# 01_basic_usage  # Redundant with filename
+# 101_project_initialization  # Redundant with filename
 ```
 
 ## Cell Organization
@@ -74,8 +77,9 @@ using ras-commander.
    try:
        from ras_commander import init_ras_project, RasCmdr
    except ImportError:
-       current_file = Path(__file__).resolve()
-       parent_directory = current_file.parent.parent
+       parent_directory = Path.cwd()
+       if parent_directory.name == "examples":
+           parent_directory = parent_directory.parent
        sys.path.append(str(parent_directory))
        from ras_commander import init_ras_project, RasCmdr
    ```
@@ -94,9 +98,9 @@ using ras-commander.
 
 5. **Cleanup** (Code, optional)
    ```python
-   # Clean up extracted project
-   import shutil
-   shutil.rmtree(project_path.parent / "example_projects", ignore_errors=True)
+   # Keep the shared example-project cache and source models intact.
+   # Inspect task-specific working artifacts before choosing what to retain.
+   print("Review artifacts under working/ before cleanup")
    ```
 
 ## Documentation Build Configuration
@@ -136,7 +140,7 @@ using ras-commander.
 **Don't Commit**:
 - Notebooks with errors
 - Notebooks without outputs when the notebook is intended to appear in docs
-- Notebooks with absolute paths in outputs
+- Fabricated or manually sanitized output; improve display/logging code before rerunning
 
 ## Content Guidelines
 
@@ -168,10 +172,12 @@ hdf_file = project_path / "Muncie.p01.hdf"
 assert hdf_file.exists(), "HDF file should be created"
 
 # Verify results
-from ras_commander.hdf import HdfResultsPlan
-hdf = HdfResultsPlan(hdf_file)
-wse = hdf.get_wse(time_index=-1)
-print(f"✓ Extracted {len(wse)} water surface elevations")
+from ras_commander import HdfResultsXsec
+# For a retained 1D unsteady HDF with cross-section time-series output:
+results = HdfResultsXsec.get_xsec_timeseries(hdf_file)
+wse = results["Water_Surface"]
+print(wse.sizes)
+# Availability is not a hydraulic acceptance test.
 ```
 
 **Why**: Shows users what to expect, serves as validation
@@ -234,7 +240,7 @@ RasCmdr.compute_plan("01")
 
 **Internal links to other notebooks**:
 ```markdown
-See [Parallel Execution](02_parallel_execution.ipynb) for running multiple plans.
+See [Parallel Execution](113_parallel_execution.ipynb) for running multiple plans.
 ```
 
 **External links**:
@@ -259,7 +265,7 @@ print(f"Geometry files: {len(ras.geom_df)}")
 ras.plan_df.head()
 
 # Or specific columns
-ras.plan_df[['plan_id', 'plan_title', 'geom_file']].head()
+ras.plan_df[['plan_number', 'plan_title', 'geom_file']].head()
 ```
 
 **Visualizations**:
@@ -300,30 +306,29 @@ except FileNotFoundError as e:
 
 **Run notebooks as tests**:
 ```bash
-# Test all notebooks
-pytest --nbmake examples/*.ipynb
+# Run only a selected notebook with its required data/runtime available
 
 # Test specific notebook
-pytest --nbmake examples/01_basic_usage.ipynb
+pytest --nbmake examples/101_project_initialization.ipynb
 ```
 
 **Requirements**:
 ```bash
-pip install pytest pytest-nbmake
+uv pip install --python .venv/Scripts/python.exe pytest nbmake
 ```
 
 ### Making Notebooks Testable
 
 **✅ DO**:
 - Use RasExamples (reproducible)
-- Include cleanup (remove temp files)
+- Keep task outputs under a distinct working directory and preserve source data
 - Handle errors gracefully
-- Keep execution time reasonable (<5 min)
+- Record cost and runtime requirements; use bounded cases appropriate to the demonstrated task
 
 **❌ DON'T**:
 - Require user input
 - Use absolute paths
-- Leave large files uncommitted
+- Commit large model datasets or ad hoc artifacts instead of using source manifests and external caches
 - Have side effects between cells
 
 ## Common Pitfalls
@@ -336,7 +341,7 @@ pip install pytest pytest-nbmake
 from ras_commander import RasCmdr
 ```
 
-**Result**: Documentation title is "01_basic_usage" (filename)
+**Result**: Documentation title is "101_project_initialization" (filename)
 
 **Fix**: Add markdown cell with H1 first
 
@@ -371,14 +376,14 @@ project_path = Path("/Users/billk/Documents/Projects/Muncie")
 
 ### Convention
 
-**Format**: `##_descriptive_name.ipynb`
+**Format**: `NNN_descriptive_name.ipynb`
 
 **Examples**:
-- `01_basic_usage.ipynb`
-- `02_parallel_execution.ipynb`
-- `15_usgs_gauge_integration.ipynb`
+- `101_project_initialization.ipynb`
+- `113_parallel_execution.ipynb`
+- `911_usgs_gauge_data_integration.ipynb`
 
-**Why Two Digits**: Allows up to 99 notebooks, sorts correctly
+**Why Three Digits**: Existing topic series support stable, sortable example IDs; do not renumber solely for appearance.
 
 ### Naming Guidelines
 
@@ -412,10 +417,9 @@ project_path = Path("/Users/billk/Documents/Projects/Muncie")
 
 ### Clear All Outputs
 
-**Before committing** (optional):
-- Use `Edit → Clear All Outputs` to reduce file size
-- Useful for notebooks with large outputs
-- Re-run before building docs if execute: false
+Do not clear outputs from a published example merely to reduce file size. Reduce
+unnecessary output in the code and rerun when appropriate. Preserve the actual results,
+plots and limitations; the documentation build does not execute notebooks.
 
 **Keep Outputs** (recommended):
 - If execute: false in mkdocs.yml
@@ -427,10 +431,11 @@ project_path = Path("/Users/billk/Documents/Projects/Muncie")
 ### Local Preview
 
 ```bash
-# Create notebooks folder
-cp -r examples docs/notebooks
-
-# Build and serve
+# Generate the same saved-output pages used in CI
+python .claude/scripts/prepare_notebooks_for_docs.py
+python .claude/scripts/generate_examples_index.py
+python .claude/scripts/generate_cognitive_docs.py
+mkdocs build --strict
 mkdocs serve
 
 # View at http://127.0.0.1:8000

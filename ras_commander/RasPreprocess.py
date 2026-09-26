@@ -15,7 +15,7 @@ The Linux binaries cannot produce the .tmp.hdf or .b## files needed to begin
 execution. This module automates the Windows-side preprocessing step.
 
 Classes:
-    RasPreprocess - Static class for Windows preprocessing operations.
+    RasPreprocess: Static class for Windows preprocessing operations.
 """
 
 import hashlib
