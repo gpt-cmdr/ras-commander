@@ -126,9 +126,12 @@ Chris's book remains the definitive reference for COM-based automation of HEC-RA
 
 - [Harris Bienn (`@harrisbienn`)](https://github.com/harrisbienn) identified
   the retained-request identity mismatch in the governed scenario-worker retry
-  workflow and authored the implementation and regression coverage in
+  workflow and authored the original correction and regression coverage in
   [#310](https://github.com/gpt-cmdr/ras-commander/issues/310) and
-  [#311](https://github.com/gpt-cmdr/ras-commander/pull/311).
+  [#311](https://github.com/gpt-cmdr/ras-commander/pull/311). That finding was
+  generalized in the portable execution contract as separate retained-payload
+  and normalized-specification identities, without coupling the public API to
+  any application-specific orchestration workflow.
 - [`@PMacAddress`](https://github.com/PMacAddress) supplied detailed,
   reproducible Windows/Wine reports and follow-up testing for headless mesh
   generation, refinement-region activation, Manning's n geometry associations,
