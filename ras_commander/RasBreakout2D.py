@@ -603,6 +603,7 @@ class RasBreakout2D:
         *,
         ras_object: RasPrj,
         refresh_hdf: bool = True,
+        refresh_method: str = "rasmapper",
         remesh: bool = True,
         compute_property_tables: bool = False,
         timeout: int = 600,
@@ -611,11 +612,43 @@ class RasBreakout2D:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
         Geometry BC lines and the cloned unsteady file are intentionally not
-        edited.  ``refresh_hdf`` performs the exact text-to-HDF import through
-        the owned RAS Mapper workflow.  ``remesh`` then regenerates computation
-        cells through :class:`GeomMesh`; neither option launches a hydraulic
-        simulation.
+        edited.  ``refresh_hdf`` performs the exact text-to-HDF import.  With
+        ``refresh_method="rasmapper"`` (default) that import runs through the
+        owned RAS Mapper workflow.  With ``refresh_method="rasexe"`` it runs
+        headless: computation points are first regenerated inside the new
+        perimeter (the parent's points would otherwise be imported), and
+        ``Ras.exe`` rebuilds the cloned geometry HDF through
+        :meth:`GeomPreprocessor.run_geometry_preprocessor` in geometry-only
+        mode.  That pass also computes property tables, so the cloned HDF
+        must first carry a terrain association the child can resolve (set it
+        with :meth:`RasMap.set_geometry_association`).  ``remesh`` then regenerates computation cells through
+        :class:`GeomMesh`; no option launches a hydraulic simulation.
+
+        Args:
+            preflight: A passing :meth:`preflight` result.
+            clone: The :meth:`clone_plan_components` result for that preflight.
+            ras_object: The initialized isolated working project.
+            refresh_hdf: Rebuild the cloned geometry HDF from text.  Required
+                when outside connections are removed.
+            refresh_method: ``"rasmapper"`` (GUI workflow) or ``"rasexe"``
+                (headless geometry preprocessor).
+            remesh: Regenerate computation cells with :meth:`GeomMesh.generate`.
+            compute_property_tables: Compute 2D property tables afterwards.
+                Requires a terrain association on the geometry.
+            timeout: Seconds allowed for the text-to-HDF import.
+            max_mesh_iterations: Mesh auto-fix iterations.
+
+        Returns:
+            Breakout2DPreparationResult: Evidence for each preparation step.
+
+        Raises:
+            ValueError: If preflight did not pass, the clone's unsteady inputs
+                changed, ``refresh_method`` is unknown, or outside connection
+                removal is requested without an HDF refresh.
+            RuntimeError: If the HDF refresh, remeshing or property tables fail.
         """
+        if refresh_method not in ("rasmapper", "rasexe"):
+            raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
         if not preflight.is_ready:
             raise ValueError("preflight must pass before geometry preparation")
         if not clone.boundaries_unchanged:
@@ -687,7 +720,34 @@ class RasBreakout2D:
         )
 
         refresh_result = None
-        if refresh_hdf:
+        if refresh_hdf and refresh_method == "rasexe":
+            from .geom.GeomPreprocessor import GeomPreprocessor
+
+            points = GeomMesh.generate_computation_points(
+                clone.geometry_number,
+                mesh_name=preflight.spec.source_2d_area,
+                ras_object=ras_object,
+            )
+            # Seeding reports "success" (a mesh is only "complete" after
+            # generation), so check the status and the point count directly.
+            if points.status != "success" or not points.cell_count:
+                raise RuntimeError(
+                    f"Computation-point regeneration failed: {points.error_message}"
+                )
+            refresh_result = GeomPreprocessor.run_geometry_preprocessor(
+                clone.plan_number,
+                ras_object=ras_object,
+                max_wait=timeout,
+                force=True,
+                clear_geompre=True,
+                geometry_only=True,
+            )
+            if not refresh_result.success or not clone.geometry_hdf.is_file():
+                raise RuntimeError(
+                    "Headless geometry HDF refresh failed: "
+                    f"{refresh_result.error or refresh_result.first_error_line}"
+                )
+        elif refresh_hdf:
             from .gui.workflows import MeshRegenerationWorkflow
 
             refresh_result = MeshRegenerationWorkflow.refresh_geometry_hdf_from_text(
