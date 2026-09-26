@@ -108,6 +108,17 @@ def _copytree_with_file_digest(
     return tree_digest.hexdigest(), project_digest.hexdigest()
 
 
+def _retained_content(path: Path) -> dict[str, str]:
+    """Digest a retained compiled artifact by content, not file stats."""
+    if path.suffix.lower() == ".hdf" and _is_hdf5(path):
+        return {"content_method": "hdf5-objects", "content_sha256": _hdf_content_digest(path)}
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return {"content_method": "bytes", "content_sha256": digest.hexdigest()}
+
+
 def _is_hdf5(path: Path) -> bool:
     import h5py
 
@@ -190,8 +201,7 @@ def _prepare_preprocessing(
                     "size_bytes": path.stat().st_size,
                     "mtime_ns": path.stat().st_mtime_ns,
                 }
-                if path.suffix.lower() == ".hdf" and _is_hdf5(path):
-                    item["content_sha256"] = _hdf_content_digest(path)
+                item.update(_retained_content(path))
                 retained.append(item)
         if not retained:
             raise ValueError(
@@ -265,20 +275,16 @@ def _complete_preprocessing_evidence(
                 "size_bytes": path.stat().st_size,
                 "mtime_ns": path.stat().st_mtime_ns,
             }
-            if "content_sha256" in prior and _is_hdf5(path):
-                item["content_sha256"] = _hdf_content_digest(path)
+            item.update(_retained_content(path))
             after.append(item)
         evidence["retained_artifacts_after"] = after
-        # HEC-RAS opens a 2D geometry HDF read-write on every unsteady run, which
-        # rewrites HDF5 bookkeeping bytes and the mtime without changing any
-        # group, dataset or attribute. An HDF artifact is unchanged when its
-        # content digest matches; other artifacts must keep size and mtime.
+        # HEC-RAS may reopen or rewrite compiled geometry on any run: a 2D
+        # geometry HDF gets new HDF5 bookkeeping bytes, and the legacy c## file
+        # can be rewritten byte for byte. Neither changes the geometry, so a
+        # retained artifact is unchanged when its content digest matches.
         evidence["retained_unchanged"] = all(
-            (
-                item.get("content_sha256") == prior["content_sha256"]
-                if "content_sha256" in prior
-                else item == prior
-            )
+            item["content_method"] == prior["content_method"]
+            and item["content_sha256"] == prior["content_sha256"]
             for item, prior in zip(after, evidence["retained_artifacts_before"])
         )
         evidence["passed"] = bool(after) and evidence["retained_unchanged"]

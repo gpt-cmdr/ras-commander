@@ -478,3 +478,20 @@ def test_hdf_content_digest_ignores_file_layout_but_not_attributes(tmp_path):
     digest = PortableExecution._hdf_content_digest
     assert digest(first) == digest(second)
     assert digest(first) != digest(third)
+
+
+def test_reuse_accepts_compiled_file_rewritten_with_identical_bytes(tmp_path):
+    """HEC-RAS may rewrite the legacy c## file byte for byte on a 2D run."""
+    project, plan, geometry = _reuse_runtime(tmp_path)
+    compiled = project.parent / "sample.c01"
+    compiled.write_bytes(b"compiled")
+    evidence, retained = PortableExecution._prepare_preprocessing(
+        PreprocessPolicy.REUSE.value, project, plan
+    )
+    before = compiled.stat()
+    compiled.write_bytes(b"compiled")
+    os.utime(compiled, ns=(before.st_atime_ns, before.st_mtime_ns + 10**9))
+
+    assert PortableExecution._complete_preprocessing_evidence(evidence, retained, 0)
+    methods = {item["path"]: item["content_method"] for item in evidence["retained_artifacts_after"]}
+    assert methods == {"sample.c01": "bytes", "sample.g01.hdf": "hdf5-objects"}
