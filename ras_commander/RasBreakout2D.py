@@ -621,7 +621,8 @@ class RasBreakout2D:
         :meth:`GeomPreprocessor.run_geometry_preprocessor` in geometry-only
         mode.  That pass also computes property tables, so the cloned HDF
         must first carry a terrain association the child can resolve (set it
-        with :meth:`RasMap.set_geometry_association`).  ``remesh`` then regenerates computation cells through
+        with :meth:`RasMap.set_geometry_association`).
+        ``remesh`` then regenerates computation cells through
         :class:`GeomMesh`; no option launches a hydraulic simulation.
 
         Args:
@@ -631,7 +632,8 @@ class RasBreakout2D:
             refresh_hdf: Rebuild the cloned geometry HDF from text.  Required
                 when outside connections are removed.
             refresh_method: ``"rasmapper"`` (GUI workflow) or ``"rasexe"``
-                (headless geometry preprocessor).
+                (headless geometry preprocessor; needs a terrain association
+                on the cloned HDF).  Ignored when ``refresh_hdf`` is False.
             remesh: Regenerate computation cells with :meth:`GeomMesh.generate`.
             compute_property_tables: Compute 2D property tables afterwards.
                 Requires a terrain association on the geometry.
@@ -745,7 +747,7 @@ class RasBreakout2D:
             if not refresh_result.success or not clone.geometry_hdf.is_file():
                 raise RuntimeError(
                     "Headless geometry HDF refresh failed: "
-                    f"{refresh_result.error or refresh_result.first_error_line}"
+                    f"{refresh_result.error or refresh_result.first_error_line or 'unknown error'}"
                 )
         elif refresh_hdf:
             from .gui.workflows import MeshRegenerationWorkflow
