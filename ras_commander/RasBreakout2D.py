@@ -27,7 +27,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from pyproj import CRS
-from shapely import contains_xy, intersects_xy, make_valid
+from shapely import intersects_xy, make_valid
 from shapely.geometry import (
     GeometryCollection,
     LineString,
@@ -47,6 +47,7 @@ from .RasPlan import RasPlan
 from .RasPrj import RasPrj
 from .RasUtils import RasUtils
 from .geom.GeomMesh import GeomMesh
+from .geom.GeomLateral import GeomLateral
 from .geom.GeomReferenceFeatures import GeomReferenceFeatures
 from .geom.GeomStorage import GeomStorage
 from .hdf.HdfBase import HdfBase
@@ -463,6 +464,14 @@ class RasBreakout2D:
             existing_boundaries,
             mesh_trim_boundary,
         )
+        connection_actions = _classify_outside_connections(
+            source_geometry_path, child, float(spec.containment_tolerance)
+        )
+        if connection_actions:
+            feature_actions = gpd.GeoDataFrame(
+                pd.concat([feature_actions, pd.DataFrame(connection_actions)], ignore_index=True),
+                geometry="geometry", crs=parent_boundary.crs,
+            )
         checks = _build_checks(
             spec,
             plan,
@@ -625,6 +634,24 @@ class RasBreakout2D:
             )
 
         child = preflight.child_boundary.geometry.iloc[0]
+        approved_connections = preflight.feature_actions[
+            preflight.feature_actions["feature_type"] == "sa_2d_connection"
+        ]
+        if not approved_connections.empty:
+            if not refresh_hdf:
+                raise ValueError("Outside connection removal requires exact native HDF refresh")
+            current_connections = _classify_outside_connections(
+                clone.geometry_path, child, float(preflight.spec.containment_tolerance)
+            )
+            approved_names = set(approved_connections["name"])
+            if (
+                not approved_connections["action"].eq("drop").all()
+                or {item["name"] for item in current_connections} != approved_names
+                or any(item["action"] != "drop" for item in current_connections)
+            ):
+                raise ValueError("Cloned connection inventory no longer matches approved outside removals")
+            for name in sorted(approved_names):
+                GeomLateral.delete_connection(clone.geometry_path, name, create_backup=True)
         breakline_specs = _retained_breakline_specs(preflight)
         reference_line_specs = _retained_reference_line_specs(preflight)
         refinement_specs = _retained_refinement_specs(preflight)
@@ -745,7 +772,11 @@ class RasBreakout2D:
         mesh_name: str,
         child_boundary: Union[BaseGeometry, gpd.GeoSeries, gpd.GeoDataFrame],
     ) -> gpd.GeoDataFrame:
-        """Select parent faces separating retained and discarded cell centers."""
+        """Select parent faces separating retained and discarded active cell centers.
+
+        Partition numeric topology first, constructing geometries only for the
+        selected faces. Ghost cells are excluded when active cell counts exist.
+        """
         geometry_path = Path(geometry_hdf)
         if not geometry_path.is_file():
             raise FileNotFoundError(f"Geometry HDF not found: {geometry_path}")
@@ -754,64 +785,73 @@ class RasBreakout2D:
             raise ValueError("Boundary-face review requires one child Polygon")
         child = orient(child, sign=1.0)
 
-        faces = HdfMesh.get_mesh_cell_faces(geometry_path)
-        cells = HdfMesh.get_mesh_cell_points(geometry_path)
-        faces = faces[faces["mesh_name"].astype(str) == str(mesh_name)].copy()
-        cells = cells[cells["mesh_name"].astype(str) == str(mesh_name)].copy()
-        if faces.empty or cells.empty:
-            raise ValueError(f"Mesh faces/cells are unavailable for {mesh_name!r}")
-        faces = faces.sort_values("face_id").set_index("face_id", drop=False)
-        cells = cells.sort_values("cell_id").set_index("cell_id", drop=False)
-
-        max_cell_id = int(cells.index.max())
-        inside = np.zeros(max_cell_id + 1, dtype=bool)
-        cell_ids = cells.index.to_numpy(dtype=int)
-        x_values = cells.geometry.x.to_numpy(dtype=float)
-        y_values = cells.geometry.y.to_numpy(dtype=float)
-        inside[cell_ids] = contains_xy(child, x_values, y_values) | intersects_xy(
-            child,
-            x_values,
-            y_values,
-        )
-
         base = f"Geometry/2D Flow Areas/{mesh_name}"
         with h5py.File(geometry_path, "r") as hdf:
+            if base not in hdf:
+                raise ValueError(f"Mesh faces/cells are unavailable for {mesh_name!r}")
+            centers = np.asarray(hdf[f"{base}/Cells Center Coordinate"][()])
+            cell_count = len(centers)
+            attributes = hdf.get("Geometry/2D Flow Areas/Attributes")
+            if attributes is not None and "Cell Count" in (attributes.dtype.names or ()):
+                rows = attributes[()]
+                cell_count = next(
+                    int(row["Cell Count"]) for row in rows
+                    if HdfUtils.convert_ras_string(row["Name"]) == str(mesh_name)
+                )
+            elif "Geometry/2D Flow Areas/Cell Info" in hdf:
+                counts = dict(HdfBase.get_2d_flow_area_names_and_counts(geometry_path))
+                cell_count = int(counts[str(mesh_name)])
+            if not 0 < cell_count <= len(centers):
+                raise ValueError(f"Invalid active cell count for {mesh_name!r}")
+            centers = centers[:cell_count]
             face_cells = np.asarray(hdf[f"{base}/Faces Cell Indexes"][()], dtype=int)
             normals = np.asarray(
                 hdf[f"{base}/Faces NormalUnitVector and Length"][()],
                 dtype=float,
             )
+        inside = intersects_xy(child, centers[:, 0], centers[:, 1])
         valid = (
             (face_cells[:, 0] >= 0)
             & (face_cells[:, 1] >= 0)
-            & (face_cells[:, 0] <= max_cell_id)
-            & (face_cells[:, 1] <= max_cell_id)
+            & (face_cells[:, 0] < cell_count)
+            & (face_cells[:, 1] < cell_count)
         )
         retained_0 = np.zeros(len(face_cells), dtype=bool)
         retained_1 = np.zeros(len(face_cells), dtype=bool)
         retained_0[valid] = inside[face_cells[valid, 0]]
         retained_1[valid] = inside[face_cells[valid, 1]]
         selected_ids = np.flatnonzero(valid & (retained_0 ^ retained_1))
-        selected_ids = np.intersect1d(selected_ids, faces.index.to_numpy(dtype=int))
         if selected_ids.size == 0:
             raise ValueError("No parent faces cross the proposed child partition")
 
+        with h5py.File(geometry_path, "r") as hdf:
+            # Numeric topology is compact even for multi-million-cell meshes;
+            # avoid expensive HDF fancy indexing of thousands of sparse rows.
+            point_indexes = hdf[f"{base}/Faces FacePoint Indexes"][()][selected_ids]
+            point_coords = hdf[f"{base}/FacePoints Coordinate"][()]
+            perimeter_info = hdf[f"{base}/Faces Perimeter Info"][()][selected_ids]
+            perimeter_values = hdf[f"{base}/Faces Perimeter Values"][()]
+            crs = HdfBase.get_projection(hdf)
+
         records: list[dict[str, Any]] = []
-        for face_id in selected_ids.tolist():
+        for row, face_id in enumerate(selected_ids.tolist()):
             cell_0, cell_1 = face_cells[face_id, :2].astype(int).tolist()
             inside_cell, outside_cell = (
                 (cell_0, cell_1) if retained_0[face_id] else (cell_1, cell_0)
             )
-            inside_point = cells.loc[inside_cell].geometry
-            outside_point = cells.loc[outside_cell].geometry
-            outward_x = float(outside_point.x - inside_point.x)
-            outward_y = float(outside_point.y - inside_point.y)
+            outward_x, outward_y = centers[outside_cell] - centers[inside_cell]
             normal_x = float(normals[face_id, 0])
             normal_y = float(normals[face_id, 1])
             dot = normal_x * outward_x + normal_y * outward_y
             if not math.isfinite(dot) or math.isclose(dot, 0.0, abs_tol=1e-12):
                 raise ValueError(f"Face {face_id} normal cannot be oriented")
-            geometry = faces.loc[face_id].geometry
+            point_a, point_b = point_indexes[row]
+            start, count = perimeter_info[row]
+            geometry = LineString(
+                [point_coords[point_a],
+                 *perimeter_values[start:start + count],
+                 point_coords[point_b]]
+            )
             records.append(
                 {
                     "mesh_name": str(mesh_name),
@@ -841,7 +881,7 @@ class RasBreakout2D:
             records,
             columns=BOUNDARY_FACE_COLUMNS,
             geometry="geometry",
-            crs=faces.crs,
+            crs=crs,
         )
 
     @staticmethod
@@ -1244,6 +1284,55 @@ def _action_record(
     }
 
 
+def _classify_outside_connections(
+    geometry_path: Path, child: BaseGeometry, tolerance: float,
+) -> list[dict[str, Any]]:
+    """Qualify only plain, fully external 2D connection lines for omission.
+
+    Culverts, gates and bridge connections remain unsupported: their spatial
+    extent is not proved by the connection centerline alone.
+    """
+    records = []
+    connections = GeomLateral.get_connections(geometry_path)
+    if connections.empty:
+        return records
+    duplicates = connections["Name"].duplicated(keep=False)
+    for index, row in connections.iterrows():
+        name = str(row.get("Name", "")).strip()
+        line = None
+        reason = "connection_extent_unverified"
+        action = "block"
+        try:
+            plain = (
+                bool(name) and not duplicates.loc[index]
+                and row.get("Type") == "2D to 2D"
+                and not bool(row.get("HasCulvert", True))
+                and not bool(row.get("HasGate", True))
+                and row.get("Conn Routing Type") in (0, 1)
+            )
+            if plain:
+                coords = GeomLateral.get_connection_line_coords(geometry_path, name)
+                xy = coords[["X", "Y"]].to_numpy(dtype=float)
+                if len(xy) >= 2 and np.isfinite(xy).all():
+                    line = LineString(xy)
+                    if line.is_valid and line.is_simple and line.length > 0:
+                        if line.disjoint(child.buffer(tolerance)):
+                            action = "drop"
+                            reason = f"verified_external_connection;distance={line.distance(child):.17g}"
+                        else:
+                            reason = "connection_intersects_child_or_tolerance"
+        except (ValueError, KeyError, TypeError, IndexError):
+            reason = "connection_extent_unverified"
+        record = _action_record(
+            "sa_2d_connection", str(index), name, action, reason, line, None
+        )
+        # Retain the inspected source line as spatial audit evidence, even for
+        # dropped features (retained_measure remains zero).
+        record["geometry"] = line
+        records.append(record)
+    return records
+
+
 def _build_checks(
     spec: Breakout2DSpec,
     plan: pd.Series,
@@ -1259,6 +1348,18 @@ def _build_checks(
         column: _int_or_zero(geometry.get(column))
         for column in _UNSUPPORTED_STRUCTURE_COLUMNS
     }
+    connection_actions = feature_actions[
+        feature_actions["feature_type"] == "sa_2d_connection"
+    ]
+    outside_connections_verified = (
+        len(connection_actions) == unsupported["num_sa_2d_connections"]
+        and connection_actions["action"].eq("drop").all()
+        and connection_actions["name"].is_unique
+    )
+    other_structures_absent = all(
+        count == 0 for column, count in unsupported.items()
+        if column != "num_sa_2d_connections"
+    )
     pure_2d = bool(
         plan.get("geometry_type") == "2D"
         and plan.get("plan_type") == "unsteady_2d"
@@ -1285,9 +1386,11 @@ def _build_checks(
         ),
         _check(
             "unsupported_structures_absent",
-            sum(unsupported.values()) == 0,
-            "Initial 2D breakout preparation does not support 1D or structure elements",
-            details=unsupported,
+            other_structures_absent and outside_connections_verified,
+            "Child must exclude all structures; only verified external plain 2D connections may be dropped",
+            details={**unsupported, "verified_external_connections": int(
+                connection_actions["action"].eq("drop").sum()
+            )},
         ),
         _check(
             "child_within_parent",

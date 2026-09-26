@@ -8601,12 +8601,15 @@ class RasUnsteady:
         geometry_file: Union[str, Path],
         locations: List[Dict[str, str]],
         *,
+        preserve_area_precipitation: bool = False,
         ras_object: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Replace every 2D boundary block with validated empty locations.
 
-        Existing 2D Flow Area boundary blocks—including area-wide blocks with
-        no BC-line name—are removed with their complete type/data payloads.
+        By default, existing 2D Flow Area boundary blocks—including area-wide
+        blocks with no BC-line name—are removed with their complete type/data
+        payloads. Opt in to ``preserve_area_precipitation`` to retain the
+        existing area-wide rainfall forcing for the requested areas.
         River/reach and storage-area/structure boundary blocks are preserved.
         Every replacement must identify exactly one BC line in the supplied
         plain-text geometry. This is intentionally a reset operation: callers
@@ -8625,6 +8628,11 @@ class RasUnsteady:
         ras_object : optional
             Project object used for short-number resolution and DataFrame
             refresh.
+        preserve_area_precipitation : bool, default False
+            Preserve area-wide Precipitation Hydrograph blocks verbatim for
+            areas named in ``locations``. In this opt-in mode, reject unknown
+            or other area-wide boundary types and precipitation on other areas
+            before writing. Perimeter boundary blocks are still replaced.
 
         Returns
         -------
@@ -8634,6 +8642,8 @@ class RasUnsteady:
         """
         if not isinstance(locations, list) or not locations:
             raise ValueError("locations must be a non-empty list of dicts")
+        if not isinstance(preserve_area_precipitation, bool):
+            raise TypeError("preserve_area_precipitation must be bool")
 
         desired: List[Tuple[str, str]] = []
         for index, spec in enumerate(locations):
@@ -8713,8 +8723,10 @@ class RasUnsteady:
         removed_locations: List[Dict[str, str]] = []
         removed_ranges: List[Tuple[int, int]] = []
         preserved_block_count = 0
+        preserved_precipitation_locations = []
         for position, start in enumerate(starts):
-            end = starts[position + 1] if position + 1 < len(starts) else len(lines)
+            next_start = starts[position + 1] if position + 1 < len(starts) else None
+            end = RasUnsteady._find_boundary_block_end(lines, start, next_start)
             location = lines[start][len("Boundary Location="):].rstrip("\r\n")
             fields = [part.strip() for part in location.split(",")]
             is_2d = len(fields) >= 6 and bool(fields[5])
@@ -8724,6 +8736,22 @@ class RasUnsteady:
                     f"Malformed 2D boundary location in {unsteady_path.name}: {location!r}"
                 )
             if is_2d:
+                line_name = fields[7] if len(fields) >= 8 else ""
+                if preserve_area_precipitation and not line_name:
+                    bc_type = RasUnsteady._detect_boundary_type(lines, start, end)
+                    types = [kind for line in lines[start + 1:end]
+                             for prefix, kind in RasUnsteady._BOUNDARY_TYPE_KEYWORDS
+                             if line.lstrip().startswith(prefix)]
+                    if (types != ["Precipitation Hydrograph"]
+                            or fields[5] not in {area for area, _ in desired}
+                            or any(item["area_2d"] == fields[5]
+                                   for item in preserved_precipitation_locations)):
+                        raise ValueError(
+                            "Cannot preserve unsupported area-wide boundary: "
+                            f"area={fields[5]!r}, type={bc_type!r}"
+                        )
+                    preserved_precipitation_locations.append({"area_2d": fields[5], "bc_line": ""})
+                    continue
                 removed_ranges.append((start, end))
                 removed_locations.append(
                     {
@@ -8817,6 +8845,7 @@ class RasUnsteady:
             "removed_locations": removed_locations,
             "inserted_locations": inserted_locations,
             "preserved_non_2d_block_count": preserved_block_count,
+            "preserved_precipitation_locations": preserved_precipitation_locations,
             "insert_index": insert_index,
             "boundaries_df_refreshed": boundaries_df_refreshed,
         }
