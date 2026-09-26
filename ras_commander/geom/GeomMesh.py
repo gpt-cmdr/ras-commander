@@ -123,6 +123,14 @@ _HECRAS_SEARCH_PATHS = [
 _DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
 
 MAX_FACES_PER_CELL = 8
+
+# HEC-RAS geometry preprocessing rebuilds the mesh from the seed points with
+# the 2D area's breaklines only (not refinement-region outlines or structures)
+# and RasMapperLib's default minimum face-length ratio; the ratio generate()
+# escalates to is not persisted to the geometry.  Verified by rebuilding
+# rejected meshes: this reproduces HEC-RAS's "cell(s) with more than 8 sides"
+# count exactly.
+RAS_PREPROCESS_MIN_FACE_RATIO = 0.05
 PERIMETER_NEAR_DUPLICATE_TOL = 1e-6
 _RATIO_LADDER = [0.05, 0.10, 0.15, 0.25]
 _GEOMETRY_ASSOCIATION_FIELDS = GEOMETRY_ASSOCIATION_FIELDS
@@ -405,6 +413,34 @@ def _build_breaklines(d2fa, ns: dict):
     if n == 0:
         return None
     return combined.CopyToMultiPartPolyline()
+
+
+def _build_ras_preprocess_breaklines(d2fa, ns: dict):
+    """Breaklines only, as HEC-RAS geometry preprocessing constrains the mesh."""
+    Polyline = ns["Polyline"]
+    combined = ns["PolylineFeatureLayer"]("bl")
+    n = 0
+    try:
+        for bl in d2fa.Geometry.BreakLines.Polylines():
+            if Polyline.IsValidPolyline(bl):
+                combined.AddFeature(bl)
+                n += 1
+    except Exception:
+        pass
+    return combined.CopyToMultiPartPolyline() if n else None
+
+
+def _ras_preprocess_replica(perim, seeds, ras_breaklines, ns: dict):
+    """Rebuild the mesh the way HEC-RAS geometry preprocessing will.
+
+    Returns the replica MeshFV2D, or None when it cannot be built (the guard
+    then does not apply).
+    """
+    try:
+        return _compute_mesh(perim, seeds, ras_breaklines, RAS_PREPROCESS_MIN_FACE_RATIO, ns)
+    except Exception as exc:
+        logger.debug("HEC-RAS preprocessing replica could not be built: %s", exc)
+        return None
 
 
 def _meshfv2d_takes_min_face_ratio(ns: dict) -> bool:
@@ -4808,6 +4844,7 @@ class GeomMesh:
             )
 
             breaklines = _build_breaklines(d2fa, ns)
+            ras_breaklines = _build_ras_preprocess_breaklines(d2fa, ns)
 
             # ── Step 4: Generate seeds via .NET ──────────────────────────
             # Always try RegenerateMeshPoints first — it uses the correct
@@ -4865,6 +4902,12 @@ class GeomMesh:
             tier4_count = 0
             midpoint_attempts = 0
             MAX_MIDPOINT_ATTEMPTS = 5
+            replica_attempts = 0
+            # The replica guard must never turn a mesh that would have been
+            # accepted into a failure: remember the last mesh RasMapperLib
+            # completed before the guard changed its seeds, and return to it
+            # on the last pass if no guarded mesh was accepted by then.
+            guard_fallback = None
             duplicate_tolerances = [
                 max(cell_size * 1e-8, 1e-6),
                 max(cell_size * 1e-6, 1e-4),
@@ -4887,6 +4930,11 @@ class GeomMesh:
                 points_outside_val = None
 
             for iteration in range(max_iterations):
+                if guard_fallback is not None and iteration == max_iterations - 1:
+                    current_seeds_pm, current_perim, ratio_idx = guard_fallback
+                    guard_fallback = None
+                    replica_attempts = MAX_MIDPOINT_ATTEMPTS  # accept with a warning
+                    result.fixes_applied.append("RasReplica:fallback-to-completed-mesh")
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
                 logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1}: "
@@ -4907,6 +4955,44 @@ class GeomMesh:
                 )
 
                 if state_val == complete_val:
+                    # ── HEC-RAS preprocessing replica ────────────────────
+                    # HEC-RAS rebuilds the mesh from these seeds with
+                    # breaklines only and the default face-length ratio;
+                    # that mesh can exceed 8 faces where this one does not.
+                    # Fix the replica's bad cells the TryAutoFix way.
+                    replica = _ras_preprocess_replica(
+                        current_perim, current_seeds_pm, ras_breaklines, ns
+                    )
+                    replica_state = (
+                        int(replica.MeshCompletionState) if replica is not None else complete_val
+                    )
+                    if (
+                        replica_state == max_faces_val
+                        and replica_attempts < MAX_MIDPOINT_ATTEMPTS
+                        and iteration < max_iterations - 1
+                    ):
+                        seeds_list = [
+                            current_seeds_pm[i]
+                            for i in range(current_seeds_pm.Count)
+                        ]
+                        new_list, n_added, _ = _autofix_max_faces(replica, seeds_list, ns)
+                        if n_added > 0:
+                            if guard_fallback is None:
+                                guard_fallback = (current_seeds_pm, current_perim, ratio_idx)
+                            current_seeds_pm = _seeds_from_pointms_list(new_list, ns)
+                            replica_attempts += 1
+                            fix_msg = f"RasReplica:MaxFaces:midpoints(+{n_added}pts)"
+                            result.fixes_applied.append(fix_msg)
+                            logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                            continue
+                    if replica_state != complete_val:
+                        logger.warning(
+                            f"[{mesh_name}] HEC-RAS preprocessing may reject this mesh: "
+                            f"its breaklines-only rebuild is {replica.MeshCompletionState}."
+                        )
+                        result.fixes_applied.append(
+                            f"RasReplica:unresolved:{replica.MeshCompletionState}"
+                        )
                     # ── Success: extract cell centers → patch .g01 text ──
                     # The .g01 text is the sole deliverable. HEC-RAS
                     # preprocessing reads "Storage Area 2D Points= N"
