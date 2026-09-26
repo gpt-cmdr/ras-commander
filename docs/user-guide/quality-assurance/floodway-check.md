@@ -13,14 +13,18 @@ withdrawn from the example gallery pending qualification. Its historical outputs
 are not evidence that the complete workflow is correct. The API remains available
 for development on disposable copies, with these known limitations:
 
-- `RasFloodway.parse_encroachments()` collapses blank fixed-width fields in legacy
-  multi-profile encroachment records. Reproducing the parse on the untouched
-  official Example 6 plan 02 shifts methods and target values; round-tripping
-  records through the same parser is not sufficient validation.
-- The checker's encroachment accessor does not read the separate `Encroachment
-  Station Left` and `Encroachment Station Right` datasets under `Additional
-  Variables` in the inspected Example 6 plan HDF. Width and associated structure
-  checks therefore do not run for that layout.
+- `RasFloodway.parse_encroachments()` preserves blank eight-character fields,
+  including the three Method 4 targets in official Example 6 plan 02. Native
+  regression tests cover that record and Method 5 plan 01; malformed numeric
+  fields or methods raise `ValueError` with the node and line context. This
+  parsing repair does not qualify trial authoring or computed hydraulic behavior.
+- The checker reads paired `Encroachment Station Left` and `Encroachment Station
+  Right` arrays under `Additional Variables`, selecting the exact profile and
+  using result-owned section identifiers. Read-only evidence covers the retained
+  HEC-RAS 6.5 US Customary Example 6 HDF. Missing profiles, incomplete pairs,
+  incompatible shapes, or missing result identifiers produce a logged diagnostic
+  and no station table. NaN stations stay missing; other layouts and versions
+  still require qualification.
 - That accessor does not supply an `encr_method` column. Method-specific diagnostics
   listed below are implemented branches, but their detection path is unqualified;
   absence of those messages does not confirm method suitability.
