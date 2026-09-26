@@ -64,6 +64,11 @@ polygons are preferred and companion text geometry is used only when needed.
 Mesh geometry data.
 
 - `get_mesh_area_names(hdf_path)` - List 2D flow areas
+- `get_mesh_areas(hdf_path)` - Read named-area perimeters, with a strictly
+  validated collection-level fallback for affected 6.2/6.3-era geometry HDFs
+- `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
+  evidence, detected layout, dataset paths, and per-capability status for area
+  names, perimeters, cell centers, face topology, and cell polygons
 - `get_mesh_cell_polygons(hdf_path)` - Get cell polygons as GeoDataFrame
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
@@ -72,6 +77,22 @@ Mesh geometry data.
 - `get_nearest_cell(hdf_path, point)` - Find nearest cell to point
 - `get_nearest_face(hdf_path, point)` - Find nearest face to point
 - `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables
+
+Some delivered geometries created across the HEC-RAS 6.2/6.3 timeframe store
+valid 2D flow-area perimeters only in the collection-level `Polygon Info`,
+`Polygon Parts`, and `Polygon Points` datasets. `get_mesh_areas()` can recover
+those perimeters after validating every offset, count, part range, coordinate,
+ring closure, and multipart association. It does not repair malformed rings or
+change their topology.
+
+The same files may report `Complete Geometry=True` while omitting the named-area
+face-connectivity datasets. In that state, `diagnose_mesh_layout()` reports the
+perimeter as `collection_fallback` and face/cell-polygon topology as
+`not_present`. `get_mesh_cell_faces()` and `get_mesh_cell_polygons()` return an
+empty GeoDataFrame with a warning. They never infer connectivity from cell
+centers or collection-level `Cell Info` / `Cell Points`. Public USACE changelogs
+do not identify the exact producer defect or establish its first fixed release,
+so dataset inspection—not a blanket version rule—selects the safe reader.
 
 > **EXPERIMENTAL — not recommended for production or any other
 > non-experimental use.** These direct writes have been tested only with

@@ -101,6 +101,222 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+class _MeshLayoutError(ValueError):
+    """Raised when a recognized mesh layout is structurally malformed."""
+
+
+def _decode_hdf_scalar(value: Any) -> Any:
+    """Return a JSON/dataframe-friendly value from an HDF attribute scalar."""
+    if isinstance(value, np.ndarray) and value.size == 1:
+        value = value.reshape(-1)[0]
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode("utf-8", errors="replace").rstrip("\x00")
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _integral_rows(values: np.ndarray, columns: int, label: str) -> np.ndarray:
+    """Validate and normalize a numeric offset/count table."""
+    array = np.asarray(values)
+    if array.ndim != 2 or array.shape[1] < columns:
+        raise _MeshLayoutError(f"{label} must be an Nx{columns} table")
+    numeric = np.asarray(array[:, :columns], dtype=float)
+    if not np.isfinite(numeric).all():
+        raise _MeshLayoutError(f"{label} contains non-finite offsets or counts")
+    if not np.equal(numeric, np.floor(numeric)).all():
+        raise _MeshLayoutError(f"{label} offsets and counts must be integral")
+    result = numeric.astype(np.int64)
+    if (result < 0).any():
+        raise _MeshLayoutError(f"{label} offsets and counts must be nonnegative")
+    return result
+
+
+def _validate_nonoverlapping_ranges(
+    ranges: List[Tuple[int, int]], total: int, label: str
+) -> None:
+    """Validate bounded, monotonic, non-overlapping half-open ranges."""
+    previous_end = 0
+    for index, (start, count) in enumerate(ranges):
+        end = start + count
+        if end > total:
+            raise _MeshLayoutError(
+                f"{label} row {index} range [{start}, {end}) exceeds {total}"
+            )
+        if index and start < previous_end:
+            raise _MeshLayoutError(f"{label} ranges overlap or are not monotonic")
+        previous_end = end
+
+
+def _strict_collection_perimeters(group, mesh_area_names: List[str]):
+    """Reconstruct validated collection-level 2D flow-area perimeters."""
+    from shapely.geometry import MultiPolygon, Polygon
+
+    required = ("Polygon Info", "Polygon Points")
+    missing = [name for name in required if name not in group]
+    if missing:
+        raise KeyError(
+            "collection-level perimeter datasets are missing: " + ", ".join(missing)
+        )
+
+    info = _integral_rows(group["Polygon Info"][()], 4, "Polygon Info")
+    if len(info) != len(mesh_area_names):
+        raise _MeshLayoutError(
+            "Attributes and Polygon Info row counts differ "
+            f"({len(mesh_area_names)} != {len(info)})"
+        )
+
+    points = np.asarray(group["Polygon Points"][()], dtype=float)
+    if points.ndim != 2 or points.shape[1] < 2:
+        raise _MeshLayoutError("Polygon Points must be an Nx2 coordinate table")
+    points = points[:, :2]
+    if not np.isfinite(points).all():
+        raise _MeshLayoutError("Polygon Points contains non-finite coordinates")
+
+    point_ranges = [(int(row[0]), int(row[1])) for row in info]
+    _validate_nonoverlapping_ranges(point_ranges, len(points), "Polygon Info point")
+
+    parts = None
+    if "Polygon Parts" in group:
+        parts = _integral_rows(group["Polygon Parts"][()], 2, "Polygon Parts")
+    part_ranges = [(int(row[2]), int(row[3])) for row in info]
+    if any(count for _, count in part_ranges):
+        if parts is None:
+            raise _MeshLayoutError("Polygon Info references missing Polygon Parts")
+        _validate_nonoverlapping_ranges(part_ranges, len(parts), "Polygon Info part")
+
+    geometries = []
+    for mesh_index, mesh_name in enumerate(mesh_area_names):
+        point_start, point_count, part_start, part_count = (
+            int(value) for value in info[mesh_index]
+        )
+        point_end = point_start + point_count
+        if point_count < 4:
+            raise _MeshLayoutError(
+                f"2D flow area {mesh_name!r} has fewer than four perimeter points"
+            )
+
+        raw_ranges: List[Tuple[int, int]]
+        if part_count:
+            raw_ranges = [
+                (int(start), int(count))
+                for start, count in parts[part_start : part_start + part_count]
+            ]
+        else:
+            raw_ranges = [(point_start, point_count)]
+
+        absolute_ranges: List[Tuple[int, int]] = []
+        for raw_start, count in raw_ranges:
+            absolute_valid = (
+                point_start <= raw_start and raw_start + count <= point_end
+            )
+            relative_start = point_start + raw_start
+            relative_valid = 0 <= raw_start and relative_start + count <= point_end
+            if absolute_valid:
+                start = raw_start
+            elif relative_valid:
+                start = relative_start
+            else:
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} has an out-of-range polygon part"
+                )
+            absolute_ranges.append((start, count))
+
+        ordered_ranges = sorted(absolute_ranges)
+        if ordered_ranges[0][0] != point_start:
+            raise _MeshLayoutError(
+                f"2D flow area {mesh_name!r} polygon parts do not start "
+                "at its point slice"
+            )
+        expected_start = point_start
+        for start, count in ordered_ranges:
+            if start != expected_start:
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} polygon parts overlap or leave gaps"
+                )
+            expected_start = start + count
+        if expected_start != point_end:
+            raise _MeshLayoutError(
+                f"2D flow area {mesh_name!r} polygon parts do not reconcile "
+                "with its point slice"
+            )
+
+        rings = []
+        ring_polygons = []
+        for start, count in absolute_ranges:
+            ring = points[start : start + count]
+            if count < 4 or len(np.unique(ring, axis=0)) < 3:
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} contains a degenerate polygon ring"
+                )
+            if not np.array_equal(ring[0], ring[-1]):
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} contains an unclosed polygon ring"
+                )
+            polygon = Polygon(ring)
+            if polygon.is_empty or not polygon.is_valid or polygon.area <= 0:
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} contains an invalid polygon ring"
+                )
+            rings.append(ring)
+            ring_polygons.append(polygon)
+
+        parents: List[Optional[int]] = []
+        for index, polygon in enumerate(ring_polygons):
+            containers = [
+                other
+                for other, candidate in enumerate(ring_polygons)
+                if other != index
+                and candidate.area > polygon.area
+                and candidate.contains(polygon.representative_point())
+            ]
+            parents.append(
+                min(containers, key=lambda candidate: ring_polygons[candidate].area)
+                if containers
+                else None
+            )
+
+        depths = []
+        for index in range(len(rings)):
+            depth = 0
+            parent = parents[index]
+            seen = {index}
+            while parent is not None:
+                if parent in seen:
+                    raise _MeshLayoutError(
+                        f"2D flow area {mesh_name!r} has cyclic ring containment"
+                    )
+                seen.add(parent)
+                depth += 1
+                parent = parents[parent]
+            depths.append(depth)
+
+        polygons = []
+        for index, ring in enumerate(rings):
+            if depths[index] % 2:
+                continue
+            holes = [
+                rings[child]
+                for child, parent in enumerate(parents)
+                if parent == index and depths[child] % 2
+            ]
+            polygon = Polygon(ring, holes)
+            if polygon.is_empty or not polygon.is_valid or polygon.area <= 0:
+                raise _MeshLayoutError(
+                    f"2D flow area {mesh_name!r} has invalid multipart topology"
+                )
+            polygons.append(polygon)
+
+        geometry = polygons[0] if len(polygons) == 1 else MultiPolygon(polygons)
+        if geometry.is_empty or not geometry.is_valid:
+            raise _MeshLayoutError(
+                f"2D flow area {mesh_name!r} has invalid assembled perimeter topology"
+            )
+        geometries.append(geometry)
+
+    return geometries
+
+
 class HdfMesh:
     """
     A class for handling mesh-related operations on HEC-RAS HDF files.
@@ -148,6 +364,248 @@ class HdfMesh:
             return list()
 
     @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def diagnose_mesh_layout(
+        hdf_path: Path,
+        program_version: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Inspect mesh-layout capabilities without modifying the HDF.
+
+        Parameters
+        ----------
+        hdf_path : Path
+            Geometry or plan HDF containing the ``Geometry/2D Flow Areas`` group.
+        program_version : str, optional
+            Program version read from the companion plan or geometry text file.
+            For example, HEC-RAS 6.2 commonly stores ``"6.20"``.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per 2D flow area. Capability status columns use
+            ``standard``, ``collection_fallback``, ``not_present``,
+            ``malformed``, or ``read_error``. Dataset-path columns identify the
+            evidence used for each decision.
+
+        Notes
+        -----
+        Collection-level ``Cell Info`` and ``Cell Points`` are reported as
+        evidence only. They are never promoted to face connectivity or cell
+        polygon topology.
+        """
+        base = "Geometry/2D Flow Areas"
+        records: List[Dict[str, Any]] = []
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                geometry_group = hdf_file.get("Geometry")
+                hdf_file_version = _decode_hdf_scalar(
+                    hdf_file.attrs.get("File Version")
+                )
+                geometry_version = _decode_hdf_scalar(
+                    geometry_group.attrs.get("Geometry Version")
+                    if geometry_group is not None
+                    else None
+                )
+                complete_geometry = _decode_hdf_scalar(
+                    geometry_group.attrs.get("Complete Geometry")
+                    if geometry_group is not None
+                    else None
+                )
+                common = {
+                    "hdf_file_version": hdf_file_version,
+                    "geometry_version": geometry_version,
+                    "complete_geometry": complete_geometry,
+                    "program_version": program_version,
+                }
+
+                if base not in hdf_file:
+                    return pd.DataFrame(
+                        [{
+                            **common,
+                            "mesh_name": None,
+                            "layout": "not_present",
+                            "area_names_status": "not_present",
+                            "area_names_paths": f"{base}/Attributes",
+                            "perimeter_status": "not_present",
+                            "perimeter_paths": "",
+                            "cell_centers_status": "not_present",
+                            "cell_centers_paths": "",
+                            "face_topology_status": "not_present",
+                            "face_topology_paths": "",
+                            "cell_polygons_status": "not_present",
+                            "cell_polygons_paths": "",
+                            "reason_codes": "no_2d_flow_areas_group",
+                            "compatibility_warning": None,
+                        }]
+                    )
+
+                group = hdf_file[base]
+                attributes_path = f"{base}/Attributes"
+                if "Attributes" not in group:
+                    raise _MeshLayoutError("2D Flow Areas/Attributes is missing")
+                attributes = group["Attributes"][()]
+                if (
+                    attributes.dtype.names is None
+                    or "Name" not in attributes.dtype.names
+                ):
+                    raise _MeshLayoutError("2D Flow Areas/Attributes has no Name field")
+                mesh_names = [
+                    HdfUtils.convert_ras_string(_decode_hdf_scalar(value))
+                    for value in attributes["Name"]
+                ]
+
+                collection_paths = [
+                    f"{base}/Polygon Info",
+                    f"{base}/Polygon Parts",
+                    f"{base}/Polygon Points",
+                ]
+                collection_status = "not_present"
+                collection_reason = None
+                if "Polygon Info" in group or "Polygon Points" in group:
+                    try:
+                        _strict_collection_perimeters(group, mesh_names)
+                        collection_status = "collection_fallback"
+                    except (KeyError, _MeshLayoutError) as exc:
+                        collection_status = "malformed"
+                        collection_reason = str(exc)
+
+                version_text = " ".join(
+                    str(value or "")
+                    for value in (program_version, hdf_file_version, geometry_version)
+                ).lower()
+                legacy_signature = (
+                    str(program_version or "").strip() == "6.20"
+                    or "hec-ras 6.3 august 2022" in version_text
+                    or str(geometry_version or "").strip() == "1.0.18"
+                )
+
+                for mesh_name in mesh_names:
+                    mesh_base = f"{base}/{mesh_name}"
+                    reasons = []
+                    perimeter_path = f"{mesh_base}/Perimeter"
+                    if perimeter_path in hdf_file:
+                        perimeter_status = "standard"
+                        perimeter_paths = perimeter_path
+                    else:
+                        perimeter_status = collection_status
+                        perimeter_paths = ";".join(collection_paths)
+                        if collection_reason:
+                            reasons.append(f"collection_perimeter:{collection_reason}")
+
+                    center_path = f"{mesh_base}/Cells Center Coordinate"
+                    if center_path in hdf_file:
+                        center_status = "standard"
+                        center_paths = center_path
+                    else:
+                        center_status = "not_present"
+                        evidence = [
+                            f"{base}/Cell Info",
+                            f"{base}/Cell Points",
+                        ]
+                        center_paths = ";".join(
+                            path for path in evidence if path in hdf_file
+                        )
+                        reasons.append("named_cell_centers_not_present")
+
+                    face_names = (
+                        "Faces FacePoint Indexes",
+                        "FacePoints Coordinate",
+                        "Faces Perimeter Info",
+                        "Faces Perimeter Values",
+                    )
+                    face_paths = [f"{mesh_base}/{name}" for name in face_names]
+                    face_present = [path in hdf_file for path in face_paths]
+                    if all(face_present):
+                        face_status = "standard"
+                    elif any(face_present):
+                        face_status = "malformed"
+                        reasons.append("partial_face_topology")
+                    else:
+                        face_status = "not_present"
+                        reasons.append("face_topology_not_present")
+
+                    cell_names = (
+                        "Cells Face and Orientation Info",
+                        "Cells Face and Orientation Values",
+                    )
+                    cell_paths = [f"{mesh_base}/{name}" for name in cell_names]
+                    cell_present = [path in hdf_file for path in cell_paths]
+                    if face_status == "standard" and all(cell_present):
+                        cell_polygon_status = "standard"
+                    elif any(cell_present) or face_status == "malformed":
+                        cell_polygon_status = "malformed"
+                        reasons.append("partial_cell_polygon_topology")
+                    else:
+                        cell_polygon_status = "not_present"
+                        reasons.append("cell_polygon_topology_not_present")
+
+                    statuses = (
+                        perimeter_status,
+                        center_status,
+                        face_status,
+                        cell_polygon_status,
+                    )
+                    if "malformed" in statuses:
+                        layout = "malformed"
+                    elif perimeter_status == "collection_fallback":
+                        layout = "collection_fallback"
+                    elif perimeter_status == "standard":
+                        layout = "standard"
+                    else:
+                        layout = "not_present"
+
+                    compatibility_warning = None
+                    if legacy_signature and face_status != "standard":
+                        compatibility_warning = (
+                            "This HEC-RAS 6.2/6.3-era geometry reports 2D data "
+                            "but omits named-area face topology. The perimeter "
+                            "may be recoverable; faces and cell polygons are not."
+                        )
+                        logger.warning("%s Mesh: %s", compatibility_warning, mesh_name)
+
+                    records.append({
+                        **common,
+                        "mesh_name": mesh_name,
+                        "layout": layout,
+                        "area_names_status": "standard",
+                        "area_names_paths": attributes_path,
+                        "perimeter_status": perimeter_status,
+                        "perimeter_paths": perimeter_paths,
+                        "cell_centers_status": center_status,
+                        "cell_centers_paths": center_paths,
+                        "face_topology_status": face_status,
+                        "face_topology_paths": ";".join(face_paths),
+                        "cell_polygons_status": cell_polygon_status,
+                        "cell_polygons_paths": ";".join(cell_paths),
+                        "reason_codes": ";".join(dict.fromkeys(reasons)),
+                        "compatibility_warning": compatibility_warning,
+                    })
+        except Exception as exc:
+            logger.error("Error diagnosing mesh layout from %s: %s", hdf_path, exc)
+            return pd.DataFrame([{
+                "hdf_file_version": None,
+                "geometry_version": None,
+                "complete_geometry": None,
+                "program_version": program_version,
+                "mesh_name": None,
+                "layout": "read_error",
+                "area_names_status": "read_error",
+                "area_names_paths": f"{base}/Attributes",
+                "perimeter_status": "read_error",
+                "perimeter_paths": "",
+                "cell_centers_status": "read_error",
+                "cell_centers_paths": "",
+                "face_topology_status": "read_error",
+                "face_topology_paths": "",
+                "cell_polygons_status": "read_error",
+                "cell_polygons_paths": "",
+                "reason_codes": str(exc),
+                "compatibility_warning": None,
+            }])
+        return pd.DataFrame(records)
+
+    @staticmethod
     @standardize_input(file_type='geom_hdf')
     def get_mesh_areas(hdf_path: Path) -> 'GeoDataFrame':
         """
@@ -174,42 +632,23 @@ class HdfMesh:
                     return GeoDataFrame()
                 group = hdf_file["Geometry/2D Flow Areas"]
                 mesh_area_polygons = []
-                polygon_info = group.get("Polygon Info")
-                polygon_parts = group.get("Polygon Parts")
-                polygon_points = group.get("Polygon Points")
+                fallback_polygons = None
                 for index, name in enumerate(mesh_area_names):
                     perimeter_path = f"{name}/Perimeter"
                     if perimeter_path in group:
                         mesh_area_polygons.append(Polygon(group[perimeter_path][()]))
                         continue
-
-                    if polygon_info is None or polygon_points is None:
-                        raise KeyError(
-                            f"2D flow area {name!r} has neither Perimeter nor "
-                            "collection-level Polygon datasets"
+                    if fallback_polygons is None:
+                        fallback_polygons = _strict_collection_perimeters(
+                            group, mesh_area_names
                         )
-                    point_start, point_count, part_start, part_count = (
-                        int(value) for value in polygon_info[index, :4]
-                    )
-                    points = polygon_points[()]
-                    if part_count <= 1 or polygon_parts is None:
-                        mesh_area_polygons.append(
-                            Polygon(points[point_start : point_start + point_count])
+                        logger.warning(
+                            "Using validated collection-level 2D perimeter "
+                            "fallback for %s; named-area face topology may still "
+                            "be unavailable",
+                            hdf_path.name,
                         )
-                        continue
-
-                    parts = polygon_parts[part_start : part_start + part_count, :2]
-                    rings = []
-                    for raw_start, raw_count in parts:
-                        ring_start, ring_count = int(raw_start), int(raw_count)
-                        if not (point_start <= ring_start < point_start + point_count):
-                            ring_start += point_start
-                        ring = points[ring_start : ring_start + ring_count]
-                        if len(ring) >= 3:
-                            rings.append(ring)
-                    if not rings:
-                        raise ValueError(f"2D flow area {name!r} has no valid polygon ring")
-                    mesh_area_polygons.append(Polygon(rings[0], rings[1:]))
+                    mesh_area_polygons.append(fallback_polygons[index])
                 return GeoDataFrame(
                     {"mesh_name": mesh_area_names, "geometry": mesh_area_polygons},
                     geometry="geometry",
@@ -259,9 +698,34 @@ class HdfMesh:
                 all_geometries = []
 
                 for mesh_name in mesh_area_names:
+                    cell_info_path = (
+                        f"Geometry/2D Flow Areas/{mesh_name}/"
+                        "Cells Face and Orientation Info"
+                    )
+                    cell_values_path = (
+                        f"Geometry/2D Flow Areas/{mesh_name}/"
+                        "Cells Face and Orientation Values"
+                    )
+                    present = [
+                        cell_info_path in hdf_file,
+                        cell_values_path in hdf_file,
+                    ]
+                    if not any(present):
+                        logger.warning(
+                            "Cell-polygon topology is not present for mesh %r in %s; "
+                            "cell centers and collection-level Cell Info/Cell Points "
+                            "will not be promoted to polygon topology",
+                            mesh_name,
+                            hdf_path.name,
+                        )
+                        continue
+                    if not all(present):
+                        raise _MeshLayoutError(
+                            f"Cell-polygon topology is partial for mesh {mesh_name!r}"
+                        )
                     # Get cell face info in one read
-                    cell_face_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Info"][()]
-                    cell_face_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Face and Orientation Values"][()][:, 0]
+                    cell_face_info = hdf_file[cell_info_path][()]
+                    cell_face_values = hdf_file[cell_values_path][()][:, 0]
 
                     # Create face lookup dictionary for this mesh
                     mesh_faces_dict = dict(face_gdf[face_gdf.mesh_name == mesh_name][["face_id", "geometry"]].values)
@@ -387,11 +851,35 @@ class HdfMesh:
                 all_geometries = []
 
                 for mesh_name in mesh_area_names:
+                    mesh_base = f"Geometry/2D Flow Areas/{mesh_name}"
+                    dataset_names = (
+                        "Faces FacePoint Indexes",
+                        "FacePoints Coordinate",
+                        "Faces Perimeter Info",
+                        "Faces Perimeter Values",
+                    )
+                    dataset_paths = [
+                        f"{mesh_base}/{name}" for name in dataset_names
+                    ]
+                    present = [path in hdf_file for path in dataset_paths]
+                    if not any(present):
+                        logger.warning(
+                            "Face topology is not present for mesh %r in %s; "
+                            "cell centers and collection-level Cell Info/Cell Points "
+                            "will not be promoted to faces",
+                            mesh_name,
+                            hdf_path.name,
+                        )
+                        continue
+                    if not all(present):
+                        raise _MeshLayoutError(
+                            f"Face topology is partial for mesh {mesh_name!r}"
+                        )
                     # Read all data at once
-                    facepoints_index = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces FacePoint Indexes"][()]
-                    facepoints_coords = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/FacePoints Coordinate"][()]
-                    faces_perim_info = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Info"][()]
-                    faces_perim_values = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Faces Perimeter Values"][()]
+                    facepoints_index = hdf_file[dataset_paths[0]][()]
+                    facepoints_coords = hdf_file[dataset_paths[1]][()]
+                    faces_perim_info = hdf_file[dataset_paths[2]][()]
+                    faces_perim_values = hdf_file[dataset_paths[3]][()]
 
                     # Process each face
                     for face_id, ((pnt_a_idx, pnt_b_idx), (start_row, count)) in enumerate(zip(facepoints_index, faces_perim_info)):
