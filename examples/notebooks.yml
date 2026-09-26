@@ -1279,39 +1279,6 @@ notebooks:
   excluded: false
   code_cells: 12
   executed_cells: 11
-- id: 223_steady_floodway_encroachment
-  filename: 223_steady_floodway_encroachment.ipynb
-  title: Steady Floodway Encroachment
-  series: 200
-  series_name: Geometry & Calibration
-  summary: ''
-  tags:
-  - floodway
-  - steady
-  difficulty: intermediate
-  est_runtime: null
-  data_project: null
-  functions_used:
-  - HdfResultsPlan.get_steady_results
-  - HdfXsec.get_cross_sections
-  - HdfXsec.get_river_bank_lines
-  - HdfXsec.get_river_centerlines
-  - RasCmdr.compute_plan
-  - RasExamples.extract_project
-  - RasFloodway.check_floodway
-  - RasFloodway.create_method_4_trial_profiles
-  - RasFloodway.create_method_5_trial_profiles
-  - RasFloodway.parse_encroachments
-  - RasFloodway.set_encroachments
-  - RasPlan.clone_plan
-  - RasPlan.clone_steady
-  - RasPlan.get_plan_title
-  - RasPlan.set_steady
-  hec_refs: []
-  learning_paths: []
-  excluded: false
-  code_cells: 12
-  executed_cells: 10
 - id: 224_steady_flow_authoring
   filename: 224_steady_flow_authoring.ipynb
   title: Steady Flow Authoring
@@ -1822,33 +1789,6 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 13
-- id: 311_2d_floodway_encroachment
-  filename: 311_2d_floodway_encroachment.ipynb
-  title: 2D Floodway Encroachment
-  series: 300
-  series_name: Unsteady & DSS
-  summary: ''
-  tags:
-  - 2d
-  - floodway
-  difficulty: intermediate
-  est_runtime: null
-  data_project: null
-  functions_used:
-  - HdfMesh.get_mesh_areas
-  - HdfMesh.get_mesh_cell_polygons
-  - HdfResultsMesh.get_mesh_max_ws
-  - RasCmdr.compute_plan
-  - RasEncroachments.list_2d_encroachment_regions
-  - RasEncroachments.list_2d_encroachment_zones
-  - RasEncroachments.setup_2d_floodway_encroachment_plan
-  - RasMap.add_wse_comparison_layers
-  - RasMap.ensure_results_plan_layer
-  hec_refs: []
-  learning_paths: []
-  excluded: false
-  code_cells: 13
   executed_cells: 13
 - id: 312_boundary_df_qmult_dss_paths
   filename: 312_boundary_df_qmult_dss_paths.ipynb
@@ -3796,60 +3736,53 @@ notebooks:
   executed_cells: 6
 - id: 922_model_validation_with_usgs
   filename: 922_model_validation_with_usgs.ipynb
-  title: Model Validation with USGS Gauge Data
+  title: Model Comparison with USGS Gauge Data
   series: 900
   series_name: Data Integration
-  summary: run the Bald Eagle Creek example plan and query USGS 01548005 metadata, then conditionally
-    retrieve, align, score, and plot modeled versus observed flow when a results HDF is available; the
-    committed run stops before timeseries validation
+  summary: Compare delivered Kalamazoo HDF water levels with 276 matched USGS gauge observations; retain
+    provenance, metrics, initialization error and calibration-comparison limits.
   tags:
   - usgs
+  - calibration
+  - hdf
+  - comparison
   difficulty: advanced
   est_runtime: null
   data_project: null
   functions_used:
-  - RasCmdr.compute_plan
-  - RasExamples.extract_project
-  - ras.plan_df
-  - ras.project_folder
-  hec_refs: []
+  - HdfBase.get_result_unit_metadata
+  - HdfBndry.get_reference_points
+  - HdfPlan.get_plan_information
+  - HdfResultsPlan.get_runtime_data
+  - HdfResultsXsec.get_ref_points_timeseries
+  hec_refs:
+  - https://pubs.usgs.gov/publication/sir20265026/full
   learning_paths: []
   excluded: false
-  code_cells: 15
-  executed_cells: 11
+  code_cells: 8
+  executed_cells: 8
 - id: 923_stofs3d_coastal_boundary
   filename: 923_stofs3d_coastal_boundary.ipynb
-  title: STOFS-3D Coastal Boundary Integration
+  title: 'STOFS-3D Coastal Water Levels: Units and Datum'
   series: 900
   series_name: Data Integration
-  summary: gauge, validation, forecast, and coastal boundary workflows
-  tags: []
+  summary: Extract an archived NOAA station time series with explicit datum metadata, compare feet and
+    meters, and distinguish source inspection from experimental stage authoring.
+  tags:
+  - coastal
+  - stofs
+  - datum
+  - boundary-conditions
   difficulty: advanced
   est_runtime: null
   data_project: null
-  functions_used:
-  - HdfBndry.get_bc_lines
-  - HdfMesh.get_mesh_cell_points
-  - HdfResultsMesh.get_mesh_max_ws
-  - RasCmdr.compute_plan
-  - RasEbfeModels.organize_model
-  - RasGeomWriter.exe
-  - RasPlan.set_plan_title
-  - RasPlan.set_shortid
-  - RasPlan.update_plan_description
-  - RasPlan.update_simulation_date
-  - RasUnsteady.extract_boundary_and_tables
-  - RasUnsteady.update_flow_title
-  - ras.boundaries_df
-  - ras.plan_df
-  - ras.prj_file
-  - ras.ras_exe_path
-  - ras.unsteady_df
-  hec_refs: []
+  functions_used: []
+  hec_refs:
+  - https://polar.ncep.noaa.gov/estofs/atl.htm
   learning_paths: []
   excluded: false
-  code_cells: 25
-  executed_cells: 25
+  code_cells: 7
+  executed_cells: 7
 - id: 924_mrms_netcdf_rain_on_grid
   filename: 924_mrms_netcdf_rain_on_grid.ipynb
   title: MRMS NetCDF Rain-on-Grid Validation

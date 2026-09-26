@@ -2,33 +2,19 @@
 
 ## Version History
 
-### v0.102.1 (September 2026)
+This website follows `main`. An installed release can lack APIs described here;
+check `ras_commander.__version__` and the documentation's
+[build provenance](https://rascommander.info/ras/version.json). A package version
+alone does not identify a development checkout. The entries below distinguish
+changes after tag `v0.102.1` from that tagged release.
 
-**FEMA eBFE Source Library and Example Dashboard**
+### Unreleased (`main` after v0.102.1)
 
-- Add fail-closed source adapters for Austin–Oyster (12040205), Upper
-  Guadalupe (12100201), Pedernales (12090206), Cibolo (12100304), and Medina
-  (12100302), including immutable source identity checks, deterministic
-  delivery repairs, reusable-output audits, and study-specific Records of
-  Deficiencies (#373, #377, #378).
-- Add exact API-derived model polygons and linked source records to the example
-  projects dashboard. Pedernales is represented by the union of all 530 active
-  1D model footprints; Upper Guadalupe and Medina retain their individual 2D
-  submodel extents rather than watershed bounding boxes.
-- Record reviewed runtime qualification without overstating completed results:
-  all 530 Pedernales plan-01 runs passed; Cibolo plan 14 and four source-complete
-  Medina projects reached owned unsteady-solver startup; Upper Medina
-  Headwaters remains blocked by its undelivered modified terrain.
-- Preserve fresh organizer manifests as pending until those exact organized
-  copies run, while keeping durable isolated-copy qualification in the source
-  registry. Large 2D runs use fixed local execution copies while authoritative
-  sources and receipts remain in the CEWS data library.
-
-**HEC-RAS 5.0.7 Unsteady Startup Detection**
-
-- Recognize `RasUnsteady64.exe` and its extensionless process name as owned
-  unsteady-solver startup signals while retaining exact process ownership,
-  fresh-artifact, and quiescence checks (#373).
+The following additions are absent from tag `v0.102.1`. Use a reviewed source
+revision containing them until a subsequent package release includes them.
+In particular, `RasUnsteady.get_gridded_precipitation_capabilities()`,
+`set_gridded_precipitation_geotiff()` and `RasMap.list_geometry_associations()`
+require this newer source; installing `ras-commander==0.102.1` is insufficient.
 
 **Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
 
@@ -238,6 +224,34 @@
   without a relevant HEC-RAS message and remained uniformly 0.06; the explicit
   association preserved terrain and propagated 0.123 into the temporary and
   final plan HDFs.
+
+### v0.102.1 (September 2026)
+
+**FEMA eBFE Source Library and Example Dashboard**
+
+- Add fail-closed source adapters for Austin–Oyster (12040205), Upper
+  Guadalupe (12100201), Pedernales (12090206), Cibolo (12100304), and Medina
+  (12100302), including immutable source identity checks, deterministic
+  delivery repairs, reusable-output audits, and study-specific Records of
+  Deficiencies (#373, #377, #378).
+- Add exact API-derived model polygons and linked source records to the example
+  projects dashboard. Pedernales is represented by the union of all 530 active
+  1D model footprints; Upper Guadalupe and Medina retain their individual 2D
+  submodel extents rather than watershed bounding boxes.
+- Record reviewed runtime qualification without overstating completed results:
+  all 530 Pedernales plan-01 runs passed; Cibolo plan 14 and four source-complete
+  Medina projects reached owned unsteady-solver startup; Upper Medina
+  Headwaters remains blocked by its undelivered modified terrain.
+- Preserve fresh organizer manifests as pending until those exact organized
+  copies run, while keeping durable isolated-copy qualification in the source
+  registry. Large 2D runs use fixed local execution copies while authoritative
+  sources and receipts remain in the CEWS data library.
+
+**HEC-RAS 5.0.7 Unsteady Startup Detection**
+
+- Recognize `RasUnsteady64.exe` and its extensionless process name as owned
+  unsteady-solver startup signals while retaining exact process ownership,
+  fresh-artifact, and quiescence checks (#373).
 
 **Refinement-Region Authoring and Mesh Density (#369)**
 
@@ -609,6 +623,26 @@ branch's larger native-host experiment.
 - Basin-average INFO logging now reports record count, valid-time spacing, and
   the lead-hour range instead of treating every record as one hour.
 
+### v0.98 series (June 2026)
+
+These concise entries reconstruct source-version changes, rather than asserting
+unverified package-upload dates:
+
+- **0.98.0:** include `sources.state` and `remote.docker` in built wheels
+  ([packaging fix](https://github.com/gpt-cmdr/ras-commander/commit/34f5f8529e1f94212847b32d08cadee906951d7c)).
+- **0.98.1:** finish the documentation-host migration and synchronize version
+  metadata ([source change](https://github.com/gpt-cmdr/ras-commander/commit/d5f770e61d8ed5b8a80684421f80580fdffe35a6)).
+- **0.98.2:** add library discovery helpers `docs()`, `agent_guide_text()` and
+  `agent_guide_path()`, packaged agent guidance and documentation links in errors
+  ([source change](https://github.com/gpt-cmdr/ras-commander/commit/f7b77fb03a6e233f08c27d124e2f281d5d8165c2)).
+
+### v0.97.0 (May 2026)
+
+The [version-setting commit](https://github.com/gpt-cmdr/ras-commander/commit/52b3bc593883f8d901d4a4bcbf6b054f62625ed4)
+revised notebook 414's depth-varying Manning workflow to retain a baseline
+comparison and removed its multiplier demonstration. This is a source-history
+summary, not a claim that every intervening change was newly introduced here.
+
 ### v0.96.2 (May 2026)
 
 **Precipitation & Dependencies**
@@ -787,10 +821,15 @@ from ras_commander.boundaries import CoastalBoundary
 **New Features**:
 - `StormGenerator` instance API deprecated (use static methods with `ddf_data=`)
 - Import `RasModPuls` for Modified Puls routing
-- `stream_callback` parameter on all compute methods
+- `stream_callback` on sequential `compute_plan()` / `compute_test_mode()`;
+  `compute_parallel()` does not accept this callback
 
 ## Deprecation Policy
 
-- Deprecated features marked with warnings
-- Removed after two minor versions
-- Breaking changes only in major versions
+- Consult each API's deprecation warning and migration notes for its replacement
+  and removal schedule; there is no universal two-minor-version removal rule.
+- Pre-1.0 releases have included breaking changes, including the `CoastalBoundary`
+  import relocation described above. Review migration notes when upgrading.
+- Pin the package version or source commit for reproducible workflows, and retain
+  the HEC-RAS runtime version separately. A successful run on one runtime does
+  not qualify other releases.

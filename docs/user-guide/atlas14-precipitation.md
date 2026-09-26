@@ -443,7 +443,7 @@ for aep_pct, total_depth in aep_depths.items():
 
     # Clone plan for this AEP
     new_plan = RasPlan.clone_plan("01", new_plan_shortid=f"{return_period}yr")
-    RasPlan.set_description(new_plan, f"{return_period}-Year Design Storm ({aep_pct}% AEP)")
+    RasPlan.update_plan_description(new_plan, f"{return_period}-Year Design Storm ({aep_pct}% AEP)")
 
     # Get the unsteady file number for this plan
     from ras_commander import ras

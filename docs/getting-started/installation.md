@@ -1,5 +1,10 @@
 # Installation
 
+The website documents `main`, which can be ahead of the released package.
+Check the [release notes](../development/release-notes.md) before using an
+unreleased API, and retain your package version or source commit alongside
+the HEC-RAS version in reproducible workflows.
+
 ## Requirements
 
 - **Python**: 3.10 or higher (3.13 recommended for new installations)

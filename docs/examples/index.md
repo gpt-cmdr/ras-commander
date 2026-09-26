@@ -1,13 +1,13 @@
 # Example Notebooks
 
-These are the canonical, runnable examples for ras-commander. Each row links to the rendered documentation page and to the source `.ipynb` on GitHub. **Runtime** is the summed cell-execution wall time captured the last time the notebook was executed (`N/A` means the notebook was committed without execution outputs).
+These are the canonical, runnable examples for ras-commander. Each row links to the rendered documentation page and to the source `.ipynb` on GitHub. **Runtime** uses recorded notebook wall time when available, otherwise summed cell timings. `N/A` means no usable timing metadata; it does not mean outputs are absent. Saved outputs and runtime alone do not establish that the central workflow or hydraulic checks passed. Read each notebook's results and limitations.
 
 See [Example Projects](example-projects.md) for the CRS-valid source catalog and MapLibre review contract for ras2cng-exported model bundles.
 
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*141 notebooks indexed - 128 with runtime data, 13 without.*
+*139 notebooks indexed - 126 with runtime data, 13 without.*
 
 ## 100s - Initialization & Execution
 
@@ -60,7 +60,6 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [220 - Kalamazoo River Calibration Workflow](../notebooks/220_calibration_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/220_calibration_workflow.ipynb) | 8 s |
 | [221 - 1D Manning's N Calibration Workflow](../notebooks/221_calibration_1d_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/221_calibration_1d_workflow.ipynb) | 36.6 min |
 | [222 - Steady Flow Calibration](../notebooks/222_steady_flow_calibration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/222_steady_flow_calibration.ipynb) | 39 s |
-| [223 - Steady Floodway Encroachment](../notebooks/223_steady_floodway_encroachment.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/223_steady_floodway_encroachment.ipynb) | 17 s |
 | [224 - Steady Flow Authoring](../notebooks/224_steady_flow_authoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/224_steady_flow_authoring.ipynb) | 12 s |
 | [225 - Fixing Blocked Obstruction Overlaps with RasFixit](../notebooks/225_fixit_blocked_obstructions.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/225_fixit_blocked_obstructions.ipynb) | 7 s |
 | [226 - 2D Connection Culvert Invert Validation (Terrain Cell Minimum)](../notebooks/226_2d_connection_culvert_invert_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/226_2d_connection_culvert_invert_validation.ipynb) | 32 s |
@@ -82,7 +81,6 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [300 - Unsteady Flow Operations](../notebooks/300_unsteady_flow_operations.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/300_unsteady_flow_operations.ipynb) | 26 s |
 | [301 - Flow Hydrograph Optimization](../notebooks/301_flow_hydrograph_optimization.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/301_flow_hydrograph_optimization.ipynb) | 1.0 min |
 | [310 - DSS Boundary Extraction](../notebooks/310_dss_boundary_extraction.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/310_dss_boundary_extraction.ipynb) | 5 s |
-| [311 - 2D Floodway Encroachment](../notebooks/311_2d_floodway_encroachment.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/311_2d_floodway_encroachment.ipynb) | 1.2 min |
 | [312 - Boundary DataFrame Enhancement: QMult, QMin, and DSS Path Parsing](../notebooks/312_boundary_df_qmult_dss_paths.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/312_boundary_df_qmult_dss_paths.ipynb) | 49 s |
 | [313 - HMS-to-RAS Boundary Condition Matching](../notebooks/313_hms_to_ras_boundary_matching.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/313_hms_to_ras_boundary_matching.ipynb) | 5 s |
 | [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
@@ -173,7 +171,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [913 - Boundary Condition Generation from Live USGS Gauge Data](../notebooks/913_bc_generation_from_live_gauge.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) | 3 s |
 | [914 - Historical AORC Event Diagnostic Comparison with USGS Stage](../notebooks/914_historical_event_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_historical_event_validation.ipynb) | 35 s |
 | [921 - USGS Study Package From Primitives](../notebooks/921_usgs_study_package_from_primitives.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/921_usgs_study_package_from_primitives.ipynb) | 13 s |
-| [922 - Model Validation with USGS Gauge Data](../notebooks/922_model_validation_with_usgs.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/922_model_validation_with_usgs.ipynb) | 1.8 min |
+| [922 - Model Comparison with USGS Gauge Data](../notebooks/922_model_validation_with_usgs.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/922_model_validation_with_usgs.ipynb) | 9 s |
 
 ## 915s - Operational Forecast Sequence
 
@@ -189,7 +187,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | --- | --- | --- |
 | [916 — HRRR Forecast to HEC-RAS: Executed Rain-on-Grid Qualification](../notebooks/916_hrrr_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 4.2 min |
 | [917 — MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 36.5 min |
-| [923 - STOFS-3D Coastal Boundary Integration](../notebooks/923_stofs3d_coastal_boundary.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 1.3 min |
+| [923 - STOFS-3D Coastal Boundary Integration](../notebooks/923_stofs3d_coastal_boundary.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 3 s |
 | [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | 59 s |
 | [926 - WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification](../notebooks/926_wpc_qpf_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |
 

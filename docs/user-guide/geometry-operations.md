@@ -9,7 +9,7 @@ RAS Commander provides comprehensive geometry parsing and modification for HEC-R
 | `RasGeometry` | 1D geometry parsing (cross sections, storage areas, connections) |
 | `RasGeometryUtils` | Parsing utilities (fixed-width, count interpretation) |
 | `RasStruct` | Inline structure parsing (bridges, culverts, weirs) |
-| `RasGeo` | 2D Manning's n land cover operations |
+| `GeomLandCover` | 2D Manning's n tables and region overrides in text geometry |
 | `HdfHydraulicTables` | Cross section property tables (HTAB) from HDF |
 
 ## Cross Sections
@@ -180,19 +180,56 @@ all_culverts = RasStruct.get_all_culverts("01", river, reach, station)
 
 ## 2D Manning's n (Land Cover)
 
+`GeomLandCover` edits the geometry text (`.g##`). Work in a copied project and
+resolve the geometry referenced by the selected plan. This example changes an
+existing base override table and reads it back; the 10% factor only illustrates
+the writer mechanics.
+
 ```python
-from ras_commander import RasGeo
+from pathlib import Path
+from ras_commander import GeomLandCover, ras
+
+plan_row = ras.plan_df.loc[ras.plan_df['plan_number'] == '01'].iloc[0]
+geom_path = Path(ras.geom_df.loc[
+    ras.geom_df['geom_number'] == plan_row['geometry_number'], 'full_path'
+].iloc[0])
 
 # Get base Manning's n table
-base_n = RasGeo.get_base_mannings_table("01")
+base_n = GeomLandCover.get_base_mannings_n(geom_path)
 print(base_n)
+if base_n.empty:
+    raise ValueError("Selected geometry has no existing base Manning's n table")
 
-# Get regional overrides
-regional = RasGeo.get_regional_mannings("01", "2D Flow Area")
+# Read all regional overrides; select a Region Name from this table if needed
+regional = GeomLandCover.get_region_mannings_n(geom_path)
+print(regional)
 
-# Update Manning's n
-RasGeo.set_base_mannings_table("01", updated_table)
+# Preserve the existing class names and Table Number while changing values
+updated_table = base_n.copy()
+updated_table['Base Mannings n Value'] *= 1.10
+GeomLandCover.set_base_mannings_n(geom_path, updated_table)
+readback = GeomLandCover.get_base_mannings_n(geom_path)
+print(readback)
 ```
+
+The layers have different owners and evidence:
+
+| Layer | API / evidence |
+|---|---|
+| Land-cover raster sidecar class values | `HdfLandCover.get_landcover_raster_map()` and native `set_landcover_mannings_n()` |
+| Geometry base overrides | `GeomLandCover.get_base_mannings_n()` / `set_base_mannings_n()`; the setter requires the existing class-name set |
+| Geometry regional overrides and polygons | `GeomLandCover.get_region_mannings_n()` / `set_region_mannings_n()` and `set_mannings_region_polygons()` |
+| Geometry-to-sidecar association | `RasMap.list_geometry_associations()` / `validate_geometry_associations()` |
+| Preprocessed cell/face values used by the solver | Recompute native property tables, then inspect with `HdfLandCover.audit_final_mannings_n()` |
+
+Text readback establishes the stored override, not its effect on solver-owned
+arrays. An absent/broken land-cover association can leave the 2D area's scalar
+default in every cell even when preprocessing reports success. Follow the
+[association and property-table guidance](../api/geometry.md#geommesh), then use
+the controlled [land-cover authoring example](../notebooks/212_landcover_mannings_n_write.md)
+or [region polygon example](../notebooks/233_mannings_region_polygon_authoring.md)
+for readback, recomputation, and final-value evidence. Existing deprecated
+`RasGeo` wrappers remain compatibility interfaces; new examples use `GeomLandCover`.
 
 ## Rebuilding a copied 2D geometry from text
 
