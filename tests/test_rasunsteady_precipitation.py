@@ -151,8 +151,8 @@ Use DSS=False
         )
 
         content = temp_unsteady_file.read_text()
-        # 24 time steps
-        assert "Precipitation Hydrograph= 24" in content
+        # 24 intervals plus the time-zero anchor
+        assert "Precipitation Hydrograph= 25" in content
 
     def test_writes_exact_sequential_depth_fields(self, temp_unsteady_file, sample_hyetograph_1hr):
         """Write one incremental-depth field per interval, with ten fields per row."""
@@ -188,10 +188,10 @@ Use DSS=False
         ]
         written_depths = [value for row in field_rows for value in row]
 
-        assert [len(row) for row in field_rows] == [10, 10, 4]
-        assert len(written_depths) == 24
+        assert [len(row) for row in field_rows] == [10, 10, 5]
+        assert len(written_depths) == 25
         assert written_depths == pytest.approx(
-            sample_hyetograph_1hr["incremental_depth"].tolist()
+            [0.0] + sample_hyetograph_1hr["incremental_depth"].tolist()
         )
 
     def test_writer_round_trip_preserves_count_and_depth(
@@ -209,9 +209,9 @@ Use DSS=False
         )
 
         values = tables["Precipitation Hydrograph="]["Value"].tolist()
-        assert len(values) == 24
+        assert len(values) == 25
         assert values == pytest.approx(
-            sample_hyetograph_1hr["incremental_depth"].tolist()
+            [0.0] + sample_hyetograph_1hr["incremental_depth"].tolist()
         )
         assert sum(values) == pytest.approx(
             sample_hyetograph_1hr["incremental_depth"].sum()
@@ -358,7 +358,7 @@ Use DSS=False
         RasUnsteady.set_precipitation_hyetograph(temp_unsteady_file, hyeto_df)
 
         content = temp_unsteady_file.read_text()
-        assert "Precipitation Hydrograph= 24" in content
+        assert "Precipitation Hydrograph= 25" in content
 
     def test_depth_conservation_in_file(self, temp_unsteady_file):
         """Test that total depth is preserved in file."""
@@ -576,7 +576,7 @@ class TestRealProjectIntegration:
 
         # Verify update
         new_content = unsteady_file.read_text()
-        assert "Precipitation Hydrograph= 24" in new_content
+        assert "Precipitation Hydrograph= 25" in new_content
 
 
 if __name__ == "__main__":

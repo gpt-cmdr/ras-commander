@@ -3220,8 +3220,8 @@ notebooks:
   title: Precipitation Hyetograph Comparison
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: Generate and read back 30 precipitation patterns through the public API; compare intended forcing
-    with native evidence from two bounded Davis runs.
+  summary: Generate and read back 30 precipitation patterns; verify intended, written and native accumulated
+    rainfall in two bounded HEC-RAS 7.0 Davis runs.
   tags:
   - precipitation
   difficulty: intermediate
@@ -3243,8 +3243,9 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  evidence_scope: Pattern generation and file readback are demonstrated. Native accumulated precipitation
-    differs from intended totals; hydraulic comparison qualification is withheld.
+  evidence_scope: All 30 patterns are authored and read back. Two HEC-RAS 7.0 Davis runs verify native
+    precipitation curves across 2,705 rainfall-receiving cells and 217 times; other versions, SI units
+    and hydraulic acceptance remain unqualified.
   code_cells: 10
   executed_cells: 10
 - id: 722_gridded_precipitation_atlas14
