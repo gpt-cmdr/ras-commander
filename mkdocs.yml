@@ -1,3 +1,4 @@
+strict: true
 site_name: RAS Commander Documentation
 site_description: Python library for automating HEC-RAS operations
 site_author: William Katzenmeyer, P.E., C.F.M.
@@ -8,6 +9,8 @@ repo_url: https://github.com/gpt-cmdr/ras-commander
 
 docs_dir: docs
 exclude_docs: |
+  notebooks/README.md
+  notebooks/AGENTS.md
   cognitive-infrastructure/agents.md
   cognitive-infrastructure/skills.md
   cognitive-infrastructure/commands.md
@@ -108,6 +111,12 @@ plugins:
   # ignore: ["notebooks/example_projects/**"]
   # ignore_h1_titles: true
   - git-revision-date-localized:
+      # Generated pages have no independent source history; never present build time as edit time.
+      exclude:
+        - notebooks/*
+        - cognitive-infrastructure/*
+        - llms/*
+      enable_parallel_processing: false
       enable_creation_date: true
       enable_git_follow: false
       type: date
@@ -170,6 +179,7 @@ extra:
 
 nav:
   - Home: index.md
+  - Capabilities by Task: capabilities.md
   - User Guide:
     - Getting Started:
       - Installation: getting-started/installation.md

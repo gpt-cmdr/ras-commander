@@ -37,3 +37,28 @@ def test_conversion_preserves_recorded_output(tmp_path):
 
     assert not (output / "223_withdrawn.md").exists()
     assert (output / "README.md").read_text(encoding="utf-8") == "keep supporting page"
+
+
+def test_markdown_links_change_but_recorded_output_and_source_do_not(tmp_path):
+    import base64
+    source, output = tmp_path / "examples", tmp_path / "rendered"
+    source.mkdir()
+    (source / "out").mkdir()
+    asset = source / "out/figure.png"
+    asset.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf9sAAAAASUVORK5CYII="))
+    cell = nbformat.v4.new_code_cell("print('[reference](200_other.ipynb)')", execution_count=1)
+    cell.outputs = [nbformat.v4.new_output('stream', name='stdout', text='[reference](200_other.ipynb)\n')]
+    notebook = nbformat.v4.new_notebook(cells=[
+        nbformat.v4.new_markdown_cell('[Reference](200_other.ipynb#section)\n![Figure](out/figure.png)\n[External](https://example.org/200_other.ipynb)'),
+        cell,
+    ])
+    path = source / '100_example.ipynb'
+    nbformat.write(notebook, path)
+    before = path.read_bytes()
+    converter.convert_notebooks(source, output)
+    rendered = (output / '100_example.md').read_text(encoding='utf-8')
+    assert '[Reference](200_other.md#section)' in rendered
+    assert '[reference](200_other.ipynb)' in rendered
+    assert 'https://example.org/200_other.ipynb' in rendered
+    assert (output / 'out/figure.png').read_bytes() == asset.read_bytes()
+    assert path.read_bytes() == before
