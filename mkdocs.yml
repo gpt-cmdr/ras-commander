@@ -118,7 +118,7 @@ plugins:
         - llms/*
       enable_parallel_processing: false
       enable_creation_date: true
-      enable_git_follow: false
+      enable_git_follow: true
       type: date
   - redirects:
       redirect_maps:
