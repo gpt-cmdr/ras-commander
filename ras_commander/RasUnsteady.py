@@ -8625,20 +8625,30 @@ class RasUnsteady:
         locations : list of dict
             Non-empty list with exact ``area_2d`` and ``bc_line`` strings.
             BC-line names must be unique.
-        ras_object : optional
-            Project object used for short-number resolution and DataFrame
-            refresh.
         preserve_area_precipitation : bool, default False
             Preserve area-wide Precipitation Hydrograph blocks verbatim for
             areas named in ``locations``. In this opt-in mode, reject unknown
             or other area-wide boundary types and precipitation on other areas
             before writing. Perimeter boundary blocks are still replaced.
+        ras_object : optional
+            Project object used for short-number resolution and DataFrame
+            refresh.
 
         Returns
         -------
         dict
             Removed 2D locations, inserted locations, preserved non-2D block
-            count, insertion index, and DataFrame-refresh evidence.
+            count, preserved precipitation locations, insertion index, and
+            DataFrame-refresh evidence.
+
+        Raises
+        ------
+        TypeError
+            If ``preserve_area_precipitation`` is not a bool.
+        ValueError
+            If ``locations`` is empty or malformed, a BC line is missing from
+            the geometry, or, with ``preserve_area_precipitation``, an
+            area-wide boundary that cannot be preserved is present.
         """
         if not isinstance(locations, list) or not locations:
             raise ValueError("locations must be a non-empty list of dicts")

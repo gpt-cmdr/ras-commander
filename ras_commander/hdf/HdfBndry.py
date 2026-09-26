@@ -26,7 +26,7 @@ List of Functions in HdfBndry:
 
 """
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Union
 
 import geopandas as gpd
 import h5py
@@ -153,10 +153,10 @@ class HdfBndry:
     @log_call
     @standardize_input(file_type='geom_hdf')
     def get_bc_external_faces(
-        hdf_path: Path,
+        hdf_path: Union[str, Path],
         include_geometry: bool = False,
         validate_unique_faces: bool = True,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, gpd.GeoDataFrame]:
         """Return native BC-line-to-external-face associations.
 
         The association is read directly from
@@ -166,7 +166,7 @@ class HdfBndry:
 
         Parameters
         ----------
-        hdf_path : Path
+        hdf_path : str or Path
             Path to a HEC-RAS geometry or plan HDF containing geometry data.
         include_geometry : bool, default False
             If ``True``, return a GeoDataFrame whose LineString geometry is
@@ -181,8 +181,9 @@ class HdfBndry:
 
         Returns
         -------
-        pandas.DataFrame
-            One row per native external-face association with columns
+        pandas.DataFrame or geopandas.GeoDataFrame
+            A GeoDataFrame when ``include_geometry=True``, otherwise a
+            DataFrame. One row per native external-face association with columns
             ``bc_line_id``, ``bc_line_name``, ``mesh_name``,
             ``bc_line_type``, ``face_id``, ``fp_start_index``,
             ``fp_end_index``, ``station_start``, and ``station_end``.
