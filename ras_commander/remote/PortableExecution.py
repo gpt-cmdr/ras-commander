@@ -656,11 +656,15 @@ def validate_unsteady_results(
     closed with ``passed=False`` and one or more reason codes.
 
     Args:
-        hdf_path: Computed unsteady plan HDF (``.p##.hdf``).
-        flow_path: Unsteady flow file (``.u##``) the plan ran with.
-        plan_path: Plan file (``.p##``), for the simulation window.
-        volume_error_percent_limit: Largest acceptable ``|Error Percent|``.
-        inflow_relative_tolerance: Relative tolerance for inflow reconciliation.
+        hdf_path (Union[str, Path]): Computed unsteady plan HDF (``.p##.hdf``).
+        flow_path (Union[str, Path]): Unsteady flow file (``.u##``) the plan
+            ran with.
+        plan_path (Union[str, Path]): Plan file (``.p##``), for the
+            simulation window.
+        volume_error_percent_limit (float): Largest acceptable
+            ``|Error Percent|``.
+        inflow_relative_tolerance (float): Relative tolerance for inflow
+            reconciliation.
 
     Returns:
         dict[str, Any]: ``passed``, ``reason_codes``, ``flow_type``,
@@ -671,7 +675,7 @@ def validate_unsteady_results(
         ``UNSTEADY_INFLOW_MISMATCH``.
 
     Examples:
-        >>> from ras_commander.remote.PortableExecution import validate_unsteady_results
+        >>> from ras_commander import validate_unsteady_results
         >>> summary = validate_unsteady_results("M.p01.hdf", "M.u01", "M.p01")  # doctest: +SKIP
         >>> summary["passed"], summary["inflow_reconciliation"]["status"]  # doctest: +SKIP
         (True, 'passed')

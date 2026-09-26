@@ -225,7 +225,9 @@ class RasPortableDocker:
         Raises:
             ValueError: If the image differs from ``container_identity``, the
                 identity is a SIF digest, the output directory is not empty,
-                a mount path contains a comma, or the source project is missing.
+                a mount path contains a comma, the source project is missing,
+                or ``security_options`` is a bare string or holds an empty
+                option.
         """
         request_file = Path(request_path).resolve()
         request = RasExecutionRequest.read(request_file)
@@ -268,6 +270,10 @@ class RasPortableDocker:
         ]
         if memory is not None:
             command.extend(("--memory", memory))
+        if isinstance(security_options, (str, bytes)):
+            raise ValueError(
+                "security_options must be a sequence of options, not one string"
+            )
         for option in security_options:
             if not str(option).strip():
                 raise ValueError("security options must be non-empty strings")
@@ -403,8 +409,9 @@ class RasPortableDocker:
                 ``execution_id`` and output directory must be unique and no
                 output may overlap any request's source tree.
             max_concurrent (int): Containers run at once (1-256).
-            image, docker_executable, python_executable, memory, pull: Passed
-                to :meth:`execute_request` for every request.
+            image, docker_executable, python_executable, memory, pull,
+                security_options: Passed to :meth:`execute_request` for every
+                request.
 
         Returns:
             PortableDockerPoolResult: Results keyed by ``execution_id`` in

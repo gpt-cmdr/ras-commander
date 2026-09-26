@@ -495,3 +495,16 @@ def test_reuse_accepts_compiled_file_rewritten_with_identical_bytes(tmp_path):
     assert PortableExecution._complete_preprocessing_evidence(evidence, retained, 0)
     methods = {item["path"]: item["content_method"] for item in evidence["retained_artifacts_after"]}
     assert methods == {"sample.c01": "bytes", "sample.g01.hdf": "hdf5-objects"}
+
+
+def test_docker_refuses_a_bare_string_of_security_options(tmp_path):
+    with pytest.raises(ValueError, match="sequence of options"):
+        RasPortableDocker.build_execute_command(
+            _bundle(tmp_path, "u01"), security_options="apparmor=unconfined"
+        )
+
+
+def test_unsteady_validator_is_a_top_level_export():
+    import ras_commander
+
+    assert ras_commander.validate_unsteady_results is PortableExecution.validate_unsteady_results
