@@ -116,7 +116,8 @@ projects, and generated artifacts are intentionally excluded from this README.
 `720_precipitation_methods_comprehensive.ipynb`,
 `721_precipitation_hyetograph_comparison.ipynb`,
 `722_gridded_precipitation_atlas14.ipynb`, `723_storm_generator_abm_validation.ipynb`,
-`725_atlas14_spatial_variance.ipynb`, `726_abm_hyetograph_grid.ipynb`
+`725_atlas14_spatial_variance.ipynb`, `726_abm_hyetograph_grid.ipynb`,
+`729_direct_geotiff_gridded_rain_on_grid.ipynb`
 
 ### 800s - Quality Assurance
 

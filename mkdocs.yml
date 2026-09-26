@@ -249,6 +249,7 @@ nav:
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
     - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
+    - Gridded Precipitation Version Matrix: development/gridded-precipitation-version-matrix.md
     - Release Notes: development/release-notes.md
   - About:
     - Cite and Support RAS Commander: cite.md

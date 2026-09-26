@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import pandas as pd
+import psutil
 
 
 raspreprocess_module = importlib.import_module("ras_commander.RasPreprocess")
@@ -259,6 +260,43 @@ def test_clear_existing_preserves_final_result_families(
     assert result.success is True
     assert hdf.read_bytes() == b"existing hdf bytes"
     assert legacy.read_bytes() == b"existing legacy bytes"
+
+
+def test_process_tree_cleanup_race_is_debug_when_direct_fallback_succeeds(
+    monkeypatch,
+    caplog,
+):
+    class VanishedLauncher:
+        pid = 12345
+        killed = False
+        waited = False
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout):
+            assert timeout == 10
+            self.waited = True
+
+    launcher = VanishedLauncher()
+    monkeypatch.setattr(
+        psutil,
+        "Process",
+        lambda _pid: (_ for _ in ()).throw(RuntimeError("launcher vanished")),
+    )
+    caplog.set_level(logging.DEBUG, logger=PREPROCESS_LOGGER)
+
+    RasPreprocess._terminate_process_tree(launcher)
+
+    assert launcher.killed is True
+    assert launcher.waited is True
+    records = _preprocess_records(caplog)
+    assert not [record for record in records if record.levelno >= logging.WARNING]
+    assert any(
+        "falling back to process.kill()" in record.getMessage()
+        for record in records
+        if record.levelno == logging.DEBUG
+    )
 
 
 def test_full_simulation_fallback_rejects_unchanged_existing_hdf(

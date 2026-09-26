@@ -430,26 +430,125 @@ class PrecipMrms:
         target_crs: Optional[str] = "EPSG:5070",
         resolution: Optional[float] = 2000.0,
         output_variable: str = "APCP_surface",
+        first_timestep_hours: Optional[float] = None,
+        end_time: Optional[Union[str, datetime]] = None,
     ) -> Path:
         """
         Export MRMS QPE grids to a HEC-RAS GDAL-raster NetCDF input.
 
         The export path is intended for ``RasUnsteady.set_gridded_precipitation``.
-        MRMS depths are written in millimeters. When ``target_crs`` is provided,
-        rioxarray reprojects the WGS84 MRMS grid to that CRS before writing.
+        MRMS interval-ending depths are accumulated in millimeters and a zero
+        cumulative frame is prepended so HEC-RAS does not treat the first QPE
+        amount as the import datum. When ``first_timestep_hours`` is omitted it
+        is inferred from a regular multi-frame time coordinate. ``end_time`` may
+        extend the forcing with flat cumulative frames through the plan end.
+        When ``target_crs`` is provided, rioxarray reprojects the WGS84 MRMS grid
+        before writing.
         """
+        import numpy as np
+        import pandas as pd
+        import xarray as xr
+
+        from ..RasPrecipHdf import RasPrecipHdf
+
         precip = PrecipMrms._prepare_precipitation_data(
             grib2_files,
             bounds=bounds,
             variable=variable,
         )
         precip_mm = PrecipMrms._convert_precip_units(precip, "mm")
+        if "time" not in precip_mm.dims:
+            raise ValueError("MRMS precipitation must include a time dimension")
+        source_times = pd.DatetimeIndex(pd.to_datetime(precip_mm["time"].values))
+        if source_times.has_duplicates or not source_times.is_monotonic_increasing:
+            raise ValueError("MRMS timestamps must be unique and strictly increasing")
+        if first_timestep_hours is None:
+            if len(source_times) < 2:
+                raise ValueError(
+                    "first_timestep_hours is required for a single MRMS frame"
+                )
+            interval_hours = np.asarray(
+                (source_times[1:] - source_times[:-1]) / pd.Timedelta(hours=1),
+                dtype=float,
+            )
+            if np.any(interval_hours <= 0.0) or not np.allclose(
+                interval_hours, interval_hours[0]
+            ):
+                raise ValueError(
+                    "first_timestep_hours is required when MRMS timestamps are irregular"
+                )
+            first_timestep_hours = float(interval_hours[0])
+        elif not np.isfinite(first_timestep_hours) or first_timestep_hours <= 0.0:
+            raise ValueError("first_timestep_hours must be a positive finite value")
+
+        cumulative, cumulative_times = RasPrecipHdf.convert_to_cumulative(
+            np.asarray(precip_mm.values),
+            source_times,
+            "amount",
+            first_timestep_hours=first_timestep_hours,
+        )
+        precip_mm = xr.DataArray(
+            cumulative,
+            dims=precip_mm.dims,
+            coords={
+                name: (
+                    pd.DatetimeIndex(cumulative_times)
+                    if name == "time"
+                    else precip_mm.coords[name]
+                )
+                for name in precip_mm.dims
+            },
+            name=output_variable,
+        )
+        storm_end = pd.Timestamp(source_times[-1])
+        zero_tail_frames = 0
+        if end_time is not None:
+            forcing_end = pd.Timestamp(end_time)
+            if forcing_end < storm_end:
+                raise ValueError("end_time cannot precede the last MRMS timestamp")
+            interval = pd.to_timedelta(float(first_timestep_hours), unit="h")
+            tail_times = pd.date_range(
+                storm_end + interval,
+                forcing_end,
+                freq=interval,
+            )
+            if len(tail_times) and tail_times[-1] != forcing_end:
+                raise ValueError(
+                    "end_time must align with the MRMS precipitation interval"
+                )
+            if forcing_end > storm_end and not len(tail_times):
+                raise ValueError(
+                    "end_time must align with the MRMS precipitation interval"
+                )
+            if len(tail_times):
+                tail_values = np.repeat(
+                    precip_mm.isel(time=-1).values[np.newaxis, ...],
+                    len(tail_times),
+                    axis=0,
+                )
+                tail = xr.DataArray(
+                    tail_values,
+                    dims=precip_mm.dims,
+                    coords={
+                        name: tail_times if name == "time" else precip_mm.coords[name]
+                        for name in precip_mm.dims
+                    },
+                    name=output_variable,
+                )
+                precip_mm = xr.concat([precip_mm, tail], dim="time")
+                zero_tail_frames = len(tail_times)
+        else:
+            forcing_end = storm_end
+
         precip_mm = precip_mm.rename(output_variable)
         precip_mm.attrs.update(
             {
                 "units": "mm",
-                "long_name": "MRMS QPE precipitation depth",
+                "long_name": "MRMS QPE cumulative precipitation depth",
+                "standard_name": "lwe_thickness_of_precipitation_amount",
                 "source": "NOAA Multi-Radar Multi-Sensor QPE",
+                "source_value_type": "amount",
+                "value_type": "cumulative",
             }
         )
 
@@ -473,7 +572,18 @@ class PrecipMrms:
 
         output_path = Path(output_netcdf)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        precip_mm.to_dataset(name=output_variable).to_netcdf(output_path)
+        output_dataset = precip_mm.to_dataset(name=output_variable)
+        output_dataset.attrs.update(
+            {
+                "first_timestep_hours": float(first_timestep_hours),
+                "storm_start": source_times[0].isoformat(),
+                "storm_end": storm_end.isoformat(),
+                "forcing_end": forcing_end.isoformat(),
+                "zero_tail_frames": int(zero_tail_frames),
+            }
+        )
+        output_dataset.to_netcdf(output_path)
+        output_dataset.close()
         return output_path
 
     @staticmethod

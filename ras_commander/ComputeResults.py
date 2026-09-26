@@ -792,8 +792,10 @@ class PreprocessResult:
         x_file_path: Path to the generated .x## file, or None on failure.
         elapsed_seconds: Wall-clock time for preprocessing.
         signal_source: ``bco``, ``owned_process_artifacts``,
-            ``natural_completion``, ``full_result_copy``, ``timeout``, or a
-            blocking-condition identifier.
+            ``materialized_gridded_precipitation``,
+            ``bco_materialized_precipitation``, ``natural_completion``,
+            ``full_result_copy``, ``timeout``, or a blocking-condition
+            identifier.
         full_result_copied: Whether a naturally completed ``p##.hdf`` supplied
             the temporary HDF fallback.
         timed_out: Whether preprocessing exceeded its bounded wait.
@@ -922,6 +924,42 @@ class GeometryLayerResult:
             status = 'FAILED'
         time_str = f"{self.elapsed_seconds:.1f}s" if self.elapsed_seconds > 0 else "N/A"
         return f"GeometryLayerResult({status}, layer={self.layer!r}, time={time_str})"
+
+
+@dataclass
+class PrecipRasterImportResult:
+    """Result of :meth:`RasPrecipHdf.write_gridded_precip_raster`.
+
+    Failures raise rather than returning ``success=False``. This object reports
+    the outcome of a completed write, dry run, or idempotent skip.
+    """
+
+    success: bool
+    unsteady_hdf_path: Path
+    met_variable: str
+    shape: Tuple[int, int]
+    units: str
+    values_chunks: Tuple[int, int]
+    vertical_chunks: Tuple[int, int]
+    created_hdf: bool = False
+    skipped: bool = False
+    dry_run: bool = False
+    elapsed_seconds: float = 0.0
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __repr__(self) -> str:
+        if self.dry_run:
+            status = "DRY-RUN"
+        elif self.skipped:
+            status = "SKIPPED"
+        else:
+            status = "SUCCESS"
+        return (
+            f"PrecipRasterImportResult({status}, variable={self.met_variable!r}, "
+            f"shape={self.shape}, units={self.units!r})"
+        )
 
 
 @dataclass

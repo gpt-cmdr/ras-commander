@@ -45,6 +45,8 @@ List of Functions in RasUnsteady:
 - set_precipitation_hyetograph()
 - set_constant_precipitation()
 - set_gridded_precipitation()
+- set_gridded_precipitation_geotiff()
+- set_gridded_precipitation_grib()
 - configure_gridded_dss_precipitation()
 - set_meteorological_station()
 - get_meteorological_stations()
@@ -56,6 +58,8 @@ Precipitation Functions:
 - disable_meteorology() - Disable all inherited meteorological forcing in text/HDF state
 - set_precipitation_hyetograph() - Write hyetograph DataFrame to unsteady file
 - set_gridded_precipitation() - Configure GDAL raster precipitation
+- set_gridded_precipitation_geotiff() - Normalize GeoTIFF precipitation and configure it
+- set_gridded_precipitation_grib() - Normalize GRIB precipitation and configure it
 - configure_gridded_dss_precipitation() - Configure gridded DSS precipitation
 
 Meteorological Point Data Functions:
@@ -123,11 +127,16 @@ from .Decorators import log_call
 import pandas as pd
 import numpy as np
 import re
-from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List
+from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
 
 if TYPE_CHECKING:
+    from .ComputeResults import PrecipRasterImportResult
     from .RasBoundary import BoundaryMutationResult
     from .RasProject import StageProjectResult
+    from .precip import (
+        GriddedPrecipitationCapabilities,
+        GriddedPrecipitationImportResult,
+    )
 
 
 
@@ -331,23 +340,6 @@ class RasUnsteady:
             "metadata. Add a CF grid_mapping variable with spatial_ref/crs_wkt "
             "or a parseable CRS attribute."
         )
-
-    @staticmethod
-    def _netcdf_interval_hours(times: Any) -> np.ndarray:
-        """Return per-row interval hours for instantaneous-rate NetCDF rasters."""
-        timestamps = pd.to_datetime(times)
-        n_times = len(timestamps)
-        interval_hours = np.zeros(n_times, dtype=np.float32)
-        if n_times <= 1:
-            return interval_hours
-
-        deltas = (timestamps[1:] - timestamps[:-1]).total_seconds() / 3600.0
-        deltas = np.asarray(deltas, dtype=np.float32)
-        if not np.all(np.isfinite(deltas)) or np.any(deltas <= 0):
-            raise ValueError("NetCDF precipitation times must be strictly increasing")
-
-        interval_hours[1:] = deltas
-        return interval_hours
 
     @staticmethod
     def _fixed_width_data_line_count(record_count: int) -> int:
@@ -3277,8 +3269,10 @@ class RasUnsteady:
                         key: RasUnsteady._decode_hdf_attr_value(value)
                         for key, value in hdf_file[precip_path].attrs.items()
                     }
-        except Exception:
-            pass
+        except (OSError, KeyError, ValueError) as exc:
+            logger.warning(
+                f"Could not read precipitation attributes from {hdf_path.name}: {exc}"
+            )
 
     @staticmethod
     def _detect_line_ending(lines: List[str]) -> str:
@@ -5050,224 +5044,265 @@ class RasUnsteady:
             raise
 
     @staticmethod
+    def _read_netcdf_precipitation(
+        netcdf_path: Union[str, Path],
+        dataset_name: Optional[str] = None,
+        value_type: str = "rate",
+        first_timestep_hours: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Read a NetCDF precipitation field and build the HEC-RAS cumulative payload.
+
+        Every failure raises. A model whose unsteady file points at gridded
+        precipitation without a payload runs with zero rain and no error, so a
+        missing file, variable, or dependency must not degrade to a warning.
+
+        The field is reoriented north-up / west-first before flattening, because
+        HEC-RAS stores row 0 at ``Raster Top``; a south-first source would otherwise
+        be written mirrored.
+
+        Parameters
+        ----------
+        netcdf_path : str or Path
+            NetCDF file with ``time``, ``y``, ``x`` coordinates.
+        dataset_name : str, optional
+            Data variable to read. Must exist when given; detected when omitted.
+        value_type : {"rate", "amount", "cumulative"}, default "rate"
+            How to interpret the variable; see ``RasPrecipHdf.convert_to_cumulative``.
+        first_timestep_hours : float, optional
+            Duration of the first band's interval. When omitted the first band is
+            not delivered, matching the HEC-RAS import dialog's default.
+
+        Returns
+        -------
+        dict
+            ``cumulative`` (n_times, rows, cols), ``times``, ``raster_left``,
+            ``raster_top``, ``cell_size``, ``n_rows``, ``n_cols``, ``srs_wkt``,
+            ``precip_var``, ``declared_units`` (the ``units`` attribute, or None).
+        """
+        from .RasPrecipHdf import RasPrecipHdf
+
+        try:
+            import xarray as xr
+        except ImportError as e:
+            raise ImportError(
+                "xarray is required to import gridded precipitation; "
+                "install with: pip install ras-commander[precip]"
+            ) from e
+
+        netcdf_path = Path(netcdf_path)
+        if not netcdf_path.exists():
+            raise FileNotFoundError(f"NetCDF precipitation file not found: {netcdf_path}")
+
+        try:
+            ds = RasUnsteady._open_netcdf_dataset(netcdf_path, xr)
+            try:
+                if dataset_name is not None and dataset_name not in ds.data_vars:
+                    raise ValueError(
+                        f"Variable {dataset_name!r} not found in {netcdf_path.name}; "
+                        f"available: {sorted(ds.data_vars)}"
+                    )
+                precip_var = RasUnsteady._find_precipitation_variable(ds, dataset_name)
+                if precip_var is None:
+                    raise ValueError(
+                        f"Could not find a precipitation variable in {netcdf_path}"
+                    )
+                precip_data = ds[precip_var].values
+                times = ds["time"].values
+                x_coords = ds["x"].values
+                y_coords = ds["y"].values
+                srs_wkt = RasUnsteady._get_netcdf_crs_wkt(ds, precip_var)
+                variable_attrs = getattr(ds[precip_var], "attrs", None) or {}
+                dataset_attrs = getattr(ds, "attrs", None) or {}
+                declared_units = variable_attrs.get("units") or dataset_attrs.get("units")
+            finally:
+                close = getattr(ds, "close", None)
+                if callable(close):
+                    close()
+        except Exception as e:
+            logger.error(f"Error reading NetCDF precipitation file {netcdf_path}: {e}")
+            raise
+
+        if precip_data.ndim != 3:
+            raise ValueError(
+                f"Precipitation variable {precip_var!r} must be (time, y, x); "
+                f"got shape {precip_data.shape}"
+            )
+
+        n_source_times = precip_data.shape[0]
+        precip_data, x_coords, y_coords = RasPrecipHdf.orient_north_up(
+            precip_data, x_coords, y_coords
+        )
+        raster_left, raster_top, cell_size, n_rows, n_cols = RasPrecipHdf.get_grid_from_coords(
+            x_coords, y_coords, default_cell_size=2000.0
+        )
+        logger.debug(
+            f"NetCDF precipitation grid: {n_source_times} timesteps, {n_rows}x{n_cols} grid"
+        )
+        cumulative, times_out = RasPrecipHdf.convert_to_cumulative(
+            precip_data, times, value_type, first_timestep_hours
+        )
+        return {
+            "cumulative": cumulative,
+            "times": times_out,
+            "raster_left": raster_left,
+            "raster_top": raster_top,
+            "cell_size": cell_size,
+            "n_rows": n_rows,
+            "n_cols": n_cols,
+            "srs_wkt": srs_wkt,
+            "precip_var": precip_var,
+            "declared_units": declared_units,
+        }
+
+    @staticmethod
+    def _write_precipitation_hdf(
+        hdf_path: Union[str, Path],
+        payload: Dict[str, Any],
+        netcdf_rel_path: str,
+        interpolation: str,
+        units: str = "mm",
+        ratio: Optional[float] = None,
+    ) -> "PrecipRasterImportResult":
+        """
+        Write a precipitation payload built by ``_read_netcdf_precipitation``.
+
+        The ``Imported Raster Data`` payload is written first, by
+        ``RasPrecipHdf.write_gridded_precip_raster``, which validates everything
+        before opening the file - so an invalid payload leaves the HDF untouched.
+        The ``Precipitation`` group attributes follow; they mirror the ``.u##`` text,
+        which HEC-RAS regenerates them from on every save, and only keep the file
+        self-consistent until then. The HDF file is created when absent - it is
+        exactly what HEC-RAS copies forward on its next rebuild.
+        """
+        import h5py
+        from .RasPrecipHdf import RasPrecipHdf
+
+        hdf_path = Path(hdf_path)
+        met_path = "Event Conditions/Meteorology"
+        logger.debug(f"Updating precipitation in HDF: {hdf_path}")
+        try:
+            result = RasPrecipHdf.write_gridded_precip_raster(
+                hdf_path,
+                payload["cumulative"],
+                payload["times"],
+                payload["raster_left"],
+                payload["raster_top"],
+                payload["cell_size"],
+                payload["srs_wkt"],
+                units,
+                nodata=-9999.0,
+                require_met_bc_block=False,
+                overwrite=True,
+            )
+            with h5py.File(hdf_path, "a") as f:
+                precip_grp = f.require_group(f"{met_path}/Precipitation")
+                precip_grp.attrs["Enabled"] = np.uint8(1)
+                precip_grp.attrs["Mode"] = np.bytes_("Gridded")
+                precip_grp.attrs["Source"] = np.bytes_("GDAL Raster File(s)")
+                precip_grp.attrs["GDAL Filename"] = np.bytes_(netcdf_rel_path)
+                precip_grp.attrs["GDAL Datasetname"] = np.bytes_(payload["precip_var"])
+                precip_grp.attrs["GDAL Filter"] = np.bytes_("")
+                precip_grp.attrs["GDAL Folder"] = np.bytes_("")
+                precip_grp.attrs["Interpolation Method"] = np.bytes_(interpolation)
+                if ratio is not None:
+                    precip_grp.attrs["Ratio"] = np.float32(ratio)
+                RasUnsteady._ensure_meteorology_attributes_dataset(f, met_path)
+        except Exception as e:
+            logger.error(f"Error updating HDF file {hdf_path}: {e}")
+            raise
+
+        cumulative = payload["cumulative"]
+        logger.info(
+            f"Imported gridded precipitation into {RasUnsteady._path_name(hdf_path)}: "
+            f"{cumulative.shape[0]} timesteps, {payload['n_rows'] * payload['n_cols']} cells, "
+            f"range={float(np.nanmin(cumulative)):.1f}-{float(np.nanmax(cumulative)):.1f} "
+            f"{result.units}"
+        )
+        return result
+
+    @staticmethod
+    def _check_declared_units(
+        payload: Dict[str, Any], units: str, netcdf_path: Union[str, Path]
+    ) -> None:
+        """
+        Reject a ``units`` argument that contradicts the NetCDF's own units metadata.
+
+        HEC-RAS converts from the Units attribute to project units, so labelling
+        inch data as mm (or the reverse) scales every value by 25.4 without error.
+        An unrecognized or missing label is not checked.
+        """
+        from .RasPrecipHdf import RasPrecipHdf
+
+        label = payload.get("declared_units")
+        declared = RasPrecipHdf.infer_depth_units(label)
+        if declared is None:
+            if label:
+                logger.debug(
+                    f"Units label {label!r} in {Path(netcdf_path).name} not recognized; "
+                    f"using units={units!r}"
+                )
+            return
+        if declared != units:
+            raise ValueError(
+                f"{Path(netcdf_path).name} declares units {label!r} ({declared}) but "
+                f"units={units!r} was requested. HEC-RAS converts from the Units "
+                f"attribute to project units, so this mismatch would scale all "
+                f"precipitation by 25.4. Pass units={declared!r}."
+            )
+
+    @staticmethod
     def _update_precipitation_hdf(
         hdf_path: Path,
         netcdf_path: Path,
         netcdf_rel_path: str,
         interpolation: str = "Nearest",
         dataset_name: Optional[str] = None,
+        units: str = "mm",
+        value_type: str = "rate",
+        first_timestep_hours: Optional[float] = None,
+        ratio: Optional[float] = None,
     ) -> None:
         """
-        Import precipitation raster data into HDF in HEC-RAS 6.6 format.
+        Import gridded precipitation from NetCDF into an unsteady flow HDF.
 
-        This function imports gridded precipitation from NetCDF into the HDF file
-        in the exact format HEC-RAS 6.6 creates when using "Import Raster Data" in the GUI.
-
-        The data is transformed from instantaneous rates to cumulative totals and
-        flattened from (time, y, x) to (time, rows*cols) shape.
-
-        HEC-RAS 6.6 Format Requirements (verified against GUI import):
-        - Timestamps in ISO 8601 format: 'YYYY-MM-DD HH:MM:SS' (|S19)
-        - No separate Timestamp dataset (timestamps only in Times attribute)
-        - Values dataset: chunked, gzip compressed, fillvalue=nan
-        - NoData attribute as float32(-9999.0)
-        - Grid extent attributes on Values dataset (not on Imported Raster Data group)
-        - Meteorology/Attributes dataset preserved for proper indexing
+        Reads the NetCDF (``_read_netcdf_precipitation``) and writes the payload in
+        HEC-RAS's native layout (``_write_precipitation_hdf``). Kept for callers
+        that operate on an HDF directly; ``set_gridded_precipitation`` also
+        configures the ``.u##`` text, which the payload needs to survive a save.
 
         Parameters
         ----------
         hdf_path : Path
-            Path to the unsteady HDF file (.u##.hdf)
+            Unsteady flow HDF (.u##.hdf). Created if absent.
         netcdf_path : Path
-            Absolute path to the NetCDF precipitation file
+            Absolute path to the NetCDF precipitation file.
         netcdf_rel_path : str
-            Relative path string for HDF attributes (e.g., ".\\Precipitation\\file.nc")
+            Relative path string for HDF attributes (e.g. ".\\Precipitation\\file.nc").
         interpolation : str
-            Interpolation method ("Bilinear" or "Nearest"). Default is "Nearest"
-            which matches HEC-RAS 6.6 GUI default.
+            "Bilinear" or "Nearest".
         dataset_name : str, optional
-            NetCDF data variable name to import. If omitted, a common
-            precipitation variable name is detected from the file.
+            NetCDF data variable. Detected when omitted.
+        units : str, default "mm"
+            Units of the NetCDF values ("mm" or "in"; "kg/m^2" is written as "mm").
+            HEC-RAS converts from these to the project's units.
+        value_type : {"rate", "amount", "cumulative"}, default "rate"
+            Interpretation of the NetCDF values.
+        first_timestep_hours : float, optional
+            First band interval duration; omit to match the import dialog default.
+        ratio : float, optional
+            Precipitation ratio attribute to write. Omit to leave it unchanged.
         """
-        import h5py
-        import numpy as np
-        import uuid
+        from .RasPrecipHdf import RasPrecipHdf
 
-        try:
-            import xarray as xr
-        except ImportError:
-            logger.warning("xarray not available - cannot import precipitation into HDF")
-            return
-
-        logger.debug(f"Updating precipitation in HDF: {hdf_path}")
-
-        # Read the NetCDF file
-        if not netcdf_path.exists():
-            logger.warning(f"NetCDF file not found: {netcdf_path}")
-            return
-
-        try:
-            ds = RasUnsteady._open_netcdf_dataset(netcdf_path, xr)
-            try:
-                precip_var = RasUnsteady._find_precipitation_variable(ds, dataset_name)
-                if precip_var is None:
-                    logger.warning(f"Could not find precipitation variable in {netcdf_path}")
-                    return
-
-                precip_data = ds[precip_var].values  # Shape: (time, y, x)
-                times = ds['time'].values
-                x_coords = ds['x'].values
-                y_coords = ds['y'].values
-                srs_wkt = RasUnsteady._get_netcdf_crs_wkt(ds, precip_var)
-            finally:
-                close = getattr(ds, "close", None)
-                if callable(close):
-                    close()
-
-            n_times, n_rows, n_cols = precip_data.shape
-            logger.debug(f"NetCDF precipitation grid: {n_times} timesteps, {n_rows}x{n_cols} grid")
-
-        except ValueError as e:
-            logger.error(f"Invalid NetCDF precipitation metadata: {e}")
-            raise
-        except Exception as e:
-            logger.warning(f"Error reading NetCDF file: {e}")
-            return
-
-        # Calculate raster extent parameters
-        cellsize = abs(x_coords[1] - x_coords[0]) if len(x_coords) > 1 else 2000.0
-        x_min = float(x_coords.min())
-        y_min = float(y_coords.min())
-        y_max = float(y_coords.max())
-
-        # Raster bounds (cell edges, not centers)
-        raster_left = x_min - cellsize / 2
-        raster_top = y_max + cellsize / 2
-
-        # Transform data: flatten spatial dims and convert to cumulative
-        # Shape: (time, y, x) -> (time, rows*cols)
-        precip_flat = precip_data.reshape(n_times, n_rows * n_cols)
-
-        # Replace NaN with 0 for cumsum calculation
-        precip_flat = np.nan_to_num(precip_flat, nan=0.0).astype(np.float32)
-
-        # HEC-RAS 6.6 writes the first cumulative row as zero, then integrates
-        # instantaneous rates by each raster interval.
-        interval_hours = RasUnsteady._netcdf_interval_hours(times)
-        precip_amounts = precip_flat * interval_hours[:, np.newaxis]
-        precip_cumulative = np.cumsum(precip_amounts, axis=0).astype(np.float32)
-
-        # Create timestamp strings in HEC-RAS 6.6 format (ISO 8601)
-        # Format: 'YYYY-MM-DD HH:MM:SS' stored as |S19 fixed-length bytes
-        import pandas as pd
-        timestamps = pd.to_datetime(times)
-        timestamp_strs = [t.strftime('%Y-%m-%d %H:%M:%S') for t in timestamps]
-
-        # Generate GUID for dataset
-        guid = str(uuid.uuid4())
-
-        # Update the HDF file
-        try:
-            with h5py.File(hdf_path, 'r+') as f:
-                met_path = 'Event Conditions/Meteorology'
-                precip_grp_path = f'{met_path}/Precipitation'
-
-                # Create parent groups if they don't exist
-                if precip_grp_path not in f:
-                    logger.debug("Creating precipitation group hierarchy in HDF")
-                    if 'Event Conditions' not in f:
-                        f.create_group('Event Conditions')
-                    if met_path not in f:
-                        f.create_group(met_path)
-                    f.create_group(precip_grp_path)
-
-                precip_grp = f[precip_grp_path]
-
-                # Update Precipitation group attributes
-                # HEC-RAS 6.6 uses uint8 for Enabled
-                precip_grp.attrs['Enabled'] = np.uint8(1)
-                precip_grp.attrs['Mode'] = np.bytes_('Gridded')
-                precip_grp.attrs['Source'] = np.bytes_('GDAL Raster File(s)')
-                precip_grp.attrs['GDAL Filename'] = np.bytes_(netcdf_rel_path)
-                precip_grp.attrs['GDAL Datasetname'] = np.bytes_(precip_var)
-                precip_grp.attrs['GDAL Filter'] = np.bytes_('')
-                precip_grp.attrs['GDAL Folder'] = np.bytes_('')
-                precip_grp.attrs['Interpolation Method'] = np.bytes_(interpolation)
-
-                # HEC-RAS 6.6 requires Meteorology/Attributes dataset for indexing
-                RasUnsteady._ensure_meteorology_attributes_dataset(f, met_path)
-
-                # Create/recreate Imported Raster Data group
-                # HEC-RAS 6.6: NO attributes on this group (grid attrs go on Values dataset)
-                raster_grp_path = f'{precip_grp_path}/Imported Raster Data'
-                if raster_grp_path in f:
-                    del f[raster_grp_path]
-                raster_grp = f.create_group(raster_grp_path)
-
-                # HEC-RAS 6.6: NO separate Timestamp dataset (timestamps only in Times attribute)
-
-                # Number of cells for dataset shape
-                n_cells = n_rows * n_cols
-
-                # Common attributes for Values datasets (HEC-RAS 6.6 format)
-                values_attrs = {
-                    'Data Type': np.bytes_('cumulative'),
-                    'GUID': np.bytes_(guid),
-                    'NoData': np.float32(-9999.0),  # HEC-RAS 6.6 uses float32
-                    'Projection': np.bytes_(srs_wkt),
-                    'Raster Cellsize': np.float64(cellsize),
-                    'Raster Cols': np.int32(n_cols),
-                    'Raster Left': np.float64(raster_left),
-                    'Raster Rows': np.int32(n_rows),
-                    'Raster Top': np.float64(raster_top),
-                    'Rate Time Units': np.bytes_('Hour'),
-                    'Storage Configuration': np.bytes_('Sequential'),
-                    'Time Series Data Type': np.bytes_('Amount'),
-                    'Times': np.array(timestamp_strs, dtype='S19'),  # HEC-RAS 6.6: ISO format |S19
-                    'Units': np.bytes_('mm'),
-                    'Version': np.bytes_('1.0'),
-                }
-
-                # Create Values dataset - HEC-RAS 6.6 format:
-                # - Chunked as single chunk (n_times, n_cells)
-                # - gzip compression level 1
-                # - fillvalue = nan
-                values_ds = raster_grp.create_dataset(
-                    'Values',
-                    data=precip_cumulative,
-                    dtype=np.float32,
-                    chunks=(n_times, n_cells),
-                    compression='gzip',
-                    compression_opts=1,
-                    fillvalue=np.nan
-                )
-                for attr_name, attr_val in values_attrs.items():
-                    values_ds.attrs[attr_name] = attr_val
-
-                # Create Values (Vertical) dataset - same format
-                values_vert_ds = raster_grp.create_dataset(
-                    'Values (Vertical)',
-                    data=precip_cumulative,
-                    dtype=np.float32,
-                    chunks=(n_times, n_cells),
-                    compression='gzip',
-                    compression_opts=1,
-                    fillvalue=np.nan
-                )
-                for attr_name, attr_val in values_attrs.items():
-                    values_vert_ds.attrs[attr_name] = attr_val
-
-                logger.info(
-                    f"Imported gridded precipitation into "
-                    f"{RasUnsteady._path_name(hdf_path)}: "
-                    f"{n_times} timesteps, {n_cells} cells, "
-                    f"range={precip_cumulative.min():.1f}-"
-                    f"{precip_cumulative.max():.1f} mm"
-                )
-
-        except Exception as e:
-            logger.error(f"Error updating HDF file: {e}")
-            raise
+        units_out = RasPrecipHdf.normalize_units(units)
+        payload = RasUnsteady._read_netcdf_precipitation(
+            netcdf_path, dataset_name, value_type, first_timestep_hours
+        )
+        RasUnsteady._check_declared_units(payload, units_out, netcdf_path)
+        RasUnsteady._write_precipitation_hdf(
+            hdf_path, payload, netcdf_rel_path, interpolation, units_out, ratio
+        )
 
     @staticmethod
     def _format_ras_dss_filename(
@@ -5323,6 +5358,134 @@ class RasUnsteady:
                 "interpolation must be '', 'Nearest', or 'Bilinear'"
             )
         return normalized
+
+    @staticmethod
+    def _gridded_precipitation_capabilities(
+        unsteady_path: Path,
+        ras_object: Optional[Any] = None,
+    ) -> Optional["GriddedPrecipitationCapabilities"]:
+        """Resolve precipitation capabilities from the runtime or file header."""
+        from .precip import PrecipCapabilities
+
+        try:
+            capabilities = PrecipCapabilities.resolve(ras_object=ras_object)
+        except ValueError:
+            capabilities = None
+        if capabilities is None:
+            with open(unsteady_path, "r", encoding="utf-8", errors="replace") as source:
+                for line in source:
+                    if line.startswith("Program Version="):
+                        version = line.split("=", 1)[1].strip()
+                        try:
+                            capabilities = PrecipCapabilities.for_version(version)
+                        except ValueError:
+                            pass
+                        break
+        if capabilities is None:
+            logger.warning(
+                "Could not resolve HEC-RAS version for %s; gridded-precipitation "
+                "version safeguards were not applied",
+                unsteady_path.name,
+            )
+            return None
+        capabilities.require_global_gridded()
+        return capabilities
+
+    @staticmethod
+    def _preflight_gridded_precipitation_request(
+        unsteady_path: Path,
+        ras_object: Optional[Any],
+        *,
+        ratio: Optional[float],
+        value_type: str,
+    ) -> Optional["GriddedPrecipitationCapabilities"]:
+        """Reject unsupported version semantics before creating derived files."""
+        capabilities = RasUnsteady._gridded_precipitation_capabilities(
+            unsteady_path, ras_object
+        )
+        RasUnsteady._preflight_precipitation_ratio(
+            unsteady_path, capabilities, ratio
+        )
+        if (
+            capabilities
+            and capabilities.period_average_timing == "shifted"
+            and value_type == "rate"
+        ):
+            logger.warning(
+                "HEC-RAS %s has a native period-average timing defect. "
+                "ras-commander is materializing cumulative precipitation for this "
+                "run; retain and validate the HDF payload if the source is later "
+                "re-imported through the HEC-RAS GUI.",
+                capabilities.version,
+            )
+        return capabilities
+
+    @staticmethod
+    def _preflight_precipitation_ratio(
+        unsteady_path: Path,
+        capabilities: Optional["GriddedPrecipitationCapabilities"],
+        ratio: Optional[float],
+    ) -> None:
+        """Validate explicit and retained ratios before mutating a model."""
+        numeric_ratio: Optional[float] = None
+        if ratio is not None:
+            try:
+                numeric_ratio = float(ratio)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"ratio must be a positive number, got {ratio!r}"
+                ) from exc
+            if not np.isfinite(numeric_ratio) or numeric_ratio <= 0:
+                raise ValueError(f"ratio must be a positive number, got {ratio!r}")
+
+        if (
+            capabilities
+            and not capabilities.ratio_applied
+            and numeric_ratio is not None
+            and not np.isclose(numeric_ratio, 1.0)
+        ):
+            raise ValueError(
+                f"HEC-RAS {capabilities.version} does not apply the optional "
+                "precipitation ratio. Pre-scale the source values intentionally "
+                "and pass ratio=1.0, or use HEC-RAS 6.2+."
+            )
+        if capabilities and not capabilities.ratio_applied and ratio is None:
+            ratio_prefix = "Met BC=Precipitation|Ratio="
+            with open(
+                unsteady_path, "r", encoding="utf-8", errors="replace"
+            ) as source:
+                existing_line = next(
+                    (line for line in source if line.startswith(ratio_prefix)),
+                    None,
+                )
+            if existing_line is not None:
+                raw_ratio = existing_line[len(ratio_prefix):].strip()
+                try:
+                    existing_ratio = float(raw_ratio) if raw_ratio else 1.0
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Unparseable precipitation ratio {raw_ratio!r} in "
+                        f"{unsteady_path.name}"
+                    ) from exc
+                if not np.isclose(existing_ratio, 1.0):
+                    raise ValueError(
+                        f"{unsteady_path.name} retains precipitation Ratio={raw_ratio}, "
+                        f"but HEC-RAS {capabilities.version} does not apply that ratio. "
+                        "Pass ratio=1.0 to clear the ineffective setting and pre-scale "
+                        "the source intentionally, or use HEC-RAS 6.2+."
+                    )
+
+    @staticmethod
+    @log_call
+    def get_gridded_precipitation_capabilities(
+        version: Optional[object] = None,
+        ras_object: Optional[Any] = None,
+    ) -> "GriddedPrecipitationCapabilities":
+        """Return version-specific gridded-precipitation support and limitations."""
+        from .precip import PrecipCapabilities
+
+        ras_obj = ras_object or ras
+        return PrecipCapabilities.resolve(version=version, ras_object=ras_obj)
 
     @staticmethod
     def _get_default_met_insert_index(lines: List[str]) -> int:
@@ -5395,6 +5558,7 @@ class RasUnsteady:
         dss_filename: str,
         dss_pathname: str,
         interpolation: str = "",
+        ratio: Optional[float] = None,
     ) -> Path:
         """
         Write gridded DSS precipitation metadata to the unsteady sidecar HDF.
@@ -5422,6 +5586,8 @@ class RasUnsteady:
             precip_grp.attrs["Source"] = np.bytes_("DSS")
             precip_grp.attrs["DSS Filename"] = np.bytes_(dss_filename)
             precip_grp.attrs["DSS Pathname"] = np.bytes_(dss_pathname)
+            if ratio is not None:
+                precip_grp.attrs["Ratio"] = np.float32(ratio)
             if interpolation:
                 precip_grp.attrs["Interpolation Method"] = np.bytes_(interpolation)
             elif "Interpolation Method" in precip_grp.attrs:
@@ -5443,10 +5609,12 @@ class RasUnsteady:
     @staticmethod
     @log_call
     def configure_gridded_dss_precipitation(
-        unsteady_file: Path,
-        dss_filename: str,
+        unsteady_file: Union[str, Path],
+        dss_filename: Union[str, Path],
         dss_pathname: str,
         interpolation: str = "",
+        ras_object: Optional[Any] = None,
+        ratio: Optional[float] = None,
     ) -> None:
         """
         Configure a .u## file to reference gridded DSS precipitation.
@@ -5456,7 +5624,7 @@ class RasUnsteady:
 
         Parameters
         ----------
-        unsteady_file : Path
+        unsteady_file : str or Path
             Path to the unsteady flow file (.u##).
         dss_filename : str
             DSS filename for the gridded precipitation source. Relative values
@@ -5469,16 +5637,50 @@ class RasUnsteady:
         interpolation : str, optional
             Spatial interpolation method. Use ``"Nearest"`` or ``"Bilinear"``.
             The default empty string leaves the RAS default unset in the .u##.
+        ras_object : optional
+            Custom initialized RAS project. Required when ``unsteady_file`` is
+            supplied as a two-digit unsteady-flow number.
+        ratio : float, optional
+            Set ``Met BC=Precipitation|Ratio``. HEC-RAS 6.0-6.1 do not apply
+            this multiplier, so those releases require 1.0. Passing 1.0 also
+            clears an ineffective retained non-unit ratio.
 
         Returns
         -------
         None
             The .u## file and its .u##.hdf sidecar metadata are updated in place.
         """
-        unsteady_path = Path(unsteady_file)
+        ras_obj = ras_object or ras
+        is_unsteady_number = isinstance(unsteady_file, str) and len(unsteady_file) <= 2
+        if is_unsteady_number:
+            ras_obj.check_initialized()
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = (
+                Path(ras_obj.project_folder) / f"{ras_obj.project_name}.u{unsteady_num}"
+            )
+        else:
+            unsteady_path = Path(unsteady_file)
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
-        unsteady_path = unsteady_path.resolve()
+        # Path.resolve() can turn mapped drives into UNC paths that HEC-RAS cannot
+        # read. This path also anchors the relative DSS filename written to .u##.
+        from .RasUtils import RasUtils
+
+        unsteady_path = RasUtils.safe_resolve(unsteady_path)
+        capabilities = RasUnsteady._gridded_precipitation_capabilities(
+            unsteady_path,
+            ras_obj if ras_object is not None or is_unsteady_number else None,
+        )
+        RasUnsteady._preflight_precipitation_ratio(
+            unsteady_path, capabilities, ratio
+        )
+        if capabilities and capabilities.period_average_timing == "shifted":
+            logger.warning(
+                "HEC-RAS %s can shift native period-average gridded precipitation "
+                "by one interval. Inspect the preprocessed temporary HDF timestamps "
+                "and rainfall before compute.",
+                capabilities.version,
+            )
 
         dss_pathname = str(dss_pathname).strip()
         if not dss_pathname:
@@ -5507,17 +5709,32 @@ class RasUnsteady:
             ("Met BC=Precipitation|Gridded DSS Pathname", dss_pathname),
         ])
 
-        RasUnsteady._replace_met_precipitation_keys(
-            unsteady_path,
-            desired_entries,
-        )
-
+        # Match the raster route: a locked/invalid HDF must fail before text
+        # advertises a new forcing configuration.
         hdf_path = RasUnsteady._update_gridded_dss_precipitation_hdf(
             unsteady_path=unsteady_path,
             dss_filename=dss_filename_str,
             dss_pathname=dss_pathname,
             interpolation=interpolation_value,
+            ratio=ratio,
         )
+        RasUnsteady._replace_met_precipitation_keys(
+            unsteady_path,
+            desired_entries,
+        )
+        if ratio is not None:
+            with open(
+                unsteady_path,
+                "r",
+                encoding="utf-8",
+                errors="replace",
+                newline="",
+            ) as source:
+                lines = source.readlines()
+            RasUnsteady._apply_precipitation_ratio_line(
+                lines, ratio, unsteady_path
+            )
+            RasUnsteady._atomic_write_lines(unsteady_path, lines)
 
         logger.info(
             f"Configured gridded DSS precipitation in {unsteady_path.name}: "
@@ -5545,13 +5762,70 @@ class RasUnsteady:
         interpolation: str = "Bilinear",
         ras_object: Optional[Any] = None,
         dataset_name: Optional[str] = None,
+        units: str = "mm",
+        value_type: str = "rate",
+        first_timestep_hours: Optional[float] = None,
+        ratio: Optional[float] = None,
     ) -> None:
-        """
-        Configure gridded precipitation from a NetCDF file in an unsteady flow file.
+        """Configure NetCDF gridded precipitation and update its native HDF.
 
-        This function modifies the meteorologic boundary conditions in an HEC-RAS
-        unsteady flow file to use GDAL Raster (NetCDF) gridded precipitation instead
-        of DSS or constant values.
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Unsteady-flow number or path.
+        netcdf_path : str or Path
+            Project-relative or absolute precipitation NetCDF path.
+        interpolation : {"Bilinear", "Nearest"}, default "Bilinear"
+            Spatial interpolation used by HEC-RAS.
+        ras_object : optional
+            Initialized project object; defaults to the global project.
+        dataset_name : str, optional
+            Precipitation variable. A common name is detected when omitted.
+        units : str, default "mm"
+            Source depth units, normally ``"mm"`` or ``"in"``.
+        value_type : {"rate", "amount", "cumulative"}, default "rate"
+            Temporal meaning of the input values.
+        first_timestep_hours : float, optional
+            Duration represented by a nonzero first rate/amount frame.
+        ratio : float, optional
+            Positive HEC-RAS precipitation multiplier.
+
+        Returns
+        -------
+        None
+            The established API intentionally retains its historical return
+            contract. Use :meth:`set_gridded_precipitation_geotiff` or
+            :meth:`set_gridded_precipitation_grib` when a structured ingestion
+            result is required for those source formats.
+        """
+        RasUnsteady._set_gridded_precipitation_with_result(
+            unsteady_file=unsteady_file,
+            netcdf_path=netcdf_path,
+            interpolation=interpolation,
+            ras_object=ras_object,
+            dataset_name=dataset_name,
+            units=units,
+            value_type=value_type,
+            first_timestep_hours=first_timestep_hours,
+            ratio=ratio,
+        )
+
+    @staticmethod
+    def _set_gridded_precipitation_with_result(
+        unsteady_file: Union[str, Path],
+        netcdf_path: Union[str, Path],
+        interpolation: str = "Bilinear",
+        ras_object: Optional[Any] = None,
+        dataset_name: Optional[str] = None,
+        units: str = "mm",
+        value_type: str = "rate",
+        first_timestep_hours: Optional[float] = None,
+        ratio: Optional[float] = None,
+    ) -> "PrecipRasterImportResult":
+        """
+        Configure NetCDF precipitation and return its verified HDF import result.
+
+        Internal result-bearing core for the public source-specific wrappers.
 
         Parameters
         ----------
@@ -5569,11 +5843,38 @@ class RasUnsteady:
             NetCDF data variable name. If omitted and the NetCDF exists, a
             common precipitation variable name is detected and written to the
             HEC-RAS ``Gridded GDAL Group`` field.
+        units : str, default "mm"
+            Units of the NetCDF values: ``"mm"`` or ``"in"`` (``"kg/m^2"`` is
+            accepted and written as ``"mm"``). HEC-RAS converts from these units to
+            the project's, so this must describe the data, not the project - a
+            mislabelled source is silently scaled by 25.4.
+        value_type : {"rate", "amount", "cumulative"}, default "rate"
+            How the NetCDF values are expressed. ``"rate"`` (per hour) is weighted
+            by each interval's duration; ``"amount"`` is a depth per interval;
+            ``"cumulative"`` is already a running total. For hourly data ``"rate"``
+            and ``"amount"`` agree; for any other interval they differ by the
+            interval length.
+        first_timestep_hours : float, optional
+            Duration of the first band's interval, in hours - the import dialog's
+            "First Timestep Duration". When omitted the first band is not delivered
+            (the dialog default) and a warning reports any non-zero data dropped.
+        ratio : float, optional
+            Set ``Met BC=Precipitation|Ratio``. HEC-RAS multiplies all
+            precipitation by this factor. When omitted the existing value is kept,
+            and a warning is logged if it is not 1.
 
         Returns
         -------
-        None
-            The function modifies the file in-place.
+        PrecipRasterImportResult
+            Verified HDF precipitation import details. The function also modifies
+            the unsteady text and sidecar HDF in place.
+
+        Raises
+        ------
+        FileNotFoundError
+            The unsteady file or the NetCDF file does not exist.
+        ValueError
+            Invalid units, value_type, first_timestep_hours, ratio, or NetCDF grid.
 
         Examples
         --------
@@ -5616,6 +5917,13 @@ class RasUnsteady:
         if not unsteady_path.exists():
             raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
 
+        RasUnsteady._preflight_gridded_precipitation_request(
+            unsteady_path,
+            ras_obj,
+            ratio=ratio,
+            value_type=value_type,
+        )
+
         interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
 
         # Convert netcdf_path to relative path if within project folder
@@ -5631,14 +5939,22 @@ class RasUnsteady:
             netcdf_full_path = ras_obj.project_folder / netcdf_path
             netcdf_str = f".\\{netcdf_path}".replace("/", "\\")
 
-        if dataset_name is None and netcdf_full_path.exists():
-            try:
-                import xarray as xr
+        from .RasPrecipHdf import RasPrecipHdf
 
-                with RasUnsteady._open_netcdf_dataset(netcdf_full_path, xr) as ds:
-                    dataset_name = RasUnsteady._find_precipitation_variable(ds)
-            except Exception as e:
-                logger.warning(f"Could not detect NetCDF precipitation variable: {e}")
+        # Validate every input and build the whole payload before the .u## text is
+        # touched, so a bad NetCDF cannot leave the model pointing at gridded
+        # precipitation with no data behind it.
+        units_out = RasPrecipHdf.normalize_units(units)
+        RasPrecipHdf.validate_data_type_units("cumulative", units_out)
+        if ratio is not None and (not np.isfinite(float(ratio)) or float(ratio) <= 0):
+            raise ValueError(f"ratio must be a positive number, got {ratio!r}")
+
+        payload = RasUnsteady._read_netcdf_precipitation(
+            netcdf_full_path, dataset_name, value_type, first_timestep_hours
+        )
+        RasUnsteady._check_declared_units(payload, units_out, netcdf_full_path)
+        if dataset_name is None:
+            dataset_name = payload["precip_var"]
 
         logger.debug(f"Configuring gridded precipitation in {unsteady_path}")
         logger.debug(f"  NetCDF file: {netcdf_str}")
@@ -5832,6 +6148,25 @@ class RasUnsteady:
             )
             gdal_group_updated = True
 
+        RasUnsteady._apply_precipitation_ratio_line(lines, ratio, unsteady_path)
+
+        # Write the payload before the text. HEC-RAS rebuilds the rest of the
+        # .u##.hdf from the text on its next save and copies this payload forward,
+        # so a missing file is created. If the HDF cannot be written (held open by
+        # RAS Mapper, corrupt, permissions) this raises with the .u## untouched,
+        # rather than leaving the model configured for gridded rain with no data.
+        hdf_path = Path(str(unsteady_path) + '.hdf')
+        if not hdf_path.exists():
+            logger.info(f"Creating {hdf_path.name} to hold the imported precipitation payload")
+        import_result = RasUnsteady._write_precipitation_hdf(
+            hdf_path=hdf_path,
+            payload=payload,
+            netcdf_rel_path=netcdf_str,
+            interpolation=interpolation,
+            units=units_out,
+            ratio=ratio,
+        )
+
         # Write the updated file
         with open(unsteady_path, 'w', encoding='utf-8', errors='replace', newline='\r\n') as f:
             f.writelines(lines)
@@ -5842,19 +6177,344 @@ class RasUnsteady:
             f"source={netcdf_str}, interpolation={interpolation}{dataset_suffix}"
         )
         logger.debug(f"Gridded precipitation configuration path: {unsteady_path}")
+        return import_result
 
-        # Import precipitation data into the HDF file
-        hdf_path = Path(str(unsteady_path) + '.hdf')
-        if hdf_path.exists():
-            RasUnsteady._update_precipitation_hdf(
-                hdf_path=hdf_path,
-                netcdf_path=netcdf_full_path,
-                netcdf_rel_path=netcdf_str,
-                interpolation=interpolation,
-                dataset_name=dataset_name,
+    @staticmethod
+    @log_call
+    def set_gridded_precipitation_geotiff(
+        unsteady_file: Union[str, Path],
+        geotiff_paths: Union[str, Path, Sequence[Union[str, Path]]],
+        *,
+        timestamps: Sequence[Any],
+        units: str,
+        value_type: str,
+        first_timestep_hours: Optional[float] = None,
+        bands: Optional[Union[Sequence[int], Sequence[Sequence[int]]]] = None,
+        source_timezone: Optional[str] = None,
+        model_timezone: Optional[str] = None,
+        interpolation: str = "Bilinear",
+        ratio: Optional[float] = None,
+        nodata_policy: str = "error",
+        cache_path: Optional[Union[str, Path]] = None,
+        cache_policy: str = "reuse",
+        ras_object: Optional[Any] = None,
+    ) -> "GriddedPrecipitationImportResult":
+        """Configure gridded precipitation directly from GeoTIFF input.
+
+        GeoTIFF is a ras-commander ingestion format, not a native HEC-RAS
+        precipitation source. The input is validated and normalized into a
+        content-addressed project-local NetCDF, then that durable NetCDF and the
+        equivalent native HDF payload are configured together. Later HEC-RAS
+        saves and preprocessing therefore retain a vendor-supported GDAL source.
+
+        A single GeoTIFF may contain one or more selected bands. A sequence uses
+        one band per file by default; pass one common band list or one band list
+        per file for multiband sequences. Timestamps and units are always
+        explicit; filenames and non-standard TIFF tags are never used to guess
+        time. Amount and rate timestamps are interval-ending; the selected
+        first-timestep duration places the start of the first interval.
+
+        Parameters
+        ----------
+        unsteady_file : str or Path
+            Unsteady-flow number or path.
+        geotiff_paths : path or sequence of paths
+            One multiband GeoTIFF, or a sequence of single-band GeoTIFFs.
+        timestamps : sequence
+            One explicit timestamp per selected band, strictly increasing.
+        units : str
+            Source depth units, normally ``"mm"`` or ``"in"``.
+        value_type : {"rate", "amount", "cumulative"}
+            Temporal meaning of each input band.
+        first_timestep_hours : float, optional
+            Required for a nonzero first rate/amount frame so it is not dropped.
+        bands : sequence of int or sequence of sequences, optional
+            Selected bands applied to every file, or one selection per file.
+        source_timezone, model_timezone : str, optional
+            Explicit timezone localization/conversion before writing the
+            timezone-naive timestamps HEC-RAS uses.
+        interpolation : {"Nearest", "Bilinear"}
+            HEC-RAS spatial interpolation method.
+        ratio : float, optional
+            HEC-RAS precipitation multiplier.
+        nodata_policy : {"error", "zero"}, default "error"
+            Fail on NoData by default; ``"zero"`` explicitly treats it as dry.
+        cache_path : str or Path, optional
+            Persistent NetCDF destination. The default is a semantic-hash path
+            below ``Precipitation/_ras_commander_cache`` in the project.
+        cache_policy : {"reuse", "refresh", "error"}, default "reuse"
+            Existing-cache behavior.
+        ras_object : optional
+            Custom initialized RAS project.
+
+        Returns
+        -------
+        GriddedPrecipitationImportResult
+            Source hashes, persistent cache identity, HDF import result, grid,
+            timestamps, units, and NoData audit information.
+        """
+        from .precip.RasPrecipGrid import (
+            GriddedPrecipitationImportResult,
+            RasPrecipGrid,
+        )
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = (
+                Path(ras_obj.project_folder)
+                / f"{ras_obj.project_name}.u{unsteady_num}"
             )
         else:
-            logger.warning(f"HDF file not found: {hdf_path} - precipitation data not imported")
+            unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        capabilities = RasUnsteady._preflight_gridded_precipitation_request(
+            unsteady_path,
+            ras_obj,
+            ratio=ratio,
+            value_type=value_type,
+        )
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
+        cube = RasPrecipGrid.from_geotiff(
+            geotiff_paths,
+            timestamps=timestamps,
+            units=units,
+            value_type=value_type,
+            first_timestep_hours=first_timestep_hours,
+            bands=bands,
+            source_timezone=source_timezone,
+            model_timezone=model_timezone,
+            nodata_policy=nodata_policy,
+        )
+
+        if cache_path is None:
+            resolved_cache = RasPrecipGrid.default_cache_path(
+                cube, Path(ras_obj.project_folder)
+            )
+        else:
+            resolved_cache = Path(cache_path)
+            if not resolved_cache.is_absolute():
+                resolved_cache = Path(ras_obj.project_folder) / resolved_cache
+        cache_result = RasPrecipGrid.to_ras_netcdf(
+            cube,
+            resolved_cache,
+            cache_policy=cache_policy,
+        )
+
+        hdf_result = RasUnsteady._set_gridded_precipitation_with_result(
+            unsteady_file=unsteady_file,
+            netcdf_path=cache_result.path,
+            interpolation=interpolation,
+            ras_object=ras_obj,
+            dataset_name="precipitation",
+            units=cube.units,
+            value_type="cumulative",
+            first_timestep_hours=None,
+            ratio=ratio,
+        )
+        return GriddedPrecipitationImportResult(
+            source_format="geotiff",
+            source_paths=cube.source_paths,
+            source_hashes=cube.source_hashes,
+            selected_bands=cube.selected_bands,
+            cache_path=cache_result.path,
+            cache_hash=cache_result.content_hash,
+            cache_reused=cache_result.reused,
+            hdf_result=hdf_result,
+            hec_ras_version=(capabilities.version if capabilities else None),
+            selected_route="translated_netcdf_with_native_hdf",
+            route_qualification=(
+                capabilities.qualification_for(
+                    "geotiff", route="translated_netcdf_with_native_hdf"
+                )
+                if capabilities
+                else "inconclusive"
+            ),
+            shape=tuple(cube.values.shape),
+            timestamps=cube.timestamps,
+            crs_wkt=cube.crs_wkt,
+            transform=cube.transform,
+            units=cube.units,
+            value_type=cube.source_value_type,
+            nodata_policy=cube.nodata_policy,
+            nodata_count=cube.nodata_count,
+        )
+
+    @staticmethod
+    @log_call
+    def set_gridded_precipitation_grib(
+        unsteady_file: Union[str, Path],
+        grib_paths: Union[str, Path, Sequence[Union[str, Path]]],
+        *,
+        timestamps: Sequence[Any],
+        units: str,
+        value_type: str,
+        first_timestep_hours: Optional[float] = None,
+        bands: Optional[Union[Sequence[int], Sequence[Sequence[int]]]] = None,
+        source_timezone: Optional[str] = None,
+        model_timezone: Optional[str] = None,
+        interpolation: str = "Bilinear",
+        ratio: Optional[float] = None,
+        nodata_policy: str = "error",
+        cache_path: Optional[Union[str, Path]] = None,
+        cache_policy: str = "reuse",
+        ras_object: Optional[Any] = None,
+    ) -> "GriddedPrecipitationImportResult":
+        """Configure projected GRIB/GRIB2 precipitation through a durable NetCDF.
+
+        Raster bands are read through GDAL/rasterio with caller-supplied
+        interval-ending timestamps (for amounts/rates), depth units, and
+        temporal semantics. The normalized cumulative
+        cube is cached as HEC-RAS-compatible NetCDF and materialized into the
+        unsteady HDF. This is also the safe route for GRIB encodings that GDAL
+        can read but HEC-RAS cannot import directly.
+
+        WPC QPF GRIB2 remains a vendor-known special case through HEC-RAS 7.0.1.
+        If the local GDAL stack cannot decode it, convert it to DSS with
+        HEC-Vortex or HEC-MetVue and use
+        :meth:`configure_gridded_dss_precipitation`.
+        """
+        from .precip.RasPrecipGrid import (
+            GriddedPrecipitationImportResult,
+            RasPrecipGrid,
+        )
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        if isinstance(unsteady_file, str) and len(unsteady_file) <= 2:
+            unsteady_num = unsteady_file.zfill(2)
+            unsteady_path = (
+                Path(ras_obj.project_folder)
+                / f"{ras_obj.project_name}.u{unsteady_num}"
+            )
+        else:
+            unsteady_path = Path(unsteady_file)
+        if not unsteady_path.exists():
+            raise FileNotFoundError(f"Unsteady flow file not found: {unsteady_path}")
+        capabilities = RasUnsteady._preflight_gridded_precipitation_request(
+            unsteady_path,
+            ras_obj,
+            ratio=ratio,
+            value_type=value_type,
+        )
+        interpolation = RasUnsteady._normalize_gridded_interpolation(interpolation)
+        cube = RasPrecipGrid.from_grib(
+            grib_paths,
+            timestamps=timestamps,
+            units=units,
+            value_type=value_type,
+            first_timestep_hours=first_timestep_hours,
+            bands=bands,
+            source_timezone=source_timezone,
+            model_timezone=model_timezone,
+            nodata_policy=nodata_policy,
+        )
+        if cache_path is None:
+            resolved_cache = RasPrecipGrid.default_cache_path(
+                cube, Path(ras_obj.project_folder)
+            )
+        else:
+            resolved_cache = Path(cache_path)
+            if not resolved_cache.is_absolute():
+                resolved_cache = Path(ras_obj.project_folder) / resolved_cache
+        cache_result = RasPrecipGrid.to_ras_netcdf(
+            cube,
+            resolved_cache,
+            cache_policy=cache_policy,
+        )
+        hdf_result = RasUnsteady._set_gridded_precipitation_with_result(
+            unsteady_file=unsteady_file,
+            netcdf_path=cache_result.path,
+            interpolation=interpolation,
+            ras_object=ras_obj,
+            dataset_name="precipitation",
+            units=cube.units,
+            value_type="cumulative",
+            ratio=ratio,
+        )
+        return GriddedPrecipitationImportResult(
+            source_format="grib",
+            source_paths=cube.source_paths,
+            source_hashes=cube.source_hashes,
+            selected_bands=cube.selected_bands,
+            cache_path=cache_result.path,
+            cache_hash=cache_result.content_hash,
+            cache_reused=cache_result.reused,
+            hdf_result=hdf_result,
+            hec_ras_version=(capabilities.version if capabilities else None),
+            selected_route="translated_netcdf_with_native_hdf",
+            route_qualification=(
+                capabilities.qualification_for(
+                    "grib", route="translated_netcdf_with_native_hdf"
+                )
+                if capabilities
+                else "inconclusive"
+            ),
+            shape=tuple(cube.values.shape),
+            timestamps=cube.timestamps,
+            crs_wkt=cube.crs_wkt,
+            transform=cube.transform,
+            units=cube.units,
+            value_type=cube.source_value_type,
+            nodata_policy=cube.nodata_policy,
+            nodata_count=cube.nodata_count,
+        )
+
+    @staticmethod
+    def _apply_precipitation_ratio_line(
+        lines: List[str], ratio: Optional[float], unsteady_path: Path
+    ) -> None:
+        """
+        Set, or check, ``Met BC=Precipitation|Ratio=`` in unsteady file lines.
+
+        Supported HEC-RAS releases multiply precipitation by this ratio and
+        regenerates the HDF attribute from this line on save. When ``ratio`` is
+        None the line is left alone, but a value other than 1 is reported, because
+        it silently scales whatever precipitation is imported.
+        """
+        prefix = "Met BC=Precipitation|Ratio="
+        ratio_idx = next(
+            (i for i, line in enumerate(lines) if line.startswith(prefix)), -1
+        )
+
+        if ratio is None:
+            if ratio_idx >= 0:
+                raw_value = lines[ratio_idx][len(prefix):].strip()
+                try:
+                    existing = float(raw_value) if raw_value else 1.0
+                except ValueError:
+                    logger.warning(
+                        f"Unparseable precipitation ratio {raw_value!r} in {unsteady_path.name}"
+                    )
+                    return
+                if not np.isclose(existing, 1.0):
+                    logger.warning(
+                        f"{unsteady_path.name} has precipitation Ratio={raw_value}; HEC-RAS "
+                        f"scales imported precipitation by this factor. Pass ratio=1.0 to "
+                        f"deliver the data unscaled."
+                    )
+            return
+
+        newline = RasUnsteady._detect_line_ending(lines)
+        new_line = (
+            f"{prefix}{RasUnsteady._format_met_float(float(ratio))}{newline}"
+        )
+        if ratio_idx >= 0:
+            lines[ratio_idx] = new_line
+            return
+        anchor = next(
+            (i for i, line in enumerate(lines)
+             if line.startswith("Met BC=Precipitation|Expanded View=")),
+            next(
+                (i for i, line in enumerate(lines)
+                 if line.startswith("Met BC=Precipitation|Mode=")),
+                -1,
+            ),
+        )
+        insert_at = anchor + 1 if anchor >= 0 else RasUnsteady._get_default_met_insert_index(lines)
+        lines.insert(insert_at, new_line)
 
     @staticmethod
     def _format_met_float(value: Optional[float]) -> str:

@@ -30,6 +30,180 @@
   unsteady-solver startup signals while retaining exact process ownership,
   fresh-artifact, and quiescence checks (#373).
 
+**Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
+
+- Correct the translated NetCDF GeoTransform to GDAL ordering, with an
+  independent rasterio reopen check for transform, CRS, extent, and values.
+- Preserve AORC's first hourly accumulation in `create_storm_plans()` by
+  passing explicit amount/mm/one-hour semantics; add a RasExamples HDF regression.
+- Refresh precipitation documentation to use implemented APIs. Retire the
+  obsolete notebook 722 authoring cells in favor of 727; add temporary-HDF
+  checks to Atlas 14, AORC, historical-event, and HRRR workflows, correct the
+  MRMS precompute plot label, and clarify uniform-boundary/WPC example scope.
+- Requalify notebook 916 with archived 8 August 2024 15Z HRRR precipitation,
+  18 native DSS interval grids, a no-rain control, temporary-plan-HDF forcing,
+  final active-cell precipitation, hydraulic response, mass balance, runtime
+  messages, and six review figures under HEC-RAS 7.0. DSS-to-temporary-HDF
+  maximum error was 0.000002 inch; the final active-cell comparison had
+  -0.00185-inch mean error and 0.02654-inch RMSE. Three localized cells exceeded
+  0.1 foot maximum water-surface error, so the notebook maps those cells and
+  retains an explicit manual-review requirement rather than presenting the
+  instructional model as uniformly converged.
+- Re-execute notebook 917 with two archived MRMS events and correct its
+  misleading rain-on-grid title and scope. The notebook now inspects 61
+  spatial DSS grids, then clearly applies intentionally area-averaged boundary
+  hyetographs in four HEC-RAS 7.0 baseline/event runs. It verifies exact
+  boundary totals in the final HDF, records zero flagged BCO diagnostics, and
+  preserves eight review figures plus six videos. A configurable short run
+  root accommodates HEC-Vortex's legacy path handling, and any unavailable
+  Mapper frames are explicitly replaced from final-HDF depth results. The
+  notebook retains manual review of diagnostics, rainfall, timing, terrain
+  coverage, and hydraulic response; notebook 924 remains the spatial MRMS
+  rain-on-grid qualification.
+- Replace notebook 926's catalog-only WPC sketch with a fully executed
+  DSS-to-HEC-RAS 7.0 rain-on-grid qualification using the complete 26 September
+  2026 00Z WPC cycle. The notebook verifies 28 downloaded and translated grids,
+  objectively selects the wettest 24-hour model window, matches DSS to the
+  temporary plan HDF within 0.0000002 inch, completes no-rain and forecast
+  simulations, and compares 18,066 active final-HDF cells with -0.000229-inch
+  mean error and 0.003105-inch RMSE. Five embedded figures include source/DSS,
+  precompute, final-forcing, hydraulic-response, and mapped convergence review.
+  It also works around `qpkit 0.1.0`'s unreliable `QPFGridOptions.extents`
+  result by cropping/reopening each GRIB in its native projection before the
+  public DSS writer; all BCO diagnostic gates were clear, while three localized
+  cells above 0.1-foot maximum WSEL error remain explicitly mapped for manual
+  review.
+- Replace notebook 728's unexecuted file-preparation sketch with a real
+  RasExamples qualification of `copy_grid_with_zero_tail()`. The source DSS
+  remains byte-for-byte unchanged; three copied records and three appended dry
+  records drive a five-hour HEC-RAS 7.0 plan. The derivative matches the
+  temporary plan HDF within 0.0000002 inch, the final HDF preserves an exact
+  three-hour zero-rain plateau, and 18,066 active cells compare to nearest DSS
+  values with 0.000005-inch mean error and 0.000693-inch RMSE. Four figures
+  retain the source field, derivative timeline, temporary-HDF plateau,
+  final-HDF comparison, and hydraulic result, with explicit manual diagnostics.
+- Replace notebook 914's ambiguous historical-validation workflow with a fully
+  executed HEC-RAS 7.0 historical-event diagnostic. The notebook verifies 48
+  archived AORC hourly amounts through the durable import HDF, temporary plan
+  HDF, and 18,066 active final-HDF cells within 0.000003 inch; records zero
+  flagged BCO diagnostics and 0.001523% volume error; and preserves five review
+  figures. USGS UTC observations are converted to Eastern local time and
+  interpolated with explicit nanosecond-normalized timestamps. The gauge result
+  is labeled diagnostic rather than calibration validation because reviewed
+  historical boundary hydrographs, initial conditions, and gate operations are
+  not included with the fixture.
+- Replace notebook 915's stale live-download sketch with a deterministic,
+  fully executed forecast orchestration/readiness artifact. It validates the
+  current public API signatures, converts a UTC forecast cycle to the model's
+  documented local time, builds and plots a contiguous production manifest,
+  and visually audits the committed 916/923/924/926 component artifacts. It
+  removes nonexistent APIs, invalid date-update keywords, fabricated fallback
+  output, mismatched live-cycle dates, and recursive cleanup of shared data.
+  The notebook explicitly does not claim independent format, model-compute, or
+  HEC-RAS version qualification.
+- Document notebook 916's isolated-environment requirement: `qpkit==0.1.0`
+  currently uses a `pydsstools` wheel that requires NumPy 1.x, so the example
+  pins NumPy below 2 and SciPy below 1.17 instead of leaving an incompatible
+  latest-SciPy combination in the user's general ras-commander environment.
+- Preserve native CRLF line endings when
+  `configure_gridded_dss_precipitation()` writes an explicit precipitation
+  ratio. Converting a HEC-RAS unsteady-flow file to mixed/LF endings could make
+  valid boundary-condition and gate-control blocks appear missing during
+  preprocessing.
+- Qualify native DSS on CLB07/Wine 11 with HEC-RAS 6.6. The prior timeout was
+  caused by the harness's disabling DLL override; removing the combined
+  `mscoree,mshtml` override restored preprocessing and verified computation.
+- Prevent beta versions from inheriting stable-release qualification.
+
+- Add first-class `RasUnsteady.set_gridded_precipitation_geotiff()` support for
+  one multiband GeoTIFF or a timestamped sequence of single-band GeoTIFFs.
+  Inputs are normalized to cumulative precipitation, written to a validated
+  content-addressed project NetCDF, and materialized through the native HDF
+  writer. The `.u##` references the durable NetCDF rather than advertising
+  GeoTIFF as a vendor-native HEC-RAS meteorology source.
+- Add the same explicit normalization route for projected GRIB/GRIB2 through
+  `set_gridded_precipitation_grib()`. WPC QPF's vendor-documented compression
+  limitation remains routed through HEC-Vortex/HEC-MetVue to DSS when the local
+  GDAL stack cannot decode it.
+- Exercise the GRIB route with a real filtered NOAA HRRR GRIB2 precipitation
+  record, including explicit message selection and positive-value native HDF
+  authoring. This is format-decoding/authoring evidence; native HEC-RAS GRIB
+  preprocessing remains documentation-backed until its executable matrix is
+  complete.
+- Require explicit timestamps, units, and rate/amount/cumulative semantics;
+  validate CRS, affine orientation, square cells, band counts, monotonic time,
+  nonnegative precipitation, and consistent grids. NoData fails by default and
+  is converted to dry cells only with `nodata_policy="zero"`.
+- Validate raster and GRIB unit metadata as temporal semantics as well as depth
+  units, including HEC-RAS rate spellings such as `mmph` and GDAL's
+  `GRIB_UNIT`; reject rate/amount mismatches and non-hourly rates that require
+  an explicit conversion.
+- Make the persistent cache genuinely semantic: source paths no longer affect
+  identity, and reuse verifies values, time/x/y coordinates, CRS, transform,
+  units, and temporal type before accepting an existing NetCDF.
+- Add `PrecipCapabilities` and
+  `RasUnsteady.get_gridded_precipitation_capabilities()` so HEC-RAS 5.x is
+  rejected for global gridded meteorology and the 6.0-6.1 ratio and
+  6.0-6.3.1 period-average timing defects are visible to callers.
+- Make source/route qualification fail closed for invalid combinations and
+  retain exact release-level evidence rather than extrapolating to patch
+  releases that were not tested.
+- Apply the HEC-RAS 6.0-6.1 ratio safeguard to DSS as well as raster inputs,
+  including retained text settings, while allowing `ratio=1.0` to clear an
+  ineffective value. Preserve the established
+  `set_gridded_precipitation()` `None` return contract; the new source-specific
+  adapters provide structured result objects.
+- Extend the process-local WMIC compatibility shim from HEC-RAS 6.3 to the
+  executable-evidence-backed 6.1-6.3 family. This repairs modern-Windows solver
+  startup without modifying HEC-RAS or the caller's environment.
+- Add notebook 729 and an opt-in RasExamples qualification test. A native
+  Windows HEC-RAS 6.6 run imported a deterministic 4-by-17-by-24 cumulative
+  GeoTIFF-derived cube, materialized fresh temporary-plan-HDF rainfall,
+  completed the Bald Eagle p06 simulation, and produced positive final
+  per-cell precipitation and hydraulic results. The notebook preserves the
+  source, precompute, rainfall, and hydraulic figures for manual review.
+- Qualify the same public GeoTIFF workflow end to end on CLB07 with HEC-RAS
+  6.6 under Wine 11.0: preprocessing emitted the expected four solver rows,
+  runtime messages contained no precipitation error, and the final HDF held
+  positive cumulative rainfall and hydraulic depth across the mesh.
+
+**Native Gridded-Precipitation Authoring and Precompute Readiness (#371)**
+
+- Add `RasPrecipHdf`, a focused writer for HEC-RAS's native
+  `Precipitation/Imported Raster Data` payload. Grids are normalized to
+  north-up/west-first order, regular square cells are required, dataset chunking
+  follows native HEC-RAS specimens, and invalid inputs are rejected before the
+  HDF is changed.
+- Make `RasUnsteady.set_gridded_precipitation()` fail fast for missing files,
+  dependencies, and variables; create a missing `.u##.hdf`; write the HDF
+  before changing the `.u##` text; and expose source `units`, `value_type`,
+  `first_timestep_hours`, and precipitation `ratio`. Rate, interval-amount, and
+  cumulative inputs are now converted explicitly instead of assuming an hourly
+  rate and silently discarding the first band.
+- Require solver-ready precipitation during `RasPreprocess.preprocess_plan()`.
+  For a gridded-rain plan, the early `.bco` marker is no longer sufficient:
+  preprocessing waits for fresh, complete artifacts and the materialized
+  plan-HDF `Precipitation/Values` and `Timestamp` datasets. An `Imported
+  Raster Data` payload by itself is reported as incomplete rather
+  than being returned as a successful Linux precompute.
+- Qualify the complete public-API workflow on CLB07 with HEC-RAS 6.6 under
+  Wine 11.0 and the native Linux solver. Both a 7-by-25 test payload and the
+  reported 76-by-1190 dimensions materialized correctly and were read by the
+  solver with no precipitation errors. The native `Imported Raster Data`
+  group is the correct authoring location; HEC-RAS preprocessing creates the
+  shallower solver-facing datasets.
+- Restore the remaining safeguards from the earlier unmerged feature branch:
+  AORC storm-plan creation now validates each caller-supplied NetCDF before
+  cloning, gridded DSS configuration preserves mapped-drive paths with
+  `RasUtils.safe_resolve()`, and unreadable precipitation sidecars emit a
+  diagnostic warning instead of being silently ignored.
+- Expand notebook 924 into an explicit authoring/precompute/postcompute
+  qualification. A Windows HEC-RAS 7.0 run materialized a 5-by-30 source grid,
+  produced positive cumulative rainfall in 18,066 mesh cells, and produced a
+  nonzero hydraulic response. The finalized code also requalified on CLB07
+  with HEC-RAS 6.6/Wine 11.0, materializing aligned 7-by-25 `Values` and
+  7-element `Timestamp` datasets.
+
 **Refinement-Region Authoring and Mesh Density (#369)**
 
 - Author real geometry through RAS Mapper's native `MeshRegions` layer on

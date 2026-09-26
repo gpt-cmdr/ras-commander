@@ -128,6 +128,7 @@ class RasPrj:
         self.initialized = False
         self.boundaries_df = None  # New attribute to store boundary conditions
         self.results_df = pd.DataFrame()  # Lightweight HDF results summaries
+        self.load_results_summary = True
         self.suppress_logging = False  # Add suppress_logging as instance variable
         self.project_crs = None
         self.project_crs_source = None
@@ -206,6 +207,7 @@ class RasPrj:
             6. Loading results summaries (if load_results_summary=True)
         """
         self.suppress_logging = suppress_logging  # Store suppress_logging state
+        self.load_results_summary = bool(load_results_summary)
         self.project_folder = Path(project_folder)
         self.project_path = self.project_folder  # Alias for compatibility
         self.project_crs = None

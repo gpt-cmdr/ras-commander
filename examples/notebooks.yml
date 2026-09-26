@@ -3078,12 +3078,12 @@ notebooks:
   executed_cells: 24
 - id: 722_gridded_precipitation_atlas14
   filename: 722_gridded_precipitation_atlas14.ipynb
-  title: Gridded Precipitation for Rain-on-Grid 2D Modeling
+  title: 'Gridded Precipitation with Atlas 14: Current Workflow'
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: This notebook demonstrates **gridded precipitation (rain-on-grid)** workflows for 2D HEC-RAS
-    models using HMS-validated precipitation methods. Unlike hydrograph boundary conditions, gridded precipitation
-    applies directly to mesh cells.
+  summary: Migration guide to the implemented Atlas 14 workflow in notebook 727, with capability lookup
+    and links to GeoTIFF, MRMS, and HRRR examples. Retires obsolete placeholder APIs and raw meteorology
+    edits.
   tags:
   - 2d
   - precipitation
@@ -3091,28 +3091,18 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
-  - HdfMesh.get_mesh_area_names
   - HdfMesh.get_mesh_areas
-  - HdfMesh.get_mesh_cell_points
   - HdfMesh.get_mesh_cell_polygons
-  - HdfResultsMesh.get_mesh_max_ws
-  - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasPlan.clone_plan
-  - RasPlan.clone_unsteady
-  - RasPlan.set_unsteady
-  - RasUnsteady.set_gridded_precipitation
-  - RasUnsteady.set_precipitation_hyetograph
-  - ras.geom_df
+  - RasUnsteady.get_gridded_precipitation_capabilities
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
-  - ras.results_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 29
-  executed_cells: 0
+  code_cells: 11
+  executed_cells: 11
 - id: 723_storm_generator_abm_validation
   filename: 723_storm_generator_abm_validation.ipynb
   title: StormGenerator Alternating Block Method - Independent Textbook Validation
@@ -3188,6 +3178,7 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - HdfMesh.get_mesh_cell_polygons
+  - HdfResultsMesh.get_mesh_cells_timeseries
   - HdfResultsMesh.get_mesh_max_ws
   - HdfResultsMesh.get_mesh_timeseries
   - HdfResultsPlan.get_compute_messages_hdf_only
@@ -3197,6 +3188,7 @@ notebooks:
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_gate_openings
   - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_constant_precipitation
@@ -3209,35 +3201,88 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 20
-  executed_cells: 20
+  code_cells: 22
+  executed_cells: 22
 - id: 728_extend_gridded_dss_forcing_window
   filename: 728_extend_gridded_dss_forcing_window.ipynb
   title: Extending Gridded DSS Forcing Through the Simulation Window
   series: 700
   series_name: Sensitivity & Precipitation
-  summary: Extend a reviewed gridded precipitation or rainfall-excess DSS family with explicit zero forcing
-    through a longer simulation window, verify source immutability and derivative metadata, and show the
-    real ras-commander project handoff without modifying or executing HEC-RAS.
+  summary: preserve and extend a model-covering gridded DSS family with three explicit dry intervals,
+    then verify temporary/final HDF forcing, a HEC-RAS 7.0 compute, the dry-tail plateau, active-cell
+    agreement, runtime diagnostics, and hydraulic results on Bald Eagle Creek
   tags:
   - dss
   - precipitation
   difficulty: intermediate
   est_runtime: 1 min
-  data_project: null
+  data_project: BaldEagleCrkMulti2D
   functions_used:
+  - HdfMesh.get_mesh_area_attributes
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfResultsMesh.get_mesh_max_ws_err
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfResultsPlan.get_volume_accounting
+  - RasCmdr.compute_plan
   - RasDss.copy_grid_with_zero_tail
   - RasDss.get_catalog
   - RasDss.get_file_version
   - RasDss.read_grid
   - RasDss.write_grid_timeseries
   - RasDss.write_timeseries
+  - RasExamples.extract_project
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.configure_gridded_dss_precipitation
+  - RasUnsteady.get_met_precipitation_config
+  - ras.project_folder
+  - ras.project_name
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 8
-  executed_cells: 0
+  code_cells: 9
+  executed_cells: 8
+- id: 729_direct_geotiff_gridded_rain_on_grid
+  filename: 729_direct_geotiff_gridded_rain_on_grid.ipynb
+  title: Direct GeoTIFF Gridded Rain-on-Grid
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Author projected precipitation GeoTIFFs, validate temporary plan-HDF rainfall, compute Bald
+    Eagle, and inspect final rainfall and hydraulics
+  tags:
+  - precipitation
+  - geotiff
+  - rain-on-grid
+  - validation
+  difficulty: intermediate
+  est_runtime: null
+  data_project: BaldEagleCrkMulti2D
+  functions_used:
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasPlan.update_plan_intervals
+  - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
+  - RasUnsteady.get_gridded_precipitation_capabilities
+  - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.set_gridded_precipitation_geotiff
+  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
+  hec_refs:
+  - HEC-RAS 2D Modeling User's Manual - Global Boundary Conditions
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 7
 - id: 730_raster_processing_performance_profiling
   filename: 730_raster_processing_performance_profiling.ipynb
   title: Raster Processing Performance Profiling
@@ -3329,20 +3374,25 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
   - HdfProject.get_project_bounds_latlon
-  - RasCmdr.compute_parallel
+  - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - RasCmdr.compute_plan
   - RasExamples.extract_project
-  - RasUsgsCore.retrieve_flow_data
-  - ras.get_plan_entries
+  - RasPlan.update_plan_intervals
+  - RasPreprocess.preprocess_plan
+  - RasUnsteady.get_met_precipitation_config
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
-  - ras.results_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 23
-  executed_cells: 22
+  code_cells: 11
+  executed_cells: 10
 - id: 901_aorc_precipitation_catalog
   filename: 901_aorc_precipitation_catalog.ipynb
   title: AORC Precipitation Catalog for HEC-RAS Rain-on-Grid Models
@@ -3356,23 +3406,20 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - HdfMesh.get_mesh_areas
   - HdfProject.get_project_bounds_latlon
-  - RasCmdr.compute_parallel
   - RasExamples.extract_project
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_gate_openings
   - RasUnsteady.set_gate_openings
-  - RasUtils.remove_with_retry
-  - ras.boundaries_df
-  - ras.get_boundary_conditions
-  - ras.get_plan_entries
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 18
-  executed_cells: 17
+  code_cells: 10
+  executed_cells: 9
 - id: 910_usgs_gauge_catalog
   filename: 910_usgs_gauge_catalog.ipynb
   title: USGS Gauge Catalog Generation
@@ -3475,48 +3522,61 @@ notebooks:
   executed_cells: 15
 - id: 914_historical_event_validation
   filename: 914_historical_event_validation.ipynb
-  title: Historical Event Validation with AORC Precipitation and USGS Gauges
+  title: Historical AORC Event Diagnostic Comparison with USGS Stage
   series: 900
   series_name: Data Integration
-  summary: 'This notebook demonstrates a comprehensive historical flood event validation workflow using:
-    - AORC gridded precipitation (rain-on-grid on 2D mesh) - USGS gauge data for boundary conditions -
-    Multiple validation points - HUC12 watershed...'
+  summary: execute an archived 48-hour AORC rain-on-grid event under HEC-RAS 7.0, verify source precipitation
+    through durable, temporary, and final HDFs, inspect runtime and hydraulic results, and compare timezone-correct
+    USGS stage as a diagnostic rather than calibration validation
   tags:
+  - 2d
+  - aorc
+  - hdf
   - precipitation
   - usgs
   difficulty: advanced
-  est_runtime: null
-  data_project: null
+  est_runtime: 5 min
+  data_project: BaldEagleCrkMulti2D
   functions_used:
+  - HdfMesh.get_mesh_area_attributes
   - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
   - HdfProject.get_project_bounds_latlon
-  - HdfResultsXsec.get_ref_lines_timeseries
-  - HdfResultsXsec.get_xsec_timeseries
+  - HdfResultsMesh.get_mesh_max_ws_err
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfResultsPlan.get_volume_accounting
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
+  - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_gridded_precipitation
-  - RasUtils.remove_with_retry
-  - ras.boundaries_df
-  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 21
-  executed_cells: 21
+  code_cells: 9
+  executed_cells: 9
 - id: 915_realtime_forecast_workflow
   filename: 915_realtime_forecast_workflow.ipynb
-  title: Real-Time Forecast Workflow with ras-commander
+  title: Operational Forecast Orchestration and Readiness
   series: 900
   series_name: Data Integration
-  summary: check and download current HRRR and STOFS-3D forecast inputs, extract coastal WSE when data
-    are available, and show the API calls for plan-date updates, stage-boundary writing, and HEC-RAS execution
-    without running a forecast model
-  tags: []
+  summary: build a deterministic timezone-explicit forecast-cycle manifest, inspect current public API
+    signatures, and visually audit the executed HRRR, STOFS-3D, MRMS, and WPC component artifacts without
+    claiming a duplicate model compute or independent format/version qualification
+  tags:
+  - forecast
+  - operations
+  - precipitation
+  - qaqc
   difficulty: advanced
-  est_runtime: null
+  est_runtime: 5 s
   data_project: null
   functions_used:
   - RasCmdr.compute_plan
@@ -3524,16 +3584,16 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 9
+  code_cells: 6
+  executed_cells: 6
 - id: 916_hrrr_precipitation_forecast
   filename: 916_hrrr_precipitation_forecast.ipynb
-  title: 'HRRR Forecast to HEC-RAS: End-to-End Rain-on-Grid Execution'
+  title: 'HRRR Forecast to HEC-RAS: Executed Rain-on-Grid Qualification'
   series: 900
   series_name: Data Integration
-  summary: select one mature live HRRR cycle, preserve source timing, write and spatially verify hourly
-    SHG DSS forcing, run converged no-rain and forecast plans through HEC-RAS 7.0, and audit hydraulic
-    response
+  summary: reproduce an archived 8 August 2024 15Z HRRR event as 18 hourly native DSS grids, verify source-to-DSS-to-temporary-and-final-HDF
+    forcing, compare no-rain and forecast hydraulics under HEC-RAS 7.0, and map localized convergence
+    exceptions for manual review
   tags:
   - 2d
   - dss
@@ -3548,7 +3608,6 @@ notebooks:
   - HdfInfiltration.get_preprocessed_infiltration_stats
   - HdfMesh.get_mesh_area_attributes
   - HdfMesh.get_mesh_areas
-  - HdfMesh.get_mesh_cell_faces
   - HdfMesh.get_mesh_cell_points
   - HdfProject.get_project_bounds_latlon
   - HdfResultsMesh.get_mesh_max_ws_err
@@ -3563,12 +3622,12 @@ notebooks:
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.configure_gridded_dss_precipitation
   - RasUnsteady.get_gate_openings
   - RasUnsteady.get_inline_hydrograph_boundaries
   - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_constant_precipitation
-  - ras.boundaries_df
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
@@ -3576,15 +3635,16 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
-  executed_cells: 12
+  code_cells: 11
+  executed_cells: 11
 - id: 917_mrms_precipitation_qpe
   filename: 917_mrms_precipitation_qpe.ipynb
-  title: MRMS QPE Rain-on-Grid Workflow
+  title: MRMS QPE Boundary-Hyetograph Hydraulic Comparison
   series: 900
   series_name: Data Integration
-  summary: download archived MRMS QPE, write and verify DSS precipitation forcing, compute Davis and New
-    Orleans rain-on-grid cases, and mosaic multi-terrain stored maps into hydraulic animations
+  summary: inspect spatial DSS grids for two archived MRMS events, intentionally reduce each event to
+    an area-average precipitation boundary, and compare HEC-RAS 7.0 baseline/event results with runtime,
+    final-HDF, map, pump, figure, and animation QA; this is not global gridded-meteorology qualification
   tags:
   - 2d
   - dss
@@ -3601,6 +3661,7 @@ notebooks:
   - HdfPump.get_pump_stations
   - HdfResultsMesh.export_depth_rasters_at_times
   - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
   - RasDss.get_catalog
   - RasDss.read_grid
@@ -3619,8 +3680,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 8
-  executed_cells: 6
+  code_cells: 7
+  executed_cells: 5
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution
@@ -3783,12 +3844,16 @@ notebooks:
   data_project: null
   functions_used:
   - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
   - HdfProject.get_project_bounds_latlon
   - HdfResultsMesh.get_mesh_cells_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasPlan.update_plan_intervals
   - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.get_met_precipitation_config
   - RasUnsteady.set_gridded_precipitation
   - ras.plan_df
@@ -3797,8 +3862,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 12
-  executed_cells: 0
+  code_cells: 13
+  executed_cells: 12
 - id: 925_xs_interpolation_surface
   filename: 925_xs_interpolation_surface.ipynb
   title: Cross-Section Interpolation Surface
@@ -3822,25 +3887,52 @@ notebooks:
   executed_cells: 10
 - id: 926_wpc_qpf_precipitation_forecast
   filename: 926_wpc_qpf_precipitation_forecast.ipynb
-  title: WPC QPF Precipitation Forecast to DSS
+  title: WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification
   series: 900
   series_name: Data Integration
-  summary: download current WPC QPF grids, crop them to a regional extent, write HEC-DSS, verify the fresh
-    catalog, and map the source precipitation field
+  summary: qualify a complete current WPC forecast through verified native-projection GRIB crops, 28 DSS
+    grids, temporary and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response,
+    mapped convergence exceptions, and explicit manual review
   tags:
   - dss
   - forecast
   - precipitation
   difficulty: advanced
   est_runtime: null
-  data_project: null
+  data_project: BaldEagleCrkMulti2D
   functions_used:
+  - HdfBndry.get_bc_lines
+  - HdfInfiltration.get_preprocessed_infiltration_stats
+  - HdfMesh.get_mesh_area_attributes
+  - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - HdfProject.get_project_bounds_latlon
+  - HdfResultsMesh.get_mesh_max_ws_err
+  - HdfResultsMesh.get_mesh_timeseries
+  - HdfResultsPlan.get_compute_messages_hdf_only
+  - HdfResultsPlan.get_volume_accounting
+  - HdfStruc.get_structures
+  - RasCmdr.compute_plan
   - RasDss.get_catalog
+  - RasDss.read_grid
+  - RasExamples.extract_project
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
+  - RasPreprocess.preprocess_plan
+  - RasUnsteady.configure_gridded_dss_precipitation
+  - RasUnsteady.get_inline_hydrograph_boundaries
+  - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.set_constant_precipitation
+  - ras.plan_df
+  - ras.project_folder
+  - ras.project_name
+  - ras.rasmap_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 5
-  executed_cells: 1
+  code_cells: 11
+  executed_cells: 11
 - id: 930_terrain_modification_analysis
   filename: 930_terrain_modification_analysis.ipynb
   title: Terrain Modification Analysis

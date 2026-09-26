@@ -207,6 +207,15 @@ class PrecipAorc:
         else:
             end_dt = pd.Timestamp(end_time)
 
+        if start_dt.tzinfo is not None:
+            start_dt = start_dt.tz_convert("UTC").tz_localize(None)
+        if end_dt.tzinfo is not None:
+            end_dt = end_dt.tz_convert("UTC").tz_localize(None)
+        if end_dt < start_dt:
+            raise ValueError(
+                f"end_time must be on or after start_time. Got {start_dt} to {end_dt}"
+            )
+
         # Extract bounds
         west, south, east, north = bounds
 
@@ -237,6 +246,7 @@ class PrecipAorc:
             store_path = f"s3://{PrecipAorc.BUCKET}/{year}.zarr"
             logger.debug(f"Loading AORC year {year} from {store_path}")
 
+            ds = None
             try:
                 store = s3fs.S3Map(root=store_path, s3=s3)
                 ds = xr.open_zarr(store)
@@ -275,13 +285,12 @@ class PrecipAorc:
                         **{lon_dim: slice(west, east)}
                     )
 
-                # Subset temporally - use date-only strings for proper inclusive slicing
+                # AORC timestamps are hourly UTC interval-ending verification times.
+                # Preserve the caller's hour/minute bounds; date-only strings silently
+                # expand every request to whole calendar days.
                 year_start = max(start_dt, pd.Timestamp(f"{year}-01-01"))
                 year_end = min(end_dt, pd.Timestamp(f"{year}-12-31 23:59:59"))
-                # Use date format YYYY-MM-DD for proper inclusive time slicing
-                start_str = year_start.strftime('%Y-%m-%d')
-                end_str = year_end.strftime('%Y-%m-%d')
-                ds_subset = ds_subset.sel(time=slice(start_str, end_str))
+                ds_subset = ds_subset.sel(time=slice(year_start, year_end))
 
                 if ds_subset.size > 0:
                     # Load data from S3 now (force lazy evaluation)
@@ -294,6 +303,11 @@ class PrecipAorc:
             except Exception as e:
                 logger.error(f"Error loading year {year}: {e}")
                 raise
+            finally:
+                if ds is not None:
+                    close = getattr(ds, "close", None)
+                    if callable(close):
+                        close()
 
         if not datasets:
             raise ValueError("No data found for the specified bounds and time range")
@@ -316,6 +330,11 @@ class PrecipAorc:
         combined.attrs['history'] = f'Downloaded by ras-commander on {datetime.now().isoformat()}'
         combined.attrs['units'] = 'kg/m^2'  # AORC precipitation units
         combined.attrs['long_name'] = 'Hourly Total Precipitation'
+        combined.attrs['value_type'] = 'amount'
+        combined.attrs['accumulation_interval_hours'] = 1.0
+        combined.attrs['time_semantics'] = (
+            'one-hour accumulation ending at the UTC timestamp'
+        )
 
         # Reproject to target CRS if specified (required for HEC-RAS GDAL import)
         if target_crs is not None:
@@ -595,6 +614,7 @@ class PrecipAorc:
         store_path = f"s3://{PrecipAorc.BUCKET}/{year}.zarr"
         logger.debug(f"Loading AORC store: {store_path}")
 
+        ds = None
         try:
             store = s3fs.S3Map(root=store_path, s3=s3)
             ds = xr.open_zarr(store)
@@ -631,6 +651,11 @@ class PrecipAorc:
         except Exception as e:
             logger.error(f"Error loading AORC data: {e}")
             raise
+        finally:
+            if ds is not None:
+                close = getattr(ds, "close", None)
+                if callable(close):
+                    close()
 
         # Convert to pandas Series for easier manipulation
         precip_series = precip_mean.to_series()
@@ -927,9 +952,14 @@ class PrecipAorc:
                     full_precip_path = ras_obj.project_folder / precip_file
                     if not full_precip_path.exists():
                         logger.debug(f"Downloading AORC data for storm {storm_id} to {full_precip_path}")
+                        # APCP timestamps mark the end of the preceding one-hour
+                        # accumulation.  A plan beginning at sim_start therefore
+                        # needs its first forcing frame at sim_start + 1 hour; the
+                        # HDF authoring path prepends the zero baseline at sim_start.
+                        first_valid_time = pd.Timestamp(sim_start) + pd.Timedelta(hours=1)
                         PrecipAorc.download(
                             bounds=bounds,
-                            start_time=sim_start,
+                            start_time=first_valid_time,
                             end_time=sim_end,
                             output_path=full_precip_path
                         )
@@ -937,6 +967,16 @@ class PrecipAorc:
                         logger.debug(f"Precipitation file exists, skipping download: {full_precip_path}")
                 else:
                     logger.debug(f"Download disabled for storm {storm_id}; using {precip_file}")
+
+                # Validate before cloning. set_gridded_precipitation also raises for
+                # a missing NetCDF, but by then an orphaned unsteady clone would have
+                # been left in the project.
+                full_precip_path = ras_obj.project_folder / precip_file
+                if not full_precip_path.exists():
+                    raise FileNotFoundError(
+                        f"Precipitation file not found for storm {storm_id}: "
+                        f"{full_precip_path}"
+                    )
 
                 # 2. Clone unsteady file
                 logger.debug(f"Cloning unsteady file for storm {storm_id}")
@@ -952,7 +992,11 @@ class PrecipAorc:
                 RasUnsteady.set_gridded_precipitation(
                     unsteady_file=new_unsteady,
                     netcdf_path=precip_file,
-                    ras_object=ras_obj
+                    ras_object=ras_obj,
+                    dataset_name="APCP_surface",
+                    units="mm",
+                    value_type="amount",
+                    first_timestep_hours=1.0,
                 )
 
                 # 4. Clone plan file

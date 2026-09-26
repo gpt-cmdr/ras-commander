@@ -169,14 +169,14 @@ class RasCmdr:
     def _legacy_wmic_subprocess_env(
         ras_object: 'RasPrj',
     ) -> tuple[Optional[dict[str, str]], Optional[tempfile.TemporaryDirectory]]:
-        """Supply the CPU-only WMIC surface required by HEC-RAS 6.3.
+        """Supply the CPU-only WMIC surface required by HEC-RAS 6.1-6.3.
 
         Current Windows releases can omit ``wmic.exe``.  The HEC-RAS 6.3
-        unsteady solver nevertheless invokes five read-only ``wmic CPU get``
-        queries before starting its numerical work and aborts when the
-        resulting ``systemInfo.txt`` is empty.  Provide those fields from CIM
-        through a process-local PATH shim; do not install a system component or
-        mutate the caller's environment.
+        unsteady solver and executable qualification of 6.1 and 6.2 invoke five
+        read-only ``wmic CPU get`` queries before starting numerical work and
+        abort when the resulting ``systemInfo.txt`` is empty.  Provide those
+        fields from CIM through a process-local PATH shim; do not install a
+        system component or mutate the caller's environment.
 
         Returns:
             A subprocess environment and its temporary-directory owner.  The
@@ -188,7 +188,7 @@ class RasCmdr:
         if (
             not RasCmdr._is_windows()
             or version is None
-            or version[:2] != (6, 3)
+            or version not in {(6, 1, 0), (6, 2, 0), (6, 3, 0), (6, 3, 1)}
             or shutil.which("wmic") is not None
         ):
             return None, None
@@ -231,8 +231,10 @@ class RasCmdr:
         env = os.environ.copy()
         env["PATH"] = f"{shim_path}{os.pathsep}{env.get('PATH', '')}"
         logger.warning(
-            "HEC-RAS 6.3 requires WMIC CPU queries, but wmic.exe is unavailable; "
-            "using a process-local CIM compatibility shim."
+            "HEC-RAS %d.%d requires WMIC CPU queries, but wmic.exe is unavailable; "
+            "using a process-local CIM compatibility shim.",
+            version[0],
+            version[1],
         )
         return env, shim_dir
 

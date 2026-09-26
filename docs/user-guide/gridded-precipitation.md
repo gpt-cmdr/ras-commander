@@ -1,702 +1,197 @@
-# Gridded Historic Precipitation
+# Gridded Precipitation
 
-The AORC (Analysis of Record for Calibration) module provides access to gridded historical precipitation data for model calibration, storm reconstruction, and historical event analysis.
+Configure global gridded rainfall with `RasUnsteady`, then validate the solver-facing precipitation through HEC-RAS preprocessing and a completed simulation. Work on an isolated project copy and make input units, interval semantics, timestamps, and model clock explicit.
 
-## Overview
+## Choose the input route
 
-AORC is a gridded historical precipitation dataset from NOAA's National Water Model retrospective forcing archive:
+| Input | Public API | Result |
+|---|---|---|
+| Projected NetCDF | `RasUnsteady.set_gridded_precipitation()` | Meteorology configuration and native imported-raster HDF |
+| Projected GeoTIFF bands/files | `RasUnsteady.set_gridded_precipitation_geotiff()` | Durable cumulative NetCDF plus native HDF |
+| Projected GRIB/GRIB2 bands/files | `RasUnsteady.set_gridded_precipitation_grib()` | Durable cumulative NetCDF plus native HDF |
+| Existing gridded DSS | `RasUnsteady.configure_gridded_dss_precipitation()` | Meteorology configuration referencing the supplied DSS family |
 
-| Feature | Details |
-|---------|---------|
-| **Period** | 1979 - present (operationally updated) |
-| **Spatial Resolution** | ~4 km grid (1/24 degree) |
-| **Temporal Resolution** | Hourly precipitation |
-| **Coverage** | Continental United States (CONUS) |
-| **Source** | NOAA Office of Water Prediction |
+GeoTIFF and GRIB setters return `GriddedPrecipitationImportResult` with source hashes, cache location, translation route, qualification, and HDF receipt. The established NetCDF setter retains its `None` return contract. For lower-level array ingestion, use `RasPrecipGrid` and `RasPrecipHdf`.
 
-**Use AORC for**:
+Install dependencies from a terminal:
 
-- ✅ Historical storm calibration
-- ✅ Long-term continuous simulation
-- ✅ Storm event reconstruction
-- ✅ Validation with observed flows/stages
-- ✅ Climate analysis and trends
-
-**For design storms**, see [Atlas 14 Precipitation](atlas14-precipitation.md).
-
-## Quick Start
-
-Basic AORC workflow for a historical storm event:
-
-```python
-from ras_commander.precip import PrecipAorc
-
-# 1. Define watershed (HUC code or shapefile)
-watershed = "02070010"  # HUC-8 code
-
-# 2. Retrieve AORC data for storm period
-aorc_data = PrecipAorc.retrieve_aorc_data(
-    watershed=watershed,
-    start_date="2018-05-15",  # Historical storm date
-    end_date="2018-05-20"
-)
-
-# 3. Calculate spatial average over watershed
-avg_precip = PrecipAorc.spatial_average(aorc_data, watershed)
-
-# 4. Aggregate to model timestep
-hourly_precip = PrecipAorc.aggregate_to_interval(
-    avg_precip,
-    interval="1HR"
-)
-
-# 5. Export for HEC-RAS
-hourly_precip.to_csv("storm_may2018.csv")
+```console
+uv pip install -e ".[precip]"
 ```
 
-## Data Retrieval
+DSS product conversion may additionally need HEC-Vortex, HEC-MetVue, or the optional dependencies listed in the product notebook.
 
-### By HUC Code
-
-Use USGS Hydrologic Unit Code for watershed definition:
+## Check version and route qualification
 
 ```python
-from ras_commander.precip import PrecipAorc
-
-# Retrieve by HUC-8 code
-aorc_data = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",  # Potomac River HUC-8
-    start_date="2015-01-01",
-    end_date="2015-12-31"
-)
-```
-
-### By Custom Boundary
-
-Use custom watershed shapefile:
-
-```python
-from pathlib import Path
-
-# Custom watershed boundary
-watershed_shp = Path("watershed_boundary.shp")
-
-aorc_data = PrecipAorc.extract_by_watershed(
-    watershed=watershed_shp,
-    start_date="2015-01-01",
-    end_date="2015-12-31"
-)
-```
-
-### Check Data Availability
-
-Verify AORC coverage before retrieval:
-
-```python
-# Check if data exists for period
-coverage = PrecipAorc.check_data_coverage(
-    watershed="02070010",
-    start_date="1990-01-01",
-    end_date="2023-12-31"
-)
-
-if coverage['available']:
-    print(f"AORC available: {coverage['start']} to {coverage['end']}")
-    print(f"Total years: {coverage['years']}")
-else:
-    print("AORC data not available for this period")
-```
-
-### Get Available Years
-
-```python
-# List all available AORC years
-years = PrecipAorc.get_available_years()
-print(f"AORC coverage: {min(years)} to {max(years)}")
-```
-
-## Spatial Processing
-
-### Spatial Averaging
-
-Calculate areal average precipitation over watershed:
-
-```python
-# Option 1: Average during retrieval
-avg_precip = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    spatial_average=True  # Returns time series only
-)
-
-# Option 2: Average after retrieval
-aorc_grid = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    return_grid=True  # Keep gridded format
-)
-avg_precip = PrecipAorc.spatial_average(aorc_grid, watershed="02070010")
-```
-
-### Grid Resampling
-
-Adjust AORC grid resolution for specific workflows:
-
-```python
-# Resample from 4 km to 2 km grid (finer resolution)
-fine_grid = PrecipAorc.resample_grid(
-    aorc_data,
-    target_resolution_km=2  # Interpolate to finer grid
-)
-
-# Useful for:
-# - Smoother spatial gradients for visualization
-# - Matching other raster datasets for comparison
-# - Reducing file count (coarser grids = fewer files)
-```
-
-**Note**: HEC-RAS 2D mesh cells are typically 10-500 meters, much finer than AORC's native 4 km resolution. HEC-RAS interpolates precipitation internally to mesh cells during simulation—you do not need to match mesh resolution.
-
-## Temporal Processing
-
-### Using Hourly Data for HEC-RAS
-
-AORC provides hourly precipitation, which is appropriate for most HEC-RAS modeling:
-
-```python
-# Use hourly data directly (AORC native interval)
-hourly = PrecipAorc.aggregate_to_interval(avg_precip, interval="1HR")
-```
-
-**For HEC-RAS modeling**: Use hourly data. HEC-RAS computational timesteps are typically seconds to minutes—the model linearly interpolates hourly precipitation to each computational timestep internally.
-
-### Aggregation for Statistical Analysis
-
-Longer intervals are useful for storm statistics and trend analysis (not modeling):
-
-```python
-# Aggregate to 6-hour (for storm statistics)
-six_hour = PrecipAorc.aggregate_to_interval(avg_precip, interval="6HR")
-
-# Aggregate to daily (for annual totals, climate trends)
-daily = PrecipAorc.aggregate_to_interval(avg_precip, interval="1DAY")
-```
-
-**Supported intervals**: `1HR`, `6HR`, `1DAY`
-
-### Storm Event Extraction
-
-Automatically identify and extract individual storms from continuous record:
-
-```python
-# Extract storm events from multi-year record
-storms = PrecipAorc.extract_storm_events(
-    avg_precip,
-    inter_event_hours=6,      # Minimum dry period between storms
-    min_depth_inches=0.5,     # Minimum total to count as storm
-    buffer_hours=6            # Hours before/after storm to include
-)
-
-# Returns list of storm DataFrames
-for i, storm in enumerate(storms):
-    storm_start = storm['datetime'].min()
-    storm_end = storm['datetime'].max()
-    storm_total = storm['precip'].sum()
-    storm_peak = storm['precip'].max()
-
-    print(f"Storm {i}: {storm_start} to {storm_end}")
-    print(f"  Total: {storm_total:.2f} inches")
-    print(f"  Peak: {storm_peak:.2f} in/hr")
-```
-
-### Rolling Precipitation Totals
-
-Calculate N-hour rolling accumulations:
-
-```python
-# Calculate 24-hour rolling totals
-rolling_24hr = PrecipAorc.calculate_rolling_totals(
-    hourly_precip,
-    window_hours=24
-)
-
-# Find maximum 24-hour precipitation in period
-max_24hr = rolling_24hr.max()
-max_date = rolling_24hr.idxmax()
-
-print(f"Maximum 24-hr total: {max_24hr:.2f} inches")
-print(f"Occurred on: {max_date}")
-
-# Calculate for multiple durations
-for duration in [6, 12, 24, 48]:
-    rolling = PrecipAorc.calculate_rolling_totals(hourly_precip, window_hours=duration)
-    print(f"Max {duration}-hr: {rolling.max():.2f} inches")
-```
-
-## Integration with HEC-RAS
-
-### Spatially Uniform Precipitation
-
-For models with uniform rainfall over entire domain:
-
-```python
-from ras_commander.precip import PrecipAorc
-from ras_commander.usgs import RasUsgsFileIo
-
-# 1. Retrieve and average AORC data
-avg_precip = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    spatial_average=True
-)
-
-# 2. Aggregate to HEC-RAS interval
-hourly = PrecipAorc.aggregate_to_interval(avg_precip, interval="1HR")
-
-# 3. Export to DSS
-RasUsgsFileIo.export_to_dss(
-    hourly,
-    dss_file="aorc_may2018.dss",
-    pathname="//BASIN/PRECIP/AORC//1HOUR/OBS/"
-)
-
-# 4. Update unsteady file to reference DSS
-from ras_commander import RasUnsteady
-# ... (update boundary configuration in .u## file)
-```
-
-### Gridded Precipitation (Rain-on-Grid)
-
-For 2D models with spatially distributed rainfall:
-
-```python
-# 1. Retrieve AORC in gridded format
-aorc_grid = PrecipAorc.retrieve_aorc_data(
-    watershed=watershed_boundary,
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    return_grid=True  # Keep spatial structure
-)
-
-# 2. Export to GDAL Raster format (HEC-RAS compatible)
-# HEC-RAS will interpolate the 4 km grid to mesh cells internally
-PrecipAorc.export_to_gdal_raster(
-    aorc_grid,
-    output_folder="C:/Projects/MyModel/precipitation",
-    format="GeoTIFF"  # or "HFA" for ERDAS Imagine
-)
-
-# 3. Configure unsteady file for gridded precipitation
 from ras_commander import RasUnsteady
 
+capabilities = RasUnsteady.get_gridded_precipitation_capabilities("6.6")
+print(capabilities.qualification_for("geotiff"))
+print(capabilities.qualification_for("dss"))
+print(capabilities.notes)
+```
+
+Global gridded meteorology starts in HEC-RAS 6.0. The separate uniform-per-area boundary in 5.x is a different mechanism; translating to DSS does not add global gridded support. HEC-RAS 6.0–6.1 ignore the optional precipitation ratio, so the API rejects non-unit ratios. Native period-average timing can shift by one interval through 6.3.1; cumulative materialization avoids that source timing path.
+
+Qualification applies to an exact release and input route. Prerelease versions do not inherit stable-release qualification. See the [version matrix](../development/gridded-precipitation-version-matrix.md) for actual runtime evidence and host limitations.
+
+For NetCDF, the default `ras_commander` route (also named `native_hdf`)
+qualifies the library-authored native HDF consumed by preprocessing. The
+`native` route means HEC-RAS itself importing the GDAL file; its qualification
+remains documentation-backed. `netcdf_hdf_qualification` and
+`native_netcdf_qualification` report these separately. An `inconclusive`
+receipt can mean either a blocked qualification run or an unresolved version;
+inspect `hec_ras_version` and the accompanying warnings.
+
+WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. `qpkit 0.1.0`'s `QPFGridOptions.extents` path produced an undersized 2-by-2 grid during qualification, so the notebook crops each source GRIB in its native projection, reopens and verifies it, and calls `kit.qpf_dss.write()` without `extents`. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
+
+## Direct GeoTIFF and GRIB ingestion
+
+Assume `ras` is an initialized, copied project and unsteady file `03` is the intended target:
+
+```python
+receipt = RasUnsteady.set_gridded_precipitation_geotiff(
+    "03",
+    ["rain_1100.tif", "rain_1200.tif", "rain_1300.tif"],
+    timestamps=["2024-08-09 11:00", "2024-08-09 12:00", "2024-08-09 13:00"],
+    units="mm",
+    value_type="amount",
+    first_timestep_hours=1.0,
+    interpolation="Bilinear",
+    ras_object=ras,
+)
+print(receipt)
+```
+
+For a multiband file, pass one path and `bands=[1, 2, 3]`, with one timestamp per selected band. File order is caller-supplied. For GRIB, use `set_gridded_precipitation_grib()` with the same temporal arguments and explicitly selected precipitation bands. Review the product's accumulation semantics, including forecast resets.
+
+These routes require north-up, unrotated, projected square cells and matching grids across the sequence. Reproject unsuitable sources deliberately before import. NoData fails by default; `nodata_policy="zero"` is an explicit choice only when missing pixels legitimately mean no rainfall. Negative rainfall and decreasing cumulative totals are rejected.
+
+Use `source_timezone` and `model_timezone` together when converting clocks; otherwise supply timestamps already on the model clock. Cache reuse checks source bytes, interpretation settings, values, time, coordinates, projection, transform, and units. Keep the returned NetCDF in the model package for subsequent HEC-RAS saves/reimports.
+
+## MRMS hourly QPE
+
+`PrecipMrms.to_ras_netcdf()` writes the safe cumulative contract for hourly
+MRMS QPE. It prepends a zero cumulative frame one interval before the first
+valid time so HEC-RAS does not use the first nonzero amount as its datum. Pass
+`end_time` to repeat the final cumulative surface through the plan end:
+
+```python
+from ras_commander.precip import PrecipMrms
+
+mrms_netcdf = PrecipMrms.to_ras_netcdf(
+    mrms_stack,
+    ras.project_folder / "Precipitation" / "mrms_qpe.nc",
+    first_timestep_hours=1.0,
+    end_time=simulation_end,
+)
 RasUnsteady.set_gridded_precipitation(
-    unsteady_file="MyModel.u01",
-    precip_folder="precipitation",
-    start_datetime="2018-05-15 00:00"
+    "03", mrms_netcdf, dataset_name="APCP_surface",
+    units="mm", value_type="cumulative", ras_object=ras,
 )
 ```
 
-**Note**: You do not need to resample AORC grids to match mesh cell size. HEC-RAS internally interpolates gridded precipitation data to 2D mesh cells during simulation.
+MRMS QPE valid times are interval-ending. A 10:00 QPE frame represents the
+09:00–10:00 interval, so a simulation intended to include that frame must
+start no later than 09:00. Notebook 924 demonstrates and verifies this timing
+against the temporary and completed plan HDFs. Starting the plan at 10:00
+correctly excludes that pre-simulation interval.
 
-## Model Calibration Workflow
+## AORC historical rainfall
 
-Use AORC for calibrating HEC-RAS models to historical events:
-
-```python
-from ras_commander import init_ras_project, RasCmdr
-from ras_commander.precip import PrecipAorc
-from ras_commander.usgs import RasUsgsCore
-
-# 1. Identify historical event from USGS gauge record
-observed_flow = RasUsgsCore.retrieve_flow_data(
-    site_no="01646500",
-    start_date="2018-05-01",
-    end_date="2018-06-01"
-)
-# ... identify peak flow date
-
-# 2. Retrieve AORC for event period
-event_precip = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    spatial_average=True
-)
-
-# 3. Export to HEC-RAS
-# ... (DSS export as shown above)
-
-# 4. Run HEC-RAS with historical precipitation
-init_ras_project("C:/Projects/Potomac", "7.0")
-RasCmdr.compute_plan("01", num_cores=4)
-
-# 5. Compare modeled vs observed (validation)
-from ras_commander import HdfResultsXsec
-modeled_flow = HdfResultsXsec.get_xsec_timeseries("01", ...)
-
-# 6. Calculate metrics
-from ras_commander.usgs import metrics
-nse = metrics.nash_sutcliffe_efficiency(observed_flow, modeled_flow)
-print(f"Calibration NSE: {nse:.3f}")
-
-# 7. Iterate: adjust roughness, re-run, validate
-```
-
-## Storm Catalog Generation
-
-Create catalog of all significant storms in multi-year period:
-
-```python
-# Retrieve long-term AORC record
-long_term = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2015-01-01",
-    end_date="2023-12-31",
-    spatial_average=True
-)
-
-# Extract all storms meeting criteria
-storm_catalog = PrecipAorc.extract_storm_events(
-    long_term,
-    inter_event_hours=6,       # 6-hour dry period separates storms
-    min_depth_inches=1.0,      # Minimum 1" total
-    buffer_hours=12            # Include 12hr before/after
-)
-
-print(f"Found {len(storm_catalog)} storms in 9-year period")
-
-# Summarize each storm
-import pandas as pd
-summary = []
-for i, storm in enumerate(storm_catalog):
-    summary.append({
-        'storm_id': i,
-        'start': storm['datetime'].min(),
-        'end': storm['datetime'].max(),
-        'duration_hr': len(storm),
-        'total_in': storm['precip'].sum(),
-        'peak_in_hr': storm['precip'].max()
-    })
-
-catalog_df = pd.DataFrame(summary)
-catalog_df.to_csv("storm_catalog.csv", index=False)
-```
-
-## Performance Optimization
-
-### Temporal Subsetting
-
-Minimize data volume by downloading only required periods:
-
-```python
-# Bad: Download entire year when only need one month
-aorc_full = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-01-01",
-    end_date="2018-12-31"  # 365 days
-)
-
-# Good: Download only event period
-aorc_event = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2018-05-15",
-    end_date="2018-05-20"  # 5 days - much faster
-)
-```
-
-### Spatial Buffering
-
-Reduce download area to just what's needed:
-
-```python
-# Retrieve with minimal buffer around watershed
-aorc_data = PrecipAorc.retrieve_aorc_data(
-    watershed=watershed_boundary,
-    start_date="2018-05-15",
-    end_date="2018-05-20",
-    buffer_km=5.0  # Small buffer (faster download)
-)
-```
-
-### Local Caching
-
-Cache processed AORC data to avoid re-downloading:
+Use the implemented `PrecipAorc.download()` API with WGS84 bounds or a supported extent input. Earlier documentation incorrectly advertised `retrieve_aorc_data()`, `extract_by_watershed()`, and `aggregate_to_interval()`; these are not public methods.
 
 ```python
 from pathlib import Path
-
-# Define cache directory
-cache_dir = Path("C:/AORC_Cache")
-cache_dir.mkdir(exist_ok=True)
-
-# Retrieve with caching
-aorc_data = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2015-01-01",
-    end_date="2015-12-31",
-    cache_dir=cache_dir  # Save to cache
-)
-
-# Subsequent calls use cached data (much faster)
-aorc_same = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2015-01-01",
-    end_date="2015-12-31",
-    cache_dir=cache_dir  # Reads from cache
-)
-```
-
-## Export Formats
-
-### CSV Export
-
-Simple tabular format for spreadsheet analysis:
-
-```python
-# Export to CSV
-hourly_precip.to_csv("aorc_precipitation.csv", index=True)
-
-# CSV format:
-# datetime,precip_inches
-# 2018-05-15 00:00:00,0.05
-# 2018-05-15 01:00:00,0.12
-# ...
-```
-
-### DSS Export
-
-HEC-DSS format for HEC-RAS and HEC-HMS:
-
-```python
-from ras_commander.usgs import RasUsgsFileIo
-
-# Export to DSS
-RasUsgsFileIo.export_to_dss(
-    hourly_precip,
-    dss_file="aorc_precip.dss",
-    pathname="//BASIN/PRECIP/AORC//1HOUR/OBS/"
-)
-```
-
-### NetCDF Export
-
-Keep gridded structure for further analysis:
-
-```python
-# Export gridded data to NetCDF
-PrecipAorc.export_to_netcdf(
-    aorc_grid,
-    output_file="aorc_grid.nc"
-)
-```
-
-## Advanced Workflows
-
-### Multi-Year Continuous Simulation
-
-Run HEC-RAS with continuous precipitation record:
-
-```python
-from ras_commander import init_ras_project, RasCmdr
 from ras_commander.precip import PrecipAorc
-from ras_commander.usgs import RasUsgsFileIo
 
-# 1. Retrieve multi-year AORC data (hourly)
-continuous_precip = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2020-01-01",
-    end_date="2020-12-31",  # 1 year example
-    spatial_average=True,
-    cache_dir="C:/AORC_Cache"  # Cache for reuse
+netcdf = PrecipAorc.download(
+    bounds=(-77.71, 41.01, -77.25, 41.22),
+    start_time="2024-08-09 11:00",
+    end_time="2024-08-09 13:00",
+    output_path=Path(ras.project_folder) / "Precipitation" / "aorc.nc",
+    target_crs="EPSG:5070",
+    resolution=2000.0,
 )
-
-# 2. Keep hourly resolution for HEC-RAS
-hourly_precip = PrecipAorc.aggregate_to_interval(
-    continuous_precip,
-    interval="1HR"
+RasUnsteady.set_gridded_precipitation(
+    "03", netcdf, dataset_name="APCP_surface",
+    units="mm", value_type="amount", first_timestep_hours=1.0,
+    ras_object=ras,
 )
-
-# 3. Export to DSS
-RasUsgsFileIo.export_to_dss(
-    hourly_precip,
-    dss_file="aorc_2020.dss",
-    pathname="//BASIN/PRECIP/AORC//1HOUR/OBS/"
-)
-
-# 4. Run simulation
-init_ras_project("C:/Projects/Continuous", "7.0")
-RasCmdr.compute_plan("01", num_cores=8)
 ```
 
-**Note**: Use hourly data for HEC-RAS simulations. Daily aggregation loses storm intensity patterns and is only appropriate for precipitation statistics.
+AORC precipitation is the one-hour accumulation ending at its timestamp, in kg/m² liquid equivalent (numerically mm of water). See [NOAA's AORC methods, section 5.1](https://www.weather.gov/media/owp/operations/aorc_v1_1_methods.pdf). `PrecipAorc.download()` preserves the caller's hour-level bounds instead of expanding them to whole calendar days. `PrecipAorc.create_storm_plans()` uses these explicit semantics for cloned storm plans and requests its first AORC frame at `sim_start + 1 hour`, allowing the HDF authoring path to place a zero cumulative baseline at `sim_start`. Check timestamp continuity and source coverage; a gap is not a zero-rainfall observation. The first timestamp above represents 10:00–11:00, so a corresponding plan should start at 10:00.
 
-### Storm Comparison Analysis
+Use `PrecipAorc.get_storm_catalog()` and `create_storm_plans()` for catalog workflows (notebooks 900 and 901). Notebook 900 executes one deterministic catalog event and verifies the exact forcing window, durable import HDF, temporary plan HDF, completed cell precipitation, hydraulic output, runtime messages, and BCO mass balance. Select the event, resolution, and model assumptions using source documentation and project requirements.
 
-Compare precipitation patterns across multiple historical storms:
+## Interval semantics
+
+| `value_type` | Meaning | Example |
+|---|---|---|
+| `amount` | Depth during the interval ending at this timestamp | AORC hourly accumulation; MRMS hourly QPE |
+| `rate` | Depth per hour over the interval | Atlas 14 ABM export in mm/hr |
+| `cumulative` | Running depth total | Already accumulated forcing |
+
+The explicit `units` argument is the **depth unit** (`"mm"` or `"in"`), including when `value_type="rate"`. The latter means depth per hour. Do not pass `units="mm/hr"` as the explicit depth-unit override.
+
+`first_timestep_hours` is the HEC-RAS import dialog's First Timestep Duration. Without it, the first band establishes time zero and is not delivered; the library warns if this drops nonzero precipitation. A source containing an explicit zero baseline, such as the ABM export in notebook 727, should leave this argument `None`. Units describe the source, not the project's unit system; HEC-RAS converts during preprocessing.
+
+## Gridded DSS handoff
 
 ```python
-# Define storm periods
-storms = {
-    "May 2018": ("2018-05-15", "2018-05-20"),
-    "Sep 2019": ("2019-09-12", "2019-09-18"),
-    "Jul 2020": ("2020-07-08", "2020-07-12")
-}
-
-storm_data = {}
-
-for name, (start, end) in storms.items():
-    # Retrieve AORC for each storm
-    precip = PrecipAorc.retrieve_aorc_data(
-        watershed="02070010",
-        start_date=start,
-        end_date=end,
-        spatial_average=True
-    )
-
-    storm_data[name] = {
-        'total': precip['precip'].sum(),
-        'peak': precip['precip'].max(),
-        'duration_hr': len(precip)
-    }
-
-# Compare storms
-import pandas as pd
-comparison = pd.DataFrame(storm_data).T
-print(comparison)
+RasUnsteady.configure_gridded_dss_precipitation(
+    "03",
+    dss_filename="Precipitation/forecast.dss",
+    dss_pathname=reviewed_dss_pathname,
+    interpolation="Bilinear",
+    ratio=1.0,
+    ras_object=ras,
+)
 ```
 
-### Climate Trend Analysis
+Use a cataloged pathname from the intended grid family and verify coverage, interval, units, and data type. `ratio=1.0` explicitly clears an inherited scale factor. This function configures the model; it does not create DSS grids. Notebook 728 demonstrates extending a forcing window with a derivative DSS file.
 
-Analyze precipitation trends over decades:
+## Precompute and post-compute validation
 
 ```python
-# Retrieve 20+ years of AORC data
-long_record = PrecipAorc.retrieve_aorc_data(
-    watershed="02070010",
-    start_date="2000-01-01",
-    end_date="2023-12-31",
-    spatial_average=True,
-    cache_dir="C:/AORC_Cache"
+from ras_commander import RasPreprocess, RasCmdr, HdfResultsPlan, RasPlan
+import h5py
+import numpy as np
+
+prepared = RasPreprocess.preprocess_plan("06", ras_object=ras, max_wait=600)
+assert bool(prepared), prepared.error
+with h5py.File(prepared.tmp_hdf_path, "r") as hdf:
+    values = hdf["Event Conditions/Meteorology/Precipitation/Values"][:]
+    times = hdf["Event Conditions/Meteorology/Precipitation/Timestamp"][:]
+assert values.ndim == 2 and values.shape[0] == len(times)
+assert np.isfinite(values).all() and np.max(values) > 0  # Expected wet event
+
+result = RasCmdr.compute_plan(
+    "06", ras_object=ras, force_rerun=True, verify=True,
+    hdf_output_variables=["Cell Hydraulic Depth", "Cell Precipitation Rate",
+                          "Cell Cumulative Precipitation Depth"],
 )
-
-# Aggregate to annual totals
-annual_totals = long_record.groupby(long_record['datetime'].dt.year)['precip'].sum()
-
-# Analyze trend
-import matplotlib.pyplot as plt
-plt.figure(figsize=(12, 6))
-plt.plot(annual_totals.index, annual_totals.values, marker='o')
-plt.xlabel('Year')
-plt.ylabel('Annual Precipitation (inches)')
-plt.title('Annual Precipitation Trend (2000-2023)')
-plt.grid(True)
-plt.savefig('precip_trend.png')
+assert bool(result), result
+plan_hdf = str(RasPlan.get_plan_path("06", ras_object=ras)) + ".hdf"
+print(HdfResultsPlan.get_compute_messages_hdf_only(plan_hdf))
 ```
 
-## Data Quality Considerations
+The imported unsteady HDF is authoring evidence. The temporary plan HDF is the precompute source of truth, and the completed final plan HDF is the post-compute source of truth. Do not manually relocate datasets. Compare preprocessed interval depths/timestamps against intended forcing in project units, then inspect final per-cell rainfall and hydraulic response. The assertions above are basic wet-event checks, not a volume or coverage proof. Manual review of all runtime messages and rainfall/result maps remains advisable.
 
-### AORC Characteristics
+## Examples and scope
 
-**Strengths**:
-- ✅ Continuous coverage (no gaps)
-- ✅ Spatially consistent
-- ✅ Hourly resolution
-- ✅ Long period of record (1979-present)
+| Notebook | Demonstration |
+|---|---|
+| 727 | Atlas 14 spatial/uniform comparison, figures, precompute checks, compute diagnostics, hydraulic results |
+| 728 | Model-covering DSS derivative with source-hash preservation, three explicit dry intervals, temporary/final HDF plateau checks, HEC-RAS 7.0 compute, and hydraulic figure |
+| 729 | Direct GeoTIFF on RasExamples, temporary HDF, final rainfall/hydraulic response, figures |
+| 900 / 901 | AORC catalog and plan creation with precompute checks |
+| 914 | Archived 48-hour AORC event with source-to-temporary/final-HDF checks, hydraulic diagnostics, and a timezone-correct USGS stage comparison; explicitly diagnostic rather than calibration validation because historical boundaries and operations are not bundled |
+| 915 | Executed forecast orchestration/readiness guide with a timezone-explicit cycle manifest, current API-signature checks, and a visual audit of the canonical HRRR, STOFS-3D, MRMS, and WPC artifacts; not independent format/version qualification |
+| 916 | Archived HRRR 15Z forecast to 18 native DSS grids; no-rain/forecast compute, temporary and final HDF forcing checks, active-cell spatial comparison, hydraulic response, convergence map, and manual diagnostics |
+| 917 | Two archived MRMS events: spatial DSS catalog/map inspection followed by an intentionally area-averaged precipitation-boundary comparison, exact final-HDF forcing checks, runtime diagnostics, hydraulic/pump figures, and animations; not global gridded qualification |
+| 924 | MRMS NetCDF rain-on-grid with precompute and final model checks |
+| 926 | Complete current WPC cycle, verified native-projection crop, 28-grid DSS catalog, objective wettest 24-hour window, temporary/final HDF forcing checks, no-rain/event HEC-RAS 7.0 runs, hydraulic/convergence figures, and manual diagnostics |
 
-**Limitations**:
-- ⚠ ~4 km resolution (may miss localized convective storms)
-- ⚠ Model-derived (not direct observations)
-- ⚠ Uncertainty in complex terrain
-- ⚠ May differ from rain gauge measurements
-
-### Validation with Rain Gauges
-
-Compare AORC to observed rain gauge data:
-
-```python
-# Retrieve AORC for gauge location
-aorc_point = PrecipAorc.extract_by_point(
-    latitude=38.9,
-    longitude=-77.0,
-    start_date="2018-05-15",
-    end_date="2018-05-20"
-)
-
-# Compare to rain gauge observations
-# (gauge_data from local source)
-import matplotlib.pyplot as plt
-
-plt.figure(figsize=(12, 6))
-plt.plot(gauge_data['datetime'], gauge_data['precip'], label='Rain Gauge', marker='o')
-plt.plot(aorc_point['datetime'], aorc_point['precip'], label='AORC', alpha=0.7)
-plt.xlabel('Date')
-plt.ylabel('Precipitation (inches/hour)')
-plt.title('AORC vs Rain Gauge Comparison')
-plt.legend()
-plt.grid(True)
-plt.show()
-```
-
-## Dependencies
-
-**Required**:
-```bash
-pip install xarray  # For AORC NetCDF data handling
-```
-
-**Optional (for advanced features)**:
-```bash
-pip install rasterio    # For gridded processing
-pip install geopandas   # For custom watershed boundaries
-```
-
-The module uses **lazy loading** - methods check for dependencies only when needed and provide installation instructions if missing.
-
-## Data Access
-
-AORC data is accessed from NOAA's cloud storage (AWS S3):
-
-- **Storage**: Zarr format on AWS S3
-- **Access**: No authentication required (public dataset)
-- **Speed**: ~1-5 minutes per year of data (depends on watershed size and network)
-- **Volume**: ~10-50 MB per year (hourly, single watershed)
-
-## Example Notebooks
-
-Comprehensive AORC workflow demonstrations:
-
-- [AORC Precipitation](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) - Basic retrieval and processing
-- [AORC Storm Catalog](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) - Automated storm extraction
-
-## Common Workflows
-
-### Historical Event Reconstruction
-
-Reconstruct a specific historical flood event:
-
-1. **Identify event date** from USGS flow data or news reports
-2. **Retrieve AORC precipitation** for event period
-3. **Process and export** to HEC-RAS format
-4. **Run model** with historical precipitation
-5. **Validate results** against observed flows/stages
-6. **Calibrate roughness** if needed
-
-### Climate Analysis
-
-Analyze precipitation patterns and trends:
-
-1. **Retrieve decades of AORC data** (1979-present)
-2. **Extract storm events** from continuous record
-3. **Analyze storm characteristics** (frequency, intensity, duration)
-4. **Identify trends** over time
-5. **Compare to design storm assumptions**
-
-## See Also
-
-- [Atlas 14 Precipitation](atlas14-precipitation.md) - Design storm generation for AEP analysis
-- [Boundary Conditions](boundary-conditions.md) - General boundary workflows
-- [DSS Operations](dss-operations.md) - Working with DSS files
-- [USGS Gauge Data](usgs-gauge-data.md) - Flow/stage data for validation
+Notebook 722 directs readers to the implemented Atlas 14 workflow instead of obsolete placeholders and raw meteorology edits. Updated source cells do not imply every live product was rerun on every HEC-RAS release; the version matrix records actual evidence.

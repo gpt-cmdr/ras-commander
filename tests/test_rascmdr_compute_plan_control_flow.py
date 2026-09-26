@@ -269,12 +269,14 @@ def test_build_compute_command_preserves_modern_layout(version, tmp_path):
     assert command == f'"{ras_exe}" -c "{project_path}" "{plan_path}"'
 
 
-def test_legacy_wmic_subprocess_env_is_scoped_to_hec_ras_63(
+@pytest.mark.parametrize("version", ["6.1", "6.2", "6.3", "6.3.1"])
+def test_legacy_wmic_subprocess_env_is_scoped_to_evidence_backed_versions(
     monkeypatch,
+    version,
 ):
     ras_obj = SimpleNamespace(
-        ras_exe_path=Path(r"C:\Program Files (x86)\HEC\HEC-RAS\6.3\Ras.exe"),
-        ras_version="6.3",
+        ras_exe_path=Path(rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe"),
+        ras_version=version,
     )
     monkeypatch.setattr(RasCmdr, "_is_windows", staticmethod(lambda: True))
     monkeypatch.setattr(rascmdr_module.shutil, "which", lambda _name: None)
@@ -292,7 +294,9 @@ def test_legacy_wmic_subprocess_env_is_scoped_to_hec_ras_63(
     owner.cleanup()
 
 
-@pytest.mark.parametrize("version", ["6.2", "6.4", "7.0"])
+@pytest.mark.parametrize(
+    "version", ["5.0.7", "6.0", "6.3.2", "6.4", "7.0"]
+)
 def test_legacy_wmic_subprocess_env_does_not_change_other_versions(
     monkeypatch,
     version,

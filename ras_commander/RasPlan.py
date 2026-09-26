@@ -1081,7 +1081,15 @@ class RasPlan:
         RasUtils.update_project_file(ras_obj.prj_file, 'Plan', new_plan_num, ras_object=ras_obj)
 
         # Re-initialize the ras global object
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+        ras_obj.initialize(
+            ras_obj.project_folder,
+            ras_obj.ras_exe_path,
+            suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            load_results_summary=getattr(
+                ras_obj, "load_results_summary", True
+            ),
+            load_hdf_metadata=getattr(ras_obj, "load_hdf_metadata", True),
+        )
 
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
@@ -4239,7 +4247,15 @@ class RasPlan:
         RasUtils.update_project_file(ras_obj.prj_file, component_type, new_num, ras_object=ras_obj)
 
         # Re-initialize and refresh DataFrames
-        ras_obj.initialize(ras_obj.project_folder, ras_obj.ras_exe_path)
+        ras_obj.initialize(
+            ras_obj.project_folder,
+            ras_obj.ras_exe_path,
+            suppress_logging=getattr(ras_obj, "suppress_logging", True),
+            load_results_summary=getattr(
+                ras_obj, "load_results_summary", True
+            ),
+            load_hdf_metadata=getattr(ras_obj, "load_hdf_metadata", True),
+        )
         ras_obj.plan_df = ras_obj.get_plan_entries()
         ras_obj.geom_df = ras_obj.get_geom_entries()
         ras_obj.flow_df = ras_obj.get_flow_entries()
