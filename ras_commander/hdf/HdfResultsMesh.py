@@ -42,7 +42,9 @@ Understanding when each return type is used:
 
 ## Public Functions
 - get_mesh_summary(): Get summary output data for a variable → gpd.GeoDataFrame
+- get_mesh_summary_values(): Get summary values without geometry → pd.DataFrame
 - get_mesh_timeseries(): Get timeseries for one mesh/variable → xr.DataArray
+- iter_mesh_timeseries(): Stream bounded time-major xarray batches
 - get_mesh_faces_timeseries(): Get face variables for one mesh → xr.Dataset
 - get_mesh_cells_timeseries(): Get cell timeseries for all meshes → Dict[str, xr.Dataset]
 - get_mesh_last_iter(): Get last iteration count → pd.DataFrame
@@ -84,12 +86,13 @@ from .._rasmap_schema import rasmap_dataframe_is_usable
 import xarray as xr
 from pathlib import Path
 import h5py
-from typing import Union, List, Optional, Dict, Any, Tuple
+from typing import Union, List, Optional, Dict, Any, Tuple, Iterator
 from .HdfMesh import HdfMesh
+from .HdfResultView import HdfResultView, Selection
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
-from ..LoggingConfig import setup_logging, get_logger
+from ..LoggingConfig import get_logger
 import geopandas as gpd
 
 logger = get_logger(__name__)
@@ -127,9 +130,44 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_summary(hdf_path: Path, var: str, round_to: str = "100ms") -> pd.DataFrame:
+    def get_mesh_summary_values(
+        hdf_path: Path,
+        var: str,
+        round_to: str = "100ms",
+    ) -> pd.DataFrame:
+        """Return mesh summary values without constructing geometry.
+
+        Args:
+            hdf_path: Path to the plan result HDF.
+            var: HEC-RAS summary-output variable name.
+            round_to: Time rounding specification for paired time rows.
+
+        Returns:
+            DataFrame with mesh name, cell or face identifier, value, and an
+            optional time column. HDF dataset attributes are retained in
+            ``DataFrame.attrs``. No Shapely geometry is constructed.
         """
-        Get timeseries output for a specific mesh and variable.
+        try:
+            with h5py.File(hdf_path, "r") as hdf_file:
+                return HdfResultsMesh._get_mesh_summary_values_output(
+                    hdf_file,
+                    var,
+                    round_to,
+                )
+        except Exception as exc:
+            logger.error("Error reading geometry-free mesh summary: %s", exc)
+            raise ValueError(f"Failed to get mesh summary values: {exc}") from exc
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_mesh_summary(
+        hdf_path: Path,
+        var: str,
+        round_to: str = "100ms",
+    ) -> gpd.GeoDataFrame:
+        """
+        Get spatial summary output for a mesh variable.
 
         Args:
             hdf_path (Path): Path to the HDF file
@@ -160,7 +198,16 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_timeseries(hdf_path: Path, mesh_name: str, var: str, truncate: bool = True) -> xr.DataArray:
+    def get_mesh_timeseries(
+        hdf_path: Path,
+        mesh_name: str,
+        var: str,
+        truncate: bool = True,
+        *,
+        time_selection: Selection = None,
+        spatial_selection: Selection = None,
+        return_type: str = "xarray",
+    ) -> Union[xr.DataArray, HdfResultView]:
         """
         Get timeseries output for a specific mesh and variable.
 
@@ -168,11 +215,19 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file
             mesh_name (str): Name of the mesh
             var (str): Variable to retrieve (see valid options below)
-            truncate (bool): Whether to truncate trailing zeros (default True)
+            truncate (bool): Whether to truncate leading/trailing zero-only
+                rows (default True). Lazy views defer that bounded scan until
+                values are requested.
+            time_selection: Source-coordinate integer or forward slice applied
+                before materialization.
+            spatial_selection: Source-coordinate integer or forward slice of
+                cells/faces applied before materialization.
+            return_type: ``"xarray"`` (default) or opt-in ``"view"``.
 
         Returns:
-            xr.DataArray: **Single variable** time series data.
+            xr.DataArray or HdfResultView: **Single variable** time series data.
                 Use DataArray when extracting ONE variable for ONE mesh.
+                ``return_type="view"`` returns a lazy source-backed view.
 
                 Dimensions:
                     - time: Timestamps
@@ -189,8 +244,115 @@ class HdfResultsMesh:
         Valid variables include:
             "Water Surface", "Face Velocity", "Cell Velocity X"...
         """
-        with h5py.File(hdf_path, 'r') as hdf_path:
-            return HdfResultsMesh._get_mesh_timeseries_output(hdf_path, mesh_name, var, truncate)
+        view = HdfResultsMesh._get_mesh_result_view(
+            hdf_path,
+            mesh_name,
+            var,
+            truncate=truncate,
+            time_selection=time_selection,
+            spatial_selection=spatial_selection,
+        )
+        if return_type == "view":
+            return view
+        if return_type != "xarray":
+            raise ValueError("return_type must be 'xarray' or 'view'")
+        return view.to_xarray()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def iter_mesh_timeseries(
+        hdf_path: Path,
+        mesh_name: str,
+        var: str,
+        *,
+        time_selection: Selection = None,
+        spatial_selection: Selection = None,
+        batch_size: Optional[int] = None,
+        max_chunk_bytes: int = 16 * 1024 * 1024,
+    ) -> Iterator[xr.DataArray]:
+        """Yield bounded, time-major batches for one mesh result variable.
+
+        The returned iterator owns one read-only HDF handle for the duration of
+        iteration. Each batch uses the established xarray DataArray schema.
+        Geometry is not constructed.
+        """
+        view = HdfResultsMesh._get_mesh_result_view(
+            hdf_path,
+            mesh_name,
+            var,
+            truncate=False,
+            time_selection=time_selection,
+            spatial_selection=spatial_selection,
+        )
+        return view.iter_batches(
+            batch_size=batch_size,
+            max_chunk_bytes=max_chunk_bytes,
+        )
+
+    @staticmethod
+    def _get_mesh_result_view(
+        hdf_path: Path,
+        mesh_name: str,
+        var: str,
+        *,
+        truncate: bool,
+        time_selection: Selection,
+        spatial_selection: Selection,
+    ) -> HdfResultView:
+        """Create a fingerprinted lazy view without reading result values."""
+        source_path = Path(hdf_path).resolve()
+        stat_before = source_path.stat()
+        dataset_path = HdfResultsMesh._get_mesh_timeseries_output_path(
+            mesh_name,
+            var,
+        )
+        time_path = (
+            "Results/Unsteady/Output/Output Blocks/Base Output/"
+            "Unsteady Time Series/Time"
+        )
+        with h5py.File(source_path, "r") as hdf_file:
+            if dataset_path not in hdf_file:
+                raise ValueError(f"Path {dataset_path} not found in HDF file")
+            if time_path not in hdf_file:
+                raise ValueError(f"Path {time_path} not found in HDF file")
+            dataset = hdf_file[dataset_path]
+            if dataset.ndim not in (1, 2):
+                raise ValueError(
+                    f"Expected a 1D or 2D result dataset, got {dataset.shape}"
+                )
+            units = HdfResultsMesh._decode_hdf_attr(
+                dataset.attrs.get("Units", "")
+            )
+            shape = tuple(int(value) for value in dataset.shape)
+            dtype = dataset.dtype.str
+
+        stat = source_path.stat()
+        if (
+            stat.st_size != stat_before.st_size
+            or stat.st_mtime_ns != stat_before.st_mtime_ns
+        ):
+            raise RuntimeError(
+                "HDF result source changed while the lazy view was being created"
+            )
+        view = HdfResultView(
+            source_path=source_path,
+            dataset_path=dataset_path,
+            time_path=time_path,
+            mesh_name=mesh_name,
+            variable=var,
+            units=units,
+            id_dim="face_id" if "Face" in var else "cell_id",
+            source_shape=shape,
+            source_dtype=dtype,
+            source_size=stat.st_size,
+            source_mtime_ns=stat.st_mtime_ns,
+            truncate=truncate,
+        )
+        return view.select(
+            time=time_selection,
+            spatial=spatial_selection,
+        )
 
     @staticmethod
     def _truncate_profile_line_flow_dataframe(
@@ -2395,6 +2557,98 @@ class HdfResultsMesh:
             List[str]: A list of mesh names.
         """
         return HdfMesh.get_mesh_area_names(hdf_path)
+
+    @staticmethod
+    def _get_mesh_summary_values_output(
+        hdf_file: h5py.File,
+        var: str,
+        round_to: str = "100ms",
+    ) -> pd.DataFrame:
+        """Read summary values from an open HDF without building geometry."""
+        start_time = HdfBase.get_simulation_start_time(hdf_file)
+        d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
+        if d2_flow_areas is None:
+            logger.debug("No 2D Flow Areas found in HDF file")
+            return pd.DataFrame()
+
+        frames = []
+        combined_attrs = {}
+        for d2_flow_area in d2_flow_areas[:]:
+            mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
+            try:
+                group = HdfResultsMesh.get_mesh_summary_output_group(
+                    hdf_file,
+                    mesh_name,
+                    var,
+                )
+            except ValueError:
+                logger.debug(
+                    "Variable %r not present for mesh %r; skipping",
+                    var,
+                    mesh_name,
+                )
+                continue
+
+            data = group[:]
+            id_column = "face_id" if "Face" in var else "cell_id"
+            value_column = var.lower().replace(" ", "_")
+            if data.ndim == 2 and data.shape[0] == 2:
+                frame = pd.DataFrame({
+                    "mesh_name": [mesh_name] * data.shape[1],
+                    id_column: range(data.shape[1]),
+                    value_column: data[0, :],
+                    f"{value_column}_time": (
+                        HdfUtils.convert_timesteps_to_datetimes(
+                            data[1, :],
+                            start_time,
+                            time_unit="days",
+                            round_to=round_to,
+                        )
+                    ),
+                })
+            elif data.ndim == 1:
+                frame = pd.DataFrame({
+                    "mesh_name": [mesh_name] * len(data),
+                    id_column: range(len(data)),
+                    value_column: data,
+                })
+            else:
+                raise ValueError(
+                    f"Unexpected data shape for {var} in {mesh_name}: {data.shape}"
+                )
+
+            frame.attrs["mesh_name"] = mesh_name
+            for attr_name, attr_value in group.attrs.items():
+                if isinstance(attr_value, bytes):
+                    decoded_value = attr_value.decode("utf-8")
+                elif isinstance(attr_value, np.ndarray):
+                    if attr_value.dtype.kind in {"S", "a"}:
+                        decoded_value = [
+                            value.decode("utf-8")
+                            if isinstance(value, bytes)
+                            else value
+                            for value in attr_value
+                        ]
+                    else:
+                        decoded_value = attr_value.tolist()
+                else:
+                    decoded_value = attr_value
+                frame.attrs[attr_name] = decoded_value
+
+            for key, value in frame.attrs.items():
+                if key not in combined_attrs:
+                    combined_attrs[key] = value
+                elif combined_attrs[key] != value:
+                    combined_attrs[key] = (
+                        f"Multiple values: {combined_attrs[key]}, {value}"
+                    )
+            frames.append(frame)
+
+        if not frames:
+            return pd.DataFrame()
+        result = pd.concat(frames, ignore_index=True)
+        result.attrs.update(combined_attrs)
+        return result
     
     
     @staticmethod
@@ -2420,116 +2674,37 @@ class HdfResultsMesh:
             Returns empty GeoDataFrame if variable is not found.
         """
         try:
-            dfs = []
-            start_time = HdfBase.get_simulation_start_time(hdf_file)
-            
-            logger.debug(f"Processing summary output for variable: {var}")
-            d2_flow_areas = hdf_file.get("Geometry/2D Flow Areas/Attributes")
-            if d2_flow_areas is None:
-                logger.debug("No 2D Flow Areas found in HDF file")
+            values = HdfResultsMesh._get_mesh_summary_values_output(
+                hdf_file,
+                var,
+                round_to,
+            )
+            if values.empty:
                 return gpd.GeoDataFrame()
 
-            for d2_flow_area in d2_flow_areas[:]:
-                mesh_name = HdfUtils.convert_ras_string(d2_flow_area[0])
-                cell_count = d2_flow_area[-1]
-                logger.debug(f"Processing mesh: {mesh_name} with {cell_count} cells")
+            attrs = dict(values.attrs)
+            if "Face" in var:
+                geometry = HdfMesh.get_mesh_cell_faces(hdf_file)
+                id_column = "face_id"
+            else:
+                geometry = HdfMesh.get_mesh_cell_points(hdf_file)
+                id_column = "cell_id"
+            if not geometry.empty:
+                values = values.merge(
+                    geometry[["mesh_name", id_column, "geometry"]],
+                    on=["mesh_name", id_column],
+                    how="left",
+                )
+            else:
+                values["geometry"] = None
 
-                try:
-                    group = HdfResultsMesh.get_mesh_summary_output_group(hdf_file, mesh_name, var)
-                except ValueError:
-                    logger.debug(f"Variable '{var}' not present in output file for mesh '{mesh_name}', skipping")
-                    continue
-                
-                data = group[:]
-                logger.debug(f"Data shape for {var} in {mesh_name}: {data.shape}")
-                logger.debug(f"Data type: {data.dtype}")
-                logger.debug(f"Attributes: {dict(group.attrs)}")
-                
-                if data.ndim == 2 and data.shape[0] == 2:
-                    # Handle 2D datasets (e.g. Maximum Water Surface)
-                    row_variables = group.attrs.get('Row Variables', [b'Value', b'Time'])
-                    row_variables = [v.decode('utf-8').strip() if isinstance(v, bytes) else v for v in row_variables]
-                    
-                    df = pd.DataFrame({
-                        "mesh_name": [mesh_name] * data.shape[1],
-                        "cell_id" if "Face" not in var else "face_id": range(data.shape[1]),
-                        f"{var.lower().replace(' ', '_')}": data[0, :],
-                        f"{var.lower().replace(' ', '_')}_time": HdfUtils.convert_timesteps_to_datetimes(
-                            data[1, :], start_time, time_unit="days", round_to=round_to
-                        )
-                    })
-                    
-                elif data.ndim == 1:
-                    # Handle 1D datasets (e.g. Cell Last Iteration)
-                    df = pd.DataFrame({
-                        "mesh_name": [mesh_name] * len(data),
-                        "cell_id" if "Face" not in var else "face_id": range(len(data)),
-                        var.lower().replace(' ', '_'): data
-                    })
-                    
-                else:
-                    raise ValueError(f"Unexpected data shape for {var} in {mesh_name}. "
-                                  f"Got shape {data.shape}")
-                
-                # Add geometry based on variable type
-                if "Face" in var:
-                    face_df = HdfMesh.get_mesh_cell_faces(hdf_file)
-                    if not face_df.empty:
-                        df = df.merge(face_df[['mesh_name', 'face_id', 'geometry']], 
-                                    on=['mesh_name', 'face_id'], 
-                                    how='left')
-                else:
-                    cell_df = HdfMesh.get_mesh_cell_points(hdf_file)
-                    if not cell_df.empty:
-                        df = df.merge(cell_df[['mesh_name', 'cell_id', 'geometry']], 
-                                    on=['mesh_name', 'cell_id'], 
-                                    how='left')
-                
-                # Add group attributes as metadata with proper decoding
-                df.attrs['mesh_name'] = mesh_name
-                for attr_name, attr_value in group.attrs.items():
-                    if isinstance(attr_value, bytes):
-                        # Decode single byte string
-                        decoded_value = attr_value.decode('utf-8')
-                    elif isinstance(attr_value, np.ndarray):
-                        if attr_value.dtype.kind in {'S', 'a'}:  # Array of byte strings
-                            # Decode array of byte strings
-                            decoded_value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in attr_value]
-                        else:
-                            # Convert other numpy arrays to list
-                            decoded_value = attr_value.tolist()
-                    else:
-                        decoded_value = attr_value
-                    df.attrs[attr_name] = decoded_value
-                
-                dfs.append(df)
-            
-            if not dfs:
-                return gpd.GeoDataFrame()
-                
-            result = pd.concat(dfs, ignore_index=True)
-            
-            # Convert to GeoDataFrame
-            gdf = gpd.GeoDataFrame(result, geometry='geometry')
-            
-            # Get CRS from HdfUtils
+            result = gpd.GeoDataFrame(values, geometry="geometry")
             crs = HdfBase.get_projection(hdf_file)
             if crs:
-                gdf.set_crs(crs, inplace=True)
-            
-            # Combine attributes from all meshes with decoded values
-            combined_attrs = {}
-            for df in dfs:
-                for key, value in df.attrs.items():
-                    if key not in combined_attrs:
-                        combined_attrs[key] = value
-                    elif combined_attrs[key] != value:
-                        combined_attrs[key] = f"Multiple values: {combined_attrs[key]}, {value}"
-            
-            gdf.attrs.update(combined_attrs)
-            
-            logger.debug(f"Processed {len(gdf)} rows of summary output data")
-            return gdf
+                result.set_crs(crs, inplace=True)
+            result.attrs.update(attrs)
+            logger.debug("Processed %s rows of summary output data", len(result))
+            return result
         
         except Exception as e:
             logger.error(f"Error processing summary output data: {e}")

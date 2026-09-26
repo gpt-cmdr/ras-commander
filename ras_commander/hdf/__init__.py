@@ -76,6 +76,7 @@ _LAZY_EXPORTS = {
         'HdfResultsAnalysis', 'HdfProject',
     )
 }
+_LAZY_EXPORTS["HdfResultView"] = (".HdfResultView", "HdfResultView")
 
 
 def _load_export(name):
@@ -120,7 +121,8 @@ __all__ = [
     # Geometry
     'HdfMesh', 'HdfXsec', 'HdfBndry', 'HdfStruc', 'HdfStorageArea', 'HdfStruc1D', 'HdfHydraulicTables',
     # Results
-    'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsBreach',
+    'HdfResultsPlan', 'HdfResultsMesh', 'HdfResultView', 'HdfResultsQuery',
+    'HdfResultsXsec', 'HdfResultsBreach',
     'HdfResultsSediment', 'HdfResultsProducts',
     # Infrastructure
     'HdfPipe', 'HdfPump', 'HdfInfiltration', 'HdfLandCover',

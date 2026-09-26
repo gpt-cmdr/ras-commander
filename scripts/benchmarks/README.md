@@ -1,5 +1,24 @@
 # Raster performance benchmarks
 
+## HDF result reads
+
+`benchmark_hdf_result_reads.py` compares lazy-view creation, one-timestep direct
+slicing, and bounded maximum reduction in isolated child processes. Add
+`--include-eager` to measure the whole-array baselines; this can require several
+times the on-disk dataset size in available memory. The source HDF is read-only.
+
+```powershell
+.venv\Scripts\python.exe scripts/benchmarks/benchmark_hdf_result_reads.py `
+  'example_projects\BaldEagleCrkMulti2D\BaldEagleDamBrk.p03.hdf' `
+  BaldEagleCr 'Water Surface' `
+  --time-index 400 --include-eager --repeats 2 `
+  --report-path working/hdf-result-read-benchmark.json
+```
+
+Each scenario runs in a fresh process and reports elapsed time, baseline/peak
+RSS, shape, dtype, and a value checksum. The first repeat is labeled only as a
+`cold_candidate`: the harness does not flush the operating-system file cache.
+
 `benchmark_store_maps_memory.py` measures wall time, process-tree CPU, I/O,
 threads, RSS/private memory, available system memory, and decoded raster pixel
 signatures for real RASMapper StoreMap jobs.

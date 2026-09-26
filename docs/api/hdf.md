@@ -131,7 +131,13 @@ removed before v1.2.0:
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`
 - `get_mesh_max_face_v(hdf_path)` - Maximum face velocity
-- `get_mesh_timeseries(hdf_path, mesh, var)` - Time series for mesh
+- `get_mesh_timeseries(hdf_path, mesh, var, *, time_selection=None,
+  spatial_selection=None, return_type="xarray")` - Eager time series with
+  source-coordinate HDF slicing, or an opt-in lazy `HdfResultView`
+- `iter_mesh_timeseries(hdf_path, mesh, var, *, batch_size=None,
+  max_chunk_bytes=16777216)` - Stream bounded, time-major xarray batches
+- `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers
+  without constructing Shapely geometry
 - `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
 - `get_mesh_faces_timeseries(hdf_path, mesh, face_ids, var)` - Face time series
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
@@ -142,6 +148,55 @@ read only. The fallback is computed only in memory and does not create or write
 `Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
+
+### Bounded and lazy result reads
+
+Existing calls to `get_mesh_timeseries()` still return an eager
+`xarray.DataArray`. The optional `time_selection` and `spatial_selection`
+arguments are pushed into the HDF read before materialization. Integer
+selections preserve a length-one dimension; forward slices preserve source
+cell/face identifiers.
+
+Set `return_type="view"` to receive an `HdfResultView`. Creating the view reads
+only HDF metadata—not result values—and does not retain an open file handle.
+Each operation reopens the source read-only and verifies its size and
+nanosecond modification time before and after the read, detecting ordinary
+source replacement or modification. Available operations are `to_xarray()`, `to_numpy()`,
+`to_pandas()`, optional `to_arrow()`, `iter_batches()`, `select()`, and bounded
+`reduce("max"|"min"|"mean"|"argmax")`.
+
+```python
+from ras_commander import HdfResultsMesh
+
+view = HdfResultsMesh.get_mesh_timeseries(
+    "BaldEagleDamBrk.p03.hdf",
+    "BaldEagleCr",
+    "Water Surface",
+    truncate=False,
+    time_selection=slice(100, 200),
+    return_type="view",
+)
+
+# Only one selected timestep and the first 5,000 cells are materialized.
+snapshot = view.select(time=150, spatial=slice(0, 5_000)).to_xarray()
+
+# Batch sizing targets 16 MiB of result values by default.
+for batch in view.iter_batches():
+    consume(batch)
+
+# Geometry-free native summary output for database loading.
+summary = HdfResultsMesh.get_mesh_summary_values(
+    "BaldEagleDamBrk.p03.hdf",
+    "Maximum Water Surface",
+)
+```
+
+Prefer a native HEC-RAS summary dataset when it represents the requested
+engineering statistic. A raw reduction over `Water Surface` is not always
+semantically identical to HEC-RAS `Maximum Water Surface`; for example,
+HEC-RAS may encode never-wet cells as zero in the summary while the time-series
+array retains terrain-elevation values. Bounded reductions deliberately report
+the selected raw dataset statistic and do not invent wet/dry semantics.
 
 ### HdfResultsProducts
 
