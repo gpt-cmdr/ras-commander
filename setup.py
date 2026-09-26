@@ -69,7 +69,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.102.0",
+    version="0.102.1",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={

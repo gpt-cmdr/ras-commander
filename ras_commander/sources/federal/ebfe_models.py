@@ -30,14 +30,10 @@ Last Updated: 2026-09-11
 """
 
 import builtins
-from contextlib import contextmanager
-from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import json
 import logging
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shutil
 import struct
@@ -46,14 +42,22 @@ import sys
 import tempfile
 import zipfile
 import zlib
-from typing import Optional, Dict, List, Any, Union
+from contextlib import contextmanager
+from copy import deepcopy
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 from tqdm.auto import tqdm
 
 from ras_commander.Decorators import log_call
 from ras_commander.sources.base import (
-    DownloadResult, ModelMetadata, ModelSource, ModelType, SourceStatus,
+    DownloadResult,
+    ModelMetadata,
+    ModelSource,
+    ModelType,
+    SourceStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +103,71 @@ class RasEbfeModels:
     _AUSTIN_OYSTER_OUTER_MEMBER_COUNT = 48
     _AUSTIN_OYSTER_SUBMITTAL_MEMBER_COUNT = 4
     _AUSTIN_OYSTER_COMPONENT_MEMBER_COUNT = 102
+    _UPPER_GUADALUPE_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12100201_UpperGuadalupe/"
+        "12100201_Models.zip"
+    )
+    _UPPER_GUADALUPE_SOURCE_SIZE = 58_575_220_457
+    _UPPER_GUADALUPE_SOURCE_ETAG = "67e7b10db40c2659eee9a5f1e6032b47-6983"
+    _UPPER_GUADALUPE_FILE_MEMBER_COUNT = 277
+    _UPPER_GUADALUPE_DIRECTORY_MEMBER_COUNT = 23
+    _UPPER_GUADALUPE_PROJECTS = {
+        f"UPGU{number}": {
+            "plans": [f"{plan:02d}" for plan in range(1, 8)],
+            "geometry": "01",
+            "unsteady_files": [f"{plan:02d}" for plan in range(1, 8)],
+            "canonical_plan": "01",
+            "depends_on": [] if number == 1 else [f"UPGU{number - 1}"],
+            "terrain": "Terrain (1).hdf" if number == 4 else "Terrain.hdf",
+        }
+        for number in range(1, 5)
+    }
+    _UPPER_GUADALUPE_TERRAIN_MODIFICATIONS = {
+        "UPGU1": ["Channels"],
+        "UPGU2": ["Channels"],
+        "UPGU3": ["Channels"],
+        "UPGU4": ["Polygons", "Channels"],
+    }
+    _UPPER_GUADALUPE_TERRAIN_PAYLOADS = {
+        "UPGU1": [
+            "Terrain.hdf",
+            "Terrain.vrt",
+            "Terrain.UPGU_WA1_DEM_1m_NAD83_2011.tif",
+        ],
+        "UPGU2": [
+            "Terrain.hdf",
+            "Terrain.vrt",
+            "Terrain.UPGU_WA2_DEM_1m_NAD83_2011.tif",
+        ],
+        "UPGU3": [
+            "Terrain.hdf",
+            "Terrain.vrt",
+            "Terrain.UPGU_WA3_DEM_1m_NAD83_2011.tif",
+        ],
+        "UPGU4": [
+            "Terrain (1).hdf",
+            "Terrain (1).vrt",
+            "Terrain (1).upgu34.tif",
+        ],
+    }
+    _PEDERNALES_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12090206_Pedernales/"
+        "12090206_Models.zip"
+    )
+    _PEDERNALES_SOURCE_SIZE = 138_116_094
+    _PEDERNALES_SOURCE_ETAG = "b73ad7fff398baa8132d40296a0e30ee-9"
+    _CIBOLO_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12100304_Cibolo/"
+        "12100304_Models.zip"
+    )
+    _CIBOLO_SOURCE_SIZE = 38_827_758_483
+    _CIBOLO_SOURCE_ETAG = "7d88e8a2b047780c8df9fd486c7bb34d-4629"
+    _MEDINA_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12100302_Medina/"
+        "12100302_Models.zip"
+    )
+    _MEDINA_SOURCE_SIZE = 52_085_665_792
+    _MEDINA_SOURCE_ETAG = "5474dc597ff3a2fb4418a59807a439ff-6210"
     _DOUBLE_MOUNTAIN_FORK_BRAZOS_SOURCE_BASE = (
         "https://ebfedata.s3-us-west-2.amazonaws.com/"
         "12050004_DoubleMountainForkBrazos/Models"
@@ -268,6 +337,12 @@ class RasEbfeModels:
         "upper-guadalupe": "upper-guadalupe",
         "upgu": "upper-guadalupe",
         "12100201": "upper-guadalupe",
+        "pedernales": "pedernales",
+        "12090206": "pedernales",
+        "cibolo": "cibolo",
+        "12100304": "cibolo",
+        "medina": "medina",
+        "12100302": "medina",
         "san-gabriel": "san-gabriel",
         "sangabriel": "san-gabriel",
         "12070205": "san-gabriel",
@@ -417,10 +492,299 @@ class RasEbfeModels:
             "study_area": "UpperGuadalupe_12100201",
             "huc8": "12100201",
             "organizer": "organize_upper_guadalupe",
-            "download_subdir": "12100201_Models_extracted",
+            "download_subdir": "12100201_UpperGuadalupe",
             "output_name": "UpperGuadalupe_12100201",
             "ras_version": "6.3.1",
-            "notes": "Four cascaded 2D watershed models.",
+            "delivered_ras_version": "6.3.1",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _UPPER_GUADALUPE_SOURCE_URL,
+            "file_size_bytes": _UPPER_GUADALUPE_SOURCE_SIZE,
+            "notes": (
+                "Four cascaded 2D unsteady projects. The dedicated adapter "
+                "reassembles all delivered terrain, land-cover, infiltration, "
+                "DSS, initial-condition, and plan-result assets while preserving "
+                "live upstream DSS dependencies. UPGU1 p01 has fresh "
+                "unsteady-start evidence; UPGU2-4 remain unqualified."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "project_count": 4,
+                "projects": deepcopy(_UPPER_GUADALUPE_PROJECTS),
+                "dependencies": {
+                    "UPGU1": [],
+                    "UPGU2": ["UPGU1"],
+                    "UPGU3": ["UPGU2"],
+                    "UPGU4": ["UPGU3"],
+                },
+                "canonical_plan": "01",
+                "required_validation_level": "unsteady_start",
+                "validation_status": "partial",
+                "validation_level": "unsteady_start",
+                "validation_scope": "isolated_copy",
+                "hec_ras_executed": True,
+                "qualified_plans": [{
+                    "project": "UPGU1",
+                    "plan": "01",
+                    "title": "UPGU1_1pct",
+                    "num_cores": 2,
+                    "signal_source": "owned_process_artifacts",
+                }],
+                "unqualified_projects": ["UPGU2", "UPGU3", "UPGU4"],
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_upper_guadalupe_"
+                    "record_of_deficiencies.md"
+                ),
+                "terrain_required": True,
+                "terrain_source_complete": True,
+                "terrain_modification_layers": deepcopy(
+                    _UPPER_GUADALUPE_TERRAIN_MODIFICATIONS
+                ),
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12100201_Models.zip",
+                    "url": _UPPER_GUADALUPE_SOURCE_URL,
+                    "size_bytes": _UPPER_GUADALUPE_SOURCE_SIZE,
+                    "etag": _UPPER_GUADALUPE_SOURCE_ETAG,
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [
+                    {
+                        "kind": "result_vrt",
+                        "count": 14,
+                        "classification": "display_only",
+                    },
+                    {
+                        "kind": "stale_or_unregistered_result_hdf",
+                        "count": 4,
+                        "classification": "display_only",
+                    },
+                    {
+                        "kind": "profile_or_qc_shapefile",
+                        "count": 3,
+                        "classification": "display_only",
+                    },
+                ],
+            },
+        },
+        "pedernales": {
+            "study_area": "Pedernales_12090206",
+            "huc8": "12090206",
+            "organizer": "organize_pedernales",
+            "download_subdir": "12090206_Pedernales",
+            "output_name": "Pedernales_12090206",
+            "ras_version": "6.6",
+            "delivered_ras_version": "4.1.0",
+            "model_type": ModelType.STEADY_1D,
+            "source_url": _PEDERNALES_SOURCE_URL,
+            "file_size_bytes": _PEDERNALES_SOURCE_SIZE,
+            "notes": (
+                "A 530-project 1D steady BLE corpus. The dedicated adapter "
+                "preserves full relative-path project identities, assembles "
+                "all current p01/g01/f01 chains, and classifies terrain as "
+                "not applicable rather than missing. All 530 selected p01 "
+                "plans completed in isolated two-core HEC-RAS 6.6 runs."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_1d",
+                "project_count": 530,
+                "canonical_plan": "01",
+                "plan_number": "01",
+                "top_level_project_count": 529,
+                "nested_project_count": 1,
+                "plan_timeout_seconds": 600,
+                "required_validation_level": "steady_plan_completion",
+                "validation_status": "qualified",
+                "validation_level": "steady_plan_completion",
+                "hec_ras_executed": True,
+                "validation_scope": "isolated_copy",
+                "qualified_plan": {
+                    "plan": "01",
+                    "project_count": 530,
+                    "passed_project_count": 530,
+                    "execution_version": "6.6",
+                    "num_cores": 2,
+                },
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_pedernales_"
+                    "record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "repairable_from_delivery",
+                "terrain_required": False,
+                "terrain_source_complete": None,
+                "downstream_usable": True,
+                "reproducible": True,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12090206_Models.zip",
+                    "url": _PEDERNALES_SOURCE_URL,
+                    "size_bytes": _PEDERNALES_SOURCE_SIZE,
+                    "etag": _PEDERNALES_SOURCE_ETAG,
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [{
+                    "value": "PEDERNALES RIVER.p02 -> .\\_XsOutData\\PEDERNALES RIVER.g02",
+                    "classification": "inactive_delete_plan",
+                }],
+            },
+        },
+        "cibolo": {
+            "study_area": "Cibolo_12100304",
+            "huc8": "12100304",
+            "organizer": "organize_cibolo",
+            "download_subdir": "12100304_Cibolo",
+            "output_name": "Cibolo_12100304",
+            "ras_version": "5.0.7",
+            "delivered_ras_version": "5.0.7",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _CIBOLO_SOURCE_URL,
+            "file_size_bytes": _CIBOLO_SOURCE_SIZE,
+            "notes": (
+                "One 2D unsteady project with delivered terrain, land cover, "
+                "and hydrology. The dedicated adapter expands the nested "
+                "final archive and repairs only audited active paths. Plan 14 "
+                "reached owned unsteady-solver startup in an isolated two-core "
+                "HEC-RAS 5.0.7 copy."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_2d",
+                "project_count": 1,
+                "project": "Cibolo",
+                "canonical_plan_contract": {
+                    "project": "Cibolo",
+                    "plan": "14",
+                    "geometry": "05",
+                    "unsteady": "02",
+                    "title": "Cibolo100YR",
+                },
+                "required_validation_level": "unsteady_start",
+                "validation_status": "qualified",
+                "validation_level": "unsteady_start",
+                "validation_scope": "isolated_copy",
+                "hec_ras_executed": True,
+                "qualified_plan": {
+                    "project": "Cibolo",
+                    "plan": "14",
+                    "geometry": "05",
+                    "unsteady": "02",
+                    "title": "Cibolo100YR",
+                    "execution_version": "5.0.7",
+                    "num_cores": 2,
+                },
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_cibolo_record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "repairable_from_delivery",
+                "terrain_required": True,
+                "terrain_source_complete": True,
+                "downstream_usable": True,
+                "reproducible": True,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12100304_Models.zip",
+                    "url": _CIBOLO_SOURCE_URL,
+                    "size_bytes": _CIBOLO_SOURCE_SIZE,
+                    "etag": _CIBOLO_SOURCE_ETAG,
+                    "extract": False,
+                }],
+                "nonblocking_unresolved_references": [
+                    {"kind": "backup_only", "count": 2},
+                    {"kind": "display_only", "count": 3},
+                ],
+            },
+        },
+        "medina": {
+            "study_area": "Medina_12100302",
+            "huc8": "12100302",
+            "organizer": "organize_medina",
+            "download_subdir": "12100302_Medina",
+            "output_name": "Medina_12100302",
+            "ras_version": "6.4.1",
+            "delivered_ras_version": "6.4.1",
+            "model_type": ModelType.UNSTEADY_2D,
+            "source_url": _MEDINA_SOURCE_URL,
+            "file_size_bytes": _MEDINA_SOURCE_SIZE,
+            "notes": (
+                "Five 2D unsteady projects. Four contain their compiled "
+                "terrain and supporting source inputs; Upper Medina "
+                "Headwaters is blocked because its referenced modified "
+                "Terrain.hdf was not delivered."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "lane_kind": "integrated_2d",
+                "project_count": 5,
+                "projects": {
+                    "Leon1": {
+                        "plan": "01",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "Leon2": {
+                        "plan": "03",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "Leon3": {
+                        "plan": "02",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "MiddleLowerMedina": {
+                        "project": "MLM",
+                        "plan": "03",
+                        "terrain_source_complete": True,
+                        "validation_status": "qualified",
+                        "validation_level": "unsteady_start",
+                        "hec_ras_executed": True,
+                    },
+                    "UpperMedinaHeadwaters": {
+                        "project": "UpperMedinaHW",
+                        "plan": "04",
+                        "terrain_source_complete": False,
+                        "validation_status": "blocked_source_gap",
+                        "validation_level": None,
+                        "hec_ras_executed": False,
+                    },
+                },
+                "required_validation_level": "unsteady_start",
+                "validation_status": "blocked_source_gap",
+                "validation_level": "partial_unsteady_start",
+                "validation_scope": "isolated_copy",
+                "hec_ras_executed": True,
+                "qualified_project_count": 4,
+                "blocked_project_count": 1,
+                "execution_version": "6.4.1",
+                "num_cores": 2,
+                "qualification_record": (
+                    "agent_tasks/2026-09-25_medina_record_of_deficiencies.md"
+                ),
+                "delivery_readiness": "critical_source_gap",
+                "terrain_required": True,
+                "terrain_source_complete": False,
+                "downstream_usable": False,
+                "reproducible": False,
+                "known_deficiencies": [{
+                    "project": "UpperMedinaHeadwaters",
+                    "kind": "missing_modified_terrain_hdf",
+                    "severity": "critical",
+                }],
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12100302_Models.zip",
+                    "url": _MEDINA_SOURCE_URL,
+                    "size_bytes": _MEDINA_SOURCE_SIZE,
+                    "etag": _MEDINA_SOURCE_ETAG,
+                    "extract": False,
+                }],
+            },
         },
         "san-gabriel": {
             "study_area": "SanGabriel_12070205",
@@ -973,7 +1337,9 @@ class RasEbfeModels:
                         metadata=RasEbfeModels.get_model_metadata(key),
                         extracted=True,
                     )
-                elif str(meta.get("huc8")) in {"12040205", "12050004"}:
+                elif str(meta.get("huc8")) in {
+                    "12040205", "12050004", "12100201",
+                }:
                     # The dedicated organizer builds in a sibling staging
                     # directory and preserves this interrupted target during
                     # atomic promotion.
@@ -1011,10 +1377,39 @@ class RasEbfeModels:
         """Return whether an existing organized target has complete evidence."""
         if str(metadata.get("huc8")) == "12040205":
             return RasEbfeModels._austin_oyster_is_reusable(organized_target)
+        if str(metadata.get("huc8")) == "12100201":
+            return RasEbfeModels._upper_guadalupe_is_reusable(organized_target)
         if str(metadata.get("huc8")) == "12050004":
             return RasEbfeModels._double_mountain_fork_brazos_is_reusable(
                 organized_target
             )
+        if str(metadata.get("huc8")) == "12090206":
+            from .ebfe_pedernales import pedernales_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "pedernales_manifest.json"
+            )
+            if source is None:
+                return False
+            return pedernales_is_reusable(organized_target, source)
+        if str(metadata.get("huc8")) == "12100304":
+            from .ebfe_cibolo import cibolo_output_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "cibolo_manifest.json"
+            )
+            if source is None:
+                return False
+            return cibolo_output_is_reusable(organized_target, source)
+        if str(metadata.get("huc8")) == "12100302":
+            from .ebfe_medina import medina_is_reusable
+
+            source = RasEbfeModels._organized_source_path(
+                organized_target, "medina_manifest.json"
+            )
+            if source is None:
+                return False
+            return medina_is_reusable(organized_target, source)
         model_log = organized_target / "agent" / "model_log.md"
         ras_root = organized_target / "RAS Model"
         if not model_log.is_file() or not ras_root.is_dir():
@@ -1031,6 +1426,33 @@ class RasEbfeModels:
         if expected_count is not None:
             return len(projects) == int(expected_count)
         return bool(projects)
+
+    @staticmethod
+    def _organized_source_path(
+        organized_target: Path, manifest_name: str
+    ) -> Optional[Path]:
+        """Return the source path sealed into a dedicated organizer manifest."""
+        try:
+            manifest = json.loads(
+                (organized_target / "agent" / manifest_name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            identity = manifest.get("source_identity") or manifest.get(
+                "source_asset"
+            )
+            if not isinstance(identity, dict):
+                return None
+            value = identity.get("path")
+            if value is not None:
+                return Path(str(value))
+            sidecar = identity.get("sidecar")
+            suffix = ".ebfe-source.json"
+            if isinstance(sidecar, str) and sidecar.endswith(suffix):
+                return Path(sidecar[: -len(suffix)])
+            return None
+        except (KeyError, OSError, TypeError, json.JSONDecodeError):
+            return None
 
     @staticmethod
     @log_call
@@ -1102,6 +1524,64 @@ class RasEbfeModels:
             verbose=verbose, show_progress=show_progress,
         ):
             return organizer(**call_kwargs)
+
+    @staticmethod
+    @log_call
+    def organize_pedernales(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize the complete 530-project Pedernales 1D BLE corpus."""
+        from .ebfe_pedernales import organize_pedernales
+
+        return organize_pedernales(
+            downloaded_folder=downloaded_folder,
+            output_folder=output_folder,
+        )
+
+    @staticmethod
+    @log_call
+    def organize_cibolo(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize Cibolo's nested 2D unsteady delivery."""
+        from .ebfe_cibolo import SOURCE_NAME, organize_cibolo_delivery
+
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12100304_Cibolo"
+        ).resolve()
+        archive = source if source.suffix.lower() == ".zip" else source / SOURCE_NAME
+        if not archive.is_file():
+            RasEbfeModels.download_source_asset(
+                "cibolo", "models", archive.parent
+            )
+        destination = Path(
+            output_folder or "./ebfe_organized/Cibolo_12100304"
+        )
+        return organize_cibolo_delivery(archive, destination)
+
+    @staticmethod
+    @log_call
+    def organize_medina(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+    ) -> Path:
+        """Organize Medina's recoverable delivery and preserve its source gap."""
+        from .ebfe_medina import SOURCE_NAME, organize_medina
+
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12100302_Medina"
+        ).resolve()
+        archive = source if source.suffix.lower() == ".zip" else source / SOURCE_NAME
+        if not archive.is_file():
+            RasEbfeModels.download_source_asset(
+                "medina", "models", archive.parent
+            )
+        destination = Path(
+            output_folder or "./ebfe_organized/Medina_12100302"
+        )
+        return organize_medina(archive, destination)
 
     @staticmethod
     @log_call
@@ -1600,236 +2080,781 @@ class RasEbfeModels:
     @staticmethod
     @log_call
     def organize_upper_guadalupe(
-        downloaded_folder: Optional[Path] = None,
-        output_folder: Optional[Path] = None,
-        validate_dss: bool = True
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+        validate_dss: bool = False,
     ) -> Path:
-        """
-        Organize Upper Guadalupe (12100201) eBFE model with automatic download.
+        """Reassemble the four-project Upper Guadalupe 2D cascade.
 
-        Pattern 3b: Multiple cascaded 2D watershed models with DSS flow transfer.
-
-        **Automatic Download**: If source data not found, automatically downloads 54.6 GB
-        from eBFE S3 bucket. This is a VERY LARGE download - ensure sufficient disk space
-        and time for download/extraction. Download includes progress tracking and
-        resumes interrupted downloads when the server supports byte-range requests.
-
-        Model characteristics:
-        - 4 cascaded watershed models (UPGU1 → UPGU2 → UPGU3 → UPGU4)
-        - 28 total plans (7 AEP frequencies × 4 models)
-        - 55 GB total size
-        - 15 GB terrain data (1m resolution, 2.8-4.9 GB per model)
-        - 10 DSS files with 10,248 pathnames (gridded precip + boundaries)
-        - HEC-RAS version 6.3.1
-
-        Args:
-            downloaded_folder: Path where data should be (will auto-download if missing)
-            output_folder: Output location (default: ./ebfe_organized/UpperGuadalupe_12100201/)
-            validate_dss: Run DSS validation checks (default: True, validates 10,248 pathnames)
-
-        Returns:
-            Path to organized model with structure:
-                UpperGuadalupe_12100201/
-                ├── HMS Model/        (README - no HMS, RAS 6.3.1 handles precip)
-                ├── RAS Model/        (4 cascaded models: UPGU1-4)
-                ├── Spatial Data/     (empty - terrain in model folders)
-                ├── Documentation/    (BLE report + inventory)
-                └── agent/
-                    ├── model_log.md
-                    └── dss_validation_output.txt
-
-        Note:
-            Models must be executed sequentially (UPGU1 → UPGU2 → UPGU3 → UPGU4)
-            as upstream models provide downstream boundary conditions via DSS.
-
-        Example:
-            >>> from ras_commander.ebfe_models import RasEbfeModels
-            >>> from ras_commander import init_ras_project, RasCmdr, RasPrj
-            >>> from pathlib import Path
-            >>>
-            >>> # Data will auto-download if not present (54.6 GB - LARGE!)
-            >>> organized = RasEbfeModels.organize_upper_guadalupe(
-            ...     downloaded_folder=Path(r"D:/eBFE/12100201_Models_extracted"),
-            ...     validate_dss=True
-            ... )
-            >>>
-            >>> # Execute cascade (upstream to downstream)
-            >>> for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
-            ...     folder = organized / "RAS Model" / model / "Input"
-            ...     ras_obj = RasPrj()
-            ...     init_ras_project(folder, "6.5", ras_object=ras_obj)
-            ...     RasCmdr.compute_plan("01", ras_object=ras_obj, num_cores=4)
+        The immutable FEMA ZIP is verified by exact size and retained multipart
+        ETag, CRC-extracted into a temporary build, and atomically promoted. A
+        legacy extracted source tree is also accepted. The active layout stays
+        flat (``RAS Model/UPGU#/UPGU#.prj``), and upstream boundary conditions
+        reference the preceding project's *live* DSS file rather than a copied
+        snapshot. This method prepares the model but does not execute HEC-RAS.
         """
         RasEbfeModels._ensure_console_output_safe()
-        if downloaded_folder is None:
-            downloaded_folder = Path("./ebfe_downloads/12100201_Models_extracted")
-        else:
-            downloaded_folder = Path(downloaded_folder)
-        if output_folder is None:
-            output_folder = Path("./ebfe_organized/UpperGuadalupe_12100201")
-        else:
-            output_folder = Path(output_folder)
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12100201_UpperGuadalupe"
+        ).resolve()
+        output_folder = Path(
+            output_folder or "./ebfe_organized/UpperGuadalupe_12100201"
+        ).resolve()
+        if RasEbfeModels._upper_guadalupe_is_reusable(
+            output_folder, source_root=source
+        ):
+            return output_folder
 
-        # Create 4-folder structure
-        folders = {
-            'hms': output_folder / "HMS Model",
-            'ras': output_folder / "RAS Model",
-            'spatial': output_folder / "Spatial Data",
-            'docs': output_folder / "Documentation",
-            'agent': output_folder / "agent"
+        archive = (
+            source if source.suffix.casefold() == ".zip"
+            else source / "12100201_Models.zip"
+        )
+        extracted_root = None
+        if not archive.is_file():
+            try:
+                extracted_root = (
+                    RasEbfeModels._find_upper_guadalupe_delivery_root(source)
+                    if source.is_dir() else None
+                )
+            except FileNotFoundError:
+                extracted_root = None
+            if extracted_root is None:
+                asset = RasEbfeModels._MODEL_REGISTRY["upper-guadalupe"]["extra"][
+                    "source_assets"
+                ][0]
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                RasEbfeModels._download_file(
+                    asset["url"],
+                    archive,
+                    description="Upper Guadalupe models (58.6 GB)",
+                    expected_size_bytes=asset["size_bytes"],
+                    expected_etag=asset["etag"],
+                )
+        source_identity: Dict[str, Any]
+        extraction_audit = None
+        source_files: List[Path] = []
+        if archive.is_file():
+            asset = RasEbfeModels._MODEL_REGISTRY["upper-guadalupe"]["extra"][
+                "source_assets"
+            ][0]
+            source_identity = RasEbfeModels._validate_source_asset_identity(
+                archive,
+                expected_size_bytes=asset["size_bytes"],
+                expected_etag=asset["etag"],
+            )
+            sidecar = RasEbfeModels._source_sidecar_path(archive)
+            sidecar_data = json.loads(sidecar.read_text(encoding="utf-8"))
+            if sidecar_data.get("source") != asset["url"]:
+                raise RuntimeError(
+                    "Upper Guadalupe source sidecar URL does not match the "
+                    "catalogued FEMA source."
+                )
+            source_files = [archive, sidecar]
+            with zipfile.ZipFile(archive) as zip_stream:
+                members = RasEbfeModels._validated_zip_members(zip_stream)
+            files = sum(not member.is_dir() for member, _ in members)
+            directories = len(members) - files
+            if (
+                files != RasEbfeModels._UPPER_GUADALUPE_FILE_MEMBER_COUNT
+                or directories
+                != RasEbfeModels._UPPER_GUADALUPE_DIRECTORY_MEMBER_COUNT
+            ):
+                raise RuntimeError(
+                    "Upper Guadalupe source contract mismatch: expected "
+                    f"277 files and 23 directories, found {files} files and "
+                    f"{directories} directories."
+                )
+            if any(relative.suffix.casefold() == ".zip" for _, relative in members):
+                raise RuntimeError("Upper Guadalupe source unexpectedly contains nested ZIPs.")
+        else:
+            if extracted_root is None:
+                extracted_root = RasEbfeModels._find_upper_guadalupe_delivery_root(
+                    source
+                )
+            source_identity = {
+                "path": str(extracted_root),
+                "mode": "legacy_extracted_tree",
+                "archive_identity_verified": False,
+            }
+            source_files = sorted(
+                path for path in extracted_root.rglob("*") if path.is_file()
+            )
+
+        source_state = {
+            str(path): (path.stat().st_size, path.stat().st_mtime_ns)
+            for path in source_files
+        }
+        source_inventory = {
+            "file_count": len(source_files),
+            "total_bytes": sum(path.stat().st_size for path in source_files),
+        }
+        output_folder.parent.mkdir(parents=True, exist_ok=True)
+        working = Path(tempfile.mkdtemp(
+            prefix=f".{output_folder.name}.assembling-",
+            dir=output_folder.parent,
+        ))
+        try:
+            if extracted_root is None:
+                extracted_root = working / ".source-extraction"
+                extraction_audit = RasEbfeModels._extract_zip_verified(
+                    archive, extracted_root, "Upper Guadalupe source archive"
+                )
+            delivery = RasEbfeModels._find_upper_guadalupe_delivery_root(
+                extracted_root
+            )
+            models_source = delivery / "Engineering Models" / "HEC-RAS Models"
+            ras_root = working / "RAS Model"
+            project_repairs = {}
+            for project, contract in RasEbfeModels._UPPER_GUADALUPE_PROJECTS.items():
+                project_source = models_source / project
+                project_root = ras_root / project
+                RasEbfeModels._copy_upper_guadalupe_project(
+                    project_source, project_root, project
+                )
+
+            shared_projection = ras_root / "UPGU1" / "Projection_File.prj"
+            if not shared_projection.is_file():
+                raise RuntimeError(
+                    "Upper Guadalupe's shared delivered projection is missing."
+                )
+            for project, contract in RasEbfeModels._UPPER_GUADALUPE_PROJECTS.items():
+                project_root = ras_root / project
+                project_repairs[project] = (
+                    RasEbfeModels._repair_upper_guadalupe_project(
+                        project_root,
+                        project,
+                        contract["terrain"],
+                        shared_projection,
+                    )
+                )
+            shared_projection.unlink()
+
+            inventory = models_source / "2D_Model_Inventory_UpperGuadalupe.xlsx"
+            if not inventory.is_file():
+                raise RuntimeError("Upper Guadalupe inventory workbook is missing.")
+            shutil.copy2(inventory, ras_root / inventory.name)
+            for folder_name in ("Documentation", "HMS Model", "Spatial Data", "agent"):
+                (working / folder_name).mkdir(parents=True, exist_ok=True)
+            hydrologic_readme = (
+                delivery / "Engineering Models" / "Hydrologic Models" / "Readme.txt"
+            )
+            if not hydrologic_readme.is_file():
+                raise RuntimeError("Upper Guadalupe hydrologic-model readme is missing.")
+            shutil.copy2(
+                hydrologic_readme,
+                working / "Documentation" / "Hydrologic_Models_Readme.txt",
+            )
+            (working / "HMS Model" / "README.md").write_text(
+                "# No separate HEC-HMS model\n\nPrecipitation and losses are "
+                "configured in the HEC-RAS 6.3.1 unsteady files.\n",
+                encoding="utf-8",
+            )
+            dss_results = (
+                RasEbfeModels._validate_dss_files(ras_root) if validate_dss else []
+            )
+            audit = RasEbfeModels._audit_upper_guadalupe_workspace(ras_root)
+            if not audit["active_hydraulic_reference_closure"]:
+                raise RuntimeError(
+                    "Upper Guadalupe active hydraulic reference closure failed: "
+                    f"{audit['errors']}"
+                )
+            too_long = [
+                str(output_folder / path.relative_to(working))
+                for path in working.rglob("*")
+                if path.is_file()
+                and len(str(output_folder / path.relative_to(working)))
+                > RasEbfeModels._WINDOWS_PATH_WARNING_LENGTH
+            ]
+            if too_long:
+                raise RuntimeError(
+                    "Upper Guadalupe active workspace exceeds the 240-character "
+                    f"path contract: {too_long[:3]}"
+                )
+            manifest = {
+                "schema_version": 1,
+                "study": "Upper Guadalupe",
+                "huc8": "12100201",
+                "source_program": "fema_ebfe",
+                "delivered_ras_version": "6.3.1",
+                "source_identity": source_identity,
+                "archive_member_counts": (
+                    {"files": 277, "directories": 23}
+                    if archive.is_file()
+                    else None
+                ),
+                "archive_extraction": extraction_audit,
+                "source_inventory": source_inventory,
+                "projects": deepcopy(RasEbfeModels._UPPER_GUADALUPE_PROJECTS),
+                "dependencies": {
+                    name: item["depends_on"]
+                    for name, item in RasEbfeModels._UPPER_GUADALUPE_PROJECTS.items()
+                },
+                "canonical_plan": "01",
+                "output_assets_relocated": {
+                    "plan_hdfs": 28,
+                    "initial_conditions": 28,
+                    "total": 56,
+                    "by_project": {name: 14 for name in project_repairs},
+                },
+                "association_attributes": {
+                    "expected": 224,
+                    "plan_hdf_expected": 196,
+                    "geometry_hdf_expected": 28,
+                    "checked": sum(
+                        item["hdf_attributes_checked"]
+                        for item in project_repairs.values()
+                    ),
+                    "updated": sum(
+                        item["hdf_attribute_updates"]
+                        for item in project_repairs.values()
+                    ),
+                    "already_correct": sum(
+                        item["hdf_attributes_already_correct"]
+                        for item in project_repairs.values()
+                    ),
+                },
+                "path_repairs": project_repairs,
+                "reference_audit": audit,
+                "dss_validation": dss_results,
+                "terrain_source_complete": True,
+                "terrain_modification_layers": deepcopy(
+                    RasEbfeModels._UPPER_GUADALUPE_TERRAIN_MODIFICATIONS
+                ),
+                "nonblocking_unresolved_references": deepcopy(
+                    RasEbfeModels._MODEL_REGISTRY["upper-guadalupe"]["extra"]
+                    ["nonblocking_unresolved_references"]
+                ),
+                "required_validation_level": "unsteady_start",
+                "validation_status": "pending",
+                "fresh_output_status": "pending",
+                "hec_ras_executed": False,
+                "source_objects_immutable": True,
+                "completed_utc": datetime.now(timezone.utc).isoformat(),
+            }
+            if manifest["association_attributes"]["checked"] != 224:
+                raise RuntimeError("Upper Guadalupe did not audit all 224 HDF attributes.")
+            (working / "agent" / "upper_guadalupe_manifest.json").write_text(
+                json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+            )
+            (working / "agent" / "model_log.md").write_text(
+                "# Upper Guadalupe (12100201) organization log\n\n"
+                "Four HEC-RAS 6.3.1 2D projects were reassembled in cascade "
+                "order. Delivered terrain and land-cover bundles, 28 plan "
+                "HDFs, and 28 IC files were retained. All 196 plan-HDF and 28 "
+                "geometry-HDF asset associations were checked. Upstream DSS "
+                "references remain "
+                "live links. Missing result VRTs and profile/QC shapefiles are "
+                "display-only. Fresh HEC-RAS unsteady-start validation is "
+                "pending.\n",
+                encoding="utf-8",
+            )
+            extraction = working / ".source-extraction"
+            if extraction.exists():
+                shutil.rmtree(extraction)
+            if source_files:
+                final_state = {
+                    str(path): (path.stat().st_size, path.stat().st_mtime_ns)
+                    for path in source_files
+                }
+                if source_state != final_state:
+                    raise RuntimeError(
+                        "Upper Guadalupe source objects changed during organization."
+                    )
+            RasEbfeModels._finalize_austin_oyster_output(working, output_folder)
+        except Exception:
+            if working.exists():
+                shutil.rmtree(working)
+            raise
+        return output_folder
+
+    @staticmethod
+    def _find_upper_guadalupe_delivery_root(source: Path) -> Path:
+        """Resolve either the archive extraction root or a legacy wrapper."""
+        source = Path(source)
+        candidates = [source]
+        candidates.extend(path for path in source.iterdir() if path.is_dir())
+        for candidate in candidates:
+            models = candidate / "Engineering Models" / "HEC-RAS Models"
+            if models.is_dir() and all(
+                (models / project / "Input" / f"{project}.prj").is_file()
+                for project in RasEbfeModels._UPPER_GUADALUPE_PROJECTS
+            ):
+                return candidate
+        raise FileNotFoundError(
+            "Upper Guadalupe delivery root not found beneath "
+            f"{source}; expected Engineering Models/HEC-RAS Models/UPGU1-4."
+        )
+
+    @staticmethod
+    def _copy_upper_guadalupe_project(
+        source: Path, destination: Path, project: str
+    ) -> None:
+        """Copy one delivered project into the compact flat runtime layout."""
+        source = Path(source)
+        required_folders = ("Input", "Output", "Terrain", "Land Cover")
+        missing = [name for name in required_folders if not (source / name).is_dir()]
+        if missing:
+            raise RuntimeError(f"{project} is missing delivered folders: {missing}")
+        shutil.copytree(source / "Input", destination)
+        for bundle in ("Terrain", "Land Cover"):
+            shutil.copytree(source / bundle, destination / bundle)
+
+        expected = {
+            *(f"{project}.p{number:02d}.hdf" for number in range(1, 8)),
+            *(f"{project}.IC.O{number:02d}" for number in range(1, 8)),
+        }
+        discovered: Dict[str, List[Path]] = {name: [] for name in expected}
+        for path in (source / "Output").rglob("*"):
+            if path.is_file() and path.name in discovered:
+                discovered[path.name].append(path)
+        invalid = {
+            name: len(paths) for name, paths in discovered.items() if len(paths) != 1
+        }
+        if invalid:
+            raise RuntimeError(
+                f"{project} Output contract mismatch; expected 14 unique assets: "
+                f"{dict(sorted(invalid.items()))}"
+            )
+        for name in sorted(expected):
+            target = destination / name
+            if target.exists():
+                raise RuntimeError(f"{project} output collision at {target}")
+            shutil.copy2(discovered[name][0], target)
+
+    @staticmethod
+    def _upper_guadalupe_path_equivalent(actual: Any, expected: str) -> bool:
+        """Compare serialized Windows asset paths without weakening location."""
+        def normalize(value: Any) -> str:
+            if isinstance(value, bytes):
+                value = value.decode("utf-8")
+            text = str(value).strip().replace("/", "\\")
+            text = re.sub(r"\\+", r"\\", text)
+            while text.startswith(".\\"):
+                text = text[2:]
+            return text.casefold()
+
+        return normalize(actual) == normalize(expected)
+
+    @staticmethod
+    def _repair_upper_guadalupe_hdf_associations(
+        project_root: Path, project: str, terrain_name: str
+    ) -> Dict[str, int]:
+        """Set seven fixed-byte association attrs on each geometry/plan HDF."""
+        try:
+            import h5py
+        except ImportError as exc:
+            raise RuntimeError(
+                "h5py is required to repair Upper Guadalupe"
+            ) from exc
+
+        expected_by_group = {
+            "Geometry": {
+                "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+                "Land Cover Filename": r".\Land Cover\LandCover.hdf",
+                "Terrain Filename": f".\\Terrain\\{terrain_name}",
+            },
+            f"Geometry/2D Flow Areas/{project}_2DArea": {
+                "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+                "Land Cover Filename": r".\Land Cover\LandCover.hdf",
+                "Terrain Filename": f".\\Terrain\\{terrain_name}",
+            },
+            f"Geometry/2D Flow Areas/{project}_2DArea/Infiltration": {
+                "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+            },
+        }
+        delivered_stale = {
+            "Infiltration Filename": r".\Land Classification\Infiltration.hdf",
+            "Land Cover Filename": r".\Land Classification\LandCover.hdf",
+            "Terrain Filename": f".\\Terrain\\RAS_Terrain\\{terrain_name}",
         }
 
-        for folder in folders.values():
-            folder.mkdir(parents=True, exist_ok=True)
+        def write_fixed_path_attribute(group: Any, attribute: str, value: str) -> None:
+            encoded = value.encode("utf-8")
+            if attribute in group.attrs:
+                del group.attrs[attribute]
+            group.attrs.create(attribute, encoded, dtype=f"S{len(encoded)}")
 
-        RasEbfeModels._emit(f"Organizing Upper Guadalupe (12100201) - Pattern 3b")
-        RasEbfeModels._emit(f"Source: {downloaded_folder}")
-        RasEbfeModels._emit(f"Output: {output_folder}\n")
-
-        # Download source data if not present
-        if not downloaded_folder.exists():
-            RasEbfeModels._emit("Source data not found - downloading from eBFE S3...")
-            RasEbfeModels._emit("⚠️  WARNING: This is a VERY LARGE download (54.6 GB)")
-            RasEbfeModels._emit("⚠️  Download time will vary based on connection speed")
-            RasEbfeModels._emit("⚠️  Ensure you have sufficient disk space available\n")
-
-            url = "https://ebfedata.s3.amazonaws.com/12100201_UpperGuadalupe/12100201_Models.zip"
-
-            # Download and extract to parent folder
-            downloaded_folder = RasEbfeModels._download_and_extract(
-                url=url,
-                output_folder=downloaded_folder.parent,
-                description="Upper Guadalupe Models (54.6 GB)"
-            )
-
-        # Pattern 3b specific paths (discovered by agent)
-        models_source = downloaded_folder / "Engineering Models" / "HEC-RAS Models"
-        inventory = models_source / "2D_Model_Inventory_UpperGuadalupe.xlsx"
-
-        # Validate nested structure exists
-        if not models_source.exists():
-            raise FileNotFoundError(
-                f"Models folder not found: {models_source}\n\n"
-                f"Expected structure: {downloaded_folder}/Engineering Models/HEC-RAS Models/\n"
-                f"Check that you extracted the correct archive and it has the expected structure."
-            )
-
-        # Check for separate Documents.zip
-        docs_source = downloaded_folder.parent / "12100201_UpperGuadalupe_Documents_extracted"
-
-        # Organize RAS Model (4 cascaded watersheds)
-        RasEbfeModels._emit("[1/4] Organizing RAS Model (4 cascaded watersheds)...")
-        ras_files = 0
-        for model_name in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
-            model_source = models_source / model_name
-            if model_source.exists():
-                # Copy Input/ folder
-                input_source = model_source / "Input"
-                input_dest = folders['ras'] / model_name
-
-                if input_source.exists():
-                    shutil.copytree(input_source, input_dest, dirs_exist_ok=True)
-                    RasEbfeModels._emit(f"  ✓ {model_name}/Input/ copied")
-
-                    # CRITICAL: Move Output/ HDF files INTO Input/ folder (where HEC-RAS expects them)
-                    output_source = model_source / "Output"
-                    if output_source.exists():
-                        RasEbfeModels._emit(f"    Moving Output/ HDF files into {model_name}/ folder...")
-                        for output_file in output_source.rglob('*'):
-                            if output_file.is_file():
-                                # Move HDF and other output files to Input/ (HEC-RAS project folder)
-                                dest_file = input_dest / output_file.name
-                                shutil.copy2(output_file, dest_file)
-                        RasEbfeModels._emit(f"    ✓ Pre-run HDF files moved to project folder")
-
-                    # CRITICAL: Move Terrain/ INTO project folder (where HEC-RAS expects it)
-                    terrain_source = model_source / "Terrain"
-                    if terrain_source.exists():
-                        terrain_dest = input_dest / "Terrain"
-                        shutil.copytree(terrain_source, terrain_dest, dirs_exist_ok=True)
-                        RasEbfeModels._emit(f"    ✓ Terrain/ moved to project folder")
-
-                    # CRITICAL: Copy land cover / infiltration layers into the
-                    # project folder so 2D property tables can be rebuilt.
-                    land_cover_source = None
-                    for candidate_name in ["Land Cover", "Land Classification", "LandCover"]:
-                        candidate = model_source / candidate_name
-                        if candidate.exists():
-                            land_cover_source = candidate
-                            break
-                    if land_cover_source is not None:
-                        land_cover_dest = input_dest / "Land Cover"
-                        shutil.copytree(
-                            land_cover_source,
-                            land_cover_dest,
-                            dirs_exist_ok=True,
+        checked = updated = already_correct = 0
+        hdf_paths = [Path(project_root) / f"{project}.g01.hdf"]
+        hdf_paths.extend(
+            Path(project_root) / f"{project}.p{number:02d}.hdf"
+            for number in range(1, 8)
+        )
+        for hdf_path in hdf_paths:
+            if not hdf_path.is_file():
+                raise RuntimeError(f"Required geometry/plan HDF is missing: {hdf_path}")
+            with h5py.File(hdf_path, "r+") as hdf:
+                for group_path, attributes in expected_by_group.items():
+                    if group_path not in hdf:
+                        raise RuntimeError(
+                            f"{hdf_path.name} lacks required group {group_path}"
                         )
-                        RasEbfeModels._emit(f"    ✓ Land Cover/ moved to project folder")
+                    group = hdf[group_path]
+                    for attribute, expected in attributes.items():
+                        checked += 1
+                        actual = group.attrs.get(attribute)
+                        if actual is None or str(actual).strip() == "":
+                            write_fixed_path_attribute(group, attribute, expected)
+                            updated += 1
+                        elif RasEbfeModels._upper_guadalupe_path_equivalent(
+                            actual, expected
+                        ):
+                            if isinstance(actual, bytes):
+                                already_correct += 1
+                            else:
+                                write_fixed_path_attribute(group, attribute, expected)
+                                updated += 1
+                        elif RasEbfeModels._upper_guadalupe_path_equivalent(
+                            actual, delivered_stale[attribute]
+                        ):
+                            write_fixed_path_attribute(group, attribute, expected)
+                            updated += 1
+                        else:
+                            raise RuntimeError(
+                                "Upper Guadalupe HDF pre-state conflict: "
+                                f"{hdf_path.name}:{group_path}@{attribute} is "
+                                f"{actual!r}, expected path-equivalent {expected!r}."
+                            )
+        return {
+            "hdf_attributes_checked": checked,
+            "hdf_attribute_updates": updated,
+            "hdf_attributes_already_correct": already_correct,
+        }
 
-                    model_files = len(list(input_dest.rglob('*')))
-                    ras_files += model_files
+    @staticmethod
+    def _repair_upper_guadalupe_project(
+        project_root: Path,
+        project: str,
+        terrain_name: str,
+        shared_projection: Path,
+    ) -> Dict[str, int]:
+        """Repair one project's audited projection, map, DSS, and HDF paths."""
+        project_root = Path(project_root)
+        shared_projection = Path(shared_projection)
+        projection_target = project_root / "Projection" / f"{project}_Projection.prj"
+        if not shared_projection.is_file():
+            raise RuntimeError("Upper Guadalupe's shared delivered projection is missing.")
+        projection_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(shared_projection, projection_target)
+
+        precip_dir = project_root / "DSS Inputs"
+        precip_dir.mkdir()
+        for name in ("UPGU_precip.dss", "UPGU_precip.dsc.h5"):
+            source = project_root / name
+            if not source.is_file():
+                raise RuntimeError(f"{project} delivered precipitation asset missing: {name}")
+            shutil.move(source, precip_dir / name)
+
+        predecessor = None if project == "UPGU1" else f"UPGU{int(project[-1]) - 1}"
+        text_updates = 0
+        candidates = [
+            project_root / f"{project}.prj",
+            project_root / f"{project}.rasmap",
+            *(project_root / f"{project}.u{number:02d}" for number in range(1, 8)),
+        ]
+        replacements = {
+            r".\DSS_Input\UPGU_precip.dss": "./DSS Inputs/UPGU_precip.dss",
+            r".\Projection\Projection_File.prj": rf".\Projection\{project}_Projection.prj",
+            r".\Land Classification": r".\Land Cover",
+            r".\Land Classification\LandCover.hdf": r".\Land Cover\LandCover.hdf",
+            r".\Land Classification\Soils.hdf": r".\Land Cover\Soils.hdf",
+            r".\Land Classification\Infiltration.hdf": r".\Land Cover\Infiltration.hdf",
+            r".\Terrain\RAS_Terrain\Terrain.hdf": rf".\Terrain\{terrain_name}",
+            r".\Terrain\RAS_Terrain\Terrain (1).hdf": rf".\Terrain\{terrain_name}",
+            r".\Terrain\RAS_Terrain": r".\Terrain",
+        }
+        if project == "UPGU1":
+            replacements[r"..\..\_Workspace\KC\SHP\UPGU1\UPGU_WA1.prj"] = (
+                r".\Projection\UPGU1_Projection.prj"
+            )
+        if predecessor:
+            replacements.update({
+                rf"..\UPGU_{int(project[-1]) - 1}\{predecessor}.dss": (
+                    f"../{predecessor}/{predecessor}.dss"
+                ),
+                rf".\DSS_Input\{predecessor}.dss": (
+                    f"../{predecessor}/{predecessor}.dss"
+                ),
+            })
+        for number in range(1, 4):
+            replacements[rf"..\UPGU_{number}\UPGU{number}"] = rf"..\UPGU{number}\UPGU{number}"
+            replacements[rf"..\UPGU_{number}\UPGU_{number}"] = rf"..\UPGU{number}\UPGU{number}"
+
+        for path in candidates:
+            if not path.is_file():
+                raise RuntimeError(f"{project} required text file missing: {path.name}")
+            content = path.read_text(encoding="utf-8", errors="strict")
+            original = content
+            for old, new in replacements.items():
+                content = content.replace(old, new)
+            if content != original:
+                path.write_text(content, encoding="utf-8")
+                text_updates += 1
+
+        stats = RasEbfeModels._repair_upper_guadalupe_hdf_associations(
+            project_root, project, terrain_name
+        )
+        stats.update({
+            "projection_assets_materialized": 1,
+            "precipitation_assets_relocated": 2,
+            "text_files_updated": text_updates,
+        })
+        return stats
+
+    @staticmethod
+    def _audit_upper_guadalupe_workspace(ras_root: Path) -> Dict[str, Any]:
+        """Fail closed on partial projects and broken hydraulic dependencies."""
+        try:
+            import h5py
+        except ImportError as exc:
+            raise RuntimeError(
+                "h5py is required to audit Upper Guadalupe"
+            ) from exc
+
+        errors = []
+        terrain_payload_files_checked = 0
+        terrain_modification_groups_checked = 0
+        hdf_association_attributes_checked = 0
+        plan_bindings_checked = 0
+        local_precipitation_references_checked = 0
+        upstream_dss_references_checked = 0
+        rasmap_hydraulic_references_checked = 0
+        ras_root = Path(ras_root)
+        for project, contract in RasEbfeModels._UPPER_GUADALUPE_PROJECTS.items():
+            root = ras_root / project
+            terrain_payloads = (
+                RasEbfeModels._UPPER_GUADALUPE_TERRAIN_PAYLOADS[project]
+            )
+            required = [
+                root / f"{project}.prj",
+                root / f"{project}.g01",
+                root / f"{project}.g01.hdf",
+                root / f"{project}.dss",
+                root / "DSS Inputs" / "UPGU_precip.dss",
+                root / "Land Cover" / "Infiltration.hdf",
+                root / "Land Cover" / "LandCover.hdf",
+                root / "Projection" / f"{project}_Projection.prj",
+            ]
+            required.extend(root / "Terrain" / name for name in terrain_payloads)
+            required.extend(root / f"{project}.p{n:02d}" for n in range(1, 8))
+            required.extend(root / f"{project}.u{n:02d}" for n in range(1, 8))
+            required.extend(root / f"{project}.p{n:02d}.hdf" for n in range(1, 8))
+            required.extend(root / f"{project}.IC.O{n:02d}" for n in range(1, 8))
+            errors.extend(str(path) for path in required if not path.is_file())
+
+            for terrain_asset in terrain_payloads:
+                if (root / "Terrain" / terrain_asset).is_file():
+                    terrain_payload_files_checked += 1
+            terrain_hdf = root / "Terrain" / contract["terrain"]
+            if terrain_hdf.is_file():
+                with h5py.File(terrain_hdf, "r") as hdf:
+                    actual_modifications = (
+                        set(hdf["Modifications"].keys())
+                        if "Modifications" in hdf
+                        else set()
+                    )
+                expected_modifications = set(
+                    RasEbfeModels._UPPER_GUADALUPE_TERRAIN_MODIFICATIONS[project]
+                )
+                if actual_modifications != expected_modifications:
+                    errors.append(
+                        f"{project} terrain modifications are "
+                        f"{sorted(actual_modifications)}, expected "
+                        f"{sorted(expected_modifications)}"
+                    )
                 else:
-                    RasEbfeModels._emit(f"  ⚠️ {model_name}/Input/ not found")
+                    terrain_modification_groups_checked += len(
+                        expected_modifications
+                    )
 
-        if inventory.exists():
-            shutil.copy2(inventory, folders['ras'] / inventory.name)
+            rasmap_path = root / f"{project}.rasmap"
+            if rasmap_path.is_file():
+                rasmap_text = rasmap_path.read_text(encoding="utf-8", errors="strict")
+                expected_projection = (
+                    f'.\\Projection\\{project}_Projection.prj'
+                )
+                expected_terrain = f'.\\Terrain\\{contract["terrain"]}'
+                for expected in (expected_projection, expected_terrain):
+                    if expected not in rasmap_text:
+                        errors.append(f"{project}.rasmap lacks {expected}")
+                    else:
+                        rasmap_hydraulic_references_checked += 1
+                for stale in ("RAS_Terrain", "Land Classification", "DSS_Input"):
+                    if stale in rasmap_text:
+                        errors.append(f"{project}.rasmap retains stale {stale}")
 
-        # Organize Documentation
-        RasEbfeModels._emit("\n[2/4] Organizing Documentation...")
-        docs_copied = 0
+            expected_by_group = {
+                "Geometry": {
+                    "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+                    "Land Cover Filename": r".\Land Cover\LandCover.hdf",
+                    "Terrain Filename": f".\\Terrain\\{contract['terrain']}",
+                },
+                f"Geometry/2D Flow Areas/{project}_2DArea": {
+                    "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+                    "Land Cover Filename": r".\Land Cover\LandCover.hdf",
+                    "Terrain Filename": f".\\Terrain\\{contract['terrain']}",
+                },
+                f"Geometry/2D Flow Areas/{project}_2DArea/Infiltration": {
+                    "Infiltration Filename": r".\Land Cover\Infiltration.hdf",
+                },
+            }
+            association_hdfs = [root / f"{project}.g01.hdf"]
+            association_hdfs.extend(
+                root / f"{project}.p{number:02d}.hdf"
+                for number in range(1, 8)
+            )
+            for hdf_path in association_hdfs:
+                if not hdf_path.is_file():
+                    continue
+                with h5py.File(hdf_path, "r") as hdf:
+                    for group_path, attributes in expected_by_group.items():
+                        if group_path not in hdf:
+                            errors.append(f"{hdf_path.name} lacks {group_path}")
+                            continue
+                        for attribute, expected in attributes.items():
+                            actual = hdf[group_path].attrs.get(attribute)
+                            hdf_association_attributes_checked += 1
+                            if actual is None or not (
+                                RasEbfeModels._upper_guadalupe_path_equivalent(
+                                    actual, expected
+                                )
+                            ):
+                                errors.append(
+                                    f"{hdf_path.name}:{group_path}@{attribute} "
+                                    "is absent or conflicting"
+                                )
 
-        if docs_source.exists():
-            for doc in docs_source.rglob('*'):
-                if doc.is_file():
-                    shutil.copy2(doc, folders['docs'] / doc.name)
-                    docs_copied += 1
+            for number in range(1, 8):
+                plan_path = root / f"{project}.p{number:02d}"
+                if plan_path.is_file():
+                    plan_text = plan_path.read_text(
+                        encoding="utf-8", errors="strict"
+                    )
+                    expected_bindings = (
+                        "Geom File=g01",
+                        f"Flow File=u{number:02d}",
+                    )
+                    if all(value in plan_text for value in expected_bindings):
+                        plan_bindings_checked += 1
+                    else:
+                        errors.append(
+                            f"{project}.p{number:02d} lacks its g01/u{number:02d} "
+                            "binding"
+                        )
 
-        RasEbfeModels._emit(f"  ✓ Organized {docs_copied} document(s)")
+                unsteady_path = root / f"{project}.u{number:02d}"
+                if unsteady_path.is_file():
+                    unsteady_text = unsteady_path.read_text(
+                        encoding="utf-8", errors="strict"
+                    )
+                    local_precipitation = "./DSS Inputs/UPGU_precip.dss"
+                    if local_precipitation in unsteady_text:
+                        local_precipitation_references_checked += 1
+                    else:
+                        errors.append(
+                            f"{project}.u{number:02d} lacks {local_precipitation}"
+                        )
+                    for stale in ("DSS_Input", "Land Classification", "RAS_Terrain"):
+                        if stale in unsteady_text:
+                            errors.append(
+                                f"{project}.u{number:02d} retains stale {stale}"
+                            )
 
-        # Create HMS Model README (no HMS for this pattern)
-        # Ensure directory exists (may be lost during large copy operations)
-        folders['hms'].mkdir(parents=True, exist_ok=True)
-        hms_readme = folders['hms'] / "README.md"
-        hms_readme.write_text("""# No HMS Model
+            if contract["depends_on"]:
+                upstream = contract["depends_on"][0]
+                expected = f"../{upstream}/{upstream}.dss"
+                for number in range(1, 8):
+                    unsteady_path = root / f"{project}.u{number:02d}"
+                    if not unsteady_path.is_file():
+                        continue
+                    text = unsteady_path.read_text(encoding="utf-8")
+                    if expected in text:
+                        upstream_dss_references_checked += 1
+                    else:
+                        errors.append(f"{project}.u{number:02d} lacks live {expected}")
+        return {
+            "active_hydraulic_reference_closure": not errors,
+            "project_count": 4,
+            "terrain_payload_files_checked": terrain_payload_files_checked,
+            "terrain_modification_groups_checked": (
+                terrain_modification_groups_checked
+            ),
+            "hdf_association_attributes_checked": (
+                hdf_association_attributes_checked
+            ),
+            "plan_bindings_checked": plan_bindings_checked,
+            "local_precipitation_references_checked": (
+                local_precipitation_references_checked
+            ),
+            "upstream_dss_references_checked": upstream_dss_references_checked,
+            "rasmap_hydraulic_references_checked": (
+                rasmap_hydraulic_references_checked
+            ),
+            "errors": errors,
+        }
 
-Upper Guadalupe uses HEC-RAS 6.3.1 which handles precipitation and losses
-internally. No separate HEC-HMS hydrologic model is included.
+    @staticmethod
+    def _upper_guadalupe_is_reusable(
+        output_folder: Path, source_root: Optional[Path] = None
+    ) -> bool:
+        """Return true only for a complete, archive-identity-bound assembly.
 
-Meteorology is configured within the HEC-RAS unsteady flow files (.u##).
-""", encoding='utf-8')
-
-        # CRITICAL: Correct ALL file paths in HEC-RAS files
-        RasEbfeModels._emit("\n[3/4] Correcting all file paths to relative references...")
-        dss_corrections = RasEbfeModels._correct_dss_paths(folders['ras'])
-        rasmap_corrections = RasEbfeModels._correct_rasmap_terrain_paths(folders['ras'])
-        standardization = RasEbfeModels._standardize_ras_model_tree(folders['ras'])
-        RasEbfeModels._emit(f"  ✓ Corrected {dss_corrections} DSS path(s)")
-        RasEbfeModels._emit(f"  ✓ Corrected {rasmap_corrections} terrain path(s)")
-        RasEbfeModels._emit(
-            "  ✓ Standardized "
-            f"{standardization.get('project_count', 0)} RAS project folder(s)"
-        )
-
-        # Validate DSS files
-        RasEbfeModels._emit("\n[4/4] Validating DSS files...")
-        dss_results = []
-        if validate_dss:
-            dss_results = RasEbfeModels._validate_dss_files(folders['ras'])
-
-        # Create model log
-        RasEbfeModels._create_upper_guadalupe_log(
-            folders['agent'],
-            downloaded_folder,
-            output_folder,
-            ras_files,
-            docs_copied,
-            dss_results
-        )
-
-        RasEbfeModels._emit(f"\n✓ Upper Guadalupe organized to: {output_folder}")
-        RasEbfeModels._emit(f"\nCascade: UPGU1 → UPGU2 → UPGU3 → UPGU4 (sequential execution required)")
-
-        return output_folder
+        Legacy extracted trees remain accepted as organization inputs for
+        backward compatibility, but they are deliberately never reusable:
+        aggregate file counts and sizes cannot prove that their contents are
+        unchanged. Reuse therefore requires the pinned source ZIP and sidecar.
+        """
+        try:
+            manifest = json.loads(
+                (Path(output_folder) / "agent" / "upper_guadalupe_manifest.json")
+                .read_text(encoding="utf-8")
+            )
+            associations = manifest["association_attributes"]
+            if (
+                manifest.get("huc8") != "12100201"
+                or manifest.get("validation_status") != "pending"
+                or manifest.get("hec_ras_executed") is not False
+                or associations.get("checked") != 224
+            ):
+                return False
+            audit = RasEbfeModels._audit_upper_guadalupe_workspace(
+                Path(output_folder) / "RAS Model"
+            )
+            if not audit["active_hydraulic_reference_closure"]:
+                return False
+            identity = manifest["source_identity"]
+            if identity.get("mode") == "legacy_extracted_tree":
+                return False
+            else:
+                requested = Path(source_root or Path(identity["path"]).parent)
+                archive = requested if requested.is_file() else requested / "12100201_Models.zip"
+                asset = RasEbfeModels._MODEL_REGISTRY["upper-guadalupe"]["extra"][
+                    "source_assets"
+                ][0]
+                RasEbfeModels._validate_source_asset_identity(
+                    archive,
+                    expected_size_bytes=asset["size_bytes"],
+                    expected_etag=asset["etag"],
+                )
+                sidecar = RasEbfeModels._source_sidecar_path(archive)
+                sidecar_data = json.loads(sidecar.read_text(encoding="utf-8"))
+                if sidecar_data.get("source") != asset["url"]:
+                    return False
+                if manifest.get("archive_member_counts") != {
+                    "files": 277,
+                    "directories": 23,
+                }:
+                    return False
+                source_files = [archive, sidecar]
+            current_inventory = {
+                "file_count": len(source_files),
+                "total_bytes": sum(path.stat().st_size for path in source_files),
+            }
+            if manifest.get("source_inventory") != current_inventory:
+                return False
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+        return True
 
     @staticmethod
     @log_call
@@ -5031,6 +6056,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
         592314/592315 and validated with HEC-RAS 6.6 geometry preprocessing.
         """
         import numpy as np
+
         from ras_commander.geom.GeomMesh import (
             _patch_text_seeds,
             _set_point_generation_data,
@@ -8799,6 +9825,7 @@ projects point to that single organized target. See
         """Extract projection WKT from local HDF/raster/projection assets."""
         try:
             from pyproj import CRS
+
             from ras_commander.hdf import HdfBase
         except Exception:
             return None
@@ -10418,105 +11445,6 @@ init_ras_project(project, "5.0.7")
 
 **Organization Status**: {'✓ Complete' if ras_extracted else '⚠️ Partial'}
 **See Also**: examples/951_ebfe_north_galveston_bay.ipynb
-"""
-        (agent_folder / "model_log.md").write_text(log_content, encoding='utf-8')
-
-    @staticmethod
-    def _create_upper_guadalupe_log(
-        agent_folder: Path,
-        source: Path,
-        dest: Path,
-        ras_files: int,
-        docs_count: int,
-        dss_results: List[Dict]
-    ):
-        """Create agent/model_log.md for Upper Guadalupe."""
-        agent_folder.mkdir(parents=True, exist_ok=True)
-        dss_section = ""
-        if dss_results:
-            total_pathnames = sum(r.get('total_pathnames', 0) for r in dss_results)
-            dss_section = f"""
-### DSS Validation
-**Files**: {len(dss_results)}
-**Total Pathnames**: {total_pathnames:,}
-**Validation**: {'✓ All valid' if all(r.get('valid', False) for r in dss_results) else '⚠️ Some invalid'}
-
-**Files Validated**:
-{chr(10).join(f"- {r['file']}: {r['total_pathnames']:,} pathnames" for r in dss_results)}
-
-### DSS Path Corrections
-**Purpose**: eBFE models have incorrect absolute DSS paths from original system.
-**Action**: All DSS File= references updated to relative paths from project folder.
-**Result**: Model will open in HEC-RAS without "DSS path needs correction" errors.
-"""
-
-        log_content = f"""# Agent Work Log - Upper Guadalupe
-
-**Model**: Upper Guadalupe (12100201)
-**Pattern**: 3b - Cascaded watershed models
-**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Generated Function**: RasEbfeModels.organize_upper_guadalupe()
-
-## Organization Summary
-
-**Source**: {source}
-**Output**: {dest}
-**Files Organized**: {ras_files}
-
-### Structure Created
-- RAS Model/ (4 cascaded models: UPGU1-4, {ras_files} files, ~56 GB)
-- Spatial Data/ (empty - terrain in model folders)
-- Documentation/ ({docs_count} files)
-- HMS Model/ (README - no HMS for this pattern)
-- agent/model_log.md (this file)
-
-### Critical Fixes Applied
-
-**1. Output/ Folder Integration**:
-- eBFE separates Output/ (pre-run HDF files) from Input/ (project files)
-- **Fix**: Moved all Output/*.hdf files INTO Input/ folder (project folder)
-- **Result**: Pre-computed results now accessible in HEC-RAS project
-- **Benefit**: Can view expected runtime from pre-run results
-
-**2. Terrain/ Integration**:
-- eBFE places Terrain/ as sibling to Input/ (breaks model references)
-- **Fix**: Moved Terrain/ INTO Input/ folder (project folder)
-- **Result**: HEC-RAS can find terrain files, model runs without errors
-- **Benefit**: .rasmap terrain references now valid
-
-**3. DSS Path Corrections**:
-- eBFE has absolute DSS paths from original system (C:\\eBFE\\...)
-- **Fix**: Updated all "DSS File=" references to relative paths
-- **Result**: No "DSS path needs correction" GUI popups
-- **Benefit**: Automation-friendly, no manual GUI fixes needed
-{dss_section}
-## Cascade Structure
-
-**Watersheds**: UPGU1 → UPGU2 → UPGU3 → UPGU4
-**Execution**: Sequential (upstream to downstream)
-**Flow Transfer**: Via DSS boundary conditions
-
-**Each Model**:
-- 7 plans (0.1%, 0.2%, 1%, 2%, 4%, 10%, special)
-- Large terrain (2.8-4.9 GB per model)
-- Input/ and Output/ folders
-
-## Usage
-
-```python
-from ras_commander import init_ras_project, RasCmdr, RasPrj
-from pathlib import Path
-
-# Execute cascade
-for model in ['UPGU1', 'UPGU2', 'UPGU3', 'UPGU4']:
-    folder = Path(r"{dest / 'RAS Model'}") / model / "Input"
-    ras_obj = RasPrj()
-    init_ras_project(folder, "6.5", ras_object=ras_obj)
-    RasCmdr.compute_plan("01", ras_object=ras_obj, num_cores=4)
-```
-
-**Organization Status**: ✓ Complete
-**See Also**: examples/952_ebfe_upper_guadalupe_cascade.ipynb
 """
         (agent_folder / "model_log.md").write_text(log_content, encoding='utf-8')
 

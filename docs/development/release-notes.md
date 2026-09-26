@@ -2,7 +2,33 @@
 
 ## Version History
 
-### Unreleased
+### v0.102.1 (September 2026)
+
+**FEMA eBFE Source Library and Example Dashboard**
+
+- Add fail-closed source adapters for Austin–Oyster (12040205), Upper
+  Guadalupe (12100201), Pedernales (12090206), Cibolo (12100304), and Medina
+  (12100302), including immutable source identity checks, deterministic
+  delivery repairs, reusable-output audits, and study-specific Records of
+  Deficiencies (#373, #377, #378).
+- Add exact API-derived model polygons and linked source records to the example
+  projects dashboard. Pedernales is represented by the union of all 530 active
+  1D model footprints; Upper Guadalupe and Medina retain their individual 2D
+  submodel extents rather than watershed bounding boxes.
+- Record reviewed runtime qualification without overstating completed results:
+  all 530 Pedernales plan-01 runs passed; Cibolo plan 14 and four source-complete
+  Medina projects reached owned unsteady-solver startup; Upper Medina
+  Headwaters remains blocked by its undelivered modified terrain.
+- Preserve fresh organizer manifests as pending until those exact organized
+  copies run, while keeping durable isolated-copy qualification in the source
+  registry. Large 2D runs use fixed local execution copies while authoritative
+  sources and receipts remain in the CEWS data library.
+
+**HEC-RAS 5.0.7 Unsteady Startup Detection**
+
+- Recognize `RasUnsteady64.exe` and its extensionless process name as owned
+  unsteady-solver startup signals while retaining exact process ownership,
+  fresh-artifact, and quiescence checks (#373).
 
 **Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
 
