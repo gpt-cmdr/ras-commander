@@ -36,6 +36,27 @@ Global gridded meteorology starts in HEC-RAS 6.0. The separate uniform-per-area 
 
 Qualification applies to an exact release and input route. Prerelease versions do not inherit stable-release qualification. See the [version matrix](../development/gridded-precipitation-version-matrix.md) for actual runtime evidence and host limitations.
 
+## Required meteorology modes
+
+HEC-RAS gridded precipitation files require explicit baseline mode records for
+evapotranspiration, air density, and air pressure. A missing record can make
+HEC-RAS report `Error processing event conditions` while the command-line
+process still exits with code zero. Every gridded precipitation setter now
+preserves an existing nonblank choice and completes only an absent or blank
+record with the RAS-authored defaults:
+
+```text
+Met BC=Evapotranspiration|Mode=None
+Met BC=Air Density|Mode=Constant
+Met BC=Air Pressure|Mode=Constant
+```
+
+The API also keeps the complete `Met BC=` block contiguous and immediately
+after the top-level meteorology headers. This applies equally to imported
+raster, GeoTIFF/GRIB translation, and DSS configuration. It does not remove the
+need to inspect HEC-RAS runtime messages: a zero exit code alone is not proof
+that event conditions were accepted.
+
 For NetCDF, the default `ras_commander` route (also named `native_hdf`)
 qualifies the library-authored native HDF consumed by preprocessing. The
 `native` route means HEC-RAS itself importing the GDAL file; its qualification
@@ -177,7 +198,7 @@ plan_hdf = str(RasPlan.get_plan_path("06", ras_object=ras)) + ".hdf"
 print(HdfResultsPlan.get_compute_messages_hdf_only(plan_hdf))
 ```
 
-The imported unsteady HDF is authoring evidence. The temporary plan HDF is the precompute source of truth, and the completed final plan HDF is the post-compute source of truth. Do not manually relocate datasets. Compare preprocessed interval depths/timestamps against intended forcing in project units, then inspect final per-cell rainfall and hydraulic response. The assertions above are basic wet-event checks, not a volume or coverage proof. Manual review of all runtime messages and rainfall/result maps remains advisable.
+The imported unsteady HDF is authoring evidence. The temporary plan HDF is the precompute source of truth, and the completed final plan HDF is the post-compute source of truth. Do not manually relocate datasets. Compare preprocessed interval depths/timestamps against intended forcing in project units, then inspect final per-cell rainfall and hydraulic response. The assertions above are basic wet-event checks, not a volume or coverage proof. Manual review of all runtime messages and rainfall/result maps remains advisable, including a search for `Error processing event conditions` even when the HEC-RAS process returns zero.
 
 ## Examples and scope
 

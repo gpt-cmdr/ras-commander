@@ -32,6 +32,16 @@
 
 **Version-Aware GeoTIFF/GRIB Precipitation Ingestion**
 
+- Complete the HEC-RAS gridded-meteorology text block for every imported-raster,
+  GeoTIFF/GRIB, and DSS authoring route (#324). Existing nonblank settings stay
+  authoritative; absent or blank evapotranspiration, air-density, and
+  air-pressure modes receive the RAS-authored defaults, and all `Met BC=`
+  records remain contiguous after the top-level meteorology headers. This
+  prevents HEC-RAS 7.0 from reporting `Error processing event conditions`
+  while returning a misleading zero process exit code. Requalify the exact
+  patched route end to end on Windows with HEC-RAS 7.0 and on CLB07/Wine 11
+  with HEC-RAS 6.6, including temporary-HDF rainfall, completed final rainfall
+  and hydraulics, and runtime-message review.
 - Correct the translated NetCDF GeoTransform to GDAL ordering, with an
   independent rasterio reopen check for transform, CRS, extent, and values.
 - Preserve AORC's first hourly accumulation in `create_storm_plans()` by

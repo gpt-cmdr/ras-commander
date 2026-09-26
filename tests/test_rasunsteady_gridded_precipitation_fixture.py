@@ -134,6 +134,12 @@ def test_set_gridded_precipitation_matches_gui_imported_u01(tmp_path):
         "Met BC=Precipitation|Gridded GDAL Group=APCP_surface\r\n",
         "",
     )
+    for required_mode in (
+        "Met BC=Evapotranspiration|Mode=None\r\n",
+        "Met BC=Air Density|Mode=Constant\r\n",
+        "Met BC=Air Pressure|Mode=Constant\r\n",
+    ):
+        starting_text = starting_text.replace(required_mode, "")
 
     unsteady_path = project_dir / "DavisStormSystem.u01"
     unsteady_path.write_bytes(starting_text.encode("utf-8"))

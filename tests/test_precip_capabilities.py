@@ -124,6 +124,15 @@ def test_route_qualification_does_not_overstate_format_evidence():
     assert capabilities.qualification_for("grib", route="native") == "documented"
 
 
+def test_hec_ras_70_geotiff_translation_has_exact_windows_qualification():
+    capabilities = PrecipCapabilities.for_version("7.0")
+
+    assert capabilities.qualification_for("geotiff") == "qualified_windows"
+    assert PrecipCapabilities.for_version("7.0.1").qualification_for(
+        "geotiff"
+    ) == "documented"
+
+
 @pytest.mark.parametrize("version", ["6.6 Beta 1", "7.0 Beta 1"])
 def test_prereleases_never_inherit_stable_runtime_qualification(version):
     capabilities = PrecipCapabilities.for_version(version)

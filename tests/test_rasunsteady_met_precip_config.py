@@ -616,6 +616,9 @@ def test_set_met_precipitation_mode_creates_precipitation_block_from_scratch(tmp
     assert "Met BC=Precipitation|Mode=Gridded" in lines
     assert "Met BC=Precipitation|Gridded Source=GDAL Raster File(s)" in lines
     assert r"Met BC=Precipitation|Gridded GDAL Filename=.\Precipitation\aorc.nc" in lines
+    assert "Met BC=Evapotranspiration|Mode=None" in lines
+    assert "Met BC=Air Density|Mode=Constant" in lines
+    assert "Met BC=Air Pressure|Mode=Constant" in lines
 
     config = RasUnsteady.get_met_precipitation_config(unsteady_file)
     assert config["mode"] == "Gridded"

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-09-25",
+  "as_of": "2026-09-26",
   "scope": "HEC-RAS global gridded meteorological precipitation",
   "status_vocabulary": [
     "Supported and qualified",
@@ -47,6 +47,21 @@
     "completion_verified": true,
     "evidence": "Fresh notebook 729 execution; temporary-HDF assertions before compute, completed final HDF, three reviewed figures. Separate opt-in RasExamples test also passed."
   },
+  "windows_geotiff_qualification_7_0": {
+    "status": "executed",
+    "hec_ras_version": "7.0",
+    "platform": "Windows",
+    "route": "GeoTIFF -> cached NetCDF plus native HDF -> preprocessing -> compute",
+    "final_hdf_sha256": "38860520816db4dc06c4837221fc6732b246c52e4d4996e7b5c7fea5f3cd8bfd",
+    "solver_rainfall_shape": [4, 408],
+    "cumulative_precipitation_maximum_inches": 0.11574575304985046,
+    "final_cumulative_nonzero_cells": 18066,
+    "hydraulic_depth_maximum_feet": 9.718265533447266,
+    "final_hydraulic_nonzero_cells": 7576,
+    "completion_verified": true,
+    "event_condition_error": false,
+    "evidence": "Opt-in RasExamples qualification test on 2026-09-26; required meteorology-mode completion, temporary-HDF assertions, completed final HDF, precipitation messages, rainfall, and hydraulic response verified."
+  },
   "wine_geotiff_qualification": {
     "status": "executed",
     "platform": "CLB07 CT212 / Wine 11",
@@ -88,6 +103,17 @@
       "final_cumulative_nonzero_cells": 18066,
       "hydraulic_depth_maximum": 9.718265533447266,
       "final_hydraulic_nonzero_cells": 7576
+    },
+    "issue_324_requalification": {
+      "date": "2026-09-26",
+      "receipt_sha256": "ba36c065802fe46edba4292076e3a83a1df3c92556af14c4fd62926d8cde502e",
+      "final_hdf_sha256": "278115f26937d64810faa6175229a502e2fb90dbb8c03efe6d525879bf91928b",
+      "preprocess_elapsed_seconds": 3.5959761142730713,
+      "required_modes_present": true,
+      "met_bc_block_contiguous": true,
+      "completion_verified": true,
+      "event_condition_error": false,
+      "final_metrics_match_prior_qualification": true
     },
     "scope_note": "Qualifies the ras-commander translation feature snapshot on Wine 11 / HEC-RAS 6.6 only; it is not a direct-vendor or cross-version GeoTIFF claim."
   },

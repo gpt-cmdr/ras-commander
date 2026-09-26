@@ -225,11 +225,14 @@ class PrecipCapabilities:
         grib_translation_qualification: QualificationStatus = (
             "historical_beta" if prerelease else "documented"
         )
-        geotiff_qualification: QualificationStatus = (
-            "historical_beta" if prerelease else (
-                "qualified_windows_and_wine" if normalized == "6.6" else "documented"
-            )
-        )
+        if prerelease:
+            geotiff_qualification: QualificationStatus = "historical_beta"
+        elif normalized == "6.6":
+            geotiff_qualification = "qualified_windows_and_wine"
+        elif normalized == "7.0":
+            geotiff_qualification = "qualified_windows"
+        else:
+            geotiff_qualification = "documented"
 
         notes.append(
             "WPC QPF GRIB2 compression is not accepted natively through 7.0.1; "
