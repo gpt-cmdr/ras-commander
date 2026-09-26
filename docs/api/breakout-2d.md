@@ -166,7 +166,11 @@ flow boundary, auditing native external-face ownership, and classifying
 intersecting NextGen flowpaths. It then sums parent face flux at both child
 cuts, derives an upstream flow envelope and preliminary downstream stage-flow
 relationship, creates and computes one plan per 1,000-cfs ladder step, and
-retains a comparable maximum-inundation map for every result.
+retains a comparable maximum-inundation map for every result. Each 48-hour
+plan ramps to its target in four hours and holds a 44-hour plateau. The
+notebook maps the selected parent faces with peak face-flux magnitude and
+direction arrows, plots the imposed hydrographs, and reports final 12-hour
+water-surface stability diagnostics with the computation summary.
 
 That reviewed downstream workflow must:
 

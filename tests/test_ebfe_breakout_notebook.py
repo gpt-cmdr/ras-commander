@@ -47,6 +47,11 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
     assert "flow_ladder" in source
     assert "rating_curve" in source
     assert "depth_results" in source
+    assert '"face_flux_cfs"' in source
+    assert "44-hour plateau" in source
+    assert "RasPlan.update_simulation_date(" in source
+    assert '"final_12h_ws_range_ft"' in source
+    assert '"final_1h_ws_change_ft"' in source
     assert "manual diagnostics" in source
 
 
@@ -61,4 +66,4 @@ def test_austin_bayou_breakout_notebook_is_executed_clean_and_visual():
         output.output_type == "display_data"
         and "image/png" in output.get("data", {})
         for output in outputs
-    ) >= 6
+    ) >= 8
