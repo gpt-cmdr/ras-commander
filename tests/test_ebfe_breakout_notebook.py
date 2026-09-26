@@ -47,6 +47,11 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
     assert "flow_ladder" in source
     assert "rating_curve" in source
     assert "depth_results" in source
+    assert "selected_reach = substring(" in source
+    assert "parent_depth = HdfResultsMesh.get_mesh_max_depth(" in source
+    assert "minimum_domain" in source
+    assert "reach_fully_contained" in source
+    assert "parent_envelope_contained" in source
     assert '"face_flux_cfs"' in source
     assert "44-hour plateau" in source
     assert "RasPlan.update_simulation_date(" in source
@@ -66,4 +71,4 @@ def test_austin_bayou_breakout_notebook_is_executed_clean_and_visual():
         output.output_type == "display_data"
         and "image/png" in output.get("data", {})
         for output in outputs
-    ) >= 8
+    ) >= 9

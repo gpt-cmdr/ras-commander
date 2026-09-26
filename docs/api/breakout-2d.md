@@ -163,7 +163,11 @@ hydraulic forcing from parent face flow. The executed Austin Bayou SH 35
 continues from a reviewed compact child and demonstrates the separate APIs for
 resetting its two geometry-backed boundary locations, writing a wide external
 flow boundary, auditing native external-face ownership, and classifying
-intersecting NextGen flowpaths. It then sums parent face flux at both child
+intersecting NextGen flowpaths. It explicitly selects a 1.5-mile reach from
+the longer NextGen edge, derives a minimum domain envelope from connected wet
+parent-result samples and a flat-ended reach corridor, and proves that the
+implemented 2D domain contains both the complete selected reach and that
+hydraulic evidence envelope. It then sums parent face flux at both child
 cuts, derives an upstream flow envelope and preliminary downstream stage-flow
 relationship, creates and computes one plan per 1,000-cfs ladder step, and
 retains a comparable maximum-inundation map for every result. Each 48-hour
