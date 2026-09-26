@@ -42,6 +42,11 @@ Production Workflow (generate)
    - Tier 3: FacePerimeterConnectionError → remove bad perimeter vertices
    - Tier 4: Ratio escalation [0.05 → 0.10 → 0.15 → 0.25]
    - Tier 5: Douglas-Peucker perimeter simplification (last resort)
+   - Before accepting a Complete mesh: rebuild it as HEC-RAS preprocessing
+     will (breaklines only, minimum face-length ratio 0.05); if that replica
+     exceeds 8 faces, add TryAutoFix midpoint seeds and retry, falling back
+     to the last completed mesh (with a warning) if the retry does not
+     complete.
 8. **Extract cell centers** — geom.Save() + h5py read (fast), or .NET Cell(i)
    iteration (slow fallback).
 9. **Write .g01 text** — _patch_text_seeds() writes cell centers as the sole
@@ -130,7 +135,7 @@ MAX_FACES_PER_CELL = 8
 # escalates to is not persisted to the geometry.  Verified by rebuilding
 # rejected meshes: this reproduces HEC-RAS's "cell(s) with more than 8 sides"
 # count exactly.
-RAS_PREPROCESS_MIN_FACE_RATIO = 0.05
+RAS_PREPROCESS_MIN_FACE_RATIO = 0.05  # also the first rung of _RATIO_LADDER
 PERIMETER_NEAR_DUPLICATE_TOL = 1e-6
 _RATIO_LADDER = [0.05, 0.10, 0.15, 0.25]
 _GEOMETRY_ASSOCIATION_FIELDS = GEOMETRY_ASSOCIATION_FIELDS
@@ -425,8 +430,8 @@ def _build_ras_preprocess_breaklines(d2fa, ns: dict):
             if Polyline.IsValidPolyline(bl):
                 combined.AddFeature(bl)
                 n += 1
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Breaklines for the preprocessing replica read partially: %s", exc)
     return combined.CopyToMultiPartPolyline() if n else None
 
 
@@ -4652,6 +4657,9 @@ class GeomMesh:
                  the exact authored perimeter
                - Tier 1: DuplicatePoints -> remove duplicate seed points
                - Tier 2: MaxFaces -> add midpoint seeds (before ratio escalation)
+               - Before acceptance: HEC-RAS preprocessing replica
+                 (breaklines only, ratio 0.05) -> midpoint seeds; fall back
+                 to the last completed mesh if the retry does not complete
                - Tier 3: Perimeter errors -> remove bad vertices
                - Tier 4: Escalate MinFaceLengthRatio [0.05 -> 0.25]
                - Tier 5: Douglas-Peucker perimeter simplification (last resort)
@@ -4948,6 +4956,16 @@ class GeomMesh:
                 state_name = str(mesh.MeshCompletionState)
                 result.iterations = iteration + 1
 
+                # Guarded seeds that no longer mesh cleanly are never handed to
+                # the other fix tiers (some of them end the loop); return to
+                # the last mesh RasMapperLib completed instead.
+                if guard_fallback is not None and state_val != complete_val:
+                    current_seeds_pm, current_perim, ratio_idx = guard_fallback
+                    guard_fallback = None
+                    replica_attempts = MAX_MIDPOINT_ATTEMPTS
+                    result.fixes_applied.append("RasReplica:fallback-to-completed-mesh")
+                    continue
+
                 logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1} result: "
                     f"{state_name} "
@@ -4969,7 +4987,8 @@ class GeomMesh:
                     if (
                         replica_state == max_faces_val
                         and replica_attempts < MAX_MIDPOINT_ATTEMPTS
-                        and iteration < max_iterations - 1
+                        # Leave a pass for the fix and one for a fallback.
+                        and iteration < max_iterations - 2
                     ):
                         seeds_list = [
                             current_seeds_pm[i]

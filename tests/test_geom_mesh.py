@@ -2888,7 +2888,7 @@ class TestRasPreprocessReplicaGuard:
     """generate() rebuilds the mesh as HEC-RAS preprocessing will before accepting it."""
 
     @staticmethod
-    def _replica_sequence(monkeypatch, states):
+    def _replica_sequence(monkeypatch, states, primary_after_guard=None):
         """_compute_mesh returns Complete for generate's own mesh; the replica
         (breaklines-only layer, ratio 0.05) returns the given states in turn."""
         calls = {"replica": 0, "autofix": 0}
@@ -2900,9 +2900,15 @@ class TestRasPreprocessReplicaGuard:
 
         def compute(perim, seeds, breaklines, ratio, ns):
             if breaklines == "ras_breaklines":
+                if states is None:
+                    raise RuntimeError("replica unavailable")
                 state = states[min(calls["replica"], len(states) - 1)]
                 calls["replica"] += 1
                 return ReplicaMesh(state)
+            calls["primary"] = calls.get("primary", 0) + 1
+            if primary_after_guard is not None and calls["autofix"] and not calls.get("fell_back"):
+                calls["fell_back"] = True
+                return ReplicaMesh(primary_after_guard)
             return FakeMesh()
 
         def autofix(mesh, seeds_list, ns, **kwargs):
@@ -2933,6 +2939,7 @@ class TestRasPreprocessReplicaGuard:
         assert result.ok
         assert calls["autofix"] == 1
         assert "RasReplica:MaxFaces:midpoints(+1pts)" in result.fixes_applied
+        assert "RasReplica:fallback-to-completed-mesh" not in result.fixes_applied
 
     def test_clean_replica_changes_nothing(self, monkeypatch, breakline_geom_text):
         _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
@@ -2944,13 +2951,42 @@ class TestRasPreprocessReplicaGuard:
         assert calls["autofix"] == 0
         assert not any(fix.startswith("RasReplica") for fix in result.fixes_applied)
 
-    def test_guard_never_fails_a_mesh_that_completed(self, monkeypatch, breakline_geom_text):
-        """A replica that never clears falls back to the completed mesh on the last pass."""
+    def test_replica_that_never_clears_is_accepted_with_a_warning(
+        self, monkeypatch, breakline_geom_text
+    ):
         _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
         self._replica_sequence(monkeypatch, [FakeMeshState(2, "MaxFacesPerCellExceeded")])
 
         result = GeomMesh.generate(breakline_geom_text, max_iterations=3)
 
         assert result.ok
-        assert "RasReplica:fallback-to-completed-mesh" in result.fixes_applied
         assert any(fix.startswith("RasReplica:unresolved") for fix in result.fixes_applied)
+
+    def test_guarded_seeds_that_stop_meshing_fall_back_to_the_completed_mesh(
+        self, monkeypatch, breakline_geom_text
+    ):
+        """The guard never turns a mesh that completed into a failure."""
+        _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+        calls = self._replica_sequence(
+            monkeypatch,
+            [FakeMeshState(2, "MaxFacesPerCellExceeded")],
+            primary_after_guard=FakeMeshState(5, "DuplicatePoints"),
+        )
+
+        result = GeomMesh.generate(breakline_geom_text)
+
+        assert result.ok
+        assert calls["fell_back"]
+        assert "RasReplica:fallback-to-completed-mesh" in result.fixes_applied
+        text = breakline_geom_text.read_text(encoding="utf-8")
+        assert "Storage Area 2D Points= 2 " in text  # the original seeds, not the guarded set
+
+    def test_unavailable_replica_leaves_generate_unchanged(self, monkeypatch, breakline_geom_text):
+        _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+        calls = self._replica_sequence(monkeypatch, None)
+
+        result = GeomMesh.generate(breakline_geom_text)
+
+        assert result.ok
+        assert calls["autofix"] == 0
+        assert not any(fix.startswith("RasReplica") for fix in result.fixes_applied)
