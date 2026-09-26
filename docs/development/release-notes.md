@@ -2,6 +2,27 @@
 
 ## Version History
 
+### v0.103.0 (September 2026)
+
+**Portable Execution Contracts and Request Identity**
+
+- Run both steady and unsteady 1D/2D plans through the scheduler-neutral
+  portable execution contract, with isolated runtime copies, preprocessing
+  evidence, hydraulic validation, Docker/Wine execution, and Slurm transport
+  (#387).
+- Preserve the retained request's optional-field omissions when binding new
+  execution receipts, while normalizing supplied paths, plan identifiers,
+  numeric tolerances, and nested stored-map options into their portable wire
+  representation (#310, #389).
+- Expose separate `payload_sha256` and `specification_sha256` identities for
+  retained-evidence authentication and conservative semantic comparisons.
+  Receipt validation remains compatible with all earlier v1 normalized
+  digests, including integer tolerance spellings.
+- Credit Harris Bienn for identifying the retained-request identity defect and
+  supplying the original correction and regression case. The generalized
+  upstream implementation deliberately remains independent of any particular
+  forecasting application or orchestration policy.
+
 ### v0.102.1 (September 2026)
 
 **FEMA eBFE Source Library and Example Dashboard**
