@@ -4244,6 +4244,8 @@ notebooks:
   est_runtime: null
   data_project: AustinBayouSH35Firehose
   functions_used:
+  - GeomBcLines.add_bc_lines
+  - GeomBcLines.delete_bc_line
   - HdfBndry.get_bc_external_faces
   - HdfBndry.get_bc_lines
   - HdfMesh.get_mesh_areas
@@ -4259,8 +4261,8 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
-  executed_cells: 8
+  code_cells: 10
+  executed_cells: 9
 - id: 960_cloud_native_geometry_export
   filename: 960_cloud_native_geometry_export.ipynb
   title: Cloud-Native Geometry Export with ras2cng

@@ -19,6 +19,8 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
     required_calls = (
         'RasExamples.extract_project(',
         'HdfBndry.get_bc_external_faces(',
+        'GeomBcLines.delete_bc_line(',
+        'GeomBcLines.add_bc_lines(',
         'RasUnsteady.replace_2d_boundary_locations(',
         'RasUnsteady.set_boundary_inline_hydrograph(',
         'RasUnsteady.set_normal_depth_boundary(',
@@ -29,6 +31,11 @@ def test_austin_bayou_breakout_notebook_covers_complete_workflow():
     assert all(call in source for call in required_calls)
     assert "AustinBayouSH35Firehose" in source
     assert "USGS_08078400.shp" in source
+    assert "Inflow_US" in source
+    assert 'bc_line="Emitter1"' not in source
+    assert "David Maidement" not in source
+    assert "Andy Carter" not in source
+    assert "Jacob" not in source
     assert "manual diagnostics" in source
 
 
