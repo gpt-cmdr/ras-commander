@@ -44,7 +44,7 @@ remains documentation-backed. `netcdf_hdf_qualification` and
 receipt can mean either a blocked qualification run or an unresolved version;
 inspect `hec_ras_version` and the accompanying warnings.
 
-WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
+WPC QPF GRIB2 compression is not accepted by native HEC-RAS import through 7.0.1. Use DSS translation as demonstrated in notebook 926. `qpkit 0.1.0`'s `QPFGridOptions.extents` path produced an undersized 2-by-2 grid during qualification, so the notebook crops each source GRIB in its native projection, reopens and verifies it, and calls `kit.qpf_dss.write()` without `extents`. Generic GRIB ingestion requires an installed GDAL reader capable of decoding the selected bands and a grid meeting the requirements below.
 
 ## Direct GeoTIFF and GRIB ingestion
 
@@ -70,6 +70,34 @@ These routes require north-up, unrotated, projected square cells and matching gr
 
 Use `source_timezone` and `model_timezone` together when converting clocks; otherwise supply timestamps already on the model clock. Cache reuse checks source bytes, interpretation settings, values, time, coordinates, projection, transform, and units. Keep the returned NetCDF in the model package for subsequent HEC-RAS saves/reimports.
 
+## MRMS hourly QPE
+
+`PrecipMrms.to_ras_netcdf()` writes the safe cumulative contract for hourly
+MRMS QPE. It prepends a zero cumulative frame one interval before the first
+valid time so HEC-RAS does not use the first nonzero amount as its datum. Pass
+`end_time` to repeat the final cumulative surface through the plan end:
+
+```python
+from ras_commander.precip import PrecipMrms
+
+mrms_netcdf = PrecipMrms.to_ras_netcdf(
+    mrms_stack,
+    ras.project_folder / "Precipitation" / "mrms_qpe.nc",
+    first_timestep_hours=1.0,
+    end_time=simulation_end,
+)
+RasUnsteady.set_gridded_precipitation(
+    "03", mrms_netcdf, dataset_name="APCP_surface",
+    units="mm", value_type="cumulative", ras_object=ras,
+)
+```
+
+MRMS QPE valid times are interval-ending. A 10:00 QPE frame represents the
+09:00–10:00 interval, so a simulation intended to include that frame must
+start no later than 09:00. Notebook 924 demonstrates and verifies this timing
+against the temporary and completed plan HDFs. Starting the plan at 10:00
+correctly excludes that pre-simulation interval.
+
 ## AORC historical rainfall
 
 Use the implemented `PrecipAorc.download()` API with WGS84 bounds or a supported extent input. Earlier documentation incorrectly advertised `retrieve_aorc_data()`, `extract_by_watershed()`, and `aggregate_to_interval()`; these are not public methods.
@@ -93,9 +121,9 @@ RasUnsteady.set_gridded_precipitation(
 )
 ```
 
-AORC precipitation is the one-hour accumulation ending at its timestamp, in kg/m² liquid equivalent (numerically mm of water). See [NOAA's AORC methods, section 5.1](https://www.weather.gov/media/owp/operations/aorc_v1_1_methods.pdf). `PrecipAorc.create_storm_plans()` uses these explicit semantics for cloned storm plans. Check timestamp continuity and source coverage; a gap is not a zero-rainfall observation. The first timestamp above represents 10:00–11:00, so a corresponding plan should start at 10:00.
+AORC precipitation is the one-hour accumulation ending at its timestamp, in kg/m² liquid equivalent (numerically mm of water). See [NOAA's AORC methods, section 5.1](https://www.weather.gov/media/owp/operations/aorc_v1_1_methods.pdf). `PrecipAorc.download()` preserves the caller's hour-level bounds instead of expanding them to whole calendar days. `PrecipAorc.create_storm_plans()` uses these explicit semantics for cloned storm plans and requests its first AORC frame at `sim_start + 1 hour`, allowing the HDF authoring path to place a zero cumulative baseline at `sim_start`. Check timestamp continuity and source coverage; a gap is not a zero-rainfall observation. The first timestamp above represents 10:00–11:00, so a corresponding plan should start at 10:00.
 
-Use `PrecipAorc.get_storm_catalog()` and `create_storm_plans()` for catalog workflows (notebooks 900 and 901). Select the event, resolution, and model assumptions using source documentation and project requirements.
+Use `PrecipAorc.get_storm_catalog()` and `create_storm_plans()` for catalog workflows (notebooks 900 and 901). Notebook 900 executes one deterministic catalog event and verifies the exact forcing window, durable import HDF, temporary plan HDF, completed cell precipitation, hydraulic output, runtime messages, and BCO mass balance. Select the event, resolution, and model assumptions using source documentation and project requirements.
 
 ## Interval semantics
 
@@ -156,12 +184,14 @@ The imported unsteady HDF is authoring evidence. The temporary plan HDF is the p
 | Notebook | Demonstration |
 |---|---|
 | 727 | Atlas 14 spatial/uniform comparison, figures, precompute checks, compute diagnostics, hydraulic results |
+| 728 | Model-covering DSS derivative with source-hash preservation, three explicit dry intervals, temporary/final HDF plateau checks, HEC-RAS 7.0 compute, and hydraulic figure |
 | 729 | Direct GeoTIFF on RasExamples, temporary HDF, final rainfall/hydraulic response, figures |
 | 900 / 901 | AORC catalog and plan creation with precompute checks |
-| 914 | Historical AORC event setup and modeled/observed comparison |
-| 916 | HRRR DSS, baseline/forecast compute, rainfall and hydraulic comparison |
-| 917 | MRMS-derived uniform boundary hyetograph; not global gridded qualification |
+| 914 | Archived 48-hour AORC event with source-to-temporary/final-HDF checks, hydraulic diagnostics, and a timezone-correct USGS stage comparison; explicitly diagnostic rather than calibration validation because historical boundaries and operations are not bundled |
+| 915 | Executed forecast orchestration/readiness guide with a timezone-explicit cycle manifest, current API-signature checks, and a visual audit of the canonical HRRR, STOFS-3D, MRMS, and WPC artifacts; not independent format/version qualification |
+| 916 | Archived HRRR 15Z forecast to 18 native DSS grids; no-rain/forecast compute, temporary and final HDF forcing checks, active-cell spatial comparison, hydraulic response, convergence map, and manual diagnostics |
+| 917 | Two archived MRMS events: spatial DSS catalog/map inspection followed by an intentionally area-averaged precipitation-boundary comparison, exact final-HDF forcing checks, runtime diagnostics, hydraulic/pump figures, and animations; not global gridded qualification |
 | 924 | MRMS NetCDF rain-on-grid with precompute and final model checks |
-| 926 | WPC acquisition, DSS catalog and source figure; model runtime qualification is separate |
+| 926 | Complete current WPC cycle, verified native-projection crop, 28-grid DSS catalog, objective wettest 24-hour window, temporary/final HDF forcing checks, no-rain/event HEC-RAS 7.0 runs, hydraulic/convergence figures, and manual diagnostics |
 
 Notebook 722 directs readers to the implemented Atlas 14 workflow instead of obsolete placeholders and raw meteorology edits. Updated source cells do not imply every live product was rerun on every HEC-RAS release; the version matrix records actual evidence.

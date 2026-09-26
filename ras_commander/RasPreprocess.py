@@ -484,6 +484,41 @@ class RasPreprocess:
                     elapsed_seconds=time.time() - start_time,
                 )
 
+        # Ras.exe is a GUI-subsystem launcher. On some HEC-RAS 7.x runs the
+        # Python-owned launcher exits after spawning CompletePreProcess even
+        # though an exact-plan Ras.exe/RasProcess.exe tree is still alive. In
+        # that state ``process.poll()`` cannot prove quiescence, and the next
+        # compute correctly refuses to replace artifacts that may still be
+        # open. Clean only processes from this launch window whose command
+        # lines contain the exact project+plan pair or the exact temporary HDF.
+        stopped_residue, surviving_residue = (
+            RasPreprocess._terminate_exact_preprocess_residue(
+                project_file=prj_file,
+                plan_file=plan_file,
+                tmp_hdf=tmp_hdf,
+                started_at=start_time,
+            )
+        )
+        if stopped_residue:
+            logger.info(
+                "Stopped detached HEC-RAS preprocessing residue for plan %s: %s",
+                plan_num,
+                ", ".join(str(pid) for pid in stopped_residue),
+            )
+        if surviving_residue:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                signal_source=signal_source,
+                error=(
+                    "Exact-plan HEC-RAS preprocessing processes remained active "
+                    "after cleanup: "
+                    + ", ".join(str(pid) for pid in surviving_residue)
+                ),
+                elapsed_seconds=time.time() - start_time,
+            )
+
         # If the process completed fully and wrote a new/changed final HDF but
         # no .tmp.hdf, use that fresh file as the Linux preprocessing input.
         # Never mistake an unchanged pre-existing final result for new output.
@@ -1333,7 +1368,18 @@ class RasPreprocess:
         """
         try:
             import psutil
+        except Exception as e:
+            logger.warning(
+                f"psutil unavailable ({e}); falling back to process.kill()"
+            )
+            try:
+                process.kill()
+                process.wait(timeout=10)
+            except Exception:
+                pass
+            return
 
+        try:
             parent = psutil.Process(process.pid)
             children = parent.children(recursive=True)
 
@@ -1370,13 +1416,191 @@ class RasPreprocess:
             except Exception:
                 pass
             logger.debug("HEC-RAS process tree terminated")
+        except psutil.NoSuchProcess:
+            # GUI-subsystem Ras.exe can detach its exact-plan replacement and
+            # allow the Python-owned launcher to exit before readiness is
+            # observed. The exact-plan residue cleanup immediately following
+            # this call handles that scoped handoff.
+            try:
+                process.wait(timeout=2)
+            except Exception:
+                pass
+            logger.debug(
+                "HEC-RAS launcher exited before process-tree termination"
+            )
         except Exception as e:
-            logger.warning(f"psutil termination failed ({e}), falling back to process.kill()")
+            # GUI-subsystem launchers can disappear between psutil discovery
+            # and termination. A successful direct fallback is an expected
+            # cleanup race, not a user-actionable preprocessing warning.
+            logger.debug(
+                "psutil process-tree termination was unavailable (%s); "
+                "falling back to process.kill()",
+                e,
+            )
             try:
                 process.kill()
                 process.wait(timeout=10)
-            except Exception:
-                pass
+            except Exception as fallback_error:
+                logger.warning(
+                    "Unable to terminate the owned HEC-RAS launcher after "
+                    "psutil fallback: %s",
+                    fallback_error,
+                )
+
+    @staticmethod
+    def _terminate_exact_preprocess_residue(
+        project_file: Path,
+        plan_file: Path,
+        tmp_hdf: Path,
+        started_at: float,
+        timeout_seconds: float = 10.0,
+    ) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+        """Stop detached processes proven to belong to one preprocess launch.
+
+        ``Ras.exe`` can return control to its parent while a replacement
+        ``Ras.exe`` and ``RasProcess.exe CompletePreProcess`` continue in the
+        background. Process ancestry is no longer sufficient after that
+        handoff, so matching is deliberately narrow:
+
+        * ``Ras.exe`` must contain the exact project and plan path arguments.
+        * ``RasProcess.exe`` must request ``CompletePreProcess`` for the exact
+          temporary plan HDF.
+        * the process must have started within this preprocessing launch.
+
+        Descendants of those exact roots are included, then children are
+        terminated before parents. The returned tuples contain stopped and
+        surviving PIDs respectively.
+        """
+        try:
+            import psutil
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect detached preprocessing processes: %s",
+                exc,
+            )
+            return (), ()
+
+        def normalized_path(value: object) -> str:
+            text = str(value).strip().strip('"')
+            try:
+                return os.path.normcase(os.path.abspath(text))
+            except (OSError, ValueError):
+                return os.path.normcase(text)
+
+        exact_project = normalized_path(project_file)
+        exact_plan = normalized_path(plan_file)
+        exact_tmp_hdf = normalized_path(tmp_hdf)
+        earliest_create_time = float(started_at) - 2.0
+        roots = []
+
+        for candidate in psutil.process_iter(
+            ["pid", "name", "cmdline", "create_time"]
+        ):
+            try:
+                info = candidate.info
+                name = str(info.get("name") or "").casefold()
+                created = float(info.get("create_time") or 0.0)
+                if created < earliest_create_time:
+                    continue
+                arguments = tuple(info.get("cmdline") or ())
+                normalized_arguments = {
+                    normalized_path(argument) for argument in arguments
+                }
+                lowered_arguments = {
+                    str(argument).strip().casefold() for argument in arguments
+                }
+            except (
+                psutil.NoSuchProcess,
+                psutil.AccessDenied,
+                psutil.ZombieProcess,
+                TypeError,
+                ValueError,
+            ):
+                continue
+
+            ras_launcher = (
+                name == "ras.exe"
+                and exact_project in normalized_arguments
+                and exact_plan in normalized_arguments
+            )
+            complete_preprocess = (
+                name == "rasprocess.exe"
+                and "completepreprocess" in lowered_arguments
+                and exact_tmp_hdf in normalized_arguments
+            )
+            if ras_launcher or complete_preprocess:
+                roots.append(candidate)
+
+        targets = {}
+        for root in roots:
+            try:
+                root_created = float(root.create_time())
+                targets[(int(root.pid), root_created)] = root
+                for child in root.children(recursive=True):
+                    child_created = float(child.create_time())
+                    if child_created >= earliest_create_time:
+                        targets[(int(child.pid), child_created)] = child
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        if not targets:
+            return (), ()
+
+        ordered = sorted(
+            targets.items(),
+            key=lambda item: item[1].pid,
+            reverse=True,
+        )
+        requested = []
+        stopped = []
+        for (pid, create_time), target in ordered:
+            try:
+                if abs(float(target.create_time()) - create_time) > 1e-6:
+                    continue
+                target.terminate()
+                requested.append(target)
+            except psutil.NoSuchProcess:
+                stopped.append(pid)
+            except psutil.AccessDenied:
+                logger.warning(
+                    "Access denied while stopping preprocessing PID %s",
+                    pid,
+                )
+
+        alive = []
+        if requested:
+            gone, alive = psutil.wait_procs(
+                requested,
+                timeout=max(0.1, float(timeout_seconds)),
+            )
+            stopped.extend(int(item.pid) for item in gone)
+
+        for target in alive:
+            try:
+                target.kill()
+            except psutil.NoSuchProcess:
+                stopped.append(int(target.pid))
+            except psutil.AccessDenied:
+                logger.warning(
+                    "Access denied while killing preprocessing PID %s",
+                    target.pid,
+                )
+
+        if alive:
+            gone, alive = psutil.wait_procs(alive, timeout=2.0)
+            stopped.extend(int(item.pid) for item in gone)
+
+        survivors = []
+        for target in alive:
+            try:
+                if target.is_running():
+                    survivors.append(int(target.pid))
+                else:
+                    stopped.append(int(target.pid))
+            except psutil.NoSuchProcess:
+                stopped.append(int(target.pid))
+
+        return tuple(sorted(set(stopped))), tuple(sorted(set(survivors)))
 
     @staticmethod
     def _clear_preprocessing_files(

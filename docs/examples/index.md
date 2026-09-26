@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*141 notebooks indexed - 124 with runtime data, 17 without.*
+*141 notebooks indexed - 128 with runtime data, 13 without.*
 
 ## 100s - Initialization & Execution
 
@@ -140,13 +140,13 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [711 - One-at-a-Time (OAT) Manning's n Sensitivity Analysis](../notebooks/711_mannings_sensitivity_multi_interval.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) | 12.1 min |
 | [720 - Precipitation Hyetograph Generation - Complete Method Comparison](../notebooks/720_precipitation_methods_comprehensive.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/720_precipitation_methods_comprehensive.ipynb) | 16 s |
 | [721 - Precipitation Hyetograph Comparison](../notebooks/721_precipitation_hyetograph_comparison.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_precipitation_hyetograph_comparison.ipynb) | 44.1 min |
-| [722 - Gridded Precipitation with Atlas 14: Current Workflow](../notebooks/722_gridded_precipitation_atlas14.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/722_gridded_precipitation_atlas14.ipynb) | N/A |
+| [722 - Atlas 14 Gridded Precipitation: Compatibility and Forcing QA](../notebooks/722_gridded_precipitation_atlas14.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/722_gridded_precipitation_atlas14.ipynb) | 1.1 min |
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
 | [726 - Gridded ABM Hyetograph Generation](../notebooks/726_abm_hyetograph_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/726_abm_hyetograph_grid.ipynb) | 2.4 min |
 | [727 - Atlas 14 Gridded Design Storm Rain-on-Grid in HEC-RAS](../notebooks/727_atlas14_gridded_rain_on_grid_hecras.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/727_atlas14_gridded_rain_on_grid_hecras.ipynb) | 16.5 min |
-| [728 - Extending Gridded DSS Forcing Through the Simulation Window](../notebooks/728_extend_gridded_dss_forcing_window.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/728_extend_gridded_dss_forcing_window.ipynb) | N/A |
-| [729 - Direct GeoTIFF Gridded Rain-on-Grid](../notebooks/729_direct_geotiff_gridded_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/729_direct_geotiff_gridded_rain_on_grid.ipynb) | N/A |
+| [728 - Extending Gridded DSS Forcing Through the Simulation Window](../notebooks/728_extend_gridded_dss_forcing_window.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/728_extend_gridded_dss_forcing_window.ipynb) | 1.3 min |
+| [729 - Direct GeoTIFF Gridded Rain-on-Grid](../notebooks/729_direct_geotiff_gridded_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/729_direct_geotiff_gridded_rain_on_grid.ipynb) | 42 s |
 | [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
 
 ## 800s - Quality Assurance
@@ -160,8 +160,8 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [900 - AORC Precipitation for HEC-RAS Rain-on-Grid Models](../notebooks/900_aorc_precipitation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) | 3.1 h |
-| [901 - AORC Precipitation Catalog for HEC-RAS Rain-on-Grid Models](../notebooks/901_aorc_precipitation_catalog.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) | 1.5 min |
+| [900 - NOAA AORC rain-on-grid: catalog, author, compute, and verify](../notebooks/900_aorc_precipitation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/900_aorc_precipitation.ipynb) | 5.7 min |
+| [901 - AORC annual storm catalog and batch plan authoring](../notebooks/901_aorc_precipitation_catalog.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/901_aorc_precipitation_catalog.ipynb) | 3.1 min |
 
 ## 910s - Gauge Data & Validation
 
@@ -171,7 +171,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [911 - USGS Gauge Data Integration for HEC-RAS](../notebooks/911_usgs_gauge_data_integration.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/911_usgs_gauge_data_integration.ipynb) | 32 s |
 | [912 - USGS Real-Time Gauge Monitoring](../notebooks/912_usgs_real_time_monitoring.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/912_usgs_real_time_monitoring.ipynb) | 2.8 min |
 | [913 - Boundary Condition Generation from Live USGS Gauge Data](../notebooks/913_bc_generation_from_live_gauge.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/913_bc_generation_from_live_gauge.ipynb) | 3 s |
-| [914 - Historical Event Validation with AORC Precipitation and USGS Gauges](../notebooks/914_historical_event_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_historical_event_validation.ipynb) | 35 s |
+| [914 - Historical AORC Event Diagnostic Comparison with USGS Stage](../notebooks/914_historical_event_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/914_historical_event_validation.ipynb) | 35 s |
 | [921 - USGS Study Package From Primitives](../notebooks/921_usgs_study_package_from_primitives.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/921_usgs_study_package_from_primitives.ipynb) | 13 s |
 | [922 - Model Validation with USGS Gauge Data](../notebooks/922_model_validation_with_usgs.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/922_model_validation_with_usgs.ipynb) | 1.8 min |
 
@@ -179,7 +179,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [915 - Real-Time Flood Forecast Workflow](../notebooks/915_realtime_forecast_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/915_realtime_forecast_workflow.ipynb) | 2.5 min |
+| [915 - Operational Forecast Orchestration and Readiness](../notebooks/915_realtime_forecast_workflow.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/915_realtime_forecast_workflow.ipynb) | 2 s |
 | [918 - HMS-RAS Coupled Forecast Execution](../notebooks/918_hms_ras_coupled_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/918_hms_ras_coupled_forecast.ipynb) | 11 s |
 | [919 - Operational Forecast Cycling](../notebooks/919_operational_forecast_cycling.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/919_operational_forecast_cycling.ipynb) | 5 s |
 
@@ -187,11 +187,11 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 
 | Notebook | Source | Runtime |
 | --- | --- | --- |
-| [916 - HRRR Forecast to HEC-RAS: End-to-End Rain-on-Grid Execution](../notebooks/916_hrrr_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 16.0 min |
-| [917 - MRMS QPE Rain-on-Grid Workflow](../notebooks/917_mrms_precipitation_qpe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 1.1 h |
+| [916 — HRRR Forecast to HEC-RAS: Executed Rain-on-Grid Qualification](../notebooks/916_hrrr_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 4.2 min |
+| [917 — MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 36.5 min |
 | [923 - STOFS-3D Coastal Boundary Integration](../notebooks/923_stofs3d_coastal_boundary.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 1.3 min |
-| [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | N/A |
-| [926 - WPC QPF Precipitation Forecast to DSS](../notebooks/926_wpc_qpf_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |
+| [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | 59 s |
+| [926 - WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification](../notebooks/926_wpc_qpf_precipitation_forecast.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |
 
 ## 920s - Terrain & Surfaces
 

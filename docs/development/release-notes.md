@@ -14,6 +14,76 @@
   obsolete notebook 722 authoring cells in favor of 727; add temporary-HDF
   checks to Atlas 14, AORC, historical-event, and HRRR workflows, correct the
   MRMS precompute plot label, and clarify uniform-boundary/WPC example scope.
+- Requalify notebook 916 with archived 8 August 2024 15Z HRRR precipitation,
+  18 native DSS interval grids, a no-rain control, temporary-plan-HDF forcing,
+  final active-cell precipitation, hydraulic response, mass balance, runtime
+  messages, and six review figures under HEC-RAS 7.0. DSS-to-temporary-HDF
+  maximum error was 0.000002 inch; the final active-cell comparison had
+  -0.00185-inch mean error and 0.02654-inch RMSE. Three localized cells exceeded
+  0.1 foot maximum water-surface error, so the notebook maps those cells and
+  retains an explicit manual-review requirement rather than presenting the
+  instructional model as uniformly converged.
+- Re-execute notebook 917 with two archived MRMS events and correct its
+  misleading rain-on-grid title and scope. The notebook now inspects 61
+  spatial DSS grids, then clearly applies intentionally area-averaged boundary
+  hyetographs in four HEC-RAS 7.0 baseline/event runs. It verifies exact
+  boundary totals in the final HDF, records zero flagged BCO diagnostics, and
+  preserves eight review figures plus six videos. A configurable short run
+  root accommodates HEC-Vortex's legacy path handling, and any unavailable
+  Mapper frames are explicitly replaced from final-HDF depth results. The
+  notebook retains manual review of diagnostics, rainfall, timing, terrain
+  coverage, and hydraulic response; notebook 924 remains the spatial MRMS
+  rain-on-grid qualification.
+- Replace notebook 926's catalog-only WPC sketch with a fully executed
+  DSS-to-HEC-RAS 7.0 rain-on-grid qualification using the complete 26 September
+  2026 00Z WPC cycle. The notebook verifies 28 downloaded and translated grids,
+  objectively selects the wettest 24-hour model window, matches DSS to the
+  temporary plan HDF within 0.0000002 inch, completes no-rain and forecast
+  simulations, and compares 18,066 active final-HDF cells with -0.000229-inch
+  mean error and 0.003105-inch RMSE. Five embedded figures include source/DSS,
+  precompute, final-forcing, hydraulic-response, and mapped convergence review.
+  It also works around `qpkit 0.1.0`'s unreliable `QPFGridOptions.extents`
+  result by cropping/reopening each GRIB in its native projection before the
+  public DSS writer; all BCO diagnostic gates were clear, while three localized
+  cells above 0.1-foot maximum WSEL error remain explicitly mapped for manual
+  review.
+- Replace notebook 728's unexecuted file-preparation sketch with a real
+  RasExamples qualification of `copy_grid_with_zero_tail()`. The source DSS
+  remains byte-for-byte unchanged; three copied records and three appended dry
+  records drive a five-hour HEC-RAS 7.0 plan. The derivative matches the
+  temporary plan HDF within 0.0000002 inch, the final HDF preserves an exact
+  three-hour zero-rain plateau, and 18,066 active cells compare to nearest DSS
+  values with 0.000005-inch mean error and 0.000693-inch RMSE. Four figures
+  retain the source field, derivative timeline, temporary-HDF plateau,
+  final-HDF comparison, and hydraulic result, with explicit manual diagnostics.
+- Replace notebook 914's ambiguous historical-validation workflow with a fully
+  executed HEC-RAS 7.0 historical-event diagnostic. The notebook verifies 48
+  archived AORC hourly amounts through the durable import HDF, temporary plan
+  HDF, and 18,066 active final-HDF cells within 0.000003 inch; records zero
+  flagged BCO diagnostics and 0.001523% volume error; and preserves five review
+  figures. USGS UTC observations are converted to Eastern local time and
+  interpolated with explicit nanosecond-normalized timestamps. The gauge result
+  is labeled diagnostic rather than calibration validation because reviewed
+  historical boundary hydrographs, initial conditions, and gate operations are
+  not included with the fixture.
+- Replace notebook 915's stale live-download sketch with a deterministic,
+  fully executed forecast orchestration/readiness artifact. It validates the
+  current public API signatures, converts a UTC forecast cycle to the model's
+  documented local time, builds and plots a contiguous production manifest,
+  and visually audits the committed 916/923/924/926 component artifacts. It
+  removes nonexistent APIs, invalid date-update keywords, fabricated fallback
+  output, mismatched live-cycle dates, and recursive cleanup of shared data.
+  The notebook explicitly does not claim independent format, model-compute, or
+  HEC-RAS version qualification.
+- Document notebook 916's isolated-environment requirement: `qpkit==0.1.0`
+  currently uses a `pydsstools` wheel that requires NumPy 1.x, so the example
+  pins NumPy below 2 and SciPy below 1.17 instead of leaving an incompatible
+  latest-SciPy combination in the user's general ras-commander environment.
+- Preserve native CRLF line endings when
+  `configure_gridded_dss_precipitation()` writes an explicit precipitation
+  ratio. Converting a HEC-RAS unsteady-flow file to mixed/LF endings could make
+  valid boundary-condition and gate-control blocks appear missing during
+  preprocessing.
 - Qualify native DSS on CLB07/Wine 11 with HEC-RAS 6.6. The prior timeout was
   caused by the harness's disabling DLL override; removing the combined
   `mscoree,mshtml` override restored preprocessing and verified computation.

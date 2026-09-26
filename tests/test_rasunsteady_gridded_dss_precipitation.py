@@ -244,3 +244,34 @@ def test_hec_ras_61_explicit_unit_dss_ratio_clears_retained_value(tmp_path):
     with h5py.File(Path(str(unsteady_file) + ".hdf"), "r") as hdf:
         ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
         assert ratio == pytest.approx(1.0)
+
+
+def test_explicit_dss_ratio_preserves_native_crlf_line_endings(tmp_path):
+    """HEC-RAS may reject otherwise valid boundary blocks after LF conversion."""
+    from ras_commander import RasUnsteady
+
+    unsteady_file = tmp_path / "native_crlf.u01"
+    unsteady_file.write_bytes(
+        b"Flow Title=CRLF\r\n"
+        b"Program Version=7.00\r\n"
+        b"Precipitation Mode=Disable\r\n"
+        b"Met BC=Precipitation|Mode=None\r\n"
+        b"Boundary Location=,BaldEagleCr,Upstream Inflow\r\n"
+        b"Interval=1HOUR\r\n"
+        b"Flow Hydrograph= 2\r\n"
+        b"       1       2\r\n"
+    )
+
+    RasUnsteady.configure_gridded_dss_precipitation(
+        unsteady_file,
+        "rain.dss",
+        BALD_EAGLE_DSS_PATHNAME,
+        interpolation="Bilinear",
+        ratio=1.0,
+    )
+
+    written = unsteady_file.read_bytes()
+    assert b"\r\n" in written
+    assert written.count(b"\n") == written.count(b"\r\n")
+    assert b"Met BC=Precipitation|Ratio=1\r\n" in written
+    assert b"Boundary Location=,BaldEagleCr,Upstream Inflow\r\n" in written

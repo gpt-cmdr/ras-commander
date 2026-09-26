@@ -5724,7 +5724,11 @@ class RasUnsteady:
         )
         if ratio is not None:
             with open(
-                unsteady_path, "r", encoding="utf-8", errors="replace"
+                unsteady_path,
+                "r",
+                encoding="utf-8",
+                errors="replace",
+                newline="",
             ) as source:
                 lines = source.readlines()
             RasUnsteady._apply_precipitation_ratio_line(
@@ -6493,7 +6497,10 @@ class RasUnsteady:
                     )
             return
 
-        new_line = f"{prefix}{RasUnsteady._format_met_float(float(ratio))}\n"
+        newline = RasUnsteady._detect_line_ending(lines)
+        new_line = (
+            f"{prefix}{RasUnsteady._format_met_float(float(ratio))}{newline}"
+        )
         if ratio_idx >= 0:
             lines[ratio_idx] = new_line
             return

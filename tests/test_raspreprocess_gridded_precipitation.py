@@ -32,6 +32,10 @@ class _RunningProcess:
         return self.returncode
 
 
+class _ExitedProcess(_RunningProcess):
+    returncode = 0
+
+
 def _seed_project(tmp_path: Path, *, gridded: bool = True) -> _FakeRas:
     project = _FakeRas(tmp_path)
     project.ras_exe_path.write_bytes(b"fixture executable")
@@ -298,3 +302,97 @@ def test_preprocess_rejects_imported_only_precipitation_payload(
     assert "Imported Raster Data alone is not solver-ready" in result.error
     assert "Precipitation/Values" in result.error
     assert terminated == [process]
+
+
+def test_naturally_exited_launcher_still_cleans_exact_plan_residue(
+    tmp_path,
+    monkeypatch,
+):
+    ras = _seed_project(tmp_path, gridded=True)
+    process = _ExitedProcess()
+    terminated = []
+    cleanup_calls = []
+
+    class Monitor:
+        blocked_reason = None
+        signal_source = "alternate"
+
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, _process):
+            _write_artifacts(tmp_path, materialized=True)
+            return True
+
+    _patch_launch(monkeypatch, Monitor, process, terminated)
+
+    def cleanup(**kwargs):
+        cleanup_calls.append(kwargs)
+        return (30220,), ()
+
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_terminate_exact_preprocess_residue",
+        staticmethod(cleanup),
+    )
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras,
+        max_wait=2,
+        clear_existing=False,
+        fix_line_endings=False,
+    )
+
+    assert result.success is True
+    assert terminated == []
+    assert len(cleanup_calls) == 1
+    assert cleanup_calls[0]["project_file"] == tmp_path / "fixture.prj"
+    assert cleanup_calls[0]["plan_file"] == tmp_path / "fixture.p01"
+    assert cleanup_calls[0]["tmp_hdf"] == tmp_path / "fixture.p01.tmp.hdf"
+
+
+def test_preprocess_fails_when_exact_plan_residue_survives_cleanup(
+    tmp_path,
+    monkeypatch,
+):
+    ras = _seed_project(tmp_path, gridded=True)
+    process = _ExitedProcess()
+    terminated = []
+
+    class Monitor:
+        blocked_reason = None
+        signal_source = "alternate"
+
+        @staticmethod
+        def enable_detailed_logging(_plan_file):
+            return True
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def monitor_until_signal(self, _process):
+            _write_artifacts(tmp_path, materialized=True)
+            return True
+
+    _patch_launch(monkeypatch, Monitor, process, terminated)
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_terminate_exact_preprocess_residue",
+        staticmethod(lambda **_kwargs: ((), (30220,))),
+    )
+
+    result = RasPreprocess.preprocess_plan(
+        "01",
+        ras_object=ras,
+        max_wait=2,
+        clear_existing=False,
+        fix_line_endings=False,
+    )
+
+    assert result.success is False
+    assert "remained active after cleanup: 30220" in result.error

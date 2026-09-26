@@ -21,8 +21,9 @@ def test_notebook_covers_native_authoring_precompute_and_final_results():
 
     assert "RasUnsteady.set_gridded_precipitation(" in source
     assert 'units="mm"' in source
-    assert 'value_type="amount"' in source
+    assert 'value_type="cumulative"' in source
     assert "first_timestep_hours=1.0" in source
+    assert "end_time=SIM_END" in source
     assert "ratio=1.0" in source
 
     assert "RasPreprocess.preprocess_plan(" in source
@@ -37,14 +38,19 @@ def test_notebook_covers_native_authoring_precompute_and_final_results():
     assert '"Cell Precipitation Rate"' in source
     assert '"Cell Cumulative Precipitation Depth"' in source
     assert '"Cell Hydraulic Depth"' in source
+    assert "comparison_error_in" in source
+    assert "np.max(np.abs(comparison_error_in))" in source
     assert source.count("plt.subplots(") >= 4
 
 
-def test_committed_notebook_remains_output_stripped():
+def test_committed_notebook_is_fully_executed_without_errors():
     notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
     code_cells = [
         cell for cell in notebook["cells"] if cell.get("cell_type") == "code"
     ]
 
-    assert all(cell.get("execution_count") is None for cell in code_cells)
-    assert all(not cell.get("outputs") for cell in code_cells)
+    assert all(cell.get("execution_count") is not None for cell in code_cells)
+    outputs = [output for cell in code_cells for output in cell.get("outputs", [])]
+    assert outputs
+    assert not any(output.get("output_type") == "error" for output in outputs)
+    assert sum("image/png" in output.get("data", {}) for output in outputs) >= 5
