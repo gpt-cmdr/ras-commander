@@ -155,10 +155,28 @@ centers (`maximum depth > 0.1 ft`), and provides overall and detail maps of
 candidate flux zones with outward-direction arrows. These are review figures
 derived from existing HDF data, not new model results.
 
-## Next steps: boundary conditions remain unresolved
+## Next steps: author and validate boundary conditions
 
-Boundary-condition work is intentionally deferred to a separate reviewed
-workflow. That work must:
+`RasBreakout2D` deliberately stops at geometry preparation; it does not infer
+hydraulic forcing from parent face flow. The executed Austin Bayou SH 35
+[example notebook](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb)
+continues from a reviewed compact child and demonstrates the separate APIs for
+resetting its two geometry-backed boundary locations, writing a wide external
+flow boundary, auditing native external-face ownership, and classifying
+intersecting NextGen flowpaths. It explicitly selects a 1.5-mile reach from
+the longer NextGen edge, derives a minimum domain envelope from connected wet
+parent-result samples and a flat-ended reach corridor, and proves that the
+implemented 2D domain contains both the complete selected reach and that
+hydraulic evidence envelope. It then sums parent face flux at both child
+cuts, derives an upstream flow envelope and preliminary downstream stage-flow
+relationship, creates and computes one plan per 1,000-cfs ladder step, and
+retains a comparable maximum-inundation map for every result. Each 48-hour
+plan ramps to its target in four hours and holds a 44-hour plateau. The
+notebook maps the selected parent faces with peak face-flux magnitude and
+direction arrows, plots the imposed hydrographs, and reports final 12-hour
+water-surface stability diagnostics with the computation summary.
+
+That reviewed downstream workflow must:
 
 1. decide which artificial-cut candidate zones need hydraulic forcing;
 2. select the appropriate type for each location without inferring it solely

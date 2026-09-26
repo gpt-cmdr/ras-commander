@@ -418,3 +418,10 @@ def test_breakout_public_dataframes_have_declared_schemas():
         ]
     ]
     assert feature_columns == breakout_module.FEATURE_ACTION_COLUMNS
+
+
+def test_prepare_rejects_unknown_refresh_method():
+    with pytest.raises(ValueError, match="refresh_method"):
+        RasBreakout2D.prepare_cloned_geometry(
+            None, None, ras_object=None, refresh_method="gui"
+        )
