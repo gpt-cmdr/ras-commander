@@ -346,7 +346,10 @@ observation, and cancellation start/finish times are Unix epoch seconds.
 
 #### Real-Time Execution Monitoring (v0.88.0+)
 
-The `stream_callback` parameter enables real-time progress monitoring during HEC-RAS execution:
+The `compute_plan()` `stream_callback` parameter enables real-time progress
+monitoring during HEC-RAS execution. The
+[execution capability and return table](../user-guide/plan-execution.md#execution-capabilities-and-return-values)
+distinguishes the single-plan and batch entry points.
 
 ```python
 from ras_commander import RasCmdr
@@ -371,9 +374,9 @@ RasCmdr.compute_plan("01", stream_callback=callback)
 
 Callbacks receive notifications at key execution points:
 
-1. `on_prep_start(plan_number)` - Before geometry preprocessing
-2. `on_prep_complete(plan_number)` - After preprocessing
-3. `on_exec_start(plan_number, command)` - When HEC-RAS subprocess starts
+1. `on_prep_start(plan_number)` - Before plan setup, including requested preprocessor-file clearing and core settings
+2. `on_prep_complete(plan_number)` - After plan setup; engine preprocessing may still be required
+3. `on_exec_start(plan_number, command)` - Immediately before launching the HEC-RAS subprocess
 4. `on_exec_message(plan_number, message)` - Each .bco file message (real-time)
 5. `on_exec_complete(plan_number, success, duration)` - After execution
 6. `on_verify_result(plan_number, verified)` - After HDF verification (if `verify=True`)
@@ -416,21 +419,11 @@ class CustomCallback:
 RasCmdr.compute_plan("01", stream_callback=CustomCallback())
 ```
 
-!!! warning "Thread Safety for Parallel Execution"
-    Callbacks used with `compute_parallel()` must be thread-safe. Use `threading.Lock` for shared state:
-
-    ```python
-    from threading import Lock
-
-    class ThreadSafeCallback:
-        def __init__(self):
-            self.lock = Lock()
-            self.results = {}
-
-        def on_exec_complete(self, plan_number, success, duration):
-            with self.lock:
-                self.results[plan_number] = (success, duration)
-    ```
+`compute_parallel()` and `compute_test_mode()` do not accept `stream_callback`.
+For serial monitoring, call `compute_plan()` in a loop.
+`SynchronizedCallback` protects callbacks shared by caller-managed threads; it
+does not enable callbacks on the batch APIs. Callback completion notifications
+are distinct from the final `ComputeResult` and its artifact-handling outcome.
 
 ##### Linux-Hosted Unsteady Preparation
 
@@ -594,17 +587,16 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
         - get_restart_output_settings
         - set_restart_output_settings
         - set_geom
-        - set_flow
+        - set_steady
+        - set_unsteady
         - set_num_cores
         - get_2d_flow_options
         - set_2d_flow_options
         - set_2d_equation_set
         - list_2d_flow_option_names
-        - set_computation_interval
-        - set_output_interval
-        - set_description
-        - get_value
-        - set_value
+        - update_plan_intervals
+        - update_plan_description
+        - get_plan_value
 
 ### RasFlowOptimization
 

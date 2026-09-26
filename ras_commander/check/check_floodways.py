@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 class CheckFloodways:
-    """Floodway encroachment validation."""
+    """Experimental floodway diagnostics; incomplete HDF coverage is not acceptance."""
 
     @staticmethod
     @log_call
@@ -36,7 +36,12 @@ class CheckFloodways:
         thresholds: Optional[ValidationThresholds] = None
     ) -> CheckResults:
         """
-        Check floodway encroachment analysis.
+        Run experimental floodway diagnostics on steady results.
+
+        Missing HDF datasets or profiles can produce empty or partial results.
+        Encroachment method/width coverage is incomplete across HDF layouts;
+        absence of messages does not establish that these checks ran. See the
+        floodway-check guide for current qualification limits.
 
         Validates:
         - Surcharge values against allowable limit
@@ -140,7 +145,7 @@ class CheckFloodways:
                     reach=reach,
                     station=str(node_id),
                     message=format_message("FW_SC_01",
-                        sc=f"{surcharge:.2f}",
+                        sc=f"{surcharge:.2f}", station=str(node_id),
                         max=f"{surcharge_limit:.2f}"),
                     help_text=get_help_text("FW_SC_01"),
                     value=surcharge,
@@ -158,14 +163,14 @@ class CheckFloodways:
                     river=river,
                     reach=reach,
                     station=str(node_id),
-                    message=format_message("FW_SC_02", sc=f"{surcharge:.2f}"),
+                    message=format_message("FW_SC_02", sc=f"{surcharge:.2f}", station=str(node_id)),
                     help_text=get_help_text("FW_SC_02"),
                     value=surcharge
                 )
                 messages.append(msg)
                 record['issues'].append("FW_SC_02")
 
-            # FW_SC_03: Zero surcharge (exact match)
+            # FW_SC_03: Near-zero surcharge (absolute value below 0.005 ft)
             if not pd.isna(surcharge) and abs(surcharge) < 0.005:
                 msg = CheckMessage(
                     message_id="FW_SC_03",
@@ -174,7 +179,7 @@ class CheckFloodways:
                     river=river,
                     reach=reach,
                     station=str(node_id),
-                    message=get_message_template("FW_SC_03"),
+                    message=format_message("FW_SC_03", station=str(node_id)),
                     help_text=get_help_text("FW_SC_03"),
                     value=surcharge
                 )
@@ -190,7 +195,7 @@ class CheckFloodways:
                     river=river,
                     reach=reach,
                     station=str(node_id),
-                    message=format_message("FW_SC_04", sc=f"{surcharge:.3f}"),
+                    message=format_message("FW_SC_04", sc=f"{surcharge:.3f}", station=str(node_id)),
                     help_text=get_help_text("FW_SC_04"),
                     value=surcharge,
                     threshold=surcharge_limit
@@ -211,7 +216,7 @@ class CheckFloodways:
                         reach=reach,
                         station=str(node_id),
                         message=format_message("FW_Q_01",
-                            qfw=f"{fw_q:.0f}",
+                            station=str(node_id), qfw=f"{fw_q:.0f}",
                             qbf=f"{base_q:.0f}"),
                         help_text=get_help_text("FW_Q_01"),
                         value=q_pct
@@ -813,7 +818,7 @@ class CheckFloodways:
         - FW_EM_02: No encroachment method specified at XS
         - FW_EM_03: Encroachment method varies within reach
         - FW_EM_04: No encroachment at non-structure XS
-        - FW_EM_05: Method 5 (target surcharge) specific checks
+        - FW_EM_05: Method 5 (target WSE increase and maximum energy change) specific checks
         - FW_EM_06: Encroachment at structures special handling
         - FW_EM_07: Encroachment optimization warnings
         - FW_EM_08: Encroachment iteration limits
@@ -918,9 +923,8 @@ class CheckFloodways:
                         )
                         messages.append(msg)
 
-                # FW_EM_05: Method 5 (target surcharge) specific check
+                # FW_EM_05: Method 5 (target WSE increase and maximum energy change) specific check
                 if encr_method == 5:
-                    target_surcharge = encr_params.get('target_surcharge', 1.0) if encr_params else 1.0
                     msg = CheckMessage(
                         message_id="FW_EM_05",
                         severity=Severity.INFO,
@@ -928,9 +932,9 @@ class CheckFloodways:
                         river=river,
                         reach=reach,
                         station=station,
-                        message=format_message("FW_EM_05", station=station, target=f"{target_surcharge:.2f}"),
+                        message=format_message("FW_EM_05", station=station),
                         help_text=get_help_text("FW_EM_05"),
-                        value=target_surcharge
+                        value=float(encr_method)
                     )
                     messages.append(msg)
 
@@ -997,13 +1001,13 @@ class CheckFloodways:
                     messages.append(msg)
 
             # FW_EM_08: Check iteration limits from encroachment parameters
-            if encr_params:
-                max_iterations = encr_params.get('max_iterations', 20)
+            if encr_params and any(5 in methods for methods in reach_methods.values()):
+                max_iterations = encr_params.get('max_iterations')
                 # Standard default is 20; flag if less than 10
-                if max_iterations < 10:
+                if max_iterations is not None and max_iterations < 10:
                     # Get a representative station for the message
                     if not encr_data.empty:
-                        sample_row = encr_data.iloc[0]
+                        sample_row = encr_data[encr_data["encr_method"] == 5].iloc[0]
                         msg = CheckMessage(
                             message_id="FW_EM_08",
                             severity=Severity.WARNING,
@@ -1072,8 +1076,8 @@ class CheckFloodways:
                         if params:
                             return params
 
-                # Default values if not found
-                return {'target_surcharge': 1.0, 'max_iterations': 20, 'tolerance': 0.01}
+                # Missing parameters are unknown, not measured defaults.
+                return None
 
         except Exception as e:
             logger.debug(f"Could not extract encroachment parameters: {e}")
@@ -1183,12 +1187,12 @@ class CheckFloodways:
         - FW_SW_05: Starting WSE inconsistent between profiles
         - FW_SW_06: Starting WSE produces supercritical flow
         - FW_SW_07: Starting WSE results in negative depth
-        - FW_SW_08: Starting WSE differs significantly from computed WSE
+        - FW_SW_08: Base/floodway WSE-drop difference over first two sorted sections
 
         Method-Specific Variants (added for encroachment method-specific validation):
         - FW_SW_02M1: Starting WSE difference - Method 1 (fixed stations) specific
         - FW_SW_02M4: Starting WSE difference - Method 4 (target surcharge) specific
-        - FW_SW_02M5: Starting WSE difference - Method 5 (target width reduction) specific
+        - FW_SW_02M5: Starting WSE difference - Method 5 (target WSE increase and maximum energy change) specific
         - FW_SW_03M1: Starting WSE below invert - Method 1 variant
         - FW_SW_03M4: Starting WSE below invert - Method 4 variant
         - FW_SW_04M1: Starting WSE above bank - Method 1 variant
@@ -1200,8 +1204,8 @@ class CheckFloodways:
         - Method 1: Fixed encroachment stations
         - Method 2: Fixed top widths
         - Method 3: Fixed percentage of conveyance reduction
-        - Method 4: Target surcharge (most common for FEMA)
-        - Method 5: Target width reduction
+        - Method 4: Target WSE increase
+        - Method 5: Target WSE increase and maximum energy change
 
         Args:
             plan_hdf: Path to plan HDF file (needed for encroachment method detection)
@@ -1234,18 +1238,12 @@ class CheckFloodways:
 
             # Get encroachment method data for method-specific checks
             encr_data = CheckFloodways._get_encroachment_stations(plan_hdf, floodway_profile)
-            encr_params = CheckFloodways._get_encroachment_parameters(plan_hdf, floodway_profile)
-
             # Build a lookup for encroachment methods by station
             encr_method_by_station = {}
             if encr_data is not None and not encr_data.empty:
                 for _, row in encr_data.iterrows():
                     key = (row.get('river', ''), row.get('reach', ''), str(row.get('station', '')))
                     encr_method_by_station[key] = row.get('encr_method', 0)
-
-            # Get target values from encroachment parameters
-            target_surcharge = encr_params.get('target_surcharge', 1.0) if encr_params else 1.0
-            target_width_reduction_pct = encr_params.get('target_width_reduction', 50.0) if encr_params else 50.0
 
             # Try to get cross section geometry for bank elevations
             xs_gdf = None
@@ -1401,15 +1399,14 @@ class CheckFloodways:
                                 station=station,
                                 message=format_message("FW_SW_02M4",
                                     diff=f"{wse_diff:.2f}",
-                                    station=station,
-                                    target=f"{target_surcharge:.2f}"),
+                                    station=station),
                                 help_text=get_help_text("FW_SW_02M4"),
                                 value=wse_diff,
                                 threshold=threshold
                             )
                             messages.append(msg)
 
-                        # FW_SW_02M5: Method 5 (target width reduction) specific
+                        # FW_SW_02M5: Method 5 (target WSE increase and maximum energy change) specific
                         elif encr_method == 5:
                             msg = CheckMessage(
                                 message_id="FW_SW_02M5",
@@ -1420,8 +1417,7 @@ class CheckFloodways:
                                 station=station,
                                 message=format_message("FW_SW_02M5",
                                     diff=f"{wse_diff:.2f}",
-                                    station=station,
-                                    target_pct=f"{target_width_reduction_pct:.0f}"),
+                                    station=station),
                                 help_text=get_help_text("FW_SW_02M5"),
                                 value=wse_diff,
                                 threshold=threshold

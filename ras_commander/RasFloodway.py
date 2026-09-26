@@ -1,5 +1,5 @@
 """
-RasFloodway - Authoring helpers for steady-flow floodway encroachments.
+RasFloodway - Experimental authoring helpers for steady-flow floodway encroachments.
 
 This module handles the plain-text HEC-RAS plan and steady-flow records needed
 to configure Method 1-5 floodway encroachment trials without GUI steps.
@@ -25,7 +25,15 @@ logger = get_logger(__name__)
 
 class RasFloodway:
     """
-    Static namespace for steady-flow floodway encroachment authoring.
+    Experimental steady-flow floodway encroachment authoring.
+
+    Not qualified for production authoring. The parser currently collapses blank
+    fixed-width values in legacy multi-profile encroachment records (including
+    official Example 6 plan 02), which can shift methods and target values.
+    The delegated floodway checker also has incomplete HDF encroachment coverage.
+    Work only on disposable copies and independently inspect authored records
+    and computed profiles. Notebook 223 was withdrawn pending qualification;
+    see the floodway-check guide for the unresolved scope.
 
     Encroachment records live in plan files as an ``Encroach Param`` header
     followed by river/reach/node records. Each node data line stores triplets of

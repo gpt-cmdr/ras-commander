@@ -1,5 +1,11 @@
 # Gridded Precipitation
 
+!!! note "Source revision requirement"
+    This guide includes APIs added on `main` after tag `v0.102.1`, including
+    `get_gridded_precipitation_capabilities()` and the GeoTIFF/GRIB adapters.
+    Use a source revision containing these changes until a later release includes
+    them. See [release notes](../development/release-notes.md) for the boundary.
+
 Configure global gridded rainfall with `RasUnsteady`, then validate the solver-facing precipitation through HEC-RAS preprocessing and a completed simulation. Work on an isolated project copy and make input units, interval semantics, timestamps, and model clock explicit.
 
 ## Choose the input route

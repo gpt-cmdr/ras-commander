@@ -69,3 +69,16 @@ This file is the canonical local instruction file for `examples/`.
 
 - Package code changes belong under [ras_commander/AGENTS.md](../ras_commander/AGENTS.md).
 - Online example docs live under `docs/examples/`.
+
+## Published notebook contracts
+
+- Use the existing three-digit series and a descriptive `NNN_name.ipynb`; preserve published names unless a migration includes redirects and metadata refresh.
+- The first cell is Markdown with one topic H1. Use H2/H3 for actual subsections.
+- State the operation, inputs/outputs, runtime and evidence scope where they are not clear from the opening. Separate source inspection, authoring, preprocessing, fresh solver results and engineering acceptance.
+- Most `Ras*` / `Hdf*` APIs are static namespaces. Resolve current public signatures instead of copying old instance examples.
+- Retain authentic outputs for executed code. Never fabricate expected output, silently skip the central workflow, or edit saved output to conceal paths/warnings. Fix noisy source logging or reduce deliberate display output before rerunning.
+- Editorial-only changes can retain prior outputs with their original run scope; changed computational cells require an appropriate rerun. Record partial reruns explicitly.
+- Computational cost follows the demonstrated task, not an arbitrary five-minute limit. Record observed timing separately from qualification; do not launch all solver notebooks as a unit test suite.
+- Keep source models and reference data immutable. Stage temporary work under configured `working/` paths; do not recursively delete the shared example-project cache as notebook cleanup.
+- The docs build converts saved notebooks; it does not execute them. Local preparation is `python .claude/scripts/prepare_notebooks_for_docs.py`, followed by the gallery/cognitive generators and `mkdocs build --strict`.
+- Curate `examples/notebooks.yml` and run its generator/validator after notebook changes. A zero-error validation does not itself prove hydraulic correctness.

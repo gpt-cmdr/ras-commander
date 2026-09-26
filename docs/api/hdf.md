@@ -8,13 +8,13 @@ Classes for reading and processing HEC-RAS HDF result files.
 
 Base functionality for HDF file operations.
 
-- `get_dataset_info(hdf_path, group_path=None)` - Print HDF structure
-- `get_attrs(hdf_path, path)` - Get attributes at path
+- `get_dataset_info(file_path, group_path="/")` - Print HDF structure
+- `get_attrs(hdf_file, attr_path)` - Get attributes at path
 - `get_projection(hdf_path)` - Get coordinate system
-- `get_result_unit_metadata(hdf_path, strict=True)` - Read normalized unit
+- `get_result_unit_metadata(hdf_path, *, strict=True)` - Read normalized unit
   metadata and source evidence from a standalone plan-result HDF
-- `parse_ras_datetime(datetime_str)` - Parse HEC-RAS datetime string
-- `parse_ras_datetime_ms(datetime_bytes)` - Parse datetime with milliseconds
+
+Datetime parsers are provided by [`HdfUtils`](#hdfutils).
 
 `get_result_unit_metadata()` is deliberately a result-HDF fallback. When the
 full project is available, use `RasPrj.get_project_units()` and treat the text
@@ -27,8 +27,8 @@ and an unresolved status for audit workflows.
 
 Plan-level information from HDF files.
 
-- `get_plan_info(hdf_path)` - Get plan metadata
-- `get_simulation_times(hdf_path)` - Get start/end times
+- `get_plan_information(hdf_path)` - Get plan metadata
+- `get_plan_start_time(hdf_path)` / `get_plan_end_time(hdf_path)` - Get start/end times
 - `get_plan_parameters(hdf_path)` - Get computation parameters
 - `get_2d_flow_options(hdf_path)` - Get 2D equation set, initial condition time, tolerances, and solver options from computed HDF output
 
@@ -72,10 +72,8 @@ Mesh geometry data.
 - `get_mesh_cell_polygons(hdf_path)` - Get cell polygons as GeoDataFrame
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
-- `get_mesh_perimeter(hdf_path)` - Get mesh perimeter polygon
-- `get_mesh_cell_count(hdf_path)` - Get number of cells
-- `get_nearest_cell(hdf_path, point)` - Find nearest cell to point
-- `get_nearest_face(hdf_path, point)` - Find nearest face to point
+- `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
+- `find_nearest_face(point, cell_faces_gdf, mesh_name=None)` - Find nearest face ID and distance using previously read faces
 - `get_mesh_face_property_tables(hdf_path)` - Read face elevation/area/wetted-perimeter/Manning tables
 
 Some delivered geometries created across the HEC-RAS 6.2/6.3 timeframe store
@@ -125,21 +123,21 @@ removed before v1.2.0:
 
 2D mesh results.
 
-- `get_mesh_max_ws(hdf_path)` - Maximum water surface elevation
-- `get_mesh_max_ws_time(hdf_path)` - Time of maximum WSE
+- `get_mesh_max_ws(hdf_path, round_to="100ms")` - GeoDataFrame with `maximum_water_surface` and, when stored, `maximum_water_surface_time`
 - `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`
 - `get_mesh_max_face_v(hdf_path)` - Maximum face velocity
-- `get_mesh_timeseries(hdf_path, mesh, var, *, time_selection=None,
+- `get_mesh_timeseries(hdf_path, mesh_name, var, truncate=True, *, time_selection=None,
   spatial_selection=None, return_type="xarray")` - Eager time series with
   source-coordinate HDF slicing, or an opt-in lazy `HdfResultView`
 - `iter_mesh_timeseries(hdf_path, mesh, var, *, batch_size=None,
   max_chunk_bytes=16777216)` - Stream bounded, time-major xarray batches
 - `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers
   without constructing Shapely geometry
-- `get_mesh_cells_timeseries(hdf_path, mesh, cell_ids, var)` - Cell time series
-- `get_mesh_faces_timeseries(hdf_path, mesh, face_ids, var)` - Face time series
+
+- `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
+- `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
 - `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
 
@@ -197,6 +195,9 @@ semantically identical to HEC-RAS `Maximum Water Surface`; for example,
 HEC-RAS may encode never-wet cells as zero in the summary while the time-series
 array retains terrain-elevation values. Bounded reductions deliberately report
 the selected raw dataset statistic and do not invent wet/dry semantics.
+
+See the [result-shape and availability contract](../user-guide/hdf-data-extraction.md#result-shapes-and-availability)
+for variable naming, coordinates, metadata, and missing-output behavior.
 
 ### HdfResultsProducts
 
@@ -314,9 +315,9 @@ Cross-section and river geometry extraction from HDF.
 
 Structure geometry and SA/2D connections.
 
-- `get_connection_list(hdf_path)` - List SA/2D connections
-- `get_connection_profile(hdf_path, name)` - Get connection profile
-- `get_connection_gates(hdf_path, name)` - Get gate data
+- `list_sa2d_connections(hdf_path, *, ras_object=None)` - List SA/2D connections with time-series results
+- `get_structures(hdf_path, datetime_to_str=False)` - Structure geometry and available attributes as a GeoDataFrame
+- `get_geom_structures_attrs(hdf_path)` - Stored geometry structure attributes as a DataFrame
 - `get_storage_area_polygons(hdf_path, *, ras_object=None)` - Extract storage
   area polygons and attributes from geometry or plan HDF files, including
   multi-ring polygons with interior rings; returns an empty GeoDataFrame when no
@@ -512,12 +513,12 @@ Basic plotting utilities.
 ## Usage Example
 
 ```python
-from ras_commander import HdfResultsMesh, HdfResultsPlan, init_ras_project
+from ras_commander import HdfResultsMesh, HdfResultsPlan, init_ras_project, ras
 
 init_ras_project("/path/to/project", "6.5")
 
 # Get HDF path
-hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == '01', 'hdf_path'].iloc[0]
+hdf_path = ras.plan_df.loc[ras.plan_df['plan_number'] == '01', 'HDF_Results_Path'].iloc[0]
 
 # Extract max WSE
 max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)

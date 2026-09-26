@@ -12,7 +12,8 @@ added or renamed:
         title*, series, series_name, functions_used, data_project, code_cells, executed_cells
       (*title only refreshed if the entry has no human-set title yet)
     * CURATION fields are filled only when missing, never overwritten:
-        summary, tags, difficulty, est_runtime, hec_refs, learning_paths, excluded
+        summary, tags, difficulty, est_runtime, hec_refs, learning_paths, excluded,
+        input_families, operations, outputs, runtime_requirements, evidence_scope
 
 So the workflow is: run once to seed -> humans curate the curation fields -> re-run anytime to
 pick up new notebooks and refreshed signals without losing curation.
@@ -21,19 +22,25 @@ Derivation sources (no notebook_inventory.csv dependency -- it is not on main):
     * title    : first markdown H1 in the notebook (fallback: prettified id)
     * summary  : README "Recommended Entry Points" one-liner if present, else first paragraph
                  after the H1 (trimmed)
-    * functions_used : regex over code cells for ras_commander public API usage
+    * functions_used : AST attributes/calls in code cells; excludes comments, prose,
+                       and known noncallable class attributes. IPython syntax is
+                       transformed when available. Unparseable cells retain regex
+                       candidates and explicit functions_used_extraction_warnings.
     * data_project   : first RasExamples.extract_project("...") argument, if any
     * code/executed cells : counted directly from the .ipynb
 
 Usage:  python .claude/scripts/generate_notebooks_metadata.py [--check]
         --check : exit non-zero if the file would change (for CI drift detection)
 
-Stdlib + PyYAML (already a docs-build dependency via mkdocs).
+PyYAML plus the installed ras_commander public inventory. IPython is optional;
+unavailable syntax transformation is reported rather than silently dropping cells.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
+from functools import lru_cache
 import json
 import re
 import sys
@@ -64,10 +71,12 @@ SERIES_NAMES = {
 FIELD_ORDER = [
     "id", "filename", "title", "series", "series_name",
     "summary", "tags", "difficulty", "est_runtime", "data_project",
-    "functions_used", "hec_refs", "learning_paths", "excluded",
+    "functions_used", "functions_used_extraction_warnings", "hec_refs", "learning_paths", "excluded",
+    "input_families", "operations", "outputs", "runtime_requirements", "evidence_scope",
     "code_cells", "executed_cells",
 ]
 FACTUAL = {"filename", "series", "series_name", "functions_used",
+           "functions_used_extraction_warnings",
            "data_project", "code_cells", "executed_cells"}
 # title is refreshed only if not human-set (tracked via _title_auto marker absence)
 
@@ -166,18 +175,69 @@ def derive_summary(md: str) -> str:
     return text
 
 
-def derive_functions(nb: dict) -> list:
+@lru_cache(maxsize=1)
+def _public_classes():
+    from validate_notebooks_yml import discover_public_classes
+    return discover_public_classes()[0]
+
+
+def _parse_code_cell(code):
+    try:
+        return ast.parse(code)
+    except SyntaxError as original:
+        try:
+            from IPython.core.inputtransformer2 import TransformerManager
+            return ast.parse(TransformerManager().transform_cell(code))
+        except (ImportError, SyntaxError, IndentationError):
+            raise original
+
+
+def derive_functions(nb: dict, diagnostics=None) -> list:
+    """Extract code use, keeping unresolved calls visible for the validator.
+
+    Callable references (for example a workflow function in an operation dict)
+    count as usage too. Known noncallable class attributes do not. The historical
+    ras.<instance-attribute> inventory is retained separately from class methods.
+    Regex fallback deliberately over-reports; its explicit warning prevents an
+    incomplete parse from being mistaken for a verified empty inventory.
+    """
+    diagnostics = diagnostics if diagnostics is not None else []
+    classes = _public_classes()
     syms = set()
-    for c in nb.get("cells", []):
+    for index, c in enumerate(nb.get("cells", [])):
         if c.get("cell_type") != "code":
             continue
         code = "".join(c.get("source", []))
-        for cls, meth in SYM_RE.findall(code):
-            if not meth.startswith("_"):          # public API only
-                syms.add(f"{cls}.{meth}")
-        for attr in RAS_ATTR_RE.findall(code):
-            if not attr.startswith("_"):
+        try:
+            tree = _parse_code_cell(code)
+        except SyntaxError as exc:
+            diagnostics.append(
+                f"cell {index}: Python {sys.version_info.major}.{sys.version_info.minor} "
+                f"AST parsing failed ({exc.msg}, line {exc.lineno}); "
+                "regex fallback may include comments/strings and needs review"
+            )
+            syms.update(f"{cls}.{method}" for cls, method in SYM_RE.findall(code)
+                        if not method.startswith("_"))
+            syms.update(f"ras.{attr}" for attr in RAS_ATTR_RE.findall(code)
+                        if not attr.startswith("_"))
+            continue
+        calls = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
+                continue
+            cls, attr = node.value.id, node.attr
+            if attr.startswith("_"):
+                continue
+            if cls == "ras":
                 syms.add(f"ras.{attr}")
+            elif re.fullmatch(r"(?:Ras|Hdf|Geom)[A-Z]\w+", cls):
+                if id(node) not in calls and cls in classes:
+                    try:
+                        if not callable(getattr(classes[cls], attr)):
+                            continue
+                    except AttributeError:
+                        pass  # Preserve unknown references as unresolved candidates.
+                syms.add(f"{cls}.{attr}")
     return sorted(syms)
 
 
@@ -220,7 +280,11 @@ def build_entry(path: Path, existing: dict, readme: dict) -> dict:
     # Factual refresh:
     e["series"] = series
     e["series_name"] = SERIES_NAMES.get(series, f"{series}s")
-    e["functions_used"] = derive_functions(nb)
+    extraction_warnings = []
+    e["functions_used"] = derive_functions(nb, extraction_warnings)
+    e.pop("functions_used_extraction_warnings", None)
+    if extraction_warnings:
+        e["functions_used_extraction_warnings"] = extraction_warnings
     e["data_project"] = derive_data_project(nb)
     e["code_cells"] = code_cells
     e["executed_cells"] = executed_cells
@@ -238,6 +302,8 @@ def build_entry(path: Path, existing: dict, readme: dict) -> dict:
     e.setdefault("hec_refs", [])
     e.setdefault("learning_paths", [])
     e.setdefault("excluded", False)
+    # Functional contracts are explicitly curated. Preserve absent fields as
+    # absent: code/output/timing presence cannot establish workflow qualification.
     # Re-order keys deterministically.
     return {k: e[k] for k in FIELD_ORDER if k in e}
 
@@ -255,7 +321,9 @@ def render(notebooks: list) -> str:
         "#\n"
         "# Seeded + refreshed by .claude/scripts/generate_notebooks_metadata.py (merge-aware: it\n"
         "# refreshes factual fields and only FILLS MISSING curation fields -- it never overwrites\n"
-        "# human edits). Curate: summary, tags, difficulty, est_runtime, hec_refs, learning_paths.\n"
+        "# human edits). Curate: summary, tags, difficulty, est_runtime, hec_refs, learning_paths,\n"
+        "# input_families, operations, outputs, runtime_requirements, evidence_scope.\n"
+        "# Functional fields are optional; absence means not curated, not unsupported.\n"
         "# Drives the gallery (generate_examples_index.py), learning paths, cross-links, llms.txt.\n"
     )
     body = yaml.safe_dump(
@@ -274,6 +342,9 @@ def main() -> int:
     readme = parse_readme_oneliners()
     paths = sorted(p for p in EXAMPLES_DIR.glob("*.ipynb"))
     notebooks = [build_entry(p, existing.get(p.stem, {}), readme) for p in paths]
+    for notebook in notebooks:
+        for warning in notebook.get("functions_used_extraction_warnings", []):
+            print(f"WARN {notebook['id']}: {warning}", file=sys.stderr)
 
     rendered = render(notebooks)
     if args.check:

@@ -4,7 +4,7 @@ RAS Commander provides comprehensive access to HEC-RAS HDF result files through 
 
 ## Overview
 
-HEC-RAS 6.x stores results in HDF5 format (`.p##.hdf` files). RAS Commander's `Hdf*` classes provide:
+HEC-RAS 5.x and later can store results in HDF5 format (`.p##.hdf` files). Dataset availability depends on the producer version, model family, and output settings. RAS Commander's `Hdf*` classes provide:
 
 - **HdfResultsMesh**: 2D mesh results (WSE, velocity, depth)
 - **HdfResultsXsec**: 1D cross-section results
@@ -21,7 +21,7 @@ init_ras_project("/path/to/project", "6.5")
 
 # From plan_df
 hdf_path = ras.plan_df.loc[
-    ras.plan_df['plan_number'] == '01', 'hdf_path'
+    ras.plan_df['plan_number'] == '01', 'HDF_Results_Path'
 ].iloc[0]
 
 # Or using RasPlan
@@ -30,6 +30,32 @@ hdf_path = RasPlan.get_results_path("01")
 
 ## 2D Mesh Results
 
+### Result Shapes and Availability
+
+| Reader | Return and selection | Required retained output |
+|---|---|---|
+| `get_mesh_max_ws()` | `GeoDataFrame`: `mesh_name`, `cell_id`, `maximum_water_surface`, point `geometry`; optional `maximum_water_surface_time` | 2D summary output and cell centers |
+| `get_mesh_timeseries()` | `DataArray`: `time` and `cell_id` (or `face_id` for face variables) | Requested 2D time-series variable |
+| `get_mesh_cells_timeseries()` | `dict[str, Dataset]`, keyed by mesh; original HDF variable names such as `Water Surface`; `time`, `cell_id`/`face_id` | Available requested variables for each mesh |
+| `get_mesh_faces_timeseries()` | `Dataset`: normalized names such as `face_velocity`; `time`, `face_id` | Available face time-series variables |
+| `get_xsec_timeseries()` | `Dataset`: `Water_Surface`, `Flow`, velocity variables; `time`, `cross_section` | Unsteady 1D time series, cross-section attributes, names, and timestamps |
+
+Cell and face IDs are local to a mesh. Inspect `.sizes`, `.coords`, and
+`.data_vars` before selecting them. Mesh time-series arrays expose the stored
+dataset unit label in `.attrs['units']`; a missing label remains empty. Spatial
+outputs use the HDF projection when present (`gdf.crs`); this does not establish
+the vertical datum. Use project unit metadata, or
+[`HdfBase.get_result_unit_metadata()`](../api/hdf.md#hdfbase) for a standalone
+result HDF, and retain the source model's vertical/time reference.
+
+An absent optional output is not a zero-valued result. Summary readers can
+return empty frames; the multi-mesh reader omits meshes with no usable requested
+variables, and the face reader can return an empty `Dataset`. The single-variable
+reader raises `ValueError` when its dataset is absent. The 1D time-series reader
+requires its full dataset set and raises when those paths are missing. Inspect
+the HDF and producer output settings before choosing another reader; a steady
+1D result is not an unsteady cross-section time series.
+
 ### Maximum Values
 
 ```python
@@ -37,7 +63,8 @@ from ras_commander import HdfResultsMesh
 
 # Maximum water surface elevation
 max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
-print(max_wse[['cell_id', 'max_ws', 'geometry']].head())
+if not max_wse.empty:
+    print(max_wse[['mesh_name', 'cell_id', 'maximum_water_surface', 'geometry']].head())
 
 # Maximum velocity at cell faces
 max_vel = HdfResultsMesh.get_mesh_max_face_v(hdf_path)
@@ -45,8 +72,9 @@ max_vel = HdfResultsMesh.get_mesh_max_face_v(hdf_path)
 # Maximum depth
 max_depth = HdfResultsMesh.get_mesh_max_depth(hdf_path)
 
-# Time of maximum WSE
-max_wse_time = HdfResultsMesh.get_mesh_max_ws_time(hdf_path)
+# Time accompanies the maximum when the producer stored value/time rows
+if 'maximum_water_surface_time' in max_wse.columns:
+    max_wse_time = max_wse[['mesh_name', 'cell_id', 'maximum_water_surface_time']]
 ```
 
 `get_mesh_max_depth()` reports one INFO provenance message for every mesh. If
@@ -73,9 +101,11 @@ first_mesh = mesh_names[0]
 wse_ts = HdfResultsMesh.get_mesh_timeseries(
     hdf_path,
     first_mesh,
-    "Water Surface"
+    "Water Surface",
+    truncate=False,
 )
 print(wse_ts)
+print(wse_ts.sizes, list(wse_ts.coords), wse_ts.attrs)
 
 # Available variables: "Water Surface", "Velocity", "Depth"
 ```
@@ -85,22 +115,30 @@ print(wse_ts)
 ```python
 from ras_commander import HdfResultsMesh
 
-# Cell time series for specific cells
-cell_ts = HdfResultsMesh.get_mesh_cells_timeseries(
+# Read the requested variable, then select cells in the returned Dataset
+cell_results = HdfResultsMesh.get_mesh_cells_timeseries(
     hdf_path,
-    mesh_name="2D Flow Area",
-    cell_ids=[0, 1, 2, 3],
+    mesh_names=first_mesh,
     var="Water Surface"
 )
+cell_dataset = cell_results[first_mesh]  # Requires available Water Surface output
+print(cell_dataset.sizes, list(cell_dataset.data_vars))
+cell_ts = cell_dataset["Water Surface"].isel(cell_id=slice(0, 4))
 
 # Face time series (flow, velocity)
-face_ts = HdfResultsMesh.get_mesh_faces_timeseries(
+face_dataset = HdfResultsMesh.get_mesh_faces_timeseries(
     hdf_path,
-    mesh_name="2D Flow Area",
-    face_ids=[10, 11, 12],
-    var="Face Velocity"
+    mesh_name=first_mesh,
+    truncate=False,
 )
+print(face_dataset.sizes, list(face_dataset.data_vars))
+if "face_velocity" in face_dataset:
+    face_ts = face_dataset["face_velocity"].isel(face_id=slice(0, 3))
 ```
+
+These readers load the stored arrays before the xarray selection. `truncate=False`
+preserves zero-only leading/trailing timesteps; single-variable and face readers
+default to truncation, while the multi-mesh reader defaults to no truncation.
 
 ### Profile-Line Flow and Peak Q
 
@@ -140,6 +178,7 @@ from ras_commander import HdfResultsXsec
 # All cross-section results (returns xarray Dataset)
 xsec_results = HdfResultsXsec.get_xsec_timeseries(hdf_path)
 print(xsec_results)
+print(xsec_results.sizes, list(xsec_results.coords))
 
 # Available variables typically include:
 # - Water_Surface
@@ -158,7 +197,8 @@ Plan-level results contain critical information for verifying simulation success
 
 ### Compute Messages (Error Checking)
 
-The compute messages contain the full HEC-RAS computation log. **This is the primary source for detecting runtime errors:**
+Compute messages provide stored HEC-RAS diagnostics. A keyword search helps
+locate messages for review; it cannot establish successful completion by itself:
 
 ```python
 from ras_commander import HdfResultsPlan
@@ -177,7 +217,7 @@ if messages:
             if any(kw in line.upper() for kw in error_keywords):
                 print(f"  {line}")
     else:
-        print("Run completed without errors")
+        print("No matching error keywords; inspect completion evidence separately")
 
     # Check for warnings
     if 'WARNING' in messages.upper():
@@ -228,7 +268,7 @@ try:
     info = HdfResultsPlan.get_unsteady_info(hdf_path)
     print("Unsteady Info:")
     print(info.T)
-except KeyError:
+except (KeyError, RuntimeError):
     print("No unsteady results found")
 
 # Detailed unsteady summary
@@ -236,7 +276,7 @@ try:
     summary = HdfResultsPlan.get_unsteady_summary(hdf_path)
     print("\nUnsteady Summary:")
     print(summary.T)
-except KeyError:
+except (KeyError, RuntimeError):
     print("No unsteady summary available")
 ```
 
@@ -265,21 +305,25 @@ if runtime is not None:
         print(f"  Unsteady Compute: {runtime['Unsteady Flow Computations (hr)'].iloc[0]:.4f} hr")
 ```
 
-### Complete Verification Function
+### Result Availability Screening
 
-Combine all checks into a reusable verification function:
+Combine these reads into a preliminary screen. This checks output availability
+and selected diagnostic keywords; it does not verify run identity, numerical
+quality, or hydraulic acceptance. Use
+[`RasCmdr.inspect_execution_evidence()`](../api/core.md#structured-execution-evidence)
+for the library's structured completion evidence.
 
 ```python
 from ras_commander import HdfResultsPlan
 
-def verify_hdf_results(hdf_path_or_plan):
+def screen_hdf_results(hdf_path_or_plan):
     """
-    Comprehensive verification of HDF results.
+    Screen retained HDF result availability and message keywords.
 
-    Returns dict with verification status and details.
+    Returns dict with screening status and details.
     """
     result = {
-        'valid': False,
+        'passes_screen': False,
         'has_compute_msgs': False,
         'has_errors': False,
         'has_volume_accounting': False,
@@ -301,13 +345,13 @@ def verify_hdf_results(hdf_path_or_plan):
 
     # 2. Check volume accounting
     volume = HdfResultsPlan.get_volume_accounting(hdf_path_or_plan)
-    result['has_volume_accounting'] = volume is not None
+    result['has_volume_accounting'] = volume is not None and not volume.empty
 
     # 3. Check unsteady results
     try:
-        HdfResultsPlan.get_unsteady_summary(hdf_path_or_plan)
-        result['has_unsteady_results'] = True
-    except:
+        summary = HdfResultsPlan.get_unsteady_summary(hdf_path_or_plan)
+        result['has_unsteady_results'] = summary is not None and not summary.empty
+    except (KeyError, ValueError, RuntimeError):
         pass
 
     # 4. Get runtime
@@ -315,18 +359,19 @@ def verify_hdf_results(hdf_path_or_plan):
     if runtime is not None:
         result['runtime_hours'] = runtime['Complete Process (hr)'].iloc[0]
 
-    # Determine overall validity
-    result['valid'] = (
+    # Determine whether this preliminary screen passed
+    result['passes_screen'] = (
         result['has_compute_msgs'] and
         not result['has_errors'] and
-        result['has_volume_accounting']
+        result['has_volume_accounting'] and
+        result['has_unsteady_results']
     )
 
     return result
 
 # Usage
-status = verify_hdf_results("01")
-print(f"Valid: {status['valid']}")
+status = screen_hdf_results("01")
+print(f"Passes preliminary screen: {status['passes_screen']}")
 if status['errors']:
     print(f"Errors: {status['errors']}")
 ```
@@ -347,7 +392,8 @@ faces = HdfMesh.get_mesh_cell_faces(hdf_path)
 points = HdfMesh.get_mesh_cell_points(hdf_path)
 
 # Mesh area perimeter
-perimeter = HdfMesh.get_mesh_perimeter(hdf_path)
+perimeters = HdfMesh.get_mesh_areas(hdf_path)
+print(perimeters.head())  # mesh_name and polygon geometry
 ```
 
 ## Structure Data
@@ -355,16 +401,19 @@ perimeter = HdfMesh.get_mesh_perimeter(hdf_path)
 ```python
 from ras_commander import HdfStruc
 
-# SA/2D Connections
-connections = HdfStruc.get_connection_list(hdf_path)
+# SA/2D connections with retained time-series results
+connections = HdfStruc.list_sa2d_connections(hdf_path)
 print(connections)
 
-# Connection profiles
-profile = HdfStruc.get_connection_profile(hdf_path, "Connection 1")
-
-# Gate data
-gates = HdfStruc.get_connection_gates(hdf_path, "Connection 1")
+# Structure geometry and attributes (empty when unavailable)
+structures = HdfStruc.get_structures(hdf_path)
+print(structures.head())
 ```
+
+Connection profiles and gates in the text geometry use the
+[`RasGeometry` connection readers](geometry-operations.md#sa2d-connections).
+The connection-name list above describes results availability, not a complete
+inventory of every structure authored in the project.
 
 ## Pipe Networks
 
@@ -435,11 +484,11 @@ import matplotlib.pyplot as plt
 
 # Get time series
 wse_ts = HdfResultsMesh.get_mesh_timeseries(
-    hdf_path, "2D Flow Area", "Water Surface"
+    hdf_path, first_mesh, "Water Surface", truncate=False
 )
 
 # Select specific cell
-cell_0_wse = wse_ts.sel(cell=0)
+cell_0_wse = wse_ts.sel(cell_id=0)
 
 # Plot
 cell_0_wse.plot()
@@ -447,7 +496,7 @@ plt.title("Water Surface at Cell 0")
 plt.show()
 
 # Convert to pandas
-wse_df = wse_ts.to_dataframe()
+wse_df = wse_ts.to_dataframe(name="water_surface")
 ```
 
 ## Working with GeoDataFrames
@@ -463,7 +512,7 @@ max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
 # Plot
 fig, ax = plt.subplots(figsize=(10, 8))
 max_wse.plot(
-    column='max_ws',
+    column='maximum_water_surface',
     cmap='Blues',
     legend=True,
     ax=ax
@@ -478,7 +527,7 @@ max_wse.to_file("max_wse.geojson", driver="GeoJSON")
 ## Performance Tips
 
 1. **Use specific methods**: `get_mesh_max_ws()` is faster than extracting all time series
-2. **Limit cell/face selections**: Specify `cell_ids` or `face_ids` when possible
+2. **Limit variables and meshes**: Use `var` and `mesh_names` on the multi-mesh reader; selecting cell/face IDs afterward does not reduce initial HDF loading
 3. **Close files**: HDF files are closed automatically, but avoid keeping many open
 4. **Memory**: Large models may require chunked processing
 
@@ -499,7 +548,7 @@ if hdf_path is None or not Path(hdf_path).exists():
 ```python
 try:
     max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
-except KeyError as e:
+except ValueError as e:
     print(f"Dataset not found in HDF: {e}")
     # Check if plan was fully computed
 ```
