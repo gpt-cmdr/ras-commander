@@ -93,6 +93,10 @@ class HdfLandCover:
         require_complete_geometry: bool = True,
         raise_on_failure: bool = True,
         ras_object: Any = None,
+        minimum_cell_distinct_values: Optional[int] = None,
+        expected_cell_values: Optional[List[float]] = None,
+        minimum_face_distinct_values: Optional[int] = None,
+        expected_face_values: Optional[List[float]] = None,
     ) -> pd.DataFrame:
         """Audit the final Manning values embedded by HEC-RAS.
 
@@ -107,13 +111,24 @@ class HdfLandCover:
             hdf_path: Explicit ``.g##.hdf`` or ``.p##.hdf`` path.
             mesh_name: Optional 2D flow-area name.
             tolerance: Minimum difference between materially distinct values.
-            minimum_distinct_values: Required number of face Manning values.
-            expected_values: Optional values that must appear within tolerance.
+            minimum_distinct_values: Backward-compatible required number of
+                face Manning values.
+            expected_values: Backward-compatible values that must appear in
+                the face array within tolerance.
             require_complete_geometry: Require HEC-RAS's ``Complete Geometry``
                 attribute to be true. Disable only for an explicit intermediate
                 geometry-HDF diagnostic.
             raise_on_failure: Raise ``RuntimeError`` if any selected area fails.
             ras_object: Reserved for API consistency.
+            minimum_cell_distinct_values: Optional required number of cell-
+                center Manning values. Use this to validate the solver's
+                ``Cells Center Manning's n`` input directly.
+            expected_cell_values: Optional values that must appear in the
+                cell-center array within tolerance.
+            minimum_face_distinct_values: Explicit face-array requirement;
+                overrides ``minimum_distinct_values`` when provided.
+            expected_face_values: Explicit face-array values; overrides
+                ``expected_values`` when provided.
 
         Returns:
             One-row-per-area DataFrame with associations, cell and face value
@@ -128,7 +143,29 @@ class HdfLandCover:
         if minimum_distinct_values < 1:
             raise ValueError("minimum_distinct_values must be at least 1.")
 
-        expected = [float(value) for value in (expected_values or [])]
+        face_minimum = (
+            minimum_distinct_values
+            if minimum_face_distinct_values is None
+            else minimum_face_distinct_values
+        )
+        if face_minimum < 1:
+            raise ValueError("minimum_face_distinct_values must be at least 1.")
+        if (
+            minimum_cell_distinct_values is not None
+            and minimum_cell_distinct_values < 1
+        ):
+            raise ValueError("minimum_cell_distinct_values must be at least 1.")
+
+        expected_face = [
+            float(value)
+            for value in (
+                expected_values
+                if expected_face_values is None
+                else expected_face_values
+            )
+            or []
+        ]
+        expected_cell = [float(value) for value in (expected_cell_values or [])]
         records = []
         with h5py.File(hdf_path, "r") as hdf:
             areas_path = "Geometry/2D Flow Areas"
@@ -172,21 +209,43 @@ class HdfLandCover:
                 )
                 cell_distinct = _materially_distinct(cell_values, tolerance)
 
-                missing_expected = [
+                missing_expected_face = [
                     value
-                    for value in expected
+                    for value in expected_face
                     if not np.any(np.abs(face_distinct - value) <= tolerance)
                 ]
+                missing_expected_cell = [
+                    value
+                    for value in expected_cell
+                    if not np.any(np.abs(cell_distinct - value) <= tolerance)
+                ]
                 failures = []
-                if face_distinct.size < minimum_distinct_values:
+                if face_distinct.size < face_minimum:
                     failures.append(
                         "face Manning values are not materially diverse "
                         f"({face_distinct.size} distinct)"
                     )
-                if missing_expected:
+                if missing_expected_face:
                     failures.append(
-                        "missing expected values "
-                        + ", ".join(f"{value:g}" for value in missing_expected)
+                        "missing expected face values "
+                        + ", ".join(
+                            f"{value:g}" for value in missing_expected_face
+                        )
+                    )
+                if (
+                    minimum_cell_distinct_values is not None
+                    and cell_distinct.size < minimum_cell_distinct_values
+                ):
+                    failures.append(
+                        "cell-center Manning values are not materially diverse "
+                        f"({cell_distinct.size} distinct)"
+                    )
+                if missing_expected_cell:
+                    failures.append(
+                        "missing expected cell-center values "
+                        + ", ".join(
+                            f"{value:g}" for value in missing_expected_cell
+                        )
                     )
                 if require_complete_geometry and not complete_geometry:
                     failures.append("HEC-RAS does not mark geometry complete")
@@ -214,7 +273,13 @@ class HdfLandCover:
                         "face_distinct_values": tuple(
                             float(value) for value in face_distinct
                         ),
-                        "missing_expected_values": tuple(missing_expected),
+                        "missing_expected_values": tuple(missing_expected_face),
+                        "missing_expected_face_values": tuple(
+                            missing_expected_face
+                        ),
+                        "missing_expected_cell_values": tuple(
+                            missing_expected_cell
+                        ),
                         "passed": not failures,
                         "failure_reason": "; ".join(failures),
                     }

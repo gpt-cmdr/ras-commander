@@ -794,6 +794,34 @@ def test_final_mannings_audit_accepts_ras6_cell_and_face_values(tmp_path: Path):
     assert report.loc[0, "cell_distinct_count"] == 3
 
 
+def test_final_mannings_audit_can_gate_solver_cell_values(tmp_path: Path):
+    result = tmp_path / "flat_cells.p01.hdf"
+    _write_result_hdf(
+        result,
+        [0.03, 0.04, 0.08],
+        cell_values=[0.06, 0.06, 0.06],
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="cell-center Manning values are not materially diverse",
+    ):
+        HdfLandCover.audit_final_mannings_n(
+            result,
+            minimum_cell_distinct_values=2,
+            expected_cell_values=[0.123],
+        )
+
+    report = HdfLandCover.audit_final_mannings_n(
+        result,
+        minimum_cell_distinct_values=1,
+        expected_cell_values=[0.123],
+        raise_on_failure=False,
+    )
+    assert report.loc[0, "missing_expected_cell_values"] == (0.123,)
+    assert report.loc[0, "missing_expected_face_values"] == ()
+
+
 def test_final_mannings_audit_requires_complete_geometry(tmp_path: Path):
     result = tmp_path / "incomplete.p01.hdf"
     _write_result_hdf(result, [0.03, 0.08], complete=False)

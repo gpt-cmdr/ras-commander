@@ -639,6 +639,46 @@ def compare_geometry_association_paths(
     return mismatches
 
 
+def landcover_association_diagnostic(hdf_path: PathLike) -> Optional[str]:
+    """Return a non-fatal diagnostic for a missing or broken land-cover link.
+
+    HEC-RAS can successfully complete property-table generation while falling
+    back to the 2D flow area's scalar Manning value.  A registered layer in
+    ``.rasmap`` is not sufficient: the compiled geometry HDF must contain a
+    valid ``Land Cover Filename`` association.
+    """
+    hdf_path = safe_resolve_path(hdf_path)
+    try:
+        association = read_geometry_association(hdf_path, resolve_paths=True)
+    except Exception as exc:
+        return (
+            f"Could not inspect the land-cover association on {hdf_path.name}: "
+            f"{exc}. Property-table completion alone does not prove that "
+            "spatial Manning values reached 'Cells Center Manning's n'."
+        )
+
+    raw_filename = association.get("landcover_raw_filename")
+    resolved_path = association.get("landcover_hdf_path")
+    if not raw_filename or not resolved_path:
+        return (
+            f"No land-cover association is stored on {hdf_path.name}. HEC-RAS "
+            "may still report property-table success while using the 2D flow "
+            "area's default Manning value for every cell. Associate the exact "
+            "land-cover HDF before recomputing and manually review the final "
+            "plan HDF 'Cells Center Manning's n' values."
+        )
+
+    if not Path(resolved_path).exists():
+        return (
+            f"The land-cover association on {hdf_path.name} resolves to a "
+            f"missing file: {resolved_path}. HEC-RAS may fall back to the 2D "
+            "flow area's default Manning value. Repair the association and "
+            "manually review the final plan HDF 'Cells Center Manning's n' "
+            "values."
+        )
+    return None
+
+
 def _resolve_rasmap_filename(
     project_folder: Path,
     filename: Optional[Union[str, Path]],

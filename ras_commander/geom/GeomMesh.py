@@ -82,6 +82,7 @@ from .._geometry_association import (
     compare_geometry_association_paths,
     decode_hdf_attr as _shared_decode_hdf_attr,
     ensure_geometry_group,
+    landcover_association_diagnostic,
     read_geometry_association,
     resolve_association_attr_path as _shared_resolve_association_attr_path,
 )
@@ -2525,6 +2526,28 @@ def _validate_geometry_association(
         )
 
 
+def _validate_omitted_geometry_associations(
+    hdf_path: Path,
+    before: Mapping[str, Any],
+    supplied_keys: set[str],
+) -> None:
+    """Ensure a partial association update preserved every omitted layer."""
+    after = _read_geometry_association(hdf_path, resolve_paths=False)
+    for key, field in _GEOMETRY_ASSOCIATION_FIELDS.items():
+        if key in supplied_keys:
+            continue
+        raw_key = key.replace("_hdf_path", "_raw_filename")
+        layer_key = key.replace("_hdf_path", "_layer_name")
+        before_pair = (before.get(raw_key), before.get(layer_key))
+        after_pair = (after.get(raw_key), after.get(layer_key))
+        if before_pair != after_pair:
+            raise RuntimeError(
+                "SetGeometryAssociationCommand changed an omitted association "
+                f"on {hdf_path}: {field['filename_attr']} was {before_pair!r} "
+                f"and became {after_pair!r}."
+            )
+
+
 def _normalise_polygon_coords(polygon) -> "numpy.ndarray":
     """Convert a polygon argument to an (N, 2) float64 NumPy array.
 
@@ -4294,6 +4317,11 @@ class GeomMesh:
                 )
             resolved_paths[key] = resolved_path
 
+        prior_association = _read_geometry_association(
+            hdf_path,
+            resolve_paths=False,
+        )
+
         _load_dlls(hecras_dir)
         from RasMapperLib.Scripting import SetGeometryAssociationCommand  # type: ignore
 
@@ -4312,6 +4340,11 @@ class GeomMesh:
 
         if validate:
             _validate_geometry_association(hdf_path, resolved_paths)
+            _validate_omitted_geometry_associations(
+                hdf_path,
+                prior_association,
+                set(resolved_paths),
+            )
 
         logger.info(
             "Updated geometry associations on %s: %s",
@@ -4361,6 +4394,10 @@ class GeomMesh:
             hecras_dir=hecras_dir,
             ras_object=ras_object,
         )
+
+        association_diagnostic = landcover_association_diagnostic(hdf_path)
+        if association_diagnostic:
+            logger.warning(association_diagnostic)
 
         ns = _imports()
         geom = ns["RASGeometry"](str(hdf_path))

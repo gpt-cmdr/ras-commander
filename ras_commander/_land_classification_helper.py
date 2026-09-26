@@ -1499,6 +1499,14 @@ def resolve_registered_land_classification_path(
     ].dropna()
     if matches.empty:
         return None
+    if len(matches) > 1:
+        message = (
+            f"Multiple registered {classification_kind} layers are available; "
+            f"implicit selection is ambiguous and currently chooses "
+            f"{matches.iloc[0]!r}. Pass the exact HDF path explicitly."
+        )
+        warnings.warn(message, DeprecationWarning, stacklevel=2)
+        logger.warning(message)
     return RasUtils.safe_resolve(Path(matches.iloc[0]))
 
 
@@ -2196,6 +2204,12 @@ def recompute_property_tables(
         geom_file,
         ras_object=ras_object,
     )
+
+    from ._geometry_association import landcover_association_diagnostic
+
+    association_diagnostic = landcover_association_diagnostic(geom_hdf_path)
+    if association_diagnostic:
+        logger.warning(association_diagnostic)
 
     from ._landcover_native import recompute_property_tables as native_recompute
 

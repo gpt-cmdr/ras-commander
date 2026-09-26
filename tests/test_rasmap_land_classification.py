@@ -122,6 +122,8 @@ class TestPublicAPISurface:
             "update_land_classification_polygon",
             "delete_land_classification_polygon",
             "get_hdf_geometry_association",
+            "list_geometry_associations",
+            "validate_geometry_associations",
         ],
     )
     def test_method_exists_and_is_static_style(self, method_name):
@@ -184,6 +186,33 @@ class TestNativeVersionResolution:
         )
         with pytest.raises(ValueError, match="hecras_version is required"):
             module._resolve_native_hecras_version(None, None)
+
+
+def test_implicit_registered_layer_selection_warns_when_ambiguous(
+    monkeypatch,
+    tmp_path,
+):
+    first = tmp_path / "LandCoverA.hdf"
+    second = tmp_path / "LandCoverB.hdf"
+    records = pd.DataFrame(
+        {
+            "classification_kind": ["landcover", "landcover"],
+            "resolved_path": [first, second],
+        }
+    )
+    monkeypatch.setattr(
+        _lch,
+        "_list_land_classification_records",
+        lambda project_paths: records,
+    )
+
+    with pytest.warns(DeprecationWarning, match="implicit selection is ambiguous"):
+        selected = _lch.resolve_registered_land_classification_path(
+            object(),
+            "landcover",
+        )
+
+    assert selected == first.resolve()
 
 
 class TestPackagedResources:

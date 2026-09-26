@@ -1572,27 +1572,46 @@ notebooks:
   executed_cells: 8
 - id: 233_mannings_region_polygon_authoring
   filename: 233_mannings_region_polygon_authoring.ipynb
-  title: Manning's n Region Polygon Authoring
+  title: Manning's n Region Polygon Authoring and Solver Validation
   series: 200
   series_name: Geometry & Calibration
-  summary: This workflow writes Manning's n calibration region polygons to the plain-text HEC-RAS geometry
-    file with `GeomLandCover.set_mannings_region_polygons()` and checks the paired regional Manning's
-    n table remains readable.
-  tags: []
-  difficulty: intermediate
-  est_runtime: null
+  summary: Author a regional Manning's n polygon on the real Muncie fixture, explicitly associate terrain
+    and land cover, validate the temporary and final plan HDF cell values, and visually confirm solver
+    propagation.
+  tags:
+  - 2d
+  - mannings-n
+  - land-cover
+  - rasmapper
+  - preprocessing
+  - validation
+  difficulty: advanced
+  est_runtime: 1 min
   data_project: Muncie
   functions_used:
   - GeomLandCover.get_region_mannings_n
   - GeomLandCover.set_mannings_region_polygons
+  - GeomLandCover.set_region_mannings_n
+  - GeomMesh.compute_property_tables
+  - HdfLandCover.audit_final_mannings_n
+  - HdfLandCover.get_mannings_region_cell_mapping
   - HdfLandCover.get_mannings_region_polygons
+  - HdfLandCover.get_preprocessed_mannings_n
   - HdfMesh.get_mesh_areas
+  - HdfMesh.get_mesh_cell_points
+  - RasCmdr.compute_plan
   - RasExamples.extract_project
+  - RasMap.list_geometry_associations
+  - RasMap.set_geometry_association
+  - RasMap.validate_geometry_associations
+  - RasPlan.get_plan_path
+  - RasPlan.update_run_flags
+  - RasPreprocess.preprocess_plan
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 3
-  executed_cells: 3
+  code_cells: 7
+  executed_cells: 6
 - id: 234_rasmapper_geometry_completion
   filename: 234_rasmapper_geometry_completion.ipynb
   title: Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)
