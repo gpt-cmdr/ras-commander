@@ -2,7 +2,7 @@ name: Validate Documentation
 
 # Catches build-breaking docs errors (bad nav entries, missing pages, mkdocstrings
 # failures) on PRs BEFORE they merge to main and trigger the self-hosted CT 210 rebuild
-# (rascommander.info). Build-only; does not deploy. Non-strict to match production.
+# (rascommander.info). Build-only; does not deploy. Strictness also lives in mkdocs.yml.
 
 on:
   pull_request:
@@ -48,7 +48,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r docs/requirements-docs.txt
-          pip install -e .
+          CI=1 pip install -e .
 
       - name: Validate notebook inventory
         run: |
@@ -58,8 +58,6 @@ jobs:
       - name: Prepare notebooks for docs
         run: |
           python .claude/scripts/prepare_notebooks_for_docs.py
-          cp examples/README.md docs/notebooks/ || true
-          cp examples/AGENTS.md docs/notebooks/ || true
 
       - name: Generate examples index table
         run: |
@@ -72,8 +70,4 @@ jobs:
 
       - name: Build — no deploy
         run: |
-          # Non-strict to match production (`mkdocs gh-deploy`) and the CT 210 rebuild.
-          # The docs currently carry ~26 benign link warnings (examples/README.md +
-          # AGENTS.md copied into notebooks/). Re-add --strict once that link debt is
-          # cleaned up, here and in the ras-commander-docs build.sh, together.
-          mkdocs build
+          mkdocs build --strict

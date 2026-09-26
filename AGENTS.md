@@ -179,7 +179,7 @@ generator fails the live build — treat the docs as production.
   `/ras/version.json`. The DataFrame column contracts come from **`ras_commander/schemas.py`** — the
   single source of truth. **If you add, rename, or remove a column on `plan_df` / `geom_df` /
   `boundaries_df` / `rasmap_df` (or add a new public DataFrame), update `schemas.py` in the SAME
-  change** — there is no automated guard for column drift. Keep `__all__` accurate; the surface
+  change** — the shared schema validator checks declarations and selected live frames, not every dynamic or semantic contract. Keep `__all__` accurate; the surface
   enumerates it.
 - **Examples gallery metadata.** When adding or renaming an example notebook, run
   `.claude/scripts/generate_notebooks_metadata.py` (seeds/refreshes `examples/notebooks.yml`, the

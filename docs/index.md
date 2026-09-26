@@ -14,6 +14,10 @@
 !!! tip "New here? Start with [Installation](getting-started/installation.md) → [Quick Start](getting-started/quickstart.md)"
     Then browse the [Example Notebooks](examples/index.md) for runnable, end-to-end workflows.
 
+Already have a model or a specific task? Start with [Capabilities by task](capabilities.md),
+[API and return contracts](api/index.md), [Examples by task](examples/index.md),
+or [Installation and runtime requirements](getting-started/installation.md).
+
 ## Key Features
 
 <div class="grid cards" markdown>

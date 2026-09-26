@@ -2,6 +2,11 @@
 
 This section provides documentation for the RAS Commander Python API.
 
+Use the [capability map](../capabilities.md) to choose an operation by its inputs
+and outputs. The [example catalog](../examples/index.md) adds selected runtime
+requirements and evidence scope; the [execution contract](../user-guide/plan-execution.md#execution-capabilities-and-return-values)
+explains single-plan and batch return semantics.
+
 ## Core Classes
 
 Primary classes for project management and execution:

@@ -191,7 +191,7 @@ This page provides a comprehensive reference for all available agents in the ras
 
 !!! info "Auto-Generated"
     This page is automatically generated from `.claude/agents/` directory.
-    Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    Generated at build time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 ## Overview
 
@@ -331,7 +331,7 @@ This page provides a comprehensive reference for all available skills in the ras
 
 !!! info "Auto-Generated"
     This page is automatically generated from `.claude/skills/` directory.
-    Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    Generated at build time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 ## Overview
 
@@ -453,7 +453,7 @@ This page provides a comprehensive reference for all available slash commands in
 
 !!! info "Auto-Generated"
     This page is automatically generated from `.claude/commands/` directory.
-    Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+    Generated at build time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
 ## Overview
 

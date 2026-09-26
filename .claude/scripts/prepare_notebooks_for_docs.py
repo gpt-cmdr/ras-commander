@@ -18,6 +18,8 @@ This is run during ReadTheDocs pre_build step.
 """
 
 import os
+import json
+from urllib.parse import unquote, urlsplit
 import re
 import shutil
 import subprocess
@@ -42,16 +44,20 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
     notebooks = list(examples_dir.glob("*.ipynb"))
     print(f"Converting {len(notebooks)} notebooks to markdown...")
 
+    scripts_dir = Path(__file__).resolve().parent
+    env = os.environ.copy()
+    env['PYTHONPATH'] = str(scripts_dir) + os.pathsep + env.get('PYTHONPATH', '')
     # Use batch mode - much faster than one-by-one
     # nbconvert can process multiple files in one call
     result = subprocess.run(
         [
             sys.executable, "-m", "jupyter", "nbconvert",
             "--to", "markdown",
+            "--config", str(scripts_dir / "nbconvert_docs_config.py"),
             "--output-dir", str(output_dir),
         ] + [str(nb) for nb in notebooks],
         capture_output=True,
-        text=True
+        text=True, env=env
     )
 
     if result.returncode != 0:
@@ -90,6 +96,25 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
             dirs_exist_ok=True,
         )
         print("Copied notebook assets")
+
+    # Copy only existing, explicitly linked local image assets (not whole model/output dirs).
+    root = examples_dir.resolve()
+    for notebook in notebooks:
+        data = json.loads(notebook.read_text(encoding='utf-8'))
+        for cell in data.get('cells', []):
+            if cell.get('cell_type') != 'markdown':
+                continue
+            source = cell.get('source', '')
+            source = ''.join(source) if isinstance(source, list) else source
+            for target in re.findall(r'!\[[^\]]*\]\(([^\s)]+)', source):
+                url = urlsplit(target)
+                if url.scheme or url.netloc:
+                    continue
+                asset = (root / unquote(url.path)).resolve()
+                if asset.is_relative_to(root) and asset.is_file():
+                    dest = output_dir / asset.relative_to(root)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(asset, dest)
 
     return len(md_files)
 

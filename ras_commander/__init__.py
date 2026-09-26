@@ -425,7 +425,7 @@ __all__ = [
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
-    'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils',
+    'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',
