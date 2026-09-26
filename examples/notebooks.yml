@@ -4251,18 +4251,25 @@ notebooks:
   - HdfMesh.get_mesh_areas
   - HdfResultsMesh.get_mesh_max_depth
   - HdfResultsMesh.get_mesh_max_ws
+  - HdfResultsMesh.get_mesh_timeseries
   - RasBreakout2D.preflight
+  - RasBreakout2D.review_parent_boundary_flux
+  - RasCmdr.compute_plan
   - RasExamples.extract_project
   - RasNetworkConflation.classify_edges
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasPlan.update_simulation_date
   - RasUnsteady.extract_boundary_and_tables
   - RasUnsteady.replace_2d_boundary_locations
   - RasUnsteady.set_boundary_inline_hydrograph
+  - RasUnsteady.set_flow_hydrograph_slope
   - RasUnsteady.set_normal_depth_boundary
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 10
-  executed_cells: 9
+  code_cells: 15
+  executed_cells: 14
 - id: 960_cloud_native_geometry_export
   filename: 960_cloud_native_geometry_export.ipynb
   title: Cloud-Native Geometry Export with ras2cng
