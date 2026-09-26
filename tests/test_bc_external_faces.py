@@ -186,6 +186,31 @@ def test_get_bc_external_faces_reports_endpoint_only_fallback(tmp_path):
     assert result.geometry.iloc[0].wkt == "LINESTRING (0 0, 2 0)"
 
 
+def test_get_bc_external_faces_uses_native_endpoints_for_stale_face_id(
+    tmp_path,
+    caplog,
+):
+    """HEC-RAS may retain a stale face ID but write valid external endpoints."""
+    geometry_hdf = tmp_path / "stale_face_id.g01.hdf"
+    rows = np.array(
+        [(0, 11, 1, 2, 0.0, 3.0)],
+        dtype=EXTERNAL_FACE_DTYPE,
+    )
+    _write_geometry_hdf(geometry_hdf, external_faces=rows)
+    _write_selected_face_geometry(geometry_hdf)
+
+    result = HdfBndry.get_bc_external_faces(geometry_hdf, include_geometry=True)
+
+    assert result.attrs["geometry_source"] == (
+        "external_face_endpoints+face_endpoints_and_perimeter_values"
+    )
+    assert result.attrs["topology_match_count"] == 0
+    assert result.attrs["topology_mismatch_count"] == 1
+    assert result.attrs["curved_face_count"] == 1
+    assert result.geometry.iloc[0].wkt == "LINESTRING (2 0, 2 3)"
+    assert "Using native External Faces endpoints for 1 of 1 BC faces" in caplog.text
+
+
 def test_get_bc_external_faces_distinguishes_absent_from_empty(tmp_path):
     absent_hdf = tmp_path / "absent.g01.hdf"
     empty_hdf = tmp_path / "empty.g01.hdf"

@@ -215,7 +215,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [956 - NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch](../notebooks/956_hydrofabric_conflation_visual_qa.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/956_hydrofabric_conflation_visual_qa.ipynb) | 5 s |
 | [957 - Using eBFE Models: Spring River Validation](../notebooks/957_ebfe_spring_river_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | N/A |
 | [958 - Model Sources: Unified Discovery, Download & Visualization](../notebooks/958_model_sources_showcase.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb) | N/A |
-| [959 - eBFE 2D Breakout Geometry Preparation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | N/A |
+| [959 - Austin Bayou SH 35 2D Breakout and NextGen Validation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | N/A |
 
 ## 960s - Cloud-Native Export
 

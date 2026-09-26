@@ -160,6 +160,10 @@ class RasExamples:
         'NewOrleansMetro': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299502039/299502111/1/1747692522764/NewOrleansMetroPipesExample.zip',
         'BeaverLake': 'https://www.hec.usace.army.mil/confluence/rasdocs/hgt/files/latest/299501780/299502090/1/1747692179014/BeaverLake-SWMM-Import-Solution.zip',
         'Klawitter': 'https://www.hec.usace.army.mil/confluence/download/attachments/276988362/Klawitter_2D_Tutorial.zip?version=1&modificationDate=1740180410184&api=v2',
+        'AustinBayouSH35Firehose': (
+            'https://drive.usercontent.google.com/download?'
+            'id=1xwmNVm_TyW1AWxznf6QzQPMtRHMz3qWv&export=download&confirm=t'
+        ),
     }
 
     _folder_df = None

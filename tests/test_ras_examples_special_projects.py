@@ -10,6 +10,14 @@ def test_klawitter_registered_as_special_project():
     assert url.startswith("https://www.hec.usace.army.mil/confluence/")
 
 
+def test_austin_bayou_firehose_registered_as_special_project():
+    url = RasExamples.SPECIAL_PROJECTS["AustinBayouSH35Firehose"]
+
+    assert url.startswith("https://drive.usercontent.google.com/download?")
+    assert "id=1xwmNVm_TyW1AWxznf6QzQPMtRHMz3qWv" in url
+    assert "export=download" in url
+
+
 def test_list_projects_includes_klawitter_special_project(monkeypatch):
     project_df = pd.DataFrame(
         [

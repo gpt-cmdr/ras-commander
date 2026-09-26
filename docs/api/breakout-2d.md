@@ -155,10 +155,18 @@ centers (`maximum depth > 0.1 ft`), and provides overall and detail maps of
 candidate flux zones with outward-direction arrows. These are review figures
 derived from existing HDF data, not new model results.
 
-## Next steps: boundary conditions remain unresolved
+## Next steps: author and validate boundary conditions
 
-Boundary-condition work is intentionally deferred to a separate reviewed
-workflow. That work must:
+`RasBreakout2D` deliberately stops at geometry preparation; it does not infer
+hydraulic forcing from parent face flow. The executed Austin Bayou SH 35
+[example notebook](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb)
+continues from a reviewed compact child and demonstrates the separate APIs for
+resetting its two geometry-backed boundary locations, writing an internal flow
+hydrograph and downstream Normal Depth condition, auditing native external-face
+ownership, classifying intersecting NextGen flowpaths, and comparing the child
+and parent maximum WSE at USGS 08078400.
+
+That reviewed downstream workflow must:
 
 1. decide which artificial-cut candidate zones need hydraulic forcing;
 2. select the appropriate type for each location without inferring it solely

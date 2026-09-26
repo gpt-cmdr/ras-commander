@@ -4225,33 +4225,42 @@ notebooks:
   executed_cells: 23
 - id: 959_ebfe_2d_breakout_geometry_preparation
   filename: 959_ebfe_2d_breakout_geometry_preparation.ipynb
-  title: eBFE 2D Breakout Geometry Preparation
+  title: Austin Bayou SH 35 2D Breakout and NextGen Validation
   series: 950
   series_name: eBFE Delivery Validation
-  summary: Qualify and prepare a contained pure-2D HUC12 breakout from Upper Guadalupe 3 plan 08, with
-    byte-identical unsteady cloning, geometry trimming/remeshing, parent terrain and inundation context,
-    and unassigned parent-face flux review.
+  summary: Reproduce the compact Austin Bayou SH 35 firehose breakout from a public RasExamples fixture,
+    validate it against the FEMA parent at USGS 08078400, classify intersecting NextGen v2.2 flowpaths,
+    verify native boundary-face ownership, and re-author its upstream and downstream boundaries.
   tags:
   - 2d
   - breakout
   - ebfe
   - geometry
   - mesh
+  - nextgen
+  - boundary-conditions
+  - validation
   difficulty: advanced
   est_runtime: null
-  data_project: null
+  data_project: AustinBayouSH35Firehose
   functions_used:
-  - HdfMesh.get_mesh_sloped_topology
+  - HdfBndry.get_bc_external_faces
+  - HdfBndry.get_bc_lines
+  - HdfMesh.get_mesh_areas
+  - HdfResultsMesh.get_mesh_max_depth
   - HdfResultsMesh.get_mesh_max_ws
-  - RasBreakout2D.clone_plan_components
   - RasBreakout2D.preflight
-  - RasBreakout2D.prepare_cloned_geometry
-  - RasBreakout2D.review_parent_boundary_flux
+  - RasExamples.extract_project
+  - RasNetworkConflation.classify_edges
+  - RasUnsteady.extract_boundary_and_tables
+  - RasUnsteady.replace_2d_boundary_locations
+  - RasUnsteady.set_boundary_inline_hydrograph
+  - RasUnsteady.set_normal_depth_boundary
   hec_refs: []
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 9
+  executed_cells: 8
 - id: 960_cloud_native_geometry_export
   filename: 960_cloud_native_geometry_export.ipynb
   title: Cloud-Native Geometry Export with ras2cng

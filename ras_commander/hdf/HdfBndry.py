@@ -172,8 +172,12 @@ class HdfBndry:
             If ``True``, return a GeoDataFrame whose LineString geometry is
             built from only the natively associated faces.  Selected face
             rows, face-point coordinates, and any intermediate ``Faces
-            Perimeter Values`` are indexed directly; the full mesh face
-            network is never materialized.
+            Perimeter Values`` are indexed directly when the external-face
+            endpoints agree with the referenced mesh face.  HEC-RAS can retain
+            stale face IDs after remeshing while writing valid native endpoint
+            IDs; those rows fall back to endpoint-only segments and are
+            reported in ``DataFrame.attrs``.  The full mesh face network is
+            never materialized.
         validate_unique_faces : bool, default True
             Require each mesh-local face to be owned by exactly one native BC
             association. Set to ``False`` only for diagnostics: all native rows
@@ -192,7 +196,10 @@ class HdfBndry:
             is therefore distinguishable from geometry that has not been
             preprocessed to create the association.
             When ``include_geometry=True``, the result also has a
-            ``geometry`` column and the native HDF projection.
+            ``geometry`` column and the native HDF projection.  The
+            ``topology_match_count`` and ``topology_mismatch_count`` metadata
+            distinguish rows that could and could not reuse mesh-face
+            perimeter values.
 
         Raises
         ------
@@ -377,6 +384,8 @@ class HdfBndry:
             geometry_source = None
             curved_face_count = 0
             perimeter_value_count = 0
+            topology_match_count = 0
+            topology_mismatch_count = 0
             if include_geometry:
                 if result["mesh_name"].isna().any():
                     raise ValueError(
@@ -497,14 +506,6 @@ class HdfBndry:
                     external_face_points = mesh_rows[
                         ["fp_start_index", "fp_end_index"]
                     ].to_numpy(dtype=np.int64)
-                    if not np.all(
-                        np.sort(selected_face_points, axis=1)
-                        == np.sort(external_face_points, axis=1)
-                    ):
-                        raise ValueError(
-                            f"Native BC external-face face-point IDs in {hdf_path} do not "
-                            f"match {face_points_path} for mesh {mesh_name!r}"
-                        )
                     if (
                         (external_face_points < 0).any()
                         or (external_face_points >= len(coordinates_dataset)).any()
@@ -512,6 +513,27 @@ class HdfBndry:
                         raise ValueError(
                             f"Native BC external-face association in {hdf_path} references "
                             f"face points outside {coordinates_path}[0:{len(coordinates_dataset)}]"
+                        )
+
+                    topology_matches = np.all(
+                        np.sort(selected_face_points, axis=1)
+                        == np.sort(external_face_points, axis=1),
+                        axis=1,
+                    )
+                    mesh_match_count = int(topology_matches.sum())
+                    mesh_mismatch_count = int((~topology_matches).sum())
+                    topology_match_count += mesh_match_count
+                    topology_mismatch_count += mesh_mismatch_count
+                    if mesh_mismatch_count:
+                        geometry_sources.add("external_face_endpoints")
+                        logger.warning(
+                            "Using native External Faces endpoints for %d of %d BC faces in "
+                            "mesh %r because their face IDs do not match current mesh topology "
+                            "in %s.",
+                            mesh_mismatch_count,
+                            len(mesh_rows),
+                            mesh_name,
+                            hdf_path.name,
                         )
 
                     point_ids = np.unique(external_face_points)
@@ -524,6 +546,16 @@ class HdfBndry:
                     }
                     selected_geometries = []
                     for row_index, (fp_start, fp_end) in enumerate(external_face_points):
+                        if not topology_matches[row_index]:
+                            selected_geometries.append(
+                                LineString(
+                                    [
+                                        point_lookup[int(fp_start)],
+                                        point_lookup[int(fp_end)],
+                                    ]
+                                )
+                            )
+                            continue
                         native_start, native_end = selected_face_points[row_index]
                         perimeter_start, perimeter_count = perimeter_ranges[row_index]
                         intermediate = [
@@ -576,6 +608,8 @@ class HdfBndry:
                     "geometry_source": geometry_source,
                     "curved_face_count": curved_face_count,
                     "perimeter_value_count": perimeter_value_count,
+                    "topology_match_count": topology_match_count,
+                    "topology_mismatch_count": topology_mismatch_count,
                 }
             )
             return result
