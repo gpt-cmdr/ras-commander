@@ -122,6 +122,26 @@ Chris's book remains the definitive reference for COM-based automation of HEC-RA
 
 ## Community Testing & Feedback
 
+### Community Contributors
+
+- [Harris Bienn (`@harrisbienn`)](https://github.com/harrisbienn) identified
+  the retained-request identity mismatch in the governed scenario-worker retry
+  workflow and authored the implementation and regression coverage in
+  [#310](https://github.com/gpt-cmdr/ras-commander/issues/310) and
+  [#311](https://github.com/gpt-cmdr/ras-commander/pull/311).
+- [`@PMacAddress`](https://github.com/PMacAddress) supplied detailed,
+  reproducible Windows/Wine reports and follow-up testing for headless mesh
+  generation, refinement-region activation, Manning's n geometry associations,
+  and solver-readable gridded precipitation in
+  [#361](https://github.com/gpt-cmdr/ras-commander/issues/361),
+  [#369](https://github.com/gpt-cmdr/ras-commander/issues/369),
+  [#370](https://github.com/gpt-cmdr/ras-commander/issues/370), and
+  [#371](https://github.com/gpt-cmdr/ras-commander/issues/371).
+- [`@jacobrbeatty`](https://github.com/jacobrbeatty) reported that
+  `RasControl.run_plan()` could accept a current-plan signal without a result
+  HDF, motivating stronger result-artifact and completion-evidence checks in
+  [#323](https://github.com/gpt-cmdr/ras-commander/issues/323).
+
 ### Early Adopters & Testers
 
 The following individuals and organizations provided valuable testing feedback during beta releases:
