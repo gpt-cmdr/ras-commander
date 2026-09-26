@@ -1,16 +1,27 @@
+import hashlib
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from ras_commander.ComputeResults import ComputeResult
+from ras_commander.remote import PortableExecution
 from ras_commander.remote.ExecutionContract import (
     PreprocessPolicy,
     RasExecutionReceipt,
     RasExecutionRequest,
     sha256_tree,
+    validate_execution_receipt,
 )
-from ras_commander.remote import PortableExecution
+
+
+def _canonical_sha256(payload):
+    return hashlib.sha256(
+        json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 OCI = "registry.example/hecras/steady@sha256:" + "a" * 64
@@ -53,6 +64,135 @@ def test_request_is_portable_source_identified_and_one_core(tmp_path):
     assert request.output_directory == "output/sample-001"
     assert len(request.digest) == 64
     assert request.resolve_paths(path)[0].name == "sample.prj"
+
+
+def test_request_preserves_retained_identity_separate_from_normalized_specification(
+    tmp_path,
+):
+    path = _request(tmp_path)
+    retained = json.loads(path.read_text(encoding="utf-8"))
+    retained.pop("timeout_seconds")
+    retained.pop("flow_tolerance_absolute")
+    retained.pop("flow_tolerance_relative")
+    retained.pop("num_cores")
+
+    request = RasExecutionRequest.from_dict(retained)
+    normalized = dict(retained)
+    normalized.update(
+        {
+            "timeout_seconds": 3600,
+            "flow_tolerance_absolute": 0.01,
+            "flow_tolerance_relative": 1e-6,
+            "num_cores": 1,
+        }
+    )
+
+    assert request.to_dict() == retained
+    assert request.payload_sha256 == request.digest == _canonical_sha256(retained)
+    assert request.specification_sha256 == _canonical_sha256(normalized)
+    assert request.payload_sha256 != request.specification_sha256
+
+    rewritten = request.write(tmp_path / "retained-request.json")
+    assert json.loads(rewritten.read_text(encoding="utf-8")) == retained
+    assert RasExecutionRequest.read(rewritten).payload_sha256 == request.payload_sha256
+
+
+def test_equivalent_request_spellings_share_specification_identity(tmp_path):
+    path = _request(tmp_path)
+    explicit = RasExecutionRequest.read(path)
+    retained = explicit.to_dict()
+    retained.pop("num_cores")
+
+    omitted = RasExecutionRequest.from_dict(retained)
+
+    assert omitted.payload_sha256 != explicit.payload_sha256
+    assert omitted.specification_sha256 == explicit.specification_sha256
+
+
+def test_retained_identity_uses_validated_portable_value_spellings(tmp_path):
+    path = _request(tmp_path)
+    payload = RasExecutionRequest.read(path).to_dict()
+    payload["plan_number"] = 1
+    payload["source_project_path"] = r"input\sample.prj"
+    payload["flow_tolerance_absolute"] = 1
+    payload["stored_maps"] = {"terrain_name": "Terrain"}
+
+    request = RasExecutionRequest.from_dict(payload)
+    retained = request.to_dict()
+
+    assert retained["plan_number"] == "01"
+    assert retained["source_project_path"] == "input/sample.prj"
+    assert retained["flow_tolerance_absolute"] == 1.0
+    assert retained["stored_maps"] == request.stored_maps.to_dict()
+
+
+def test_receipt_validation_accepts_legacy_normalized_v1_identity(tmp_path):
+    path = _request(tmp_path)
+    payload = RasExecutionRequest.read(path).to_dict()
+    payload.pop("num_cores")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    request = RasExecutionRequest.read(path)
+    _, output = request.resolve_paths(path)
+    output.mkdir(parents=True)
+    receipt_path = output / "execution_receipt.json"
+    RasExecutionReceipt(
+        execution_id=request.execution_id,
+        request_sha256=request.specification_sha256,
+        container_identity=request.container_identity,
+        runtime_container_identity=request.container_identity,
+        success=False,
+        status="failed",
+        started_at="2026-09-13T00:00:00Z",
+        finished_at="2026-09-13T00:00:01Z",
+        source_tree_sha256_before=request.source_tree_sha256,
+        source_tree_sha256_after=request.source_tree_sha256,
+        source_unchanged=True,
+        solver_verified=False,
+        hydraulic_validated=False,
+        result_validation={"passed": False},
+        error="legacy failure",
+    ).write(receipt_path)
+
+    assert validate_execution_receipt(path, receipt_path).request_sha256 == (
+        request.specification_sha256
+    )
+
+
+def test_receipt_validation_accepts_legacy_integer_tolerance_identity(tmp_path):
+    path = _request(tmp_path)
+    payload = RasExecutionRequest.read(path).to_dict()
+    payload["flow_tolerance_absolute"] = 1
+    payload["flow_tolerance_relative"] = 0
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    request = RasExecutionRequest.read(path)
+    _, output = request.resolve_paths(path)
+    output.mkdir(parents=True)
+    receipt_path = output / "execution_receipt.json"
+    RasExecutionReceipt(
+        execution_id=request.execution_id,
+        request_sha256=request._legacy_v1_sha256,
+        container_identity=request.container_identity,
+        runtime_container_identity=request.container_identity,
+        success=False,
+        status="failed",
+        started_at="2026-09-13T00:00:00Z",
+        finished_at="2026-09-13T00:00:01Z",
+        source_tree_sha256_before=request.source_tree_sha256,
+        source_tree_sha256_after=request.source_tree_sha256,
+        source_unchanged=True,
+        solver_verified=False,
+        hydraulic_validated=False,
+        result_validation={"passed": False},
+        error="legacy integer tolerance failure",
+    ).write(receipt_path)
+
+    assert request._legacy_v1_sha256 not in {
+        request.payload_sha256,
+        request.specification_sha256,
+    }
+    assert validate_execution_receipt(path, receipt_path).request_sha256 == (
+        request._legacy_v1_sha256
+    )
 
 
 def test_request_accepts_conservative_absolute_windows_ras_executable(tmp_path):

@@ -14,20 +14,19 @@ block reject it as an unknown request field.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import tempfile
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Mapping, Optional, Union
 
 from ..Decorators import log_call
 from ..RasUtils import RasUtils
-
 
 REQUEST_SCHEMA = "ras-commander-execution-request/v1"
 RECEIPT_SCHEMA = "ras-commander-execution-receipt/v1"
@@ -61,6 +60,17 @@ _STORED_MAPS_RECEIPT_FIELDS = frozenset(
 )
 _STORED_MAP_PRODUCT_FIELDS = frozenset(
     {"profile_index", "profile_name", "map_type", "primary_path", "file_count"}
+)
+_DEFAULTABLE_REQUEST_FIELDS = frozenset(
+    {
+        "preprocess_policy",
+        "timeout_seconds",
+        "flow_tolerance_absolute",
+        "flow_tolerance_relative",
+        "num_cores",
+        "schema",
+        "stored_maps",
+    }
 )
 _EXECUTION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _CONTAINER_IDENTITY = re.compile(
@@ -394,7 +404,7 @@ def atomic_write_json(path: Union[str, Path], payload: Mapping[str, Any]) -> Pat
 
 @dataclass(frozen=True)
 class RasExecutionRequest:
-    """Immutable request for one steady plan using exactly one CPU core.
+    """Immutable request for one steady or unsteady plan using one CPU core.
 
     ``source_project_path`` and ``output_directory`` are relative to the JSON
     request's directory. The request records source identities for one
@@ -449,7 +459,7 @@ class RasExecutionRequest:
         if not re.fullmatch(r"[0-9a-f]{64}", self.source_tree_sha256):
             raise ValueError("source_tree_sha256 must be a lowercase SHA-256 digest")
         if self.num_cores != 1:
-            raise ValueError("Portable steady execution requires num_cores=1")
+            raise ValueError("Portable execution requires num_cores=1")
         if not isinstance(self.timeout_seconds, int) or self.timeout_seconds < 1:
             raise ValueError("timeout_seconds must be a positive integer")
         if self.flow_tolerance_absolute < 0 or self.flow_tolerance_relative < 0:
@@ -535,12 +545,27 @@ class RasExecutionRequest:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "RasExecutionRequest":
-        """Validate and load a request mapping, rejecting unknown fields."""
+        """Validate and retain a request mapping, rejecting unknown fields.
+
+        The retained mapping remains the authoritative payload for request
+        identity.  Validation may supply dataclass defaults for omitted
+        optional fields, but those defaults must not silently change the
+        request digest recorded by an execution receipt.
+        """
         values = dict(payload)
         if "stored_maps" in values and values["stored_maps"] is None:
             # Absence is the only v1 spelling; null would not round-trip.
             raise ValueError("stored_maps must be omitted rather than null")
-        return cls(**values)
+        request = cls(**values)
+        # Preserve which optional top-level fields the retained request omitted,
+        # while emitting every supplied value in its validated wire spelling.
+        # This keeps paths, plan numbers, and nested extension objects portable.
+        retained_values = request._normalized_dict()
+        for field_name in _DEFAULTABLE_REQUEST_FIELDS - values.keys():
+            retained_values.pop(field_name, None)
+        retained = json.loads(_canonical_json(retained_values).decode("utf-8"))
+        object.__setattr__(request, "_retained_payload", retained)
+        return request
 
     @classmethod
     def read(cls, path: Union[str, Path]) -> "RasExecutionRequest":
@@ -552,12 +577,23 @@ class RasExecutionRequest:
         return cls.from_dict(payload)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the canonical serializable request.
+        """Return the retained serializable request.
 
         ``stored_maps`` is omitted when unset so v1 request bytes and digests
-        are unchanged.
+        are unchanged. Requests loaded from JSON also preserve omission of
+        other optional fields; use :attr:`specification_sha256` when a
+        normalized semantic identity is required.
         """
+        retained = getattr(self, "_retained_payload", None)
+        if retained is not None:
+            return json.loads(_canonical_json(retained).decode("utf-8"))
+        return self._normalized_dict()
+
+    def _normalized_dict(self) -> dict[str, Any]:
+        """Return every normalized contract field, omitting absent extensions."""
         payload = asdict(self)
+        payload["flow_tolerance_absolute"] = float(self.flow_tolerance_absolute)
+        payload["flow_tolerance_relative"] = float(self.flow_tolerance_relative)
         if self.stored_maps is None:
             payload.pop("stored_maps")
         else:
@@ -577,8 +613,34 @@ class RasExecutionRequest:
 
     @property
     def digest(self) -> str:
-        """SHA-256 of the canonical request payload."""
+        """SHA-256 of the canonical retained request payload."""
         return hashlib.sha256(_canonical_json(self.to_dict())).hexdigest()
+
+    @property
+    def payload_sha256(self) -> str:
+        """SHA-256 binding the receipt to the retained request payload."""
+        return self.digest
+
+    @property
+    def specification_sha256(self) -> str:
+        """SHA-256 of the normalized semantic execution specification.
+
+        Unlike :attr:`payload_sha256`, this digest is unchanged when a caller
+        omits an optional field whose value equals the contract default.  It
+        is suitable for cache keys and governed retry comparisons; receipts
+        continue to bind the exact retained payload through ``request_sha256``.
+        """
+        return hashlib.sha256(_canonical_json(self._normalized_dict())).hexdigest()
+
+    @property
+    def _legacy_v1_sha256(self) -> str:
+        """Return the normalized digest emitted by executors before payload identity."""
+        payload = asdict(self)
+        if self.stored_maps is None:
+            payload.pop("stored_maps")
+        else:
+            payload["stored_maps"] = self.stored_maps.to_dict()
+        return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
     def resolve_paths(self, request_path: Union[str, Path]) -> tuple[Path, Path]:
         """Resolve and confine input/output paths relative to one request file."""
@@ -742,7 +804,11 @@ def validate_execution_receipt(
     receipt = RasExecutionReceipt.read(supplied_receipt)
     if receipt.execution_id != request.execution_id:
         raise ValueError("Receipt execution_id does not match request")
-    if receipt.request_sha256 != request.digest:
+    if receipt.request_sha256 not in {
+        request.payload_sha256,
+        request.specification_sha256,
+        request._legacy_v1_sha256,
+    }:
         raise ValueError("Receipt request digest does not match request")
     if receipt.container_identity != request.container_identity:
         raise ValueError("Receipt container identity does not match request")

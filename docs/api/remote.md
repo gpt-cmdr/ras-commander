@@ -124,13 +124,14 @@ slowest worker's `max_runtime_minutes` plus a staging/copy-back margin. It then
 waits for already-started worker tasks before returning so those tasks cannot
 continue mutating copied project outputs after the API call has returned.
 
-## Portable Steady Execution
+## Portable Plan Execution
 
-Portable execution runs one prepared steady plan per request, always with one
-CPU core, inside a pinned container. Requests and receipts are versioned JSON
-(`ras-commander-execution-request/v1`, `ras-commander-execution-receipt/v1`),
-and every path in a request is relative to the request file's directory, so
-the same bundle runs through Docker or Slurm/Apptainer without changes.
+Portable execution runs one prepared steady or unsteady plan per request,
+always with one CPU core, inside a pinned container. Requests and receipts are
+versioned JSON (`ras-commander-execution-request/v1`,
+`ras-commander-execution-receipt/v1`), and every path in a request is relative
+to the request file's directory, so the same bundle runs through Docker or
+Slurm/Apptainer without changes.
 
 ```python
 from ras_commander.remote import (
@@ -155,6 +156,18 @@ docker_result = RasPortableDocker.execute_request(request_path)
 
 - `RasExecutionRequest.create()` records the SHA-256 of the project file and
   of the whole project tree. `read()` and `from_dict()` reject unknown fields.
+- `request.payload_sha256` (also available as the backward-compatible
+  `request.digest`) identifies the retained JSON request. Optional fields that
+  were omitted stay omitted, while supplied values are emitted in their
+  validated portable spelling. A new receipt therefore binds the caller's
+  retained field set rather than silently inserting defaults.
+- `request.specification_sha256` identifies the normalized execution meaning.
+  Requests that differ only by omission of default-valued optional fields have
+  different payload identities but the same specification identity. Use this
+  second digest for cache keys or governed retry comparisons; continue using
+  the payload identity to authenticate a particular retained request. Receipt
+  validation also accepts the normalized digest written by older v1 executors,
+  preserving validation of existing results.
 - In the container, `python -m ras_commander.remote.execute_request
   execute-request /job/request.json` copies the project to
   `<output>/runtime_project`, runs `RasCmdr.compute_plan(num_cores=1,
