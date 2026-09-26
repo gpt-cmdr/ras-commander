@@ -108,6 +108,58 @@ def _copytree_with_file_digest(
     return tree_digest.hexdigest(), project_digest.hexdigest()
 
 
+def _is_hdf5(path: Path) -> bool:
+    import h5py
+
+    return bool(h5py.is_hdf5(path))
+
+
+def _hdf_content_digest(path: Path) -> str:
+    """Return a SHA-256 of an HDF5 file's groups, datasets and attributes.
+
+    Object names are visited in sorted order; each contributes its name, its
+    attributes (sorted by name, as dtype and bytes) and, for datasets, dtype,
+    shape and raw bytes read in row blocks. Free space and object-header
+    bookkeeping are excluded, so rewriting an unchanged file keeps its digest.
+    """
+    import h5py
+    import numpy as np
+
+    digest = hashlib.sha256()
+
+    def raw(array: Any) -> bytes:
+        # Variable-length strings load as object arrays, whose bytes are pointers.
+        if array.dtype.kind == "O":
+            return b"\0".join(repr(item).encode("utf-8") for item in array.ravel())
+        return np.ascontiguousarray(array).tobytes()
+
+    def add(value: Any) -> None:
+        array = np.asarray(value)
+        digest.update(str(array.dtype).encode())
+        digest.update(str(array.shape).encode())
+        digest.update(raw(array))
+
+    with h5py.File(path, "r") as handle:
+        names = [""]
+        handle.visit(names.append)
+        for name in sorted(names):
+            node = handle[name] if name else handle
+            digest.update(b"\0" + name.encode("utf-8") + b"\0")
+            for key in sorted(node.attrs):
+                digest.update(key.encode("utf-8"))
+                add(node.attrs[key])
+            if isinstance(node, h5py.Dataset):
+                digest.update(str(node.dtype).encode())
+                digest.update(str(node.shape).encode())
+                if node.shape and node.shape[0]:
+                    step = max(1, (64 * 1024 * 1024) // max(1, node[:1].nbytes))
+                    for start in range(0, node.shape[0], step):
+                        digest.update(raw(node[start : start + step]))
+                elif node.shape == ():
+                    add(node[()])
+    return digest.hexdigest()
+
+
 def _geometry_number(plan_path: Path) -> str:
     for line in plan_path.read_text(encoding="utf-8", errors="replace").splitlines():
         match = _GEOMETRY_FILE.match(line)
@@ -133,13 +185,14 @@ def _prepare_preprocessing(
     if value is PreprocessPolicy.REUSE:
         for path in candidates:
             if path.is_file() and path.stat().st_size > 0:
-                retained.append(
-                    {
-                        "path": path.name,
-                        "size_bytes": path.stat().st_size,
-                        "mtime_ns": path.stat().st_mtime_ns,
-                    }
-                )
+                item = {
+                    "path": path.name,
+                    "size_bytes": path.stat().st_size,
+                    "mtime_ns": path.stat().st_mtime_ns,
+                }
+                if path.suffix.lower() == ".hdf" and _is_hdf5(path):
+                    item["content_sha256"] = _hdf_content_digest(path)
+                retained.append(item)
         if not retained:
             raise ValueError(
                 "REUSE requires an existing nonempty compiled geometry artifact: "
@@ -207,15 +260,27 @@ def _complete_preprocessing_evidence(
                 evidence["error"] = f"Retained preprocessor artifact missing: {prior['path']}"
                 evidence["passed"] = False
                 return False
-            after.append(
-                {
-                    "path": path.name,
-                    "size_bytes": path.stat().st_size,
-                    "mtime_ns": path.stat().st_mtime_ns,
-                }
-            )
+            item = {
+                "path": path.name,
+                "size_bytes": path.stat().st_size,
+                "mtime_ns": path.stat().st_mtime_ns,
+            }
+            if "content_sha256" in prior and _is_hdf5(path):
+                item["content_sha256"] = _hdf_content_digest(path)
+            after.append(item)
         evidence["retained_artifacts_after"] = after
-        evidence["retained_unchanged"] = after == evidence["retained_artifacts_before"]
+        # HEC-RAS opens a 2D geometry HDF read-write on every unsteady run, which
+        # rewrites HDF5 bookkeeping bytes and the mtime without changing any
+        # group, dataset or attribute. An HDF artifact is unchanged when its
+        # content digest matches; other artifacts must keep size and mtime.
+        evidence["retained_unchanged"] = all(
+            (
+                item.get("content_sha256") == prior["content_sha256"]
+                if "content_sha256" in prior
+                else item == prior
+            )
+            for item, prior in zip(after, evidence["retained_artifacts_before"])
+        )
         evidence["passed"] = bool(after) and evidence["retained_unchanged"]
         return bool(evidence["passed"])
     generated = []

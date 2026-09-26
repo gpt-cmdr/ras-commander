@@ -6,6 +6,7 @@ selects the validator -- ``.f##`` steady, ``.u##`` unsteady -- and anything else
 fails the receipt before HEC-RAS is started.
 """
 
+import os
 from pathlib import Path
 
 import h5py
@@ -416,3 +417,64 @@ def test_docker_rejects_an_empty_security_option(tmp_path):
         RasPortableDocker.build_execute_command(
             _bundle(tmp_path, "u01"), security_options=(" ",)
         )
+
+
+def _write_geometry_hdf(path: Path, elevations) -> None:
+    with h5py.File(path, "w") as handle:
+        group = handle.create_group("Geometry/2D Flow Areas/Area")
+        group.attrs["Terrain Filename"] = b"./Terrain/Terrain.hdf"
+        group.create_dataset("Cells Minimum Elevation", data=elevations)
+        group.create_dataset("Names", data=["a", "b"], dtype=h5py.string_dtype())
+
+
+def _reuse_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    project = runtime / "sample.prj"
+    project.write_text("project")
+    plan = runtime / "sample.p01"
+    plan.write_text("Geom File=g01\n")
+    geometry = runtime / "sample.g01.hdf"
+    _write_geometry_hdf(geometry, [1.0, 2.0, 3.0])
+    return project, plan, geometry
+
+
+def test_reuse_accepts_geometry_hdf_rewritten_without_content_change(tmp_path):
+    """HEC-RAS reopens a 2D geometry HDF read-write; only bookkeeping changes."""
+    project, plan, geometry = _reuse_runtime(tmp_path)
+    evidence, retained = PortableExecution._prepare_preprocessing(
+        PreprocessPolicy.REUSE.value, project, plan
+    )
+    before = geometry.stat()
+    _write_geometry_hdf(geometry, [1.0, 2.0, 3.0])
+    os.utime(geometry, ns=(before.st_atime_ns, before.st_mtime_ns + 10**9))
+
+    assert PortableExecution._complete_preprocessing_evidence(evidence, retained, 0)
+    after = evidence["retained_artifacts_after"][0]
+    assert after["mtime_ns"] != evidence["retained_artifacts_before"][0]["mtime_ns"]
+    assert after["content_sha256"] == evidence["retained_artifacts_before"][0]["content_sha256"]
+    assert evidence["retained_unchanged"] is True
+
+
+def test_reuse_rejects_geometry_hdf_with_changed_content(tmp_path):
+    project, plan, geometry = _reuse_runtime(tmp_path)
+    evidence, retained = PortableExecution._prepare_preprocessing(
+        PreprocessPolicy.REUSE.value, project, plan
+    )
+    _write_geometry_hdf(geometry, [1.0, 2.0, 3.5])
+
+    assert not PortableExecution._complete_preprocessing_evidence(evidence, retained, 0)
+    assert evidence["retained_unchanged"] is False
+
+
+def test_hdf_content_digest_ignores_file_layout_but_not_attributes(tmp_path):
+    first, second, third = (tmp_path / f"{n}.hdf" for n in "abc")
+    _write_geometry_hdf(first, [1.0, 2.0])
+    _write_geometry_hdf(second, [1.0, 2.0])
+    _write_geometry_hdf(third, [1.0, 2.0])
+    with h5py.File(third, "a") as handle:
+        handle["Geometry/2D Flow Areas/Area"].attrs["Terrain Filename"] = b"../Terrain/Terrain.hdf"
+
+    digest = PortableExecution._hdf_content_digest
+    assert digest(first) == digest(second)
+    assert digest(first) != digest(third)
