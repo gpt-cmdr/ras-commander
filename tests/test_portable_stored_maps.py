@@ -195,9 +195,6 @@ class _Harness:
 
         process = importlib.import_module("ras_commander.RasProcess").RasProcess
         monkeypatch.setattr(PortableExecution.RasPrj, "initialize", initialize)
-        monkeypatch.setattr(
-            PortableExecution.RasPlan, "is_plan_steady_state", lambda *a, **k: True
-        )
         monkeypatch.setattr(PortableExecution.RasCmdr, "compute_plan", compute)
         monkeypatch.setattr(
             PortableExecution.HdfResultsPlan,

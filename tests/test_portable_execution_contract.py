@@ -228,9 +228,6 @@ def test_execute_request_maps_preprocessing_and_preserves_source(
     monkeypatch.setattr(PortableExecution.RasPrj, "initialize", initialize)
     monkeypatch.setattr(PortableExecution, "_copytree_with_file_digest", hash_tree_once)
     monkeypatch.setattr(PortableExecution, "sha256_file", hash_result_once)
-    monkeypatch.setattr(
-        PortableExecution.RasPlan, "is_plan_steady_state", lambda *a, **k: True
-    )
     monkeypatch.setattr(PortableExecution.RasCmdr, "compute_plan", compute)
     monkeypatch.setattr(
         PortableExecution.HdfResultsPlan,
@@ -345,9 +342,6 @@ def test_preprocess_clear_failure_cannot_yield_success(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "unlink", unlink)
     monkeypatch.setattr(PortableExecution.RasPrj, "initialize", initialize)
-    monkeypatch.setattr(
-        PortableExecution.RasPlan, "is_plan_steady_state", lambda *a, **k: True
-    )
     monkeypatch.setattr(PortableExecution.RasCmdr, "compute_plan", compute)
 
     receipt = PortableExecution.execute_request(path)
@@ -379,7 +373,14 @@ def test_successful_receipt_requires_complete_evidence(tmp_path):
         )
 
 
-def test_execute_request_records_nonsteady_failure_without_solver(tmp_path, monkeypatch):
+def test_execute_request_records_unresolvable_flow_file_without_solver(
+    tmp_path, monkeypatch
+):
+    """A plan with no flow file fails the receipt before HEC-RAS starts.
+
+    This replaces a test that asserted every non-steady plan was refused;
+    unsteady plans now run, and are covered in test_portable_execution_any_plan.
+    """
     path = _request(tmp_path)
 
     def initialize(self, project_folder, ras_exe_path, **kwargs):
@@ -387,15 +388,17 @@ def test_execute_request_records_nonsteady_failure_without_solver(tmp_path, monk
         self.project_name = "sample"
         self.prj_file = self.project_folder / "sample.prj"
         self.initialized = True
+        self.plan_df = pd.DataFrame([{"plan_number": "01", "Flow Path": ""}])
+
+    def compute(*args, **kwargs):
+        raise AssertionError("the solver must not start")
 
     monkeypatch.setattr(PortableExecution.RasPrj, "initialize", initialize)
-    monkeypatch.setattr(
-        PortableExecution.RasPlan, "is_plan_steady_state", lambda *a, **k: False
-    )
+    monkeypatch.setattr(PortableExecution.RasCmdr, "compute_plan", compute)
     receipt = PortableExecution.execute_request(path)
 
     assert not receipt.success
-    assert "not classified as a steady plan" in receipt.error
+    assert "has no resolvable flow file" in receipt.error
 
 
 def test_execute_request_refuses_nonempty_output(tmp_path):

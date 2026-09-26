@@ -198,6 +198,7 @@ class RasPortableDocker:
         python_executable: str = "python",
         memory: Optional[str] = None,
         pull: str = "missing",
+        security_options: Sequence[str] = (),
     ) -> tuple[str, ...]:
         """Render a shell-free, one-CPU Docker command for one request bundle.
 
@@ -214,6 +215,9 @@ class RasPortableDocker:
             memory (Optional[str]): Optional Docker ``--memory`` limit.
             pull (str): Docker ``--pull`` policy: ``always``, ``missing``, or
                 ``never``.
+            security_options (Sequence[str]): Docker ``--security-opt``
+                values, one flag each, for example ``apparmor=unconfined``
+                on hosts whose default AppArmor profile blocks Wine.
 
         Returns:
             tuple[str, ...]: The Docker argument vector.
@@ -221,7 +225,9 @@ class RasPortableDocker:
         Raises:
             ValueError: If the image differs from ``container_identity``, the
                 identity is a SIF digest, the output directory is not empty,
-                a mount path contains a comma, or the source project is missing.
+                a mount path contains a comma, the source project is missing,
+                or ``security_options`` is a bare string or holds an empty
+                option.
         """
         request_file = Path(request_path).resolve()
         request = RasExecutionRequest.read(request_file)
@@ -264,10 +270,22 @@ class RasPortableDocker:
         ]
         if memory is not None:
             command.extend(("--memory", memory))
+        if isinstance(security_options, (str, bytes)):
+            raise ValueError(
+                "security_options must be a sequence of options, not one string"
+            )
+        for option in security_options:
+            if not str(option).strip():
+                raise ValueError("security options must be non-empty strings")
+            command.extend(("--security-opt", str(option)))
+        # Name the executable as the entrypoint. An image's own ENTRYPOINT would
+        # otherwise be prepended to these arguments; Apptainer's exec ignores
+        # it, Docker does not.
         command.extend(
             (
-                selected_image,
+                "--entrypoint",
                 python_executable,
+                selected_image,
                 "-m",
                 "ras_commander.remote.execute_request",
                 "execute-request",
@@ -289,6 +307,7 @@ class RasPortableDocker:
         python_executable: str = "python",
         memory: Optional[str] = None,
         pull: str = "missing",
+        security_options: Sequence[str] = (),
     ) -> PortableDockerExecutionResult:
         """Run one request in Docker and load its hydraulic receipt.
 
@@ -305,6 +324,7 @@ class RasPortableDocker:
             python_executable=python_executable,
             memory=memory,
             pull=pull,
+            security_options=security_options,
         )
         _, output = request.resolve_paths(request_file)
         receipt_path = output / "execution_receipt.json"
@@ -380,6 +400,7 @@ class RasPortableDocker:
         python_executable: str = "python",
         memory: Optional[str] = None,
         pull: str = "missing",
+        security_options: Sequence[str] = (),
     ) -> PortableDockerPoolResult:
         """Execute independent project requests with bounded concurrency.
 
@@ -388,8 +409,9 @@ class RasPortableDocker:
                 ``execution_id`` and output directory must be unique and no
                 output may overlap any request's source tree.
             max_concurrent (int): Containers run at once (1-256).
-            image, docker_executable, python_executable, memory, pull: Passed
-                to :meth:`execute_request` for every request.
+            image, docker_executable, python_executable, memory, pull,
+                security_options: Passed to :meth:`execute_request` for every
+                request.
 
         Returns:
             PortableDockerPoolResult: Results keyed by ``execution_id`` in
@@ -420,6 +442,7 @@ class RasPortableDocker:
                     python_executable=python_executable,
                     memory=memory,
                     pull=pull,
+                    security_options=security_options,
                 ): request.execution_id
                 for path, request in zip(paths, requests)
             }

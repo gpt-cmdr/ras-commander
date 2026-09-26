@@ -247,6 +247,20 @@ exception_functions:
       closed (reason code STEADY_RESULTS_UNREADABLE) instead of raising on
       unresolvable inputs.
 
+  - function_name: validate_unsteady_results
+    module: ras_commander.remote.PortableExecution
+    reason: |
+      Unsteady counterpart of validate_steady_results, chosen by the portable
+      execution entry point for plans whose flow file is .u##. Kept a
+      module-level function beside it so both validators share one spelling
+      and one top-level import (``from ras_commander import
+      validate_unsteady_results``).
+    category: execution_validation
+    standardize_input: |
+      Not applied: the function converts its paths with Path() and must fail
+      closed (reason code UNSTEADY_RESULTS_UNREADABLE) instead of raising on
+      unresolvable inputs.
+
   - function_name: execute_request
     module: ras_commander.remote.PortableExecution
     reason: |

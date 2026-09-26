@@ -60,7 +60,7 @@ from .ExecutionContract import (
     StoredMapsRequest,
     validate_execution_receipt,
 )
-from .PortableExecution import validate_steady_results
+from .PortableExecution import validate_steady_results, validate_unsteady_results
 # Imported eagerly (stdlib-only dependencies) so the class, not the same-named
 # submodule, is the package attribute after ``import ...remote.RasPortableDocker``.
 from .RasPortableDocker import (
@@ -105,6 +105,7 @@ __all__ = [
     'ExecutionResult',
     'get_worker_status',
     'validate_steady_results',
+    'validate_unsteady_results',
 
     # Portable one-core steady execution
     'PreprocessPolicy',
