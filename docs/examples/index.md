@@ -7,7 +7,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*141 notebooks indexed - 128 with runtime data, 13 without.*
+*141 notebooks indexed - 129 with runtime data, 12 without.*
 
 ## 100s - Initialization & Execution
 
@@ -215,7 +215,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 | [956 - NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch](../notebooks/956_hydrofabric_conflation_visual_qa.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/956_hydrofabric_conflation_visual_qa.ipynb) | 5 s |
 | [957 - Using eBFE Models: Spring River Validation](../notebooks/957_ebfe_spring_river_validation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/957_ebfe_spring_river_validation.ipynb) | N/A |
 | [958 - Model Sources: Unified Discovery, Download & Visualization](../notebooks/958_model_sources_showcase.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/958_model_sources_showcase.ipynb) | N/A |
-| [959 - Austin Bayou SH 35 2D Breakout, Flow Ladder, and NextGen Validation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | 4 min |
+| [959 - Austin Bayou SH 35: 2D breakout, NextGen conflation, boundary authoring, and validation](../notebooks/959_ebfe_2d_breakout_geometry_preparation.md) | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/959_ebfe_2d_breakout_geometry_preparation.ipynb) | 3.2 min |
 
 ## 960s - Cloud-Native Export
 
