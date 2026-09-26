@@ -197,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     execute = subparsers.add_parser(
         "execute-request",
-        help="execute one immutable one-core steady-plan request",
+        help="execute one immutable one-core HEC-RAS plan request (steady or unsteady)",
     )
     execute.add_argument("request", type=Path)
     return parser

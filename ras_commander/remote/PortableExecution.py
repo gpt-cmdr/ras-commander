@@ -27,7 +27,6 @@ from typing import Any, Union
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from ..RasCmdr import RasCmdr
-from ..RasPlan import RasPlan
 from ..RasPrj import RasPrj
 from ..RasSteady import RasSteady
 from ..hdf.HdfResultsPlan import HdfResultsPlan
@@ -424,6 +423,313 @@ def validate_steady_results(
     return summary
 
 
+#: Whole-model volume error, in percent, above which unsteady results fail.
+#: HEC-RAS guidance treats a volume error under about one percent as sound.
+UNSTEADY_VOLUME_ERROR_PERCENT_LIMIT = 1.0
+
+#: Relative tolerance between the authored inline inflow volume and the
+#: boundary inflow HEC-RAS reports, applied only when the inflow is determinable.
+UNSTEADY_INFLOW_RELATIVE_TOLERANCE = 0.01
+
+_VOLUME_ACCOUNTING_GROUP = "Results/Unsteady/Summary/Volume Accounting"
+_VOLUME_ACCOUNTING_FIELDS = {
+    "volume_error": "Error",
+    "volume_error_percent": "Error Percent",
+    "boundary_inflow_volume": "Total Boundary Flux of Water In",
+    "boundary_outflow_volume": "Total Boundary Flux of Water Out",
+    "volume_starting": "Volume Starting",
+    "volume_ending": "Volume Ending",
+}
+_CUBIC_FEET_PER_ACRE_FOOT = 43560.0
+_INTERVAL_UNIT_SECONDS = {"SEC": 1, "MIN": 60, "HOUR": 3600, "DAY": 86400}
+_INFLOW_HYDROGRAPH_KEYS = (
+    "Flow Hydrograph=",
+    "Lateral Inflow Hydrograph=",
+    "Uniform Lateral Inflow Hydrograph=",
+)
+_STAGE_DRIVEN_KEYS = ("Stage Hydrograph=", "Stage and Flow Hydrograph=")
+
+
+def _plan_flow_type(flow_path: Path) -> str | None:
+    """Classify a plan by the flow file it runs: ``.f##`` or ``.u##``.
+
+    The suffix is exact. ``RasPlan.get_plan_flow_type`` infers from project
+    tables and reports a quasi-unsteady sediment plan as steady.
+    """
+    suffix = flow_path.suffix.lower()
+    if re.fullmatch(r"\.f\d{2}", suffix):
+        return "steady"
+    if re.fullmatch(r"\.u\d{2}", suffix):
+        return "unsteady"
+    return None
+
+
+def _interval_seconds(token: Any) -> float | None:
+    match = re.fullmatch(r"\s*(\d+)\s*(SEC|MIN|HOUR|DAY)S?\s*", str(token).upper())
+    if not match:
+        return None
+    return float(int(match.group(1)) * _INTERVAL_UNIT_SECONDS[match.group(2)])
+
+
+def _ras_datetime(day: str, clock: str):
+    from datetime import datetime, timedelta
+
+    try:
+        base = datetime.strptime(day.strip(), "%d%b%Y")
+    except ValueError:
+        return None
+    text = clock.replace(":", "").strip()
+    if not text.isdigit() or len(text) not in (3, 4):
+        return None
+    # HEC-RAS writes midnight at the end of a day as 2400.
+    return base + timedelta(hours=int(text[:-2]), minutes=int(text[-2:]))
+
+
+def _simulation_seconds(plan_path: Path) -> float | None:
+    """Length of the plan's simulation window, from ``Simulation Date=``."""
+    for line in Path(plan_path).read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("Simulation Date="):
+            parts = [part.strip() for part in line.split("=", 1)[1].split(",")]
+            if len(parts) != 4:
+                return None
+            start = _ras_datetime(parts[0], parts[1])
+            end = _ras_datetime(parts[2], parts[3])
+            if start is None or end is None or end <= start:
+                return None
+            return (end - start).total_seconds()
+    return None
+
+
+def _inflow_not_determinable(flow_text: str) -> list[str]:
+    """Reasons the boundary inflow cannot be predicted from inline ordinates."""
+    reasons: set[str] = set()
+    if any(
+        line.strip().replace(" ", "").lower() == "precipitationmode=enable"
+        for line in flow_text.splitlines()
+    ):
+        reasons.add("UNSTEADY_INFLOW_PRECIPITATION_ENABLED")
+
+    blocks: list[list[str]] = []
+    for line in flow_text.splitlines():
+        if line.startswith("Boundary Location="):
+            blocks.append([])
+        elif blocks:
+            blocks[-1].append(line.strip())
+    for block in blocks:
+        uses_dss = any(line.replace(" ", "").lower() == "usedss=true" for line in block)
+        fixed_start = any(
+            line.replace(" ", "").lower() == "usefixedstarttime=true" for line in block
+        )
+        is_inflow = any(line.startswith(_INFLOW_HYDROGRAPH_KEYS) for line in block)
+        for line in block:
+            if line.startswith(_STAGE_DRIVEN_KEYS):
+                count = line.split("=", 1)[1].strip()
+                if uses_dss or (count.isdigit() and int(count) > 0):
+                    reasons.add("UNSTEADY_INFLOW_STAGE_DRIVEN_BOUNDARY")
+        if is_inflow and uses_dss:
+            reasons.add("UNSTEADY_INFLOW_FROM_DSS")
+        if is_inflow and fixed_start:
+            reasons.add("UNSTEADY_INFLOW_FIXED_START_TIME")
+    return sorted(reasons)
+
+
+def _integrate_hydrograph(values: list[float], step_seconds: float, window: float) -> float | None:
+    """Volume under a linearly interpolated hydrograph over ``[0, window]``.
+
+    Returns ``None`` when the ordinates end before the window does, since
+    HEC-RAS would not have run such a plan as authored.
+    """
+    if len(values) < 2 or (len(values) - 1) * step_seconds < window - 1e-6:
+        return None
+    total = 0.0
+    for index in range(len(values) - 1):
+        start = index * step_seconds
+        if start >= window:
+            break
+        first, second = float(values[index]), float(values[index + 1])
+        end = start + step_seconds
+        if end <= window:
+            total += (first + second) / 2.0 * step_seconds
+        else:
+            fraction = (window - start) / step_seconds
+            at_window = first + (second - first) * fraction
+            total += (first + at_window) / 2.0 * (window - start)
+    return total
+
+
+@log_call
+def validate_unsteady_results(
+    hdf_path: Union[str, Path],
+    flow_path: Union[str, Path],
+    plan_path: Union[str, Path],
+    *,
+    volume_error_percent_limit: float = UNSTEADY_VOLUME_ERROR_PERCENT_LIMIT,
+    inflow_relative_tolerance: float = UNSTEADY_INFLOW_RELATIVE_TOLERANCE,
+) -> dict[str, Any]:
+    """Validate an unsteady result from HEC-RAS's own volume accounting.
+
+    Model-agnostic across 1D, 2D, and combined models: HEC-RAS writes whole-model
+    volume accounting to ``Results/Unsteady/Summary/Volume Accounting`` for
+    every unsteady run. The result passes when that block exists, its values are
+    finite, and the absolute volume error is within
+    ``volume_error_percent_limit``.
+
+    When every inflow is an inline hydrograph -- no DSS-sourced inflow, no
+    stage-driven boundary, no fixed start time, and precipitation disabled --
+    the authored inflow volume is integrated over the simulation window and
+    must match HEC-RAS's ``Total Boundary Flux of Water In`` within
+    ``inflow_relative_tolerance``. Otherwise that reconciliation is recorded as
+    ``not_applicable`` with its reasons; it is never assumed to pass.
+
+    The function never raises for unreadable or inconsistent inputs; it fails
+    closed with ``passed=False`` and one or more reason codes.
+
+    Args:
+        hdf_path: Computed unsteady plan HDF (``.p##.hdf``).
+        flow_path: Unsteady flow file (``.u##``) the plan ran with.
+        plan_path: Plan file (``.p##``), for the simulation window.
+        volume_error_percent_limit: Largest acceptable ``|Error Percent|``.
+        inflow_relative_tolerance: Relative tolerance for inflow reconciliation.
+
+    Returns:
+        dict[str, Any]: ``passed``, ``reason_codes``, ``flow_type``,
+        ``volume_units``, the volume-accounting values, the limit, and an
+        ``inflow_reconciliation`` section. Reason codes:
+        ``UNSTEADY_RESULTS_UNREADABLE``, ``UNSTEADY_VOLUME_ACCOUNTING_MISSING``,
+        ``UNSTEADY_NONFINITE_VOLUME``, ``UNSTEADY_VOLUME_ERROR_EXCEEDED``,
+        ``UNSTEADY_INFLOW_MISMATCH``.
+
+    Examples:
+        >>> from ras_commander.remote.PortableExecution import validate_unsteady_results
+        >>> summary = validate_unsteady_results("M.p01.hdf", "M.u01", "M.p01")  # doctest: +SKIP
+        >>> summary["passed"], summary["inflow_reconciliation"]["status"]  # doctest: +SKIP
+        (True, 'passed')
+    """
+    reason_codes: list[str] = []
+    reconciliation: dict[str, Any] = {
+        "status": "not_applicable",
+        "reasons": [],
+        "authored_inflow_volume": None,
+        "reported_inflow_volume": None,
+        "relative_difference": None,
+        "tolerance": inflow_relative_tolerance,
+        "hydrographs_integrated": 0,
+    }
+    summary: dict[str, Any] = {
+        "passed": False,
+        "reason_codes": reason_codes,
+        "flow_type": "unsteady",
+        "volume_units": None,
+        "volume_error_percent_limit": volume_error_percent_limit,
+        "inflow_reconciliation": reconciliation,
+        **{field: None for field in _VOLUME_ACCOUNTING_FIELDS},
+    }
+
+    try:
+        import h5py
+
+        with h5py.File(hdf_path, "r") as handle:
+            group = handle.get(_VOLUME_ACCOUNTING_GROUP)
+            attributes = dict(group.attrs) if group is not None else None
+    except Exception as exc:  # noqa: BLE001 - fail closed on any read error
+        summary["error"] = f"{type(exc).__name__}: {exc}"
+        reason_codes.append("UNSTEADY_RESULTS_UNREADABLE")
+        return summary
+
+    missing = (
+        list(_VOLUME_ACCOUNTING_FIELDS.values())
+        if attributes is None
+        else [name for name in _VOLUME_ACCOUNTING_FIELDS.values() if name not in attributes]
+    )
+    if missing:
+        summary["missing_attributes"] = missing
+        reason_codes.append("UNSTEADY_VOLUME_ACCOUNTING_MISSING")
+        return summary
+
+    units = attributes.get("Vol Accounting in")
+    if isinstance(units, bytes):
+        units = units.decode("utf-8", errors="replace")
+    summary["volume_units"] = str(units).strip() if units is not None else None
+    values = {}
+    for field, attribute in _VOLUME_ACCOUNTING_FIELDS.items():
+        try:
+            values[field] = float(attributes[attribute])
+        except (TypeError, ValueError):
+            values[field] = float("nan")
+    summary.update(values)
+    if not all(_finite(value) for value in values.values()):
+        reason_codes.append("UNSTEADY_NONFINITE_VOLUME")
+        return summary
+    if abs(values["volume_error_percent"]) > volume_error_percent_limit:
+        reason_codes.append("UNSTEADY_VOLUME_ERROR_EXCEEDED")
+
+    # --- inflow reconciliation, only when the inflow is fully determinable ----
+    not_determinable: list[str] = []
+    try:
+        flow_text = Path(flow_path).read_text(encoding="utf-8", errors="replace")
+        not_determinable.extend(_inflow_not_determinable(flow_text))
+    except OSError:
+        not_determinable.append("UNSTEADY_INFLOW_FLOW_FILE_UNREADABLE")
+    if (summary["volume_units"] or "").lower() != "acre feet":
+        not_determinable.append("UNSTEADY_INFLOW_UNITS_UNSUPPORTED")
+    window = _simulation_seconds(Path(plan_path))
+    if window is None:
+        not_determinable.append("UNSTEADY_INFLOW_SIMULATION_WINDOW_UNREADABLE")
+
+    authored_cubic_feet = 0.0
+    if not not_determinable:
+        from ..RasUnsteady import RasUnsteady
+
+        try:
+            hydrographs = RasUnsteady.get_inline_hydrograph_boundaries(Path(flow_path))
+        except Exception:  # noqa: BLE001
+            hydrographs = None
+            not_determinable.append("UNSTEADY_INFLOW_HYDROGRAPHS_UNREADABLE")
+        if hydrographs is not None:
+            try:
+                for row in hydrographs.itertuples(index=False):
+                    step = _interval_seconds(getattr(row, "interval", None))
+                    # ``values`` is a NumPy array: test it for None, never for truth.
+                    raw = getattr(row, "values", None)
+                    ordinates = [] if raw is None else [float(v) for v in list(raw)]
+                    if step is None:
+                        not_determinable.append("UNSTEADY_INFLOW_INTERVAL_UNSUPPORTED")
+                        break
+                    if any(not _finite(v) for v in ordinates):
+                        not_determinable.append("UNSTEADY_INFLOW_NONFINITE_ORDINATE")
+                        break
+                    volume = _integrate_hydrograph(ordinates, step, window)
+                    if volume is None:
+                        not_determinable.append("UNSTEADY_INFLOW_HYDROGRAPH_SHORTER_THAN_RUN")
+                        break
+                    authored_cubic_feet += volume
+                    reconciliation["hydrographs_integrated"] += 1
+            except Exception as exc:  # noqa: BLE001 - the validator never raises
+                reconciliation["error"] = f"{type(exc).__name__}: {exc}"
+                not_determinable.append("UNSTEADY_INFLOW_HYDROGRAPHS_UNREADABLE")
+
+    if not_determinable:
+        reconciliation["reasons"] = sorted(set(not_determinable))
+    else:
+        authored = authored_cubic_feet / _CUBIC_FEET_PER_ACRE_FOOT
+        reported = values["boundary_inflow_volume"]
+        scale = max(abs(authored), abs(reported))
+        difference = 0.0 if scale == 0 else abs(reported - authored) / scale
+        reconciliation.update(
+            authored_inflow_volume=authored,
+            reported_inflow_volume=reported,
+            relative_difference=difference,
+        )
+        if difference <= inflow_relative_tolerance:
+            reconciliation["status"] = "passed"
+        else:
+            reconciliation["status"] = "failed"
+            reason_codes.append("UNSTEADY_INFLOW_MISMATCH")
+
+    summary["passed"] = not reason_codes
+    return summary
+
+
 @log_call
 def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
     """Execute a validated request and write ``execution_receipt.json``.
@@ -432,6 +738,13 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
     success requires all of the following: ``RasCmdr.compute_plan`` success,
     a non-empty plan HDF, a ``Complete Process`` compute message, no parsed
     compute errors. The solver runs only on an isolated source-tree copy.
+
+    Execution is agnostic to model type: 1D, 2D, and combined models, steady
+    and unsteady, run through the same path. Only hydraulic validation depends
+    on the plan, chosen by the flow file it runs -- ``validate_steady_results``
+    for ``.f##`` and ``validate_unsteady_results`` for ``.u##``. The plan type,
+    flow file, and validator are recorded in the receipt's
+    ``compute_diagnostics["plan"]``. Any other flow file fails the receipt.
 
     When the request carries a ``stored_maps`` block, maps are generated only
     after the steady results pass hydraulic validation, by
@@ -490,6 +803,11 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
         "passed": False,
         "reason_codes": ["STEADY_RESULTS_NOT_EVALUATED"],
     }
+    plan_evidence: dict[str, Any] = {
+        "flow_type": None,
+        "flow_file": None,
+        "validator": None,
+    }
     preprocessing_evidence = {
         "requested_policy": request.preprocess_policy,
         "effective_action": "not-started",
@@ -505,22 +823,38 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
             prj_file=runtime_project,
             load_results_summary=False,
         )
-        if not RasPlan.is_plan_steady_state(
-            request.plan_number, ras_object=ras_object
-        ):
-            raise ValueError(
-                f"Plan {request.plan_number} is not classified as a steady plan"
-            )
-
         plan_row = ras_object.plan_df[
             ras_object.plan_df["plan_number"] == request.plan_number
         ]
         if plan_row.empty or not str(plan_row.iloc[0].get("Flow Path", "")).strip():
-            raise ValueError("Selected steady plan has no resolvable flow file")
+            raise ValueError(
+                f"Plan {request.plan_number} has no resolvable flow file"
+            )
         flow_path = Path(plan_row.iloc[0]["Flow Path"])
         plan_path = runtime_root / f"{runtime_project.stem}.p{request.plan_number}"
         if not plan_path.is_file():
-            raise ValueError(f"Selected steady plan file is missing: {plan_path}")
+            raise ValueError(f"Selected plan file is missing: {plan_path}")
+
+        # The solver is agnostic to model type; only validation depends on it.
+        flow_type = _plan_flow_type(flow_path)
+        plan_evidence["flow_file"] = flow_path.name
+        if flow_type is None:
+            raise ValueError(
+                f"Plan {request.plan_number} runs flow file {flow_path.name}; "
+                "only steady (.f##) and unsteady (.u##) plans are supported"
+            )
+        plan_evidence["flow_type"] = flow_type
+        plan_evidence["validator"] = (
+            "validate_steady_results" if flow_type == "steady" else "validate_unsteady_results"
+        )
+        result_validation["reason_codes"] = [f"{flow_type.upper()}_RESULTS_NOT_EVALUATED"]
+        if request.stored_maps is not None and flow_type != "steady":
+            # Stored maps are generated at steady profiles; refuse before
+            # spending a solve rather than skip them after one.
+            raise ValueError(
+                "Stored maps are supported only for steady plans; "
+                f"plan {request.plan_number} is unsteady"
+            )
 
         preprocessing_evidence, required_preprocess_outputs = _prepare_preprocessing(
             request.preprocess_policy, runtime_project, plan_path
@@ -588,12 +922,17 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
             and not diagnostics.get("has_errors")
         )
         if solver_verified:
-            result_validation = validate_steady_results(
-                hdf_path,
-                flow_path,
-                absolute_tolerance=request.flow_tolerance_absolute,
-                relative_tolerance=request.flow_tolerance_relative,
-            )
+            if flow_type == "steady":
+                result_validation = validate_steady_results(
+                    hdf_path,
+                    flow_path,
+                    absolute_tolerance=request.flow_tolerance_absolute,
+                    relative_tolerance=request.flow_tolerance_relative,
+                )
+            else:
+                result_validation = validate_unsteady_results(
+                    hdf_path, flow_path, plan_path
+                )
             hydraulic_validated = bool(result_validation["passed"])
         compute_success = solver_verified and hydraulic_validated
         if not solver_verified:
@@ -601,8 +940,9 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
                 "first_error_line"
             ) or "HEC-RAS compute did not pass HDF and compute-message validation"
         elif not hydraulic_validated:
-            error = "Steady results failed hydraulic validation: " + ", ".join(
-                result_validation["reason_codes"]
+            error = (
+                f"{flow_type.capitalize()} results failed hydraulic validation: "
+                + ", ".join(result_validation["reason_codes"])
             )
     except Exception as exc:
         logger.exception("Portable execution failed for %s", request.execution_id)
@@ -654,6 +994,7 @@ def execute_request(request_path: Union[str, Path]) -> RasExecutionReceipt:
     }
     diagnostics["preprocessing"] = preprocessing_evidence
     diagnostics["fresh_result"] = fresh_result_evidence
+    diagnostics["plan"] = plan_evidence
     runtime_identity = os.environ.get(
         "RAS_COMMANDER_RUNTIME_CONTAINER_IDENTITY", request.container_identity
     )
