@@ -10,7 +10,7 @@ markdown tables (one row per example notebook). For each notebook it emits:
 * Source    - link to the source ``.ipynb`` on GitHub
 * Runtime   - total cell-execution wall time summed from the notebook's
               per-cell ``metadata.execution`` timestamps, or ``N/A`` when the
-              notebook was committed without execution outputs.
+              notebook has no usable recorded timing metadata.
 
 It is meant to run during the docs build, AFTER
 ``.claude/scripts/prepare_notebooks_for_docs.py`` (which converts the
@@ -223,9 +223,11 @@ def build_index_markdown(examples_dir: Path) -> Tuple[str, int, int]:
         "# Example Notebooks\n\n"
         "These are the canonical, runnable examples for ras-commander. Each row "
         "links to the rendered documentation page and to the source `.ipynb` on "
-        "GitHub. **Runtime** is the summed cell-execution wall time captured the "
-        "last time the notebook was executed (`N/A` means the notebook was "
-        "committed without execution outputs).\n\n"
+        "GitHub. **Runtime** uses recorded notebook wall time when available, "
+        "otherwise summed cell timings. `N/A` means no usable timing metadata; "
+        "it does not mean outputs are absent. Saved outputs and runtime alone "
+        "do not establish that the central workflow or hydraulic checks passed. "
+        "Read each notebook's results and limitations.\n\n"
         "See [Example Projects](example-projects.md) for the CRS-valid source "
         "catalog and MapLibre review contract for ras2cng-exported model "
         "bundles.\n\n"

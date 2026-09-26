@@ -113,6 +113,8 @@ plugins:
       type: date
   - redirects:
       redirect_maps:
+        notebooks/223_steady_floodway_encroachment.md: user-guide/quality-assurance/floodway-check.md
+        notebooks/311_2d_floodway_encroachment.md: user-guide/quality-assurance/floodway-check.md
         notebooks/610_fluvial_pluvial_delineation.md: notebooks/610_generate_fluvial_pluvial_delineations_max_wse_arrival_time.md
         notebooks/219_mannings_region_polygon_authoring.md: notebooks/233_mannings_region_polygon_authoring.md
 
@@ -191,6 +193,7 @@ nav:
     - DSS Operations: user-guide/dss-operations.md
     - USGS Gauge Data Retrieval: user-guide/usgs-gauge-data.md
     - Gridded Historic Precipitation: user-guide/gridded-precipitation.md
+    - Coastal Water Levels: user-guide/coastal-boundaries.md
     - Atlas 14 Precipitation: user-guide/atlas14-precipitation.md
     - Project File Validation: user-guide/project-file-validation.md
     - Quality Assurance (RasCheck):

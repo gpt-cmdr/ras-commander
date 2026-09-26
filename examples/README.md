@@ -5,7 +5,7 @@ The notebooks are reference workflows for hydraulic modelers and developers;
 use them to understand API patterns, then move repeatable production logic into
 library code or scripts.
 
-The current git inventory contains **137 canonical notebooks** under
+The current git inventory contains **139 canonical notebooks** under
 `examples/`. Executed copies, temporary test notebooks, extracted HEC-RAS
 projects, and generated artifacts are intentionally excluded from this README.
 
@@ -40,6 +40,14 @@ projects, and generated artifacts are intentionally excluded from this README.
 - [950_ebfe_spring_creek.ipynb](950_ebfe_spring_creek.ipynb) through [958_model_sources_showcase.ipynb](958_model_sources_showcase.ipynb) - FEMA eBFE/BLE organization and validation.
 - [960_cloud_native_geometry_export.ipynb](960_cloud_native_geometry_export.ipynb) through [962_cloud_native_cog_results_export.ipynb](962_cloud_native_cog_results_export.ipynb) - cloud-native export with `ras2cng`.
 
+## Floodway example status
+
+Notebooks 223 and 311 have been withdrawn pending engineering qualification.
+Steady encroachment parsing and 2D solver application are not established by
+those examples' prior outputs. See the
+[floodway diagnostic scope](../docs/user-guide/quality-assurance/floodway-check.md)
+for experimental API status and the evidence required before restoring them.
+
 ## Current Inventory
 
 ### 100s - Initialization & Execution
@@ -69,7 +77,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 `217_1d_levee_authoring.ipynb`, `218_infiltration_base_override_authoring.ipynb`,
 `219_1d_bridge_xs_plotting.ipynb`,
 `220_calibration_workflow.ipynb`, `221_calibration_1d_workflow.ipynb`,
-`222_steady_flow_calibration.ipynb`, `223_steady_floodway_encroachment.ipynb`,
+`222_steady_flow_calibration.ipynb`,
 `224_steady_flow_authoring.ipynb`, `225_fixit_blocked_obstructions.ipynb`,
 `226_2d_connection_culvert_invert_validation.ipynb`,
 `227_2d_connection_culvert_authoring.ipynb`, `228_mannings_n_from_nlcd.ipynb`,
@@ -81,7 +89,7 @@ projects, and generated artifacts are intentionally excluded from this README.
 ### 300s - Unsteady Flow & DSS
 
 `300_unsteady_flow_operations.ipynb`, `301_flow_hydrograph_optimization.ipynb`,
-`310_dss_boundary_extraction.ipynb`, `311_2d_floodway_encroachment.ipynb`,
+`310_dss_boundary_extraction.ipynb`,
 `312_boundary_df_qmult_dss_paths.ipynb`, `313_hms_to_ras_boundary_matching.ipynb`,
 `314_reference_line_generation.ipynb`, `315_2d_computation_options.ipynb`,
 `316_terrain_modifications.ipynb`, `317_restart_file_settings.ipynb`,

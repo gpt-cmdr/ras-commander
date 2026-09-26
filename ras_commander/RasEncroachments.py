@@ -54,7 +54,14 @@ _POLYGON_POINTS_ATTRS = {
 
 
 class RasEncroachments:
-    """Static helpers for 2D floodway encroachment authoring."""
+    """Experimental helpers for 2D floodway GIS-input authoring.
+
+    Input readback is distinct from solver application. In the withdrawn
+    notebook 311, the HEC-RAS 6.6 run returned completion booleans but no native
+    unsteady encroachment result arrays and zero maximum-WSE differences.
+    Hydraulic application of these authored inputs remains unqualified; see
+    the floodway-check guide. The GIS authoring APIs remain available.
+    """
 
     @staticmethod
     @log_call
@@ -284,7 +291,12 @@ class RasEncroachments:
         ras_object=None,
     ) -> Dict[str, Any]:
         """
-        Create or configure a 2D floodway encroachment plan from structured input.
+        Create or configure experimental 2D floodway GIS inputs.
+
+        This authors files and layers; it does not establish that the solver
+        applies the encroachment. The retained notebook 311 run had no native
+        encroachment result arrays and all compared maximum-WSE differences
+        were zero. Independently qualify solver application before study use.
 
         When ``new_plan_shortid`` or ``new_title`` is supplied, ``template_plan``
         is cloned with :meth:`RasPlan.clone_plan` before authoring the companion

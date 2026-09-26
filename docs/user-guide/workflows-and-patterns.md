@@ -18,7 +18,7 @@ new_plan = RasPlan.clone_plan("01", "sensitivity_01")
 
 # 3. Modify parameters
 RasPlan.set_num_cores(new_plan, 8)
-RasPlan.set_computation_interval(new_plan, "1MIN")
+RasPlan.update_plan_intervals(new_plan, computation_interval="1MIN")
 
 # 4. Execute
 success = RasCmdr.compute_plan(new_plan)
@@ -26,7 +26,7 @@ success = RasCmdr.compute_plan(new_plan)
 # 5. Analyze results
 if success:
     max_wse = HdfResultsMesh.get_mesh_max_ws(new_plan)
-    print(f"Max WSE: {max_wse['max_ws'].max():.2f} ft")
+    print(f"Max WSE: {max_wse['maximum_water_surface'].max():.2f} (model length units)")
 ```
 
 ## Batch Parameter Sensitivity
@@ -83,7 +83,7 @@ for i in range(1, 11):
 # Execute in parallel (local machine)
 results = RasCmdr.compute_parallel(
     plan_number=plans,
-    num_workers=4,    # 4 parallel workers
+    max_workers=4,    # 4 parallel workers
     num_cores=4       # 4 cores per worker
 )
 
@@ -151,7 +151,7 @@ for plan in plans:
     stats = {
         'plan': plan,
         'runtime_seconds': runtime.get('Compute Time (s)', 0),
-        'max_wse': max_wse['max_ws'].max(),
+        'max_wse': max_wse['maximum_water_surface'].max(),
         'max_depth': max_depth['max_depth'].max(),
         'avg_depth': max_depth['max_depth'].mean()
     }
@@ -250,7 +250,7 @@ plans = ["01", "02", "03", "04", "05", "06"]
 
 results = RasCmdr.compute_parallel(
     plan_number=plans,
-    num_workers=4,
+    max_workers=4,
     num_cores=4,
     clear_geompre=False  # Don't clear cached geometry!
 )

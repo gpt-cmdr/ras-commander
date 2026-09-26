@@ -55,16 +55,28 @@ def convert_notebooks(examples_dir: Path, output_dir: Path) -> int:
     )
 
     if result.returncode != 0:
-        print(f"  Some errors during conversion:")
-        print(f"  {result.stderr[:500]}")
+        raise RuntimeError(
+            f"Notebook conversion failed (exit {result.returncode}); "
+            f"refusing to publish partial or stale output.\n{result.stderr[-4000:]}"
+        )
 
     # Show conversion output
     for line in result.stderr.split('\n'):
         if 'Converting' in line or 'Writing' in line:
             print(f"  {line.strip()}")
 
-    # Count results
-    md_files = list(output_dir.glob("*.md"))
+    # Count only this source set. Existing files cannot hide a missing conversion.
+    md_files = [output_dir / f"{notebook.stem}.md" for notebook in notebooks]
+    missing = [path.name for path in md_files if not path.is_file()]
+    if missing:
+        raise RuntimeError(f"Missing converted notebooks: {', '.join(missing)}")
+    # Disposable build mirrors survive git reset with ignored rendered pages.
+    # Remove only numbered notebook Markdown that no longer has a source; keep
+    # hand-copied README/AGENTS and assets. This also lets retirement redirects win.
+    expected_names = {path.name for path in md_files}
+    for stale in output_dir.glob("*.md"):
+        if re.match(r"^\d+_", stale.name) and stale.name not in expected_names:
+            stale.unlink()
     print(f"Created {len(md_files)} markdown files")
 
     # Preserve committed notebook figures referenced from Markdown cells.

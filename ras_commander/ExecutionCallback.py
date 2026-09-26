@@ -20,18 +20,18 @@ class ExecutionCallback(Protocol):
     This defines the interface for monitoring HEC-RAS computation lifecycle.
     Implementations can provide any subset of these methods - all are optional.
 
-    Lifecycle Order:
-        1. on_prep_start()     - Before geometry preprocessing
-        2. on_prep_complete()  - After preprocessing
-        3. on_exec_start()     - HEC-RAS subprocess started
+    Lifecycle Hooks (terminal ordering depends on the execution outcome):
+        1. on_prep_start()     - Before plan setup
+        2. on_prep_complete()  - After plan setup, before engine preprocessing
+        3. on_exec_start()     - Immediately before HEC-RAS subprocess launch
         4. on_exec_message()   - During execution (potentially many calls)
         5. on_exec_complete()  - HEC-RAS subprocess finished
         6. on_verify_result()  - After HDF verification (if verify=True)
 
     Thread Safety:
-        When used with compute_parallel(), callbacks are invoked from
-        worker threads concurrently. Implementations MUST be thread-safe.
-        Use locks, thread-local storage, or atomic operations as needed.
+        compute_plan() accepts stream_callback; compute_parallel() and
+        compute_test_mode() do not. If caller-managed threads share a callback,
+        protect shared state with locks, thread-local storage, or atomic operations.
 
     Example - Simple Console Logging:
         >>> class ConsoleCallback:
@@ -59,7 +59,7 @@ class ExecutionCallback(Protocol):
 
     def on_prep_start(self, plan_number: str) -> None:
         """
-        Called before geometry preprocessing and core setup.
+        Called before plan setup, including preprocessor-file clearing and core setup.
 
         This is invoked before:
         - Geometry preprocessor file clearing (if clear_geompre=True)
@@ -69,13 +69,13 @@ class ExecutionCallback(Protocol):
             plan_number: Plan identifier (e.g., "01", "02")
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
         """
         ...
 
     def on_prep_complete(self, plan_number: str) -> None:
         """
-        Called after geometry preprocessing and core setup complete.
+        Called after plan setup completes; engine preprocessing may still be required.
 
         This is invoked after:
         - Geometry preprocessor files cleared (if applicable)
@@ -86,13 +86,13 @@ class ExecutionCallback(Protocol):
             plan_number: Plan identifier (e.g., "01", "02")
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
         """
         ...
 
     def on_exec_start(self, plan_number: str, command: str) -> None:
         """
-        Called when HEC-RAS subprocess starts.
+        Called immediately before launching the HEC-RAS subprocess.
 
         This is invoked immediately before subprocess execution begins.
         The command includes the full command line that will be executed.
@@ -107,7 +107,7 @@ class ExecutionCallback(Protocol):
             This is the last callback before HEC-RAS begins running.
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
         """
         ...
 
@@ -133,7 +133,7 @@ class ExecutionCallback(Protocol):
             - For expensive operations, queue messages and process in separate thread
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
             CRITICAL: Implement proper locking if writing to shared resources.
 
         Example Messages:
@@ -148,11 +148,13 @@ class ExecutionCallback(Protocol):
         """
         Called when HEC-RAS execution finishes.
 
-        This is invoked immediately after subprocess completes (successfully or not).
+        This reports the execution-phase outcome. Later artifact handling can
+        still change the final ComputeResult.success value.
 
         Args:
             plan_number: Plan identifier (e.g., "01", "02")
-            success: True if subprocess exited with code 0, False otherwise
+            success: Execution-phase success under the selected engine contract;
+                not necessarily equivalent to a zero launcher return code
             duration: Execution time in seconds (floating point)
 
         Note:
@@ -161,7 +163,7 @@ class ExecutionCallback(Protocol):
             - duration is wall-clock time, not CPU time
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
         """
         ...
 
@@ -177,11 +179,12 @@ class ExecutionCallback(Protocol):
 
         Note:
             - Only called when RasCmdr.compute_plan(..., verify=True)
-            - verified=True is the strongest guarantee that HEC-RAS succeeded
+            - verified=True reports completion evidence, not hydraulic acceptance
+              or successful later artifact handling
             - verified=False may indicate computation errors or incomplete results
 
         Thread Safety:
-            May be called concurrently for different plans in compute_parallel().
+            Protect shared state if caller-managed threads share this callback.
         """
         ...
 
