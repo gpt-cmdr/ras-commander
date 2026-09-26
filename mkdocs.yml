@@ -248,6 +248,7 @@ nav:
     - Multi-Harness Agent Contract: development/multi-harness-agent-contract.md
     - Contributing: development/contributing.md
     - Architecture: development/architecture.md
+    - HDF Results Query Architecture: development/hdf-results-query-architecture.md
     - HEC-RAS 6.3.0.2 Wine Compute Qualification: development/hec-ras-6302-wine-compute-plan-qualification.md
     - Gridded Precipitation Version Matrix: development/gridded-precipitation-version-matrix.md
     - Release Notes: development/release-notes.md

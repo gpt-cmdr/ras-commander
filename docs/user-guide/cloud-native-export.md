@@ -174,6 +174,33 @@ The most commonly used geometry layers are:
 
 Results export is most useful for 2D summary outputs that you want to analyze outside HEC-RAS. A common pattern is to export mesh cell polygons first, then export a results variable and join those values onto the polygons so the output is immediately ready for mapping.
 
+For a downstream loader that does not need geometry, use ras-commander's
+bounded semantic readers instead of reproducing raw HDF paths:
+
+```python
+from ras_commander import HdfResultsMesh
+
+# Native HEC-RAS summary values, identifiers, times, units, and metadata only.
+summary = HdfResultsMesh.get_mesh_summary_values(
+    "BaldEagleDamBrk.p03.hdf",
+    "Maximum Water Surface",
+)
+
+# Time-major batches suitable for Arrow/Parquet/database ingestion.
+for batch in HdfResultsMesh.iter_mesh_timeseries(
+    "BaldEagleDamBrk.p03.hdf",
+    "BaldEagleCr",
+    "Water Surface",
+    max_chunk_bytes=16 * 1024 * 1024,
+):
+    load_batch(batch)
+```
+
+DuckDB session ownership and durable SQL schemas remain in `ras2cng` (or a
+separate optional connector); DuckDB is not required by ras-commander. See the
+[HDF results query architecture](../development/hdf-results-query-architecture.md)
+for the boundary and native-summary caveats.
+
 === "CLI"
 
     ```bash

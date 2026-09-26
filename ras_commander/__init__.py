@@ -298,7 +298,8 @@ _LAZY_EXPORTS = {
             'HdfBase', 'HdfUtils', 'HdfPlan', 'HdfMesh', 'HdfXsec',
             'HdfBndry', 'HdfStruc', 'HdfStorageArea',
             'HdfHydraulicTables', 'HdfResultsPlan', 'HdfResultsMesh',
-            'HdfResultsQuery', 'HdfResultsXsec', 'HdfResultsBreach',
+            'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
+            'HdfResultsBreach',
             'HdfResultsSediment', 'HdfResultsProducts', 'HdfPipe',
             'HdfPump', 'HdfInfiltration', 'HdfLandCover', 'HdfPlot',
             'HdfResultsPlot', 'HdfFluvialPluvial', 'HdfBenefitAreas',
@@ -529,7 +530,8 @@ __all__ = [
 
     # HDF handling
     'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
-    'HdfResultsMesh', 'HdfResultsPlan', 'HdfResultsProducts', 'HdfResultsQuery',
+    'HdfResultsMesh', 'HdfResultView', 'HdfResultsPlan',
+    'HdfResultsProducts', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsSediment',
     'HdfStruc', 'HdfStorageArea', 'HdfUtils', 'HdfXsec', 'HdfPump',
     'HdfPipe', 'HdfInfiltration', 'HdfLandCover', 'HdfHydraulicTables', 'HdfResultsBreach', 'RasBreach',
