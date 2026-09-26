@@ -15,6 +15,13 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 - Use `Atlas14Grid`, `Atlas14Variance`, and `AbmHyetographGrid` for spatial Atlas 14 analysis and rain-on-grid workflows.
 - Use `AbmHyetographGrid.to_ras_netcdf()` to convert interval-ending ABM rate grids to projected HEC-RAS GDAL NetCDF forcing; keep storm-end and forcing-end metadata distinct when extending zero-rate frames through the plan end.
 - Use `PrecipHrrr` for HRRR forecast download and `VortexCli` when the workflow needs gridded met conversion to DSS.
+- Use `RasPrecipGrid` for explicit projected GeoTIFF/GRIB normalization and
+  `RasUnsteady.set_gridded_precipitation_geotiff()` / `_grib()` for durable
+  NetCDF plus native-HDF authoring. Timestamps are interval-ending for amounts
+  and rates; explicit units are depth units, with `value_type` supplying time semantics.
+- Use `PrecipCapabilities` or `RasUnsteady.get_gridded_precipitation_capabilities()`
+  for exact-release and route evidence. NetCDF `native_hdf` qualification describes
+  library-authored HDF; `native` describes vendor GDAL ingestion. Never conflate them.
 
 ## Critical Rules
 

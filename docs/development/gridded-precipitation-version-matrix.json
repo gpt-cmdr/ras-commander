@@ -1,0 +1,412 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-25",
+  "scope": "HEC-RAS global gridded meteorological precipitation",
+  "status_vocabulary": [
+    "Supported and qualified",
+    "Supported with translation",
+    "Supported with documented limitation",
+    "Vendor defect / avoid",
+    "Unsupported",
+    "Not yet tested"
+  ],
+  "qualification_fixture": {
+    "project": "HEC-RAS 6.0 official Bald Eagle Creek Multi-2D example",
+    "plan": "06 - Gridded Precip - Infiltration",
+    "source": "HEC-DSS NEXRAD grid",
+    "pathname": "/SHG/MARFC/PRECIP/01SEP2018:0200/01SEP2018:0300/NEXRAD/",
+    "window": {
+      "start": "2018-09-09T18:00:00",
+      "end": "2018-09-09T19:20:00"
+    },
+    "materialized_input": {
+      "shape": [3, 268830],
+      "maximum": 3.617718458175659,
+      "nonzero": 230735
+    },
+    "expected_final_cumulative_precipitation": {
+      "maximum": 0.11454278230667114,
+      "nonzero_for_nine_output_times": 144528
+    }
+  },
+  "windows_geotiff_qualification": {
+    "status": "executed",
+    "hec_ras_version": "6.6",
+    "platform": "Windows",
+    "route": "GeoTIFF -> cached NetCDF plus native HDF -> preprocessing -> compute",
+    "executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+    "final_hdf_sha256": "e6edf6998766620bdd92c39ca6bd33280c96a0b422925f6c6f48a5a26c7c8047",
+    "solver_rainfall_shape": [4, 408],
+    "solver_rainfall_timestamps": [
+      "09Aug2024 10:00:00.000", "09Aug2024 11:00:00.000",
+      "09Aug2024 12:00:00.000", "09Aug2024 13:00:00.000"
+    ],
+    "solver_interval_maximum_inches": 0.0393701009452343,
+    "cumulative_precipitation_maximum_inches": 0.11574575304985046,
+    "hydraulic_depth_maximum_feet": 9.718265533447266,
+    "completion_verified": true,
+    "evidence": "Fresh notebook 729 execution; temporary-HDF assertions before compute, completed final HDF, three reviewed figures. Separate opt-in RasExamples test also passed."
+  },
+  "wine_geotiff_qualification": {
+    "status": "executed",
+    "platform": "CLB07 CT212 / Wine 11",
+    "hec_ras_version": "6.6",
+    "project": "RasExamples 6.6 BaldEagleCrkMulti2D",
+    "route": "GeoTIFF sequence -> cached NetCDF plus native unsteady HDF -> RasPreprocess -> RasCmdr",
+    "executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+    "tcu_acceptance": {
+      "method": "RasTcu.accept",
+      "gui_interaction": false,
+      "before": "accepted",
+      "accept_result": "already-accepted",
+      "after": "accepted"
+    },
+    "temporary_hdf": {
+      "shape": [4, 408],
+      "timestamps": [
+        "09Aug2024 10:00:00.000",
+        "09Aug2024 11:00:00.000",
+        "09Aug2024 12:00:00.000",
+        "09Aug2024 13:00:00.000"
+      ],
+      "intervals": [
+        {"minimum": 0.0, "maximum": 0.0, "nonzero": 0},
+        {"minimum": 0.01968505047261715, "maximum": 0.0393701009452343, "nonzero": 408},
+        {"minimum": 0.009842525236308575, "maximum": 0.0393701009452343, "nonzero": 408},
+        {"minimum": 0.003937006462365389, "maximum": 0.0393701009452343, "nonzero": 408}
+      ]
+    },
+    "messages": [
+      "Processing Precipitation data",
+      "Finished Processing Precipitation data",
+      "Finished Unsteady Flow Simulation",
+      "Complete Process"
+    ],
+    "final": {
+      "hdf_sha256": "0be34dbaf339192b44bee51134c50a3a0d31ba5980aa0c12c1e72a1d1d449afe",
+      "cumulative_precipitation_maximum": 0.11574575304985046,
+      "final_cumulative_nonzero_cells": 18066,
+      "hydraulic_depth_maximum": 9.718265533447266,
+      "final_hydraulic_nonzero_cells": 7576
+    },
+    "scope_note": "Qualifies the ras-commander translation feature snapshot on Wine 11 / HEC-RAS 6.6 only; it is not a direct-vendor or cross-version GeoTIFF claim."
+  },
+  "wine_dss_qualification": {
+    "status": "executed",
+    "platform": "CLB07 CT212 / Wine 11",
+    "hec_ras_version": "6.6",
+    "project": "Clean RasExamples 6.6 BaldEagleCrkMulti2D",
+    "route": "native HEC-DSS gridded precipitation",
+    "executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+    "tcu_acceptance": {
+      "method": "RasTcu.accept",
+      "gui_interaction": false,
+      "before": "accepted",
+      "accept_result": "already-accepted",
+      "after": "accepted"
+    },
+    "preprocess": {
+      "success": true,
+      "elapsed_seconds": 13.2879,
+      "temporary_hdf_exists": true,
+      "shape": [3, 268830]
+    },
+    "final": {
+      "completion_verified": true,
+      "hdf_sha256": "6f8aa85125809c10393e47ed7c2f412203a2121db4e0b116493ca7ea7516e106",
+      "cumulative_precipitation_maximum": 0.11454278230667114,
+      "cumulative_nonzero_entries": 144528,
+      "water_surface_maximum": 923.1984252929688
+    },
+    "scope_note": "Tested 6.6 profile only. Removing the combined disabling WINEDLLOVERRIDES='mscoree,mshtml=' setting resolved the previous 300-second timeout; short-path and fresh-profile controls retaining it still timed out. Final summary metrics match Windows 6.6, not a bitwise comparison of every result array."
+  },
+  "schema_inspection": {
+    "method": "focused UTF-16 string comparison; no vendor-source decompilation",
+    "searched_strings": [
+      "Precipitation Mode",
+      "Gridded Source",
+      "Meteorology",
+      "Point Interpolation",
+      "Constant Units"
+    ],
+    "hec_ras_5_0_7": {
+      "assembly": "RasMapperLib.dll",
+      "size_bytes": 3685888,
+      "file_version": "2.0.0.0",
+      "sha256": "f23f43304d445356e50f760f1e54ee17d5b46b2c7a97991e7d73dad740c735ba",
+      "strings_present": []
+    },
+    "hec_ras_6_0": {
+      "assembly": "RasMapperLib.dll",
+      "size_bytes": 6174720,
+      "file_version": "2.0.0.0",
+      "sha256": "be896702ff0705034b3d17dab86a4d91e290dc69884f50dd3fdfb83518faf8c8",
+      "strings_present": [
+        "Precipitation Mode",
+        "Gridded Source",
+        "Meteorology",
+        "Point Interpolation",
+        "Constant Units"
+      ]
+    }
+  },
+  "formats": [
+    {
+      "format": "HEC-DSS gridded precipitation",
+      "first_documented_release": "6.0",
+      "vendor_route": "native",
+      "qualification": "Qualified on selected Windows 6.x and 7.x releases",
+      "notes": "The matrix fixture is a PER-CUM NEXRAD grid. DSS time-series conventions label period values at the end of the period."
+    },
+    {
+      "format": "GDAL NetCDF",
+      "first_documented_release": "6.0",
+      "vendor_route": "native",
+      "qualification": "Official documentation and schema evidence only in this matrix branch",
+      "notes": "This entry describes vendor GDAL ingestion. The separate ras-commander native-HDF route has MRMS NetCDF evidence on Windows 7.0 and Windows/Wine 6.6. Native GDAL still needs its deterministic semantic matrix; do not transfer native-HDF evidence to that route."
+    },
+    {
+      "format": "GDAL GRIB/GRIB2",
+      "first_documented_release": "6.0",
+      "vendor_route": "native with product-specific limitations",
+      "qualification": "Real projected NOAA HRRR GRIB2 decoded and authored to native HDF; native HEC-RAS preprocessing not yet qualified",
+      "notes": "The opt-in live test filters APCP from NOAA NOMADS, selects an explicit GRIB message, validates a positive precipitation cube, and verifies native HDF authoring. Do not infer that every GDAL-readable encoding works in HEC-RAS. WPC QPF GRIB2 compression is a documented exception through 7.0.1."
+    },
+    {
+      "format": "WPC QPF GRIB2",
+      "first_documented_release": "6.0",
+      "vendor_route": "translate to HEC-DSS",
+      "qualification": "Supported with translation",
+      "notes": "HEC documents HEC-MetVue or HEC-Vortex as the workaround through 7.0.1."
+    },
+    {
+      "format": "GeoTIFF precipitation time series",
+      "first_documented_release": null,
+      "vendor_route": "ras-commander translation to NetCDF plus native HDF materialization",
+      "qualification": "Supported with translation; qualified on Windows and CLB07/Wine 11 with HEC-RAS 6.6",
+      "notes": "Explicit timestamps, units, temporal semantics, CRS, affine grid, and NoData policy are validated before a content-addressed HEC-compatible NetCDF and equivalent HDF payload are written. Windows and Wine qualifications verified temporary-HDF rainfall, completed compute, and positive final per-cell rainfall and hydraulics. HEC-RAS documentation examined for 6.0-7.0.1 limits native GDAL meteorological precipitation to NetCDF or GRIB; direct vendor GeoTIFF ingestion and cross-version support are not claimed."
+    },
+    {
+      "format": "Imported Raster Data HDF",
+      "first_documented_release": "6.0",
+      "vendor_route": "internal materialization",
+      "qualification": "Not a user source-format claim",
+      "notes": "This is the solver-facing representation authored by RAS Mapper and ras-commander, not an independently advertised external format."
+    }
+  ],
+  "releases": [
+    {
+      "version": "5.0",
+      "release_date": "2016-03-04",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "f1913cfee5655c59ad63bae1ae9545ed1063fa5408ce84bde1a56566d7c99aea",
+      "execution": "Not applicable: global gridded meteorology is absent; older uniform-per-area precipitation remains distinct."
+    },
+    {
+      "version": "5.0.1",
+      "release_date": "2016-04",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "3ecf4d03f6054d085745ffc2ed673292f462a5b82c2e99f6fb58092a083724e6",
+      "execution": "Not applicable: global gridded meteorology is absent."
+    },
+    {
+      "version": "5.0.2",
+      "release_date": "2016-08",
+      "stable": false,
+      "status": "Unsupported",
+      "evidence": ["official withdrawn-release notice"],
+      "windows_executable_sha256": null,
+      "execution": "Not installed and not sourced from an unofficial mirror; HEC withdrew this release for a critical simplified-breach defect."
+    },
+    {
+      "version": "5.0.3",
+      "release_date": "2016-09",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "794e3dc4c9f2b2820b6056ee2aa6c2bf7712b8879f4b13163bf4c44156e68b37",
+      "execution": "Not applicable: global gridded meteorology is absent."
+    },
+    {
+      "version": "5.0.4",
+      "release_date": "2018-03",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "4b260e8a010d6d7eaa4cfa74b998603136d6d692bec29838c91313fd8e711d5b",
+      "execution": "Not applicable: global gridded meteorology is absent."
+    },
+    {
+      "version": "5.0.5",
+      "release_date": "2018-06",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "eb973b70aa718e1f48bac2e4dc3c2ffc5b4409ace19b2ca747e4e2b5b7e9cc86",
+      "execution": "Not applicable: global gridded meteorology is absent."
+    },
+    {
+      "version": "5.0.6",
+      "release_date": "2018-11",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.x examples", "5.0.7 schema-string comparison"],
+      "windows_executable_sha256": "0af2521be71574c893c606f9fb4229df91e2464ebf6c04507957b80e0be1766f",
+      "execution": "Not applicable: global gridded meteorology is absent."
+    },
+    {
+      "version": "5.0.7",
+      "release_date": "2019-03",
+      "stable": true,
+      "status": "Unsupported",
+      "evidence": ["official release documentation", "official 5.0.7 examples", "focused RasMapperLib schema-string inspection"],
+      "windows_executable_sha256": "940dbdc1869e8672402821a0df091d905406b9b0ff7f44d521a8681ca917e88e",
+      "execution": "No global gridded-meteorology grammar was found in official examples or matching schema strings."
+    },
+    {
+      "version": "6.0",
+      "release_date": "2021-05-28",
+      "stable": true,
+      "status": "Not yet tested",
+      "evidence": ["official new-features documentation", "official Bald Eagle DSS fixture", "6.0 schema strings", "native Windows RasTcu public-API and runtime-dialog evidence"],
+      "windows_executable_sha256": "2126b0307f7b77e1885f7a0dba4ddd590d0c08d1ac63e425c8a7b7fed54e7473",
+      "preprocess": "RasTcu.accept() and status() both report exact-runtime acceptance with no GUI interaction, but launching the same executable still raises the actual Terms and Conditions dialog before preprocessing.",
+      "solver": "Not run.",
+      "limitations": ["ras-commander TCU API-registry/runtime disagreement on this host", "precipitation ratio defect later fixed in 6.2", "period-average interpolation timing defect later corrected in 6.4"]
+    },
+    {
+      "version": "6.1",
+      "release_date": "2021-09-21",
+      "stable": true,
+      "status": "Supported with documented limitation",
+      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "windows_executable_sha256": "58423df21f7115340a9d41f5d93039a786c91f0ffc944f7b23c77846bcc9e330",
+      "qualification_wmic_shim": "process_local_cim",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Unmodified run aborts because Windows no longer supplies WMIC. A qualification-only process-local CIM shim produces a verified solve, final cumulative maximum 0.1145427823, 126462 nonzero cumulative values across 8 output times, and nonzero WSE.",
+      "limitations": ["host compatibility shim required on this Windows host", "precipitation ratio defect later fixed in 6.2", "period-average interpolation timing defect later corrected in 6.4"]
+    },
+    {
+      "version": "6.2",
+      "release_date": "2022-03-11",
+      "stable": true,
+      "status": "Supported with documented limitation",
+      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "windows_executable_sha256": "826082cb45384ec6c05150eb71a8ab26bb5183a8e2603f717cf8ee9832e7a92e",
+      "qualification_wmic_shim": "process_local_cim",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Unmodified run aborts because Windows no longer supplies WMIC. A qualification-only process-local CIM shim produces a verified solve, final cumulative maximum 0.1145427823, 144528 nonzero cumulative values across 9 output times, and nonzero WSE.",
+      "limitations": ["host compatibility shim required on this Windows host", "period-average interpolation timing defect later corrected in 6.4"]
+    },
+    {
+      "version": "6.3",
+      "release_date": "2022-08-25",
+      "stable": true,
+      "status": "Supported with documented limitation",
+      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "windows_executable_sha256": "3a8f683961dcad82cfb15bbb68ec3df62c6510711dd89c37e3e09f52c9d8b860",
+      "qualification_wmic_shim": "available_process_local_cim_not_needed_in_this_matrix_run",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "limitations": ["exact-release process-local WMIC fallback retained from earlier host evidence", "6.3's advertised period-average fix was incomplete; use 6.4 or later for that input semantic"]
+    },
+    {
+      "version": "6.3.1",
+      "release_date": "2022-09-30",
+      "stable": true,
+      "status": "Supported with documented limitation",
+      "evidence": ["native Windows public-API execution", "official release documentation"],
+      "windows_executable_sha256": "7b40237b2ef0a90a32b673affe7f5de7114410527d17e755d0c62a44e2c39a9e",
+      "qualification_wmic_shim": "available_process_local_cim_not_needed_in_this_matrix_run",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "limitations": ["exact-release process-local WMIC fallback retained from earlier host evidence", "period-average inputs can produce a result shifted one period later; corrected in 6.4"]
+    },
+    {
+      "version": "6.4",
+      "release_date": "2023-06-05",
+      "stable": true,
+      "status": "Not yet tested",
+      "evidence": ["official release and resolved-issues documentation"],
+      "windows_executable_sha256": null,
+      "execution": "No local runtime; the current official archive offers superseding 6.4.1. No unofficial installer was used.",
+      "limitations": []
+    },
+    {
+      "version": "6.4.1",
+      "release_date": "2023-06-22",
+      "stable": true,
+      "status": "Not yet tested",
+      "evidence": ["official documentation", "CLB07 runtime inventory", "public RasTcu API evidence", "read-only Wine dialog inspection"],
+      "windows_executable_sha256": null,
+      "wine_executable_sha256": "0fd3bcef58db429bc2faa0c926d5da4ca64918d398ce9db349f138aee1d533f6",
+      "preprocess": "Native registered prefix: RasTcu.accept() returns no-donor-available. Mixed accepted prefix: 6.4.1 opens 'RasMapper Component did not load' / 'ActiveX component can't create object' before preprocessing.",
+      "solver": "Not run.",
+      "limitations": ["exact-profile TCU provisioning blocker", "mixed-profile COM registration blocker; no precipitation inference"]
+    },
+    {
+      "version": "6.5",
+      "release_date": "2024-02-02",
+      "stable": true,
+      "status": "Not yet tested",
+      "evidence": ["native Windows public-API attempt", "read-only Win32 dialog inspection", "official documentation"],
+      "windows_executable_sha256": "b23bd359f47e2a869a5b931a98b461c43978d86c6250894e88a09b21f8aae99d",
+      "preprocess": "The exact 6.5 Ras.exe opens an HEC/VB dialog titled 'Error' with body 'Unexpected error; quitting' before a fresh plan result is materialized, including from a clean short-path project.",
+      "solver": "Not reached.",
+      "limitations": ["confirmed startup/install/runtime failure on this host; do not classify as a precipitation defect"]
+    },
+    {
+      "version": "6.6",
+      "release_date": "2024-09-30",
+      "stable": true,
+      "status": "Supported and qualified",
+      "evidence": ["native Windows DSS public-API execution", "CLB07/Wine 11 translated-GeoTIFF public-API execution", "official documentation"],
+      "windows_executable_sha256": "a34e56a172ba06cde2d546f4d7282801c2b67040969d4ed23b41dfc755772134",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "wine": "Translated GeoTIFF feature snapshot qualified end to end: exact 4 x 408 interval values; final cumulative maximum 0.1157457530 inches over 18066 cells; final hydraulic depth maximum 9.7182655334 feet over 7576 cells.",
+      "wine_dss": "Qualified on CLB07/Wine 11: removing WINEDLLOVERRIDES='mscoree,mshtml=' resolved the prior timeout. Preprocessing 13.2879 seconds, 3 x 268830 values, verified compute; final cumulative max 0.11454278230667114 inches, 144528 nonzero entries, WSE max 923.1984252929688 feet, exactly matching Windows 6.6 metrics.",
+      "wine_dss_final_hdf_sha256": "6f8aa85125809c10393e47ed7c2f412203a2121db4e0b116493ca7ea7516e106",
+      "wine_dss_control": "Short-path and isolated-profile controls retaining the combined disabling override both timed out at 120 seconds. The successful run isolated the combined override, not its individual DLL entries.",
+      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+    },
+    {
+      "version": "6.7 Beta 5",
+      "release_date": "2025-10",
+      "stable": false,
+      "status": "Supported and qualified",
+      "support_claim": false,
+      "evidence": ["native Windows public-API execution", "historical prerelease runtime"],
+      "windows_executable_sha256": "80e708b51e68f342359817b1dc54559da0f8b57021a0b42cf9f64b61c32b6524",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified historical solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "limitations": ["prerelease evidence only; use stable 7.0/7.0.1 for support decisions"]
+    },
+    {
+      "version": "7.0",
+      "release_date": "2026-04-17",
+      "stable": true,
+      "status": "Supported and qualified",
+      "evidence": ["native Windows public-API execution", "official documentation"],
+      "windows_executable_sha256": "9990c10531221469bf51a9a62ae91f36ec01e651bed83aadf632e678130ae797",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+    },
+    {
+      "version": "7.0.1",
+      "release_date": "2026-06-02",
+      "stable": true,
+      "status": "Supported and qualified",
+      "evidence": ["native Windows public-API execution", "official documentation"],
+      "windows_executable_sha256": "ce2ca395c68c4ee17387376ea3a7152c24db483488dced4eb96a59e85fd72985",
+      "preprocess": "DSS precipitation materialized as 3 x 268830 values; messages report precipitation processing finished.",
+      "solver": "Verified solve with final cumulative maximum 0.1145427823, 144528 nonzero cumulative values, and nonzero WSE.",
+      "limitations": ["WPC QPF GRIB2 requires DSS translation"]
+    }
+  ]
+}

@@ -40,6 +40,33 @@ def _write_unsteady(path, lines):
     return path
 
 
+def _write_minimal_precip_netcdf(path):
+    xr = pytest.importorskip("xarray")
+    import numpy as np
+
+    wkt = (
+        'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],'
+        'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]'
+    )
+    dataset = xr.Dataset(
+        data_vars={
+            "APCP_surface": (
+                ("time", "y", "x"),
+                np.zeros((2, 1, 2), dtype=np.float32),
+                {"units": "mm", "grid_mapping": "spatial_ref"},
+            ),
+            "spatial_ref": ((), np.int32(0), {"spatial_ref": wkt, "crs_wkt": wkt}),
+        },
+        coords={
+            "time": pd.date_range("2020-01-01 01:00", periods=2, freq="h"),
+            "y": np.array([0.5]),
+            "x": np.array([0.5, 1.5]),
+        },
+    )
+    dataset.to_netcdf(path, engine="netcdf4")
+    return path
+
+
 def test_flow_title_success_info_uses_filename_and_debug_keeps_path(tmp_path, caplog):
     unsteady_file = _write_unsteady(
         tmp_path / "project" / "Model.u02",
@@ -144,7 +171,7 @@ def test_gridded_precipitation_configuration_info_is_concise(tmp_path, caplog):
     )
     precip_file = tmp_path / "Precipitation" / "storm.nc"
     precip_file.parent.mkdir()
-    precip_file.write_text("", encoding="utf-8")
+    _write_minimal_precip_netcdf(precip_file)
 
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         RasUnsteady.set_gridded_precipitation(
@@ -157,7 +184,7 @@ def test_gridded_precipitation_configuration_info_is_concise(tmp_path, caplog):
     info_messages = _messages(caplog, logging.INFO)
     assert (
         "Configured gridded precipitation in Model.u01: "
-        "source=.\\Precipitation\\storm.nc, interpolation=Bilinear"
+        "source=.\\Precipitation\\storm.nc, interpolation=Bilinear, dataset=APCP_surface"
     ) in info_messages
     warning_messages = _messages(caplog, logging.WARNING)
     assert not any(

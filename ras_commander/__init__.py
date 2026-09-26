@@ -17,7 +17,7 @@ try:
     __version__ = version("ras-commander")
 except PackageNotFoundError:
     # package is not installed
-    __version__ = "0.102.0"
+    __version__ = "0.102.1"
 
 # Canonical machine-readable agent index (see docs() helper below)
 __llms_txt__ = "https://rascommander.info/ras/llms.txt"
@@ -147,6 +147,20 @@ _LAZY_EXPORTS = {
     'RasEncroachments': ('.RasEncroachments', 'RasEncroachments'),
     'RasMapValidation': ('.RasMapValidation', 'RasMapValidation'),
     'RasGeometryCompute': ('.RasGeometryCompute', 'RasGeometryCompute'),
+    'RasPrecipHdf': ('.RasPrecipHdf', 'RasPrecipHdf'),
+    'PrecipCapabilities': ('.precip', 'PrecipCapabilities'),
+    'GriddedPrecipitationCapabilities': (
+        '.precip', 'GriddedPrecipitationCapabilities'
+    ),
+    **{
+        name: ('.precip', name)
+        for name in (
+            'GriddedPrecipitationImportResult', 'PrecipitationCube',
+            'PrecipitationNetcdfResult', 'RasPrecipGrid',
+            'PrecipitationSource', 'QualificationRoute',
+            'QualificationStatus', 'TimingStatus',
+        )
+    },
     'RasGuiAutomation': ('.RasGuiAutomation', 'RasGuiAutomation'),
     'RasScreenshot': ('.RasScreenshot', 'RasScreenshot'),
     'RasBreach': ('.RasBreach', 'RasBreach'),
@@ -216,7 +230,7 @@ _LAZY_EXPORTS = {
         for name in (
             'RasControlResult', 'PreprocessResult',
             'GeometryPreprocessResult', 'GeometryLayerResult',
-            'GeometryCompleteResult', 'RasProcessRecord',
+            'GeometryCompleteResult', 'PrecipRasterImportResult', 'RasProcessRecord',
             'RasProcessQueryError', 'RasProcessInventory',
             'PlanProcessInventory', 'PlanCancellationResult',
             'FlowPathPolicyResult', 'TerrainExportResult',
@@ -430,9 +444,15 @@ __all__ = [
     'PlanExecutionCleanup', 'PlanExecutionCleanupError',
     'ResultArtifactAmbiguityError',
     'PreprocessResult', 'GeometryPreprocessResult',
-    'GeometryLayerResult', 'GeometryCompleteResult', 'FlowPathPolicyResult',
+    'GeometryLayerResult', 'GeometryCompleteResult', 'PrecipRasterImportResult',
+    'FlowPathPolicyResult',
     'TerrainExportResult',
-    'RasGeometryCompute',
+    'RasGeometryCompute', 'RasPrecipHdf',
+    'PrecipCapabilities', 'GriddedPrecipitationCapabilities',
+    'GriddedPrecipitationImportResult', 'PrecipitationCube',
+    'PrecipitationNetcdfResult', 'RasPrecipGrid',
+    'PrecipitationSource', 'QualificationRoute',
+    'QualificationStatus', 'TimingStatus',
     'RasPreprocess',
     'RasExamples', 'RasEbfeModels', 'AlabamaBleModels', 'M3Model', 'RasCmdr', 'RasCurrency', 'RasControl', 'RasTcu', 'TcuStatus', 'RasMap', 'RasEncroachments', 'RasProcess', 'ProjectionInfo', 'StoredMapProductsIncompleteError', 'GeoTiffWriteOptions', 'RasterOperationProfileResult', 'StoreMapPerformanceOptions', 'StoreMapProfileResult', 'StoreMapResourceEstimate', 'StoreMapResourceSample', 'TerrainResourceEstimate', 'RasGuiAutomation', 'RasScreenshot', 'HdfFluvialPluvial',
     'RasBenefits', 'BenefitAreaConfig', 'BenefitAreaResult', 'BenefitCategory',

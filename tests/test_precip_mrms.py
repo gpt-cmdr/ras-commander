@@ -288,7 +288,46 @@ def test_direct_mrms_hyetograph_and_netcdf_exports(tmp_path):
     with xr.open_dataset(nc_path) as ds:
         assert "APCP_surface" in ds.data_vars
         assert ds["APCP_surface"].attrs["units"] == "mm"
-        assert ds["APCP_surface"].shape == precip.shape
+        assert ds["APCP_surface"].attrs["value_type"] == "cumulative"
+        assert ds["APCP_surface"].shape == (4, 2, 2)
+        assert pd.Timestamp(ds["time"].values[0]) == times[0] - pd.Timedelta(hours=1)
+        np.testing.assert_allclose(ds["APCP_surface"].isel(time=0), 0.0)
+        np.testing.assert_allclose(
+            ds["APCP_surface"].isel(time=-1),
+            precip.sum("time"),
+        )
+        assert ds.attrs["first_timestep_hours"] == 1.0
+        assert ds.attrs["zero_tail_frames"] == 0
+
+
+def test_mrms_netcdf_extends_flat_cumulative_tail(tmp_path):
+    xr = pytest.importorskip("xarray")
+    times = pd.date_range("2024-08-09 10:00", periods=2, freq="h")
+    precip = xr.DataArray(
+        np.array([[[2.0]], [[3.0]]], dtype=float),
+        dims=("time", "latitude", "longitude"),
+        coords={"time": times, "latitude": [41.0], "longitude": [-77.5]},
+        attrs={"units": "mm"},
+    )
+
+    nc_path = PrecipMrms.to_ras_netcdf(
+        precip,
+        tmp_path / "mrms_tail.nc",
+        target_crs=None,
+        end_time="2024-08-09 14:00",
+    )
+
+    with xr.open_dataset(nc_path) as ds:
+        assert list(pd.to_datetime(ds["time"].values)) == list(
+            pd.date_range("2024-08-09 09:00", "2024-08-09 14:00", freq="h")
+        )
+        np.testing.assert_allclose(
+            ds["APCP_surface"].values[:, 0, 0],
+            [0.0, 2.0, 5.0, 5.0, 5.0, 5.0],
+        )
+        assert ds.attrs["storm_end"] == "2024-08-09T11:00:00"
+        assert ds.attrs["forcing_end"] == "2024-08-09T14:00:00"
+        assert ds.attrs["zero_tail_frames"] == 3
 
 
 def test_animation_helpers_accept_dataarray_and_hdf(monkeypatch, tmp_path):
@@ -413,7 +452,8 @@ def test_animation_helpers_accept_dataarray_and_hdf(monkeypatch, tmp_path):
 def test_precipitation_animation_separates_rate_and_cumulative_units(
     monkeypatch, tmp_path
 ):
-    pytest.importorskip("matplotlib")
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg", force=True)
     xr = pytest.importorskip("xarray")
 
     precip = xr.DataArray(

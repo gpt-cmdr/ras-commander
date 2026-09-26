@@ -168,6 +168,140 @@ def test_austin_oyster_catalog_has_one_unsteady_start_candidate() -> None:
     assert "completed-result" in project["notes"]
 
 
+def test_upper_guadalupe_catalog_has_four_linked_source_candidates() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    projects = [
+        item
+        for item in config["projects"]
+        if item["id"].startswith("upper-guadalupe-ras-model-upgu")
+    ]
+    expected_ids = [
+        "upper-guadalupe-ras-model-upgu1-upgu1-prj-030c0a6a",
+        "upper-guadalupe-ras-model-upgu2-upgu2-prj-917be43b",
+        "upper-guadalupe-ras-model-upgu3-upgu3-prj-c79886b4",
+        "upper-guadalupe-ras-model-upgu4-upgu4-prj-a9a9000f",
+    ]
+    assert [project["id"] for project in projects] == expected_ids
+    assert all(
+        project["status"] == "Source qualification candidate"
+        for project in projects
+    )
+    assert all(
+        project["viewer_type"] == "Qualification candidate"
+        for project in projects
+    )
+    assert all(
+        not project[field]
+        for project in projects
+        for field in ("webmap", "manifest", "project_manifest")
+    )
+    assert [project["details"].rsplit("#", 1)[-1] for project in projects] == [
+        f"upgu{number}" for number in range(1, 5)
+    ]
+    assert all(
+        project["record_of_deficiencies"].endswith(
+            "2026-09-25_upper_guadalupe_record_of_deficiencies.md"
+        )
+        for project in projects
+    )
+    assert "reached owned unsteady-solver startup" in projects[0]["notes"]
+    assert "qualification is not established" in projects[1]["notes"]
+    assert all(
+        "qualification was not attempted" in project["notes"]
+        for project in projects[2:]
+    )
+    assert [Path(project["geometry_hdf"]).name for project in projects] == [
+        f"UPGU{number}.g01.hdf" for number in range(1, 5)
+    ]
+
+
+def test_pedernales_catalog_has_one_exact_corpus_candidate() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+    projects = [
+        item for item in config["projects"] if item["id"] == "pedernales-12090206"
+    ]
+
+    assert len(projects) == 1
+    project = projects[0]
+    assert project["crs"] == "EPSG:2277"
+    assert project["extent_geojson"].endswith(
+        "pedernales_12090206_model_footprints.geojson"
+    )
+    assert project["extent_geojson_crs"] == "EPSG:4326"
+    assert "Union of 530 HdfProject.get_project_extent" in project["extent_source"]
+    assert project["landing_extent_source"] == (
+        "Exact union of 530 active model footprints"
+    )
+    assert project["status"] == "Qualified: 530/530 plan-01 runs passed"
+    assert project["viewer_type"] == "Qualification candidate"
+    assert all(
+        not project[field]
+        for field in (
+            "webmap",
+            "manifest",
+            "project_manifest",
+            "landing_geometry_pmtiles",
+            "landing_geometry_profile",
+        )
+    )
+    assert project["record_of_deficiencies"].endswith(
+        "2026-09-25_pedernales_record_of_deficiencies.md"
+    )
+
+
+def test_cibolo_and_medina_candidate_catalog_contract() -> None:
+    config = json.loads(CATALOG_CONFIG_PATH.read_text(encoding="utf-8"))
+    by_id = {item["id"]: item for item in config["projects"]}
+
+    cibolo = by_id["cibolo-12100304"]
+    assert cibolo["crs"] == "EPSG:2278"
+    assert Path(cibolo["geometry_hdf"]).name == "Cibolo.g05.hdf"
+    assert cibolo["status"] == "Qualified: unsteady start"
+    assert "owned unsteady-solver startup" in cibolo["notes"]
+    assert all(
+        not cibolo[field] for field in ("webmap", "manifest", "project_manifest")
+    )
+
+    medina_ids = [
+        "medina-leon1-12100302",
+        "medina-leon2-12100302",
+        "medina-leon3-12100302",
+        "medina-middle-lower-medina-12100302",
+        "medina-upper-medina-headwaters-12100302",
+    ]
+    medina = [by_id[project_id] for project_id in medina_ids]
+    assert [Path(project["geometry_hdf"]).name for project in medina] == [
+        "Leon1.g01.hdf",
+        "Leon2.g01.hdf",
+        "Leon3.g01.hdf",
+        "MLM.g01.hdf",
+        "UpperMedinaHW.g02.hdf",
+    ]
+    assert all(project["crs"] == "EPSG:2278" for project in medina)
+    assert all(
+        not project[field]
+        for project in medina
+        for field in ("webmap", "manifest", "project_manifest")
+    )
+    assert [project["status"] for project in medina[:4]] == [
+        "Qualified: unsteady start"
+    ] * 4
+    assert all(
+        "owned unsteady-solver startup" in project["notes"]
+        for project in medina[:4]
+    )
+    assert medina[-1]["status"] == "Critical source gap — blocked"
+    assert medina[-1]["viewer_type"] == "Blocked source model"
+    assert "compiled modified Terrain.hdf" in medina[-1]["notes"]
+    assert all(
+        project["record_of_deficiencies"].endswith(
+            "2026-09-25_medina_record_of_deficiencies.md"
+        )
+        for project in medina
+    )
+
+
 def test_write_javascript_catalog_preserves_exact_project_footprint(
     tmp_path: Path,
 ) -> None:

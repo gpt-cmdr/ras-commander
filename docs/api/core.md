@@ -444,11 +444,24 @@ RasCmdr.compute_plan("01", stream_callback=CustomCallback())
         - verify_preprocessing
 
 `preprocess_plan()` runs Windows HEC-RAS through native Windows Python or
-Windows Python hosted by Wine. It stops at either the detailed `.bco` signal or
-an owned `RasUnsteady.exe` descendant after `.tmp.hdf`, `.b##`, and `.x##` are
-all non-empty. The returned `PreprocessResult.signal_source` records which path
-was used. First-run legal-assent dialogs are reported as blockers and are never
-accepted automatically.
+Windows Python hosted by Wine. For ordinary plans it stops at either the
+detailed `.bco` signal or an owned `RasUnsteady.exe` descendant after
+`.tmp.hdf`, `.b##`, and `.x##` are all non-empty. The returned
+`PreprocessResult.signal_source` records which path was used. First-run
+legal-assent dialogs are reported as blockers and are never accepted
+automatically.
+
+Gridded precipitation has a stricter readiness gate. The unsteady-flow HDF
+contains the authored source payload under
+`Event Conditions/Meteorology/Precipitation/Imported Raster Data`; HEC-RAS
+preprocessing must materialize the solver-facing `Precipitation/Values` and
+`Precipitation/Timestamp` datasets in the temporary plan HDF. The `.bco`
+marker can precede that handoff, so `preprocess_plan()` waits for fresh,
+complete preprocessing artifacts and validates both materialized datasets
+before reporting success. Plans without gridded precipitation retain the owned
+solver-process fallback. Treat a failed `PreprocessResult` as a failed
+precompute; do not launch
+the native solver with an incomplete temporary HDF.
 
 `run_ras_geom_preprocess()` performs the matching vendor geometry-preprocessor
 step with a bounded timeout, executable hash, before/after HDF hashes,

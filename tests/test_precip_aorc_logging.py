@@ -46,6 +46,7 @@ class _FakeAorcArray:
         self.shape = (3, 2, 2)
         self.attrs = {}
         self._series = series
+        self.selections = []
 
     def __getitem__(self, key):
         if key == "latitude":
@@ -55,6 +56,7 @@ class _FakeAorcArray:
         raise KeyError(key)
 
     def sel(self, **kwargs):
+        self.selections.append(kwargs)
         return self
 
     def load(self):
@@ -140,6 +142,28 @@ def test_download_info_is_concise_and_debug_keeps_paths(monkeypatch, tmp_path, c
     assert "AORC output grid shape" in debug_text
 
 
+def test_download_preserves_hour_level_time_bounds(monkeypatch, tmp_path):
+    aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
+    monkeypatch.setattr(aorc_module, "_check_precip_dependencies", lambda: None)
+    array = _FakeAorcArray()
+    _install_fake_aorc_modules(monkeypatch, array)
+
+    aorc_module.PrecipAorc.download(
+        bounds=(-78.0, 40.0, -77.0, 42.0),
+        start_time="2020-01-01 09:00",
+        end_time="2020-01-01 12:00",
+        output_path=tmp_path / "hourly.nc",
+        target_crs=None,
+    )
+
+    time_selection = next(selection["time"] for selection in array.selections if "time" in selection)
+    assert time_selection.start == pd.Timestamp("2020-01-01 09:00")
+    assert time_selection.stop == pd.Timestamp("2020-01-01 12:00")
+    assert array.attrs["value_type"] == "amount"
+    assert array.attrs["accumulation_interval_hours"] == 1.0
+    assert "ending at the UTC timestamp" in array.attrs["time_semantics"]
+
+
 def test_check_availability_accepts_polygon_and_explicit_buffer():
     aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
     from shapely.geometry import box
@@ -222,6 +246,14 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
     monkeypatch.setattr(rasplan_module.RasPlan, "set_unsteady", lambda *args, **kwargs: None)
     monkeypatch.setattr(rasplan_module.RasPlan, "update_simulation_date", lambda *args, **kwargs: None)
     monkeypatch.setattr(rasunsteady_module.RasUnsteady, "set_gridded_precipitation", lambda *args, **kwargs: None)
+    download_calls = []
+
+    def fake_download(**kwargs):
+        download_calls.append(kwargs)
+        Path(kwargs["output_path"]).write_bytes(b"fake netcdf")
+        return Path(kwargs["output_path"])
+
+    monkeypatch.setattr(aorc_module.PrecipAorc, "download", fake_download)
 
     storm_catalog = pd.DataFrame(
         [
@@ -248,7 +280,7 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
             bounds=(-78.0, 40.0, -77.0, 42.0),
             template_plan="06",
             ras_object=FakeRasProject(),
-            download_data=False,
+            download_data=True,
         )
 
     assert results["status"].tolist() == ["success", "success"]
@@ -266,3 +298,57 @@ def test_create_storm_plans_logs_one_summary_per_storm(monkeypatch, tmp_path, ca
     assert str(tmp_path / "Precipitation") in debug_text
     assert "Cloning unsteady file for storm 1" in debug_text
     assert "Configuring gridded precipitation for storm 2" in debug_text
+    assert [call["start_time"] for call in download_calls] == [
+        pd.Timestamp("2020-01-01 01:00"),
+        pd.Timestamp("2020-02-03 01:00"),
+    ]
+    assert [call["end_time"] for call in download_calls] == [
+        pd.Timestamp("2020-01-01 04:00"),
+        pd.Timestamp("2020-02-03 04:00"),
+    ]
+
+
+def test_create_storm_plans_missing_netcdf_fails_before_cloning(monkeypatch, tmp_path):
+    aorc_module = importlib.import_module("ras_commander.precip.PrecipAorc")
+    rasplan_module = importlib.import_module("ras_commander.RasPlan")
+
+    class FakeRasProject:
+        project_folder = tmp_path
+
+        def check_initialized(self):
+            return None
+
+    template = tmp_path / "project.p06"
+    template.write_text("Flow File=u01\nHDF Write Time Slices=0\n", encoding="utf-8")
+    clones = []
+
+    monkeypatch.setattr(
+        rasplan_module.RasPlan,
+        "get_plan_path",
+        lambda plan_number, ras_object=None: template if str(plan_number) == "06" else None,
+    )
+    monkeypatch.setattr(
+        rasplan_module.RasPlan,
+        "clone_unsteady",
+        lambda *args, **kwargs: clones.append(args) or "02",
+    )
+
+    storm_catalog = pd.DataFrame([{
+        "storm_id": 1,
+        "start_time": pd.Timestamp("2020-01-01 01:00"),
+        "sim_start": pd.Timestamp("2020-01-01 00:00"),
+        "sim_end": pd.Timestamp("2020-01-01 04:00"),
+        "total_depth_in": 1.25,
+    }])
+
+    results = aorc_module.PrecipAorc.create_storm_plans(
+        storm_catalog=storm_catalog,
+        bounds=(-78.0, 40.0, -77.0, 42.0),
+        template_plan="06",
+        ras_object=FakeRasProject(),
+        download_data=False,
+    )
+
+    assert results["status"].iloc[0].startswith("error")
+    assert "not found" in results["status"].iloc[0]
+    assert clones == []

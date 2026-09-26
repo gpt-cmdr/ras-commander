@@ -26,6 +26,9 @@ FULL_FEATURE_DEPENDENCIES = [
     'matplotlib',
     'shapely>=2.0',
     'rasterio',
+    'rioxarray',
+    'cfgrib>=0.9.10',
+    'eccodes>=2.28',
     'pyarrow>=14.0',
     'pyproj',
     'rasterstats',
@@ -66,7 +69,7 @@ class CustomBuildPy(build_py):
 
 setup(
     name="ras-commander",
-    version="0.102.0",
+    version="0.102.1",
     packages=find_packages(include=['ras_commander', 'ras_commander.*']),
     include_package_data=True,
     package_data={
@@ -142,17 +145,32 @@ setup(
         # unqualified native source build.
         'ebfe': ['zipfile-deflate64; python_version < "3.11"'],
         # Precipitation enhancements
-        'precip': ['zarr>=2.14.0', 's3fs>=2023.0.0', 'netCDF4>=1.6.0'],
+        'precip': [
+            'xarray',
+            'h5netcdf',
+            'scipy',
+            'rasterio',
+            'rioxarray',
+            'cfgrib>=0.9.10',
+            'eccodes>=2.28',
+            'pyproj',
+            'zarr>=2.14.0,<3',
+            's3fs>=2023.0.0',
+            'netCDF4>=1.6.0',
+        ],
         'precip-huc12': ['pygeohydro>=0.19.0'],  # HUC12 watershed boundaries for Atlas14Variance
         # GeoParquet support without the rest of the full feature stack.
         'geoparquet': ['pyarrow>=14.0'],
         # Notebook dependencies (raster visualization, coordinate systems, precipitation examples)
         'notebooks': [
             'rasterio',
+            'rioxarray',
+            'cfgrib>=0.9.10',
+            'eccodes>=2.28',
             'pyproj',
             'aiohttp',
             'dataretrieval>=1.0',
-            'zarr>=2.14.0',
+            'zarr>=2.14.0,<3',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
             'pygeohydro>=0.19.0',
@@ -174,11 +192,14 @@ setup(
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
             'dataretrieval>=1.0',
-            'zarr>=2.14.0',
+            'zarr>=2.14.0,<3',
             's3fs>=2023.0.0',
             'netCDF4>=1.6.0',
             'pygeohydro>=0.19.0',
             'rasterio',
+            'rioxarray',
+            'cfgrib>=0.9.10',
+            'eccodes>=2.28',
             'pyproj',
             'aiohttp',
             'pythonnet>=3.0.5',

@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,24 @@ BASE_CONFIG = {
     "raw": {},
     "hdf_attributes": {},
 }
+
+
+def test_corrupt_precipitation_hdf_logs_warning(tmp_path, caplog):
+    unsteady_file = tmp_path / "corrupt.u01"
+    unsteady_file.write_text(
+        "Flow Title=Corrupt sidecar\nProgram Version=6.60\n",
+        encoding="utf-8",
+    )
+    Path(str(unsteady_file) + ".hdf").write_bytes(b"not an HDF file")
+
+    with caplog.at_level(logging.WARNING, logger="ras_commander.RasUnsteady"):
+        config = RasUnsteady.get_met_precipitation_config(unsteady_file)
+
+    assert config["hdf_attributes"] == {}
+    assert any(
+        "Could not read precipitation attributes from corrupt.u01.hdf" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 DAVIS_RAW_DISABLED = {
