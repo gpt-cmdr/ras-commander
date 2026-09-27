@@ -711,6 +711,12 @@ class PrecipMrms:
             )
 
         if isinstance(flood_data, (str, Path)):
+            if terrain is not None:
+                raise ValueError(
+                    "terrain overlays are not supported for the HDF point-cloud "
+                    "animation route. Export stored-map rasters and use the raster "
+                    "route, or omit terrain."
+                )
             return PrecipMrms.animate_flood_inundation_from_hdf(
                 plan_hdf=flood_data,
                 output_mp4=output_mp4,
@@ -1956,17 +1962,26 @@ class PrecipMrms:
         if extent is None:
             x_coords = np.arange(x_size)
             y_coords = np.arange(y_size)
+            grid_bounds = None
         else:
             west, east, south, north = extent
-            x_coords = np.linspace(west, east, x_size)
-            y_coords = np.linspace(south, north, y_size)
+            if not west < east or not south < north:
+                raise ValueError("extent must be ordered as west < east, south < north")
+            x_step = (east - west) / x_size
+            y_step = (north - south) / y_size
+            x_coords = west + (np.arange(x_size) + 0.5) * x_step
+            y_coords = south + (np.arange(y_size) + 0.5) * y_step
+            grid_bounds = (float(west), float(east), float(south), float(north))
 
         da = xr.DataArray(
             array,
             dims=("time", "y", "x"),
             coords={"time": time_index, "y": y_coords, "x": x_coords},
             name=name,
-            attrs={"units": units},
+            attrs={
+                "units": units,
+                **({"grid_bounds": grid_bounds} if grid_bounds is not None else {}),
+            },
         )
         return da
 
@@ -1996,12 +2011,16 @@ class PrecipMrms:
 
         Frame limiting occurs before any selected raster metadata or data is
         read. The returned DataArray has ``time``, ``y``, and ``x`` dimensions
-        and includes ``units`` and ``crs`` attributes. The returned stack is
-        allocated eagerly; specify both ``cell_size`` and ``max_frames`` for
-        large multi-terrain domains to bound memory use.
+        and includes ``units``, ``crs``, and pixel-edge ``grid_bounds``
+        attributes. North-up and south-up rasters are supported. West-up,
+        rotated, and sheared transforms fail explicitly because a one-dimensional
+        x/y grid cannot represent them without changing data orientation. The
+        returned stack is allocated eagerly; specify both ``cell_size`` and
+        ``max_frames`` for large multi-terrain domains to bound memory use.
         """
         try:
             import rasterio
+            from rasterio.coords import BoundingBox
             from rasterio.transform import from_origin
             from rasterio.warp import Resampling, reproject
         except ImportError as exc:
@@ -2101,17 +2120,36 @@ class PrecipMrms:
                             f"frame {frame_index} raster {raster_path} uses {src.crs}, "
                             f"expected {common_crs}"
                         )
+                    if not np.isclose(src.transform.b, 0.0) or not np.isclose(
+                        src.transform.d, 0.0
+                    ):
+                        raise ValueError(
+                            "Rotated or sheared stored-map rasters are not supported; "
+                            f"rectify the raster before loading: {raster_path}"
+                        )
+                    if src.transform.a <= 0:
+                        raise ValueError(
+                            "West-up stored-map rasters are not supported; rectify "
+                            f"the raster to east-increasing columns: {raster_path}"
+                        )
 
                     src_nodata = src.nodata
                     if src_nodata is None and np.issubdtype(
                         np.dtype(src.dtypes[0]), np.floating
                     ):
                         src_nodata = np.nan
+                    native_bounds = src.bounds
+                    normalized_bounds = BoundingBox(
+                        left=min(native_bounds.left, native_bounds.right),
+                        bottom=min(native_bounds.bottom, native_bounds.top),
+                        right=max(native_bounds.left, native_bounds.right),
+                        top=max(native_bounds.bottom, native_bounds.top),
+                    )
                     meta = {
                         "path": raster_path,
                         "shape": (src.height, src.width),
                         "transform": src.transform,
-                        "bounds": src.bounds,
+                        "bounds": normalized_bounds,
                         "res": (abs(src.res[0]), abs(src.res[1])),
                         "nodata": src_nodata,
                     }
@@ -2193,7 +2231,28 @@ class PrecipMrms:
             dims=("time", "y", "x"),
             coords={"time": time_index, "y": y_coords, "x": x_coords},
             name=name,
-            attrs={"units": units, "crs": common_crs.to_string()},
+            attrs={
+                "units": units,
+                "crs": common_crs.to_string(),
+                "grid_bounds": (
+                    float(min(
+                        ref_transform.c,
+                        ref_transform.c + cols * ref_transform.a,
+                    )),
+                    float(max(
+                        ref_transform.c,
+                        ref_transform.c + cols * ref_transform.a,
+                    )),
+                    float(min(
+                        ref_transform.f,
+                        ref_transform.f + rows * ref_transform.e,
+                    )),
+                    float(max(
+                        ref_transform.f,
+                        ref_transform.f + rows * ref_transform.e,
+                    )),
+                ),
+            },
         )
 
     @staticmethod
@@ -2567,6 +2626,47 @@ class PrecipMrms:
     def _data_extent(data: Any) -> Tuple[Tuple[float, float, float, float], str]:
         import numpy as np
 
+        attrs = getattr(data, "attrs", {}) or {}
+        explicit_bounds = attrs.get("grid_bounds")
+        if explicit_bounds is not None:
+            if len(explicit_bounds) != 4:
+                raise ValueError("grid_bounds must contain west, east, south, north")
+            bounds = tuple(float(value) for value in explicit_bounds)
+            if not bounds[0] < bounds[1] or not bounds[2] < bounds[3]:
+                raise ValueError("grid_bounds must be ordered west < east, south < north")
+            y_coord = data.coords.get("y") if "y" in data.coords else None
+            origin = (
+                "upper"
+                if y_coord is not None
+                and y_coord.ndim == 1
+                and y_coord.size > 1
+                and float(y_coord.values[0]) > float(y_coord.values[-1])
+                else "lower"
+            )
+            return bounds, origin
+
+        def coordinate_edge_bounds(values: Any) -> Tuple[float, float]:
+            """Return outer pixel edges for a one-dimensional center coordinate."""
+            centers = np.asarray(values, dtype=float)
+            finite = centers[np.isfinite(centers)]
+            if finite.size == 0:
+                raise ValueError("Animation coordinates contain no finite values")
+            if finite.size == 1:
+                raise ValueError(
+                    "A one-cell coordinate cannot define pixel-edge bounds; "
+                    "provide grid_bounds metadata or an explicit extent"
+                )
+            steps = np.diff(finite)
+            if not np.allclose(steps, steps[0], rtol=1e-7, atol=1e-12):
+                raise ValueError(
+                    "Nonuniform center coordinates require explicit grid_bounds metadata"
+                )
+            edges = np.empty(finite.size + 1, dtype=float)
+            edges[1:-1] = (finite[:-1] + finite[1:]) / 2.0
+            edges[0] = finite[0] - (finite[1] - finite[0]) / 2.0
+            edges[-1] = finite[-1] + (finite[-1] - finite[-2]) / 2.0
+            return float(np.nanmin(edges)), float(np.nanmax(edges))
+
         lat_name = PrecipMrms._find_coord_name(data, ("latitude", "lat"))
         lon_name = PrecipMrms._find_coord_name(data, ("longitude", "lon"))
         if lat_name is not None and lon_name is not None:
@@ -2574,23 +2674,26 @@ class PrecipMrms:
             lon = np.asarray(data[lon_name].values, dtype=float)
             lon = np.where(lon > 180, lon - 360, lon)
             origin = "upper" if lat.ndim == 1 and lat[0] > lat[-1] else "lower"
-            return (
-                float(np.nanmin(lon)),
-                float(np.nanmax(lon)),
-                float(np.nanmin(lat)),
-                float(np.nanmax(lat)),
-            ), origin
+            if lat.ndim == 1 and lon.ndim == 1:
+                left, right = coordinate_edge_bounds(lon)
+                bottom, top = coordinate_edge_bounds(lat)
+                return (left, right, bottom, top), origin
+            raise ValueError(
+                "Nonrectilinear latitude/longitude grids require explicit "
+                "grid_bounds metadata"
+            )
 
         if "x" in data.coords and "y" in data.coords:
             x = np.asarray(data.coords["x"].values, dtype=float)
             y = np.asarray(data.coords["y"].values, dtype=float)
             origin = "upper" if y.ndim == 1 and y[0] > y[-1] else "lower"
-            return (
-                float(np.nanmin(x)),
-                float(np.nanmax(x)),
-                float(np.nanmin(y)),
-                float(np.nanmax(y)),
-            ), origin
+            if x.ndim == 1 and y.ndim == 1:
+                left, right = coordinate_edge_bounds(x)
+                bottom, top = coordinate_edge_bounds(y)
+                return (left, right, bottom, top), origin
+            raise ValueError(
+                "Nonrectilinear x/y grids require explicit grid_bounds metadata"
+            )
 
         shape = data.isel(time=0).shape
         return (0.0, float(shape[1]), 0.0, float(shape[0])), "lower"
