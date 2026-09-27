@@ -208,6 +208,7 @@ The imported unsteady HDF is authoring evidence. The temporary plan HDF is the p
 
 ## Terrain backgrounds in flood animations
 
+For gridded arrays and stored-map rasters,
 `PrecipMrms.animate_flood_inundation(..., terrain=terrain_path)` reads the
 terrain raster's CRS, transform, bounds, and NoData value. It warps only the
 portion needed by the displayed flood grid, computes hillshade at that bounded
@@ -222,6 +223,11 @@ grids differ. Missing raster CRS or missing flood-grid CRS fails rather than sil
 stretching the background. This overlay is visualization only; it does not
 alter the terrain used by HEC-RAS or the analytical resolution of the hydraulic
 results.
+
+The direct plan-HDF route renders mesh centers as a point cloud and does not
+support a terrain background. Passing `terrain=` with a plan HDF raises a clear
+`ValueError`; export stored-map rasters when a georeferenced terrain overlay is
+required.
 
 ## Combined-animation time alignment
 

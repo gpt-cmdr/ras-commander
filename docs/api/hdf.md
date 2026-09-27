@@ -70,8 +70,10 @@ Mesh geometry data.
   evidence, detected layout, dataset paths, and per-capability status for area
   names, perimeters, cell centers, face topology, and cell polygons
 - `get_mesh_cell_polygons(hdf_path, strict=False)` - Get cell polygons as a
-  GeoDataFrame; warnings and `result.attrs["cell_polygon_diagnostics"]` expose
-  physical cells that were omitted or ambiguously polygonized
+  GeoDataFrame; warnings and the equality-safe tuple of record dictionaries in
+  `result.attrs["cell_polygon_diagnostics"]` expose physical cells that were
+  omitted or ambiguously polygonized. Use `diagnose_mesh_cell_polygons()` when
+  a DataFrame is preferred.
 - `diagnose_mesh_cell_polygons(hdf_path)` - Report native cell IDs, face IDs,
   polygon counts, and reason codes for physical-cell reconstruction problems
   and expected boundary-only records

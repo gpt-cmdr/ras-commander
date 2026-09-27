@@ -682,7 +682,9 @@ class HdfMesh:
             Raise :class:`MeshCellPolygonError` when a native cell produces no
             polygon or more than one polygon. The default preserves the legacy
             return behavior, emits a warning, and attaches anomaly rows to
-            ``result.attrs["cell_polygon_diagnostics"]``.
+            ``result.attrs["cell_polygon_diagnostics"]`` as an equality-safe
+            tuple of record dictionaries. Use
+            :meth:`diagnose_mesh_cell_polygons` for a DataFrame.
 
         Returns
         -------
@@ -741,6 +743,16 @@ class HdfMesh:
                             mesh_name,
                             hdf_path.name,
                         )
+                        diagnostics.append({
+                            "mesh_name": mesh_name,
+                            "cell_id": None,
+                            "face_count": None,
+                            "polygon_count": None,
+                            "status": "not_present",
+                            "reason_code": "cell_topology_not_present",
+                            "face_ids": (),
+                            "missing_face_ids": (),
+                        })
                         continue
                     if not all(present):
                         raise _MeshLayoutError(
@@ -755,19 +767,26 @@ class HdfMesh:
 
                     # Process each cell
                     for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
-                        face_ids = cell_face_values[start:start + length]
-                        if length < 3:
+                        start = int(start)
+                        length = int(length)
+                        if (
+                            start < 0
+                            or length < 0
+                            or start > len(cell_face_values)
+                            or start + length > len(cell_face_values)
+                        ):
                             diagnostics.append({
                                 "mesh_name": mesh_name,
                                 "cell_id": cell_id,
-                                "face_count": int(length),
+                                "face_count": length,
                                 "polygon_count": 0,
-                                "status": "boundary_only",
-                                "reason_code": "insufficient_faces",
-                                "face_ids": tuple(int(value) for value in face_ids),
+                                "status": "omitted",
+                                "reason_code": "invalid_face_span",
+                                "face_ids": (),
                                 "missing_face_ids": (),
                             })
                             continue
+                        face_ids = cell_face_values[start:start + length]
                         missing_face_ids = [
                             int(face_id)
                             for face_id in face_ids
@@ -783,6 +802,30 @@ class HdfMesh:
                                 "reason_code": "missing_face_reference",
                                 "face_ids": tuple(int(value) for value in face_ids),
                                 "missing_face_ids": tuple(missing_face_ids),
+                            })
+                            continue
+                        if length == 0:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": 0,
+                                "polygon_count": 0,
+                                "status": "omitted",
+                                "reason_code": "zero_faces",
+                                "face_ids": (),
+                                "missing_face_ids": (),
+                            })
+                            continue
+                        if length < 3:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": int(length),
+                                "polygon_count": 0,
+                                "status": "boundary_only",
+                                "reason_code": "insufficient_faces",
+                                "face_ids": tuple(int(value) for value in face_ids),
+                                "missing_face_ids": (),
                             })
                             continue
                         face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
@@ -830,7 +873,9 @@ class HdfMesh:
                     ],
                 )
                 problematic = diagnostics_df[
-                    diagnostics_df["status"].isin(("omitted", "ambiguous"))
+                    diagnostics_df["status"].isin(
+                        ("omitted", "ambiguous", "not_present", "read_error")
+                    )
                 ]
                 if not problematic.empty:
                     summary = ", ".join(
@@ -856,14 +901,35 @@ class HdfMesh:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file)
                 )
-                result.attrs["cell_polygon_diagnostics"] = diagnostics_df
+                # DataFrames in ``attrs`` make ordinary operations such as
+                # ``pd.concat([cells_a, cells_b])`` fail while pandas compares
+                # metadata.  Store equality-safe records and keep the public
+                # diagnostic method as the DataFrame-returning API.
+                result.attrs["cell_polygon_diagnostics"] = tuple(
+                    diagnostics_df.to_dict(orient="records")
+                )
                 return result
 
         except Exception as e:
             if strict:
-                raise
+                if isinstance(e, MeshCellPolygonError):
+                    raise
+                raise MeshCellPolygonError(
+                    f"Could not reconstruct mesh cell polygons from {hdf_path}: {e}"
+                ) from e
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
-            return GeoDataFrame()
+            result = GeoDataFrame()
+            result.attrs["cell_polygon_diagnostics"] = ({
+                "mesh_name": None,
+                "cell_id": None,
+                "face_count": None,
+                "polygon_count": None,
+                "status": "read_error",
+                "reason_code": type(e).__name__,
+                "face_ids": (),
+                "missing_face_ids": (),
+            },)
+            return result
 
     @staticmethod
     @log_call
@@ -873,15 +939,27 @@ class HdfMesh:
 
         The result contains the native ``mesh_name`` and zero-based ``cell_id``,
         face and polygon counts, a status and reason code, and the referenced
-        face IDs. ``boundary_only`` rows identify expected native one- or
+        face IDs. ``boundary_only`` rows identify validated native one- or
         two-face records and do not make strict reconstruction fail. ``omitted``
-        and ``ambiguous`` rows identify physical-cell problems. An empty result
-        means every processed native cell produced exactly one polygon; it does
-        not imply that absent topology exists.
+        and ``ambiguous`` rows identify physical-cell problems;
+        ``not_present`` and ``read_error`` distinguish unavailable or malformed
+        topology from a clean reconstruction. An empty result means every
+        named mesh supplied topology and every processed physical cell produced
+        exactly one polygon.
         """
         polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False)
-        diagnostics = polygons.attrs.get("cell_polygon_diagnostics")
-        if diagnostics is None:
+        diagnostic_records = polygons.attrs.get("cell_polygon_diagnostics")
+        columns = [
+            "mesh_name",
+            "cell_id",
+            "face_count",
+            "polygon_count",
+            "status",
+            "reason_code",
+            "face_ids",
+            "missing_face_ids",
+        ]
+        if diagnostic_records is None:
             return pd.DataFrame(columns=[
                 "mesh_name",
                 "cell_id",
@@ -892,7 +970,7 @@ class HdfMesh:
                 "face_ids",
                 "missing_face_ids",
             ])
-        return diagnostics.copy()
+        return pd.DataFrame.from_records(diagnostic_records, columns=columns)
         
     @staticmethod
     @standardize_input(file_type='geom_hdf')

@@ -570,7 +570,7 @@ def test_terrain_raster_is_warped_to_flood_grid_with_nodata_preserved(tmp_path):
     )
 
     assert overlay["values"].shape == (2, 3)
-    assert overlay["extent"] == (1.5, 3.5, 3.5, 4.5)
+    assert overlay["extent"] == (1.0, 4.0, 3.0, 5.0)
     assert overlay["origin"] == "upper"
     assert overlay["crs"] == "EPSG:2871"
     assert np.isfinite(overlay["values"]).all()
@@ -679,8 +679,17 @@ def test_flood_animation_uses_aligned_terrain_extent(monkeypatch, tmp_path):
     )
 
     assert output.exists()
-    assert captured["extents"] == [(5.5, 7.5, 10.5, 11.5)] * 2
+    assert captured["extents"] == [(5.0, 8.0, 10.0, 12.0)] * 2
     assert captured["shapes"] == [(2, 3), (2, 3)]
+
+
+def test_hdf_flood_animation_rejects_silently_ignored_terrain(tmp_path):
+    with pytest.raises(ValueError, match="HDF point-cloud animation route"):
+        PrecipMrms.animate_flood_inundation(
+            tmp_path / "results.p01.hdf",
+            tmp_path / "flood.mp4",
+            terrain=tmp_path / "terrain.tif",
+        )
 
 
 def test_load_stored_map_stack_reconciles_mixed_single_raster_grids(tmp_path):
@@ -706,11 +715,76 @@ def test_load_stored_map_stack_reconciles_mixed_single_raster_grids(tmp_path):
 
     assert stack.dims == ("time", "y", "x")
     assert stack.shape == (2, 2, 4)
-    assert stack.attrs == {"units": "ft", "crs": "EPSG:2871"}
+    assert stack.attrs == {
+        "units": "ft",
+        "crs": "EPSG:2871",
+        "grid_bounds": (0.0, 4.0, 0.0, 2.0),
+    }
     assert np.count_nonzero(np.isfinite(stack.values[0])) == 4
     assert np.count_nonzero(np.isfinite(stack.values[1])) == 3
     assert np.all(stack.values[0, :, :2] == 1.0)
     assert np.all(stack.values[1, 0, 1:] == 2.0)
+    assert PrecipMrms._data_extent(stack) == ((0.0, 4.0, 0.0, 2.0), "upper")
+
+
+def test_public_extent_is_treated_as_pixel_edges():
+    data = PrecipMrms._coerce_grid_data(
+        np.ones((1, 2, 4), dtype=float),
+        extent=(1000.0, 1040.0, 1970.0, 2000.0),
+    )
+
+    np.testing.assert_allclose(data.coords["x"], [1005.0, 1015.0, 1025.0, 1035.0])
+    np.testing.assert_allclose(data.coords["y"], [1977.5, 1992.5])
+    assert PrecipMrms._data_extent(data) == (
+        (1000.0, 1040.0, 1970.0, 2000.0),
+        "lower",
+    )
+
+
+def test_stored_map_stack_normalizes_south_up_bounds(tmp_path):
+    pytest.importorskip("rasterio")
+    from affine import Affine
+
+    raster_path = _write_stored_map_raster(
+        tmp_path / "south_up.tif",
+        np.arange(6, dtype="float32").reshape(2, 3),
+        Affine(10.0, 0.0, 1000.0, 0.0, 10.0, 1970.0),
+    )
+
+    stack = PrecipMrms.load_stored_map_stack(raster_path)
+
+    assert stack.attrs["grid_bounds"] == (1000.0, 1030.0, 1970.0, 1990.0)
+    assert PrecipMrms._data_extent(stack) == (
+        (1000.0, 1030.0, 1970.0, 1990.0),
+        "lower",
+    )
+    np.testing.assert_array_equal(
+        stack.values[0],
+        np.arange(6, dtype="float32").reshape(2, 3),
+    )
+
+
+@pytest.mark.parametrize(
+    ("transform", "message"),
+    [
+        (pytest.param((-1.0, 0.0, 2.0, 0.0, -1.0, 2.0), "West-up", id="west-up")),
+        (pytest.param((1.0, 0.1, 0.0, 0.0, -1.0, 2.0), "Rotated", id="rotated")),
+    ],
+)
+def test_stored_map_stack_rejects_unrepresentable_transforms(
+    tmp_path, transform, message
+):
+    pytest.importorskip("rasterio")
+    from affine import Affine
+
+    raster_path = _write_stored_map_raster(
+        tmp_path / f"{message.lower()}.tif",
+        np.ones((2, 2), dtype="float32"),
+        Affine(*transform),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        PrecipMrms.load_stored_map_stack(raster_path)
 
 
 def test_load_stored_map_stack_mosaics_every_grouped_tile(tmp_path):
@@ -1008,7 +1082,11 @@ def test_combined_interval_amount_label_and_dry_tail_are_explicit(monkeypatch, t
             "y": [0.5],
             "x": [0.5],
         },
-        attrs={"units": "mm", "crs": "EPSG:2871"},
+        attrs={
+            "units": "mm",
+            "crs": "EPSG:2871",
+            "grid_bounds": (0.0, 1.0, 0.0, 1.0),
+        },
     )
     flood = xr.DataArray(
         np.ones((2, 1, 1), dtype="float32"),
@@ -1018,7 +1096,7 @@ def test_combined_interval_amount_label_and_dry_tail_are_explicit(monkeypatch, t
             "y": [0.5],
             "x": [0.5],
         },
-        attrs={"crs": "EPSG:2871"},
+        attrs={"crs": "EPSG:2871", "grid_bounds": (0.0, 1.0, 0.0, 1.0)},
     )
     captured = {}
 
