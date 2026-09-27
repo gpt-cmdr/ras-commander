@@ -942,3 +942,105 @@ def test_public_animations_route_grouped_rasters_and_forward_grid_options(
     assert calls["combined"][0] == grouped_frames
     assert calls["combined"][1]["cell_size"] == 50
     assert calls["combined"][1]["resampling"] == "cubic"
+
+
+def test_combined_alignment_selects_interval_covering_hydraulic_time():
+    source = pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"])
+    target = pd.to_datetime(
+        ["2024-01-01 00:30", "2024-01-01 01:00", "2024-01-01 01:05"]
+    )
+
+    indices, status = PrecipMrms._align_precipitation_frames(
+        source,
+        target,
+        alignment="covering_interval",
+        interval="1h",
+        coverage_policy="error",
+    )
+
+    assert indices.tolist() == [0, 0, 1]
+    assert status.tolist() == ["covering_interval"] * 3
+
+
+def test_combined_alignment_distinguishes_hold_error_and_authorized_dry_tail():
+    source = pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"])
+    target = pd.to_datetime(["2024-01-01 00:30", "2024-01-01 02:30"])
+
+    held, held_status = PrecipMrms._align_precipitation_frames(
+        source,
+        target,
+        coverage_policy="hold",
+    )
+    assert held.tolist() == [0, 1]
+    assert held_status.tolist() == ["held outside source coverage"] * 2
+
+    with pytest.raises(ValueError, match="outside precipitation source coverage"):
+        PrecipMrms._align_precipitation_frames(
+            source,
+            target,
+            coverage_policy="error",
+        )
+
+    dry_indices, dry_status = PrecipMrms._align_precipitation_frames(
+        source,
+        pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:30"]),
+        coverage_policy="dry_tail",
+    )
+    assert dry_indices.tolist() == [0, -1]
+    assert dry_status.tolist() == ["latest_completed", "authorized dry tail"]
+
+    with pytest.raises(ValueError, match="not before"):
+        PrecipMrms._align_precipitation_frames(
+            source,
+            pd.to_datetime(["2024-01-01 00:30"]),
+            coverage_policy="dry_tail",
+        )
+
+
+def test_combined_interval_amount_label_and_dry_tail_are_explicit(monkeypatch, tmp_path):
+    pytest.importorskip("matplotlib")
+    xr = pytest.importorskip("xarray")
+    precip = xr.DataArray(
+        np.array([[[25.4]], [[50.8]]], dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"]),
+            "y": [0.5],
+            "x": [0.5],
+        },
+        attrs={"units": "mm", "crs": "EPSG:2871"},
+    )
+    flood = xr.DataArray(
+        np.ones((2, 1, 1), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.to_datetime(["2024-01-01 01:05", "2024-01-01 02:30"]),
+            "y": [0.5],
+            "x": [0.5],
+        },
+        attrs={"crs": "EPSG:2871"},
+    )
+    captured = {}
+
+    def capture(fig, update_func, frame_count, output_path, fps, dpi):
+        artists = update_func(frame_count - 1)
+        captured["precip"] = np.asarray(artists[0].get_array()).copy()
+        captured["title"] = artists[-1].get_text()
+        captured["labels"] = [axis.get_ylabel() for axis in fig.axes]
+        Path(output_path).touch()
+
+    monkeypatch.setattr(PrecipMrms, "_save_animation", staticmethod(capture))
+    output = PrecipMrms.animate_combined(
+        precip,
+        flood,
+        tmp_path / "combined.mp4",
+        precip_value_semantics="interval_amount",
+        precip_alignment="covering_interval",
+        precip_interval="1h",
+        coverage_policy="dry_tail",
+    )
+
+    assert output.exists()
+    assert np.all(captured["precip"] == 0)
+    assert "authorized dry tail" in captured["title"]
+    assert "Precipitation interval amount (in)" in captured["labels"]
