@@ -42,13 +42,17 @@ Four hourly, US-customary HEC-RAS 7.0 baseline/event computations verify
 Orleans cells. Maximum event cumulative errors against the written curves
 are 2.10e-7 and 5.85e-7 inches, respectively. Saved outputs inspect those
 retained computations and regenerate diagnostic figures; a fresh notebook
-run defaults to native computation. Inspection/render runtime is reported
-separately from native run durations.
+run defaults to native computation, but the refactored compute recipe was
+only definition-executed during this inspection run and was not rerun through
+the solver. Inspection/render runtime is reported separately from native run
+durations.
 
-Diagnostic maps use one HDF-derived rendering method without network
-basemaps or a misregistered optional terrain background ([issue 441](https://github.com/gpt-cmdr/ras-commander/issues/441)). Combined animations align hourly source intervals with hydraulic
-frames and label the assumed dry tail. A New Orleans detailed-polygon
-omission is recorded in [issue 438](https://github.com/gpt-cmdr/ras-commander/issues/438);
+Diagnostic maps show invert depth (water surface minus cell minimum elevation)
+using one HDF-derived rendering method; reference-cell hydrographs identify
+hydraulic depth separately. Maps omit network basemaps and the misregistered
+optional terrain background ([issue 441](https://github.com/gpt-cmdr/ras-commander/issues/441)).
+Combined animations align hourly source intervals with hydraulic frames and
+label the assumed dry tail. A New Orleans detailed-polygon omission is recorded in [issue 438](https://github.com/gpt-cmdr/ras-commander/issues/438);
 the omitted physical cell remains included through independent native
 connectivity checks. Shared animation semantics are tracked in
 [issue 440](https://github.com/gpt-cmdr/ras-commander/issues/440).

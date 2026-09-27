@@ -1,7 +1,12 @@
 """Small guard fixtures; native hydraulic qualification remains in notebook 917."""
 import ast
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
 import re
+import shutil
+import time
 from types import SimpleNamespace
 
 import nbformat
@@ -20,11 +25,16 @@ def helpers():
         "verify_boundary_topology", "validate_source_hyetograph", "physical_support_from_topology",
         "align_animation_precipitation",
         "summarize_runtime_messages",
+        "build_qualification_summary", "preserve_after_input_snapshots", "sha256_file",
     }
     tree = ast.parse(source)
     functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
     module = ast.Module(body=functions, type_ignores=[])
-    namespace = {"np": np, "pd": pd, "xr": xr, "re": re}
+    namespace = {
+        "np": np, "pd": pd, "xr": xr, "re": re, "Path": Path,
+        "datetime": datetime, "timezone": timezone, "hashlib": hashlib,
+        "json": json, "shutil": shutil, "time": time,
+    }
     exec(compile(module, "notebook_helpers", "exec"), namespace)
     return namespace
 
@@ -551,3 +561,117 @@ def test_runtime_warning_patterns_preserve_both_source_labels_and_full_hdf_text(
     output = capsys.readouterr().out
     assert messages in output
     assert "BCO: Error reading retained input path" in output
+
+
+def test_qualification_provenance_uses_supplied_sources_and_actual_utc_date(helpers):
+    native_sources = {"ras_commander/native_producer.py": "b" * 64}
+    inspection_sources = {"ras_commander/inspection_reader.py": "a" * 64}
+    runs = [{"native_runtime_seconds": 2.5, "native_started_epoch": 1600000000.,
+             "native_source_module_sha256": native_sources}]
+    # Local January 1 is still December 31 in UTC; neither a literal date nor
+    # the local calendar date can stand in for this inspection's UTC date.
+    inspection_time = datetime(2031, 1, 1, 0, 30, tzinfo=timezone(timedelta(hours=2)))
+    summary = helpers["build_qualification_summary"](
+        runs, mode="inspect_retained", source_module_sha256=inspection_sources,
+        library_version="9.9.test", inspection_time=inspection_time,
+    )
+    assert summary["execution_date"] == "2030-12-31"
+    assert summary["inspection_utc"].endswith("Z")
+    assert datetime.fromisoformat(summary["inspection_utc"].replace("Z", "+00:00")) == inspection_time
+    assert summary["library_version"] == "9.9.test"
+    assert summary["source_module_sha256"] == inspection_sources
+    assert summary["runs"] == runs
+    assert summary["runs"][0]["native_source_module_sha256"] == native_sources
+    assert summary["native_runtime_seconds_total"] == 2.5
+
+
+def test_qualification_inspection_timestamp_defaults_to_current_utc(helpers):
+    before = datetime.now(timezone.utc)
+    summary = helpers["build_qualification_summary"](
+        [], mode="compute", source_module_sha256={"reader.py": "c" * 64}, library_version="1.2.test",
+    )
+    after = datetime.now(timezone.utc)
+    inspection = datetime.fromisoformat(summary["inspection_utc"].replace("Z", "+00:00"))
+    assert inspection.utcoffset() == timedelta(0)
+    assert before - timedelta(seconds=1) <= inspection <= after
+    assert summary["execution_date"] == inspection.date().isoformat()
+    assert summary["native_runtime_seconds_total"] == 0
+
+
+def test_exact_existing_postcompute_snapshot_is_used_without_other_recovery_sources(helpers, tmp_path):
+    evidence = tmp_path / "evidence"
+    destination = evidence / "baseline_inputs_after"
+    destination.mkdir(parents=True)
+    target = destination / "case.p01"
+    target.write_bytes(b"exact postcompute input")
+    expected_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+    original = tmp_path / "missing_model" / target.name
+    before = evidence / "baseline_inputs"
+    before.mkdir()
+    (before / target.name).write_bytes(b"different precompute input")
+    receipt = {"input_sha256_after": {str(original): expected_hash}}
+
+    helpers["preserve_after_input_snapshots"](receipt, evidence, "baseline")
+
+    assert target.read_bytes() == b"exact postcompute input"
+    assert not original.exists()
+    assert (before / target.name).read_bytes() == b"different precompute input"
+    manifest = json.loads((destination / "capture_manifest.json").read_text())
+    assert manifest["files"][0]["sha256"] == expected_hash
+    assert Path(manifest["files"][0]["snapshot"]) == target
+
+
+def test_corrupt_existing_postcompute_snapshot_is_not_overwritten(helpers, tmp_path):
+    original = tmp_path / "case.p01"
+    original.write_bytes(b"valid current input")
+    expected_hash = hashlib.sha256(original.read_bytes()).hexdigest()
+    evidence = tmp_path / "evidence"
+    destination = evidence / "event_inputs_after"
+    destination.mkdir(parents=True)
+    target = destination / original.name
+    target.write_bytes(b"corrupt retained snapshot")
+    receipt = {"input_sha256_after": {str(original): expected_hash}}
+
+    with pytest.raises(AssertionError, match="Postcompute snapshot hash mismatch"):
+        helpers["preserve_after_input_snapshots"](receipt, evidence, "event")
+
+    assert target.read_bytes() == b"corrupt retained snapshot"
+    assert original.read_bytes() == b"valid current input"
+    assert not (destination / "capture_manifest.json").exists()
+
+
+def test_postcompute_recovery_checks_all_sources_before_copying(helpers, tmp_path):
+    original = tmp_path / "case.p01"
+    original.write_bytes(b"recoverable plan input")
+    missing = tmp_path / "case.u01"
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    receipt = {"input_sha256_after": {
+        str(original): hashlib.sha256(original.read_bytes()).hexdigest(),
+        str(missing): hashlib.sha256(b"unavailable input").hexdigest(),
+    }}
+
+    with pytest.raises(ValueError, match="Cannot recover exact postcompute input bytes"):
+        helpers["preserve_after_input_snapshots"](receipt, evidence, "baseline")
+
+    destination = evidence / "baseline_inputs_after"
+    assert not (destination / original.name).exists()
+    assert not (destination / "capture_manifest.json").exists()
+
+
+def test_existing_postcompute_manifest_and_snapshot_remain_immutable(helpers, tmp_path):
+    original = tmp_path / "case.p01"
+    original.write_bytes(b"recorded input")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    receipt = {"input_sha256_after": {str(original): hashlib.sha256(original.read_bytes()).hexdigest()}}
+    helpers["preserve_after_input_snapshots"](receipt, evidence, "event")
+    destination = evidence / "event_inputs_after"
+    manifest_path = destination / "capture_manifest.json"
+    manifest_before = manifest_path.read_bytes()
+    original.write_bytes(b"subsequently changed current model")
+
+    helpers["preserve_after_input_snapshots"](receipt, evidence, "event")
+
+    assert manifest_path.read_bytes() == manifest_before
+    assert (destination / original.name).read_bytes() == b"recorded input"

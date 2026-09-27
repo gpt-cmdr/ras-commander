@@ -1,6 +1,7 @@
 """Contract tests for the executed MRMS boundary-hyetograph comparison."""
 
 import ast
+from datetime import datetime, timedelta, timezone
 import json
 import math
 from pathlib import Path
@@ -27,6 +28,7 @@ def test_mrms_boundary_notebook_states_and_implements_its_actual_scope():
         "HdfResultsPlan.get_compute_messages_hdf_only",
         "HdfResultsMesh.get_mesh_timeseries", "audit_runtime_messages",
         "validate_source_hyetograph", "align_animation_precipitation", "summarize_runtime_messages",
+        "build_qualification_summary",
     } <= calls
     assert not {
         "RasUnsteady.configure_gridded_dss_precipitation",
@@ -55,8 +57,23 @@ def test_mrms_boundary_notebook_is_fully_executed_with_preserved_diagnostics_and
     assert qualification == notebook.metadata["mrms_absolute_time_qualification"]
     assert qualification["mode"] == "inspect_retained"
     assert qualification["clock"] == "UTC-equivalent naive HEC-RAS model labels"
-    assert re.fullmatch(r"[0-9a-f]{9,40}", qualification["source_base"])
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", qualification["execution_date"])
+    assert qualification["inspection_utc"].endswith("Z")
+    inspection = datetime.fromisoformat(qualification["inspection_utc"].replace("Z", "+00:00"))
+    assert inspection.utcoffset() == timedelta(0)
+    assert qualification["execution_date"] == inspection.astimezone(timezone.utc).date().isoformat()
+    source_hashes = qualification["source_module_sha256"]
+    assert isinstance(source_hashes, dict) and source_hashes
+    for name, digest in source_hashes.items():
+        assert isinstance(name, str) and name
+        assert re.fullmatch(r"[0-9a-f]{64}", digest)
+    # Compare provenance with the independently emitted setup values, rather
+    # than whatever library version happens to be installed when tests run.
+    printed_sources = stream_text.split("Source SHA256:", 1)[1].lstrip()
+    setup_hashes, _ = json.JSONDecoder().raw_decode(printed_sources)
+    assert source_hashes == setup_hashes
+    setup_version = re.search(r"; ras-commander: ([^\r\n]+)", stream_text)
+    assert setup_version is not None
+    assert qualification["library_version"] == setup_version.group(1).strip()
 
     rows = qualification["runs"]
     assert len(rows) == 4
@@ -70,6 +87,15 @@ def test_mrms_boundary_notebook_is_fully_executed_with_preserved_diagnostics_and
         for field in ("native_hdf_sha256", "native_executable_sha256"):
             assert re.fullmatch(r"[0-9a-f]{64}", row[field]), (row["project"], field)
         assert math.isfinite(row["native_runtime_seconds"]) and row["native_runtime_seconds"] > 0
+        assert type(row["native_started_epoch"]) in (int, float)
+        assert math.isfinite(row["native_started_epoch"]) and row["native_started_epoch"] > 0
+        assert row["native_started_epoch"] + row["native_runtime_seconds"] <= inspection.timestamp()
+        native_hashes = row["native_source_module_sha256"]
+        assert isinstance(native_hashes, dict) and native_hashes
+        assert set(native_hashes) <= set(source_hashes)
+        for name, digest in native_hashes.items():
+            assert re.fullmatch(r"[0-9a-f]{64}", digest)
+            assert digest == source_hashes[name]
         for field in ("timestamps", "physical_cells_checked", "boundary_cells_zero"):
             assert isinstance(row[field], int) and row[field] > 0, (row["project"], field)
         for field in ("expected_total_in", "hdf_final_total_in", "max_all_time_cell_error_in", "native_tolerance_in"):
