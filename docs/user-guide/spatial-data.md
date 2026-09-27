@@ -745,6 +745,36 @@ timestamps = RasProcess.get_plan_timestamps("01")
 results = RasProcess.store_maps(plan_number="01", profile=timestamps[10])
 ```
 
+For several unsteady output times, use the timestamp-aware wrapper. Froude and
+bed-shear-stress maps follow the same routing as the core map types:
+
+```python
+selected = [timestamps[len(timestamps) // 2], timestamps[-1]]
+results_by_time = RasProcess.store_maps_at_timesteps(
+    plan_number="01",
+    timesteps=selected,
+    wse=False,
+    depth=False,
+    velocity=False,
+    froude=True,
+    shear_stress=True,
+)
+```
+
+The plan must contain the results needed by RAS Mapper. Configure detailed
+outputs such as `Cell Velocity` and `Face Shear Stress` with
+`RasPlan.set_hdf_output_variables()`, compute the plan, and confirm the final
+plan HDF before exporting. The fully executed
+[Froude and shear-stress timestep example](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/963_froude_shear_timestep_maps.ipynb)
+demonstrates configuration, computation, HDF inspection, georeferencing checks,
+and visual review on the Muncie RasExamples project.
+
+!!! warning "Manual hydraulic review remains necessary"
+    Stored-map generation proves that RAS Mapper could produce a raster; it
+    does not establish hydraulic reasonableness. Review computation messages,
+    units, wet/dry fronts, structures, localized extreme Froude values, mesh
+    transitions, and the native results before accepting the maps.
+
 #### All Steady Profiles in One Launch
 
 For a steady plan, use the canonical `steady_profiles` mode. It resolves names
