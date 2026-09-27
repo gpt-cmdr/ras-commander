@@ -1969,6 +1969,9 @@ class RasCmdr:
         stays uncertain: a network share's negative-lookup cache can briefly
         report our live tmp HDF as missing. Any failure to prove the
         difference (for example an unreachable alias) also stays uncertain.
+        A different file name is taken as a different file; an 8.3 short name
+        or hard link to our own tmp HDF would defeat that, but RasUnsteady is
+        launched with long-name arguments for its own tmp HDF.
         """
         try:
             if not (
@@ -2101,7 +2104,7 @@ class RasCmdr:
                             ):
                                 # Another plan's solver (e.g. a parallel
                                 # worker) holds an existing tmp HDF, while
-                                # ours is gone from its readable folder.
+                                # ours is gone from its existing folder.
                                 continue
                             # A path alias may be equivalent even when one
                             # spelling cannot currently be opened. That is not
