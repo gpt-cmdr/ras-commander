@@ -295,7 +295,7 @@ _LAZY_EXPORTS = {
     **{
         name: ('.hdf', name)
         for name in (
-            'HdfBase', 'HdfUtils', 'HdfPlan', 'HdfMesh', 'HdfXsec',
+            'HdfBase', 'HdfUtils', 'HdfPlan', 'HdfMesh', 'MeshCellPolygonError', 'HdfXsec',
             'HdfBndry', 'HdfStruc', 'HdfStorageArea',
             'HdfHydraulicTables', 'HdfResultsPlan', 'HdfResultsMesh',
             'HdfResultView', 'HdfResultsQuery', 'HdfResultsXsec',
@@ -529,7 +529,7 @@ __all__ = [
     'OpenRasMapperWorkflow', 'MeshRegenerationWorkflow',
 
     # HDF handling
-    'HdfBase', 'HdfBndry', 'HdfMesh', 'HdfPlan', 'HdfProject',
+    'HdfBase', 'HdfBndry', 'HdfMesh', 'MeshCellPolygonError', 'HdfPlan', 'HdfProject',
     'HdfResultsMesh', 'HdfResultView', 'HdfResultsPlan',
     'HdfResultsProducts', 'HdfResultsQuery',
     'HdfResultsXsec', 'HdfResultsSediment',
