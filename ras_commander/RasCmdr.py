@@ -1961,19 +1961,26 @@ class RasCmdr:
 
         ``os.path.samefile`` cannot compare a path that no longer exists, and
         HEC-RAS renames ``.p##.tmp.hdf`` to the final HDF when a solve ends.
-        If our tmp HDF is absent from a folder we can read, while the other
-        solver's tmp HDF exists, the two cannot be one file: the other solver
-        is unrelated (typically a parallel worker still running). Any other
-        combination (for example an unreachable alias spelling) stays
-        uncertain for the caller.
+        If our tmp HDF is absent from its existing folder while the other
+        solver's tmp HDF exists, and the two paths name a different file
+        (another file name, or a folder that is provably not ours), the other
+        solver is unrelated -- typically a parallel worker still running.
+        The same name in the same folder reached through another spelling
+        stays uncertain: a network share's negative-lookup cache can briefly
+        report our live tmp HDF as missing. Any failure to prove the
+        difference (for example an unreachable alias) also stays uncertain.
         """
         try:
-            return (
+            if not (
                 target_path.parent.is_dir()
-                and not target_path.exists()
                 and candidate.exists()
-            )
-        except (OSError, ValueError):
+                and not target_path.exists()
+            ):
+                return False
+            if candidate.name.casefold() != target_path.name.casefold():
+                return True
+            return not os.path.samefile(candidate.parent, target_path.parent)
+        except (OSError, ValueError, TypeError):
             return False
 
     @staticmethod

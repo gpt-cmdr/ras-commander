@@ -3976,3 +3976,44 @@ def test_solver_process_match_stays_unknown_when_both_tmp_files_are_missing(tmp_
         ours,
         [process],
     ) is None
+
+
+def test_solver_process_match_stays_unknown_for_same_slot_seen_missing(
+    monkeypatch,
+    tmp_path,
+):
+    # Same folder and file name reached through another spelling (e.g. a
+    # second share name), while a cached lookup reports our tmp HDF missing:
+    # never a proven non-match.
+    folder = tmp_path / "results [Worker 1]"
+    folder.mkdir()
+    ours = folder / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "alias-share" / "TestProject.p01.tmp.hdf"
+    real_exists = Path.exists
+
+    def cached_exists(self, *args, **kwargs):
+        if str(self) == str(ours):
+            return False
+        if str(self) == str(theirs):
+            return True
+        return real_exists(self, *args, **kwargs)
+
+    def samefile(a, b):
+        if Path(a).name.endswith(".tmp.hdf"):
+            raise FileNotFoundError(str(b))
+        return True  # the two folders are one folder
+
+    monkeypatch.setattr(rascmdr_module.Path, "exists", cached_exists)
+    monkeypatch.setattr(rascmdr_module.os.path, "samefile", samefile)
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [process],
+    ) is None
