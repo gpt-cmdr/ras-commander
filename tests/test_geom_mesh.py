@@ -2958,3 +2958,32 @@ def test_perimeter_shapely_polygon_rejects_invalid_perimeter():
     bowtie = MockPolygon([(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])
 
     assert geom_mesh_module._perimeter_shapely_polygon(bowtie) is None
+
+
+def test_autofix_max_faces_reports_inset_count_and_ignores_unusable_perimeter():
+    stats = {}
+    geom_mesh_module._autofix_max_faces(
+        _NineSidedCellMesh(), [], {"PointM": MockPointM},
+        perimeter=_SQUARE_PERIMETER, stats=stats,
+    )
+    assert stats == {"inset": 1}
+
+    bowtie = MockPolygon([(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])
+    fallback_stats = {}
+    _, _, mids = geom_mesh_module._autofix_max_faces(
+        _NineSidedCellMesh(), [], {"PointM": MockPointM},
+        perimeter=bowtie, stats=fallback_stats,
+    )
+    assert (mids[0].X, mids[0].Y) == pytest.approx((10.0, 0.0))
+    assert fallback_stats == {"inset": 0}
+
+
+def test_inset_perimeter_midpoint_uses_segment_length_when_face_length_unknown():
+    polygon = geom_mesh_module._perimeter_shapely_polygon(_SQUARE_PERIMETER)
+
+    moved, was_moved = geom_mesh_module._inset_perimeter_midpoint(
+        MockPointM(10.0, 0.0), 0.0, polygon, {"PointM": MockPointM}
+    )
+
+    # Nearest perimeter segment is 20 long -> 1% = 0.2 inward.
+    assert was_moved and (moved.X, moved.Y) == pytest.approx((10.0, 0.2))
