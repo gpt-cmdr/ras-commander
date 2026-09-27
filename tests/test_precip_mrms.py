@@ -531,6 +531,158 @@ def test_flood_animation_accepts_stored_map_rasters(tmp_path):
     assert raster_stack.attrs["crs"] == "EPSG:2871"
 
 
+def test_terrain_raster_is_warped_to_flood_grid_with_nodata_preserved(tmp_path):
+    rasterio = pytest.importorskip("rasterio")
+    xr = pytest.importorskip("xarray")
+    from rasterio.transform import from_origin
+
+    terrain_path = tmp_path / "terrain.tif"
+    terrain = np.arange(36, dtype="float32").reshape(6, 6)
+    terrain[0, 0] = -9999
+    with rasterio.open(
+        terrain_path,
+        "w",
+        driver="GTiff",
+        height=6,
+        width=6,
+        count=1,
+        dtype="float32",
+        crs="EPSG:2871",
+        transform=from_origin(0, 6, 1, 1),
+        nodata=-9999,
+    ) as dst:
+        dst.write(terrain, 1)
+
+    flood = xr.DataArray(
+        np.ones((2, 2, 3), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.date_range("2024-02-04", periods=2, freq="h"),
+            "y": [4.5, 3.5],
+            "x": [1.5, 2.5, 3.5],
+        },
+        attrs={"crs": "EPSG:2871"},
+    )
+
+    overlay = PrecipMrms._prepare_terrain_data(
+        terrain_path,
+        target_data=flood,
+    )
+
+    assert overlay["values"].shape == (2, 3)
+    assert overlay["extent"] == (1.5, 3.5, 3.5, 4.5)
+    assert overlay["origin"] == "upper"
+    assert overlay["crs"] == "EPSG:2871"
+    assert np.isfinite(overlay["values"]).all()
+
+
+def test_raw_terrain_array_requires_exact_flood_grid_shape():
+    xr = pytest.importorskip("xarray")
+    flood = xr.DataArray(
+        np.ones((1, 2, 3), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={"time": [pd.Timestamp("2024-02-04")], "y": [1.5, 0.5], "x": [0.5, 1.5, 2.5]},
+        attrs={"crs": "EPSG:2871"},
+    )
+
+    with pytest.raises(ValueError, match="must match the animation grid shape"):
+        PrecipMrms._prepare_terrain_data(
+            np.ones((4, 4), dtype=float),
+            target_data=flood,
+        )
+
+
+def test_terrain_raster_is_reprojected_when_crs_differs(tmp_path):
+    rasterio = pytest.importorskip("rasterio")
+    xr = pytest.importorskip("xarray")
+    from rasterio.transform import from_origin
+
+    terrain_path = tmp_path / "geographic_terrain.tif"
+    with rasterio.open(
+        terrain_path,
+        "w",
+        driver="GTiff",
+        height=4,
+        width=4,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(-1, 1, 0.5, 0.5),
+    ) as dst:
+        dst.write(np.arange(16, dtype="float32").reshape(4, 4), 1)
+
+    flood = xr.DataArray(
+        np.ones((1, 2, 2), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": [pd.Timestamp("2024-02-04")],
+            "y": [50000.0, -50000.0],
+            "x": [-50000.0, 50000.0],
+        },
+        attrs={"crs": "EPSG:3857"},
+    )
+
+    overlay = PrecipMrms._prepare_terrain_data(terrain_path, target_data=flood)
+
+    assert overlay["values"].shape == (2, 2)
+    assert overlay["crs"] == "EPSG:3857"
+    assert np.isfinite(overlay["values"]).all()
+
+
+def test_hillshade_retains_terrain_nodata_mask():
+    terrain = np.array([[np.nan, 1.0], [2.0, 3.0]])
+
+    shaded = PrecipMrms._hillshade(terrain)
+
+    assert np.isnan(shaded[0, 0])
+    assert np.isfinite(shaded[1, 1])
+
+
+def test_flood_animation_uses_aligned_terrain_extent(monkeypatch, tmp_path):
+    rasterio = pytest.importorskip("rasterio")
+    pytest.importorskip("matplotlib")
+    xr = pytest.importorskip("xarray")
+    from rasterio.transform import from_origin
+
+    terrain_path = tmp_path / "large_terrain.tif"
+    with rasterio.open(
+        terrain_path,
+        "w",
+        driver="GTiff",
+        height=20,
+        width=20,
+        count=1,
+        dtype="float32",
+        crs="EPSG:2871",
+        transform=from_origin(0, 20, 1, 1),
+    ) as dst:
+        dst.write(np.arange(400, dtype="float32").reshape(20, 20), 1)
+
+    flood = xr.DataArray(
+        np.ones((1, 2, 3), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={"time": [pd.Timestamp("2024-02-04")], "y": [11.5, 10.5], "x": [5.5, 6.5, 7.5]},
+        attrs={"crs": "EPSG:2871"},
+    )
+    captured = {}
+
+    def capture(fig, update_func, frame_count, output_path, fps, dpi):
+        captured["extents"] = [tuple(image.get_extent()) for image in fig.axes[0].images]
+        captured["shapes"] = [np.asarray(image.get_array()).shape for image in fig.axes[0].images]
+        Path(output_path).touch()
+
+    monkeypatch.setattr(PrecipMrms, "_save_animation", staticmethod(capture))
+    output = PrecipMrms.animate_flood_inundation(
+        flood,
+        tmp_path / "aligned.mp4",
+        terrain=terrain_path,
+    )
+
+    assert output.exists()
+    assert captured["extents"] == [(5.5, 7.5, 10.5, 11.5)] * 2
+    assert captured["shapes"] == [(2, 3), (2, 3)]
+
+
 def test_load_stored_map_stack_reconciles_mixed_single_raster_grids(tmp_path):
     pytest.importorskip("rasterio")
     from rasterio.transform import from_origin

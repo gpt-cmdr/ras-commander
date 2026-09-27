@@ -643,7 +643,7 @@ class PrecipMrms:
             title=title,
             value_label=f"Precipitation ({units})",
             units=units,
-            terrain=PrecipMrms._prepare_terrain_data(terrain) if terrain is not None else None,
+            terrain=terrain,
             boundary=boundary,
             mesh_boundary=mesh_boundary,
             pump_stations=pump_stations,
@@ -743,7 +743,7 @@ class PrecipMrms:
             title=title,
             value_label=f"Depth ({units})",
             units=units,
-            terrain=PrecipMrms._prepare_terrain_data(terrain) if terrain is not None else None,
+            terrain=terrain,
             boundary=boundary,
             mesh_boundary=mesh_boundary,
             pump_stations=pump_stations,
@@ -900,7 +900,7 @@ class PrecipMrms:
             title=title,
             value_label=f"Depth ({units})",
             units=units,
-            terrain=PrecipMrms._prepare_terrain_data(terrain) if terrain is not None else None,
+            terrain=terrain,
             boundary=boundary,
             mesh_boundary=mesh_boundary,
             pump_stations=pump_stations,
@@ -2200,23 +2200,109 @@ class PrecipMrms:
         )
 
     @staticmethod
-    def _prepare_terrain_data(terrain: Any) -> Any:
+    def _prepare_terrain_data(
+        terrain: Any,
+        target_data: Optional[Any] = None,
+        target_crs: Optional[Any] = None,
+    ) -> Any:
+        """Prepare hillshade on the displayed grid without losing georeferencing.
+
+        Georeferenced raster paths are warped only to the target animation grid,
+        which bounds both memory use and hillshade work. Raw arrays have no
+        spatial metadata and are accepted only when their shape already matches
+        the target grid.
+        """
+        import numpy as np
+
         if terrain is None:
             return None
         if isinstance(terrain, (str, Path)):
             try:
                 import rasterio
+                from rasterio.enums import Resampling
+                from rasterio.transform import from_bounds
+                from rasterio.warp import reproject
             except ImportError as exc:
                 raise ImportError(
                     "rasterio is required to use a terrain raster overlay. "
                     "Install with: pip install rasterio"
                 ) from exc
             with rasterio.open(terrain) as src:
-                terrain_data = src.read(1).astype(float)
-                if src.nodata is not None:
-                    terrain_data[terrain_data == src.nodata] = float("nan")
-            return PrecipMrms._hillshade(terrain_data)
-        return terrain
+                if src.crs is None:
+                    raise ValueError(
+                        f"Terrain raster has no CRS and cannot be aligned: {terrain}"
+                    )
+                if target_data is None:
+                    terrain_data = src.read(1).astype(float)
+                    if src.nodata is not None:
+                        terrain_data[terrain_data == src.nodata] = float("nan")
+                    return {
+                        "values": PrecipMrms._hillshade(terrain_data),
+                        "extent": (
+                            src.bounds.left,
+                            src.bounds.right,
+                            src.bounds.bottom,
+                            src.bounds.top,
+                        ),
+                        "origin": "upper" if src.transform.e < 0 else "lower",
+                        "crs": src.crs.to_string(),
+                    }
+
+                resolved_crs = target_crs or PrecipMrms._data_crs(target_data)
+                if resolved_crs is None:
+                    raise ValueError(
+                        "Animation data must provide a CRS when terrain is a "
+                        "georeferenced raster path"
+                    )
+                target_extent, target_origin = PrecipMrms._data_extent(target_data)
+                target_shape = tuple(target_data.isel(time=0).shape)
+                destination = np.full(target_shape, np.nan, dtype=np.float32)
+                destination_transform = from_bounds(
+                    target_extent[0],
+                    target_extent[2],
+                    target_extent[1],
+                    target_extent[3],
+                    width=target_shape[1],
+                    height=target_shape[0],
+                )
+                reproject(
+                    source=rasterio.band(src, 1),
+                    destination=destination,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    src_nodata=src.nodata,
+                    dst_transform=destination_transform,
+                    dst_crs=resolved_crs,
+                    dst_nodata=np.nan,
+                    resampling=Resampling.bilinear,
+                )
+                if target_origin == "lower":
+                    destination = np.flipud(destination)
+                return {
+                    "values": PrecipMrms._hillshade(destination),
+                    "extent": target_extent,
+                    "origin": target_origin,
+                    "crs": str(resolved_crs),
+                }
+
+        terrain_data = np.asarray(terrain, dtype=float)
+        if target_data is not None:
+            target_shape = tuple(target_data.isel(time=0).shape)
+            if terrain_data.shape != target_shape:
+                raise ValueError(
+                    "Raw terrain arrays have no georeferencing and must match "
+                    f"the animation grid shape {target_shape}; got {terrain_data.shape}"
+                )
+            target_extent, target_origin = PrecipMrms._data_extent(target_data)
+        else:
+            target_extent = (0.0, float(terrain_data.shape[1]), 0.0, float(terrain_data.shape[0]))
+            target_origin = "lower"
+        return {
+            "values": terrain_data,
+            "extent": target_extent,
+            "origin": target_origin,
+            "crs": str(target_crs) if target_crs is not None else None,
+        }
 
     @staticmethod
     def _hillshade(values: Any, azimuth: float = 315.0, altitude: float = 45.0) -> Any:
@@ -2225,7 +2311,10 @@ class PrecipMrms:
         data = np.asarray(values, dtype=float)
         if data.ndim != 2:
             return data
-        filled = np.where(np.isfinite(data), data, np.nanmean(data))
+        valid = np.isfinite(data)
+        if not valid.any():
+            return np.full(data.shape, np.nan, dtype=float)
+        filled = np.where(valid, data, np.nanmean(data))
         dy, dx = np.gradient(filled)
         slope = np.pi / 2.0 - np.arctan(np.hypot(dx, dy))
         aspect = np.arctan2(-dx, dy)
@@ -2235,7 +2324,9 @@ class PrecipMrms:
             np.sin(altitude_rad) * np.sin(slope)
             + np.cos(altitude_rad) * np.cos(slope) * np.cos(azimuth_rad - aspect)
         )
-        return np.clip((shaded + 1.0) / 2.0, 0.0, 1.0)
+        result = np.clip((shaded + 1.0) / 2.0, 0.0, 1.0)
+        result[~valid] = np.nan
+        return result
 
     @staticmethod
     def _convert_precip_units(data: Any, units: str) -> Any:
@@ -2294,16 +2385,21 @@ class PrecipMrms:
 
         extent, origin = PrecipMrms._data_extent(plot_data)
         data_crs = crs or PrecipMrms._data_crs(plot_data)
+        terrain_overlay = PrecipMrms._prepare_terrain_data(
+            terrain,
+            target_data=plot_data,
+            target_crs=data_crs,
+        ) if terrain is not None else None
         vmax = PrecipMrms._robust_vmax(values, 0.1)
         output = Path(output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
 
         fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
-        if terrain is not None:
+        if terrain_overlay is not None:
             ax.imshow(
-                terrain,
-                extent=extent,
-                origin=origin,
+                terrain_overlay["values"],
+                extent=terrain_overlay["extent"],
+                origin=terrain_overlay["origin"],
                 cmap="gray",
                 alpha=0.35,
                 zorder=1,

@@ -206,6 +206,23 @@ print(HdfResultsPlan.get_compute_messages_hdf_only(plan_hdf))
 
 The imported unsteady HDF is authoring evidence. The temporary plan HDF is the precompute source of truth, and the completed final plan HDF is the post-compute source of truth. Do not manually relocate datasets. Compare preprocessed interval depths/timestamps against intended forcing in project units, then inspect final per-cell rainfall and hydraulic response. The assertions above are basic wet-event checks, not a volume or coverage proof. Manual review of all runtime messages and rainfall/result maps remains advisable, including a search for `Error processing event conditions` even when the HEC-RAS process returns zero.
 
+## Terrain backgrounds in flood animations
+
+`PrecipMrms.animate_flood_inundation(..., terrain=terrain_path)` reads the
+terrain raster's CRS, transform, bounds, and NoData value. It warps only the
+portion needed by the displayed flood grid, computes hillshade at that bounded
+display resolution, and uses the flood grid's extent and orientation. Terrain
+and hydraulic rasters therefore need not have identical bounds, resolution, or
+CRS.
+
+A raw NumPy terrain array has no georeferencing. It is accepted only when its
+shape exactly matches the flood grid, in which case it is explicitly treated as
+an already aligned display array. Use a georeferenced raster path whenever the grids differ.
+Missing raster CRS or missing flood-grid CRS fails rather than silently
+stretching the background. This overlay is visualization only; it does not
+alter the terrain used by HEC-RAS or the analytical resolution of the hydraulic
+results.
+
 ## Examples and scope
 
 | Notebook | Demonstration |
