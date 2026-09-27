@@ -3936,3 +3936,84 @@ def test_wsl_python_interruption_recovers_exact_identity_before_reraise(
         details["wsl_supervision_lease"]["lease_path"]
     ).exists()
     assert legacy.read_bytes() == b"preserved during Python interruption"
+
+
+def test_solver_process_match_ignores_parallel_worker_after_own_solve_finished(tmp_path):
+    # compute_parallel: our worker's solve finished (tmp HDF renamed away),
+    # another worker's RasUnsteady still holds its own existing tmp HDF.
+    ours = tmp_path / "results [Worker 1]" / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "results [Worker 2]" / "TestProject.p03.tmp.hdf"
+    ours.parent.mkdir()
+    theirs.parent.mkdir()
+    theirs.write_bytes(b"active")
+    other_worker = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": str(theirs.parent),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [other_worker],
+    ) is False
+
+
+def test_solver_process_match_stays_unknown_when_both_tmp_files_are_missing(tmp_path):
+    ours = tmp_path / "a" / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "b" / "TestProject.p03.tmp.hdf"
+    ours.parent.mkdir()
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [process],
+    ) is None
+
+
+def test_solver_process_match_stays_unknown_for_same_slot_seen_missing(
+    monkeypatch,
+    tmp_path,
+):
+    # Same folder and file name reached through another spelling (e.g. a
+    # second share name), while a cached lookup reports our tmp HDF missing:
+    # never a proven non-match.
+    folder = tmp_path / "results [Worker 1]"
+    folder.mkdir()
+    ours = folder / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "alias-share" / "TestProject.p01.tmp.hdf"
+    real_exists = Path.exists
+
+    def cached_exists(self, *args, **kwargs):
+        if str(self) == str(ours):
+            return False
+        if str(self) == str(theirs):
+            return True
+        return real_exists(self, *args, **kwargs)
+
+    def samefile(a, b):
+        if Path(a).name.endswith(".tmp.hdf"):
+            raise FileNotFoundError(str(b))
+        return True  # the two folders are one folder
+
+    monkeypatch.setattr(rascmdr_module.Path, "exists", cached_exists)
+    monkeypatch.setattr(rascmdr_module.os.path, "samefile", samefile)
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [process],
+    ) is None

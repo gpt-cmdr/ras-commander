@@ -1953,6 +1953,40 @@ class RasCmdr:
             return None
 
     @staticmethod
+    def _finished_tmp_hdf_differs_from_live(
+        candidate: Path,
+        target_path: Path,
+    ) -> bool:
+        """Return True when a live solver's tmp HDF provably is not ours.
+
+        ``os.path.samefile`` cannot compare a path that no longer exists, and
+        HEC-RAS renames ``.p##.tmp.hdf`` to the final HDF when a solve ends.
+        If our tmp HDF is absent from its existing folder while the other
+        solver's tmp HDF exists, and the two paths name a different file
+        (another file name, or a folder that is provably not ours), the other
+        solver is unrelated -- typically a parallel worker still running.
+        The same name in the same folder reached through another spelling
+        stays uncertain: a network share's negative-lookup cache can briefly
+        report our live tmp HDF as missing. Any failure to prove the
+        difference (for example an unreachable alias) also stays uncertain.
+        A different file name is taken as a different file; an 8.3 short name
+        or hard link to our own tmp HDF would defeat that, but RasUnsteady is
+        launched with long-name arguments for its own tmp HDF.
+        """
+        try:
+            if not (
+                target_path.parent.is_dir()
+                and candidate.exists()
+                and not target_path.exists()
+            ):
+                return False
+            if candidate.name.casefold() != target_path.name.casefold():
+                return True
+            return not os.path.samefile(candidate.parent, target_path.parent)
+        except (OSError, ValueError, TypeError):
+            return False
+
+    @staticmethod
     def _rasunsteady_processes_reference_tmp_hdf(
         tmp_hdf_path: Path,
         processes,
@@ -2064,6 +2098,14 @@ class RasCmdr:
                             if os.path.samefile(candidate, target_path):
                                 return True
                         except (OSError, ValueError, TypeError):
+                            if RasCmdr._finished_tmp_hdf_differs_from_live(
+                                candidate,
+                                target_path,
+                            ):
+                                # Another plan's solver (e.g. a parallel
+                                # worker) holds an existing tmp HDF, while
+                                # ours is gone from its existing folder.
+                                continue
                             # A path alias may be equivalent even when one
                             # spelling cannot currently be opened. That is not
                             # evidence that the solver is unrelated.
