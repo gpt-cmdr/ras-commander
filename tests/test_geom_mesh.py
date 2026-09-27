@@ -2882,3 +2882,79 @@ class TestFlowlineRefinementRegions:
                 Polygon([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)]),
                 buffer_width=5.0,
             )
+
+
+class _NineSidedCellMesh:
+    """One cell with nine faces; face 0 lies on the perimeter y=0, x 0..20."""
+
+    NonVirtualCellCount = 1
+
+    def __init__(self):
+        # (start, end) of each face; face 0 is the longest so it is fixed first.
+        self._faces = [((0.0, 0.0), (20.0, 0.0)), ((5.0, 5.0), (15.0, 5.0))] + [
+            ((6.0 + i, 6.0), (6.5 + i, 6.0)) for i in range(7)
+        ]
+
+    def CellFacesCount(self, cidx):
+        return len(self._faces)
+
+    def CellFaces(self, cidx):
+        return list(range(len(self._faces)))
+
+    def FaceSimpleLength(self, fidx):
+        (ax, ay), (bx, by) = self._faces[fidx]
+        return ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+
+    def PointsOnFace(self, fidx):
+        return types.SimpleNamespace(Count=2)
+
+    def FaceSegment(self, fidx):
+        (ax, ay), (bx, by) = self._faces[fidx]
+        mid = MockPointM((ax + bx) / 2, (ay + by) / 2)
+        return types.SimpleNamespace(MidPoint=lambda: mid)
+
+
+_SQUARE_PERIMETER = MockPolygon([(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0)])
+
+
+def test_autofix_max_faces_moves_perimeter_midpoint_inside():
+    new_pts, n_added, mids = geom_mesh_module._autofix_max_faces(
+        _NineSidedCellMesh(), [], {"PointM": MockPointM}, perimeter=_SQUARE_PERIMETER
+    )
+
+    assert n_added == 2
+    # Perimeter face (length 20) midpoint (10, 0) moves 1% of 20 = 0.2 inward.
+    assert (mids[0].X, mids[0].Y) == pytest.approx((10.0, 0.2))
+    # Interior face midpoint is untouched.
+    assert (mids[1].X, mids[1].Y) == pytest.approx((10.0, 5.0))
+    assert new_pts == mids
+
+
+def test_autofix_max_faces_without_perimeter_keeps_ras_mapper_midpoints():
+    _, n_added, mids = geom_mesh_module._autofix_max_faces(
+        _NineSidedCellMesh(), [], {"PointM": MockPointM}
+    )
+
+    assert n_added == 2
+    assert (mids[0].X, mids[0].Y) == pytest.approx((10.0, 0.0))
+
+
+def test_inset_perimeter_midpoint_handles_clockwise_perimeter_and_outside_points():
+    clockwise = MockPolygon([(0.0, 0.0), (0.0, 20.0), (20.0, 20.0), (20.0, 0.0)])
+    polygon = geom_mesh_module._perimeter_shapely_polygon(clockwise)
+
+    moved, was_moved = geom_mesh_module._inset_perimeter_midpoint(
+        MockPointM(10.0, -0.5), 20.0, polygon, {"PointM": MockPointM}
+    )
+    kept, was_kept = geom_mesh_module._inset_perimeter_midpoint(
+        MockPointM(10.0, 10.0), 20.0, polygon, {"PointM": MockPointM}
+    )
+
+    assert was_moved and (moved.X, moved.Y) == pytest.approx((10.0, 0.2))
+    assert not was_kept and (kept.X, kept.Y) == (10.0, 10.0)
+
+
+def test_perimeter_shapely_polygon_rejects_invalid_perimeter():
+    bowtie = MockPolygon([(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)])
+
+    assert geom_mesh_module._perimeter_shapely_polygon(bowtie) is None
