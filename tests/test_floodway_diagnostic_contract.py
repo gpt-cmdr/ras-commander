@@ -81,6 +81,24 @@ def test_missing_parameters_are_unknown(empty_hdf):
     assert CheckFloodways._get_encroachment_parameters(empty_hdf, "Floodway") is None
 
 
+@pytest.mark.parametrize("method", [None, float("nan"), 0])
+def test_missing_station_results_do_not_infer_method_zero(monkeypatch, empty_hdf, method):
+    row = dict(river="River", reach="Reach", station="5.0",
+               encr_sta_l=float("nan"), encr_sta_r=float("nan"))
+    if method is not None:
+        row["encr_method"] = method
+    monkeypatch.setattr(CheckFloodways, "_get_encroachment_stations",
+                        lambda *args: pd.DataFrame([row]))
+    messages = CheckFloodways._check_floodway_encroachment_methods(
+        empty_hdf, empty_hdf, "Floodway", get_default_thresholds(),
+    )
+    expected = {"FW_EM_04", "FW_EM_02"} if method == 0 else {"FW_EM_04"}
+    assert {message.message_id for message in messages} == expected
+    missing = next(message for message in messages if message.message_id == "FW_EM_04")
+    assert "results unavailable" in missing.message
+    assert "do not establish" in missing.help_text
+
+
 @pytest.mark.parametrize("method, expected_id", [(1, "FW_EM_01"), (5, "FW_EM_05")])
 def test_method_notice_is_informational(monkeypatch, empty_hdf, method, expected_id):
     monkeypatch.setattr(CheckFloodways, "_get_encroachment_stations", lambda *args: pd.DataFrame([

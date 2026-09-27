@@ -8,12 +8,14 @@ import hashlib
 import os
 from pathlib import Path
 import zipfile
+from collections import Counter
 
 import h5py
 import numpy as np
 import pytest
 
 from ras_commander import RasFloodway
+from ras_commander.check import RasCheck
 from ras_commander.check.check_floodways import CheckFloodways
 
 
@@ -107,6 +109,8 @@ def test_native_field_layout_preserves_blanks_and_adjacent_full_width_values():
         [None, None, None], [4, .8, None], [None, None, None],
     ]
     assert RasFloodway._parse_node_slots('       4      .8', 1) == [[4, .8, None]]
+    assert RasFloodway._parse_node_slots(raw + ' ' * 8, 3) == [[4, .8, None], [4, .9, None], [4, 1., None]]
+    assert RasFloodway._parse_node_slots(raw + ' ' * 24, 3) == [[4, .8, None], [4, .9, None], [4, 1., None]]
 
 
 def test_unambiguous_compact_complete_triplets_remain_supported():
@@ -127,6 +131,53 @@ def test_writer_field_positions_have_independent_expected_values(tmp_path):
     assert [float(values[i:i + 8]) for i in range(0, 48, 8)] == [4, .8, 0, 5, 1, 1.2]
     assert frame['method'].tolist() == [4, 5]
     assert frame['target_surcharge'].tolist() == [.8, 1.]
+
+
+def test_rewrite_consumes_full_width_values_and_all_old_nodes(tmp_path):
+    path = tmp_path / 'rewrite.p01'
+    path.write_text('Plan Title=Rewrite regression\nCheckData=True\nOther=Preserved\n', encoding='utf-8')
+    records = [dict(river='River', reach='Reach', node=node, method=1,
+                    left_station=176.9155, right_station=1202.3324)
+               for node in ('5.99', '5.875*')]
+    RasFloodway.set_encroachments(path, records)
+    first = path.read_bytes()
+    result = RasFloodway.set_encroachments(path, records)
+    assert result['node'].tolist() == ['5.99', '5.875*']
+    assert path.read_bytes() == first
+    assert 'Other=Preserved' in path.read_text(encoding='utf-8')
+
+
+def test_native_station_rewrite_is_idempotent(native_zip, native_hdf, tmp_path):
+    path = tmp_path / 'native.p01'
+    with zipfile.ZipFile(native_zip) as archive:
+        path.write_bytes(archive.read('Applications Guide/Example 6 - Floodway Determination/flodencr.p01'))
+    stations = CheckFloodways._get_encroachment_stations(native_hdf, 'PF#2')
+    records = [dict(river=row.river, reach=row.reach, node=row.station, method=1,
+                    left_station=row.encr_sta_l, right_station=row.encr_sta_r)
+               for row in stations.itertuples(index=False)]
+    first = RasFloodway.set_encroachments(path, records)
+    first_bytes = path.read_bytes()
+    second = RasFloodway.set_encroachments(path, records)
+    assert len(first) == len(second) == 12
+    assert second['node'].tolist() == stations['station'].tolist()
+    assert path.read_bytes() == first_bytes
+
+
+@pytest.mark.parametrize('explicit_locations', [False, True])
+def test_native_plan_parse_failure_precedes_trial_flow_mutation(native_zip, tmp_path, explicit_locations):
+    path, flow = tmp_path / 'bad.p01', tmp_path / 'FLODENCR.F01'
+    with zipfile.ZipFile(native_zip) as archive:
+        plan_bytes = archive.read('Applications Guide/Example 6 - Floodway Determination/flodencr.p01')
+        flow_bytes = archive.read('Applications Guide/Example 6 - Floodway Determination/FLODENCR.F01')
+    path.write_bytes(plan_bytes.replace(b'       5       1     1.2', b'      .9       1     1.2', 1))
+    flow.write_bytes(flow_bytes)
+    before_plan = path.read_bytes()
+    locations = [dict(river='Beaver Creek', reach='Kentwood', node='5.99')] if explicit_locations else None
+    with pytest.raises(ValueError, match='invalid method'):
+        RasFloodway.create_trial_profiles(path, method=4, targets=[.8],
+                                         flow_number_or_path=flow, locations=locations)
+    assert path.read_bytes() == before_plan
+    assert flow.read_bytes() == flow_bytes
 
 
 @pytest.mark.parametrize('record, count, error', [
@@ -181,6 +232,24 @@ def test_native_additional_variables_select_profile_and_preserve_nan(native_hdf)
     base = CheckFloodways._get_encroachment_stations(native_hdf, 'PF#1')
     assert base[['encr_sta_l', 'encr_sta_r']].isna().all().all()
     assert CheckFloodways._get_encroachment_stations(native_hdf, 'missing') is None
+
+
+def test_native_public_checker_does_not_guess_methods_or_station_distances(native_hdf):
+    result = RasCheck.check_floodways(native_hdf, native_hdf, 'PF#1', 'PF#2')
+    assert len(result.floodway_summary) == 12
+    assert Counter(message.message_id for message in result.messages) == {
+        'FW_SC_01': 3, 'FW_SC_04': 5, 'FW_SC_02': 1,
+        'FW_SW_01': 1, 'FW_SW_02': 1, 'FW_SW_04': 1,
+    }
+    # PF#1 is deliberately selected as a missing-station control, not a
+    # hydraulically encroached floodway. No authored method can be inferred.
+    missing = RasCheck.check_floodways(native_hdf, native_hdf, 'PF#1', 'PF#1')
+    assert Counter(message.message_id for message in missing.messages) == {
+        'FW_SC_03': 12, 'FW_EM_04': 12, 'FW_SW_01': 1, 'FW_SW_04': 1, 'FW_SW_05': 1,
+    }
+    station_messages = [message for message in missing.messages if message.message_id == 'FW_EM_04']
+    assert all('results unavailable' in message.message for message in station_messages)
+    assert all('do not establish' in message.help_text for message in station_messages)
 
 
 def test_result_identifiers_take_precedence_over_reordered_geometry(tmp_path):

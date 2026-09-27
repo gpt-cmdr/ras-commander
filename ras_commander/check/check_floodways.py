@@ -483,72 +483,10 @@ class CheckFloodways:
                                 )
                                 messages.append(msg)
 
-            # FW_WD_05: Steep floodway boundary slope check
-            # Need to compare encroachment stations between adjacent XS
-            encr_sorted = encr_data.sort_values(['river', 'reach', 'station'], ascending=[True, True, False])
-            prev_row = None
-            prev_reach_len = 100.0  # Default reach length if unknown
-
-            for _, row in encr_sorted.iterrows():
-                river = row.get('river', '')
-                reach = row.get('reach', '')
-                station = row.get('station', '')
-                encr_l = row.get('encr_sta_l', np.nan)
-                encr_r = row.get('encr_sta_r', np.nan)
-
-                if prev_row is not None and prev_row.get('river', '') == river and prev_row.get('reach', '') == reach:
-                    prev_encr_l = prev_row.get('encr_sta_l', np.nan)
-                    prev_encr_r = prev_row.get('encr_sta_r', np.nan)
-
-                    # Try to get actual reach length between stations
-                    try:
-                        prev_sta = float(prev_row.get('station', 0))
-                        curr_sta = float(station)
-                        reach_len = abs(prev_sta - curr_sta)
-                        if reach_len > 0:
-                            prev_reach_len = reach_len
-                    except (ValueError, TypeError):
-                        reach_len = prev_reach_len
-
-                    # Check left encroachment slope
-                    if not pd.isna(encr_l) and not pd.isna(prev_encr_l) and reach_len > 0:
-                        left_change = abs(encr_l - prev_encr_l)
-                        left_slope = left_change / reach_len
-                        if left_slope > 0.10:  # 10% slope threshold
-                            msg = CheckMessage(
-                                message_id="FW_WD_05",
-                                severity=Severity.WARNING,
-                                check_type="FLOODWAY",
-                                river=river,
-                                reach=reach,
-                                station=str(station),
-                                message=format_message("FW_WD_05", slope=f"{left_slope:.2f}", station=str(station)),
-                                help_text=get_help_text("FW_WD_05"),
-                                value=left_slope,
-                                threshold=0.10
-                            )
-                            messages.append(msg)
-
-                    # Check right encroachment slope
-                    if not pd.isna(encr_r) and not pd.isna(prev_encr_r) and reach_len > 0:
-                        right_change = abs(encr_r - prev_encr_r)
-                        right_slope = right_change / reach_len
-                        if right_slope > 0.10:  # 10% slope threshold
-                            msg = CheckMessage(
-                                message_id="FW_WD_05",
-                                severity=Severity.WARNING,
-                                check_type="FLOODWAY",
-                                river=river,
-                                reach=reach,
-                                station=str(station),
-                                message=format_message("FW_WD_05", slope=f"{right_slope:.2f}", station=str(station)),
-                                help_text=get_help_text("FW_WD_05"),
-                                value=right_slope,
-                                threshold=0.10
-                            )
-                            messages.append(msg)
-
-                prev_row = row
+            # FW_WD_05 is not evaluated: river-station identifiers are not
+            # longitudinal distances. No qualified spacing/coordinate contract
+            # is supplied here, so neither identifier differences nor a default
+            # reach length can establish a boundary transition ratio.
 
             # FW_ST_01: Structure encroachment doesn't match adjacent XS
             if struct_data is not None and not struct_data.empty:
@@ -869,7 +807,9 @@ class CheckFloodways:
                 station = str(row.get('station', ''))
                 encr_l = row.get('encr_sta_l', np.nan)
                 encr_r = row.get('encr_sta_r', np.nan)
-                encr_method = row.get('encr_method', 0)
+                encr_method = row.get('encr_method')
+                if pd.isna(encr_method):
+                    encr_method = None
 
                 reach_key = (river, reach)
                 xs_key = (river, reach, station)
@@ -878,7 +818,7 @@ class CheckFloodways:
                 # Track methods for reach consistency check
                 if reach_key not in reach_methods:
                     reach_methods[reach_key] = set()
-                if encr_method > 0:
+                if encr_method is not None and encr_method > 0:
                     reach_methods[reach_key].add(encr_method)
 
                 # FW_EM_01: Method 1 (Fixed encroachment stations) used
@@ -917,7 +857,7 @@ class CheckFloodways:
                 # FW_EM_04: No encroachment at non-structure XS
                 if not is_structure:
                     has_encr = not (pd.isna(encr_l) and pd.isna(encr_r))
-                    if not has_encr and encr_method == 0:
+                    if not has_encr and encr_method in (None, 0):
                         msg = CheckMessage(
                             message_id="FW_EM_04",
                             severity=Severity.WARNING,
@@ -947,7 +887,7 @@ class CheckFloodways:
                     messages.append(msg)
 
                 # FW_EM_06: Encroachment at structure requires special handling
-                if is_structure and encr_method > 0:
+                if is_structure and encr_method is not None and encr_method > 0:
                     msg = CheckMessage(
                         message_id="FW_EM_06",
                         severity=Severity.WARNING,

@@ -96,6 +96,13 @@ class RasFloodway:
         -------
         pandas.DataFrame
             One row per node/profile encroachment triplet.
+            ``line_number`` is the 1-based node-header line.
+
+        Raises
+        ------
+        ValueError
+            If a numeric field, method, or profile-slot count is malformed.
+            The error identifies the 1-based values line and node identity.
         """
         plan_path = RasFloodway._resolve_plan_path(plan_number_or_path, ras_object)
         lines = RasFloodway._read_lines(plan_path)
@@ -299,6 +306,13 @@ class RasFloodway:
         plan_path = RasFloodway._resolve_plan_path(plan_number_or_path, ras_object)
         flow_path = RasFloodway._resolve_flow_path(flow_number_or_path, plan_path, ras_object)
 
+        # Validate the existing block and infer locations before mutating the
+        # flow file: strict parsing failures must leave both inputs unchanged.
+        RasFloodway._find_encroachment_block(RasFloodway._read_lines(plan_path))
+        locations = locations or encroachments
+        if locations is None:
+            locations = RasFloodway._infer_encroachment_locations(plan_path, flow_path)
+
         flow_info = RasFloodway._expand_steady_flow_profiles(
             flow_path=flow_path,
             base_profile=base_profile,
@@ -309,9 +323,6 @@ class RasFloodway:
         )
 
         target_profile_numbers = flow_info["new_profile_numbers"]
-        locations = locations or encroachments
-        if locations is None:
-            locations = RasFloodway._infer_encroachment_locations(plan_path, flow_path)
 
         records = RasFloodway._build_trial_encroachments(
             locations=locations,
@@ -648,6 +659,10 @@ class RasFloodway:
                 raw = raw[:len(raw) // width * width]
             fields = [raw[i:i + width].strip() for i in range(0, len(raw), width)]
 
+        # Trailing padding is not an additional profile; interior blanks still
+        # retain their positions, and the header supplies omitted trailing slots.
+        while fields and not fields[-1]:
+            fields.pop()
         values = []
         for index, field in enumerate(fields):
             if not field:
@@ -925,10 +940,26 @@ class RasFloodway:
             if not stripped:
                 end += 1
                 continue
-            if stripped.startswith(("Encroach River=", "Encroach Reach=", "Encroach Node=")):
-                end += 1
+            if stripped.startswith("Encroach Node="):
+                if end + 1 >= len(lines):
+                    raise ValueError(f"Missing encroachment values after line {end + 1}")
+                try:
+                    RasFloodway._parse_node_slots(
+                        lines[end + 1],
+                        RasFloodway._expected_profile_slots(
+                            RasFloodway._parse_encroach_param(lines[start])
+                        ),
+                    )
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid encroachment values at line {end + 2} "
+                        f"({stripped}): {exc}"
+                    ) from exc
+                # Consume the native values line as a record, including adjacent
+                # full-width fields that cannot be split on whitespace.
+                end += 2
                 continue
-            if RasFloodway._looks_like_encroachment_value_line(lines[end]):
+            if stripped.startswith(("Encroach River=", "Encroach Reach=")):
                 end += 1
                 continue
             break
