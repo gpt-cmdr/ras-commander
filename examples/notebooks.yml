@@ -4587,3 +4587,39 @@ notebooks:
     alone does not establish hydraulic quality.
   code_cells: 13
   executed_cells: 13
+- id: 963_froude_shear_timestep_maps
+  filename: 963_froude_shear_timestep_maps.ipynb
+  title: Froude and shear-stress maps at selected timesteps
+  series: 960
+  series_name: Cloud-Native Export
+  summary: Configure and compute a copied Muncie plan, export maximum and selected-timestep Froude and
+    bed-shear-stress GeoTIFFs, verify their HDF sources and georeferencing, and visually review the real
+    hydraulic outputs.
+  tags:
+  - 2d
+  - results
+  - raster
+  - froude
+  - shear-stress
+  - qaqc
+  difficulty: advanced
+  est_runtime: 2-3 minutes
+  data_project: null
+  functions_used:
+  - HdfMesh.get_mesh_area_names
+  - HdfResultsPlan.get_compute_messages
+  - RasCmdr.compute_plan
+  - RasExamples.extract_project
+  - RasPlan.clone_plan
+  - RasPlan.get_hdf_output_options
+  - RasPlan.get_hdf_output_variables
+  - RasPlan.set_hdf_output_variables
+  - RasProcess.get_plan_timestamps
+  - RasProcess.store_maps
+  - RasProcess.store_maps_at_timesteps
+  - ras.plan_df
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 10
+  executed_cells: 10
