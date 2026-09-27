@@ -1953,6 +1953,30 @@ class RasCmdr:
             return None
 
     @staticmethod
+    def _finished_tmp_hdf_differs_from_live(
+        candidate: Path,
+        target_path: Path,
+    ) -> bool:
+        """Return True when a live solver's tmp HDF provably is not ours.
+
+        ``os.path.samefile`` cannot compare a path that no longer exists, and
+        HEC-RAS renames ``.p##.tmp.hdf`` to the final HDF when a solve ends.
+        If our tmp HDF is absent from a folder we can read, while the other
+        solver's tmp HDF exists, the two cannot be one file: the other solver
+        is unrelated (typically a parallel worker still running). Any other
+        combination (for example an unreachable alias spelling) stays
+        uncertain for the caller.
+        """
+        try:
+            return (
+                target_path.parent.is_dir()
+                and not target_path.exists()
+                and candidate.exists()
+            )
+        except (OSError, ValueError):
+            return False
+
+    @staticmethod
     def _rasunsteady_processes_reference_tmp_hdf(
         tmp_hdf_path: Path,
         processes,
@@ -2064,6 +2088,14 @@ class RasCmdr:
                             if os.path.samefile(candidate, target_path):
                                 return True
                         except (OSError, ValueError, TypeError):
+                            if RasCmdr._finished_tmp_hdf_differs_from_live(
+                                candidate,
+                                target_path,
+                            ):
+                                # Another plan's solver (e.g. a parallel
+                                # worker) holds an existing tmp HDF, while
+                                # ours is gone from its readable folder.
+                                continue
                             # A path alias may be equivalent even when one
                             # spelling cannot currently be opened. That is not
                             # evidence that the solver is unrelated.

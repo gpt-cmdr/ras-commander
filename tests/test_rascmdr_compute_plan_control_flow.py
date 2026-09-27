@@ -3936,3 +3936,43 @@ def test_wsl_python_interruption_recovers_exact_identity_before_reraise(
         details["wsl_supervision_lease"]["lease_path"]
     ).exists()
     assert legacy.read_bytes() == b"preserved during Python interruption"
+
+
+def test_solver_process_match_ignores_parallel_worker_after_own_solve_finished(tmp_path):
+    # compute_parallel: our worker's solve finished (tmp HDF renamed away),
+    # another worker's RasUnsteady still holds its own existing tmp HDF.
+    ours = tmp_path / "results [Worker 1]" / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "results [Worker 2]" / "TestProject.p03.tmp.hdf"
+    ours.parent.mkdir()
+    theirs.parent.mkdir()
+    theirs.write_bytes(b"active")
+    other_worker = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": str(theirs.parent),
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [other_worker],
+    ) is False
+
+
+def test_solver_process_match_stays_unknown_when_both_tmp_files_are_missing(tmp_path):
+    ours = tmp_path / "a" / "TestProject.p01.tmp.hdf"
+    theirs = tmp_path / "b" / "TestProject.p03.tmp.hdf"
+    ours.parent.mkdir()
+    process = SimpleNamespace(
+        info={
+            "name": "RasUnsteady.exe",
+            "cmdline": ["RasUnsteady.exe", str(theirs), "x01"],
+            "cwd": None,
+        }
+    )
+
+    assert RasCmdr._rasunsteady_processes_reference_tmp_hdf(
+        ours,
+        [process],
+    ) is None
