@@ -25,9 +25,47 @@ longer falls back to the first boundary. Recompute `cumulative_depth` from
 `incremental_depth` when importing rounded CSV values. Convert DSS boundaries
 deliberately and verify the selected area, units, start time and written values.
 See the [precipitation guide](../user-guide/atlas14-precipitation.md#writing-hyetographs-to-unsteady-files)
-and notebook 721 for the bounded HEC-RAS 7.0 evidence; other configurations remain
-unqualified. Historical notebook 917 outputs predate this writer change and need
-an explicit absolute-time alignment check before reuse with the current writer.
+and notebooks 721 and 917 for bounded HEC-RAS 7.0 evidence; other configurations
+remain unqualified.
+
+**MRMS absolute-time alignment and retained native evidence**
+
+Notebook 917 now excludes MRMS accumulations ending at or before the model
+start, preserves source precision, and appends an explicitly assumed dry tail.
+Raw GRIB validity times, the converted hyetograph, the written boundary and
+native cumulative rainfall are checked on the same UTC-equivalent model clock.
+The applied boundary is the arithmetic mean of the configured rectangular
+MRMS clip; the intermediate spatial DSS grids are inspected separately.
+
+Four hourly, US-customary HEC-RAS 7.0 baseline/event computations verify
+505 times across 2,705 physical Davis cells and 361 times across 19,711 New
+Orleans cells. Maximum event cumulative errors against the written curves
+are 2.10e-7 and 5.85e-7 inches, respectively. Saved outputs inspect those
+retained computations and regenerate diagnostic figures; a fresh notebook
+run defaults to native computation, but the refactored compute recipe was
+only definition-executed during this inspection run and was not rerun through
+the solver. Inspection/render runtime is reported separately from native run
+durations.
+
+Diagnostic maps show invert depth (water surface minus cell minimum elevation)
+using one HDF-derived rendering method; reference-cell hydrographs identify
+hydraulic depth separately. Maps omit network basemaps and the misregistered
+optional terrain background ([issue 441](https://github.com/gpt-cmdr/ras-commander/issues/441)).
+Combined animations align hourly source intervals with hydraulic frames and
+label the assumed dry tail. A New Orleans detailed-polygon omission is recorded in [issue 438](https://github.com/gpt-cmdr/ras-commander/issues/438);
+the omitted physical cell remains included through independent native
+connectivity checks. Shared animation semantics are tracked in
+[issue 440](https://github.com/gpt-cmdr/ras-commander/issues/440).
+New Orleans retains a pipe-network iteration diagnostic for node 426,
+"Mine Blvd - Node 1," with native `ERROR` value 0.450. Successful computation
+and rainfall agreement do not establish hydraulic acceptance or spatial
+rain-on-grid qualification; broader precipitation configurations remain in
+[issue 398](https://github.com/gpt-cmdr/ras-commander/issues/398).
+
+Notebook inventory now counts recorded `execution_count` values, including
+silent definition cells, rather than counting only cells with saved output.
+Execution counts do not establish success or freshness; evidence scope remains
+explicit in the catalog.
 
 ### v0.103.0 (September 2026)
 

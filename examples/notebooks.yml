@@ -28,7 +28,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 17
-  executed_cells: 14
+  executed_cells: 17
 - id: 101_project_initialization
   filename: 101_project_initialization.ipynb
   title: Project Initialization
@@ -63,7 +63,7 @@ notebooks:
   - Python; HEC-RAS installation optional for file inspection
   evidence_scope: Inventory and path resolution do not establish that a plan can compute.
   code_cells: 19
-  executed_cells: 16
+  executed_cells: 19
 - id: 102_multiple_project_operations
   filename: 102_multiple_project_operations.ipynb
   title: Multiple Project Operations
@@ -91,7 +91,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 13
-  executed_cells: 11
+  executed_cells: 13
 - id: 103_plan_and_geometry_operations
   filename: 103_plan_and_geometry_operations.ipynb
   title: Plan and Geometry Operations
@@ -144,7 +144,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 27
-  executed_cells: 25
+  executed_cells: 27
 - id: 104_plan_parameter_operations
   filename: 104_plan_parameter_operations.ipynb
   title: Plan Parameter Operations
@@ -186,7 +186,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 22
-  executed_cells: 18
+  executed_cells: 21
 - id: 110_single_plan_execution
   filename: 110_single_plan_execution.ipynb
   title: Single Plan Execution
@@ -225,7 +225,7 @@ notebooks:
   evidence_scope: Execution and completion evidence are separate from hydraulic acceptance; inspect the
     final result and diagnostics.
   code_cells: 15
-  executed_cells: 14
+  executed_cells: 15
 - id: 111_executing_plan_sets
   filename: 111_executing_plan_sets.ipynb
   title: Executing Plan Sets
@@ -250,7 +250,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 6
+  executed_cells: 8
 - id: 112_sequential_plan_execution
   filename: 112_sequential_plan_execution.ipynb
   title: Sequential Plan Execution
@@ -274,7 +274,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 9
+  executed_cells: 11
 - id: 113_parallel_execution
   filename: 113_parallel_execution.ipynb
   title: Parallel Execution
@@ -294,7 +294,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 114_parameter_permutation
   filename: 114_parameter_permutation.ipynb
   title: Parameter Permutation Sweeps with RasPermutation
@@ -329,7 +329,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 8
+  executed_cells: 9
 - id: 115_real_time_execution_monitoring
   filename: 115_real_time_execution_monitoring.ipynb
   title: Real-Time Execution Monitoring with Callbacks
@@ -350,7 +350,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 7
-  executed_cells: 6
+  executed_cells: 7
 - id: 116_hdf_output_options_benchmark
   filename: 116_hdf_output_options_benchmark.ipynb
   title: HDF Output Options Read Benchmark
@@ -390,7 +390,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 12
+  executed_cells: 15
 - id: 117_monte_carlo_uncertainty
   filename: 117_monte_carlo_uncertainty.ipynb
   title: Monte Carlo Preparation and Ensemble Workflow
@@ -449,7 +449,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 10
+  executed_cells: 11
 - id: 121_legacy_hecrascontroller_and_rascontrol
   filename: 121_legacy_hecrascontroller_and_rascontrol.ipynb
   title: HECRASController Profiles
@@ -526,7 +526,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 18
-  executed_cells: 15
+  executed_cells: 16
 - id: 123_rasmapper_geometry_layer_updates
   filename: 123_rasmapper_geometry_layer_updates.ipynb
   title: RASMapper Geometry Layer Updates
@@ -557,7 +557,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 30
-  executed_cells: 28
+  executed_cells: 30
 - id: 124_rasmapper_bank_lines
   filename: 124_rasmapper_bank_lines.ipynb
   title: RASMapper Bank Lines
@@ -577,7 +577,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 6
-  executed_cells: 4
+  executed_cells: 6
 - id: 125_rasmapper_stored_maps_arrival_duration
   filename: 125_rasmapper_stored_maps_arrival_duration.ipynb
   title: 'RASMapper Stored Maps: Arrival Time, Duration, and Percent Time Inundated'
@@ -655,7 +655,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 25
-  executed_cells: 23
+  executed_cells: 25
 - id: 202_2d_plaintext_geometry
   filename: 202_2d_plaintext_geometry.ipynb
   title: 2D Geometry File Parsing
@@ -687,7 +687,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 20
-  executed_cells: 19
+  executed_cells: 20
 - id: 203_htab_parameter_optimization
   filename: 203_htab_parameter_optimization.ipynb
   title: HTAB Parameter Optimization for Model Stability
@@ -727,7 +727,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 28
-  executed_cells: 27
+  executed_cells: 28
 - id: 204_culvert_gis_validation
   filename: 204_culvert_gis_validation.ipynb
   title: Culvert GIS Reconstruction and Hydraulic-Validity Checks (1D)
@@ -755,7 +755,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 14
-  executed_cells: 13
+  executed_cells: 14
 - id: 205_extract_xs_xyz_from_geometry
   filename: 205_extract_xs_xyz_from_geometry.ipynb
   title: Extract Cross Section XYZ Coordinates from Plain Text Geometry
@@ -810,7 +810,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 18
-  executed_cells: 17
+  executed_cells: 18
 - id: 207_reference_lines_and_points
   filename: 207_reference_lines_and_points.ipynb
   title: Reference Lines and Points for 2D Calibration
@@ -835,7 +835,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 6
-  executed_cells: 5
+  executed_cells: 6
 - id: 208_bridge_method_comparison
   filename: 208_bridge_method_comparison.ipynb
   title: Bridge Method Comparison
@@ -861,7 +861,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 209_culvert_authoring
   filename: 209_culvert_authoring.ipynb
   title: Culvert Authoring
@@ -893,7 +893,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 14
-  executed_cells: 13
+  executed_cells: 14
 - id: 210_xs_interpolation_settings
   filename: 210_xs_interpolation_settings.ipynb
   title: Cross-Section Interpolation Settings
@@ -1015,7 +1015,7 @@ notebooks:
   evidence_scope: The notebook retains controlled authoring and response comparisons for its selected
     models/classes; they do not qualify every land-cover or runtime combination.
   code_cells: 11
-  executed_cells: 10
+  executed_cells: 11
 - id: 213_land_classification_polygon_authoring
   filename: 213_land_classification_polygon_authoring.ipynb
   title: Native Land Classification Polygon Authoring
@@ -1065,7 +1065,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 8
+  executed_cells: 10
 - id: 214_connection_authoring
   filename: 214_connection_authoring.ipynb
   title: SA/2D Connection Authoring
@@ -1099,7 +1099,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 17
-  executed_cells: 16
+  executed_cells: 17
 - id: 215_sa2d_bridge_connection_authoring
   filename: 215_sa2d_bridge_connection_authoring.ipynb
   title: SA/2D Bridge Connection Authoring
@@ -1129,7 +1129,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 14
+  executed_cells: 15
 - id: 216_1d_bridge_authoring
   filename: 216_1d_bridge_authoring.ipynb
   title: 1D Bridge Authoring
@@ -1169,7 +1169,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 217_1d_levee_authoring
   filename: 217_1d_levee_authoring.ipynb
   title: 1D Cross-Section Levee Authoring
@@ -1234,7 +1234,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 8
+  executed_cells: 10
 - id: 219_1d_bridge_xs_plotting
   filename: 219_1d_bridge_xs_plotting.ipynb
   title: 1D Bridge Cross-Section Plotting with Deck/Pier Overlay
@@ -1256,7 +1256,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 6
+  executed_cells: 8
 - id: 220_calibration_workflow
   filename: 220_calibration_workflow.ipynb
   title: Manning's n Calibration with RasCalibrate
@@ -1303,7 +1303,7 @@ notebooks:
   evidence_scope: The execution switch and target provenance determine what a run establishes. Synthetic
     targets demonstrate estimation mechanics, not observational validation.
   code_cells: 23
-  executed_cells: 22
+  executed_cells: 23
 - id: 221_calibration_1d_workflow
   filename: 221_calibration_1d_workflow.ipynb
   title: 1D Manning's N Calibration Workflow
@@ -1357,7 +1357,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 12
-  executed_cells: 11
+  executed_cells: 12
 - id: 224_steady_flow_authoring
   filename: 224_steady_flow_authoring.ipynb
   title: Steady Flow Authoring
@@ -1402,7 +1402,7 @@ notebooks:
   evidence_scope: Text roundtrip and native computation are distinct checks; this example does not qualify
     floodway encroachment authoring.
   code_cells: 5
-  executed_cells: 3
+  executed_cells: 5
 - id: 225_fixit_blocked_obstructions
   filename: 225_fixit_blocked_obstructions.ipynb
   title: Fixing Blocked Obstruction Overlaps with RasFixit
@@ -1428,7 +1428,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 20
-  executed_cells: 18
+  executed_cells: 20
 - id: 226_2d_connection_culvert_invert_validation
   filename: 226_2d_connection_culvert_invert_validation.ipynb
   title: 2D Connection Culvert Invert Validation (Terrain Cell Minimum)
@@ -1453,7 +1453,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 10
+  executed_cells: 11
 - id: 227_2d_connection_culvert_authoring
   filename: 227_2d_connection_culvert_authoring.ipynb
   title: Authoring a 2D Connection Culvert (`Connection Culv=`)
@@ -1479,7 +1479,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 7
+  executed_cells: 8
 - id: 228_mannings_n_from_nlcd
   filename: 228_mannings_n_from_nlcd.ipynb
   title: Manning's n from NLCD Validation
@@ -1507,7 +1507,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 8
+  executed_cells: 9
 - id: 229_model_extent_polygons
   filename: 229_model_extent_polygons.ipynb
   title: Model Extent Polygons (1D, 2D, and Overall Footprints)
@@ -1681,7 +1681,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 7
-  executed_cells: 6
+  executed_cells: 7
 - id: 234_rasmapper_geometry_completion
   filename: 234_rasmapper_geometry_completion.ipynb
   title: Headless RASMapper Geometry Completion (Edge Lines, Interpolation Surface, Flow Paths)
@@ -1859,7 +1859,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 48
-  executed_cells: 39
+  executed_cells: 43
 - id: 301_flow_hydrograph_optimization
   filename: 301_flow_hydrograph_optimization.ipynb
   title: Flow Hydrograph Optimization
@@ -1883,7 +1883,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 12
-  executed_cells: 11
+  executed_cells: 12
 - id: 310_dss_boundary_extraction
   filename: 310_dss_boundary_extraction.ipynb
   title: DSS Boundary Extraction
@@ -1908,7 +1908,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 13
+  executed_cells: 15
 - id: 312_boundary_df_qmult_dss_paths
   filename: 312_boundary_df_qmult_dss_paths.ipynb
   title: 'Boundary DataFrame Enhancement: QMult, QMin, and DSS Path Parsing'
@@ -1979,7 +1979,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 56
-  executed_cells: 47
+  executed_cells: 49
 - id: 313_hms_to_ras_boundary_matching
   filename: 313_hms_to_ras_boundary_matching.ipynb
   title: HMS-to-RAS Boundary Condition Matching
@@ -2011,7 +2011,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 15
+  executed_cells: 16
 - id: 314_reference_line_generation
   filename: 314_reference_line_generation.ipynb
   title: Breakline-Derived Reference Lines And USGS Gauge Points
@@ -2051,7 +2051,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 14
-  executed_cells: 12
+  executed_cells: 14
 - id: 315_2d_computation_options
   filename: 315_2d_computation_options.ipynb
   title: 2D Computation Options
@@ -2180,7 +2180,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 24
-  executed_cells: 23
+  executed_cells: 24
 - id: 319_post_fire_debris_flow_nonnewtonian
   filename: 319_post_fire_debris_flow_nonnewtonian.ipynb
   title: Post-fire debris-flow 2D modeling, built from scratch (non-Newtonian)
@@ -2211,7 +2211,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 7
-  executed_cells: 6
+  executed_cells: 7
 - id: 320_1d_boundary_condition_visualization
   filename: 320_1d_boundary_condition_visualization.ipynb
   title: 1D Boundary Condition Visualization
@@ -2244,7 +2244,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 14
-  executed_cells: 13
+  executed_cells: 14
 - id: 400_1d_hdf_data_extraction
   filename: 400_1d_hdf_data_extraction.ipynb
   title: 1D HDF Data Extraction
@@ -2310,7 +2310,7 @@ notebooks:
   evidence_scope: Dataset presence and extraction establish readable stored results, not freshness or
     hydraulic acceptance.
   code_cells: 73
-  executed_cells: 52
+  executed_cells: 69
 - id: 401_steady_flow_analysis
   filename: 401_steady_flow_analysis.ipynb
   title: Steady Flow Analysis
@@ -2351,7 +2351,7 @@ notebooks:
   evidence_scope: Steady profiles are separate from unsteady time series; the example comparisons do not
     establish model calibration.
   code_cells: 24
-  executed_cells: 20
+  executed_cells: 24
 - id: 410_2d_hdf_data_extraction
   filename: 410_2d_hdf_data_extraction.ipynb
   title: 2D HDF Data Extraction
@@ -2423,7 +2423,7 @@ notebooks:
   evidence_scope: Stored maxima, instantaneous time series, geometry, and derived quantities have different
     meanings; missing optional output is not zero.
   code_cells: 120
-  executed_cells: 111
+  executed_cells: 118
 - id: 411_2d_hdf_pipes_and_pumps
   filename: 411_2d_hdf_pipes_and_pumps.ipynb
   title: Pipes and Pumps
@@ -2463,7 +2463,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 36
-  executed_cells: 28
+  executed_cells: 34
 - id: 412_2d_detail_face_data_extraction
   filename: 412_2d_detail_face_data_extraction.ipynb
   title: 2D Face Data Extraction
@@ -2513,7 +2513,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 54
-  executed_cells: 42
+  executed_cells: 54
 - id: 413_profile_line_flow_extraction
   filename: 413_profile_line_flow_extraction.ipynb
   title: Profile Line Flow Extraction
@@ -2535,7 +2535,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 6
-  executed_cells: 5
+  executed_cells: 6
 - id: 414_depth_varying_mannings_n
   filename: 414_depth_varying_mannings_n.ipynb
   title: Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves
@@ -2580,7 +2580,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 14
+  executed_cells: 15
 - id: 415_2d_spatial_result_queries
   filename: 415_2d_spatial_result_queries.ipynb
   title: 2D Spatial Result Queries with HdfResultsQuery
@@ -2610,7 +2610,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 416_2d_velocity_profile_line
   filename: 416_2d_velocity_profile_line.ipynb
   title: 2D Velocity Profile Line Extraction
@@ -2629,7 +2629,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 4
-  executed_cells: 3
+  executed_cells: 4
 - id: 417_inspect_results_and_generate_hydraulic_products
   filename: 417_inspect_results_and_generate_hydraulic_products.ipynb
   title: Inspecting Results and Generating Hydraulic Product Packages
@@ -2959,7 +2959,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 30
-  executed_cells: 25
+  executed_cells: 29
 - id: 611_validating_map_layers
   filename: 611_validating_map_layers.ipynb
   title: Validating RAS Mapper Layers and Terrain Files
@@ -2994,7 +2994,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 25
-  executed_cells: 23
+  executed_cells: 24
 - id: 612_benefit_area_analysis
   filename: 612_benefit_area_analysis.ipynb
   title: Benefit-area mapping for storm-system alternatives
@@ -3049,7 +3049,7 @@ notebooks:
   evidence_scope: Benefit categories use declared depth thresholds and aligned pre/post rasters; no qualifying
     benefit does not imply no physical change.
   code_cells: 11
-  executed_cells: 10
+  executed_cells: 11
 - id: 700_core_sensitivity
   filename: 700_core_sensitivity.ipynb
   title: Core Sensitivity Testing with results_df
@@ -3076,7 +3076,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 7
+  executed_cells: 8
 - id: 701_benchmarking_versions_6.1_to_6.6
   filename: 701_benchmarking_versions_6.1_to_6.6.ipynb
   title: Version Benchmarking and Core Scaling (HEC-RAS 5.0.5, 6.0, 6.3.1, 6.6, 7.0)
@@ -3105,7 +3105,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 6
+  executed_cells: 8
 - id: 710_mannings_sensitivity_bulk_analysis
   filename: 710_mannings_sensitivity_bulk_analysis.ipynb
   title: Manning's n Bulk Sensitivity Analysis
@@ -3143,7 +3143,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 15
-  executed_cells: 13
+  executed_cells: 14
 - id: 711_mannings_sensitivity_multi_interval
   filename: 711_mannings_sensitivity_multi_interval.ipynb
   title: One-at-a-Time (OAT) Manning's n Sensitivity Analysis
@@ -3185,7 +3185,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 14
+  executed_cells: 16
 - id: 720_precipitation_methods_comprehensive
   filename: 720_precipitation_methods_comprehensive.ipynb
   title: Precipitation Hyetograph Generation - Complete Method Comparison
@@ -3214,7 +3214,7 @@ notebooks:
   evidence_scope: Method comparison demonstrates temporal construction; it does not select a locally appropriate
     design storm or prove delivery to a hydraulic solver.
   code_cells: 15
-  executed_cells: 13
+  executed_cells: 15
 - id: 721_precipitation_hyetograph_comparison
   filename: 721_precipitation_hyetograph_comparison.ipynb
   title: Precipitation Hyetograph Comparison
@@ -3417,7 +3417,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 8
+  executed_cells: 9
 - id: 729_direct_geotiff_gridded_rain_on_grid
   filename: 729_direct_geotiff_gridded_rain_on_grid.ipynb
   title: Direct GeoTIFF Gridded Rain-on-Grid
@@ -3454,7 +3454,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 7
+  executed_cells: 9
 - id: 730_raster_processing_performance_profiling
   filename: 730_raster_processing_performance_profiling.ipynb
   title: Raster Processing Performance Profiling
@@ -3519,7 +3519,7 @@ notebooks:
   evidence_scope: Diagnostics support review and may have incomplete dataset coverage. Floodway authoring/checking
     remains experimental; empty messages are not a compliance finding.
   code_cells: 20
-  executed_cells: 19
+  executed_cells: 20
 - id: 801_advanced_structure_validation
   filename: 801_advanced_structure_validation.ipynb
   title: Advanced Structure Validation with RasCheck
@@ -3550,7 +3550,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 19
-  executed_cells: 17
+  executed_cells: 19
 - id: 900_aorc_precipitation
   filename: 900_aorc_precipitation.ipynb
   title: AORC Precipitation for HEC-RAS Rain-on-Grid Models
@@ -3583,7 +3583,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 10
+  executed_cells: 11
 - id: 901_aorc_precipitation_catalog
   filename: 901_aorc_precipitation_catalog.ipynb
   title: AORC Precipitation Catalog for HEC-RAS Rain-on-Grid Models
@@ -3610,7 +3610,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 910_usgs_gauge_catalog
   filename: 910_usgs_gauge_catalog.ipynb
   title: USGS Gauge Catalog Generation
@@ -3635,7 +3635,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 17
-  executed_cells: 16
+  executed_cells: 17
 - id: 911_usgs_gauge_data_integration
   filename: 911_usgs_gauge_data_integration.ipynb
   title: USGS Gauge Data Integration for HEC-RAS
@@ -3660,7 +3660,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 45
-  executed_cells: 44
+  executed_cells: 45
 - id: 912_usgs_real_time_monitoring
   filename: 912_usgs_real_time_monitoring.ipynb
   title: USGS Real-Time Gauge Monitoring
@@ -3832,8 +3832,9 @@ notebooks:
   title: MRMS QPE Boundary-Hyetograph Hydraulic Comparison
   series: 900
   series_name: Data Integration
-  summary: Inspect archived MRMS grids and historical uniform-boundary HEC-RAS comparisons; align absolute
-    source times and rerun before using the repaired precipitation writer.
+  summary: Align archived MRMS interval ends with the model clock, write uniform precipitation boundaries,
+    and inspect complete native cumulative rainfall histories and baseline/event hydraulic diagnostics
+    for Davis and New Orleans.
   tags:
   - 2d
   - dss
@@ -3845,6 +3846,8 @@ notebooks:
   functions_used:
   - HdfMesh.get_mesh_areas
   - HdfMesh.get_mesh_cell_points
+  - HdfMesh.get_mesh_cell_polygons
+  - HdfMesh.get_mesh_sloped_topology
   - HdfProject.get_project_bounds_latlon
   - HdfPump.get_pump_station_timeseries
   - HdfPump.get_pump_stations
@@ -3852,16 +3855,20 @@ notebooks:
   - HdfResultsMesh.get_mesh_timeseries
   - HdfResultsPlan.get_compute_messages_hdf_only
   - RasCmdr.compute_plan
+  - RasCmdr.inspect_plan_processes
   - RasDss.get_catalog
   - RasDss.read_grid
   - RasExamples.extract_project
   - RasPlan.get_plan_value
   - RasPlan.update_plan_intervals
   - RasPlan.update_simulation_date
+  - RasPrj.find_ras_prj
+  - RasPrj.get_project_units
   - RasProcess.get_plan_timestamps
-  - RasProcess.store_maps_at_timesteps
+  - RasUnsteady.extract_boundary_and_tables
   - RasUnsteady.set_precipitation_hyetograph
   - ras.boundaries_df
+  - ras.get_boundary_conditions
   - ras.plan_df
   - ras.project_folder
   - ras.project_name
@@ -3869,11 +3876,29 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
-  evidence_scope: 'Saved outputs predate the interval-end writer repair. The current recipe needs MRMS
-    time-origin alignment and native time-series verification before rerun; historical totals and peak
-    checks do not qualify the repaired writer. Follow-up: issue 398.'
-  code_cells: 7
-  executed_cells: 5
+  input_families:
+  - Archived hourly MRMS MultiSensor QPE Pass2 GRIB2
+  - Davis and New Orleans Metro RasExamples projects
+  operations:
+  - Audit source units, absolute times and spatial support
+  - Author and read back uniform precipitation boundaries
+  - Compare baseline/event native cumulative rainfall and hydraulic diagnostics
+  outputs:
+  - Source and serialized rainfall tables
+  - Native computation receipts and cumulative rainfall comparisons
+  - Diagnostic maps, pump plots and animations
+  runtime_requirements:
+  - Windows with HEC-RAS 7.0 for native computation
+  - HEC-Vortex and RasDss Java dependencies; archived MRMS downloads or cache
+  - ffmpeg for animations
+  evidence_scope: 'Four hourly US-customary HEC-RAS 7.0 baseline/event runs verify complete cumulative
+    rainfall histories at 505 times across 2,705 Davis cells and 361 times across 19,711 New Orleans cells.
+    Saved outputs inspect retained runs and regenerate diagnostic figures; the gallery runtime covers
+    inspection/rendering only. Native run durations are recorded separately. Uniform boundaries follow
+    simulation start; spatial rain-on-grid, other configurations and hydraulic acceptance remain unqualified.
+    Follow-ups: issues 398, 438, 440 and 441.'
+  code_cells: 10
+  executed_cells: 10
 - id: 918_hms_ras_coupled_forecast
   filename: 918_hms_ras_coupled_forecast.ipynb
   title: HMS-RAS Coupled Forecast Execution
@@ -3915,7 +3940,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 9
-  executed_cells: 8
+  executed_cells: 9
 - id: 920_terrain_creation
   filename: 920_terrain_creation.ipynb
   title: Creating a RAS Terrain with ras-commander
@@ -3962,7 +3987,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 8
-  executed_cells: 6
+  executed_cells: 8
 - id: 922_model_validation_with_usgs
   filename: 922_model_validation_with_usgs.ipynb
   title: Model Comparison with USGS Gauge Data
@@ -4058,7 +4083,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 13
-  executed_cells: 12
+  executed_cells: 13
 - id: 925_xs_interpolation_surface
   filename: 925_xs_interpolation_surface.ipynb
   title: Cross-Section Interpolation Surface
@@ -4298,7 +4323,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 7
-  executed_cells: 6
+  executed_cells: 7
 - id: 954_ebfe_lake_maurepas_validation
   filename: 954_ebfe_lake_maurepas_validation.ipynb
   title: 'Using eBFE Models: Lake Maurepas Validation'
@@ -4320,7 +4345,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 9
+  executed_cells: 11
 - id: 955_ebfe_tickfaw_validation
   filename: 955_ebfe_tickfaw_validation.ipynb
   title: 'Using eBFE Models: Tickfaw Results-Ready Validation'
@@ -4343,7 +4368,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 11
-  executed_cells: 9
+  executed_cells: 11
 - id: 956_hydrofabric_conflation_visual_qa
   filename: 956_hydrofabric_conflation_visual_qa.ipynb
   title: NextGen Hydrofabric Conflation Visual QA — Texas eBFE Shiloh Branch
@@ -4397,7 +4422,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
 - id: 958_model_sources_showcase
   filename: 958_model_sources_showcase.ipynb
   title: 'Model Sources: Unified Discovery, Download & Visualization'
@@ -4484,7 +4509,7 @@ notebooks:
     constant-flow domain omits tributary inflow and does not substitute for watershed-preserving rainfall
     modeling or complete engineering validation.
   code_cells: 15
-  executed_cells: 14
+  executed_cells: 15
 - id: 960_cloud_native_geometry_export
   filename: 960_cloud_native_geometry_export.ipynb
   title: Cloud-Native Geometry Export with ras2cng
@@ -4503,7 +4528,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 14
+  executed_cells: 16
 - id: 961_cloud_native_results_export
   filename: 961_cloud_native_results_export.ipynb
   title: Cloud-Native Results Export with ras2cng
@@ -4527,7 +4552,7 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 16
-  executed_cells: 14
+  executed_cells: 16
 - id: 962_cloud_native_cog_results_export
   filename: 962_cloud_native_cog_results_export.ipynb
   title: Cloud Optimized GeoTIFF Results Export with ras2cng
@@ -4561,4 +4586,4 @@ notebooks:
   evidence_scope: Exported products reflect the selected producer results and options; product generation
     alone does not establish hydraulic quality.
   code_cells: 13
-  executed_cells: 11
+  executed_cells: 13

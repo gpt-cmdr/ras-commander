@@ -261,8 +261,13 @@ def seed_tags(nb_id: str, title: str, series: int) -> list:
 
 
 def count_cells(nb: dict) -> tuple[int, int]:
+    """Count code cells and recorded executions, including silent cells.
+
+    Retained outputs alone do not establish execution. An execution count
+    records that a cell ran, not whether it succeeded or is current.
+    """
     code = [c for c in nb.get("cells", []) if c.get("cell_type") == "code"]
-    executed = sum(1 for c in code if c.get("outputs"))
+    executed = sum(1 for c in code if c.get("execution_count") is not None)
     return len(code), executed
 
 

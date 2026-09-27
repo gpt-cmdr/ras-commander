@@ -201,7 +201,11 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 
     | Contract | Scope |
     | --- | --- |
-    | Evidence scope | Saved outputs predate the interval-end writer repair. The current recipe needs MRMS time-origin alignment and native time-series verification before rerun; historical totals and peak checks do not qualify the repaired writer. Follow-up: issue 398. |
+    | Inputs | Archived hourly MRMS MultiSensor QPE Pass2 GRIB2; Davis and New Orleans Metro RasExamples projects |
+    | Operations | Audit source units, absolute times and spatial support; Author and read back uniform precipitation boundaries; Compare baseline/event native cumulative rainfall and hydraulic diagnostics |
+    | Outputs | Source and serialized rainfall tables; Native computation receipts and cumulative rainfall comparisons; Diagnostic maps, pump plots and animations |
+    | Runtime requirements | Windows with HEC-RAS 7.0 for native computation; HEC-Vortex and RasDss Java dependencies; archived MRMS downloads or cache; ffmpeg for animations |
+    | Evidence scope | Four hourly US-customary HEC-RAS 7.0 baseline/event runs verify complete cumulative rainfall histories at 505 times across 2,705 Davis cells and 361 times across 19,711 New Orleans cells. Saved outputs inspect retained runs and regenerate diagnostic figures; the gallery runtime covers inspection/rendering only. Native run durations are recorded separately. Uniform boundaries follow simulation start; spatial rain-on-grid, other configurations and hydraulic acceptance remain unqualified. Follow-ups: issues 398, 438, 440 and 441. |
 
 ??? info "922 - Model Comparison with USGS Gauge Data"
 
@@ -428,7 +432,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | Notebook | Source | Runtime |
 | --- | --- | --- |
 | [916 - HRRR Forecast to HEC-RAS: Executed Rain-on-Grid Qualification](../notebooks/916_hrrr_precipitation_forecast.md)<br>reproduce an archived 8 August 2024 15Z HRRR event as 18 hourly native DSS grids, verify source-to-DSS-to-temporary-and-final-HDF forcing, compare no-rain and forecast hydraulics under HEC-RAS 7.0, and map localized convergence exceptions for manual review | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 4.2 min |
-| [917 - MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md)<br>Inspect archived MRMS grids and historical uniform-boundary HEC-RAS comparisons; align absolute source times and rerun before using the repaired precipitation writer. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 36.5 min |
+| [917 - MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md)<br>Align archived MRMS interval ends with the model clock, write uniform precipitation boundaries, and inspect complete native cumulative rainfall histories and baseline/event hydraulic diagnostics for Davis and New Orleans. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 5.3 min |
 | [923 - STOFS-3D Coastal Water Levels: Units and Datum](../notebooks/923_stofs3d_coastal_boundary.md)<br>Extract an archived NOAA station time series with explicit datum metadata, compare feet and meters, and distinguish source inspection from experimental stage authoring. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 3 s |
 | [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md)<br>MRMS QPE workflows, including direct NetCDF rain-on-grid validation | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | 59 s |
 | [926 - WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification](../notebooks/926_wpc_qpf_precipitation_forecast.md)<br>qualify a complete current WPC forecast through verified native-projection GRIB crops, 28 DSS grids, temporary and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response, mapped convergence exceptions, and explicit manual review | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |
