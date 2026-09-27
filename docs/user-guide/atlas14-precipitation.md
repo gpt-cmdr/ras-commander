@@ -378,7 +378,7 @@ results = Atlas14Variance.analyze(
 
 ### Writing Hyetographs to Unsteady Files
 
-Use `RasUnsteady.set_precipitation_hyetograph()` to write any hyetograph DataFrame directly to a HEC-RAS unsteady file:
+Use `RasUnsteady.set_precipitation_hyetograph()` to replace an existing inline precipitation boundary in a HEC-RAS unsteady file. Use a project copy when comparing storm patterns:
 
 ```python
 from ras_commander import init_ras_project, RasUnsteady, RasCmdr
@@ -400,23 +400,36 @@ if ATLAS14_AVAILABLE:
 
     # Write directly to unsteady file (one call)
     # Detects time interval from hour spacing (1HOUR, 30MIN, 5MIN, etc.)
-    RasUnsteady.set_precipitation_hyetograph("MyModel.u01", hyeto)
+    RasUnsteady.set_precipitation_hyetograph("01", hyeto)
 
     # Execute plan
     RasCmdr.compute_plan("01")
 ```
 
-`RasUnsteady.set_precipitation_hyetograph()` validates that the DataFrame has the required columns (`hour`, `incremental_depth`, `cumulative_depth`), finds the "Precipitation Hydrograph=" section, detects the time interval automatically, and formats values in HEC-RAS fixed-width format.
+The writer validates the DataFrame before changing the file and preserves the boundary's existing start-time configuration. Specify `boundary_name="Area Name"` to select an exact, case-insensitive name in boundary-location field 5; this selector is verified for 2D Flow Areas. Storage Area layouts require separate verification. Omitting the name selects the first precipitation boundary.
+
+| Input | Contract |
+| --- | --- |
+| `hour` | Regular interval-end hours measured from the boundary start. Begin at one interval, or include a zero-depth row at hour zero. Pad delayed storms with explicit dry intervals. |
+| `incremental_depth` | Finite, nonnegative depth over the preceding interval. Use inches for a US-customary model or millimeters for an SI model; the writer does not convert units. |
+| `cumulative_depth` | Cumulative sum of the incremental depths, in the same units. |
+
+The writer inserts a zero-depth start ordinate when needed. It rounds cumulative depths to 0.01 depth units before differencing into the native `8.2f` fields, keeping each interval-end cumulative depth within 0.005 units of the input (apart from floating-point tolerance). Individual increments can change by up to 0.01 units. Atlas 14 generators return inches: convert **both** depth columns before writing an SI model.
+
+Cover the simulation window explicitly. Check the written boundary and the final HDF precipitation at matching times before interpreting hydraulic differences. [Notebook 721](../notebooks/721_precipitation_hyetograph_comparison.md) retains a bounded HEC-RAS 7.0 Davis comparison; it does not qualify other versions, SI models, or other boundary-start configurations.
 
 ### Multi-AEP Batch Workflow
 
 Generate and execute a suite of AEP design storms:
 
 ```python
-from ras_commander import init_ras_project, RasCmdr, RasPlan, RasUnsteady
+from ras_commander import init_ras_project, RasCmdr, RasPlan, RasUnsteady, ras
 from ras_commander.precip import StormGenerator
 
 init_ras_project("C:/Projects/FloodStudy", "7.0")
+template_unsteady = ras.plan_df.loc[
+    ras.plan_df['plan_number'] == '01', 'unsteady_number'
+].iloc[0]
 
 # DDF data for temporal pattern (download once, reuse for all AEPs)
 ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)
@@ -441,18 +454,16 @@ for aep_pct, total_depth in aep_depths.items():
         position_percent=50
     )
 
-    # Clone plan for this AEP
-    new_plan = RasPlan.clone_plan("01", new_plan_shortid=f"{return_period}yr")
+    # Give each plan its own forcing file; cloning a plan alone shares the template's.
+    unsteady_num = RasPlan.clone_unsteady(template_unsteady)
+    new_plan = RasPlan.clone_plan(
+        "01", new_plan_shortid=f"{return_period}yr", unsteady_flow=unsteady_num
+    )
     RasPlan.update_plan_description(new_plan, f"{return_period}-Year Design Storm ({aep_pct}% AEP)")
 
-    # Get the unsteady file number for this plan
-    from ras_commander import ras
-    plan_row = ras.plan_df[ras.plan_df['plan_number'] == new_plan]
-    unsteady_num = plan_row['unsteady_number'].iloc[0]
-
-    # Write hyetograph to unsteady file
-    unsteady_file = f"FloodStudy.u{unsteady_num}"
-    RasUnsteady.set_precipitation_hyetograph(unsteady_file, hyeto)
+    # Resolve the number through the initialized project, independent of cwd.
+    # Pad with dry intervals if needed to cover this plan's simulation window.
+    RasUnsteady.set_precipitation_hyetograph(unsteady_num, hyeto)
 
     # Execute
     RasCmdr.compute_plan(new_plan, num_cores=4)
@@ -464,7 +475,7 @@ for aep_pct, total_depth in aep_depths.items():
 Complete workflow demonstrations:
 
 - `examples/720_precipitation_methods_comprehensive.ipynb` - Side-by-side comparison of all four hyetograph methods (Atlas14Storm, FrequencyStorm, ScsTypeStorm, StormGenerator) with validation
-- `examples/721_precipitation_hyetograph_comparison.ipynb` - Multi-method, multi-AEP workflow; parallel HEC-RAS execution; pre-execution validation
+- [721: Precipitation hyetograph comparison](../notebooks/721_precipitation_hyetograph_comparison.md) - 30-pattern generation and readback, with two bounded Davis runs comparing intended, written and native precipitation
 - `examples/722_gridded_precipitation_atlas14.ipynb` - Gridded precipitation workflow; spatial variance analysis; mesh polygon visualization
 - `examples/725_atlas14_spatial_variance.ipynb` - Spatial variance analysis for uniform vs. distributed rainfall assessment; HUC12 watershed option
 

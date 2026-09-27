@@ -7,6 +7,28 @@ check `ras_commander.__version__` and the documentation's
 [build provenance](https://rascommander.info/ras/version.json). A package version
 alone does not identify a development checkout.
 
+### Unreleased
+
+**Inline precipitation timing and input validation**
+
+`RasUnsteady.set_precipitation_hyetograph()` now preserves one zero-depth start
+ordinate and rounds cumulative depths before deriving native interval depths.
+The written count includes that start ordinate. Regular interval-end input starts
+at one interval, or includes a zero-depth row at hour zero. Align absolute observed
+timestamps with the existing boundary start before writing; a depth at time `t`
+represents the preceding interval.
+
+Calls now raise `ValueError` for inconsistent cumulative depths, invalid timing,
+ambiguous or unmatched named boundaries, DSS-backed precipitation boundaries,
+or mixed source newlines. Named selection is exact and case-insensitive; it no
+longer falls back to the first boundary. Recompute `cumulative_depth` from
+`incremental_depth` when importing rounded CSV values. Convert DSS boundaries
+deliberately and verify the selected area, units, start time and written values.
+See the [precipitation guide](../user-guide/atlas14-precipitation.md#writing-hyetographs-to-unsteady-files)
+and notebook 721 for the bounded HEC-RAS 7.0 evidence; other configurations remain
+unqualified. Historical notebook 917 outputs predate this writer change and need
+an explicit absolute-time alignment check before reuse with the current writer.
+
 ### v0.103.0 (September 2026)
 
 **Portable Execution Contracts and Request Identity**

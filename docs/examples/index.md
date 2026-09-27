@@ -173,7 +173,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 
     | Contract | Scope |
     | --- | --- |
-    | Evidence scope | Pattern generation and file readback are demonstrated. Native accumulated precipitation differs from intended totals; hydraulic comparison qualification is withheld. |
+    | Evidence scope | All 30 patterns are authored and read back. Two hourly HEC-RAS 7.0 Davis runs verify native precipitation across 2,705 rainfall-receiving cells and 217 times; other versions, SI units, fixed-start boundaries, sub-hourly intervals and hydraulic acceptance remain unqualified. |
 
 ??? info "800 - Quality Assurance with RasCheck"
 
@@ -194,6 +194,14 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | Contract | Scope |
     | --- | --- |
     | Evidence scope | Current saved setup/map output uses real HDF geometry and successful USGS station metadata. Later monitoring outputs retain their historical configuration and were not rerun. |
+
+??? info "917 - MRMS QPE Boundary-Hyetograph Hydraulic Comparison"
+
+    [Open notebook](../notebooks/917_mrms_precipitation_qpe.md)
+
+    | Contract | Scope |
+    | --- | --- |
+    | Evidence scope | Saved outputs predate the interval-end writer repair. The current recipe needs MRMS time-origin alignment and native time-series verification before rerun; historical totals and peak checks do not qualify the repaired writer. Follow-up: issue 398. |
 
 ??? info "922 - Model Comparison with USGS Gauge Data"
 
@@ -371,7 +379,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [710 - Manning's n Bulk Sensitivity Analysis](../notebooks/710_mannings_sensitivity_bulk_analysis.md)<br>This notebook demonstrates **bulk Manning's n sensitivity analysis** for HEC-RAS 2D models with spatially variable roughness. The workflow: | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/710_mannings_sensitivity_bulk_analysis.ipynb) | 2.0 min |
 | [711 - One-at-a-Time (OAT) Manning's n Sensitivity Analysis](../notebooks/711_mannings_sensitivity_multi_interval.md)<br>This notebook performs a one-at-a-time Manning's n sensitivity analysis on the Muncie 2D example project using GeomLandCover edits, local parallel execution, preprocessed cell roughness propagation QA, and POI max-WSE sensitivity plots. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/711_mannings_sensitivity_multi_interval.ipynb) | 12.1 min |
 | [720 - Precipitation Hyetograph Generation - Complete Method Comparison](../notebooks/720_precipitation_methods_comprehensive.md)<br>precipitation methods | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/720_precipitation_methods_comprehensive.ipynb) | 16 s |
-| [721 - Precipitation Hyetograph Comparison](../notebooks/721_precipitation_hyetograph_comparison.md)<br>Generate and read back 30 precipitation patterns through the public API; compare intended forcing with native evidence from two bounded Davis runs. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_precipitation_hyetograph_comparison.ipynb) | 44.1 min |
+| [721 - Precipitation Hyetograph Comparison](../notebooks/721_precipitation_hyetograph_comparison.md)<br>Generate and read back 30 precipitation patterns; verify intended, written and native accumulated rainfall in two bounded HEC-RAS 7.0 Davis runs. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/721_precipitation_hyetograph_comparison.ipynb) | 13.2 min |
 | [722 - Gridded Precipitation with Atlas 14: Current Workflow](../notebooks/722_gridded_precipitation_atlas14.md)<br>Migration guide to the implemented Atlas 14 workflow in notebook 727, with capability lookup and links to GeoTIFF, MRMS, and HRRR examples. Retires obsolete placeholder APIs and raw meteorology edits. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/722_gridded_precipitation_atlas14.ipynb) | 1.1 min |
 | [723 - StormGenerator Alternating Block Method - Independent Textbook Validation](../notebooks/723_storm_generator_abm_validation.md)<br>Compare StormGenerator alternating-block hyetographs with an independent reference calculation and optional HMS storm classes; check depth conservation and temporal placement. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/723_storm_generator_abm_validation.ipynb) | 5 s |
 | [725 - Atlas 14 Spatial Variance Analysis](../notebooks/725_atlas14_spatial_variance.md)<br>precipitation methods | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/725_atlas14_spatial_variance.ipynb) | 1.3 min |
@@ -420,7 +428,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | Notebook | Source | Runtime |
 | --- | --- | --- |
 | [916 - HRRR Forecast to HEC-RAS: Executed Rain-on-Grid Qualification](../notebooks/916_hrrr_precipitation_forecast.md)<br>reproduce an archived 8 August 2024 15Z HRRR event as 18 hourly native DSS grids, verify source-to-DSS-to-temporary-and-final-HDF forcing, compare no-rain and forecast hydraulics under HEC-RAS 7.0, and map localized convergence exceptions for manual review | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/916_hrrr_precipitation_forecast.ipynb) | 4.2 min |
-| [917 - MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md)<br>inspect spatial DSS grids for two archived MRMS events, intentionally reduce each event to an area-average precipitation boundary, and compare HEC-RAS 7.0 baseline/event results with runtime, final-HDF, map, pump, figure, and animation QA; this is not global gridded-meteorology qualification | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 36.5 min |
+| [917 - MRMS QPE Boundary-Hyetograph Hydraulic Comparison](../notebooks/917_mrms_precipitation_qpe.md)<br>Inspect archived MRMS grids and historical uniform-boundary HEC-RAS comparisons; align absolute source times and rerun before using the repaired precipitation writer. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/917_mrms_precipitation_qpe.ipynb) | 36.5 min |
 | [923 - STOFS-3D Coastal Water Levels: Units and Datum](../notebooks/923_stofs3d_coastal_boundary.md)<br>Extract an archived NOAA station time series with explicit datum metadata, compare feet and meters, and distinguish source inspection from experimental stage authoring. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/923_stofs3d_coastal_boundary.ipynb) | 3 s |
 | [924 - MRMS NetCDF Rain-on-Grid Validation](../notebooks/924_mrms_netcdf_rain_on_grid.md)<br>MRMS QPE workflows, including direct NetCDF rain-on-grid validation | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/924_mrms_netcdf_rain_on_grid.ipynb) | 59 s |
 | [926 - WPC QPF DSS-to-HEC-RAS Rain-on-Grid Qualification](../notebooks/926_wpc_qpf_precipitation_forecast.md)<br>qualify a complete current WPC forecast through verified native-projection GRIB crops, 28 DSS grids, temporary and final HDF forcing, no-rain/event HEC-RAS 7.0 simulations, hydraulic response, mapped convergence exceptions, and explicit manual review | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/926_wpc_qpf_precipitation_forecast.ipynb) | 22 s |

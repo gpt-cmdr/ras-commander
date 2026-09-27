@@ -4803,11 +4803,16 @@ class RasUnsteady:
             Path to the unsteady flow file (.u##) or unsteady number (e.g., "01")
         hyetograph_df : pd.DataFrame
             DataFrame with columns:
-            - 'hour': Time in hours from storm start (end of interval)
-            - 'incremental_depth': Precipitation depth for this interval (inches)
-            - 'cumulative_depth': Cumulative precipitation depth (inches)
+            - 'hour': Regular interval-end hours from the existing boundary start.
+              Start at one interval, or include a zero-depth row at hour zero.
+            - 'incremental_depth': Depth over the preceding interval (inches for
+              a US-customary model, mm for an SI model; no unit conversion).
+            - 'cumulative_depth': Cumulative sum of incremental depths in the same units.
         boundary_name : str, optional
-            Name of the 2D Flow Area or Storage Area to update.
+            Exact, case-insensitive area name in Boundary Location field 5.
+            Named selection is verified for 2D Flow Areas; Storage Area layouts
+            require separate native verification.
+            A supplied name must identify exactly one precipitation boundary.
             If None, updates the first Precipitation Hydrograph found.
         ras_object : optional
             Custom RAS object to use instead of the global one
@@ -4820,7 +4825,8 @@ class RasUnsteady:
         Raises
         ------
         ValueError
-            If DataFrame is missing required columns
+            If data, timing, fixed-width range or the target inline boundary is invalid,
+            or the source file mixes newline conventions
         FileNotFoundError
             If unsteady flow file not found
 
@@ -4830,8 +4836,9 @@ class RasUnsteady:
         >>> from ras_commander.precip import StormGenerator
         >>>
         >>> # Generate hyetograph
-        >>> gen = StormGenerator.download_from_coordinates(29.76, -95.37)
-        >>> hyeto = gen.generate_hyetograph(
+        >>> ddf = StormGenerator.download_from_coordinates(29.76, -95.37)
+        >>> hyeto = StormGenerator.generate_hyetograph(
+        ...     ddf_data=ddf,
         ...     total_depth_inches=17.0,
         ...     duration_hours=24,
         ...     position_percent=50
@@ -4848,16 +4855,24 @@ class RasUnsteady:
 
         **Interval Detection**:
         - Interval is calculated from `hour` column spacing (e.g., 1.0 → "1HOUR", 0.5 → "30MIN")
-        - The Interval= line immediately preceding the Precipitation Hydrograph section is updated
+        - The unique Interval= line inside the selected boundary block is updated
 
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
         - 10 incremental-depth values per line
-        - Count = number of depth values; timing comes from the Interval= line
+        - Count includes a zero-depth ordinate at the existing boundary start.
+        - A value at time t is the depth over the preceding interval.
+        - Existing fixed-start/simulation-start selection is preserved; cover the
+          required simulation window and append explicit dry intervals as needed.
 
         **Depth Conservation**:
-        - Total depth is logged for verification
-        - Should match the total_depth_inches used in generation
+        - Cumulative depths are rounded to 0.01, then differenced for serialization.
+        - Total and interval-end cumulative depths differ by at most 0.005 depth
+          units (floating-point tolerance aside); individual increments can differ
+          by up to 0.01. This avoids accumulated independent-rounding error.
+        - Native interval timing was checked on the HEC-RAS 7.0 Davis example;
+          other versions, units and boundary-start configurations need their own
+          solver-level check. This method does not establish hydraulic acceptance.
 
         See Also
         --------
@@ -4893,140 +4908,123 @@ class RasUnsteady:
                 f"Required columns: {required_columns}"
             )
 
-        # Calculate interval from hour column
-        hours = hyetograph_df['hour'].values
-        if len(hours) < 2:
+        # Native table index zero is the boundary start, not the first interval end.
+        # A value at t represents depth over (t - interval, t].  See the HEC-RAS
+        # User's Manual, Boundary Conditions / Precipitation, and notebook 721.
+        try:
+            data = hyetograph_df[required_columns].to_numpy(dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Hyetograph columns must contain finite numeric values") from exc
+        if len(data) < 2:
             raise ValueError("DataFrame must have at least 2 rows to determine interval")
-
-        interval_hours = hours[1] - hours[0]
-
-        # Convert interval to HEC-RAS format string
-        if interval_hours >= 1.0:
-            if interval_hours == int(interval_hours):
-                interval_str = f"{int(interval_hours)}HOUR"
-            else:
-                # Convert to minutes if fractional hour
-                interval_min = int(interval_hours * 60)
-                interval_str = f"{interval_min}MIN"
+        if not np.isfinite(data).all():
+            raise ValueError("Hyetograph columns must contain finite numeric values")
+        hours, depths, cumulative = data.T
+        if (depths < 0).any() or (cumulative < 0).any():
+            raise ValueError("Precipitation depths must be non-negative")
+        interval_hours = float(hours[1] - hours[0])
+        if interval_hours <= 0 or not np.allclose(
+            np.diff(hours), interval_hours, rtol=0, atol=1e-9
+        ):
+            raise ValueError("hour must be a strictly increasing regular interval grid")
+        interval_minutes = round(interval_hours * 60)
+        if interval_minutes < 1 or not np.isclose(
+            interval_hours * 60, interval_minutes, rtol=0, atol=1e-7
+        ):
+            raise ValueError("Interval must be a positive whole number of minutes")
+        canonical_cumulative = np.cumsum(depths)
+        if not np.allclose(cumulative, canonical_cumulative, rtol=1e-9, atol=1e-8):
+            raise ValueError("cumulative_depth must equal the cumulative sum of incremental_depth")
+        # Use one canonical mass curve: tolerated noise in the redundant supplied
+        # cumulative column must not cross a rounding tie and create negative rain.
+        cumulative = canonical_cumulative
+        if np.isclose(hours[0], 0, rtol=0, atol=1e-9):
+            if depths[0] != 0 or cumulative[0] != 0:
+                raise ValueError("A time-zero row must have zero incremental and cumulative depth")
+        elif np.isclose(hours[0], interval_hours, rtol=0, atol=1e-9):
+            cumulative = np.r_[0.0, cumulative]
         else:
-            interval_min = int(interval_hours * 60)
-            interval_str = f"{interval_min}MIN"
+            raise ValueError("hour must start at zero or the first interval end; pad delayed storms with zeros")
 
-        # Read the file
-        with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = f.readlines()
-
-        # Get precipitation values (incremental depths)
-        precip_values = hyetograph_df['incremental_depth'].values
-
-        # Calculate total depth for logging
-        total_depth = hyetograph_df['cumulative_depth'].iloc[-1]
-
-        # Precipitation Hydrograph stores one incremental depth per interval.
+        # Quantize the mass curve before differencing: total and every interval-end
+        # cumulative depth stay within 0.005 input depth units. Independent rounding
+        # of increments can accumulate an arbitrarily larger total-depth error.
+        try:
+            with np.errstate(over="raise", invalid="raise"):
+                rounded_cumulative = np.rint(cumulative * 100.0) / 100.0
+        except FloatingPointError as exc:
+            raise ValueError("Precipitation depth exceeds the fixed-width numeric range") from exc
+        precip_values = np.diff(rounded_cumulative, prepend=0.0)
+        fields = [f"{value:8.2f}" for value in precip_values]
+        if any(len(field) != 8 for field in fields):
+            raise ValueError("Precipitation depth cannot be represented in an 8-character field")
+        interval_str = (
+            f"{interval_minutes // 60}HOUR"
+            if interval_minutes % 60 == 0 else f"{interval_minutes}MIN"
+        )
+        total_depth = float(cumulative[-1])
         num_values = len(precip_values)
 
-        # Format into fixed-width lines (8 chars each, 10 depth values per line)
-        formatted_lines = []
-        for i in range(0, len(precip_values), 10):
-            row_values = precip_values[i:i+10]
-            formatted_row = ''.join(f'{value:8.2f}' for value in row_values)
-            formatted_lines.append(formatted_row + '\n')
-
-        # Find the Precipitation Hydrograph section(s)
-        precip_sections = []
-        for i, line in enumerate(lines):
-            if line.startswith('Precipitation Hydrograph='):
-                precip_sections.append(i)
-
-        if not precip_sections:
+        # Decode losslessly and retain the native encoding and newline convention.
+        original_bytes = unsteady_path.read_bytes()
+        for encoding in ("utf-8", "cp1252", "latin-1"):
+            try:
+                text = original_bytes.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        lines = text.splitlines(keepends=True)
+        newline = RasUnsteady._detect_line_ending(lines)
+        blocks = RasUnsteady._find_boundary_blocks(lines)
+        candidates = []
+        for block in blocks:
+            for idx in range(block["start_idx"] + 1, block["end_idx"]):
+                if lines[idx].startswith("Precipitation Hydrograph="):
+                    candidates.append((block, idx))
+        if not candidates:
             raise ValueError(
                 f"No 'Precipitation Hydrograph=' section found in {unsteady_path}. "
                 "Ensure the unsteady file has a precipitation boundary condition defined."
             )
-
-        # Determine which section to update
         if boundary_name is not None:
-            # Find the section associated with the specified boundary
-            target_section = None
-            for precip_idx in precip_sections:
-                # Search backwards for Boundary Location
-                for j in range(precip_idx - 1, max(0, precip_idx - 50), -1):
-                    if lines[j].startswith('Boundary Location='):
-                        # Check if boundary name matches (usually in position 6 for storage area)
-                        loc_parts = lines[j].replace('Boundary Location=', '').split(',')
-                        for part in loc_parts:
-                            if boundary_name.strip().lower() in part.strip().lower():
-                                target_section = precip_idx
-                                break
-                        break
-                if target_section is not None:
-                    break
+            if not isinstance(boundary_name, str) or not boundary_name.strip():
+                raise ValueError("boundary_name must be a non-empty area name")
+            name = boundary_name.strip().casefold()
+            candidates = [
+                (block, idx) for block, idx in candidates
+                if len(block["parts"]) > 5 and block["parts"][5].casefold() == name
+            ]
+            if len(candidates) != 1:
+                raise ValueError(f"Expected exactly one precipitation boundary for area {boundary_name!r}; found {len(candidates)}")
+        block, precip_line_idx = candidates[0]
+        interval_indices = [
+            idx for idx in range(block["start_idx"] + 1, precip_line_idx)
+            if lines[idx].startswith("Interval=")
+        ]
+        if len(interval_indices) != 1:
+            raise ValueError("Precipitation boundary must have exactly one Interval= before its table")
+        # This writer targets an existing inline boundary, without changing DSS or
+        # fixed-start-time selection behind the caller's back.
+        if any(line.strip() == "Use DSS=True" for line in lines[block["start_idx"]:block["end_idx"]]):
+            raise ValueError("Precipitation boundary uses DSS; select an inline boundary before writing")
 
-            if target_section is None:
-                logger.warning(
-                    f"Boundary '{boundary_name}' not found. "
-                    f"Updating first Precipitation Hydrograph section."
-                )
-                target_section = precip_sections[0]
-        else:
-            target_section = precip_sections[0]
-
-        precip_line_idx = target_section
-
-        # Find the end of the old data section by scanning for next keyword line
-        # Data starts right after the Precipitation Hydrograph= line
         old_data_start = precip_line_idx + 1
-        old_data_end = old_data_start
-
-        # Scan forward to find where data ends (next line with '=' keyword)
-        for k in range(old_data_start, len(lines)):
-            line = lines[k]
-            # Data lines are numeric only; keyword lines contain '='
-            if '=' in line:
-                old_data_end = k
-                break
-            # Also check for empty lines that might mark end of section
-            if not line.strip():
-                # Empty line might be end of section, but continue checking
-                pass
-        else:
-            # Reached end of file
-            old_data_end = len(lines)
-
-        # Update the Precipitation Hydrograph header line with new count
-        new_precip_line = f"Precipitation Hydrograph= {num_values} \n"
-
-        # Search backwards from Precipitation Hydrograph line for Interval line
-        interval_updated = False
-        for j in range(precip_line_idx - 1, max(0, precip_line_idx - 20), -1):
-            if lines[j].startswith('Interval='):
-                old_interval = lines[j].strip()
-                lines[j] = f"Interval={interval_str}\n"
-                interval_updated = True
-                logger.debug(f"Updated {old_interval} to Interval={interval_str}")
-                break
-
-        if not interval_updated:
-            logger.warning(
-                f"Could not find Interval= line before Precipitation Hydrograph at line {precip_line_idx + 1}. "
-                "Interval not updated."
-            )
-
-        # Replace the old data section with new formatted data
-        # 1. Update header line
-        lines[precip_line_idx] = new_precip_line
-
-        # 2. Replace data lines
+        old_data_end = next(
+            (idx for idx in range(old_data_start, block["end_idx"]) if "=" in lines[idx]),
+            block["end_idx"],
+        )
+        formatted_lines = [
+            "".join(fields[idx:idx + 10]) + newline
+            for idx in range(0, num_values, 10)
+        ]
+        lines[interval_indices[0]] = f"Interval={interval_str}{newline}"
+        lines[precip_line_idx] = f"Precipitation Hydrograph= {num_values} {newline}"
         new_lines = lines[:old_data_start] + formatted_lines + lines[old_data_end:]
-
-        # Write updated content back to file
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
-
+        unsteady_path.write_bytes("".join(new_lines).encode(encoding))
         logger.info(
             f"Updated Precipitation Hydrograph in {unsteady_path.name}: "
-            f"{num_values} time steps, interval={interval_str}, "
-            f"total depth={total_depth:.4f} inches"
+            f"{num_values} ordinates including time-zero anchor, interval={interval_str}, "
+            f"input depth={total_depth:.6f}, serialized depth={rounded_cumulative[-1]:.2f}"
         )
 
     @staticmethod
@@ -8880,8 +8878,8 @@ class RasUnsteady:
         removes DSS File/Path lines, writes inline hydrograph data in HEC-RAS fixed-width
         format, and updates the table count and Interval line.
 
-        The method follows the same pattern as ``set_precipitation_hyetograph()`` for
-        inline table writing.
+        Like ``set_precipitation_hyetograph()``, this writes fixed-width values,
+        but flow/stage ordinates and interval precipitation have different time semantics.
 
         Parameters
         ----------
@@ -8951,7 +8949,9 @@ class RasUnsteady:
         Each value is 8 characters wide, 10 values per line. The count on the header
         line is the number of values, and time is implied from the Interval setting.
 
-        Precipitation Hydrograph uses the same values-only timing convention.
+        Precipitation also stores values only, but each depth applies to the preceding
+        interval. Its dedicated writer preserves a zero-depth start ordinate; do not
+        apply that interval-depth convention to flow/stage ordinates.
 
         **State Transition**:
 
