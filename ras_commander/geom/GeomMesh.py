@@ -124,6 +124,11 @@ _DEPS = ["Utility.Core", "Geospatial.Core", "H5Assist", "RasMapperLib"]
 
 MAX_FACES_PER_CELL = 8
 PERIMETER_NEAR_DUPLICATE_TOL = 1e-6
+# HEC-RAS geometry preprocessing rejects a seed lying on the 2D perimeter
+# ("point(s) detected outside the perimeter"), although RasMapperLib meshes it.
+# MaxFaces midpoints of perimeter faces are moved inward by this fraction of
+# the face length (unit-agnostic: 2 ft for a 200 ft face, 0.6 m for 60 m).
+PERIMETER_MIDPOINT_INSET_RATIO = 0.01
 _RATIO_LADDER = [0.05, 0.10, 0.15, 0.25]
 _GEOMETRY_ASSOCIATION_FIELDS = GEOMETRY_ASSOCIATION_FIELDS
 
@@ -516,14 +521,10 @@ def _remove_seed_indexes(seeds_pm, indexes: set[int], ns: dict):
 
 def _seed_indexes_outside_perimeter(seeds_pm, perimeter) -> set[int]:
     """Return seed indexes outside an exact .NET perimeter polygon."""
-    from shapely.geometry import Point, Polygon
+    from shapely.geometry import Point
 
-    perimeter_coords = [
-        (float(perimeter.PointM(index).X), float(perimeter.PointM(index).Y))
-        for index in range(perimeter.Count)
-    ]
-    polygon = Polygon(perimeter_coords)
-    if polygon.is_empty or not polygon.is_valid:
+    polygon = _perimeter_shapely_polygon(perimeter)
+    if polygon is None:
         return set()
     return {
         index
@@ -534,15 +535,88 @@ def _seed_indexes_outside_perimeter(seeds_pm, perimeter) -> set[int]:
     }
 
 
-def _autofix_max_faces(mesh, seeds_as_list: list, ns: dict) -> Tuple[list, int, list]:
+def _perimeter_shapely_polygon(perimeter):
+    """Counter-clockwise shapely Polygon of a .NET perimeter, or None if unusable."""
+    from shapely.geometry import Polygon
+    from shapely.geometry.polygon import orient
+
+    try:
+        coords = [
+            (float(perimeter.PointM(index).X), float(perimeter.PointM(index).Y))
+            for index in range(perimeter.Count)
+        ]
+        polygon = Polygon(coords)
+    except Exception:
+        return None
+    if polygon.is_empty or not polygon.is_valid:
+        return None
+    return orient(polygon, sign=1.0)
+
+
+def _inset_perimeter_midpoint(mid, face_length: float, polygon, ns: dict):
+    """Return ``mid`` moved strictly inside ``polygon`` when it lies on or outside it.
+
+    A midpoint closer to the perimeter than ``PERIMETER_MIDPOINT_INSET_RATIO``
+    times the face length (or outside it) is moved to that distance from the
+    nearest perimeter segment along the segment's inward normal. When the face
+    length is unknown (zero), the nearest perimeter segment's length is used.
+    Other points, and points that cannot be moved inside (logged), are
+    returned unchanged.
+
+    Returns (point, moved).
+    """
+    from shapely.geometry import LineString, Point
+
+    if polygon is None:
+        return mid, False
+    point = Point(float(mid.X), float(mid.Y))
+    ring = polygon.exterior
+    coords = list(ring.coords)
+    segments = [LineString(coords[i : i + 2]) for i in range(len(coords) - 1)]
+    nearest = min(segments, key=lambda segment: segment.distance(point))
+    length = float(nearest.length)
+    reference = float(face_length) if face_length and face_length > 0 else length
+    inset = PERIMETER_MIDPOINT_INSET_RATIO * reference
+    if polygon.contains(point) and ring.distance(point) >= inset:
+        return mid, False
+    if length == 0 or not inset > 0:
+        logger.debug(
+            f"MaxFaces midpoint ({point.x:.3f}, {point.y:.3f}) is on the perimeter "
+            "but its nearest perimeter segment has zero length; left in place"
+        )
+        return mid, False
+    (ax, ay), (bx, by) = nearest.coords
+    foot = nearest.interpolate(nearest.project(point))
+    # Left normal of a counter-clockwise ring points into the polygon.
+    x = foot.x - (by - ay) / length * inset
+    y = foot.y + (bx - ax) / length * inset
+    if not polygon.contains(Point(x, y)):
+        logger.debug(
+            f"MaxFaces midpoint ({point.x:.3f}, {point.y:.3f}) is on the perimeter "
+            f"but moving it {inset:.3f} inward leaves the perimeter; left in place"
+        )
+        return mid, False
+    return ns["PointM"](x, y), True
+
+
+def _autofix_max_faces(
+    mesh, seeds_as_list: list, ns: dict, perimeter=None, stats: Optional[dict] = None
+) -> Tuple[list, int, list]:
     """Add midpoints of longest 2 faces (with no internal points) per cell exceeding MAX_FACES.
 
     Matches C# TryAutoFix (ilspy_meshfv2d.txt:4803-4804): filters by
-    InternalPoints.IsNullOrEmpty() only — does NOT exclude perimeter faces
-    and does NOT perform containment checks.
+    InternalPoints.IsNullOrEmpty() only and does NOT exclude perimeter faces.
+    One deviation, when ``perimeter`` (the .NET perimeter Polygon being meshed)
+    is given: a midpoint on or outside the perimeter is moved inward by
+    ``PERIMETER_MIDPOINT_INSET_RATIO`` of its face length. RasMapperLib accepts
+    a seed on the perimeter, but HEC-RAS geometry preprocessing rejects the
+    mesh ("1 point(s) detected outside the perimeter of the 2D-area").
+    If ``stats`` is a dict, ``stats["inset"]`` receives the number moved.
 
     Returns (combined_seeds, n_added, new_midpoints_only).
     """
+    polygon = _perimeter_shapely_polygon(perimeter) if perimeter is not None else None
+    n_inset = 0
     new_pts = list(seeds_as_list)
     midpoints_only = []
     seen = set()
@@ -578,6 +652,11 @@ def _autofix_max_faces(mesh, seeds_as_list: list, ns: dict) -> Tuple[list, int, 
             try:
                 seg = mesh.FaceSegment(fidx)
                 mid = seg.MidPoint()
+                if polygon is not None:
+                    mid, moved = _inset_perimeter_midpoint(
+                        mid, face_key(fidx), polygon, ns
+                    )
+                    n_inset += int(moved)
                 new_pts.append(mid)
                 midpoints_only.append(mid)
                 seen.add(fidx)
@@ -586,6 +665,12 @@ def _autofix_max_faces(mesh, seeds_as_list: list, ns: dict) -> Tuple[list, int, 
             except Exception:
                 pass
 
+    if n_inset:
+        logger.debug(
+            f"MaxFaces midpoints moved inside the perimeter: {n_inset} of {n_added}"
+        )
+    if stats is not None:
+        stats["inset"] = n_inset
     return new_pts, n_added, midpoints_only
 
 
@@ -5066,8 +5151,10 @@ class GeomMesh:
                         current_seeds_pm[i]
                         for i in range(current_seeds_pm.Count)
                     ]
+                    midpoint_stats: dict = {}
                     new_list, n_added, _ = _autofix_max_faces(
-                        mesh, seeds_list, ns
+                        mesh, seeds_list, ns, perimeter=current_perim,
+                        stats=midpoint_stats,
                     )
                     if n_added > 0:
                         current_seeds_pm = _seeds_from_pointms_list(
@@ -5077,6 +5164,13 @@ class GeomMesh:
                         fix_msg = f"MaxFaces:midpoints(+{n_added}pts)"
                         result.fixes_applied.append(fix_msg)
                         logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                        if midpoint_stats.get("inset"):
+                            # Departure from RASMapper's placement, kept visible.
+                            inset_msg = (
+                                f"MaxFaces:perimeter-inset({midpoint_stats['inset']})"
+                            )
+                            result.fixes_applied.append(inset_msg)
+                            logger.debug(f"[{mesh_name}] Fix applied: {inset_msg}")
                         continue
 
                 # Perimeter errors → remove bad vertices
