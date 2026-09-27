@@ -2745,8 +2745,16 @@ class PrecipMrms:
         target = pd.DatetimeIndex(pd.to_datetime(target_times))
         if len(source) == 0:
             raise ValueError("source_times must contain at least one timestamp")
+        if source.hasnans:
+            raise ValueError("source_times must contain only finite timestamps")
         if not source.is_monotonic_increasing or source.has_duplicates:
             raise ValueError("source_times must be unique and increasing")
+        if len(target) == 0:
+            raise ValueError("target_times must contain at least one timestamp")
+        if target.hasnans:
+            raise ValueError("target_times must contain only finite timestamps")
+        if not target.is_monotonic_increasing or target.has_duplicates:
+            raise ValueError("target_times must be unique and increasing")
 
         alignment_clean = alignment.strip().lower()
         policy = coverage_policy.strip().lower()
@@ -2766,12 +2774,31 @@ class PrecipMrms:
                     "precip_interval is required for covering_interval alignment"
                 )
             interval_delta = pd.Timedelta(interval)
-            if interval_delta <= pd.Timedelta(0):
-                raise ValueError("precip_interval must be positive")
+            if pd.isna(interval_delta) or interval_delta <= pd.Timedelta(0):
+                raise ValueError("precip_interval must be a finite positive duration")
+            if len(source) > 1:
+                cadence = source[1:] - source[:-1]
+                gaps = cadence > interval_delta
+                overlaps = cadence < interval_delta
+                if gaps.any():
+                    raise ValueError(
+                        "Precipitation source intervals contain an internal gap; "
+                        "covering_interval requires continuous fixed-interval coverage"
+                    )
+                if overlaps.any():
+                    raise ValueError(
+                        "Precipitation source intervals overlap; covering_interval "
+                        "requires continuous fixed-interval coverage"
+                    )
             indices = np.searchsorted(source.values, target.values, side="left")
             coverage_start = source[0] - interval_delta
 
-        before = target < coverage_start
+        # Interval-ending amounts use the half-open convention (start, end].
+        before = (
+            target <= coverage_start
+            if alignment_clean == "covering_interval"
+            else target < coverage_start
+        )
         after = target > source[-1]
         if policy == "error" and (before.any() or after.any()):
             raise ValueError(
@@ -2794,6 +2821,21 @@ class PrecipMrms:
             indices = np.asarray(indices, dtype=int)
 
         invalid = (indices >= len(source)) & ~after
+        if alignment_clean == "covering_interval":
+            in_coverage = ~(before | after)
+            selected = np.asarray(indices, dtype=int)[in_coverage]
+            selected_ends = source.take(selected)
+            selected_starts = selected_ends - interval_delta
+            target_in_coverage = target[in_coverage]
+            membership_invalid = ~(
+                (target_in_coverage > selected_starts)
+                & (target_in_coverage <= selected_ends)
+            )
+            if membership_invalid.any():
+                raise ValueError(
+                    "Target times do not fall within the declared precipitation "
+                    "intervals using the (start, end] convention"
+                )
         if invalid.any():
             raise ValueError(
                 "Target times do not fall within the declared precipitation intervals"

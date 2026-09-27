@@ -253,9 +253,12 @@ PrecipMrms.animate_combined(
 )
 ```
 
-`covering_interval` selects the accumulation interval containing each hydraulic
-frame rather than the latest completed observation. `coverage_policy="error"`
-fails when hydraulic frames extend beyond the declared source coverage. Use
+`covering_interval` enforces continuous, fixed-duration, interval-ending source
+coverage. A frame ending at `end` covers exactly `(end - precip_interval, end]`;
+the interval start is excluded and its end is included. Source gaps, overlaps,
+duplicate or unordered timestamps, and hydraulic frames that do not belong to
+the selected interval fail explicitly. `coverage_policy="error"` also fails
+when hydraulic frames extend beyond the declared source coverage. Use
 `coverage_policy="dry_tail"` only when zero precipitation after the final source
 interval is an explicit caller assumption; the animation labels those frames as
 an authorized dry tail. It never converts missing coverage before the first
@@ -263,10 +266,12 @@ interval to zero.
 
 `precip_value_semantics="rate"` labels values as `in/hr`.
 `"interval_amount"` labels them as inches per displayed interval without
-claiming an hourly rate. Alignment may repeat a source grid across multiple
-hydraulic display frames, so never sum the displayed frame stack to calculate
-cumulative precipitation. Preserve and integrate the original source intervals
-for forcing or water-balance calculations.
+claiming an hourly rate. This display-only name is intentionally distinct from
+forcing APIs' `value_type`: it describes how to label and align already-loaded
+animation values and does not rewrite forcing data. Alignment may repeat a
+source grid across multiple hydraulic display frames, so never sum the displayed
+frame stack to calculate cumulative precipitation. Preserve and integrate the
+original source intervals for forcing or water-balance calculations.
 
 ## Examples and scope
 

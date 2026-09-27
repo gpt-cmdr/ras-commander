@@ -1036,6 +1036,92 @@ def test_combined_alignment_selects_interval_covering_hydraulic_time():
     assert status.tolist() == ["covering_interval"] * 3
 
 
+def test_covering_interval_enforces_start_exclusive_end_inclusive():
+    source = pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"])
+
+    indices, _ = PrecipMrms._align_precipitation_frames(
+        source,
+        pd.DatetimeIndex([
+            pd.Timestamp("2024-01-01 00:00") + pd.Timedelta(1, unit="ns"),
+            pd.Timestamp("2024-01-01 01:00"),
+            pd.Timestamp("2024-01-01 02:00"),
+        ]),
+        alignment="covering_interval",
+        interval="1h",
+        coverage_policy="error",
+    )
+
+    assert indices.tolist() == [0, 0, 1]
+    with pytest.raises(ValueError, match="outside precipitation source coverage"):
+        PrecipMrms._align_precipitation_frames(
+            source,
+            pd.to_datetime(["2024-01-01 00:00"]),
+            alignment="covering_interval",
+            interval="1h",
+            coverage_policy="error",
+        )
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (["2024-01-01 01:00", "2024-01-01 03:00"], "internal gap"),
+        (["2024-01-01 01:00", "2024-01-01 01:30"], "overlap"),
+    ],
+)
+def test_covering_interval_rejects_gaps_overlaps_and_irregular_cadence(
+    source, message
+):
+    with pytest.raises(ValueError, match=message):
+        PrecipMrms._align_precipitation_frames(
+            pd.to_datetime(source),
+            pd.to_datetime(["2024-01-01 01:15"]),
+            alignment="covering_interval",
+            interval="1h",
+            coverage_policy="hold",
+        )
+
+
+@pytest.mark.parametrize("interval", ["0h", "-1h", pd.NaT])
+def test_covering_interval_requires_finite_positive_duration(interval):
+    with pytest.raises(ValueError, match="finite positive duration"):
+        PrecipMrms._align_precipitation_frames(
+            pd.to_datetime(["2024-01-01 01:00"]),
+            pd.to_datetime(["2024-01-01 00:30"]),
+            alignment="covering_interval",
+            interval=interval,
+        )
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        ["2024-01-01 01:00", "2024-01-01 01:00"],
+        ["2024-01-01 02:00", "2024-01-01 01:00"],
+        ["2024-01-01 01:00", None],
+    ],
+)
+def test_combined_alignment_requires_valid_ordered_unique_target_times(target):
+    with pytest.raises(ValueError, match="target_times must"):
+        PrecipMrms._align_precipitation_frames(
+            pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"]),
+            pd.to_datetime(target),
+        )
+
+
+def test_combined_alignment_rejects_empty_target_and_source_nat():
+    with pytest.raises(ValueError, match="target_times must contain"):
+        PrecipMrms._align_precipitation_frames(
+            pd.to_datetime(["2024-01-01 01:00"]),
+            pd.DatetimeIndex([]),
+        )
+    with pytest.raises(ValueError, match="source_times must contain only finite"):
+        PrecipMrms._align_precipitation_frames(
+            pd.DatetimeIndex([pd.NaT]),
+            pd.to_datetime(["2024-01-01 01:00"]),
+        )
+
+
 def test_combined_alignment_distinguishes_hold_error_and_authorized_dry_tail():
     source = pd.to_datetime(["2024-01-01 01:00", "2024-01-01 02:00"])
     target = pd.to_datetime(["2024-01-01 00:30", "2024-01-01 02:30"])
@@ -1122,3 +1208,77 @@ def test_combined_interval_amount_label_and_dry_tail_are_explicit(monkeypatch, t
     assert np.all(captured["precip"] == 0)
     assert "authorized dry tail" in captured["title"]
     assert "Precipitation interval amount (in)" in captured["labels"]
+
+
+def test_public_combined_grid_route_rejects_internal_precipitation_gap(tmp_path):
+    xr = pytest.importorskip("xarray")
+    precip = xr.DataArray(
+        np.ones((2, 2, 2), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.to_datetime(["2024-01-01 01:00", "2024-01-01 03:00"]),
+            "y": [1.5, 0.5],
+            "x": [0.5, 1.5],
+        },
+        attrs={"units": "mm", "crs": "EPSG:2871"},
+    )
+    flood = xr.DataArray(
+        np.ones((1, 2, 2), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.to_datetime(["2024-01-01 01:30"]),
+            "y": [1.5, 0.5],
+            "x": [0.5, 1.5],
+        },
+        attrs={"crs": "EPSG:2871"},
+    )
+
+    with pytest.raises(ValueError, match="internal gap"):
+        PrecipMrms.animate_combined(
+            precip,
+            flood,
+            tmp_path / "gap.mp4",
+            precip_value_semantics="interval_amount",
+            precip_alignment="covering_interval",
+            precip_interval="1h",
+            coverage_policy="error",
+        )
+
+
+def test_public_combined_hdf_route_rejects_internal_precipitation_gap(
+    monkeypatch, tmp_path
+):
+    xr = pytest.importorskip("xarray")
+    precip = xr.DataArray(
+        np.ones((2, 2, 2), dtype="float32"),
+        dims=("time", "y", "x"),
+        coords={
+            "time": pd.to_datetime(["2024-01-01 01:00", "2024-01-01 03:00"]),
+            "y": [1.5, 0.5],
+            "x": [0.5, 1.5],
+        },
+        attrs={"units": "mm", "crs": "EPSG:2871"},
+    )
+    monkeypatch.setattr(
+        PrecipMrms,
+        "_load_hdf_flood_points",
+        staticmethod(lambda **_: {
+            "values": np.ones((1, 1), dtype=float),
+            "times": pd.to_datetime(["2024-01-01 01:30"]),
+            "x": np.array([0.5]),
+            "y": np.array([0.5]),
+            "units": "ft",
+            "crs": "EPSG:2871",
+        }),
+    )
+
+    with pytest.raises(ValueError, match="internal gap"):
+        PrecipMrms.animate_combined(
+            precip,
+            tmp_path / "results.p01.hdf",
+            tmp_path / "gap-hdf.mp4",
+            precip_value_semantics="interval_amount",
+            precip_alignment="covering_interval",
+            precip_interval="1h",
+            coverage_policy="error",
+        )
