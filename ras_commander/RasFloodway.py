@@ -27,9 +27,9 @@ class RasFloodway:
     """
     Experimental steady-flow floodway encroachment authoring.
 
-    Not qualified for production authoring. The parser currently collapses blank
-    fixed-width values in legacy multi-profile encroachment records (including
-    official Example 6 plan 02), which can shift methods and target values.
+    Not qualified for production authoring. Native fixed-width parsing is
+    regression-tested against official Example 6 records, including blank
+    values between profiles; this does not qualify the authoring workflow.
     The delegated floodway checker also has incomplete HDF encroachment coverage.
     Work only on disposable copies and independently inspect authored records
     and computed profiles. Notebook 223 was withdrawn pending qualification;
@@ -96,6 +96,13 @@ class RasFloodway:
         -------
         pandas.DataFrame
             One row per node/profile encroachment triplet.
+            ``line_number`` is the 1-based node-header line.
+
+        Raises
+        ------
+        ValueError
+            If a numeric field, method, or profile-slot count is malformed.
+            The error identifies the 1-based values line and node identity.
         """
         plan_path = RasFloodway._resolve_plan_path(plan_number_or_path, ras_object)
         lines = RasFloodway._read_lines(plan_path)
@@ -122,7 +129,13 @@ class RasFloodway:
             node = stripped.split("=", 1)[1].strip()
             value_line = lines[i + 1] if i + 1 < len(lines) else ""
             expected_slots = RasFloodway._expected_profile_slots(encroach_param)
-            slots = RasFloodway._parse_node_slots(value_line, expected_slots)
+            try:
+                slots = RasFloodway._parse_node_slots(value_line, expected_slots)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid encroachment record in {plan_path} at line {i + 2} "
+                    f"({current_river}/{current_reach}/{node}): {exc}"
+                ) from exc
 
             for slot_index, slot in enumerate(slots):
                 method = slot[0]
@@ -293,6 +306,13 @@ class RasFloodway:
         plan_path = RasFloodway._resolve_plan_path(plan_number_or_path, ras_object)
         flow_path = RasFloodway._resolve_flow_path(flow_number_or_path, plan_path, ras_object)
 
+        # Validate the existing block and infer locations before mutating the
+        # flow file: strict parsing failures must leave both inputs unchanged.
+        RasFloodway._find_encroachment_block(RasFloodway._read_lines(plan_path))
+        locations = locations or encroachments
+        if locations is None:
+            locations = RasFloodway._infer_encroachment_locations(plan_path, flow_path)
+
         flow_info = RasFloodway._expand_steady_flow_profiles(
             flow_path=flow_path,
             base_profile=base_profile,
@@ -303,9 +323,6 @@ class RasFloodway:
         )
 
         target_profile_numbers = flow_info["new_profile_numbers"]
-        locations = locations or encroachments
-        if locations is None:
-            locations = RasFloodway._infer_encroachment_locations(plan_path, flow_path)
 
         records = RasFloodway._build_trial_encroachments(
             locations=locations,
@@ -620,15 +637,63 @@ class RasFloodway:
 
     @staticmethod
     def _parse_node_slots(value_line: str, expected_slots: int = 0) -> List[List[Optional[float]]]:
-        values = RasFloodway._parse_value_tokens(value_line)
+        """Read native eight-character fields without shifting blank values.
+
+        Compact records are accepted only as complete, single-space-delimited
+        triplets with no leading/trailing padding. Native-looking malformed
+        records must not fall back to whitespace parsing.
+        """
+        raw = value_line.rstrip("\r\n")
+        width = RasSteady.FIXED_WIDTH_FIELD_WIDTH
+        number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+        compact = re.fullmatch(rf"{number}(?: {number})+", raw)
+        if compact and len(raw.split(" ")) % 3 == 0:
+            fields = raw.split(" ")
+        else:
+            if len(raw) % width:
+                # Some readers remove trailing blank fields, but a partial
+                # nonblank fixed-width field cannot be positioned reliably.
+                remainder = raw[len(raw) // width * width:]
+                if remainder.strip():
+                    raise ValueError("incomplete eight-character field")
+                raw = raw[:len(raw) // width * width]
+            fields = [raw[i:i + width].strip() for i in range(0, len(raw), width)]
+
+        # Trailing padding is not an additional profile; interior blanks still
+        # retain their positions, and the header supplies omitted trailing slots.
+        while fields and not fields[-1]:
+            fields.pop()
+        values = []
+        for index, field in enumerate(fields):
+            if not field:
+                values.append(None)
+                continue
+            try:
+                value = float(field)
+            except ValueError as exc:
+                raise ValueError(f"invalid numeric field {index + 1}: {field!r}") from exc
+            if not math.isfinite(value):
+                raise ValueError(f"non-finite numeric field {index + 1}: {field!r}")
+            values.append(value)
         inferred_slots = math.ceil(len(values) / 3) if values else 0
+        if expected_slots and inferred_slots > expected_slots:
+            raise ValueError(
+                f"record has {inferred_slots} profile slots; header allows {expected_slots}"
+            )
         slot_count = max(expected_slots, inferred_slots)
         slots = []
         for slot_index in range(slot_count):
             start = slot_index * 3
             group = values[start:start + 3]
             group = group + [None] * max(0, 3 - len(group))
-            method = int(group[0]) if group[0] is not None else None
+            method = group[0]
+            if method is None:
+                if any(value is not None for value in group[1:]):
+                    raise ValueError(f"profile slot {slot_index + 1} has values but no method")
+            elif not method.is_integer() or not 0 <= method <= 5:
+                raise ValueError(f"invalid method {method} in profile slot {slot_index + 1}")
+            else:
+                method = int(method)
             slots.append([method, group[1], group[2]])
         return slots
 
@@ -875,10 +940,26 @@ class RasFloodway:
             if not stripped:
                 end += 1
                 continue
-            if stripped.startswith(("Encroach River=", "Encroach Reach=", "Encroach Node=")):
-                end += 1
+            if stripped.startswith("Encroach Node="):
+                if end + 1 >= len(lines):
+                    raise ValueError(f"Missing encroachment values after line {end + 1}")
+                try:
+                    RasFloodway._parse_node_slots(
+                        lines[end + 1],
+                        RasFloodway._expected_profile_slots(
+                            RasFloodway._parse_encroach_param(lines[start])
+                        ),
+                    )
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid encroachment values at line {end + 2} "
+                        f"({stripped}): {exc}"
+                    ) from exc
+                # Consume the native values line as a record, including adjacent
+                # full-width fields that cannot be split on whitespace.
+                end += 2
                 continue
-            if RasFloodway._looks_like_encroachment_value_line(lines[end]):
+            if stripped.startswith(("Encroach River=", "Encroach Reach=")):
                 end += 1
                 continue
             break

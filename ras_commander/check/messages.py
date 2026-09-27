@@ -1292,8 +1292,8 @@ MESSAGE_CATALOG: Dict[str, Dict] = {
         "type": MessageType.FWCHECK
     },
     "FW_EM_04": {
-        "message": "No encroachment at non-structure XS {station}",
-        "help_text": "Encroachment should be specified at all floodway cross sections.",
+        "message": "Encroachment station results unavailable at non-structure XS {station}",
+        "help_text": "Both encroachment station results are missing. Review the selected profile, result export, and authored inputs; missing results do not establish that no encroachment method was specified.",
         "type": MessageType.FWCHECK
     },
     "FW_EM_05": {

@@ -13,17 +13,27 @@ withdrawn from the example gallery pending qualification. Its historical outputs
 are not evidence that the complete workflow is correct. The API remains available
 for development on disposable copies, with these known limitations:
 
-- `RasFloodway.parse_encroachments()` collapses blank fixed-width fields in legacy
-  multi-profile encroachment records. Reproducing the parse on the untouched
-  official Example 6 plan 02 shifts methods and target values; round-tripping
-  records through the same parser is not sufficient validation.
-- The checker's encroachment accessor does not read the separate `Encroachment
-  Station Left` and `Encroachment Station Right` datasets under `Additional
-  Variables` in the inspected Example 6 plan HDF. Width and associated structure
-  checks therefore do not run for that layout.
+- `RasFloodway.parse_encroachments()` preserves blank eight-character fields,
+  including the three Method 4 targets in official Example 6 plan 02. Native
+  opt-in native regression tests cover that record and Method 5 plan 01; malformed numeric
+  fields or methods raise `ValueError` with the node and line context. This
+  parsing repair does not qualify trial authoring or computed hydraulic behavior.
+- The checker reads paired `Encroachment Station Left` and `Encroachment Station
+  Right` arrays under `Additional Variables`, selecting the exact profile and
+  using result-owned section identifiers. Read-only evidence covers the retained
+  HEC-RAS 6.5 US Customary Example 6 HDF. Missing profiles, incomplete pairs,
+  incompatible shapes, or missing result identifiers produce a logged diagnostic
+  and no station table. NaN stations stay missing; other layouts and versions
+  still require qualification.
 - That accessor does not supply an `encr_method` column. Method-specific diagnostics
   listed below are implemented branches, but their detection path is unqualified;
-  absence of those messages does not confirm method suitability.
+  they are skipped when the method is unknown. `FW_EM_04` reports missing station
+  results without inferring an authored method. Absence of method messages does
+  not confirm method suitability.
+- Station-based width and structure screening now receives the retained HDF's
+  station arrays. `FW_WD_05` transition screening is disabled because no qualified
+  longitudinal spacing and coordinate contract is supplied; river-station labels
+  (including river miles and interpolated identifiers) are not used as distances.
 - Missing results, missing profile names, unsupported datasets, and some helper
   failures can return empty or partial results. There is no complete coverage
   receipt. Verify the summary is populated and contains every expected section.
@@ -37,6 +47,13 @@ qualification is claimed by this repair. Restoring the notebook requires indepen
 input-record readback, complete section/profile matching, fresh solver evidence,
 and review of WSE, energy, flow regime, and structure behavior. Keep source models
 immutable and retain both diagnostics and the actual executed notebook outputs.
+Native fixture tests require the retained files (or paths supplied through
+`RAS_COMMANDER_FLOODWAY_EXAMPLES_ZIP` and `RAS_COMMANDER_FLOODWAY_HDF`); they skip
+explicitly when those files are unavailable. They include public checker calls
+for the encroached profile and an unencroached missing-station control, plus an
+idempotent rewrite of native full-width station records. Parser rejection is
+checked before trial-flow expansion; this is not a general two-file transaction
+guarantee for other authoring failures.
 
 ### Separate 2D authoring status
 
@@ -103,7 +120,7 @@ All length/elevation thresholds in this table are in feet.
 | FW_EM_01 | INFO | Method 1 detected; fixed stations are not inherently unsuitable |
 | FW_EM_02 | WARNING | Method is zero and both encroachment stations are missing at a non-structure section |
 | FW_EM_03 | INFO | Multiple positive methods detected within a reach |
-| FW_EM_04 | WARNING | No encroachment at a non-structure section; same missing-input predicate as FW_EM_02 |
+| FW_EM_04 | WARNING | Both station results are missing at a non-structure section with unknown or zero method; does not establish absent authored encroachment |
 | FW_EM_05 | INFO | Method 5 detected; targets are not verified by this message |
 | FW_EM_06 | WARNING | Encroachment method detected at a structure; review treatment |
 | FW_EM_07 | WARNING | Detected Method 4/5 inward encroachment distances beyond positive banks have an asymmetry ratio greater than 5:1 |
@@ -112,7 +129,6 @@ All length/elevation thresholds in this table are in feet.
 | FW_WD_02 | WARNING | Left encroachment is right of a positive left bank station |
 | FW_WD_03 | WARNING | Right encroachment is left of a positive right bank station |
 | FW_WD_04 | WARNING | Encroachment width is less than a positive channel width |
-| FW_WD_05 | WARNING | Lateral station change divided by station-identifier difference exceeds 0.10 (fallback length if parsing fails); review units/order before interpretation |
 | FW_ST_01 | WARNING | Structure encroachment differs from adjacent section encroachment |
 | FW_ST_02 | ERROR | Encroachment lies inside positive bridge abutment stations |
 | FW_ST_03 | WARNING | Both encroachment stations are missing at a structure |

@@ -483,72 +483,10 @@ class CheckFloodways:
                                 )
                                 messages.append(msg)
 
-            # FW_WD_05: Steep floodway boundary slope check
-            # Need to compare encroachment stations between adjacent XS
-            encr_sorted = encr_data.sort_values(['river', 'reach', 'station'], ascending=[True, True, False])
-            prev_row = None
-            prev_reach_len = 100.0  # Default reach length if unknown
-
-            for _, row in encr_sorted.iterrows():
-                river = row.get('river', '')
-                reach = row.get('reach', '')
-                station = row.get('station', '')
-                encr_l = row.get('encr_sta_l', np.nan)
-                encr_r = row.get('encr_sta_r', np.nan)
-
-                if prev_row is not None and prev_row.get('river', '') == river and prev_row.get('reach', '') == reach:
-                    prev_encr_l = prev_row.get('encr_sta_l', np.nan)
-                    prev_encr_r = prev_row.get('encr_sta_r', np.nan)
-
-                    # Try to get actual reach length between stations
-                    try:
-                        prev_sta = float(prev_row.get('station', 0))
-                        curr_sta = float(station)
-                        reach_len = abs(prev_sta - curr_sta)
-                        if reach_len > 0:
-                            prev_reach_len = reach_len
-                    except (ValueError, TypeError):
-                        reach_len = prev_reach_len
-
-                    # Check left encroachment slope
-                    if not pd.isna(encr_l) and not pd.isna(prev_encr_l) and reach_len > 0:
-                        left_change = abs(encr_l - prev_encr_l)
-                        left_slope = left_change / reach_len
-                        if left_slope > 0.10:  # 10% slope threshold
-                            msg = CheckMessage(
-                                message_id="FW_WD_05",
-                                severity=Severity.WARNING,
-                                check_type="FLOODWAY",
-                                river=river,
-                                reach=reach,
-                                station=str(station),
-                                message=format_message("FW_WD_05", slope=f"{left_slope:.2f}", station=str(station)),
-                                help_text=get_help_text("FW_WD_05"),
-                                value=left_slope,
-                                threshold=0.10
-                            )
-                            messages.append(msg)
-
-                    # Check right encroachment slope
-                    if not pd.isna(encr_r) and not pd.isna(prev_encr_r) and reach_len > 0:
-                        right_change = abs(encr_r - prev_encr_r)
-                        right_slope = right_change / reach_len
-                        if right_slope > 0.10:  # 10% slope threshold
-                            msg = CheckMessage(
-                                message_id="FW_WD_05",
-                                severity=Severity.WARNING,
-                                check_type="FLOODWAY",
-                                river=river,
-                                reach=reach,
-                                station=str(station),
-                                message=format_message("FW_WD_05", slope=f"{right_slope:.2f}", station=str(station)),
-                                help_text=get_help_text("FW_WD_05"),
-                                value=right_slope,
-                                threshold=0.10
-                            )
-                            messages.append(msg)
-
-                prev_row = row
+            # FW_WD_05 is not evaluated: river-station identifiers are not
+            # longitudinal distances. No qualified spacing/coordinate contract
+            # is supplied here, so neither identifier differences nor a default
+            # reach length can establish a boundary transition ratio.
 
             # FW_ST_01: Structure encroachment doesn't match adjacent XS
             if struct_data is not None and not struct_data.empty:
@@ -643,93 +581,101 @@ class CheckFloodways:
         plan_hdf: Path,
         floodway_profile: str
     ) -> Optional[pd.DataFrame]:
-        """
-        Extract encroachment stations from plan HDF file.
+        """Read profile-specific stations without inferring encroachment methods.
 
-        Args:
-            plan_hdf: Path to plan HDF file
-            floodway_profile: Name of floodway profile
-
-        Returns:
-            DataFrame with columns: river, reach, station, encr_sta_l, encr_sta_r
-            or None if no encroachment data found
+        Supports paired Additional Variables arrays (profile, cross section).
+        Legacy combined arrays require explicit (cross section, profile, side)
+        axes, or (cross section, side) for a single-profile result only.
+        Returns the established five columns, or None when data is absent or
+        unsupported. Invalid/ambiguous data is logged with the file and profile.
         """
+        base = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles'
+        result_attrs = 'Results/Steady/Output/Geometry Info/Cross Section Attributes'
+        geometry_attrs = 'Geometry/Cross Sections/Attributes'
+
+        def decode(value):
+            return value.decode('utf-8').strip() if isinstance(value, bytes) else str(value).strip()
+
         try:
             with h5py.File(plan_hdf, 'r') as hdf:
-                # Try multiple possible paths for encroachment data
-                encr_paths = [
-                    'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Cross Sections/Encroachment Stations',
+                paired = f'{base}/Cross Sections/Additional Variables'
+                left_path = f'{paired}/Encroachment Station Left'
+                right_path = f'{paired}/Encroachment Station Right'
+                has_left, has_right = left_path in hdf, right_path in hdf
+                combined_path = next((path for path in (
+                    f'{base}/Cross Sections/Encroachment Stations',
                     'Results/Steady/Output/Cross Sections/Encroachment Stations',
-                    'Geometry/Cross Sections/Encroachment Stations'
+                    'Geometry/Cross Sections/Encroachment Stations',
+                ) if path in hdf), None)
+                if not has_left and not has_right and combined_path is None:
+                    logger.debug("No encroachment station datasets in %s", plan_hdf)
+                    return None
+                if has_left != has_right:
+                    raise ValueError('missing paired Encroachment Station Left/Right dataset')
+
+                profile_path = f'{base}/Profile Names'
+                if profile_path not in hdf:
+                    raise ValueError('missing steady profile names')
+                names = hdf[profile_path][()]
+                if names.ndim != 1:
+                    raise ValueError('steady profile names must be one-dimensional')
+                profiles = [decode(name) for name in names]
+                if profiles.count(floodway_profile) != 1:
+                    raise ValueError(f'profile {floodway_profile!r} must occur exactly once')
+                profile_idx = profiles.index(floodway_profile)
+
+                # Result arrays must use result-owned identifiers. Equal row
+                # counts do not prove alignment with the geometry table.
+                attrs_path = (geometry_attrs if not has_left and
+                              combined_path.startswith('Geometry/') else result_attrs)
+                if attrs_path not in hdf:
+                    raise ValueError(f'missing cross-section identifiers: {attrs_path}')
+                xs_attrs = hdf[attrs_path][()]
+                fields = {name.lower(): name for name in (xs_attrs.dtype.names or ())}
+                station_field = fields.get('station') or fields.get('rs')
+                if (xs_attrs.ndim != 1 or not station_field or
+                        'river' not in fields or 'reach' not in fields):
+                    raise ValueError(f'invalid cross-section identifiers: {attrs_path}')
+                identifiers = [
+                    (decode(xs[fields['river']]), decode(xs[fields['reach']]),
+                     decode(xs[station_field])) for xs in xs_attrs
                 ]
+                if len(set(identifiers)) != len(identifiers):
+                    raise ValueError('duplicate cross-section identifiers')
+                count = len(xs_attrs)
 
-                encr_data = None
-                for path in encr_paths:
-                    if path in hdf:
-                        encr_data = hdf[path][:]
-                        break
-
-                if encr_data is None:
-                    return None
-
-                # Get cross section attributes for river/reach/station info
-                xs_attrs_path = 'Geometry/Cross Sections/Attributes'
-                if xs_attrs_path not in hdf:
-                    return None
-
-                xs_attrs = hdf[xs_attrs_path][:]
-
-                # Get profile names to find floodway profile index
-                profile_path = 'Results/Steady/Output/Output Blocks/Base Output/Steady Profiles/Profile Names'
-                profile_idx = 0
-                if profile_path in hdf:
-                    profile_names = hdf[profile_path][:]
-                    for i, name in enumerate(profile_names):
-                        name_str = name.decode('utf-8').strip() if isinstance(name, bytes) else str(name).strip()
-                        if name_str == floodway_profile:
-                            profile_idx = i
-                            break
-
-                # Build encroachment data DataFrame
-                records = []
-                for i, xs in enumerate(xs_attrs):
-                    river = xs['River'].decode('utf-8').strip() if isinstance(xs['River'], bytes) else str(xs['River']).strip()
-                    reach = xs['Reach'].decode('utf-8').strip() if isinstance(xs['Reach'], bytes) else str(xs['Reach']).strip()
-                    station = xs['RS'].decode('utf-8').strip() if isinstance(xs['RS'], bytes) else str(xs['RS']).strip()
-
-                    # Get encroachment values - structure varies by HDF version
-                    if encr_data.ndim == 2:
-                        # 2D array: [xs_index, profile_index] or [xs_index, left/right]
-                        if encr_data.shape[1] >= 2:
-                            encr_l = float(encr_data[i, 0]) if i < encr_data.shape[0] else np.nan
-                            encr_r = float(encr_data[i, 1]) if i < encr_data.shape[0] else np.nan
-                        else:
-                            encr_l = np.nan
-                            encr_r = np.nan
-                    elif encr_data.ndim == 3:
-                        # 3D array: [xs_index, profile_index, left/right]
-                        if i < encr_data.shape[0] and profile_idx < encr_data.shape[1]:
-                            encr_l = float(encr_data[i, profile_idx, 0])
-                            encr_r = float(encr_data[i, profile_idx, 1]) if encr_data.shape[2] > 1 else np.nan
-                        else:
-                            encr_l = np.nan
-                            encr_r = np.nan
+                if has_left:
+                    left = hdf[left_path][()]
+                    right = hdf[right_path][()]
+                    expected = (len(profiles), count)
+                    if left.shape != expected or right.shape != expected:
+                        raise ValueError(
+                            f'paired station shapes must be {expected}; '
+                            f'got {left.shape} and {right.shape}'
+                        )
+                    left, right = left[profile_idx], right[profile_idx]
+                else:
+                    combined = hdf[combined_path][()]
+                    if combined.shape == (count, len(profiles), 2):
+                        left, right = combined[:, profile_idx, 0], combined[:, profile_idx, 1]
+                    elif len(profiles) == 1 and combined.shape == (count, 2):
+                        left, right = combined[:, 0], combined[:, 1]
                     else:
-                        encr_l = np.nan
-                        encr_r = np.nan
+                        raise ValueError(f'unsupported or ambiguous combined station shape {combined.shape}')
 
-                    records.append({
-                        'river': river,
-                        'reach': reach,
-                        'station': station,
-                        'encr_sta_l': encr_l,
-                        'encr_sta_r': encr_r
-                    })
-
-                return pd.DataFrame(records)
-
-        except Exception as e:
-            logger.debug(f"Could not extract encroachment stations: {e}")
+                records = [
+                    {'river': river, 'reach': reach, 'station': station,
+                     'encr_sta_l': float(left[i]), 'encr_sta_r': float(right[i])}
+                    for i, (river, reach, station) in enumerate(identifiers)
+                ]
+                return pd.DataFrame(records, columns=[
+                    'river', 'reach', 'station', 'encr_sta_l', 'encr_sta_r'
+                ])
+        except (OSError, KeyError, ValueError, TypeError) as exc:
+            logger.warning(
+                "Could not extract encroachment stations from %s for profile %r: %s",
+                plan_hdf, floodway_profile, exc,
+            )
             return None
 
     @staticmethod
@@ -861,7 +807,9 @@ class CheckFloodways:
                 station = str(row.get('station', ''))
                 encr_l = row.get('encr_sta_l', np.nan)
                 encr_r = row.get('encr_sta_r', np.nan)
-                encr_method = row.get('encr_method', 0)
+                encr_method = row.get('encr_method')
+                if pd.isna(encr_method):
+                    encr_method = None
 
                 reach_key = (river, reach)
                 xs_key = (river, reach, station)
@@ -870,7 +818,7 @@ class CheckFloodways:
                 # Track methods for reach consistency check
                 if reach_key not in reach_methods:
                     reach_methods[reach_key] = set()
-                if encr_method > 0:
+                if encr_method is not None and encr_method > 0:
                     reach_methods[reach_key].add(encr_method)
 
                 # FW_EM_01: Method 1 (Fixed encroachment stations) used
@@ -909,7 +857,7 @@ class CheckFloodways:
                 # FW_EM_04: No encroachment at non-structure XS
                 if not is_structure:
                     has_encr = not (pd.isna(encr_l) and pd.isna(encr_r))
-                    if not has_encr and encr_method == 0:
+                    if not has_encr and encr_method in (None, 0):
                         msg = CheckMessage(
                             message_id="FW_EM_04",
                             severity=Severity.WARNING,
@@ -939,7 +887,7 @@ class CheckFloodways:
                     messages.append(msg)
 
                 # FW_EM_06: Encroachment at structure requires special handling
-                if is_structure and encr_method > 0:
+                if is_structure and encr_method is not None and encr_method > 0:
                     msg = CheckMessage(
                         message_id="FW_EM_06",
                         severity=Severity.WARNING,
