@@ -4592,9 +4592,9 @@ notebooks:
   title: Froude and shear-stress maps at selected timesteps
   series: 960
   series_name: Cloud-Native Export
-  summary: Configure and compute a copied Muncie plan, export maximum and selected-timestep Froude
-    and bed-shear-stress GeoTIFFs, verify their HDF sources and georeferencing, and visually review
-    the real hydraulic outputs.
+  summary: Configure and compute a copied Muncie plan, export maximum and selected-timestep Froude and
+    bed-shear-stress GeoTIFFs, verify their HDF sources and georeferencing, and visually review the real
+    hydraulic outputs.
   tags:
   - 2d
   - results
@@ -4604,7 +4604,7 @@ notebooks:
   - qaqc
   difficulty: advanced
   est_runtime: 2-3 minutes
-  data_project: Muncie
+  data_project: null
   functions_used:
   - HdfMesh.get_mesh_area_names
   - HdfResultsPlan.get_compute_messages
@@ -4622,4 +4622,4 @@ notebooks:
   learning_paths: []
   excluded: false
   code_cells: 10
-  executed_cells: 9
+  executed_cells: 10
