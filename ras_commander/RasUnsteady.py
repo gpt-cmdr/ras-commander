@@ -4809,7 +4809,9 @@ class RasUnsteady:
               a US-customary model, mm for an SI model; no unit conversion).
             - 'cumulative_depth': Cumulative sum of incremental depths in the same units.
         boundary_name : str, optional
-            Exact, case-insensitive 2D Flow Area or Storage Area name (location field 5).
+            Exact, case-insensitive area name in Boundary Location field 5.
+            Named selection is verified for 2D Flow Areas; Storage Area layouts
+            require separate native verification.
             A supplied name must identify exactly one precipitation boundary.
             If None, updates the first Precipitation Hydrograph found.
         ras_object : optional
@@ -4823,7 +4825,8 @@ class RasUnsteady:
         Raises
         ------
         ValueError
-            If data, timing, fixed-width range or the target inline boundary is invalid
+            If data, timing, fixed-width range or the target inline boundary is invalid,
+            or the source file mixes newline conventions
         FileNotFoundError
             If unsteady flow file not found
 
@@ -4852,7 +4855,7 @@ class RasUnsteady:
 
         **Interval Detection**:
         - Interval is calculated from `hour` column spacing (e.g., 1.0 → "1HOUR", 0.5 → "30MIN")
-        - The Interval= line immediately preceding the Precipitation Hydrograph section is updated
+        - The unique Interval= line inside the selected boundary block is updated
 
         **Fixed-Width Format**:
         - Values formatted as 8-character fixed-width fields (8.2f)
@@ -8875,8 +8878,8 @@ class RasUnsteady:
         removes DSS File/Path lines, writes inline hydrograph data in HEC-RAS fixed-width
         format, and updates the table count and Interval line.
 
-        The method follows the same pattern as ``set_precipitation_hyetograph()`` for
-        inline table writing.
+        Like ``set_precipitation_hyetograph()``, this writes fixed-width values,
+        but flow/stage ordinates and interval precipitation have different time semantics.
 
         Parameters
         ----------
@@ -8946,7 +8949,9 @@ class RasUnsteady:
         Each value is 8 characters wide, 10 values per line. The count on the header
         line is the number of values, and time is implied from the Interval setting.
 
-        Precipitation Hydrograph uses the same values-only timing convention.
+        Precipitation also stores values only, but each depth applies to the preceding
+        interval. Its dedicated writer preserves a zero-depth start ordinate; do not
+        apply that interval-depth convention to flow/stage ordinates.
 
         **State Transition**:
 

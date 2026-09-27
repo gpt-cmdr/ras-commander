@@ -384,9 +384,27 @@ class PrecipMrms:
         Convert MRMS QPE grids to a spatial-mean HEC-RAS hyetograph.
 
         ``grib2_files`` may be GRIB2 paths or an already loaded xarray/numpy
-        grid stack. The output DataFrame matches
-        ``RasUnsteady.set_precipitation_hyetograph()`` with ``hour``,
-        ``incremental_depth``, and ``cumulative_depth`` columns.
+        grid stack. The output DataFrame contains absolute interval-ending
+        ``time`` values and the writer columns ``hour``, ``incremental_depth``,
+        and ``cumulative_depth``. Column compatibility does not set the native
+        boundary's absolute start time.
+
+        For a regular series with interval ``dt``, ``hour`` is ``dt, 2*dt, ...``
+        relative to ``time.iloc[0] - dt``. The interval is inferred from the
+        first two timestamps, or defaults to one hour for a single frame.
+        Callers must check regular, ordered source timestamps and the actual
+        accumulation period; this method does not align a simulation clock.
+
+        ``RasUnsteady.set_precipitation_hyetograph()`` uses the existing native
+        boundary start and ignores the optional ``time`` column. Align that
+        start with ``time.iloc[0] - dt``, or remove source frames ending at or
+        before the desired boundary start before conversion. If filtering the
+        returned DataFrame instead, rebase ``hour`` from that boundary start
+        and recompute ``cumulative_depth`` from the retained increments.
+        Do not apply a frame ending at the simulation start to the following
+        interval: its accumulation belongs to the preceding period. Check
+        absolute-time native cumulative output after writing; totals and peaks
+        alone cannot detect a one-interval timing shift.
         """
         import numpy as np
         import pandas as pd

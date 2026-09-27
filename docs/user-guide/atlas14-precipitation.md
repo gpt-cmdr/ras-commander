@@ -400,13 +400,13 @@ if ATLAS14_AVAILABLE:
 
     # Write directly to unsteady file (one call)
     # Detects time interval from hour spacing (1HOUR, 30MIN, 5MIN, etc.)
-    RasUnsteady.set_precipitation_hyetograph("MyModel.u01", hyeto)
+    RasUnsteady.set_precipitation_hyetograph("01", hyeto)
 
     # Execute plan
     RasCmdr.compute_plan("01")
 ```
 
-The writer validates the DataFrame before changing the file and preserves the boundary's existing start-time configuration. Specify `boundary_name="Area Name"` to select an exact, case-insensitive area name; omitting it selects the first precipitation boundary.
+The writer validates the DataFrame before changing the file and preserves the boundary's existing start-time configuration. Specify `boundary_name="Area Name"` to select an exact, case-insensitive name in boundary-location field 5; this selector is verified for 2D Flow Areas. Storage Area layouts require separate verification. Omitting the name selects the first precipitation boundary.
 
 | Input | Contract |
 | --- | --- |
@@ -423,10 +423,13 @@ Cover the simulation window explicitly. Check the written boundary and the final
 Generate and execute a suite of AEP design storms:
 
 ```python
-from ras_commander import init_ras_project, RasCmdr, RasPlan, RasUnsteady
+from ras_commander import init_ras_project, RasCmdr, RasPlan, RasUnsteady, ras
 from ras_commander.precip import StormGenerator
 
 init_ras_project("C:/Projects/FloodStudy", "7.0")
+template_unsteady = ras.plan_df.loc[
+    ras.plan_df['plan_number'] == '01', 'unsteady_number'
+].iloc[0]
 
 # DDF data for temporal pattern (download once, reuse for all AEPs)
 ddf_data = StormGenerator.download_from_coordinates(29.76, -95.37)
@@ -451,18 +454,16 @@ for aep_pct, total_depth in aep_depths.items():
         position_percent=50
     )
 
-    # Clone plan for this AEP
-    new_plan = RasPlan.clone_plan("01", new_plan_shortid=f"{return_period}yr")
+    # Give each plan its own forcing file; cloning a plan alone shares the template's.
+    unsteady_num = RasPlan.clone_unsteady(template_unsteady)
+    new_plan = RasPlan.clone_plan(
+        "01", new_plan_shortid=f"{return_period}yr", unsteady_flow=unsteady_num
+    )
     RasPlan.update_plan_description(new_plan, f"{return_period}-Year Design Storm ({aep_pct}% AEP)")
 
-    # Get the unsteady file number for this plan
-    from ras_commander import ras
-    plan_row = ras.plan_df[ras.plan_df['plan_number'] == new_plan]
-    unsteady_num = plan_row['unsteady_number'].iloc[0]
-
-    # Write hyetograph to unsteady file
-    unsteady_file = f"FloodStudy.u{unsteady_num}"
-    RasUnsteady.set_precipitation_hyetograph(unsteady_file, hyeto)
+    # Resolve the number through the initialized project, independent of cwd.
+    # Pad with dry intervals if needed to cover this plan's simulation window.
+    RasUnsteady.set_precipitation_hyetograph(unsteady_num, hyeto)
 
     # Execute
     RasCmdr.compute_plan(new_plan, num_cores=4)
