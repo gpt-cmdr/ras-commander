@@ -938,6 +938,10 @@ class PrecipMrms:
         max_frames: Optional[int] = 24,
         cell_size: Optional[float] = None,
         resampling: str = "nearest",
+        precip_value_semantics: str = "rate",
+        precip_alignment: str = "latest_completed",
+        precip_interval: Optional[Any] = None,
+        coverage_policy: str = "hold",
     ) -> Path:
         """
         Generate a synchronized split-screen precipitation and flood animation.
@@ -946,6 +950,15 @@ class PrecipMrms:
         DataArray. ``flood_data`` can be a gridded array, xarray DataArray,
         HEC-RAS plan HDF path, or flat/grouped stored-map raster frames.
         ``bounds`` is accepted as an alias for ``precip_bounds``.
+
+        ``precip_alignment='latest_completed'`` with
+        ``coverage_policy='hold'`` preserves the historical display behavior.
+        For interval-ending accumulations, use
+        ``precip_value_semantics='interval_amount'``,
+        ``precip_alignment='covering_interval'``, and provide
+        ``precip_interval``. ``coverage_policy='error'`` rejects frames outside
+        source coverage; ``'dry_tail'`` permits explicit zero display only after
+        the final source interval.
         """
         _check_animation_dependencies()
         import matplotlib.pyplot as plt
@@ -959,7 +972,14 @@ class PrecipMrms:
             precip_data,
             bounds=precip_bounds,
         )
-        precip_in = PrecipMrms._convert_precip_units(precip, "in/hr")
+        semantics = precip_value_semantics.strip().lower()
+        if semantics not in {"rate", "interval_amount", "instantaneous"}:
+            raise ValueError(
+                "precip_value_semantics must be 'rate', 'interval_amount', "
+                "or 'instantaneous'"
+            )
+        display_units = "in/hr" if semantics == "rate" else "in"
+        precip_in = PrecipMrms._convert_precip_units(precip, display_units)
 
         if PrecipMrms._looks_like_raster_paths(flood_data):
             flood = PrecipMrms.load_stored_map_stack(
@@ -992,6 +1012,10 @@ class PrecipMrms:
                 fps=fps,
                 dpi=dpi,
                 title=title,
+                precip_value_semantics=semantics,
+                precip_alignment=precip_alignment,
+                precip_interval=precip_interval,
+                coverage_policy=coverage_policy,
             )
         else:
             flood = PrecipMrms._coerce_grid_data(
@@ -1010,9 +1034,12 @@ class PrecipMrms:
         n_frames = int(flood.sizes["time"])
         if n_frames < 1 or len(precip_times) < 1:
             raise ValueError("Combined animation requires at least one frame")
-        precip_frame_indices = PrecipMrms._nearest_previous_time_indices(
+        precip_frame_indices, precip_frame_status = PrecipMrms._align_precipitation_frames(
             source_times=precip_times,
             target_times=flood_times_index,
+            alignment=precip_alignment,
+            interval=precip_interval,
+            coverage_policy=coverage_policy,
         )
         flood_values = np.asarray(flood.values, dtype=float)
         precip_vmax = PrecipMrms._robust_vmax(np.asarray(precip_in.values), 0.1)
@@ -1022,8 +1049,13 @@ class PrecipMrms:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         fig, (ax_p, ax_f) = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
+        first_precip = (
+            np.zeros_like(np.asarray(precip_in.isel(time=0).values, dtype=float))
+            if int(precip_frame_indices[0]) < 0
+            else np.asarray(precip_in.isel(time=int(precip_frame_indices[0])).values, dtype=float)
+        )
         im_p = ax_p.imshow(
-            np.asarray(precip_in.isel(time=int(precip_frame_indices[0])).values, dtype=float),
+            first_precip,
             extent=precip_extent,
             origin=precip_origin,
             cmap="turbo",
@@ -1042,7 +1074,14 @@ class PrecipMrms:
             alpha=raster_alpha,
             zorder=2,
         )
-        fig.colorbar(im_p, ax=ax_p, shrink=0.8).set_label("Precipitation (in/hr)")
+        precip_label = (
+            "Precipitation rate (in/hr)"
+            if semantics == "rate"
+            else "Precipitation interval amount (in)"
+            if semantics == "interval_amount"
+            else "Precipitation value (in)"
+        )
+        fig.colorbar(im_p, ax=ax_p, shrink=0.8).set_label(precip_label)
         fig.colorbar(im_f, ax=ax_f, shrink=0.8).set_label("Depth (ft)")
         ax_p.set_title("MRMS QPE")
         ax_f.set_title("Flood Inundation")
@@ -1066,11 +1105,16 @@ class PrecipMrms:
 
         def update(frame_idx: int) -> list:
             precip_idx = int(precip_frame_indices[frame_idx])
-            im_p.set_data(np.asarray(precip_in.isel(time=precip_idx).values, dtype=float))
+            if precip_idx < 0:
+                im_p.set_data(np.zeros_like(first_precip))
+                precip_time_text = "authorized dry tail"
+            else:
+                im_p.set_data(np.asarray(precip_in.isel(time=precip_idx).values, dtype=float))
+                precip_time_text = precip_times[precip_idx].strftime('%Y-%m-%d %H:%M')
             im_f.set_data(np.asarray(flood.isel(time=frame_idx).values, dtype=float))
             timestamp.set_text(
                 f"{title}\n"
-                f"Precip: {precip_times[precip_idx].strftime('%Y-%m-%d %H:%M')} | "
+                f"Precip: {precip_time_text} [{precip_frame_status[frame_idx]}] | "
                 f"Flood: {flood_times_index[frame_idx].strftime('%Y-%m-%d %H:%M')}"
             )
             return [im_p, im_f, timestamp]
@@ -1184,6 +1228,10 @@ class PrecipMrms:
         fps: int,
         dpi: int,
         title: str,
+        precip_value_semantics: str,
+        precip_alignment: str,
+        precip_interval: Optional[Any],
+        coverage_policy: str,
     ) -> Path:
         import matplotlib.pyplot as plt
         import numpy as np
@@ -1195,9 +1243,12 @@ class PrecipMrms:
         n_frames = int(flood_values.shape[0])
         if n_frames < 1 or len(precip_times) < 1:
             raise ValueError("Combined animation requires at least one frame")
-        precip_frame_indices = PrecipMrms._nearest_previous_time_indices(
+        precip_frame_indices, precip_frame_status = PrecipMrms._align_precipitation_frames(
             source_times=precip_times,
             target_times=flood_times,
+            alignment=precip_alignment,
+            interval=precip_interval,
+            coverage_policy=coverage_policy,
         )
 
         precip_extent, precip_origin = PrecipMrms._data_extent(precip)
@@ -1211,8 +1262,13 @@ class PrecipMrms:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         fig, (ax_p, ax_f) = plt.subplots(1, 2, figsize=(12, 5), constrained_layout=True)
+        first_precip = (
+            np.zeros_like(np.asarray(precip.isel(time=0).values, dtype=float))
+            if int(precip_frame_indices[0]) < 0
+            else np.asarray(precip.isel(time=int(precip_frame_indices[0])).values, dtype=float)
+        )
         im_p = ax_p.imshow(
-            np.asarray(precip.isel(time=int(precip_frame_indices[0])).values, dtype=float),
+            first_precip,
             extent=precip_extent,
             origin=precip_origin,
             cmap="turbo",
@@ -1233,7 +1289,14 @@ class PrecipMrms:
             alpha=raster_alpha,
             zorder=2,
         )
-        fig.colorbar(im_p, ax=ax_p, shrink=0.8).set_label("Precipitation (in/hr)")
+        precip_label = (
+            "Precipitation rate (in/hr)"
+            if precip_value_semantics == "rate"
+            else "Precipitation interval amount (in)"
+            if precip_value_semantics == "interval_amount"
+            else "Precipitation value (in)"
+        )
+        fig.colorbar(im_p, ax=ax_p, shrink=0.8).set_label(precip_label)
         flood_label = flood_points["variable"]
         flood_units = flood_points["units"]
         fig.colorbar(scat, ax=ax_f, shrink=0.8).set_label(
@@ -1262,11 +1325,16 @@ class PrecipMrms:
 
         def update(frame_idx: int) -> list:
             precip_idx = int(precip_frame_indices[frame_idx])
-            im_p.set_data(np.asarray(precip.isel(time=precip_idx).values, dtype=float))
+            if precip_idx < 0:
+                im_p.set_data(np.zeros_like(first_precip))
+                precip_time_text = "authorized dry tail"
+            else:
+                im_p.set_data(np.asarray(precip.isel(time=precip_idx).values, dtype=float))
+                precip_time_text = precip_times[precip_idx].strftime('%Y-%m-%d %H:%M')
             scat.set_array(flood_values[frame_idx])
             timestamp.set_text(
                 f"{title}\n"
-                f"Precip: {precip_times[precip_idx].strftime('%Y-%m-%d %H:%M')} | "
+                f"Precip: {precip_time_text} [{precip_frame_status[frame_idx]}] | "
                 f"Flood: {flood_times[frame_idx].strftime('%Y-%m-%d %H:%M')}"
             )
             return [im_p, scat, timestamp]
@@ -2557,6 +2625,77 @@ class PrecipMrms:
             raise ValueError("source_times must contain at least one timestamp")
         positions = np.searchsorted(source.values, target.values, side="right") - 1
         return np.clip(positions, 0, len(source) - 1).astype(int)
+
+    @staticmethod
+    def _align_precipitation_frames(
+        source_times: Any,
+        target_times: Any,
+        alignment: str = "latest_completed",
+        interval: Optional[Any] = None,
+        coverage_policy: str = "hold",
+    ) -> Tuple[Any, Any]:
+        """Map hydraulic frames to precipitation frames with explicit semantics."""
+        import numpy as np
+        import pandas as pd
+
+        source = pd.DatetimeIndex(pd.to_datetime(source_times))
+        target = pd.DatetimeIndex(pd.to_datetime(target_times))
+        if len(source) == 0:
+            raise ValueError("source_times must contain at least one timestamp")
+        if not source.is_monotonic_increasing or source.has_duplicates:
+            raise ValueError("source_times must be unique and increasing")
+
+        alignment_clean = alignment.strip().lower()
+        policy = coverage_policy.strip().lower()
+        if alignment_clean not in {"latest_completed", "covering_interval"}:
+            raise ValueError(
+                "precip_alignment must be 'latest_completed' or 'covering_interval'"
+            )
+        if policy not in {"hold", "error", "dry_tail"}:
+            raise ValueError("coverage_policy must be 'hold', 'error', or 'dry_tail'")
+
+        if alignment_clean == "latest_completed":
+            indices = np.searchsorted(source.values, target.values, side="right") - 1
+            coverage_start = source[0]
+        else:
+            if interval is None:
+                raise ValueError(
+                    "precip_interval is required for covering_interval alignment"
+                )
+            interval_delta = pd.Timedelta(interval)
+            if interval_delta <= pd.Timedelta(0):
+                raise ValueError("precip_interval must be positive")
+            indices = np.searchsorted(source.values, target.values, side="left")
+            coverage_start = source[0] - interval_delta
+
+        before = target < coverage_start
+        after = target > source[-1]
+        if policy == "error" and (before.any() or after.any()):
+            raise ValueError(
+                "Hydraulic animation times extend outside precipitation source coverage"
+            )
+        if policy == "dry_tail" and before.any():
+            raise ValueError(
+                "dry_tail authorizes zeros only after precipitation coverage, not before it"
+            )
+
+        statuses = np.full(len(target), alignment_clean, dtype=object)
+        if policy == "hold":
+            indices = np.clip(indices, 0, len(source) - 1)
+            statuses[before | after] = "held outside source coverage"
+        elif policy == "dry_tail":
+            indices = np.asarray(indices, dtype=int)
+            indices[after] = -1
+            statuses[after] = "authorized dry tail"
+        else:
+            indices = np.asarray(indices, dtype=int)
+
+        invalid = (indices >= len(source)) & ~after
+        if invalid.any():
+            raise ValueError(
+                "Target times do not fall within the declared precipitation intervals"
+            )
+        return indices.astype(int), statuses
 
     @staticmethod
     def _robust_vmax(values: Any, minimum: float) -> float:

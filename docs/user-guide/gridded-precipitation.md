@@ -217,11 +217,50 @@ CRS.
 
 A raw NumPy terrain array has no georeferencing. It is accepted only when its
 shape exactly matches the flood grid, in which case it is explicitly treated as
-an already aligned display array. Use a georeferenced raster path whenever the grids differ.
-Missing raster CRS or missing flood-grid CRS fails rather than silently
+an already aligned display array. Use a georeferenced raster path whenever the
+grids differ. Missing raster CRS or missing flood-grid CRS fails rather than silently
 stretching the background. This overlay is visualization only; it does not
 alter the terrain used by HEC-RAS or the analytical resolution of the hydraulic
 results.
+
+## Combined-animation time alignment
+
+`PrecipMrms.animate_combined()` keeps its historical display behavior by
+default: `precip_alignment="latest_completed"` selects the latest precipitation
+timestamp at or before each hydraulic frame, and `coverage_policy="hold"`
+repeats the nearest source frame outside source coverage. This is a
+latest-observation display contract, not a claim that the selected value is the
+forcing interval active at the hydraulic timestamp.
+
+For interval-ending accumulations such as hourly MRMS QPE, make the alternative
+contract explicit:
+
+```python
+PrecipMrms.animate_combined(
+    precip,
+    flood,
+    "combined.mp4",
+    precip_value_semantics="interval_amount",
+    precip_alignment="covering_interval",
+    precip_interval="1h",
+    coverage_policy="error",
+)
+```
+
+`covering_interval` selects the accumulation interval containing each hydraulic
+frame rather than the latest completed observation. `coverage_policy="error"`
+fails when hydraulic frames extend beyond the declared source coverage. Use
+`coverage_policy="dry_tail"` only when zero precipitation after the final source
+interval is an explicit caller assumption; the animation labels those frames as
+an authorized dry tail. It never converts missing coverage before the first
+interval to zero.
+
+`precip_value_semantics="rate"` labels values as `in/hr`.
+`"interval_amount"` labels them as inches per displayed interval without
+claiming an hourly rate. Alignment may repeat a source grid across multiple
+hydraulic display frames, so never sum the displayed frame stack to calculate
+cumulative precipitation. Preserve and integrate the original source intervals
+for forcing or water-balance calculations.
 
 ## Examples and scope
 
