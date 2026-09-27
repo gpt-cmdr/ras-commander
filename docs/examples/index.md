@@ -9,7 +9,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*139 notebooks indexed - 127 with runtime data, 12 without.*
+*140 notebooks indexed - 128 with runtime data, 12 without.*
 
 ## Selected Workflow Contracts
 
@@ -468,3 +468,4 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [960 - Cloud-Native Geometry Export with ras2cng](../notebooks/960_cloud_native_geometry_export.md)<br>cloud-native export with `ras2cng` | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/960_cloud_native_geometry_export.ipynb) | N/A |
 | [961 - Cloud-Native Results Export with ras2cng](../notebooks/961_cloud_native_results_export.md)<br>Export HEC-RAS simulation results to cloud-native GeoParquet, build interactive flood depth maps, and generate PMTiles for web deployment using [ras2cng](https://github.com/gpt-cmdr/ras2cng). | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/961_cloud_native_results_export.ipynb) | N/A |
 | [962 - Cloud Optimized GeoTIFF Results Export with ras2cng](../notebooks/962_cloud_native_cog_results_export.md)<br>cloud-native export with `ras2cng` | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/962_cloud_native_cog_results_export.ipynb) | N/A |
+| [963 - Froude and shear-stress maps at selected timesteps](../notebooks/963_froude_shear_timestep_maps.md)<br>Configure and compute a copied Muncie plan, export maximum and selected-timestep Froude and bed-shear-stress GeoTIFFs, verify their HDF sources and georeferencing, and visually review the real hydraulic outputs. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/963_froude_shear_timestep_maps.ipynb) | 1.7 min |
