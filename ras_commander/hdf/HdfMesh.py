@@ -18,6 +18,8 @@ get_mesh_areas()
     Returns 2D flow area perimeter polygons
 get_mesh_cell_polygons()
     Returns 2D flow mesh cell polygons
+diagnose_mesh_cell_polygons()
+    Reports omitted, ambiguous, and boundary-only native cell IDs
 get_mesh_cell_points()
     Returns 2D flow mesh cell center points
 get_mesh_cell_faces()
@@ -103,6 +105,10 @@ logger = get_logger(__name__)
 
 class _MeshLayoutError(ValueError):
     """Raised when a recognized mesh layout is structurally malformed."""
+
+
+class MeshCellPolygonError(ValueError):
+    """Raised when native mesh cells cannot be reconstructed unambiguously."""
 
 
 def _decode_hdf_scalar(value: Any) -> Any:
@@ -660,7 +666,11 @@ class HdfMesh:
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_cell_polygons(hdf_path: Path) -> 'GeoDataFrame':
+    def get_mesh_cell_polygons(
+        hdf_path: Path,
+        *,
+        strict: bool = False,
+    ) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell polygons.
 
@@ -668,6 +678,11 @@ class HdfMesh:
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file.
+        strict : bool, default False
+            Raise :class:`MeshCellPolygonError` when a native cell produces no
+            polygon or more than one polygon. The default preserves the legacy
+            return behavior, emits a warning, and attaches anomaly rows to
+            ``result.attrs["cell_polygon_diagnostics"]``.
 
         Returns
         -------
@@ -677,6 +692,13 @@ class HdfMesh:
             - cell_id: int - Unique cell identifier (0-indexed)
             - geometry: Polygon - Cell polygon geometry constructed from face edges
             Returns an empty GeoDataFrame if no 2D areas exist or if there's an error.
+
+        Notes
+        -----
+        Cell IDs are native, zero-based IDs within each mesh. The returned row
+        index must not be treated as a complete or positional cell identifier.
+        Use :meth:`diagnose_mesh_cell_polygons` or ``strict=True`` whenever an
+        exhaustive physical-cell mask is required.
         """
         # Lazy imports for heavy dependencies
         from geopandas import GeoDataFrame
@@ -696,6 +718,7 @@ class HdfMesh:
                 all_mesh_names = []
                 all_cell_ids = []
                 all_geometries = []
+                diagnostics = []
 
                 for mesh_name in mesh_area_names:
                     cell_info_path = (
@@ -733,17 +756,98 @@ class HdfMesh:
                     # Process each cell
                     for cell_id, (start, length) in enumerate(cell_face_info[:, :2]):
                         face_ids = cell_face_values[start:start + length]
+                        if length < 3:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": int(length),
+                                "polygon_count": 0,
+                                "status": "boundary_only",
+                                "reason_code": "insufficient_faces",
+                                "face_ids": tuple(int(value) for value in face_ids),
+                                "missing_face_ids": (),
+                            })
+                            continue
+                        missing_face_ids = [
+                            int(face_id)
+                            for face_id in face_ids
+                            if face_id not in mesh_faces_dict
+                        ]
+                        if missing_face_ids:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": int(length),
+                                "polygon_count": 0,
+                                "status": "omitted",
+                                "reason_code": "missing_face_reference",
+                                "face_ids": tuple(int(value) for value in face_ids),
+                                "missing_face_ids": tuple(missing_face_ids),
+                            })
+                            continue
                         face_geoms = [mesh_faces_dict[face_id] for face_id in face_ids]
 
                         # Create polygon
                         polygons = list(polygonize(face_geoms))
-                        if polygons:
-                            all_mesh_names.append(mesh_name)
-                            all_cell_ids.append(cell_id)
-                            all_geometries.append(Polygon(polygons[0]))
+                        if not polygons:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": int(length),
+                                "polygon_count": 0,
+                                "status": "omitted",
+                                "reason_code": "no_polygon",
+                                "face_ids": tuple(int(value) for value in face_ids),
+                                "missing_face_ids": (),
+                            })
+                            continue
+                        if len(polygons) > 1:
+                            diagnostics.append({
+                                "mesh_name": mesh_name,
+                                "cell_id": cell_id,
+                                "face_count": int(length),
+                                "polygon_count": len(polygons),
+                                "status": "ambiguous",
+                                "reason_code": "multiple_polygons",
+                                "face_ids": tuple(int(value) for value in face_ids),
+                                "missing_face_ids": (),
+                            })
+                        all_mesh_names.append(mesh_name)
+                        all_cell_ids.append(cell_id)
+                        all_geometries.append(Polygon(polygons[0]))
+
+                diagnostics_df = pd.DataFrame(
+                    diagnostics,
+                    columns=[
+                        "mesh_name",
+                        "cell_id",
+                        "face_count",
+                        "polygon_count",
+                        "status",
+                        "reason_code",
+                        "face_ids",
+                        "missing_face_ids",
+                    ],
+                )
+                problematic = diagnostics_df[
+                    diagnostics_df["status"].isin(("omitted", "ambiguous"))
+                ]
+                if not problematic.empty:
+                    summary = ", ".join(
+                        f"{mesh!r}: {count}"
+                        for mesh, count in problematic.groupby("mesh_name").size().items()
+                    )
+                    message = (
+                        "Mesh cell polygon reconstruction was incomplete or ambiguous "
+                        f"({summary}). Inspect diagnose_mesh_cell_polygons(); native "
+                        "cell IDs remain authoritative."
+                    )
+                    if strict:
+                        raise MeshCellPolygonError(message)
+                    logger.warning(message)
 
                 # Create GeoDataFrame in one go
-                return GeoDataFrame(
+                result = GeoDataFrame(
                     {
                         "mesh_name": all_mesh_names,
                         "cell_id": all_cell_ids,
@@ -752,10 +856,43 @@ class HdfMesh:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file)
                 )
+                result.attrs["cell_polygon_diagnostics"] = diagnostics_df
+                return result
 
         except Exception as e:
+            if strict:
+                raise
             logger.error(f"Error reading mesh cell polygons from {hdf_path}: {str(e)}")
             return GeoDataFrame()
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='geom_hdf')
+    def diagnose_mesh_cell_polygons(hdf_path: Path) -> pd.DataFrame:
+        """Return cells not reconstructed as exactly one polygon.
+
+        The result contains the native ``mesh_name`` and zero-based ``cell_id``,
+        face and polygon counts, a status and reason code, and the referenced
+        face IDs. ``boundary_only`` rows identify expected native one- or
+        two-face records and do not make strict reconstruction fail. ``omitted``
+        and ``ambiguous`` rows identify physical-cell problems. An empty result
+        means every processed native cell produced exactly one polygon; it does
+        not imply that absent topology exists.
+        """
+        polygons = HdfMesh.get_mesh_cell_polygons(hdf_path, strict=False)
+        diagnostics = polygons.attrs.get("cell_polygon_diagnostics")
+        if diagnostics is None:
+            return pd.DataFrame(columns=[
+                "mesh_name",
+                "cell_id",
+                "face_count",
+                "polygon_count",
+                "status",
+                "reason_code",
+                "face_ids",
+                "missing_face_ids",
+            ])
+        return diagnostics.copy()
         
     @staticmethod
     @standardize_input(file_type='geom_hdf')

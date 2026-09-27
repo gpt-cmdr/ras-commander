@@ -69,7 +69,12 @@ Mesh geometry data.
 - `diagnose_mesh_layout(hdf_path, program_version=None)` - Report version
   evidence, detected layout, dataset paths, and per-capability status for area
   names, perimeters, cell centers, face topology, and cell polygons
-- `get_mesh_cell_polygons(hdf_path)` - Get cell polygons as GeoDataFrame
+- `get_mesh_cell_polygons(hdf_path, strict=False)` - Get cell polygons as a
+  GeoDataFrame; warnings and `result.attrs["cell_polygon_diagnostics"]` expose
+  physical cells that were omitted or ambiguously polygonized
+- `diagnose_mesh_cell_polygons(hdf_path)` - Report native cell IDs, face IDs,
+  polygon counts, and reason codes for physical-cell reconstruction problems
+  and expected boundary-only records
 - `get_mesh_cell_faces(hdf_path)` - Get cell face lines
 - `get_mesh_cell_points(hdf_path)` - Get cell center points
 - `find_nearest_cell(point, cell_points_gdf, mesh_name=None)` - Find nearest cell ID and distance using previously read cell centers
@@ -91,6 +96,17 @@ empty GeoDataFrame with a warning. They never infer connectivity from cell
 centers or collection-level `Cell Info` / `Cell Points`. Public USACE changelogs
 do not identify the exact producer defect or establish its first fixed release,
 so dataset inspection—not a blanket version rule—selects the safe reader.
+
+Detailed face linework can also fail to produce exactly one polygon for an
+individual physical cell. The default reader preserves its historical output
+shape but warns, retains the native zero-based cell IDs, and attaches a
+diagnostic table to the result. Use `diagnose_mesh_cell_polygons()` to inspect
+the affected IDs or `get_mesh_cell_polygons(..., strict=True)` when incomplete
+or ambiguous physical-cell geometry must stop the workflow. One- and two-face
+boundary-only records are reported separately and do not fail strict mode.
+Never assume the GeoDataFrame row index is an exhaustive physical-cell mask,
+and do not silently replace failed detailed geometry with a convex hull,
+endpoint ring, or selected repaired component.
 
 > **EXPERIMENTAL — not recommended for production or any other
 > non-experimental use.** These direct writes have been tested only with
