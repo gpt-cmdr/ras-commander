@@ -121,21 +121,79 @@ class HdfMesh:
         -------
         List[str]
             A list of the 2D mesh area names within the RAS geometry.
-            Returns an empty list if no 2D areas exist or if there's an error.
+            Returns an empty list when the geometry declares no 2D flow areas.
+
+        Raises
+        ------
+        ValueError
+            If the 2D Flow Areas group is present but structurally unreadable.
+            An unreadable mesh declaration is never reported as "no meshes":
+            the two answers mean different things to every caller.
+
+        Notes
+        -----
+        A 1D-only HEC-RAS geometry does not necessarily omit the
+        ``Geometry/2D Flow Areas`` group. HEC-RAS 5.0.5 writes it as an empty
+        placeholder, exactly as it writes empty ``River Flow Paths`` and
+        ``River Stationing`` groups beside it. The presence of the group is
+        therefore not a promise that an ``Attributes`` dataset exists, and its
+        absence is a well-formed statement that there are no 2D flow areas.
         """
-        try:
-            with h5py.File(hdf_path, 'r') as hdf_file:
-                if "Geometry/2D Flow Areas" not in hdf_file:
-                    return list()
-                return list(
-                    [
-                        HdfUtils.convert_ras_string(n.decode('utf-8'))
-                        for n in hdf_file["Geometry/2D Flow Areas/Attributes"][()]["Name"]
-                    ]
-                )
-        except Exception as e:
-            logger.error(f"Error reading mesh area names from {hdf_path}: {str(e)}")
+        with h5py.File(hdf_path, 'r') as hdf_file:
+            return HdfMesh._read_mesh_area_names(hdf_file, hdf_path)
+
+    @staticmethod
+    def _read_mesh_area_names(hdf_file: h5py.File, hdf_path: Path) -> List[str]:
+        """Resolve 2D mesh area names from an open geometry HDF.
+
+        Separated from the public method so the structural rules can be read
+        and tested on their own. Every branch either returns a determination
+        or raises; none of them reports absence because a read failed.
+        """
+        flow_areas = hdf_file.get("Geometry/2D Flow Areas")
+        if flow_areas is None:
+            # No group at all: a 1D-only geometry that omits the placeholder.
             return list()
+        if not isinstance(flow_areas, h5py.Group):
+            raise ValueError(
+                f"Geometry/2D Flow Areas is not a group in {hdf_path}: "
+                f"found {type(flow_areas).__name__}"
+            )
+
+        attributes = flow_areas.get("Attributes")
+        if attributes is None:
+            # The area groups carry the same names and are how every other
+            # mesh reader in this module addresses an area, so they answer the
+            # question when the Attributes table is absent.
+            area_group_names = [
+                name for name, item in flow_areas.items()
+                if isinstance(item, h5py.Group)
+            ]
+            if area_group_names:
+                return [
+                    HdfUtils.convert_ras_string(name)
+                    for name in area_group_names
+                ]
+            # Empty placeholder group: the geometry declares no 2D flow areas.
+            return list()
+
+        if not isinstance(attributes, h5py.Dataset):
+            raise ValueError(
+                f"Geometry/2D Flow Areas/Attributes is not a dataset in "
+                f"{hdf_path}: found {type(attributes).__name__}"
+            )
+        field_names = attributes.dtype.names or ()
+        if "Name" not in field_names:
+            raise ValueError(
+                f"Geometry/2D Flow Areas/Attributes has no Name field in "
+                f"{hdf_path}: fields are {list(field_names)}"
+            )
+        return [
+            HdfUtils.convert_ras_string(
+                name.decode('utf-8') if isinstance(name, bytes) else str(name)
+            )
+            for name in attributes[()]["Name"]
+        ]
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
