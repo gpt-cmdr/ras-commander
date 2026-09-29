@@ -540,7 +540,9 @@ class HdfLandCover:
                 geoms = []
                 missing_parts_regions = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
-                    points = lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
+                    )
                     if part_cnt == 1:
                         geoms.append(Polygon(points))
                     elif "Polygon Parts" not in lc_group:

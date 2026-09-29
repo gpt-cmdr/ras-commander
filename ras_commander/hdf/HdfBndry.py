@@ -743,7 +743,9 @@ class HdfBndry:
                         continue
 
                     try:
-                        points = bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        points = HdfBase.plan_vertex_ordinates(
+                            bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        )
                         
                         # Additional validation of points array
                         if len(points) < 2:
@@ -877,7 +879,9 @@ class HdfBndry:
                 polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
                 geoms = list()
                 for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
-                    points = polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    )
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))
                     else:

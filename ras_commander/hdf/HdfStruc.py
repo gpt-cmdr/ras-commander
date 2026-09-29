@@ -463,7 +463,9 @@ class HdfStruc:
                 for i in range(len(centerline_info)):
                     start_idx = centerline_info[i][0]  # Point Starting Index
                     point_count = centerline_info[i][1]  # Point Count
-                    points = centerline_points[start_idx:start_idx + point_count]
+                    points = HdfBase.plan_vertex_ordinates(
+                        centerline_points[start_idx:start_idx + point_count]
+                    )
                     if len(points) >= 2:
                         geoms.append(LineString(points))
                     else:

@@ -581,9 +581,11 @@ class HdfInfiltration:
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
-                    points = infil_data["Polygon Points"][()][
-                        pnt_start : pnt_start + pnt_cnt
-                    ]
+                    points = HdfBase.plan_vertex_ordinates(
+                        infil_data["Polygon Points"][()][
+                            pnt_start : pnt_start + pnt_cnt
+                        ]
+                    )
 
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))

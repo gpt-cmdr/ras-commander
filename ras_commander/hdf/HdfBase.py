@@ -686,6 +686,52 @@ class HdfBase:
             ) from e
 
     @staticmethod
+    def plan_vertex_ordinates(points: "np.ndarray") -> "np.ndarray":
+        """Reduce an HDF vertex array to ordinates Shapely accepts.
+
+        HEC-RAS writes some geometry point tables with four ordinates per
+        vertex. Shapely's constructors take two or three and raise
+        ``ValueError: The ordinate (last) dimension should be 2 or 3, got 4``
+        on anything wider, which aborts the whole layer for the caller.
+
+        Observed on the FEMA eBFE submittal for HUC8 12090106, model
+        ``MidCo_0601_A1``: ``/Geometry/2D Flow Area Refinement Regions/Polygon
+        Points`` is ``(21592, 4)`` and the third and fourth columns are
+        entirely NaN. There they are padding, not Z and M, so keeping three
+        ordinates would manufacture NaN-Z geometry out of nothing and push the
+        failure downstream into whatever consumes the GeoDataFrame.
+
+        The rule is therefore: a real Z is kept, a padding or measure column is
+        not.
+
+        - Fewer than four ordinates: returned unchanged. Two and three are what
+          Shapely already accepts, so nothing that reads today changes.
+        - Four or more: the trailing ordinates past the third are dropped as M
+          and beyond. The third is kept only when it holds at least one finite
+          value; when it is entirely NaN or infinite it is padding and the
+          result is planar XY.
+
+        Parameters
+        ----------
+        points : np.ndarray
+            A 2-D array of vertices, ``(n_vertices, n_ordinates)``, sliced
+            straight out of an HDF point dataset.
+
+        Returns
+        -------
+        np.ndarray
+            The same array when it already fits, otherwise a view holding its
+            first two or three ordinates.
+        """
+        array = np.asarray(points)
+        if array.ndim != 2 or array.shape[1] < 4:
+            return array
+        third = array[:, 2]
+        if np.issubdtype(array.dtype, np.floating) and not np.isfinite(third).any():
+            return array[:, :2]
+        return array[:, :3]
+
+    @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
     def get_polylines_from_parts(hdf_path: Path, path: str, info_name: str = "Polyline Info", 
@@ -747,7 +793,9 @@ class HdfBase:
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in polyline_info:
-                    points = polyline_points[pnt_start : pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        polyline_points[pnt_start : pnt_start + pnt_cnt]
+                    )
                     if part_cnt == 1:
                         geoms.append(LineString(points))
                     else:
