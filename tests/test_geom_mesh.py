@@ -810,6 +810,8 @@ class TestReseedAfterPerimeterFix:
     """Test perimeter repair requires an execution context before mutation."""
 
     def test_requires_external_geometry_hdf_regeneration(self, monkeypatch, tmp_path):
+        from ras_commander import RasPrj
+
         geom_text_path = tmp_path / "test.g01"
         geom_text_path.write_text("Geom Title=Test\n", encoding="utf-8")
         monkeypatch.setattr(
@@ -827,6 +829,7 @@ class TestReseedAfterPerimeterFix:
                 ),
                 100.0,
                 "SecondaryArea",
+                ras_object=RasPrj(),
             )
 
 

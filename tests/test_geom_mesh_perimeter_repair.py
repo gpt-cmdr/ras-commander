@@ -43,13 +43,14 @@ def repair_project(tmp_path, monkeypatch):
 
     def compile_hdf():
         ring = module._text_flow_area_perimeter(path, "MainArea")
+        spacing = module._read_cell_size_from_text(path, "MainArea")
         _write_mesh_hdf(
             hdf_path,
             [
                 {
                     "name": "MainArea",
-                    "spacing_dx": 50.0,
-                    "spacing_dy": 50.0,
+                    "spacing_dx": spacing,
+                    "spacing_dy": spacing,
                     "cell_count": 2,
                 }
             ],
@@ -128,8 +129,9 @@ def repair_project(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("repair_kind", ["dp", "vertex_removal"])
+@pytest.mark.parametrize("cell_size", [50.0, 80.0])
 def test_generate_persists_reloads_and_retries(
-    repair_project, monkeypatch, repair_kind
+    repair_project, monkeypatch, repair_kind, cell_size
 ):
     path, hdf, ras, calls = repair_project
     before = path.read_bytes()
@@ -149,10 +151,16 @@ def test_generate_persists_reloads_and_retries(
         lambda *args: [1] if repair_kind == "vertex_removal" else [],
     )
     result = module.GeomMesh.generate(
-        path, mesh_name="MainArea", ras_object=ras, max_iterations=2
+        path,
+        mesh_name="MainArea",
+        ras_object=ras,
+        max_iterations=2,
+        cell_size=cell_size,
     )
     assert result.ok
     assert result.iterations == 2
+    assert module._read_cell_size_from_hdf(hdf, "MainArea") == cell_size
+    assert module._read_cell_size_from_text(path, "MainArea") == cell_size
     assert len(result.perimeter_repairs) == 1
     record = result.perimeter_repairs[0]
     assert record["max_vertex_displacement"] == pytest.approx(1.0)

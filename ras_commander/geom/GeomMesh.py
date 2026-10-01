@@ -1638,6 +1638,7 @@ def _reseed_after_perimeter_fix(
         text_path,
         flow_area_name=mesh_name,
         geometry=candidate,
+        point_generation_data=(None, None, cell_size, cell_size),
         create_backup=True,
     )
     repaired = _text_flow_area_perimeter(text_path, mesh_name)
