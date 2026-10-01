@@ -21,6 +21,14 @@ scalar BC fields when ownership is ambiguous. Other validation stays active
 and source files are read-only. The legacy `validate_unique_faces=False`
 diagnostic shape is preserved. DataFrame schema contract version is 1.20.
 
+**Empty SA/2D profile records no longer block retention**
+
+`GeomLateral.get_connection_data()` reports explicit zero-count centerline and
+BR/XS profiles, and complete empty bridge skeletons, in `EmptyRecords` with their
+raw text preserved. These records contribute no spatial support and no longer
+block connection retention. Nonzero, malformed and unfamiliar records still fail
+closed; native mesh attachment verification remains a separate requirement.
+
 **Complete SA/2D connections, retention on clip and breakout, native attachment checks**
 
 `GeomLateral` reads every SA/2D connection completely as a DataFrame (crest and terrain profiles,

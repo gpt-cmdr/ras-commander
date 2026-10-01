@@ -323,6 +323,11 @@ DATAFRAME_SCHEMAS = {
                     "List of explicitly requested compatibility default fields.",
                 ),
                 (
+                    "EmptyRecords",
+                    "object",
+                    "Raw recognized zero-count profiles and complete empty bridge metadata.",
+                ),
+                (
                     "UnknownRecords",
                     "object",
                     "Preserved records whose support/physics are not decoded.",
