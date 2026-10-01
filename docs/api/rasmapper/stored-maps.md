@@ -34,9 +34,10 @@ execution evidence.
 
 ## Orchestration, result registration and calculated layers
 
-::: ras_commander.RasMap
+::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - postprocess_stored_maps
@@ -58,7 +59,7 @@ execution evidence.
 
 ## Headless mapping, resources and raster products
 
-::: ras_commander.RasProcess
+::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false
       heading_level: 3

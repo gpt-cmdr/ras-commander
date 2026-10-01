@@ -1648,7 +1648,7 @@ Step 5: Configure (optional — auto-detection usually works)
             sediment_soils_hdf_path: Optional sediment bed-material soils HDF.
             ras_version: Optional HEC-RAS version for RasProcess.exe lookup.
             timeout: Command timeout in seconds.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             Dict containing command args, return code, stdout/stderr,
@@ -1954,7 +1954,7 @@ Step 5: Configure (optional — auto-detection usually works)
 
         Args:
             plan_number: Plan number (e.g., "01", "06")
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
 
         Returns:
             List of timestamp strings in format "DDMMMYYYY HH:MM:SS" (e.g., "10SEP2018 02:30:00")
@@ -3763,15 +3763,16 @@ Step 5: Configure (optional — auto-detection usually works)
                 BenefitArea raster is calculated.
             clear_existing: Clear existing stored maps before adding new ones (default: True)
             fix_georef: Apply georeferencing fix to output TIFs (default: True)
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
             ras_version: Optional specific HEC-RAS mapping-runtime version
             timeout: Command timeout in seconds (default: 600)
             performance: Keyword-only StoreMap execution and resource policy.
                 The default preserves serial StoreAllMaps behavior. Use
                 ``StoreMapPerformanceOptions(max_workers=None)`` for automatic
                 memory- and CPU-bounded map-level parallelism.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases. Do not combine them with
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias. Do not combine them with
                 ``performance``.
 
         Returns:
@@ -4695,7 +4696,7 @@ Step 5: Configure (optional — auto-detection usually works)
                 the temporary configuration.
             fix_georef: Apply the existing terrain georeferencing repair to
                 generated TIFF tiles.
-            ras_object: Optional initialized project object.
+            ras_object (RasPrj, optional): Optional initialized project object.
             ras_version: Optional installed HEC-RAS mapping-runtime version.
             timeout: Aggregate helper timeout in seconds.
             terrain_name: Optional registered RASMapper terrain to select.
@@ -5161,14 +5162,24 @@ Step 5: Configure (optional — auto-detection usually works)
                 integer indices, exact RASMapper timestamp strings, or datetimes.
                 If omitted, all available output timesteps are used.
             max_timesteps: Optional cap applied after timestep selection.
-            wse, depth, velocity, froude, shear_stress, depth_x_velocity,
-                depth_x_velocity_sq: Map types to export. Defaults to Depth only.
-            render_mode, clear_existing, fix_georef, ras_object, ras_version,
-                timeout: Passed through to ``store_maps``.
+            wse: Generate WSE maps (default: False).
+            depth: Generate Depth maps (default: True).
+            velocity: Generate Velocity maps (default: False).
+            froude: Generate Froude maps (default: False).
+            shear_stress: Generate Shear Stress maps (default: False).
+            depth_x_velocity: Generate depth-times-velocity maps (default: False).
+            depth_x_velocity_sq: Generate depth-times-velocity-squared maps (default: False).
+            render_mode: Rendering mode passed through to ``store_maps``.
+            clear_existing: Clear existing stored maps, passed to ``store_maps``.
+            fix_georef: Georeferencing fix flag passed to ``store_maps``.
+            ras_object (RasPrj, optional): Project object passed to ``store_maps``.
+            ras_version: Mapping-runtime version passed to ``store_maps``.
+            timeout: Per-call timeout in seconds passed to ``store_maps``.
             performance: StoreMap execution and memory policy for every
                 timestep.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases.
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias.
 
         Returns:
             Dict keyed by RASMapper timestamp string. Each value is the
@@ -5343,12 +5354,13 @@ Step 5: Configure (optional — auto-detection usually works)
             depth_x_velocity: Generate D*V maps (default: False)
             depth_x_velocity_sq: Generate D*V² maps (default: False)
             fix_georef: Apply georeferencing fix (default: True)
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
             ras_version: Optional specific HEC-RAS version
             timeout: Timeout per plan in seconds (default: 1800)
             performance: StoreMap execution and memory policy for every plan.
-            max_workers, memory_per_worker_mb, reserve_memory_mb: Deprecated
-                keyword-only migration aliases.
+            max_workers: Deprecated keyword-only worker-count migration alias.
+            memory_per_worker_mb: Deprecated keyword-only per-worker memory alias.
+            reserve_memory_mb: Deprecated keyword-only reserved-memory alias.
 
         Returns:
             Dict mapping plan numbers to their generated files dict.

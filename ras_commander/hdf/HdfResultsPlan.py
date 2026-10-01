@@ -336,12 +336,13 @@ class HdfResultsPlan:
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
             reftype (str): Type of reference data ('lines' or 'points')
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: Tidy frame containing time, reference ID/name, mesh
                 name, and every numeric native result variable. Returns an
-                empty frame when the requested reference output is absent.
+                empty frame when the requested reference output is absent or
+                an error is caught, including an invalid reftype. Inspect log
+                diagnostics; an empty result is not a zero-valued hydrograph.
         """
         try:
             from .HdfResultsXsec import HdfResultsXsec

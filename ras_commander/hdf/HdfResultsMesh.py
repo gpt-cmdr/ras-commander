@@ -464,6 +464,37 @@ class HdfResultsMesh:
         reference-line faces and ad-hoc profile lines are read through
         ``RASResults.ReadUnsteadyTimeSeries()`` after selecting ad-hoc faces
         with ``MeshFV2D.PerimeterFacesAlongPolyline()``.
+
+        Args:
+            hdf_path: Completed plan HDF, with the matching geometry available.
+            line_name: Exact reference-line or profile-layer feature name.
+            mesh_name: Optional 2D flow area selector.
+            profile_lines_path: Optional external profile-line layer. Coordinates
+                must match the model CRS; project metadata can resolve this path.
+            direction: ``"absolute"`` takes the absolute value of a precomputed
+                reference hydrograph, but sums absolute face flows in a fallback
+                branch. ``"signed"`` preserves the precomputed hydrograph sign,
+                or sums native face-normal signs without line-orientation
+                correction in a fallback. These are not interchangeable fluxes.
+            truncate: Trim leading and trailing zero-flow samples when true.
+            ras_object: Optional initialized project context.
+
+        Returns:
+            DataFrame with ``time``, ``flow``, ``line_name``, ``mesh_name``,
+            ``direction``, ``face_count`` and ``selection_source``. Attributes
+            include units, variable and face IDs. Preserve this provenance:
+            ``try_read_ref_line_flow`` identifies the precomputed hydrograph
+            route, whose observed-versus-computed provenance has not been
+            independently qualified here; face-selection routes identify
+            aggregation of stored face output, not a new solver calculation.
+            Missing units are not inferred.
+
+        Notes:
+            Requires pythonnet and compatible installed RasMapperLib. For an
+            offline approximation use ``get_profile_line_flow_timeseries_legacy``.
+            To read recorded reference matrices directly without native mapping,
+            use ``HdfResultsXsec.get_ref_lines_timeseries``. Reading an HDF cannot
+            create reference output that was not recorded by the model run.
         """
         direction = HdfResultsMesh._normalize_profile_line_direction(direction)
         native_faces = HdfResultsMesh._get_native_profile_line_faces(
@@ -680,10 +711,13 @@ class HdfResultsMesh:
         """
         Return peak flow across a RAS Mapper profile/reference line.
 
-        For ``direction="absolute"``, the peak is the maximum absolute-flow
-        sum. For ``direction="signed"``, the peak timestep is selected by
+        For ``direction="absolute"``, the peak is the maximum of the selected
+        extraction route's absolute-flow series: absolute native-associated
+        hydrograph flow or a sum of absolute face flows. Preserve ``selection_source`` to
+        distinguish these quantities. For ``direction="signed"``, the peak timestep is selected by
         maximum signed-flow magnitude and the returned ``peak_flow`` preserves
-        the native sign at that timestep.
+        the native sign at that timestep. A peak from saved output times need
+        not equal a peak over every computational timestep.
         """
         flow_df = HdfResultsMesh.get_profile_line_flow_timeseries(
             hdf_path=hdf_path,

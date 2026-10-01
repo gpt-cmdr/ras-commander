@@ -1224,8 +1224,13 @@ class GeomReferenceFeatures:
         """
         Insert reference points into a plain text geometry file.
 
-        Reference points are stored as IC Points with names starting with
-        "Reference Point". They are inserted in the IC Point section.
+        This helper writes IC Point records with names starting with
+        "Reference Point" in the geometry's IC Point section. Text readback
+        does not establish that HEC-RAS recognizes them as native result
+        reference points. A successful subsequent run is also insufficient:
+        the retained HEC-RAS 7.0 run in example 314 did not produce a native
+        Reference Points result group. Check for recorded output explicitly;
+        nearest-cell sampling is a different extraction method.
 
         Args:
             geom_file: Path to geometry file (.g##)

@@ -30,6 +30,7 @@ The [RASMapper reference](rasmapper/index.md) groups the spatial APIs by task:
 
 - [Layers and associations](rasmapper/layers.md) — terrain, classifications, reference maps and geometry HDF associations
 - [Display and spatial review](rasmapper/display.md) — layer visibility, bounds, screenshots and review bundles
+- [Profiles and reference results](rasmapper/profiles.md) — offline sampling, native mapped profiles, recorded hydrographs and reference authoring
 - [Stored maps](rasmapper/stored-maps.md) — headless result export, profiles, timesteps and calculated layers
 - [Geometry completion](rasmapper/geometry-completion.md) — native geometry-derived layers and diagnostics
 - [Automated mesh generation](rasmapper/mesh-generation.md) — computation points, refinements, mesh repair and property tables

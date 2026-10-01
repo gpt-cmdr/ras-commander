@@ -76,6 +76,7 @@ plugins:
           - user-guide/plan-execution.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
+          - user-guide/2d-profile-and-reference-workflows.md
           - user-guide/geometry-operations.md
           - user-guide/boundary-conditions.md
         API Reference:
@@ -84,6 +85,7 @@ plugins:
           - api/rasmapper/index.md
           - api/rasmapper/layers.md
           - api/rasmapper/display.md
+          - api/rasmapper/profiles.md
           - api/rasmapper/stored-maps.md
           - api/rasmapper/geometry-completion.md
           - api/rasmapper/mesh-generation.md
@@ -203,6 +205,7 @@ nav:
     - eBFE Delivery Validation: user-guide/ebfe-delivery-validation.md
     - Working with eBFE Models: ebfe_models.md
     - HDF Data Extraction: user-guide/hdf-data-extraction.md
+    - 2D Profiles and Reference Results: user-guide/2d-profile-and-reference-workflows.md
     - Geometry Operations: user-guide/geometry-operations.md
     - Steady Flow Analysis: user-guide/steady-flow-analysis.md
     - Dam Breach Analysis: user-guide/dam-breach-analysis.md
@@ -239,6 +242,7 @@ nav:
       - Overview: api/rasmapper/index.md
       - Layers and Associations: api/rasmapper/layers.md
       - Display and Spatial Review: api/rasmapper/display.md
+      - Profiles and Reference Results: api/rasmapper/profiles.md
       - Stored Maps: api/rasmapper/stored-maps.md
       - Geometry Completion: api/rasmapper/geometry-completion.md
       - Automated Mesh Generation: api/rasmapper/mesh-generation.md

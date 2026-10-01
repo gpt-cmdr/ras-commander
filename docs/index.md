@@ -30,6 +30,10 @@ or [Installation and runtime requirements](getting-started/installation.md).
 
     Extract and analyze 1D/2D results directly from HDF files - water surfaces, velocities, depths, and more.
 
+- :material-chart-line: **[2D Profiles and Reference Results](user-guide/2d-profile-and-reference-workflows.md)**
+
+    Automate plots across many lines. Choose saved-result sampling, native RASMapper profiles, or solver-recorded reference hydrographs, with explicit terrain, time, and flow conventions.
+
 - :material-vector-polygon: **[Geometry Operations](user-guide/geometry-operations.md)**
 
     Parse and modify geometry files including cross-sections, storage areas, connections, and inline structures.

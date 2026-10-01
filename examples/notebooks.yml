@@ -816,11 +816,14 @@ notebooks:
   title: Reference Lines and Points for 2D Calibration
   series: 200
   series_name: Geometry & Calibration
-  summary: This notebook demonstrates `GeomReferenceFeatures` — inserting and reading reference lines
-    and reference points in HEC-RAS plain text geometry files.
+  summary: Author and read back reference lines and points in geometry text; prepare locations for a subsequent
+    model run.
   tags:
   - 2d
   - calibration
+  - reference-lines
+  - reference-points
+  - geometry
   difficulty: intermediate
   est_runtime: null
   data_project: BaldEagleCrkMulti2D
@@ -834,6 +837,19 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
+  input_families:
+  - Working geometry text
+  - Named line and point coordinates in model CRS
+  operations:
+  - Write reference locations
+  - Read geometry text back
+  outputs:
+  - Updated geometry text
+  - Reference location inventories
+  runtime_requirements:
+  - Python geometry authoring; solver required separately for new reference results
+  evidence_scope: Retained outputs demonstrate text authoring and readback, not reference hydrographs
+    or a fresh solve.
   code_cells: 6
   executed_cells: 6
 - id: 208_bridge_method_comparison
@@ -2017,11 +2033,15 @@ notebooks:
   title: Breakline-Derived Reference Lines And USGS Gauge Points
   series: 300
   series_name: Unsteady & DSS
-  summary: This notebook authors 2D HEC-RAS reference features from hydraulic geometry, not arbitrary
-    straight lines. It uses channel-aligned 2D breaklines as longitudinal reference lines, generates 250
-    ft perpendicular transects from those centerl...
+  summary: Generate transverse reference lines and gauge points, compute a working plan, and batch plot
+    recorded line hydrographs alongside nearest-cell gauge samples.
   tags:
+  - 2d
   - usgs
+  - reference-lines
+  - reference-points
+  - hydrographs
+  - batch-plotting
   difficulty: intermediate
   est_runtime: null
   data_project: null
@@ -2050,6 +2070,22 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
+  input_families:
+  - Working 2D project and channel-aligned breaklines
+  - USGS gauge locations
+  operations:
+  - Generate and author reference locations
+  - Preprocess and compute a plan
+  - Plot recorded line hydrographs and nearest-cell gauge WSE
+  outputs:
+  - Authored reference geometry
+  - Computed plan results
+  - Line hydrograph and gauge sample figures
+  runtime_requirements:
+  - Configured HEC-RAS execution runtime
+  - Gauge discovery network access
+  evidence_scope: Retained outputs show the demonstrated run. Gauge WSE plots use nearest-cell sampling,
+    not solver-recorded reference-point hydrographs; generated lines still require engineering review.
   code_cells: 14
   executed_cells: 14
 - id: 315_2d_computation_options
@@ -2519,12 +2555,15 @@ notebooks:
   title: Profile Line Flow Extraction
   series: 400
   series_name: HDF Results
-  summary: HDF mesh and results extraction
+  summary: Extract named-line flow series and peaks; distinguish native-associated hydrographs of unqualified
+    provenance from face-flow aggregation.
   tags:
   - 2d
   - hdf
   - profile-lines
+  - reference-lines
   - flow
+  - hydrographs
   difficulty: intermediate
   est_runtime: null
   data_project: null
@@ -2534,6 +2573,22 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
+  input_families:
+  - Completed plan HDF and matching geometry
+  - Named profile-line layer or geometry reference line
+  operations:
+  - Extract named-line flow time series
+  - Find sampled peak and inspect face-flow comparison
+  outputs:
+  - Flow series with selection provenance
+  - Peak-flow summary and comparison plot
+  runtime_requirements:
+  - Current canonical API requires pythonnet and compatible RasMapperLib
+  - External Chippewa fixture described in notebook
+  evidence_scope: Saved outputs retain a historical six-face reconstruction, not current native qualification.
+    The native fixture uses seven faces with substantially different flow. Native-associated hydrograph
+    provenance remains unqualified; absolute hydrograph values and summed absolute face flows are different
+    quantities.
   code_cells: 6
   executed_cells: 6
 - id: 414_depth_varying_mannings_n
@@ -2616,10 +2671,14 @@ notebooks:
   title: 2D Velocity Profile Line Extraction
   series: 400
   series_name: HDF Results
-  summary: Extract velocity, depth, and terrain along a user-defined profile line from a completed 2D
-    plan HDF.
+  summary: Sample native RASMapper velocity, depth and terrain along a polyline at one saved time; distinguish
+    station profiles from recorded reference hydrographs.
   tags:
   - 2d
+  - profile-lines
+  - rasmapper
+  - velocity
+  - terrain
   difficulty: intermediate
   est_runtime: null
   data_project: null
@@ -2628,6 +2687,20 @@ notebooks:
   hec_refs: []
   learning_paths: []
   excluded: false
+  input_families:
+  - Completed 2D plan HDF and matching geometry
+  - RAS terrain HDF and line coordinates
+  operations:
+  - Select a saved result time
+  - Query a native station-wise velocity profile
+  outputs:
+  - Station/profile table
+  - Velocity, depth and terrain figure
+  runtime_requirements:
+  - pythonnet and compatible installed RasMapperLib
+  - Matching RAS terrain and geometry
+  evidence_scope: Retained example output illustrates a single-time station profile, not line-integrated
+    discharge or solver-recorded reference output; this editorial update does not requalify native execution.
   code_cells: 4
   executed_cells: 4
 - id: 417_inspect_results_and_generate_hydraulic_products

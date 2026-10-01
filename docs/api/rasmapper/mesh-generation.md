@@ -73,7 +73,7 @@ they do not qualify every geometry, release or hydraulic configuration.
 
 ## Mesh methods
 
-::: ras_commander.geom.GeomMesh
+::: ras_commander.geom.GeomMesh.GeomMesh
     options:
       show_root_heading: false
       heading_level: 3

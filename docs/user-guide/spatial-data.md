@@ -1,5 +1,11 @@
 # Working with Spatial Data and RASMapper
 
+For station profiles and hydrographs across many lines, use
+[2D profiles and reference workflows](2d-profile-and-reference-workflows.md).
+It distinguishes mapped postprocessing from solver-recorded reference output
+and explains how terrain, time selection, and the requested variable affect
+the extraction route.
+
 RAS Commander provides comprehensive tools for working with HEC-RAS spatial datasets, including terrain, land cover, infiltration layers, and automated map generation. This guide covers accessing RASMapper configuration data and modifying spatial parameters for model calibration.
 
 ## Overview

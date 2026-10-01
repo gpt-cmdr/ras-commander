@@ -347,7 +347,7 @@ class RasMap:
 
         Args:
             rasmap_path (Union[str, Path]): Path to the .rasmap file.
-            ras_object: Optional RAS object instance. Retained for API
+            ras_object (RasPrj, optional): Optional RAS object instance. Retained for API
                 compatibility; parsing does not require project state.
 
         Returns:
@@ -661,7 +661,7 @@ class RasMap:
 
         Args:
             ras_project_path: Project folder, .prj file, or .rasmap file.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             DataFrame with one row per LandCoverLayer entry.
@@ -724,7 +724,7 @@ class RasMap:
 
         Args:
             ras_project_path: Project folder, .prj file, or .rasmap file.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             DataFrame with one row per ``Terrains/Layer`` entry.
@@ -832,7 +832,7 @@ class RasMap:
 
         Args:
             layer_hdf_path: Land-cover, soils, or infiltration sidecar HDF.
-            ras_object: Optional RasPrj object. Present for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object. Present for API consistency.
 
         Returns:
             GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
@@ -1188,7 +1188,7 @@ class RasMap:
         Args:
             geom_number: Optional geometry number to select. When omitted, all
                 project geometries are inspected.
-            ras_object: Optional initialized :class:`RasPrj` instance.
+            ras_object (RasPrj, optional): Optional initialized :class:`RasPrj` instance.
 
         Returns:
             DataFrame described by the ``geometry_associations`` schema.
@@ -1479,7 +1479,7 @@ class RasMap:
         Get the path to the .rasmap file based on the current project.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[Path]: Path to the .rasmap file if found, None otherwise.
@@ -1504,7 +1504,7 @@ class RasMap:
         Initialize the rasmap_df as part of project initialization.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             pd.DataFrame: DataFrame containing information from the .rasmap file.
@@ -1590,7 +1590,7 @@ class RasMap:
             as_dataframe: Return a DataFrame when True. When omitted, explicit
                 ``ras_project_path`` calls return a DataFrame and legacy active-project
                 calls return the historical list-of-dicts shape.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             DataFrame with one row per top-level map layer, or legacy
@@ -1837,7 +1837,7 @@ class RasMap:
             replace_existing: Replace an existing reference layer with the same name.
                 Default False preserves the historical append behavior.
             validate_geojson_wgs84: Raise if a GeoJSON source is not WGS84-compatible.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if layer was successfully added.
@@ -1902,7 +1902,7 @@ class RasMap:
 
         Args:
             layer_name: Name of the layer to remove.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if layer was found and removed, False if not found.
@@ -1955,7 +1955,7 @@ class RasMap:
         List all geometry layers in the RASMapper configuration file.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with geometry info:
@@ -2038,7 +2038,7 @@ class RasMap:
             name: Optional target display name. Defaults to the source name.
             checked: Whether the target geometry is visible.
             expanded: Whether the target geometry tree is expanded.
-            ras_object: Optional initialized :class:`RasPrj` instance.
+            ras_object (RasPrj, optional): Optional initialized :class:`RasPrj` instance.
 
         Returns:
             Dict[str, Any]: Registered layer metadata and the ``.rasmap`` path.
@@ -2144,7 +2144,7 @@ class RasMap:
                 - Geometry number (e.g., "08" or "g08")
                 - Filename pattern (e.g., "g08.hdf")
             visible: True to show geometry, False to hide.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if geometry was found and modified.
@@ -2223,7 +2223,7 @@ class RasMap:
             visible: True to show all geometries, False to hide all.
             except_geom: Optional geometry to exclude from visibility change.
                 Can be geometry name, number (e.g., "08"), or filename pattern.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             int: Number of geometries modified.
@@ -2312,7 +2312,7 @@ class RasMap:
         Args:
             ras_project_path: Project folder, ``.prj`` file, or ``.rasmap`` file.
                 If omitted, the active ``RasPrj`` object is used.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             pd.DataFrame: One row per top-level geometry and child geometry
@@ -2363,7 +2363,7 @@ class RasMap:
             exclusive: If ``True``, hide all geometries and child elements first,
                 then show only the matching parent geometry and selected child
                 element. This is useful for screenshot workflows.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML visibility attributes modified.
@@ -2541,7 +2541,7 @@ class RasMap:
             exclusive: If ``True``, hide non-matching terrain layers first.
             surface_on: Keep the terrain ``<Surface On="...">`` state aligned
                 with the checked state.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML attributes/elements modified.
@@ -2643,7 +2643,7 @@ class RasMap:
             stitch_edges_enabled: Toggle ``Plot stitch TIN edges``.
             level0_stitch_edges_enabled: Toggle ``Plot Level0 stitch TIN edges``.
             remove_stitch_rendering_enabled: Toggle ``Remove Stitch Rendering``.
-            ras_object: Optional ``RasPrj`` object instance.
+            ras_object (RasPrj, optional): Optional ``RasPrj`` object instance.
 
         Returns:
             int: Number of XML attributes/elements modified.
@@ -3189,7 +3189,7 @@ class RasMap:
         version incompatibility and attempts automatic upgrade via GUI automation.
 
         Args:
-            ras_object: Optional RasPrj object instance (default: global ras).
+            ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
             auto_upgrade (bool): If True, attempt automatic upgrade via GUI automation.
                 If False, only detect version and return status without upgrading.
 
@@ -3985,7 +3985,7 @@ class RasMap:
                 ``"01"``) or a plan sequence for ``configured``/``selected``/
                 ``timesteps``. Omit it for ``all_plans``.
             render_mode: Optional water-surface rendering override.
-            ras_object: Initialized project object; defaults to the active project.
+            ras_object (RasPrj, optional): Initialized project object; defaults to the active project.
             timeout: Per-helper timeout in seconds.
             mode: ``auto``, ``configured``, ``selected``, ``timesteps``,
                 ``steady_profiles``, or ``all_plans``. ``native`` remains a
@@ -3999,7 +3999,8 @@ class RasMap:
             profiles: Steady-profile selectors for ``steady_profiles`` mode.
                 ``None`` selects all profiles; exact names and zero-based
                 indexes may be mixed in a sequence.
-            timesteps, max_timesteps: Timestep selectors for ``timesteps`` mode.
+            timesteps: Timestep selectors for ``timesteps`` mode.
+            max_timesteps: Optional cap applied after timestep selection.
             map_types: One product name or a sequence of names. Exactly the
                 listed products are generated. Do not combine with individual
                 raster/product flags, except ``inundation_boundary`` (see
@@ -4007,17 +4008,26 @@ class RasMap:
                 given, are WSE/Depth/Velocity for selected/all-plans, Depth
                 only for timesteps, and Depth plus one inundation boundary for
                 steady_profiles.
-            wse, depth, velocity, froude, shear_stress, depth_x_velocity,
-                depth_x_velocity_sq, inundation_boundary, arrival_time,
-                duration, percent_inundated: Individual product flags. Once any
-                flag is given, only flags set to True are generated.
-                ``inundation_boundary`` may also be passed together with
+            wse: Individual Water Surface Elevation product flag. Once any
+                individual product flag is given, only flags set to True are generated.
+            depth: Individual Depth product flag.
+            velocity: Individual Velocity product flag.
+            froude: Individual Froude number product flag.
+            shear_stress: Individual Shear Stress product flag.
+            depth_x_velocity: Individual depth-times-velocity product flag.
+            depth_x_velocity_sq: Individual depth-times-velocity-squared product flag.
+            arrival_time: Individual Arrival Time product flag.
+            duration: Individual Duration product flag.
+            percent_inundated: Individual Percent Inundated product flag.
+            inundation_boundary: Individual inundation boundary polygon flag.
+                May also be passed together with
                 ``map_types`` to add (True) or explicitly omit (False) the
                 boundary polygon; False conflicts with a ``map_types`` entry of
                 ``"inundation_boundary"``. For steady_profiles,
                 ``map_types=["depth"]`` therefore yields Depth rasters only.
             arrival_depth: Threshold for whole-simulation configured products.
-            clear_existing, fix_georef: Configured-map execution controls.
+            clear_existing: Clear existing stored maps before adding new ones.
+            fix_georef: Apply georeferencing fixes to generated rasters.
             ras_version: Optional installed mapping-runtime version.
             terrain_name: Registered terrain selection for non-timestep modes.
             benefit_area: Optional single-plan benefit-area configuration.
@@ -4565,7 +4575,7 @@ class RasMap:
             plan_number: Plan number(s) to generate maps for (e.g. "01" or ["01", "02"]).
             render_mode: Rendering mode override. If None, reads from .rasmap file.
                 Valid values: "horizontal", "sloping", "slopingPretty".
-            ras_object: Optional RAS project object.
+            ras_object (RasPrj, optional): Optional RAS project object.
             timeout: Timeout in seconds per plan (default: 600).
 
         Returns:
@@ -4743,7 +4753,7 @@ class RasMap:
 
         Args:
             plan_number (Union[str, int, float]): Plan number (accepts flexible formats like 1, "01", "001").
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Path: Path to the mapping output folder.
@@ -4863,7 +4873,7 @@ class RasMap:
         Args:
             plan_number (Union[str, int, float]): Plan number (accepts flexible formats).
             variable_name (str): Variable name to search for in VRT filenames (e.g., "WSE", "Depth", "Velocity").
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Path: Path to the matching .vrt file.
@@ -4958,7 +4968,7 @@ class RasMap:
             use_depth_weighted_faces (bool): When True, face contributions are
                 weighted by depth. Only applies to slopingPretty mode.
                 Default: False.
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             bool: True if successful, False otherwise.
@@ -5111,7 +5121,7 @@ class RasMap:
         Get the current water surface rendering mode from the RASMapper configuration.
 
         Args:
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[dict]: Rendering mode configuration with keys:
@@ -5527,7 +5537,7 @@ class RasMap:
             layer_name: Display name for terrain layer (default: "Terrain")
             projection_prj: Path to ESRI PRJ file. If provided, updates
                 RASProjectionFilename element. Default: None (keeps existing).
-            ras_object: Optional RasPrj object instance (default: global ras).
+            ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
 
         Returns:
             None
@@ -5715,7 +5725,7 @@ class RasMap:
                 they are normalized to ``.\\`` relative Windows form.
             rasmap_path: Explicit ``.rasmap`` path. When omitted, resolve it
                 from ``ras_object``.
-            ras_object: Optional initialized project object.
+            ras_object (RasPrj, optional): Optional initialized project object.
             backup: Create a durable sibling backup before mutation.
 
         Returns:
@@ -5871,7 +5881,7 @@ class RasMap:
         calculated layers.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with keys:
@@ -6247,7 +6257,7 @@ class RasMap:
         ``<Layer Type="RASResults">`` blocks.
 
         Args:
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[Dict[str, Any]]: List of dicts with keys:
@@ -6361,7 +6371,7 @@ class RasMap:
                 indices in the script).
             checked: Whether the layer is visible in RASMapper. Default True.
             profile_index: ProfileIndex attribute for the calculated layer. Default 0.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if the layer was successfully added.
@@ -6506,7 +6516,7 @@ class RasMap:
             host_plan_name: If provided, only search within that specific RASResults
                 block. If None, searches all RASResults blocks and removes the first match.
             delete_script: If True, also delete the ``.rasscript`` file from disk.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             bool: True if the layer was found and removed, False if not found.
@@ -6608,7 +6618,7 @@ class RasMap:
                 Default: ``"CompareWSE_{tag}"``.
             host_plan: Which plan to host the calculated layer under — ``"proposed"``
                 (default) or ``"existing"``.
-            ras_object: Optional RasPrj object instance.
+            ras_object (RasPrj, optional): Optional RasPrj object instance.
 
         Returns:
             List[str]: Names of successfully created layers.
