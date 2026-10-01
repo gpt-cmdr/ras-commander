@@ -36,7 +36,6 @@ and [931 — native terrain export](../../notebooks/931_native_rasmapper_terrain
 ::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
-      show_root_toc_entry: false
       heading_level: 3
       members:
         - parse_rasmap
@@ -94,7 +93,6 @@ These checks do not run the hydraulic solver.
 ::: ras_commander.RasMapValidation.RasMapValidation
     options:
       show_root_heading: false
-      show_root_toc_entry: false
       heading_level: 3
       members:
         - check_layer_format

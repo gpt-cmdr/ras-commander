@@ -82,6 +82,8 @@ def validate(docs_dir: Path, site_dir: Path) -> list[str]:
     for page in pages:
         expected = listed_anchors(page.read_text(encoding="utf-8"))
         total += len(expected)
+        if page.stem != "index" and not expected:
+            errors.append(f"{page.name}: no explicitly listed members parsed; check directive syntax")
         relative = Path("api") / "rasmapper"
         if page.stem != "index":
             relative /= page.stem
