@@ -552,8 +552,10 @@ class HdfInfiltration:
 
         Returns:
             A GeoDataFrame with columns ``region_id``, ``Name``, and
-            ``geometry``. Returns an empty GeoDataFrame if the required
-            datasets do not exist.
+            ``geometry``. Returns an empty GeoDataFrame when the polygon
+            layer is absent; missing siblings in a present layer raise.
+
+        Read errors and malformed present polygon layers are logged and raised.
 
         Example
         -------
@@ -571,13 +573,15 @@ class HdfInfiltration:
 
                 infil_data = hdf_file[infiltration_path]
 
-                if ("Polygon Info" not in infil_data or
-                    "Attributes" not in infil_data or
-                    "Polygon Points" not in infil_data):
+                polygon_datasets = ("Polygon Info", "Attributes", "Polygon Points")
+                if "Polygon Info" not in infil_data and "Polygon Points" not in infil_data:
                     return gpd.GeoDataFrame()
+                missing = [name for name in polygon_datasets if name not in infil_data]
+                if missing:
+                    raise ValueError(f"Missing polygon datasets: {missing}")
 
                 region_ids = range(infil_data["Attributes"][()].shape[0])
-                names = np.vectorize(HdfUtils.convert_ras_string)(infil_data["Attributes"][()]["Name"])
+                names = [HdfUtils.convert_ras_string(name) for name in infil_data["Attributes"][()]["Name"]]
 
                 geoms = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in infil_data["Polygon Info"][()]:
@@ -587,17 +591,14 @@ class HdfInfiltration:
                         ]
                     )
 
+                    if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid region polygon point range")
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))
                         continue
 
                     if "Polygon Parts" not in infil_data:
-                        logger.warning(
-                            "Multi-part infiltration polygon but "
-                            "'Polygon Parts' dataset missing"
-                        )
-                        geoms.append(Polygon(points))
-                        continue
+                        raise ValueError("Multipart infiltration region is missing Polygon Parts")
 
                     parts = infil_data["Polygon Parts"][()][
                         part_start : part_start + part_cnt
@@ -621,8 +622,8 @@ class HdfInfiltration:
                 )
 
         except Exception as e:
-            logger.error(f"Error reading infiltration region polygons from {hdf_path}: {str(e)}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error reading infiltration region polygons from {hdf_path} (Geometry/Infiltration): {str(e)}")
+            raise
 
     SOIL_GROUPS = ['NoData', 'D', 'C', 'B', 'A']
 

@@ -158,25 +158,31 @@ def test_optional_missing_boundary_groups_log_debug_context(
     assert all(str(tmp_path) not in message for message in optional_group_messages)
 
 
-def test_invalid_breaklines_warning_includes_counts_not_full_path(
+@pytest.mark.parametrize("invalid_record", [0, 1, 2])
+def test_invalid_breaklines_raise_and_log_full_context(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    invalid_record: int,
 ):
     geom_hdf = tmp_path / "model.g01.hdf"
     _write_invalid_breaklines_hdf(geom_hdf)
+    # Isolate zero-point, single-point, and malformed multipart records.
+    with h5py.File(geom_hdf, "r+") as hdf_file:
+        group = hdf_file["Geometry/2D Flow Area Break Lines"]
+        attributes = group["Attributes"][()][invalid_record:invalid_record + 1]
+        info = group["Polyline Info"][()][invalid_record:invalid_record + 1]
+        del group["Attributes"]
+        del group["Polyline Info"]
+        group.create_dataset("Attributes", data=attributes)
+        group.create_dataset("Polyline Info", data=info)
 
-    with caplog.at_level("WARNING", logger=LOGGER_NAME):
-        result = HdfBndry.get_breaklines(geom_hdf)
+    with caplog.at_level("ERROR", logger=LOGGER_NAME), pytest.raises(ValueError):
+        HdfBndry.get_breaklines(geom_hdf)
 
-    assert result.empty
     messages = _hdf_bndry_messages(caplog)
-    assert len(messages) == 1
-    assert "No valid breaklines found in model.g01.hdf" in messages[0]
-    assert "skipped 3 invalid breaklines" in messages[0]
-    assert "zero_length=1" in messages[0]
-    assert "single_point=1" in messages[0]
-    assert "other=1" in messages[0]
-    assert str(tmp_path) not in messages[0]
+    assert messages
+    assert any(str(geom_hdf) in message and "Geometry/2D Flow Area Break Lines" in message
+               for message in messages)
 
 
 def test_boundary_parse_errors_include_hdf_path_and_group(

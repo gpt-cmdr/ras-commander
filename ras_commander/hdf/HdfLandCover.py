@@ -509,6 +509,8 @@ class HdfLandCover:
         Returns:
             GeoDataFrame with columns: region_id, Name, 2D_Area_Name, geometry
 
+        Read errors and malformed present polygon layers are logged and raised.
+
         Example:
             >>> regions = HdfLandCover.get_mannings_region_polygons("01")
         """
@@ -524,30 +526,31 @@ class HdfLandCover:
 
                 lc_group = hdf_file[lc_path]
 
-                if ("Polygon Info" not in lc_group or
-                    "Attributes" not in lc_group or
-                    "Polygon Points" not in lc_group):
-                    logger.debug(f"Missing polygon datasets in {lc_path}")
+                polygon_datasets = ("Polygon Info", "Attributes", "Polygon Points")
+                if "Polygon Info" not in lc_group and "Polygon Points" not in lc_group:
                     return gpd.GeoDataFrame()
+                missing = [name for name in polygon_datasets if name not in lc_group]
+                if missing:
+                    raise ValueError(f"Missing polygon datasets: {missing}")
 
                 attrs = lc_group["Attributes"][()]
-                names = np.vectorize(HdfUtils.convert_ras_string)(attrs["Name"])
+                names = [HdfUtils.convert_ras_string(name) for name in attrs["Name"]]
 
                 area_names = None
                 if "2D Area Name" in attrs.dtype.names:
-                    area_names = np.vectorize(HdfUtils.convert_ras_string)(attrs["2D Area Name"])
+                    area_names = [HdfUtils.convert_ras_string(name) for name in attrs["2D Area Name"]]
 
                 geoms = []
-                missing_parts_regions = []
                 for pnt_start, pnt_cnt, part_start, part_cnt in lc_group["Polygon Info"][()]:
                     points = HdfBase.plan_vertex_ordinates(
                         lc_group["Polygon Points"][()][pnt_start:pnt_start + pnt_cnt]
                     )
+                    if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid region polygon point range")
                     if part_cnt == 1:
                         geoms.append(Polygon(points))
                     elif "Polygon Parts" not in lc_group:
-                        missing_parts_regions.append(len(geoms))
-                        geoms.append(Polygon(points))
+                        raise ValueError("Multipart Manning's region is missing Polygon Parts")
                     else:
                         parts = lc_group["Polygon Parts"][()][part_start:part_start + part_cnt]
                         rings = [points[ps:ps + pc] for ps, pc in parts]
@@ -556,17 +559,6 @@ class HdfLandCover:
                         else:
                             # First ring is exterior, rest are holes
                             geoms.append(Polygon(rings[0], rings[1:]))
-
-                if missing_parts_regions:
-                    logger.warning(
-                        "'Polygon Parts' dataset missing for "
-                        f"{len(missing_parts_regions)} multi-part Manning's n "
-                        "calibration polygon(s); using raw point order as polygon shells"
-                    )
-                    logger.debug(
-                        "Manning's n calibration polygon indices missing parts: "
-                        f"{missing_parts_regions}"
-                    )
 
                 data = {
                     "region_id": range(len(names)),
@@ -583,8 +575,8 @@ class HdfLandCover:
                 )
 
         except Exception as e:
-            logger.error(f"Error reading Manning's region polygons from {hdf_path}: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error reading Manning's region polygons from {hdf_path} (Geometry/Land Cover (Manning's n)): {e}")
+            raise
 
     @staticmethod
     @log_call

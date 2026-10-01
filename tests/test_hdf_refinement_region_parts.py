@@ -10,7 +10,10 @@ from ras_commander import HdfBndry
 
 
 @pytest.mark.parametrize("global_offsets", [False, True])
-def test_refinement_holes_islands_and_disjoint_shells(tmp_path, global_offsets):
+@pytest.mark.parametrize("ordinate_count", [2, 4])
+def test_refinement_holes_islands_and_disjoint_shells(
+    tmp_path, global_offsets, ordinate_count
+):
     path = tmp_path / "regions.g01.hdf"
     prefix = list(box(-10, -10, -9, -9).exterior.coords)
     rings = [
@@ -25,7 +28,10 @@ def test_refinement_holes_islands_and_disjoint_shells(tmp_path, global_offsets):
         group["Attributes"] = np.array(
             [(b"simple",), (b"multipart",)], dtype=[("Name", "S20")]
         )
-        group["Polygon Points"] = prefix + [p for ring in rings for p in ring]
+        points = np.asarray(prefix + [p for ring in rings for p in ring])
+        if ordinate_count == 4:
+            points = np.column_stack((points, np.full((len(points), 2), np.nan)))
+        group["Polygon Points"] = points
         group["Polygon Info"] = [[0, 5, 0, 1], [5, 20, 1, 4]]
         # Native collections use global offsets; historical readers also
         # support offsets relative to each feature's point slice.

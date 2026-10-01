@@ -686,6 +686,7 @@ class HdfBase:
             ) from e
 
     @staticmethod
+    @log_call
     def plan_vertex_ordinates(points: "np.ndarray") -> "np.ndarray":
         """Reduce an HDF vertex array to ordinates Shapely accepts.
 
@@ -796,6 +797,8 @@ class HdfBase:
                     points = HdfBase.plan_vertex_ordinates(
                         polyline_points[pnt_start : pnt_start + pnt_cnt]
                     )
+                    if pnt_start < 0 or pnt_cnt < 2 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid polyline point range")
                     if part_cnt == 1:
                         geoms.append(LineString(points))
                     else:
