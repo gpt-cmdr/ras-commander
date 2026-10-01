@@ -14,6 +14,8 @@ STATIONS = {
     "normal_left_only": "760438",
     "normal_right_only": "727241",
     "multiple_blocks": "753090",
+    "normal_left_zero_placeholder": "633500",
+    "normal_right_zero_placeholder": "54210",
 }
 
 
@@ -111,6 +113,36 @@ def test_normal_station_elevation_edits_retain_blank_slots(tmp_path, name):
     pd.testing.assert_frame_equal(result.isna(), before_blanks)
     assert (actual_flag, actual_permanent) == (flag, permanent)
     assert b"nan" not in path.read_bytes().lower()
+
+
+@pytest.mark.parametrize(
+    "name", ["normal_left_zero_placeholder", "normal_right_zero_placeholder"]
+)
+def test_normal_zero_placeholders_are_retained_on_edits(tmp_path, name):
+    path = _copy_fixture(tmp_path, name)
+    frame, flag, permanent = _get(path, STATIONS[name])
+    assert frame.loc[0, "left_station"] == 0
+    assert frame.loc[1, "right_station"] == 0
+    defined = frame.elevation.notna()
+    frame.loc[defined, "elevation"] += 1
+    _set(path, STATIONS[name], frame, flag, permanent)
+    result, _, _ = _get(path, STATIONS[name])
+    pd.testing.assert_frame_equal(result, frame)
+    assert result.loc[0, "left_station"] == result.loc[1, "right_station"] == 0
+
+
+@pytest.mark.parametrize(
+    "name", ["normal_left_zero_placeholder", "normal_right_zero_placeholder"]
+)
+def test_zero_placeholder_partial_activation_pair_rejected(tmp_path, name):
+    path = _copy_fixture(tmp_path, name)
+    before = path.read_bytes()
+    frame, flag, permanent = _get(path, STATIONS[name])
+    frame.loc[frame.elevation.notna(), "elevation"] = np.nan
+    with pytest.raises(ValueError):
+        _set(path, STATIONS[name], frame, flag, permanent)
+    assert path.read_bytes() == before
+    assert not list(tmp_path.glob("*.bak*"))
 
 
 @pytest.mark.parametrize("new_count", [0, 1, 4, 8])

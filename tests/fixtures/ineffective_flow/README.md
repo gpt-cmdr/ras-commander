@@ -12,3 +12,5 @@ Source SHA-256: `5fa47b784757e06484694cd373b9f44c6b8f59f2b7a46d366ef179ecf5a5575
 - `normal_both.g01`: source record lines 9161-9164; native XS `Type RM Length L Ch R = 1 ,758717  ,2540,2540,2540`.
 - `multiple_blocks.g01`: source record lines 9413-9416; native XS `Type RM Length L Ch R = 1 ,753090  ,4469,4469,4469`.
 - `normal_right_only.g01`: source record lines 10546-10549; native XS `Type RM Length L Ch R = 1 ,727241  ,2566,2566,2566`.
+- `normal_left_zero_placeholder.g01`: source record lines 13939-13942; native XS `Type RM Length L Ch R = 1 ,633500  ,2792,2792,2792`.
+- `normal_right_zero_placeholder.g01`: source record lines 38439-38442; native XS `Type RM Length L Ch R = 1 ,54210   ,3221,3221,3221`.

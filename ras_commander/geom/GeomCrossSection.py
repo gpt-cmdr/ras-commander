@@ -3806,12 +3806,11 @@ class GeomCrossSection:
         if fmt_flag != 0 or values.shape != (2, 3):
             raise ValueError("Blank ineffective flow slots require two normal L/R rows")
         for row_number, row in enumerate(values):
-            if np.isnan(row).all():
-                continue  # An undefined side retains its native three blank slots.
             outer_column = 0 if row_number == 0 else 1
-            if (
-                not np.isnan(row[outer_column])
-                or np.isnan(row[[1 - outer_column, 2]]).any()
+            outer_value = row[outer_column]
+            missing_pair = np.isnan(row[[1 - outer_column, 2]])
+            if (not np.isnan(outer_value) and outer_value != 0) or (
+                missing_pair.any() and not missing_pair.all()
             ):
                 raise ValueError(
                     "Normal ineffective flow needs a station and elevation per side"
@@ -3901,8 +3900,10 @@ class GeomCrossSection:
         normal format (flag 0) retains two rows in left/right order: the left
         activation station is ``right_station`` in row 0, and the right
         activation station is ``left_station`` in row 1. The unbounded outer
-        endpoint is NaN, and an undefined side has three NaNs. These blanks
-        must be retained when writing; no cross-section extents are inferred.
+        endpoint is NaN or a native zero placeholder. An undefined side has
+        NaN activation station and elevation, retaining its outer placeholder.
+        Blanks and zero placeholders must be retained when writing; no
+        cross-section extents are inferred.
 
         Parameters:
             geom_file: Path to HEC-RAS geometry file.
