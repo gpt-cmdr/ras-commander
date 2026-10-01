@@ -344,6 +344,30 @@ utilities.
 
 - `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
 - `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
+
+When the existing automatic-repair loop removes perimeter vertices or applies
+Douglas–Peucker simplification, `generate()` writes the repaired perimeter through
+`GeomStorage.set_2d_flow_area_perimeter(create_backup=True)`, regenerates initial
+computation points, and runs `GeomPreprocessor.run_geometry_preprocessor()` with
+`geometry_only=True`, `force=True`, and `clear_geompre=True`. Supply an initialized
+`ras_object` with a plan referencing that geometry. Work on a disposable project
+copy: repair changes the geometry text and compiled HDF. The loop reloads the HDF,
+checks text/HDF consistency and feature containment, then retries within
+`max_iterations`. `recompile_via_rasexe` still controls the initial missing/stale
+HDF refresh; it is not required for this automatic repair handoff.
+
+`MeshResult.perimeter_repairs` contains one record per persisted repair: `reason`,
+`original_perimeter_hash`, `repaired_perimeter_hash`, `max_vertex_displacement`,
+`area_change`, and `backup_path`. SHA-256 hashes cover ordered closed XY rings as
+compact JSON floating-point pairs, using actual persisted coordinates after
+writer rounding. Displacement is the maximum vertex-to-opposite-boundary distance
+in both directions, in project length units; signed area change is repaired minus
+original polygon area in squared project units. CRS and units remain those of the
+project. Evidence is logged before preprocessing so failures remain traceable.
+Failed repair handoffs and retries raise `RuntimeError` chained to the original
+mesh repair reason, including iteration exhaustion. Ordinary failures before any
+repair retain the existing `MeshResult` behavior. These records describe geometry
+changes; they do not establish hydraulic acceptance.
 - `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations. A missing or broken land-cover link emits a non-fatal warning because HEC-RAS may still return success while populating every cell with the 2D area's scalar default.
 
 Before property-table generation, use

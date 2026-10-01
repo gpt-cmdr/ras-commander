@@ -87,6 +87,7 @@ class MeshResult:
     geom_text_path: str = ""
     geom_hdf_path: str = ""
     domain_containment: Optional[DomainContainmentResult] = None
+    perimeter_repairs: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:

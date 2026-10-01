@@ -62,6 +62,8 @@ Ported from G:\\GH\\RASDecomp\\headless_mesh\\mesh_fix.py and mesh_bc_fix.py.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import platform
@@ -1603,18 +1605,79 @@ def _reseed_after_perimeter_fix(
     hdf_path: Path,
     current_perim,
     cell_size: float,
-    fid: int,
-    mesh_name: str | None,
-    ns: dict,
+    mesh_name: str,
     hecras_dir=None,
-) -> "PointMs":
-    """Reject perimeter fixes that require text-to-HDF regeneration."""
-    raise RuntimeError(
-        "Perimeter repair would require regenerating the compiled geometry HDF "
-        f"from {text_path.name}. ras-commander cannot generate .g##.hdf from "
-        ".g## text with RasMapperLib; create or refresh the geometry HDF through "
-        "full HEC-RAS/Ras.exe behavior, then retry."
+    *,
+    ras_object=None,
+) -> dict[str, Any]:
+    """Persist a repaired perimeter and refresh its compiled HDF via Ras.exe.
+
+    Hashes cover the ordered closed XY ring serialized as compact JSON floats.
+    Displacement is the maximum of vertex-to-opposite-boundary distances in
+    both directions, in project length units. Area change is repaired minus
+    original polygon area, in squared project units. Metrics use the actual
+    written ring, including fixed-width writer rounding.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from .GeomStorage import GeomStorage
+
+    # Resolve the execution context before any destructive geometry write.
+    _find_plan_for_geometry(text_path, ras_object=ras_object)
+    original = _text_flow_area_perimeter(text_path, mesh_name)
+    if original is None:
+        raise ValueError(f"No authored perimeter for 2D flow area '{mesh_name}'")
+    coordinates = [
+        (float(current_perim.PointM(i).X), float(current_perim.PointM(i).Y))
+        for i in range(current_perim.Count)
+    ]
+    candidate = Polygon(coordinates)
+    if candidate.is_empty or not candidate.is_valid or candidate.area <= 0:
+        raise ValueError("Perimeter repair produced an invalid or empty polygon")
+    backup = GeomStorage.set_2d_flow_area_perimeter(
+        text_path,
+        flow_area_name=mesh_name,
+        geometry=candidate,
+        create_backup=True,
     )
+    repaired = _text_flow_area_perimeter(text_path, mesh_name)
+    if repaired is None:
+        raise RuntimeError("Written repaired perimeter could not be read back")
+    original_polygon = Polygon(original)
+    repaired_polygon = Polygon(repaired)
+
+    def ring_hash(polygon):
+        ring = [[float(x), float(y)] for x, y in polygon.exterior.coords]
+        return hashlib.sha256(
+            json.dumps(ring, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        ).hexdigest()
+
+    evidence = {
+        "original_perimeter_hash": ring_hash(original_polygon),
+        "repaired_perimeter_hash": ring_hash(repaired_polygon),
+        "max_vertex_displacement": max(
+            max(Point(xy).distance(repaired_polygon.boundary) for xy in original),
+            max(Point(xy).distance(original_polygon.boundary) for xy in repaired),
+        ),
+        "area_change": repaired_polygon.area - original_polygon.area,
+        "backup_path": str(backup),
+    }
+    # Log evidence before execution so a failed handoff remains traceable.
+    logger.info("[%s] Persisted perimeter repair: %s", mesh_name, evidence)
+    seeds = GeomMesh.generate_computation_points(
+        text_path,
+        mesh_name=mesh_name,
+        cell_size=cell_size,
+        hecras_dir=hecras_dir,
+        ras_object=ras_object,
+    )
+    if seeds.status != "success" or seeds.cell_count <= 0:
+        raise RuntimeError(
+            f"Repaired perimeter seed generation failed: {seeds.error_message}"
+        )
+    _recompile_geometry_hdf_via_rasexe(text_path, hdf_path, ras_object=ras_object)
+    _ensure_hdf(text_path, require_current=True, mesh_name=mesh_name)
+    return evidence
 
 
 def _set_point_generation_data(
@@ -4740,7 +4803,18 @@ class GeomMesh:
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
-            the compiled geometry HDF path on success.
+            the compiled geometry HDF path on success. ``perimeter_repairs``
+            records each persisted automatic repair's reason, ordered-ring
+            SHA-256 hashes, maximum vertex-to-opposite-boundary displacement
+            (both directions, project length units), signed area change
+            (squared project units), and backup path. Coordinates retain the
+            project's CRS. Repair mutates text and HDF, with a text backup;
+            supply an initialized project with a referencing plan.
+
+        Raises:
+            RuntimeError: A perimeter repair handoff or subsequent mesh retry
+                fails, chained to the original mesh repair reason. Retries
+                share the existing ``max_iterations`` bound.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
 
@@ -4770,6 +4844,7 @@ class GeomMesh:
             if bl_spacing_far is None:
                 bl_spacing_far = legacy_bl_spacing
 
+        repair_reason = None
         try:
             text_path = geom_path
 
@@ -4930,6 +5005,44 @@ class GeomMesh:
             current_perim = perim
             current_seeds_pm = seeds_pm
 
+            def apply_perimeter_repair(candidate, reason):
+                nonlocal geom, d2fa, fid, breaklines, current_perim, current_seeds_pm
+                nonlocal repair_reason
+                if repair_reason is None:
+                    repair_reason = RuntimeError(reason)
+                # The loop counts mesh attempts, including the post-repair retry.
+                if result.iterations >= max_iterations:
+                    raise RuntimeError(
+                        f"Max iterations ({max_iterations}) reached before repair retry"
+                    )
+                evidence = _reseed_after_perimeter_fix(
+                    text_path,
+                    hdf_path,
+                    candidate,
+                    cell_size,
+                    mesh_name,
+                    hecras_dir,
+                    ras_object=ras_object,
+                )
+                evidence["reason"] = reason
+                result.perimeter_repairs.append(evidence)
+                containment = _audit_domain_containment_hdf(hdf_path, mesh_name, float(cell_size))
+                result.domain_containment = containment
+                if not containment:
+                    raise RuntimeError("Repaired perimeter failed mesh-feature containment")
+                # Every object loaded from the old HDF must be replaced before
+                # computing or saving another mesh; candidate-only retries are stale.
+                geom = ns["RASGeometry"](str(hdf_path))
+                d2fa = geom.D2FlowArea
+                fid = d2fa.GetFeatureByName(mesh_name)
+                if fid < 0:
+                    raise RuntimeError(f"Recompiled HDF is missing 2D flow area '{mesh_name}'")
+                current_perim = d2fa.Geometry.MeshPerimeters.Polygon(fid)
+                if current_perim is None or current_perim.Count < 3:
+                    raise RuntimeError("Recompiled HDF has an empty repaired perimeter")
+                breaklines = _build_breaklines(d2fa, ns)
+                current_seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+
             # Tier 0: Pre-simplify short perimeter segments
             pre_n = current_perim.Count
             repaired_perim = _remove_short_perimeter_segments(
@@ -5013,6 +5126,8 @@ class GeomMesh:
                             "Mesh reported Complete but RasMapper did not expose "
                             "NonVirtualCellCount."
                         )
+                        if repair_reason is not None:
+                            raise RuntimeError(result.error_message)
                         return result
 
                     # Fast path: geom.Save() → h5py bulk read
@@ -5178,16 +5293,15 @@ class GeomMesh:
                 if state_val in (face_perim_val, perim_poly_val):
                     bad_indices = _autofix_perimeter(current_perim, ns)
                     if bad_indices:
-                        current_perim = _remove_perimeter_points(
+                        if repair_reason is None:
+                            repair_reason = RuntimeError(f"{state_name}: Perim:remove")
+                        candidate = _remove_perimeter_points(
                             current_perim, bad_indices, ns
                         )
                         fix_msg = f"Perim:remove(-{len(bad_indices)}pts)"
                         result.fixes_applied.append(fix_msg)
                         logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                        current_seeds_pm = _reseed_after_perimeter_fix(
-                            text_path, hdf_path, current_perim,
-                            cell_size, fid, mesh_name, ns, hecras_dir,
-                        )
+                        apply_perimeter_repair(candidate, f"{state_name}: {fix_msg}")
                         continue
 
                 # ── Ratio escalation (when specific fix didn't apply) ────
@@ -5204,29 +5318,35 @@ class GeomMesh:
                 tol = cs * min(0.10 * (tier4_count + 1), 0.50)
                 buf_mult = 3.0 + float(tier4_count)
                 tier4_count += 1
-                try:
-                    error_pts = _find_error_locations(mesh, cs, ratio)
-                    if error_pts:
-                        current_perim = _localized_douglas_peucker(
-                            current_perim, error_pts, cs, tol, ns, buf_mult
-                        )
-                        fix_msg = f"DP:local({len(error_pts)}zones)"
-                        result.fixes_applied.append(fix_msg)
-                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                    else:
-                        current_perim = _douglas_peucker_polygon(
-                            current_perim, tol, ns
-                        )
-                        fix_msg = f"DP:global(tol={tol:.1f})"
-                        result.fixes_applied.append(fix_msg)
-                        logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
-                    current_seeds_pm = _reseed_after_perimeter_fix(
-                        text_path, hdf_path, current_perim,
-                        cell_size, fid, mesh_name, ns, hecras_dir,
+                if repair_reason is None:
+                    repair_reason = RuntimeError(f"{state_name}: DP(tol={tol:.1f})")
+                error_pts = _find_error_locations(mesh, cs, ratio)
+                if error_pts:
+                    candidate = _localized_douglas_peucker(
+                        current_perim, error_pts, cs, tol, ns, buf_mult
                     )
-                except Exception as exc:
-                    result.error_message = f"Douglas-Peucker failed: {exc}"
-                    break
+                    fix_msg = f"DP:local({len(error_pts)}zones)"
+                    result.fixes_applied.append(fix_msg)
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                else:
+                    candidate = _douglas_peucker_polygon(
+                        current_perim, tol, ns
+                    )
+                    fix_msg = f"DP:global(tol={tol:.1f})"
+                    result.fixes_applied.append(fix_msg)
+                    logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
+                # No-op simplifications still consume the existing bound,
+                # but do not invoke Ras.exe or overwrite the perimeter.
+                candidate_coords = [
+                    (float(candidate.PointM(i).X), float(candidate.PointM(i).Y))
+                    for i in range(candidate.Count)
+                ]
+                current_coords = [
+                    (float(current_perim.PointM(i).X), float(current_perim.PointM(i).Y))
+                    for i in range(current_perim.Count)
+                ]
+                if candidate_coords != current_coords:
+                    apply_perimeter_repair(candidate, f"{state_name}: {fix_msg}")
             else:
                 result.error_message = (
                     f"Max iterations ({max_iterations}) reached"
@@ -5234,9 +5354,17 @@ class GeomMesh:
 
             result.status = "error"
             result.mesh_state = state_name
+            if repair_reason is not None:
+                raise RuntimeError(
+                    result.error_message or f"Mesh retry failed: {state_name}"
+                )
             return result
 
         except Exception as exc:
+            if repair_reason is not None:
+                raise RuntimeError(
+                    f"Mesh repair/retry failed after {repair_reason}: {exc}"
+                ) from repair_reason
             result.status = "exception"
             result.error_message = str(exc)
             logger.error(f"[{result.mesh_name}] Exception: {exc}")

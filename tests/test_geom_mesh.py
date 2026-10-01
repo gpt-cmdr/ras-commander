@@ -807,7 +807,7 @@ class TestPatchTextSeeds:
 
 
 class TestReseedAfterPerimeterFix:
-    """Test perimeter mutation refuses unavailable text-to-HDF regeneration."""
+    """Test perimeter repair requires an execution context before mutation."""
 
     def test_requires_external_geometry_hdf_regeneration(self, monkeypatch, tmp_path):
         geom_text_path = tmp_path / "test.g01"
@@ -818,7 +818,7 @@ class TestReseedAfterPerimeterFix:
             lambda *args, **kwargs: pytest.fail("perimeter text was patched"),
         )
 
-        with pytest.raises(RuntimeError, match="cannot generate .g##.hdf"):
+        with pytest.raises(RuntimeError, match="initialized RasPrj"):
             _reseed_after_perimeter_fix(
                 geom_text_path,
                 geom_text_path.with_suffix(".g01.hdf"),
@@ -826,9 +826,7 @@ class TestReseedAfterPerimeterFix:
                     [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
                 ),
                 100.0,
-                1,
                 "SecondaryArea",
-                {"RASGeometry": lambda path: MagicMock()},
             )
 
 
