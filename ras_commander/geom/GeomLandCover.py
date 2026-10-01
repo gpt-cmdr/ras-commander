@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -657,8 +658,7 @@ class GeomLandCover:
                 break
 
         # Write the updated file
-        with open(geom_file_path, 'w', encoding='utf-8') as f:
-            f.writelines(updated_lines)
+        _write_ras_text(geom_file_path, "".join(updated_lines), encoding="utf-8")
 
         return True
 
@@ -743,8 +743,7 @@ class GeomLandCover:
                 updated_lines[i] = f"LCMann Time={current_time}\n"
                 break
 
-        with open(geom_file_path, 'w', encoding='utf-8') as f:
-            f.writelines(updated_lines)
+        _write_ras_text(geom_file_path, "".join(updated_lines), encoding="utf-8")
 
         return True
 
@@ -965,8 +964,7 @@ class GeomLandCover:
                 break
 
         # Write the updated file
-        with open(geom_file_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(geom_file_path, "".join(lines), encoding="utf-8")
 
         return True
 

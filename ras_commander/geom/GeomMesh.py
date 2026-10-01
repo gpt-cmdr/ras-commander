@@ -72,6 +72,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 from uuid import uuid4
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from .._gdal_runtime import (
     configure_hecras_gdal_runtime,
@@ -1110,7 +1111,7 @@ def _set_breakline_spacing_impl(
     backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
     shutil.copy2(geom_text_path, backup)
     tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
-    tmp.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(tmp, "".join(modified), encoding="utf-8")
     tmp.replace(geom_text_path)
     target = (
         f"FID {breakline_fid}" if breakline_fid is not None
@@ -1183,7 +1184,7 @@ def _set_breakline_name_impl(
     backup = geom_text_path.with_suffix(geom_text_path.suffix + ".bak")
     shutil.copy2(geom_text_path, backup)
     tmp = geom_text_path.with_suffix(geom_text_path.suffix + ".tmp")
-    tmp.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(tmp, "".join(modified), encoding="utf-8")
     tmp.replace(geom_text_path)
     logger.info(f"Renamed breakline → '{new_name}' in {geom_text_path.name}")
     return backup
@@ -1593,7 +1594,7 @@ def _patch_text_perimeter(
         logger.warning(f"Storage Area Surface Line block not found in {geom_text_path.name}")
         return
 
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
     logger.debug(f"Patched perimeter → {n} vertices in {geom_text_path.name}")
 
 
@@ -1640,7 +1641,7 @@ def _set_point_generation_data(
                 modified.append(line)
         else:
             modified.append(line)
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
 
 
 def _looks_like_storage_area_seed_line(line: str) -> bool:
@@ -1751,7 +1752,7 @@ def _patch_text_seeds(
             f"Storage Area 2D Points block not found in geometry text: {geom_text_path}"
         )
 
-    geom_text_path.write_text("".join(modified), encoding="utf-8")
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
     logger.debug(f"Text seeds patched → {n} points in {geom_text_path.name}")
 
 

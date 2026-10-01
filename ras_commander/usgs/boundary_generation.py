@@ -17,6 +17,7 @@ from typing import Union, List, Optional, Any
 import numpy as np
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 
@@ -405,8 +406,9 @@ class BoundaryGenerator:
 
         # Write updated file
         try:
-            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(new_lines)
+            _write_ras_text(
+                unsteady_path, "".join(new_lines), encoding="utf-8", errors="replace"
+            )
             logger.info(f"Successfully updated {unsteady_path}")
         except PermissionError:
             logger.error(f"Permission denied writing to: {unsteady_path}")

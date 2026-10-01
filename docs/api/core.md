@@ -181,7 +181,9 @@ The operation is generic across recognized 1D and 2D boundary types; it does
 not encode a protected-type policy. It rejects direct paths, partial or
 index-only selectors, ambiguous encodings/types, reparse points, stale file or
 block evidence, and non-local apply targets. Apply performs one verified byte
-splice and atomic replacement without creating a `.bak` file. Any mutation
+splice, CRLF newline serialization, and atomic replacement without creating a
+`.bak` file. Retained content and encoding are preserved apart from newline
+normalization; source selectors remain bound to the original bytes. Any mutation
 invalidates the stage snapshot, so another edit requires a fresh stage and
 inventory. If an exception exposes `mutation_applied=True`, the replacement
 committed before a later verification/refresh failure and the stage must be

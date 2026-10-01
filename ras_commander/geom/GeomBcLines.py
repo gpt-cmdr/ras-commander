@@ -55,6 +55,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
@@ -436,14 +437,16 @@ class GeomBcLines:
         ) as temporary:
             staging = Path(temporary)
             staged_geom = staging / geom_path.name
-            staged_geom.write_bytes("".join(file_lines).encode("utf-8"))
+            _write_ras_text(staged_geom, "".join(file_lines), encoding="utf-8")
             payloads = []
             writer_project = RasPrj()
             for index, (name, bc_type, _, spec) in enumerate(prepared):
                 # Isolate type-writer scans from unrelated boundaries and trailers.
                 forcing = staging / f"forcing{index}.u01"
-                forcing.write_bytes(
-                    f"Flow Title=BC replacement{newline}Program Version=6.60{newline}Use Restart=0{newline}".encode()
+                _write_ras_text(
+                    forcing,
+                    f"Flow Title=BC replacement{newline}Program Version=6.60{newline}Use Restart=0{newline}",
+                    encoding="utf-8",
                 )
                 selector = {
                     "area_2d": area_name,
@@ -532,7 +535,7 @@ class GeomBcLines:
                         "Staged boundary references do not match replacement geometry"
                     )
                 staged[path] = staging / path.name
-                staged[path].write_bytes("".join(content).encode("utf-8"))
+                _write_ras_text(staged[path], "".join(content), encoding="utf-8")
             # Reject concurrent changes before backups or publishing any content.
             if any(path.read_bytes() != data for path, data in originals.items()):
                 raise ValueError("Input files changed during BC replacement")

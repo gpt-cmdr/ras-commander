@@ -23,6 +23,8 @@ from typing import Any
 
 from ras_commander.LoggingConfig import get_logger, log_call
 
+from ..._ras_text import _write_ras_text
+
 logger = get_logger(__name__)
 
 __all__ = ["cibolo_output_is_reusable", "organize_cibolo_delivery"]
@@ -272,7 +274,7 @@ def _replace_exact(path: Path, old: str, new: str, label: str) -> int:
     old_count = text.count(old)
     new_count = text.count(new)
     if old_count == 1 and new_count == 0:
-        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        _write_ras_text(path, text.replace(old, new, 1), encoding="utf-8")
         return 1
     if old_count == 0 and new_count == 1:
         return 0

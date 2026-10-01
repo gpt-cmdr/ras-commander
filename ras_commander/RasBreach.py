@@ -61,6 +61,7 @@ from dataclasses import dataclass
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPrj import ras, read_file_with_fallback_encoding
+from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
@@ -796,8 +797,7 @@ class RasBreach:
                 output = "\r\n".join(lines)
 
             # Use open() with newline='' to preserve CRLF
-            with open(plan_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(output)
+            _write_ras_text(plan_path, output, encoding="utf-8")
 
             # Validate CRLF preservation
             if not RasBreach._validate_crlf(plan_path):
@@ -1264,8 +1264,7 @@ class RasBreach:
                 output = "\r\n".join(lines)
 
             # Use open() with newline='' to preserve CRLF
-            with open(plan_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(output)
+            _write_ras_text(plan_path, output, encoding="utf-8")
 
             # Validate CRLF preservation
             if not RasBreach._validate_crlf(plan_path):

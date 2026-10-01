@@ -62,6 +62,7 @@ import pandas as pd
 import numpy as np
 import math
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -2883,8 +2884,9 @@ class GeomCrossSection:
                             )
 
                     # Write modified file
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
+                    _write_ras_text(
+                        geom_file, "".join(modified_lines), encoding="utf-8"
+                    )
 
                     logger.debug(
                         f"Updated station/elevation for {river}/{reach}/RS {rs}: "
@@ -4022,8 +4024,9 @@ class GeomCrossSection:
                                 modified_lines[k + 1] = perm_str
                             break
 
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
+                    _write_ras_text(
+                        geom_file, "".join(modified_lines), encoding="utf-8"
+                    )
 
                     logger.info(
                         f"Updated ineffective flow for {river}/{reach}/RS {rs}: "
@@ -4134,8 +4137,9 @@ class GeomCrossSection:
                         + lines[old_data_end:]
                     )
 
-                    with open(geom_file, 'w', encoding='utf-8') as f:
-                        f.writelines(modified_lines)
+                    _write_ras_text(
+                        geom_file, "".join(modified_lines), encoding="utf-8"
+                    )
 
                     logger.info(
                         f"Updated Manning's n for {river}/{reach}/RS {rs}: "
@@ -4780,8 +4784,7 @@ class GeomCrossSection:
                             )
 
             # Write modified file
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
+            _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
             logger.info(
                 f"Updated HTAB params for {river}/{reach}/RS {rs}: "
@@ -5526,8 +5529,7 @@ class GeomCrossSection:
         # Step 6: Write all modifications to geometry file
         if modifications:
             try:
-                with open(geom_file, 'w', encoding='utf-8') as f:
-                    f.writelines(modified_lines)
+                _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
                 logger.debug(f"Wrote {len(modifications)} HTAB modifications to {geom_file.name}")
 

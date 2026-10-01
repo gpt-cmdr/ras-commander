@@ -40,6 +40,7 @@ import logging
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from .._spatial_extent import _normalize_extent_bounds
 
@@ -1031,8 +1032,9 @@ class PrecipAorc:
                         'HDF Write Time Slices=-1',
                         plan_content
                     )
-                    with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
-                        f.write(plan_content)
+                    _write_ras_text(
+                        plan_path, plan_content, encoding="utf-8", errors="replace"
+                    )
                     logger.debug(f"Enabled HDF time series output for plan {new_plan}")
 
                 result['status'] = 'success'

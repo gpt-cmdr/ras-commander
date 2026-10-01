@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path, PureWindowsPath
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
+from .._ras_text import _write_ras_text, _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from ..RasUtils import RasUtils
@@ -150,7 +151,7 @@ class GeomProjection:
             lines,
             transformer,
         )
-        out_path.write_text("".join(transformed_lines), encoding="utf-8")
+        _write_ras_text(out_path, "".join(transformed_lines), encoding="utf-8")
 
         qa = GeomProjection._qa_geometry_lines(transformed_lines)
         result = {
@@ -755,7 +756,8 @@ class GeomProjection:
         if not filename.lower().endswith(".prj"):
             filename = f"{filename}.prj"
         projection_path = projection_dir / filename
-        projection_path.write_text(
+        _write_ras_text(
+            projection_path,
             destination_crs.to_wkt(version="WKT1_ESRI"),
             encoding="utf-8",
         )
@@ -784,7 +786,7 @@ class GeomProjection:
             )
             projection_elem.set("Filename", new_ref)
             projection_elem.text = None
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
             updates.append(
                 {
                     "rasmap_path": str(rasmap_path),

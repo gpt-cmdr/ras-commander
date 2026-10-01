@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import pandas as pd
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -1199,8 +1200,7 @@ class GeomCulvert:
 
             modified_lines = lines[:replace_start] + new_lines + lines[replace_end:]
 
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(modified_lines)
+            _write_ras_text(geom_file, "".join(modified_lines), encoding="utf-8")
 
             result = {
                 'culverts_written': len(normalized_records),

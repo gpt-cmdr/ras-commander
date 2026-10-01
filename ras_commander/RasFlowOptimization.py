@@ -19,6 +19,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from ._ras_text import _write_ras_text
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
@@ -833,7 +834,7 @@ class RasFlowOptimization:
 
     @staticmethod
     def _write_text_lines(path: Path, lines: List[str]) -> None:
-        path.write_text("".join(lines), encoding="utf-8")
+        _write_ras_text(path, "".join(lines), encoding="utf-8")
 
     @staticmethod
     def _read_flow_ratio_values(

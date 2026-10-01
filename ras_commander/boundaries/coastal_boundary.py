@@ -34,6 +34,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, timezone
 import warnings
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger, log_call
 
 logger = get_logger(__name__)
@@ -766,9 +767,11 @@ class CoastalBoundary:
             # Replace existing lines (including preceding Interval=)
             lines[replace_start:data_end] = stage_block.splitlines()
 
-        # Preserve the original LF/CRLF style and terminal-newline state.
+        # Preserve terminal-newline state; the shared writer enforces CRLF.
         trailing_newline = newline if content.endswith('\n') else ''
-        unsteady_file.write_bytes((newline.join(lines) + trailing_newline).encode(encoding))
+        _write_ras_text(
+            unsteady_file, newline.join(lines) + trailing_newline, encoding=encoding
+        )
 
         logger.info(
             f"Wrote stage BC for '{bc_location}' to {unsteady_file.name}: "

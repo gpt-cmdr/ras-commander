@@ -308,7 +308,11 @@ assert result.state == "applied"
 Apply is supported only on a fixed local volume. It verifies the stage
 manifest, full staged population, file identity, source digest, block digest,
 type, raw location, and exact byte range before atomic replacement. No `.bak`
-file is created; the immutable source project is the recovery copy. A successful
+file is created; the immutable source project is the recovery copy. The output
+uses CRLF on every platform; retained content and encoding are preserved apart
+from newline normalization. Source and removed-block digests describe the
+original bytes, while the result digest and newline describe the serialized
+output. A successful
 edit invalidates the inventory, so make another fresh stage before another
 mutation. Do not use a truth test such as `if result:`; inspect `result.state`.
 

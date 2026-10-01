@@ -20,6 +20,7 @@ from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
@@ -1293,8 +1294,7 @@ class GeomReferenceFeatures:
         insert_lines = [block_line + line_ending for block_line in new_blocks]
         file_lines[insert_idx:insert_idx] = insert_lines
 
-        with open(geom_file, "w", encoding="utf-8", newline="") as f:
-            f.writelines(file_lines)
+        _write_ras_text(geom_file, "".join(file_lines), encoding="utf-8")
 
         logger.debug(
             f"Inserted {len(points)} reference point(s) into {geom_file.name} "

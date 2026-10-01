@@ -37,6 +37,7 @@ import warnings
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
+from .._ras_text import _write_ras_text
 from ..ComputeResults import GeometryPreprocessResult
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -222,7 +223,7 @@ class GeomPreprocessor:
                 GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
 
             original_plan_text = (
-                plan_path.read_text(encoding="utf-8", errors="ignore")
+                plan_path.read_bytes()
                 if restore_plan_settings
                 else None
             )
@@ -542,7 +543,7 @@ class GeomPreprocessor:
                     replacement = f"{prefix}{key}= {value} \n"
                     break
             updated.append(replacement if replacement is not None else line)
-        plan_path.write_text("".join(updated), encoding="utf-8")
+        _write_ras_text(plan_path, "".join(updated), encoding="utf-8")
 
     @staticmethod
     def _restore_plan_preprocessor_settings(plan_path: Path, settings: dict) -> None:
@@ -562,13 +563,13 @@ class GeomPreprocessor:
                     replacement = f"{prefix}{key}= {value}\n"
                     break
             restored.append(replacement if replacement is not None else line)
-        plan_path.write_text("".join(restored), encoding="utf-8")
+        _write_ras_text(plan_path, "".join(restored), encoding="utf-8")
 
     @staticmethod
-    def _restore_plan_file(plan_path: Path, original_text: str) -> None:
+    def _restore_plan_file(plan_path: Path, original_text: bytes) -> None:
         """Restore the plan file exactly after temporary validation edits."""
         try:
-            plan_path.write_text(original_text, encoding="utf-8")
+            plan_path.write_bytes(original_text)
         except OSError as exc:
             logger.warning(f"Could not restore plan file {plan_path}: {exc}")
 

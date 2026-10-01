@@ -89,6 +89,7 @@ import logging
 import re
 from .LoggingConfig import get_logger
 from .Decorators import log_call
+from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
@@ -351,14 +352,9 @@ class RasPlan:
             lines = handle.readlines()
 
         updated_lines = RasPlan._replace_reference_in_lines(lines, key, value)
-        with open(
-            plan_file_path,
-            'w',
-            encoding='utf-8',
-            errors='replace',
-            newline='',
-        ) as handle:
-            handle.writelines(updated_lines)
+        _write_ras_text(
+            plan_file_path, "".join(updated_lines), encoding="utf-8", errors="replace"
+        )
 
         with open(
             plan_file_path,
@@ -1476,8 +1472,9 @@ class RasPlan:
                         lines.append(f"{flag}= {-1 if value else 0}\n")
                         updated_lines += 1
 
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger = get_logger(__name__)
             logger.info(
@@ -1561,8 +1558,9 @@ class RasPlan:
                         if line.strip().startswith(key):
                             lines[i] = f"{key}={value.upper()}\n"
 
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger = logging.getLogger(__name__)
             logger.info("Updated intervals in plan file: %s", Path(plan_file_path).name)
@@ -1792,8 +1790,9 @@ class RasPlan:
                 new_lines = lines[:insertion_idx] + description_block + lines[insertion_idx:]
             
             # Write the modified content back to the file
-            with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(new_lines)
+            _write_ras_text(
+                plan_path, "".join(new_lines), encoding="utf-8", errors="replace"
+            )
             
             # Validate the result (optional debug check)
             if __debug__:  # Only in debug mode
@@ -1968,8 +1967,8 @@ class RasPlan:
                 raise ValueError(f"Plan file not found for plan number: {plan_number_or_path!r}")
 
         try:
-            # Plan files are line-oriented text, but a targeted update must not
-            # normalize newline bytes or re-encode unrelated content.
+            # Keep unrelated native bytes intact; only newline serialization
+            # changes when the validated record is written with CRLF.
             original = Path(plan_file_path).read_bytes()
             lines = original.splitlines(keepends=True)
 
@@ -2033,7 +2032,9 @@ class RasPlan:
                 )
 
             # Write only after the complete target record has been validated.
-            Path(plan_file_path).write_bytes(b"".join(lines))
+            _write_ras_text(
+                plan_file_path, b"".join(lines).decode("latin-1"), encoding="latin-1"
+            )
 
             logger.info("Updated simulation date in plan file: %s", plan_file_path.name)
             logger.debug("Updated simulation date in plan file path: %s", plan_file_path)
@@ -2183,8 +2184,9 @@ class RasPlan:
         insert = [f"Sediment Output Variables={v}\n" for v in final_vars]
         new_lines[level_idx + 1:level_idx + 1] = insert
 
-        with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-            file.writelines(new_lines)
+        _write_ras_text(
+            plan_file_path, "".join(new_lines), encoding="utf-8", errors="replace"
+        )
         logger.info(f"Set {len(final_vars)} sediment output variable(s) in {plan_file_path}")
 
         if ras_object:
@@ -2290,8 +2292,9 @@ class RasPlan:
                     lines.insert(0, f"Short Identifier={new_shortid}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info("Updated Short Identifier in plan file to: %s", new_shortid)
             logger.debug("Updated Short Identifier in plan file path: %s", plan_file_path)
@@ -2387,8 +2390,9 @@ class RasPlan:
                 lines.insert(0, f"Plan Title={new_title}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger.debug("Updated Plan Title in plan file to: %s", new_title)
             logger.debug("Updated Plan Title in plan file path: %s", plan_file_path)
@@ -3023,8 +3027,9 @@ class RasPlan:
             logger.debug("2D flow options already current in plan file: %s", plan_file_path.name)
             return True
 
-        with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-            file.writelines(lines)
+        _write_ras_text(
+            plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(f"Updated 2D flow options in plan file: {plan_file_path.name}")
         return True
@@ -3477,8 +3482,9 @@ class RasPlan:
                 )
                 return True
 
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             if hasattr(ras_obj, "get_plan_entries"):
                 ras_obj.plan_df = ras_obj.get_plan_entries()
@@ -3657,8 +3663,9 @@ class RasPlan:
                 logger.debug("HDF write parameters already current in plan file: %s", plan_file_path.name)
                 return True
 
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info(f"Updated HDF write parameters in plan file: {plan_file_path.name}")
             return True
@@ -3926,8 +3933,9 @@ class RasPlan:
             lines.insert(insert_index, f"{target_line}\n")
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info(f"Added HDF output variable '{variable}' to plan file: {plan_file_path.name}")
             return True
@@ -4098,8 +4106,9 @@ class RasPlan:
                 return False
 
             # Write the updated content back to the file
-            with open(plan_file_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(new_lines)
+            _write_ras_text(
+                plan_file_path, "".join(new_lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info(
                 "Removed HDF output variable %r from plan file: %s",
@@ -4505,8 +4514,9 @@ class RasPlan:
                     break
 
             if modified:
-                with open(plan_path, 'w', encoding='utf-8', errors='replace') as f:
-                    f.writelines(lines)
+                _write_ras_text(
+                    plan_path, "".join(lines), encoding="utf-8", errors="replace"
+                )
                 logger.debug(
                     "Updated %s from %s to %s in %s",
                     key,
@@ -4595,8 +4605,9 @@ class RasPlan:
             lines = f.readlines()
         new_lines = [line for line in lines if line.strip() != f"Current Plan=p{plan_number}"]
         if len(new_lines) < len(lines):
-            with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(new_lines)
+            _write_ras_text(
+                ras_obj.prj_file, "".join(new_lines), encoding="utf-8", errors="replace"
+            )
             logger.debug("Removed Current Plan=p%s line from .prj", plan_number)
 
         # Refresh all DataFrames
@@ -4662,8 +4673,9 @@ class RasPlan:
         for i, line in enumerate(lines):
             if line.strip() == f"Current Plan=p{old_number}":
                 lines[i] = f"Current Plan=p{new_number}\n"
-                with open(ras_obj.prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                    f.writelines(lines)
+                _write_ras_text(
+                    ras_obj.prj_file, "".join(lines), encoding="utf-8", errors="replace"
+                )
                 logger.debug("Updated Current Plan from p%s to p%s", old_number, new_number)
                 break
 
@@ -5076,4 +5088,3 @@ class RasPlan:
         n_created = len(report[report['status'] == 'created'])
         logger.info(f"Created {n_created}/{len(variants)} plan variants from plan p{base_plan}")
         return report
-

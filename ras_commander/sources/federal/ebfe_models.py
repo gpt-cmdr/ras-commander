@@ -60,6 +60,8 @@ from ras_commander.sources.base import (
     SourceStatus,
 )
 
+from ..._ras_text import _write_ras_text, _write_ras_xml
+
 logger = logging.getLogger(__name__)
 
 
@@ -2588,7 +2590,7 @@ class RasEbfeModels:
             for old, new in replacements.items():
                 content = content.replace(old, new)
             if content != original:
-                path.write_text(content, encoding="utf-8")
+                _write_ras_text(path, content, encoding="utf-8")
                 text_updates += 1
 
         stats = RasEbfeModels._repair_upper_guadalupe_hdf_associations(
@@ -3476,7 +3478,7 @@ class RasEbfeModels:
                 "Expected exactly one Austin-Oyster rasmap projection repair, "
                 f"found {projection_updates}"
             )
-        rasmaps[0].write_text(text, encoding="utf-8")
+        _write_ras_text(rasmaps[0], text, encoding="utf-8")
         return {
             "hdf_attributes_checked": checked,
             "hdf_attribute_updates": updates,
@@ -4214,7 +4216,7 @@ class RasEbfeModels:
                 + str(contract["reference"])
                 + content[match.end(2):]
             )
-            rasmap.write_text(updated, encoding="utf-8")
+            _write_ras_text(rasmap, updated, encoding="utf-8")
             records.append({
                 "project": name,
                 "surface": "rasmap_projection",
@@ -4237,7 +4239,7 @@ class RasEbfeModels:
                 for old, new in replacements:
                     content = content.replace(old, new)
                 if content != original:
-                    source_file.write_text(content, encoding="utf-8")
+                    _write_ras_text(source_file, content, encoding="utf-8")
                     records.append({
                         "project": name,
                         "surface": "unsteady_dss",
@@ -4511,7 +4513,7 @@ class RasEbfeModels:
                 flags=re.IGNORECASE,
             )
             if content != original:
-                rasmap.write_text(content, encoding="utf-8")
+                _write_ras_text(rasmap, content, encoding="utf-8")
 
             records.append({
                 "project": name,
@@ -4542,7 +4544,7 @@ class RasEbfeModels:
             flags=re.IGNORECASE,
         )
         if content != original:
-            rasmap.write_text(content, encoding="utf-8")
+            _write_ras_text(rasmap, content, encoding="utf-8")
             return 1
         return 0
 
@@ -5472,14 +5474,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
             newline = "\n"
         lines.insert(geom_matches[0] + 1, f"{expected}{newline}")
 
-        with open(
-            plan_path,
-            "w",
-            encoding="utf-8",
-            errors="replace",
-            newline="",
-        ) as handle:
-            handle.writelines(lines)
+        _write_ras_text(plan_path, "".join(lines), encoding="utf-8", errors="replace")
         return True
 
     # =========================================================================
@@ -6479,7 +6474,9 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                     )
                 except Exception:
                     pass
-                projection_file.write_text(projection_text + "\n", encoding='utf-8')
+                _write_ras_text(
+                    projection_file, projection_text + "\n", encoding="utf-8"
+                )
 
             # Move Output HDF files INTO project folder
             if wa_key in output_dirs:
@@ -6540,7 +6537,7 @@ Flow data is contained in steady flow files (.f##) within each reach model.
                     content
                 )
                 if content != original:
-                    rasmap.write_text(content, encoding='utf-8')
+                    _write_ras_text(rasmap, content, encoding="utf-8")
                     cross_model_fixes += 1
             except Exception as e:
                 RasEbfeModels._emit(f"    Warning: Could not process {rasmap.name}: {e}")
@@ -7552,7 +7549,9 @@ HEC-RAS version: 5.0.1 / 5.0.3
                     modified = True
 
             if modified:
-                tree.write(rasmap_file, encoding="utf-8", xml_declaration=False)
+                _write_ras_xml(
+                    tree, rasmap_file, encoding="utf-8", xml_declaration=False
+                )
             stats["rasmap_files"] += 1
 
         return stats
@@ -9352,7 +9351,7 @@ projects point to that single organized target. See
 
             updated = pattern.sub(replace_match, content)
             if modified:
-                text_file.write_text(updated, encoding='utf-8')
+                _write_ras_text(text_file, updated, encoding="utf-8")
 
         return corrections
 
@@ -9461,7 +9460,9 @@ projects point to that single organized target. See
                     modified = True
 
             if modified:
-                tree.write(rasmap_file, encoding='utf-8', xml_declaration=False)
+                _write_ras_xml(
+                    tree, rasmap_file, encoding="utf-8", xml_declaration=False
+                )
 
         return {
             "rasmap_corrections": rasmap_corrections,
@@ -9813,7 +9814,7 @@ projects point to that single organized target. See
 
                 updated = pattern.sub(replace_match, content)
                 if modified:
-                    hecras_file.write_text(updated, encoding='utf-8')
+                    _write_ras_text(hecras_file, updated, encoding="utf-8")
 
         return {
             'dss_assets_copied': copied,
@@ -9913,7 +9914,9 @@ projects point to that single organized target. See
                 )
                 if projection_text:
                     projection_folder.mkdir(parents=True, exist_ok=True)
-                    desired_projection.write_text(projection_text, encoding='utf-8')
+                    _write_ras_text(
+                        desired_projection, projection_text, encoding="utf-8"
+                    )
                     created += 1
 
             if not desired_projection.exists():
@@ -9943,7 +9946,7 @@ projects point to that single organized target. See
                     )
                 else:
                     content = insert_text + content
-            rasmap_file.write_text(content, encoding='utf-8')
+            _write_ras_text(rasmap_file, content, encoding="utf-8")
             updated += 1
 
         return {
@@ -9990,7 +9993,7 @@ projects point to that single organized target. See
             or projection_file.read_text(encoding='utf-8', errors='ignore').strip()
             != projection_text.strip()
         ):
-            projection_file.write_text(projection_text + "\n", encoding='utf-8')
+            _write_ras_text(projection_file, projection_text + "\n", encoding="utf-8")
             files_written = 1
 
         rasmap_updates = 0
@@ -10026,7 +10029,7 @@ projects point to that single organized target. See
                 else:
                     content = insert_text + content
             if content != original:
-                rasmap_file.write_text(content, encoding='utf-8')
+                _write_ras_text(rasmap_file, content, encoding="utf-8")
                 rasmap_updates += 1
 
         return {
@@ -10172,7 +10175,7 @@ projects point to that single organized target. See
                     )
 
             if content != original:
-                rasmap_file.write_text(content, encoding='utf-8')
+                _write_ras_text(rasmap_file, content, encoding="utf-8")
 
         return {
             'terrain_references_updated': terrain_updates,
@@ -10238,9 +10241,10 @@ projects point to that single organized target. See
                     continue
                 removed += 1
             if updated_lines != lines:
-                prj_file.write_text(
+                _write_ras_text(
+                    prj_file,
                     "\n".join(updated_lines) + "\n",
-                    encoding='utf-8',
+                    encoding="utf-8",
                 )
         return {'missing_plan_references_removed': removed}
 
@@ -10604,7 +10608,7 @@ projects point to that single organized target. See
                 flags=re.IGNORECASE,
             )
             if updated != content:
-                rasmap_file.write_text(updated, encoding='utf-8')
+                _write_ras_text(rasmap_file, updated, encoding="utf-8")
                 updates += 1
 
         try:
@@ -11224,7 +11228,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                         RasEbfeModels._emit(f"    ⚠️ DSS file not in organized structure: {dss_filename}")
 
                 if modified:
-                    hecras_file.write_text(content, encoding='utf-8')
+                    _write_ras_text(hecras_file, content, encoding="utf-8")
                     corrections_made += 1
 
             except Exception as e:
@@ -11311,7 +11315,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                         modified = True
 
                 if modified:
-                    rasmap_file.write_text(content, encoding='utf-8')
+                    _write_ras_text(rasmap_file, content, encoding="utf-8")
                     corrections += 1
 
             except Exception as e:
