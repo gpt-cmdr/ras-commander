@@ -47,10 +47,13 @@ ras_commander.geom.GeomReferenceFeatures.add_reference_lines : Sibling
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+import pandas as pd
 
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
@@ -63,9 +66,7 @@ logger = get_logger(__name__)
 _BC_NAME_KEY = "BC Line Name="
 _BC_STORAGE_AREA_KEY = "BC Line Storage Area="
 _BC_TEXT_POSITION_KEY = "BC Line Text Position="
-_TEXT_POSITION_SENTINEL = (
-    " 1.79769313486232E+308 , 1.79769313486232E+308 "
-)
+_TEXT_POSITION_SENTINEL = " 1.79769313486232E+308 , 1.79769313486232E+308 "
 
 
 def _build_bc_line_block(
@@ -102,9 +103,7 @@ def _detect_line_ending(file_lines: List[str]) -> str:
     return "\r\n" if file_lines and file_lines[0].endswith("\r\n") else "\n"
 
 
-def _find_bc_line_block(
-    file_lines: List[str], name: str
-) -> Optional[tuple]:
+def _find_bc_line_block(file_lines: List[str], name: str) -> Optional[tuple]:
     """Locate an existing BC line block by name. Returns (start_idx, end_idx)
     where end_idx is exclusive (one past the last line of the block — i.e.,
     the line after `BC Line Text Position=`)."""
@@ -136,7 +135,7 @@ def _list_storage_areas(file_lines: List[str]) -> List[str]:
         if stripped.startswith("Storage Area="):
             # Format: `Storage Area=<name padded to 16>,,` — take field[0] of
             # the comma split, strip the keyword and trailing whitespace.
-            payload = stripped[len("Storage Area="):]
+            payload = stripped[len("Storage Area=") :]
             name_field = payload.split(",", 1)[0].strip()
             if name_field:
                 areas.append(name_field)
@@ -163,15 +162,9 @@ def _bc_line_insertion_index(file_lines: List[str]) -> int:
         stripped = line.rstrip("\r\n")
         if stripped.startswith(_BC_TEXT_POSITION_KEY):
             last_bc_text_idx = i
-        if (
-            stripped.startswith("Reference Line Name=")
-            and first_refline_idx == -1
-        ):
+        if stripped.startswith("Reference Line Name=") and first_refline_idx == -1:
             first_refline_idx = i
-        if (
-            stripped.startswith("IC Point Name=")
-            and first_ic_point_idx == -1
-        ):
+        if stripped.startswith("IC Point Name=") and first_ic_point_idx == -1:
             first_ic_point_idx = i
         if stripped.startswith("LCMann ") and first_lcmann_idx == -1:
             first_lcmann_idx = i
@@ -185,6 +178,420 @@ def _bc_line_insertion_index(file_lines: List[str]) -> int:
 
 class GeomBcLines:
     """Public API for authoring 2D BC line geometry in `.g##` text files."""
+
+    @staticmethod
+    @log_call
+    def replace_bc_lines(
+        geom_file: str | Path,
+        unsteady_files: list[str | Path],
+        *,
+        area_2d: str,
+        lines: list[dict[str, Any]],
+        ras_object: Any | None = None,
+    ) -> pd.DataFrame:
+        """Completely replace one area's perimeter BC lines and forcing.
+
+        Parameters
+        ----------
+        geom_file : str or Path
+            Explicit geometry text path in the caller's disposable clone.
+        unsteady_files : list of str or Path
+            Complete set of cloned unsteady files referencing this geometry.
+            At least one is required. Paths must share the geometry directory.
+            With ``ras_object``, completeness is checked against ``plan_df``;
+            otherwise the caller is responsible for supplying the complete set.
+        area_2d : str
+            Exact 2D Flow Area name (maximum 16 characters).
+        lines : list of dict
+            Complete replacement set; an empty list clears perimeter lines.
+            Each entry has ``name`` (maximum 32 characters), ``coordinates``
+            (finite N-by-2 vertices), and ``bc_type``. Supported types are
+            ``Normal Depth`` (``friction_slope`` required), ``Flow Hydrograph``
+            (``hydrograph_df`` and ``friction_slope`` required), and
+            ``Stage Hydrograph`` (``hydrograph_df`` required). Hydrograph frames
+            have ``hour`` and ``value`` columns accepted by ``RasUnsteady``.
+            The supplied forcing is applied to every supplied unsteady file.
+        ras_object : optional
+            Initialized clone project used to verify geometry/flow association
+            and refresh ``boundaries_df`` after successful writes.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per new line and unsteady file, with ``geom_file``,
+            ``unsteady_file``, ``area_2d``, ``bc_line``, and ``bc_type`` columns.
+            Empty replacements return the same empty schema. ``attrs`` includes
+            ``removed_bc_lines``, ``backup_paths`` and ``boundaries_df_refreshed``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If an explicit input file is missing.
+        ValueError
+            If inputs, native blocks, names, forcing or project associations
+            are invalid, ambiguous, or incomplete.
+        OSError
+            If staging, backup creation, or replacement fails.
+
+        Notes
+        -----
+        This method modifies only explicitly supplied paths; it does not clone
+        projects. Other areas, 1D boundaries and area-wide rainfall are retained.
+        All content is staged and validated before writes, with same-directory
+        atomic replacement per file and byte-exact rollback on write exceptions.
+        This is an exception-atomic transaction, not a crash-atomic multi-file
+        transaction; concurrent readers/writers must be excluded by the caller.
+        Existing backups are retained. Compiled HDF files are not updated: run
+        native preprocessing before inspecting native face attachments.
+        A post-commit metadata refresh failure is logged and returned through
+        ``boundaries_df_refreshed=False``; it does not undo committed files.
+        ``standardize_input`` is HDF-specific; these text paths are normalized
+        explicitly and never resolved through the global project.
+        """
+        from ..RasPrj import RasPrj
+        from ..RasUnsteady import RasUnsteady
+        from ..RasUtils import RasUtils
+
+        def clean_name(value, label, maximum):
+            if not isinstance(value, str):
+                raise TypeError(f"{label} must be a string")
+            if not value.strip():
+                raise ValueError(f"{label} must be a non-empty string")
+            value = value.strip()
+            if len(value) > maximum or any(c in value for c in ",\r\n"):
+                raise ValueError(
+                    f"{label} exceeds {maximum} characters or contains delimiters"
+                )
+            return value
+
+        area_name = clean_name(area_2d, "area_2d", 16)
+        geom_path = RasUtils.safe_resolve(Path(geom_file))
+        if not isinstance(unsteady_files, list) or not unsteady_files:
+            raise ValueError(
+                "unsteady_files must be a non-empty list of explicit paths"
+            )
+        flow_paths = [RasUtils.safe_resolve(Path(value)) for value in unsteady_files]
+        paths = [geom_path, *flow_paths]
+        if len(set(paths)) != len(paths):
+            raise ValueError("Geometry and unsteady paths must be distinct")
+        for path in paths:
+            if not path.is_file():
+                raise FileNotFoundError(f"Input file not found: {path}")
+            if path.parent != geom_path.parent:
+                raise ValueError(
+                    "All input files must belong to the same cloned project directory"
+                )
+        if any(
+            os.path.samefile(a, b) for i, a in enumerate(paths) for b in paths[i + 1 :]
+        ):
+            raise ValueError("Input paths must not alias the same physical file")
+        if not isinstance(lines, list):
+            raise TypeError("lines must be a list of replacement specifications")
+
+        if ras_object is not None:
+            ras_object.check_initialized()
+            matches = ras_object.geom_df[
+                ras_object.geom_df["full_path"].map(
+                    lambda p: RasUtils.safe_resolve(Path(p)) == geom_path
+                )
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    "Geometry must identify exactly one entry in ras_object.geom_df"
+                )
+            number = str(matches.iloc[0]["geom_number"])
+            plans = ras_object.plan_df
+            linked = plans[plans["geometry_number"].astype(str) == number]
+            expected = {
+                RasUtils.safe_resolve(Path(p))
+                for p in linked["Flow Path"].dropna()
+                if Path(p).suffix.startswith(".u")
+            }
+            if set(flow_paths) != expected:
+                raise ValueError(
+                    "unsteady_files must contain every flow file associated with this geometry"
+                )
+            other = plans[plans["geometry_number"].astype(str) != number]
+            if any(
+                RasUtils.safe_resolve(Path(p)) in expected
+                for p in other["Flow Path"].dropna()
+            ):
+                raise ValueError(
+                    "An unsteady file is shared with another geometry; clone it first"
+                )
+
+        originals = {path: path.read_bytes() for path in paths}
+        file_lines = originals[geom_path].decode("utf-8").splitlines(keepends=True)
+        areas = _list_storage_areas(file_lines)
+        if areas.count(area_name) != 1:
+            raise ValueError(f"2D Flow Area {area_name!r} not found in geometry")
+        area_start = next(
+            i
+            for i, line in enumerate(file_lines)
+            if line.startswith("Storage Area=")
+            and line.split("=", 1)[1].split(",", 1)[0].strip() == area_name
+        )
+        area_end = next(
+            (
+                i
+                for i in range(area_start + 1, len(file_lines))
+                if file_lines[i].startswith("Storage Area=")
+            ),
+            len(file_lines),
+        )
+        if not any(
+            line.startswith("Storage Area 2D Points=")
+            for line in file_lines[area_start:area_end]
+        ):
+            raise ValueError(f"Storage area {area_name!r} is not a 2D Flow Area")
+        newline = _detect_line_ending(file_lines)
+        records = []
+        starts = [
+            i for i, line in enumerate(file_lines) if line.startswith(_BC_NAME_KEY)
+        ]
+        for position, start in enumerate(starts):
+            limit = (
+                starts[position + 1] if position + 1 < len(starts) else len(file_lines)
+            )
+            end = next(
+                (
+                    i + 1
+                    for i in range(start + 1, limit)
+                    if file_lines[i].startswith(_BC_TEXT_POSITION_KEY)
+                ),
+                None,
+            )
+            if end is None:
+                raise ValueError("Unterminated BC line geometry block")
+            area_fields = [
+                line[len(_BC_STORAGE_AREA_KEY) :].strip()
+                for line in file_lines[start:end]
+                if line.startswith(_BC_STORAGE_AREA_KEY)
+            ]
+            if len(area_fields) != 1 or not area_fields[0]:
+                raise ValueError("BC line block requires exactly one storage area")
+            records.append(
+                (
+                    file_lines[start][len(_BC_NAME_KEY) :].strip(),
+                    area_fields[0],
+                    start,
+                    end,
+                )
+            )
+        if len({record[0] for record in records}) != len(records):
+            raise ValueError("Duplicate native BC line names are ambiguous")
+        retained_names = {name for name, area, _, _ in records if area != area_name}
+        removed = [name for name, area, _, _ in records if area == area_name]
+        prepared = []
+        for spec in lines:
+            if not isinstance(spec, dict):
+                raise TypeError("Each replacement specification must be a dict")
+            name = clean_name(spec.get("name"), "name", 32)
+            if name in retained_names or any(item[0] == name for item in prepared):
+                raise ValueError(f"Duplicate or unrelated-area BC line name {name!r}")
+            coords = np.asarray(spec.get("coordinates"), dtype=float)
+            if (
+                coords.ndim != 2
+                or coords.shape[1] != 2
+                or len(coords) < 2
+                or not np.isfinite(coords).all()
+            ):
+                raise ValueError(
+                    "coordinates must be a finite (N, 2) array with at least two points"
+                )
+            if np.linalg.norm(np.diff(coords, axis=0), axis=1).sum() == 0:
+                raise ValueError("BC line geometry must have positive length")
+            bc_type = spec.get("bc_type")
+            if bc_type not in ("Normal Depth", "Flow Hydrograph", "Stage Hydrograph"):
+                raise ValueError("Unsupported or missing bc_type")
+            if (
+                bc_type in ("Normal Depth", "Flow Hydrograph")
+                and "friction_slope" not in spec
+            ):
+                raise ValueError(f"{bc_type} requires friction_slope")
+            if bc_type != "Normal Depth" and not isinstance(
+                spec.get("hydrograph_df"), pd.DataFrame
+            ):
+                raise ValueError(f"{bc_type} requires hydrograph_df")
+            prepared.append((name, bc_type, coords, spec))
+        for _, area, start, end in reversed(records):
+            if area == area_name:
+                del file_lines[start:end]
+        insertion = _bc_line_insertion_index(file_lines)
+        blocks = [
+            line + newline
+            for name, _, coords, _ in prepared
+            for line in _build_bc_line_block(name, area_name, coords)
+        ]
+        if (
+            blocks
+            and insertion
+            and not file_lines[insertion - 1].endswith(("\n", "\r"))
+        ):
+            file_lines[insertion - 1] += newline
+        file_lines[insertion:insertion] = blocks
+
+        with TemporaryDirectory(
+            prefix=".bc-replacement-", dir=geom_path.parent
+        ) as temporary:
+            staging = Path(temporary)
+            staged_geom = staging / geom_path.name
+            staged_geom.write_bytes("".join(file_lines).encode("utf-8"))
+            payloads = []
+            writer_project = RasPrj()
+            for index, (name, bc_type, _, spec) in enumerate(prepared):
+                # Isolate type-writer scans from unrelated boundaries and trailers.
+                forcing = staging / f"forcing{index}.u01"
+                forcing.write_bytes(
+                    f"Flow Title=BC replacement{newline}Program Version=6.60{newline}Use Restart=0{newline}".encode()
+                )
+                selector = {
+                    "area_2d": area_name,
+                    "bc_line": name,
+                    "ras_object": writer_project,
+                }
+                RasUnsteady.ensure_2d_boundary_location(
+                    forcing, staged_geom, **selector
+                )
+                if bc_type == "Normal Depth":
+                    RasUnsteady.set_normal_depth_boundary(
+                        forcing, spec["friction_slope"], **selector
+                    )
+                else:
+                    if not RasUnsteady.set_boundary_inline_hydrograph(
+                        forcing, spec["hydrograph_df"], bc_type=bc_type, **selector
+                    ):
+                        raise ValueError(f"Could not write forcing for {name!r}")
+                    if bc_type == "Flow Hydrograph":
+                        RasUnsteady.set_flow_hydrograph_slope(
+                            forcing, spec["friction_slope"], **selector
+                        )
+                authored = forcing.read_bytes().decode().splitlines(keepends=True)
+                boundary = RasUnsteady._find_boundary_blocks(authored)
+                if len(boundary) != 1 or boundary[0]["bc_type"] != bc_type:
+                    raise ValueError(f"Forcing validation failed for {name!r}")
+                payloads.extend(
+                    authored[boundary[0]["start_idx"] : boundary[0]["end_idx"]]
+                )
+            staged = {geom_path: staged_geom}
+            for path in flow_paths:
+                content = originals[path].decode("utf-8").splitlines(keepends=True)
+                boundaries = RasUnsteady._find_boundary_blocks(content)
+                identities = [tuple(b["parts"][:8]) for b in boundaries]
+                if len(set(identities)) != len(identities):
+                    raise ValueError(
+                        "Duplicate native boundary locations are ambiguous"
+                    )
+                for boundary in reversed(boundaries):
+                    parts = boundary["parts"]
+                    if len(parts) > 5 and parts[5] == area_name:
+                        if len(parts) < 8 or any(parts[8:]) or any(parts[:3]):
+                            raise ValueError("Malformed target 2D boundary location")
+                        if parts[7]:
+                            del content[boundary["start_idx"] : boundary["end_idx"]]
+                insertion = next(
+                    (
+                        i
+                        for i, line in enumerate(content)
+                        if line.startswith("Boundary Location=")
+                    ),
+                    None,
+                )
+                if payloads and insertion is None:
+                    header = [
+                        i
+                        for i, line in enumerate(content)
+                        if line.startswith(
+                            ("Flow Title=", "Program Version=", "Use Restart=")
+                        )
+                    ]
+                    if not header:
+                        raise ValueError(
+                            "Cannot identify safe unsteady insertion point"
+                        )
+                    insertion = max(header) + 1
+                if payloads:
+                    flow_newline = RasUnsteady._detect_line_ending(content)
+                    if insertion and not content[insertion - 1].endswith(("\n", "\r")):
+                        content[insertion - 1] += flow_newline
+                    content[insertion:insertion] = [
+                        line.rstrip("\r\n") + flow_newline for line in payloads
+                    ]
+                final_boundaries = RasUnsteady._find_boundary_blocks(content)
+                final_target = [
+                    (block["parts"][7], block["bc_type"])
+                    for block in final_boundaries
+                    if len(block["parts"]) >= 8
+                    and block["parts"][5] == area_name
+                    and block["parts"][7]
+                ]
+                if sorted(final_target) != sorted(
+                    (name, kind) for name, kind, _, _ in prepared
+                ):
+                    raise ValueError(
+                        "Staged boundary references do not match replacement geometry"
+                    )
+                staged[path] = staging / path.name
+                staged[path].write_bytes("".join(content).encode("utf-8"))
+            # Reject concurrent changes before backups or publishing any content.
+            if any(path.read_bytes() != data for path, data in originals.items()):
+                raise ValueError("Input files changed during BC replacement")
+            backups = []
+            for path, data in originals.items():
+                backup = path.with_name(path.name + ".bak")
+                counter = 1
+                while backup.exists():
+                    backup = path.with_name(f"{path.name}.bak.{counter}")
+                    counter += 1
+                with backup.open("xb") as stream:
+                    stream.write(data)
+                backups.append(str(backup))
+            committed = []
+            try:
+                for path, stage in staged.items():
+                    os.replace(stage, path)
+                    committed.append(path)
+            except BaseException:
+                for index, path in enumerate(reversed(committed)):
+                    restore = staging / f"rollback{index}"
+                    restore.write_bytes(originals[path])
+                    os.replace(restore, path)
+                raise
+        boundaries_df_refreshed = False
+        if ras_object is not None:
+            try:
+                ras_object.boundaries_df = ras_object.get_boundary_conditions()
+                boundaries_df_refreshed = True
+            except Exception as exc:  # noqa: BLE001 -- refresh must not report failed committed edits
+                logger.warning(
+                    "BC replacement committed; boundaries_df refresh failed: %s", exc
+                )
+        result = pd.DataFrame(
+            [
+                {
+                    "geom_file": str(geom_path),
+                    "unsteady_file": str(path),
+                    "area_2d": area_name,
+                    "bc_line": name,
+                    "bc_type": bc_type,
+                }
+                for path in flow_paths
+                for name, bc_type, _, _ in prepared
+            ],
+            columns=["geom_file", "unsteady_file", "area_2d", "bc_line", "bc_type"],
+        )
+        result.attrs.update(
+            removed_bc_lines=removed,
+            backup_paths=backups,
+            boundaries_df_refreshed=boundaries_df_refreshed,
+        )
+        logger.info(
+            "Replaced %d BC lines with %d lines on %s",
+            len(removed),
+            len(prepared),
+            area_name,
+        )
+        return result
 
     @staticmethod
     @log_call
@@ -301,9 +708,7 @@ class GeomBcLines:
             name = str(name_raw).strip()
             sa_raw = spec.get("storage_area")
             if not sa_raw:
-                raise ValueError(
-                    f"BC line {name!r}: 'storage_area' is required"
-                )
+                raise ValueError(f"BC line {name!r}: 'storage_area' is required")
             storage_area = str(sa_raw).strip()
             if storage_area not in existing_areas:
                 raise ValueError(
@@ -313,9 +718,7 @@ class GeomBcLines:
                 )
             coords_raw = spec.get("coordinates")
             if coords_raw is None:
-                raise ValueError(
-                    f"BC line {name!r}: 'coordinates' is required"
-                )
+                raise ValueError(f"BC line {name!r}: 'coordinates' is required")
             coords = np.asarray(coords_raw, dtype=np.float64)
             if coords.ndim != 2 or coords.shape[1] != 2 or len(coords) < 2:
                 raise ValueError(
@@ -437,9 +840,7 @@ class GeomBcLines:
 
         hit = _find_bc_line_block(file_lines, clean_name)
         if hit is None:
-            raise ValueError(
-                f"BC line {clean_name!r} not found in {geom_path.name}"
-            )
+            raise ValueError(f"BC line {clean_name!r} not found in {geom_path.name}")
         start, end = hit
         lines_removed = end - start
         del file_lines[start:end]
@@ -514,9 +915,7 @@ class GeomBcLines:
 
         old_hit = _find_bc_line_block(file_lines, clean_old)
         if old_hit is None:
-            raise ValueError(
-                f"BC line {clean_old!r} not found in {geom_path.name}"
-            )
+            raise ValueError(f"BC line {clean_old!r} not found in {geom_path.name}")
         if _find_bc_line_block(file_lines, clean_new) is not None:
             raise ValueError(
                 f"BC line {clean_new!r} already exists in {geom_path.name}"

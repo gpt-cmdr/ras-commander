@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.17"
+SCHEMA_VERSION = "1.18"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,110 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "mesh_perimeter_faces": {
+        "description": "Every native perimeter face of one 2D area, including confirmed unassigned faces.",
+        "accessor": "HdfMesh.get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)",
+        "source": "HdfMesh.get_mesh_perimeter_faces()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "mesh_name",
+                "dtype": "string",
+                "description": "Exact native 2D area name.",
+            },
+            {
+                "name": "face_id",
+                "dtype": "int64",
+                "description": "Zero-based native mesh-local face ID.",
+            },
+            {
+                "name": "cell0",
+                "dtype": "int64",
+                "description": "First native adjacent cell ID.",
+            },
+            {
+                "name": "cell1",
+                "dtype": "int64",
+                "description": "Second native adjacent cell ID.",
+            },
+            {
+                "name": "interior_cell_id",
+                "dtype": "int64",
+                "description": "Physical cell adjacent to the perimeter face.",
+            },
+            {
+                "name": "exterior_cell_id",
+                "dtype": "int64",
+                "description": "Native ghost cell ID or exterior sentinel -1.",
+            },
+            {
+                "name": "fp_start_index",
+                "dtype": "int64",
+                "description": "Native start face-point ID.",
+            },
+            {
+                "name": "fp_end_index",
+                "dtype": "int64",
+                "description": "Native end face-point ID.",
+            },
+            {
+                "name": "face_length",
+                "dtype": "float64",
+                "description": "Native length in model units, geometry fallback indicated in attrs.",
+            },
+            {
+                "name": "bc_line_id",
+                "dtype": "Int64",
+                "description": "Native BC Attributes row ID; null for confirmed unassigned face.",
+            },
+            {
+                "name": "bc_line_name",
+                "dtype": "string",
+                "description": "Native associated BC name, nullable.",
+            },
+            {
+                "name": "bc_line_type",
+                "dtype": "string",
+                "description": "Native geometry BC type, nullable; not the flow forcing type.",
+            },
+            {
+                "name": "geometry",
+                "dtype": "geometry",
+                "description": "Face LineString including stored intermediate perimeter vertices.",
+            },
+        ],
+    },
+    "bc_line_replacement": {
+        "description": "New named-area BC lines and forcing written to explicitly supplied cloned files.",
+        "accessor": "GeomBcLines.replace_bc_lines(geom_file, unsteady_files, area_2d=..., lines=..., ras_object=None)",
+        "source": "GeomBcLines.replace_bc_lines()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {
+                "name": "geom_file",
+                "dtype": "str",
+                "description": "Explicit cloned geometry path.",
+            },
+            {
+                "name": "unsteady_file",
+                "dtype": "str",
+                "description": "Explicit cloned unsteady flow path.",
+            },
+            {
+                "name": "area_2d",
+                "dtype": "str",
+                "description": "Exact target 2D area name.",
+            },
+            {"name": "bc_line", "dtype": "str", "description": "New BC line name."},
+            {
+                "name": "bc_type",
+                "dtype": "str",
+                "description": "Normal Depth, Flow Hydrograph, or Stage Hydrograph forcing.",
+            },
+        ],
+    },
     "container_batch_summary": {
         "description": "Ordered outcomes of host-side container jobs, including failures and reused stages.",
         "accessor": "RasDocker.run_batch(...).summary_df",
