@@ -119,6 +119,7 @@ class GeomLateral:
         "Breach",
         "TerrainProfile",
         "DefaultsUsed",
+        "EmptyRecords",
         "UnknownRecords",
         "ParseIssues",
     ]
@@ -133,6 +134,8 @@ class GeomLateral:
         these records are preserved, not represented as fully decoded physics.
         DefaultsUsed lists the fields explicitly defaulted by set_connection.
         Missing optional profiles are empty Station/Elevation DataFrames.
+        EmptyRecords preserves recognized zero-count profile records and the
+        metadata of a completely empty native bridge skeleton as raw strings.
         RawBlock preserves original line endings and undecodable source bytes
         using UTF-8 surrogateescape and is authoritative for writing.
 
@@ -219,6 +222,8 @@ class GeomLateral:
             row["TerrainProfile"] = pd.DataFrame(columns=["Station", "Elevation"])
             row["Breach"] = []
             row["DefaultsUsed"] = []
+            empty_indices = GeomLateral._empty_connection_record_indices(block)
+            row["EmptyRecords"] = [block[i] for i in sorted(empty_indices)]
             row["UnknownRecords"] = []
             for bi, line in enumerate(block):
                 keyword, _, value = line.partition("=")
@@ -244,7 +249,13 @@ class GeomLateral:
                     ]
                 if "breach" in keyword.lower():
                     row["Breach"].append(line)
-                if "=" in line and keyword not in known:
+                if (
+                    (
+                        "=" in line and keyword not in known
+                        or line.lstrip().startswith("Conn BR:")
+                    )
+                    and bi not in empty_indices
+                ):
                     row["UnknownRecords"].append(line)
             row["Culverts"] = pd.DataFrame()
             row["Gates"] = pd.DataFrame()
@@ -261,6 +272,81 @@ class GeomLateral:
             rows, columns=GeomLateral.CONNECTION_DATA_COLUMNS, dtype=object
         )
         return result
+
+    @staticmethod
+    def _empty_connection_record_indices(block: list[str]) -> set[int]:
+        """Recognize explicit zero counts, never missing or undecoded support."""
+        empty = set()
+        profile_keys = {
+            f"Conn BR: {prefix} {table}"
+            for prefix in ("BR", "XS")
+            for table in ("SE", "Mann")
+        }
+        for i, line in enumerate(block):
+            keyword, separator, value = line.strip().partition("=")
+            fields = [v.strip() for v in value.split(",")]
+            if not separator:
+                continue
+            zero = keyword == "Connection Centerline Profile" and fields == ["0"]
+            zero = zero or (
+                keyword in profile_keys
+                and len(fields) == 2
+                and fields[0] in ("1", "2")
+                and fields[1] == "0"
+            )
+            # A zero count followed by unlabelled payload is contradictory.
+            following = next((v.strip() for v in block[i + 1 :] if v.strip()), "")
+            if zero and (
+                not following or "=" in following or following.startswith("Conn BR:")
+            ):
+                empty.add(i)
+
+        bridge_indices = [
+            i for i, line in enumerate(block) if line.lstrip().startswith("Conn BR:")
+        ]
+        if not bridge_indices:
+            return empty
+        start, end = bridge_indices[0], bridge_indices[-1] + 1
+        indices = [i for i in range(start, end) if block[i].strip()]
+        native = [block[i].strip() for i in indices]
+        skeleton = [v.strip() for v in GeomLateral._build_empty_bridge_skeleton()]
+        if len(native) != len(skeleton):
+            return empty
+        # Known scalar metadata is recognized only with the complete empty
+        # deck/BR/XS structure. Unknown variants and populated tables fail closed.
+        for position, (line, expected) in enumerate(zip(native, skeleton)):
+            key, separator, value = line.partition("=")
+            expected_key = expected.partition("=")[0]
+            if position == 2:
+                fields = [v.strip() for v in line.split(",")]
+                if len(fields) != 14 or fields[4:6] != ["0", "0"]:
+                    return empty
+            elif key != expected_key or separator != expected.partition("=")[1]:
+                return empty
+            elif position == 0:
+                fields = [v.strip() for v in value.split(",")]
+                if fields not in (
+                    ["-1", "0", "-1", "-1", "0"],
+                    ["0", "0", "0", "0", "0", "0.3", "0.5"],
+                ):
+                    return empty
+            elif position == 9:
+                fields = [v.strip() for v in value.split(",")]
+                if len(fields) != 10:
+                    return empty
+            else:
+                if line != expected:
+                    return empty
+                if key in profile_keys and indices[position] not in empty:
+                    return empty
+                continue
+            try:
+                if any(v and not math.isfinite(float(v)) for v in fields):
+                    return empty
+            except ValueError:
+                return empty
+        empty.update(indices)
+        return empty
 
     @staticmethod
     def _connection_values_equal(left, right) -> bool:

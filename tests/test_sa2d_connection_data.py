@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
-from ras_commander import GeomLateral, RasExamples
+from ras_commander import GeomLateral, GeomStorage, RasExamples
 
 
 @pytest.fixture
@@ -233,3 +233,215 @@ def test_empty_schema_and_explicit_removal(geometry):
     assert empty.empty
     assert empty.columns.tolist() == GeomLateral.CONNECTION_DATA_COLUMNS
     assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).empty
+
+
+def _append_connection_records(geometry, records):
+    inventory = GeomLateral.get_connection_data(geometry)
+    raw = inventory.iloc[0]["RawBlock"] + records
+    GeomLateral.write_connection_data(
+        geometry,
+        pd.DataFrame([{"Name": "internal", "RawBlock": raw}]),
+        create_backup=False,
+    )
+    return GeomLateral.get_connection_data(geometry).iloc[0]
+
+
+@pytest.mark.parametrize(
+    "record",
+    ["Connection Centerline Profile=0\n"]
+    + [
+        f"Conn BR: {prefix} {kind}={side},0\n"
+        for prefix in ("BR", "XS")
+        for kind in ("SE", "Mann")
+        for side in (1, 2)
+    ],
+)
+def test_zero_count_profiles_are_recognized_empty(geometry, record):
+    row = _append_connection_records(geometry, record)
+    assert row["EmptyRecords"] == [record]
+    assert row["UnknownRecords"] == []
+    assert row["ParseIssues"] == []
+    assert (
+        GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]["action"]
+        == "keep"
+    )
+
+
+@pytest.mark.parametrize(
+    "record",
+    [f"Connection Centerline Profile={count}\n" for count in ("1", "-1", "x", "")]
+    + [
+        f"Conn BR: {prefix} {kind}={side},{count}\n"
+        for prefix in ("BR", "XS")
+        for kind in ("SE", "Mann")
+        for side, count in ((1, "1"), (2, "-1"), (1, "x"), (3, "0"), (1, ""))
+    ],
+)
+def test_active_or_invalid_profiles_remain_unknown(geometry, record):
+    row = _append_connection_records(geometry, record)
+    assert record in row["UnknownRecords"]
+    assert record not in row["EmptyRecords"]
+    result = GeomLateral.classify_connections(geometry, box(20, 20, 30, 30)).iloc[0]
+    assert result["action"] == "block"
+    assert result["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+
+
+def test_empty_bridge_skeleton_preserves_raw_lines_and_spatial_decisions(geometry):
+    records = "".join(GeomLateral._build_empty_bridge_skeleton())
+    row = _append_connection_records(geometry, records)
+    assert row["EmptyRecords"] == records.splitlines(keepends=True)
+    assert row["UnknownRecords"] == []
+    assert row["ParseIssues"] == []
+    kept = GeomLateral.classify_connections(
+        geometry, box(0, 0, 10, 10), retained_area_names={"A"}
+    ).iloc[0]
+    assert kept["action"] == "keep"
+    assert kept.geometry.bounds == pytest.approx((1, 4, 9, 6))
+    crossing = GeomLateral.classify_connections(geometry, box(1.5, 0, 10, 10)).iloc[0]
+    assert crossing["reason"] == "CONNECTION_CROSSES_CHILD_BOUNDARY"
+    assert (
+        GeomLateral.classify_connections(geometry, box(20, 20, 30, 30)).iloc[0][
+            "action"
+        ]
+        == "drop"
+    )
+    removed = GeomLateral.classify_connections(
+        geometry, box(0, 0, 10, 10), retained_area_names={"B"}
+    ).iloc[0]
+    assert removed["reason"] == "CONNECTION_ENDPOINT_REMOVED"
+
+
+def test_delivered_salt_draw_empty_bridge_variant_is_retained(geometry):
+    lines = GeomLateral._build_empty_bridge_skeleton()
+    lines[0] = "Conn BR: Bridge=0,0,0,0, 0 ,0.3,0.5\n"
+    lines[2] = ",10,3,0, 0, 0, , , 0.98, 0, 0,0,,\n"
+    lines[9] = "Conn BR: BR Coef=-1 , 0 , 0 ,,,0.8,-1,,0,\n"
+    records = "Connection Centerline Profile=0\n" + "".join(lines)
+    row = _append_connection_records(geometry, records)
+    assert row["EmptyRecords"] == records.splitlines(keepends=True)
+    assert row["UnknownRecords"] == []
+    assert row["ParseIssues"] == []
+    result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
+    assert result["action"] == "keep"
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("BR SE=1,0", "BR SE=1,1"),
+        ("XS Mann=2,0", "XS Mann=2,1"),
+        ("0,0,0,0, 0, 0,", "0,0,0,0, 1, 0,"),
+        ("0,0,0,0, 0, 0,", "0,0,0,0, -1, 0,"),
+        ("0,0,0,0, 0, 0,", "0,0,0,0, x, 0,"),
+        ("0,0,0,0, 0, 0,", "malformed deck payload"),
+        ("BR Bank Stations=1,,", "BR Bank Stations=1,0,1"),
+        ("XS Bank Stations=2,,", "XS Bank Stations=2,0,"),
+    ],
+)
+def test_bridge_skeleton_with_active_or_malformed_support_blocks(geometry, old, new):
+    records = "".join(GeomLateral._build_empty_bridge_skeleton())
+    assert old in records
+    row = _append_connection_records(geometry, records.replace(old, new))
+    assert row["UnknownRecords"]
+    result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
+    assert result["action"] == "block"
+    assert result["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    "unknown",
+    [
+        "Conn BR: Vendor Spatial Extension=0\n",
+        "Conn BR: Vendor Spatial Extension\n",
+        "  Conn BR: Vendor Spatial Extension\n",
+    ],
+)
+def test_unknown_bridge_extension_cannot_be_hidden_by_empty_skeleton(geometry, unknown):
+    records = "".join(GeomLateral._build_empty_bridge_skeleton())
+    row = _append_connection_records(geometry, records + unknown)
+    assert unknown in row["UnknownRecords"]
+    assert unknown not in row["EmptyRecords"]
+    result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
+    assert result["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    "records",
+    [
+        "Connection Centerline Profile=0\nConn BR: Vendor Spatial Extension\n",
+        "Connection Centerline Profile=0\n  Conn BR: Vendor Spatial Extension\n",
+        "Conn BR: BR SE=1,0\nConn BR: Vendor Spatial Extension\n",
+        "Conn BR: XS SE=2,0\nConn BR: Vendor Spatial Extension\n",
+        "Conn BR: Deck malformed\n",
+    ],
+)
+def test_unknown_bridge_headers_without_equals_block(geometry, records):
+    row = _append_connection_records(geometry, records)
+    unknown = records.splitlines(keepends=True)[-1]
+    assert unknown in row["UnknownRecords"]
+    assert unknown not in row["EmptyRecords"]
+    result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
+    assert result["action"] == "block"
+    assert result["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    "records",
+    [
+        "Connection Centerline Profile=0\n   1.000   2.000\n",
+        "Conn BR: XS Mann=2,0\n   1.000   2.000\n",
+        "".join(GeomLateral._build_empty_bridge_skeleton()) + "   1.000   2.000\n",
+    ],
+)
+def test_unlabelled_payload_after_empty_profile_blocks(geometry, records):
+    _append_connection_records(geometry, records)
+    result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
+    assert result["action"] == "block"
+    assert result["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+
+
+def test_empty_records_lossless_mixed_newlines_and_tamper_rejection(geometry):
+    lines = ["Connection Centerline Profile=0\n"]
+    lines += GeomLateral._build_empty_bridge_skeleton()
+    records = "".join(
+        line.replace("\n", "\r\n") if i % 2 else line for i, line in enumerate(lines)
+    )
+    _append_connection_records(geometry, records)
+    before = geometry.read_bytes()
+    inventory = GeomLateral.get_connection_data(geometry)
+    assert inventory.iloc[0]["EmptyRecords"] == records.splitlines(keepends=True)
+    GeomLateral.write_connection_data(geometry, inventory, create_backup=False)
+    assert geometry.read_bytes() == before
+    inventory.at[0, "EmptyRecords"] = []
+    with pytest.raises(ValueError, match="EmptyRecords does not agree"):
+        GeomLateral.write_connection_data(geometry, inventory)
+    assert geometry.read_bytes() == before
+
+
+def test_clipping_retains_empty_profiles_losslessly(tmp_path):
+    geometry = tmp_path / "clip.g01"
+    geometry.write_bytes(b"Geom Title=Clipping\r\nLCMann Time=0\r\n")
+    GeomStorage.set_2d_flow_area_perimeter(
+        geometry, "Area", geometry=box(0, 0, 40, 40), create_backup=False
+    )
+    GeomLateral.set_connection(
+        geometry,
+        "internal",
+        [(5, 5), (10, 5)],
+        "Area",
+        "Area",
+        weir_width=2,
+        weir_coef=3,
+        crest_profile=pd.DataFrame({"Station": [0, 5], "Elevation": [10, 10]}),
+        create_backup=False,
+    )
+    records = "Connection Centerline Profile=0\n"
+    records += "".join(GeomLateral._build_empty_bridge_skeleton())
+    row = _append_connection_records(geometry, records)
+    before = geometry.read_bytes()
+    actions = GeomStorage.clip_2d_flow_area(geometry, "Area", box(0, 0, 20, 20))
+    assert actions.iloc[0]["action"] == "keep"
+    assert actions.attrs["backup_path"].read_bytes() == before
+    after = GeomLateral.get_connection_data(geometry).iloc[0]
+    assert after["RawBlock"] == row["RawBlock"]
+    assert after["EmptyRecords"] == row["EmptyRecords"]
