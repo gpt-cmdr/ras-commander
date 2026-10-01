@@ -101,19 +101,26 @@ def test_selector_does_not_fall_back_or_match_partial_name(native_file, name):
 
 
 @pytest.mark.parametrize('encoding', ['utf-8', 'cp1252'])
-@pytest.mark.parametrize('newline', ['\n', '\r\n'])
-def test_exact_area_selection_preserves_neighbors_encoding_and_newlines(tmp_path, encoding, newline):
+@pytest.mark.parametrize('newline', ['\n', '\r\n', '\r'])
+@pytest.mark.parametrize('terminal_newline', [False, True])
+def test_exact_area_selection_preserves_neighbors_encoding_and_writes_crlf(
+    tmp_path, encoding, newline, terminal_newline,
+):
     p = tmp_path / 'precip.u01'
     before = ('Flow Title=Río\n' + boundary('area20') + boundary('area2') +
               'Precipitation Mode=Disable\n').replace('\n', newline).encode(encoding)
+    if not terminal_newline:
+        before = before[:-len(newline)]
     p.write_bytes(before)
     RasUnsteady.set_precipitation_hyetograph(p, frame([.1, .2]), boundary_name=' AREA2 ')
     after = p.read_bytes()
-    untouched = ('Flow Title=Río\n' + boundary('area20')).replace('\n', newline).encode(encoding)
+    untouched = ('Flow Title=Río\n' + boundary('area20')).replace('\n', '\r\n').encode(encoding)
     assert after.startswith(untouched)
-    assert after.endswith(('Precipitation Mode=Disable' + newline).encode())
-    if newline == '\r\n':
-        assert b'\n' not in after.replace(b'\r\n', b'')
+    suffix = 'Precipitation Mode=Disable' + ('\r\n' if terminal_newline else '')
+    assert after.endswith(suffix.encode(encoding))
+    assert after.endswith(b'\r\n') is terminal_newline
+    assert b'\n' not in after.replace(b'\r\n', b'')
+    assert b'\r' not in after.replace(b'\r\n', b'')
 
 
 @pytest.mark.parametrize('bad_block', [boundary()+boundary(), boundary().replace('Interval=1HOUR\n',''),

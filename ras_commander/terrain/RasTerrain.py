@@ -65,6 +65,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 # Import decorator from parent package
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..ComputeResults import TerrainExportResult
 from ..LoggingConfig import get_logger
@@ -2015,7 +2016,7 @@ class RasTerrain:
         output_prj.parent.mkdir(parents=True, exist_ok=True)
 
         # Write PRJ file
-        output_prj.write_text(prj_wkt, encoding="utf-8")
+        _write_ras_text(output_prj, prj_wkt, encoding="utf-8")
         logger.info(f"Projection file created: {output_prj.name}")
         logger.debug(f"Projection file path: {output_prj}")
 

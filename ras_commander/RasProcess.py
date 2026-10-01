@@ -106,6 +106,7 @@ class WineConfig:
     ras_install_dir: Optional[Path] = None
 
 
+from ._ras_text import _normalize_ras_newlines, _write_ras_text, _write_ras_xml
 from .RasPrj import ras
 from .RasMap import RasMap
 from .RasBenefits import BenefitAreaConfig, RasBenefits
@@ -2958,7 +2959,8 @@ Step 5: Configure (optional — auto-detection usually works)
             f".{rasmap_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
         )
         try:
-            tree.write(
+            _write_ras_xml(
+                tree,
                 _windows_extended_length_path(temporary_path),
                 encoding="utf-8",
                 xml_declaration=True,
@@ -3098,7 +3100,8 @@ Step 5: Configure (optional — auto-detection usually works)
                 map_params.set(attr_name, str(attr_value))
 
             # Write back
-            tree.write(
+            _write_ras_xml(
+                tree,
                 _windows_extended_length_path(rasmap_path),
                 encoding="utf-8",
                 xml_declaration=True,
@@ -3157,7 +3160,8 @@ Step 5: Configure (optional — auto-detection usually works)
                     removed_count += 1
 
             if removed_count > 0:
-                tree.write(
+                _write_ras_xml(
+                    tree,
                     _windows_extended_length_path(rasmap_path),
                     encoding="utf-8",
                     xml_declaration=True,
@@ -5466,16 +5470,15 @@ Step 5: Configure (optional — auto-detection usually works)
                 temp_dir = wine_config.wine_prefix / "drive_c" / "temp"
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 xml_path = temp_dir / f"rasprocess_cmd_{os.getpid()}.xml"
-                with open(xml_path, "w", encoding="utf-8") as f:
-                    f.write(command_xml)
+                _write_ras_text(xml_path, command_xml, encoding="utf-8")
                 xml_wine_path = RasProcess._linux_to_wine_path(xml_path)
             else:
                 raise RuntimeError("Wine not configured on Linux")
         else:
             f = tempfile.NamedTemporaryFile(
-                mode="w", suffix=".xml", delete=False, encoding="utf-8"
+                mode="w", suffix=".xml", delete=False, encoding="utf-8", newline=""
             )
-            f.write(command_xml)
+            f.write(_normalize_ras_newlines(command_xml))
             f.close()
             xml_path = Path(f.name)
             xml_wine_path = str(xml_path)

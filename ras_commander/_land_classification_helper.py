@@ -23,6 +23,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
 from ._rasmap_schema import create_rasmap_dataframe, expected_rasmap_path
@@ -1446,7 +1447,9 @@ def upsert_land_classification_layer(
             },
         )
 
-    tree.write(project_paths.rasmap_path, encoding="utf-8", xml_declaration=False)
+    _write_ras_xml(
+        tree, project_paths.rasmap_path, encoding="utf-8", xml_declaration=False
+    )
     return layer_path
 
 

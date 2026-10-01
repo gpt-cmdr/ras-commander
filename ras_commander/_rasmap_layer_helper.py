@@ -11,6 +11,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import pandas as pd
 
 from . import _land_classification_helper as _lch
+from ._ras_text import _write_ras_xml
 from .LoggingConfig import get_logger
 from .RasUtils import RasUtils
 
@@ -471,7 +472,7 @@ def _ensure_map_layers(root: ET.Element) -> ET.Element:
 
 
 def _write_rasmap_tree(tree: ET.ElementTree, rasmap_path: Path) -> None:
-    tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+    _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
 
 
 def _normalize_string_filter(

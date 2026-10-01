@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 
+from ._ras_text import _write_ras_text
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPlan import RasPlan
@@ -619,8 +620,7 @@ class RasFloodway:
 
     @staticmethod
     def _write_lines(path: Path, lines: List[str]) -> None:
-        with open(path, "w", encoding="utf-8") as file:
-            file.writelines(lines)
+        _write_ras_text(path, "".join(lines), encoding="utf-8")
 
     @staticmethod
     def _parse_encroach_param(line: str) -> List[Optional[float]]:

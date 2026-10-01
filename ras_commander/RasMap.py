@@ -93,6 +93,7 @@ from typing import (
     Union,
 )
 
+from ._ras_text import _write_ras_xml
 from .RasPrj import ras
 from .RasPlan import RasPlan
 from .RasUtils import RasUtils
@@ -1937,7 +1938,9 @@ class RasMap:
         for layer in _mlh.top_level_map_layers(root):
             if layer.get("Name") == layer_name:
                 map_layers.remove(layer)
-                tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+                _write_ras_xml(
+                    tree, rasmap_path, encoding="utf-8", xml_declaration=True
+                )
                 logger.info("Removed map layer '%s'", layer_name)
                 logger.debug("Updated RASMapper file: %s", rasmap_path)
                 return True
@@ -2096,7 +2099,7 @@ class RasMap:
         target_layer.set("Checked", "True" if checked else "False")
         target_layer.set("Expanded", "True" if expanded else "False")
         target_layer.set("Filename", rel_hdf)
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
 
         readback = ET.parse(rasmap_path).getroot().find("Geometries")
         registered = None if readback is None else next(
@@ -2200,7 +2203,7 @@ class RasMap:
                 break
 
         if found:
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             return True
         else:
             logger.warning(f"Geometry '{geom_identifier}' not found in .rasmap")
@@ -2285,7 +2288,7 @@ class RasMap:
             modified_count += 1
 
         if modified_count > 0:
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             logger.info(f"Modified visibility for {modified_count} geometries")
 
         return modified_count
@@ -3799,7 +3802,7 @@ class RasMap:
                         "Filtered terrains, keeping only '%s'", specify_terrain
                     )
 
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
 
             # --- 3. Execute HEC-RAS ---
             if auto_click_compute:
@@ -5092,7 +5095,7 @@ class RasMap:
                 )
 
             # Write the modified XML back
-            tree.write(rasmap_path, encoding="utf-8", xml_declaration=True)
+            _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=True)
             logger.debug("Updated RASMapper configuration: %s", rasmap_path)
 
             return True
@@ -5678,7 +5681,7 @@ class RasMap:
 
         # Write updated rasmap file
         # Use a custom write to preserve XML formatting
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
 
         action = "Replaced" if existing_layer is not None else "Added"
         logger.info("%s terrain layer '%s' in .rasmap", action, layer_name)
@@ -5808,7 +5811,7 @@ class RasMap:
                     )
                 shutil.copy2(target, backup_path)
             try:
-                tree.write(staging, encoding="utf-8", xml_declaration=False)
+                _write_ras_xml(tree, staging, encoding="utf-8", xml_declaration=False)
                 ET.parse(staging)
                 os.replace(staging, target)
             finally:
@@ -5984,7 +5987,7 @@ class RasMap:
         layer.set("Expanded", "True" if expanded else "False")
         layer.set("Filename", rel_hdf)
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         record = {
             "name": layer_name,
             "filename": rel_hdf,
@@ -6087,7 +6090,7 @@ class RasMap:
             child.set("Type", layer_type)
             child.set("Filename", rel_plan)
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         logger.info("Ensured 2D encroachment plan layers")
         logger.debug("Updated RASMapper file: %s", rasmap_path)
         return rasmap_path
@@ -6222,7 +6225,7 @@ class RasMap:
         map_parameters.set("ProfileName", profile_name)
         map_parameters.set("ArrivalDepth", "0")
 
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         record = {
             "name": layer_name,
             "parent_plan": host_plan_name,
@@ -6483,7 +6486,7 @@ class RasMap:
             t_elem.set("Name", terrain_name)
 
         # Write updated rasmap
-        tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+        _write_ras_xml(tree, rasmap_path, encoding="utf-8", xml_declaration=False)
         logger.info(f"Added calculated layer '{layer_name}' to plan '{host_plan_name}'")
         return True
 
@@ -6551,7 +6554,9 @@ class RasMap:
                     script_filename = child.get("Filename", "")
                     results_layer.remove(child)
 
-                    tree.write(rasmap_path, encoding="utf-8", xml_declaration=False)
+                    _write_ras_xml(
+                        tree, rasmap_path, encoding="utf-8", xml_declaration=False
+                    )
                     logger.info(
                         f"Removed calculated layer '{layer_name}' from "
                         f"'{results_layer.get('Name')}'"

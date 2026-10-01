@@ -30,6 +30,7 @@ from .RasNetworkConflation import (
     RasNetworkConflation,
 )
 from .RasPrj import RasPrj
+from ._ras_text import _write_ras_text
 
 
 if TYPE_CHECKING:
@@ -1056,25 +1057,23 @@ class RasBreakout1D:
         plan_file = destination / f"{project_name}.p01"
         geometry_file = destination / f"{project_name}.g01"
         flow_file = destination / f"{project_name}.f01"
-        geometry_file.write_text(
-            assembly["geometry_text"], encoding="utf-8", newline="\r\n"
-        )
+        _write_ras_text(geometry_file, assembly["geometry_text"], encoding="utf-8")
         from .RasSteady import RasSteady
 
         RasSteady.write_flow_file(flow_file, assembly["flow_data"])
-        plan_file.write_text(
+        _write_ras_text(
+            plan_file,
             RasBreakout1D._rewrite_plan(
                 Path(template_source.plan["plan_path"]), project_name
             ),
             encoding="utf-8",
-            newline="\r\n",
         )
-        project_file.write_text(
+        _write_ras_text(
+            project_file,
             RasBreakout1D._rewrite_project(
                 template_source.ras_object.prj_file, project_name
             ),
             encoding="utf-8",
-            newline="\r\n",
         )
 
         for source_id, expected_hash in assembly[
@@ -1629,19 +1628,19 @@ class RasBreakout1D:
         geometry_file = destination / f"{project_name}.g01"
         flow_file = destination / f"{project_name}.f01"
 
-        geometry_file.write_text(geometry_text, encoding="utf-8", newline="\r\n")
+        _write_ras_text(geometry_file, geometry_text, encoding="utf-8")
         from .RasSteady import RasSteady
 
         RasSteady.write_flow_file(flow_file, flow_data)
-        plan_file.write_text(
+        _write_ras_text(
+            plan_file,
             RasBreakout1D._rewrite_plan(source_plan, project_name),
             encoding="utf-8",
-            newline="\r\n",
         )
-        project_file.write_text(
+        _write_ras_text(
+            project_file,
             RasBreakout1D._rewrite_project(source_ras.prj_file, project_name),
             encoding="utf-8",
-            newline="\r\n",
         )
 
         if RasBreakout1D._sha256(source_geom) != source_geom_hash:

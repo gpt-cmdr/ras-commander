@@ -87,6 +87,7 @@ from ras_commander._rasmap_schema import (
     expected_rasmap_path,
     rasmap_dataframe_is_usable,
 )
+from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
@@ -1558,8 +1559,9 @@ class RasPrj:
                 raise ValueError("Could not find 'Proj Title=' or 'Current Plan=' in project file")
 
             # Write back to file
-            with open(self.prj_file, 'w', encoding='utf-8', errors='replace') as f:
-                f.writelines(lines)
+            _write_ras_text(
+                self.prj_file, "".join(lines), encoding="utf-8", errors="replace"
+            )
 
             logger.info(f"Set current plan to p{plan_number_str} in {self.prj_file}")
 
@@ -3134,8 +3136,10 @@ def create_project_from_template(
     if target_crs is not None:
         from pyproj import CRS
 
-        proj_out.write_text(
-            CRS.from_user_input(target_crs).to_wkt("WKT1_ESRI"), encoding="utf-8"
+        _write_ras_text(
+            proj_out,
+            CRS.from_user_input(target_crs).to_wkt("WKT1_ESRI"),
+            encoding="utf-8",
         )
     elif proj_src.exists():
         shutil.copyfile(proj_src, proj_out)
@@ -3145,7 +3149,7 @@ def create_project_from_template(
     if hec_prj and hec_prj.exists():
         txt = hec_prj.read_text(encoding="utf-8", errors="replace")
         txt = txt.replace("Proj Title=TEMPLATE", f"Proj Title={project_name}", 1)
-        hec_prj.write_text(txt, encoding="utf-8")
+        _write_ras_text(hec_prj, txt, encoding="utf-8")
 
     # 4. Rewrite the .rasmap geometry filename references so RASMapper resolves
     #    the renamed geometry HDF (the .rasmap references it by full filename).
@@ -3153,7 +3157,7 @@ def create_project_from_template(
     if rasmap and rasmap.exists():
         txt = rasmap.read_text(encoding="utf-8", errors="replace")
         txt = txt.replace("TEMPLATE.g01.hdf", f"{project_name}.g01.hdf")
-        rasmap.write_text(txt, encoding="utf-8")
+        _write_ras_text(rasmap, txt, encoding="utf-8")
 
     logger.info(
         f"Created project '{project_name}' from RAS {version} template in "

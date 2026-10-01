@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 from datetime import datetime
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 
@@ -567,19 +568,8 @@ class GeomParser:
                 backup_path = GeomParser.create_backup(geom_file)
                 logger.debug(f"Created backup: {backup_path}")
 
-            # Step 2: Preserve the source file's line-ending convention.
-            # Python universal-newline reads normalize CRLF to ``\n``; writing
-            # those lines verbatim makes legacy HEC-RAS/VB6 treat a cloned
-            # geometry as one giant record. Native geometry files are normally
-            # CRLF, so recover that convention from the pre-edit bytes.
-            source_bytes = geom_file.read_bytes()
-            line_ending = "\r\n" if b"\r\n" in source_bytes else "\n"
-            text = "".join(modified_lines)
-            text = text.replace("\r\n", "\n").replace("\r", "\n")
-            if line_ending != "\n":
-                text = text.replace("\n", line_ending)
-            with open(temp_path, 'w', encoding='utf-8', newline='') as f:
-                f.write(text)
+            # Step 2: Write engine records with CRLF on every platform.
+            _write_ras_text(temp_path, "".join(modified_lines), encoding="utf-8")
 
             # Step 3: Basic validation - check temp file has content
             if temp_path.stat().st_size == 0:

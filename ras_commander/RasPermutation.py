@@ -21,6 +21,7 @@ import pandas as pd
 
 from .Decorators import log_call
 from .LoggingConfig import get_logger
+from ._ras_text import _write_ras_text
 
 
 logger = get_logger(__name__)
@@ -158,13 +159,7 @@ class RasPermutation:
             for line in lines
         ]
 
-        with open(
-            file_path,
-            "w",
-            encoding="utf-8",
-            newline="",
-        ) as handle:
-            handle.writelines(normalized_lines)
+        _write_ras_text(file_path, "".join(normalized_lines), encoding="utf-8")
 
         if not RasPermutation._has_crlf_only(file_path):
             raise RuntimeError(

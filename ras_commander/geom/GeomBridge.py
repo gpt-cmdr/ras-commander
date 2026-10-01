@@ -47,6 +47,7 @@ from typing import Union, Optional, List, Dict, Any
 import pandas as pd
 import numpy as np
 
+from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
 from .GeomParser import GeomParser
@@ -2208,8 +2209,7 @@ class GeomBridge:
                 backup_path = GeomParser.create_backup(geom_file)
                 logger.debug(f"Created backup: {backup_path}")
 
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(geom_file, "".join(lines), encoding="utf-8")
 
             after = GeomBridge.get_hydraulic_methods(
                 geom_file, river, reach, rs, opening_index=opening_index
@@ -3357,8 +3357,7 @@ class GeomBridge:
                 logger.debug(f"Inserted {lines_inserted} new HTAB lines at line {insert_idx}")
 
             # Write modified file
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(geom_file, "".join(lines), encoding="utf-8")
 
             logger.debug(f"Successfully wrote HTAB parameters for {river}/{reach}/RS {rs}")
 
@@ -3719,8 +3718,7 @@ class GeomBridge:
                 )
 
             # Write modified file once
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(geom_file, "".join(lines), encoding="utf-8")
 
             total_modified = bridges_modified + inline_weirs_modified
             logger.debug(

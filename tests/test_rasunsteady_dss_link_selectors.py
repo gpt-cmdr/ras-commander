@@ -81,12 +81,15 @@ def test_legacy_unique_1d_selector_remains_positional(tmp_path: Path) -> None:
     assert f"{'9':>8}" in text
 
 
-def test_exact_2d_selector_leaves_other_block_unchanged(tmp_path: Path) -> None:
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_exact_2d_selector_preserves_other_block_except_newlines(
+    tmp_path: Path, newline: str,
+) -> None:
     unsteady = tmp_path / "model.u01"
     untouched = _block(",,,,,Area2D,,Line A,", value="7")
     target = _block(",,,,,Area2D,,Line B,", value="8")
     untouched_bytes = ("\r\n".join(untouched) + "\r\n").encode()
-    _write_file(unsteady, untouched + target, newline="\r\n")
+    _write_file(unsteady, untouched + target, newline=newline)
 
     assert _set_link(
         unsteady,
@@ -339,7 +342,7 @@ def test_bare_relative_dss_filename_gets_explicit_prefix(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
-def test_preserves_consistent_newline_convention(
+def test_accepts_consistent_input_newlines_and_writes_crlf(
     tmp_path: Path,
     newline: str,
 ) -> None:
@@ -352,25 +355,28 @@ def test_preserves_consistent_newline_convention(
 
     assert _set_link(unsteady, sa_2d_name="Area2D", bc_line="Line A")
 
-    _assert_only_newline(unsteady.read_bytes(), newline.encode())
+    _assert_only_newline(unsteady.read_bytes(), b"\r\n")
 
 
 @pytest.mark.parametrize("terminal_newline", [True, False])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
 def test_preserves_terminal_newline_state(
     tmp_path: Path,
     terminal_newline: bool,
+    newline: str,
 ) -> None:
     unsteady = tmp_path / "model.u01"
     _write_file(
         unsteady,
         _block(",,,,,Area2D,,Line A,"),
-        newline="\r\n",
+        newline=newline,
         terminal_newline=terminal_newline,
     )
 
     assert _set_link(unsteady, sa_2d_name="Area2D", bc_line="Line A")
 
     assert unsteady.read_bytes().endswith(b"\r\n") is terminal_newline
+    _assert_only_newline(unsteady.read_bytes(), b"\r\n")
 
 
 def test_mixed_newlines_rejected_with_original_bytes_unchanged(

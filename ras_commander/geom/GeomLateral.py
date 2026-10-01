@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
     from shapely.geometry.base import BaseGeometry
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
@@ -1654,7 +1655,7 @@ class GeomLateral:
         backup_path = geom_file.with_suffix(geom_file.suffix + ".bak")
         backup_path.write_text("".join(lines), encoding="utf-8")
         out_lines = abs_lines[:replace_start] + new_lines + abs_lines[replace_end:]
-        geom_file.write_text("".join(out_lines), encoding="utf-8")
+        _write_ras_text(geom_file, "".join(out_lines), encoding="utf-8")
 
         return {
             "culverts_written": len(culverts),

@@ -20,6 +20,15 @@ rejects partial or unknown support before writing. `RasBreakout2D` retains quali
 returns native attachment evidence separately from text retention; missing evidence reports
 `CONNECTION_ATTACHMENT_UNVERIFIED`.
 
+**Cross-platform HEC-RAS text serialization**
+
+Model text writers now serialize CRLF on every platform, including steady flow,
+plan, project, geometry, and unsteady flow files. Existing LF and CRLF inputs
+remain readable; fields, encodings, and terminal-newline state are preserved.
+This fixes Linux-authored steady flow files failing to load in HEC-RAS 6.6 under
+Wine. The native-Linux solver path still converts to LF at execution
+(`dos2unix=True` and `fix_line_endings=True` remain the defaults).
+
 **Complete 2D perimeter inventory and area-scoped BC replacement**
 
 `HdfMesh.get_mesh_perimeter_faces()` returns all native perimeter faces of a

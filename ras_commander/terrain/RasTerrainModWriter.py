@@ -28,6 +28,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 
+from .._ras_text import _write_ras_xml
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 
@@ -2172,7 +2173,7 @@ class RasTerrainModWriter:
         mod_group.set('Checked', 'True')
         mod_group.set('Expanded', 'True')
 
-        tree.write(rasmap_path, xml_declaration=False, encoding='unicode')
+        _write_ras_xml(tree, rasmap_path, xml_declaration=False, encoding="unicode")
         return mod_group
 
     @staticmethod
@@ -2236,7 +2237,7 @@ class RasTerrainModWriter:
         cp_layer.set('Type', 'ElevationControlPointLayer')
         cp_layer.set('Checked', 'True')
 
-        tree.write(rasmap_path, xml_declaration=False, encoding='unicode')
+        _write_ras_xml(tree, rasmap_path, xml_declaration=False, encoding="unicode")
         logger.debug(f"Added modification layer '{name}' to .rasmap")
 
 

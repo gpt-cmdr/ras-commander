@@ -128,6 +128,7 @@ import pandas as pd
 import numpy as np
 import re
 from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
+from ._ras_text import _normalize_ras_newlines, _write_ras_text
 
 if TYPE_CHECKING:
     from .ComputeResults import PrecipRasterImportResult
@@ -415,8 +416,9 @@ class RasUnsteady:
         
         if updated:
             try:
-                with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
-                    f.writelines(lines)
+                _write_ras_text(
+                    unsteady_path, "".join(lines), encoding="utf-8", errors="replace"
+                )
                 logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
                 logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
@@ -1076,8 +1078,9 @@ class RasUnsteady:
             )
             return
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(
             f"Set Non-Newtonian method to {method_id} "
@@ -1199,8 +1202,9 @@ class RasUnsteady:
             elif max_cv is not None and line.startswith('Non-Newtonian Max Cv='):
                 lines[i] = f"Non-Newtonian Max Cv={max_cv}\n"
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         changes = []
         if cv is not None:
@@ -1409,8 +1413,9 @@ class RasUnsteady:
             elif user_viscosity is not None and line.startswith('User Viscosity='):
                 lines[i] = f"User Viscosity={user_viscosity}\n"
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         changes = []
         if yield_method is not None:
@@ -1519,8 +1524,9 @@ class RasUnsteady:
                 lines[i] = f"Herschel-Bulkley Coef={new_k}, {new_n}\n"
                 break
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         changes = []
         if k is not None:
@@ -1751,8 +1757,9 @@ class RasUnsteady:
             elif high_c_transport is not None and line.startswith('Non-Newtonian High C Transport='):
                 lines[i] = f"Non-Newtonian High C Transport= {high_c_transport} \n"
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         changes = []
         if clastic_method is not None:
@@ -1974,8 +1981,9 @@ class RasUnsteady:
         if interval is not None and target_interval_idx is not None:
             lines[target_interval_idx] = f'Gate Time Interval={interval}\n'
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(
             f"Set {len(values)} gate openings (boundary_index={boundary_index}) "
@@ -2207,8 +2215,9 @@ class RasUnsteady:
         if interval is not None and target_interval_idx is not None:
             lines[target_interval_idx_adj] = f'Interval={interval}\n'
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(
             f"Set {len(values)} GW interflow values (boundary_index={boundary_index}) "
@@ -2407,8 +2416,9 @@ class RasUnsteady:
             elif cp_max_pool is not None and line.startswith('Navigation Dam CP Max Pool='):
                 lines[i] = f'Navigation Dam CP Max Pool={cp_max_pool}\n'
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(
             f"Set Navigation Dam data (boundary_index={boundary_index}) "
@@ -2602,8 +2612,9 @@ class RasUnsteady:
                         break
                 lines[insert_pos:insert_pos] = new_gate_lines
 
-        with open(unsteady_file, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_file, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         logger.info(
             f"Set Rules BC data (boundary_index={boundary_index}) "
@@ -2701,8 +2712,12 @@ class RasUnsteady:
 
         if retained_lines != original_lines:
             try:
-                with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
-                    f.writelines(retained_lines)
+                _write_ras_text(
+                    unsteady_path,
+                    "".join(retained_lines),
+                    encoding="utf-8",
+                    errors="replace",
+                )
                 logger.debug(f"Successfully wrote modifications to unsteady flow file: {unsteady_path}")
             except PermissionError:
                 logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
@@ -3011,8 +3026,9 @@ class RasUnsteady:
             retained.insert(use_restart_idx + 1, f"Prior WS Filename={prior_ws_filename}\n")
             retained.insert(use_restart_idx + 2, f"Prior WS Profile={profile}\n")
 
-        with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as f:
-            f.writelines(retained)
+        _write_ras_text(
+            unsteady_path, "".join(retained), encoding="utf-8", errors="replace"
+        )
 
         logger.info(f"Set IC method to '{method}' in {unsteady_path.name}")
 
@@ -3333,7 +3349,7 @@ class RasUnsteady:
                 delete=False,
             ) as temp_file:
                 temp_path = Path(temp_file.name)
-                temp_file.writelines(lines)
+                temp_file.write(_normalize_ras_newlines("".join(lines)))
                 temp_file.flush()
                 os.fsync(temp_file.fileno())
 
@@ -4102,8 +4118,7 @@ class RasUnsteady:
             )
 
         if updated_lines != original_lines:
-            with open(unsteady_path, "w", encoding="utf-8") as file:
-                file.writelines(updated_lines)
+            _write_ras_text(unsteady_path, "".join(updated_lines), encoding="utf-8")
 
             if hasattr(ras_obj, "get_boundary_conditions"):
                 try:
@@ -4511,8 +4526,8 @@ class RasUnsteady:
         """Preview or remove one exact boundary block from an owned stage.
 
         Selection evidence comes from :meth:`inspect_boundary_blocks`. Preview
-        is the default and performs no write. Apply uses a verified byte splice
-        and atomic replacement; direct paths, partial selectors, positional
+        is the default and performs no write. Apply uses a verified splice with
+        CRLF serialization and atomic replacement; direct paths, partial selectors, positional
         selectors, ``force``, and global-project fallback are not accepted.
         """
         from .RasBoundary import delete_boundary
@@ -4772,8 +4787,9 @@ class RasUnsteady:
         lines[start_line:start_line+len(formatted_values)] = formatted_values
         
         try:
-            with open(unsteady_path, 'w', encoding='utf-8', errors='replace') as file:
-                file.writelines(lines)
+            _write_ras_text(
+                unsteady_path, "".join(lines), encoding="utf-8", errors="replace"
+            )
             logger.info(f"Successfully updated table '{table_name}' in {unsteady_path}")
         except PermissionError:
             logger.error(f"Permission denied when writing to unsteady flow file: {unsteady_path}")
@@ -5020,7 +5036,7 @@ class RasUnsteady:
         lines[interval_indices[0]] = f"Interval={interval_str}{newline}"
         lines[precip_line_idx] = f"Precipitation Hydrograph= {num_values} {newline}"
         new_lines = lines[:old_data_start] + formatted_lines + lines[old_data_end:]
-        unsteady_path.write_bytes("".join(new_lines).encode(encoding))
+        _write_ras_text(unsteady_path, "".join(new_lines), encoding=encoding)
         logger.info(
             f"Updated Precipitation Hydrograph in {unsteady_path.name}: "
             f"{num_values} ordinates including time-zero anchor, interval={interval_str}, "
@@ -6299,8 +6315,9 @@ class RasUnsteady:
         )
 
         # Write the updated file
-        with open(unsteady_path, 'w', encoding='utf-8', errors='replace', newline='\r\n') as f:
-            f.writelines(lines)
+        _write_ras_text(
+            unsteady_path, "".join(lines), encoding="utf-8", errors="replace"
+        )
 
         if completed_modes:
             logger.info(
@@ -7135,8 +7152,7 @@ class RasUnsteady:
         insert_idx = RasUnsteady._find_station_insert_index(lines)
         lines[insert_idx:insert_idx] = station_lines
 
-        with open(unsteady_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         logger.info(f"Updated meteorological station '{station_name}' in {unsteady_path.name}")
         logger.debug(f"Meteorological station update path: {unsteady_path}")
@@ -7266,8 +7282,7 @@ class RasUnsteady:
         lines = RasUnsteady._remove_point_et_block(lines, station_name)
         RasUnsteady._insert_point_et_block(lines, block_lines)
 
-        with open(unsteady_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         logger.info(
             f"Configured point ET for station '{station_name}' in {unsteady_path.name} "
@@ -7993,8 +8008,7 @@ class RasUnsteady:
                     logger.debug(f"Updated DSS Path at line {i+1}: {dss_path} -> {new_dss_path}")
 
         if update_count > 0:
-            with open(unsteady_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
             logger.info(f"Updated {update_count} DSS paths in {unsteady_path.name}")
         else:
             logger.warning(f"No DSS paths found with run identifier '{old_run_id}'")
@@ -9644,8 +9658,7 @@ class RasUnsteady:
         block_after = ''.join(lines[boundary_idx:new_block_end])
 
         # 7) Persist file
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         # 8) Refresh boundaries_df where possible
         boundaries_df_refreshed = False
@@ -9973,8 +9986,7 @@ class RasUnsteady:
             new_block_end += 1
         block_after = ''.join(lines[boundary_idx:new_block_end])
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         boundaries_df_refreshed = False
         if ras_obj is not None:
@@ -10464,8 +10476,7 @@ class RasUnsteady:
         block_after = ''.join(lines[boundary_idx:new_block_end])
 
         # 7) Persist file
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         # 8) Refresh boundaries_df where possible
         boundaries_df_refreshed = False
@@ -10803,8 +10814,7 @@ class RasUnsteady:
         block_after = ''.join(lines[boundary_idx:new_block_end])
 
         # 7) Persist file
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         # 8) Refresh boundaries_df where possible
         boundaries_df_refreshed = False
@@ -10978,8 +10988,7 @@ class RasUnsteady:
             i += 1
 
         if update_count > 0:
-            with open(unsteady_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
             logger.info(f"Updated {update_count} DSS paths in {unsteady_path.name}")
         else:
             if old_a_part:
@@ -11112,8 +11121,7 @@ class RasUnsteady:
             i += 1
 
         if updated:
-            with open(unsteady_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
             logger.info(f"Updated QMult to {new_multiplier} for station '{river_station}' in {unsteady_path.name}")
         else:
             logger.warning(f"Boundary not found for station '{river_station}'")
@@ -11274,8 +11282,7 @@ class RasUnsteady:
                 i += 1
 
         if total_updates > 0:
-            with open(unsteady_path, 'w', encoding='utf-8') as f:
-                f.writelines(lines)
+            _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
             logger.info(f"Applied {total_updates} updates to {unsteady_path.name}")
         else:
             logger.warning("No matching boundaries found for any updates")
@@ -11481,8 +11488,7 @@ class RasUnsteady:
                     for old_sub, new_sub in mapping.items():
                         content = content.replace(old_sub, new_sub)
 
-                    with open(unsteady_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
+                    _write_ras_text(unsteady_path, content, encoding="utf-8")
 
                     logger.info(f"Applied {len(updates_for_file)} updates to {unsteady_path.name}")
 
@@ -11851,8 +11857,7 @@ class RasUnsteady:
         for idx, data_line in enumerate(formatted_lines):
             lines.insert(insert_pos + idx, data_line)
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         boundaries_df_refreshed = False
         if ras_obj is not None:
@@ -12199,8 +12204,7 @@ class RasUnsteady:
             for i, bl in enumerate(new_block):
                 lines.insert(insert_pos + i, bl)
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         boundaries_df_refreshed = False
         if ras_obj is not None:
@@ -12629,8 +12633,7 @@ class RasUnsteady:
                 lines.insert(insert_after, slope_line)
             slope_written = slope
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         boundaries_df_refreshed = False
         if ras_obj is not None:
@@ -13036,8 +13039,7 @@ class RasUnsteady:
                 lines.insert(insert_after, slope_line)
             slope_written = slope
 
-        with open(unsteady_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        _write_ras_text(unsteady_path, "".join(lines), encoding="utf-8")
 
         boundaries_df_refreshed = False
         if ras_obj is not None:

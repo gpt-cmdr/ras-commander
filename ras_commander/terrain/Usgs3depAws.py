@@ -73,6 +73,7 @@ import pandas as pd
 import requests
 from shapely.geometry import box
 
+from .._ras_text import _write_ras_text
 from .._spatial_extent import (
     _normalize_extent_bounds,
     _normalize_extent_geometry,
@@ -3525,7 +3526,11 @@ class Usgs3depAws:
         hec_terrain_hdf = Path(hec_terrain_hdf)
         hec_terrain_hdf.parent.mkdir(parents=True, exist_ok=True)
         projection_prj = hec_terrain_hdf.parent / "Projection.prj"
-        projection_prj.write_text(CRS.from_user_input(project_crs).to_wkt("WKT1_ESRI"), encoding="utf-8")
+        _write_ras_text(
+            projection_prj,
+            CRS.from_user_input(project_crs).to_wkt("WKT1_ESRI"),
+            encoding="utf-8",
+        )
 
         kwargs: Dict[str, Any] = {
             "input_rasters": [Path(raster_path)],

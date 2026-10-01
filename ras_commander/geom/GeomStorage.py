@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
     from shapely.geometry.base import BaseGeometry
 
+from .._ras_text import _write_ras_text
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
@@ -1129,8 +1130,7 @@ class GeomStorage:
             )
 
             # Write modified file
-            with open(geom_file, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+            _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
             logger.info(
                 f"Updated elevation-volume curve for {storage_name}: "
@@ -1398,7 +1398,7 @@ class GeomStorage:
                 geom_file,
                 geom_file.with_suffix(geom_file.suffix + ".bak"),
             )
-        geom_file.write_text("".join(lines), encoding="utf-8")
+        _write_ras_text(geom_file, "".join(lines), encoding="utf-8")
 
         if update_hdf:
             geom_hdf = Path(str(geom_file) + ".hdf")
@@ -1623,8 +1623,7 @@ class GeomStorage:
             )
             new_lines = lines[:start_idx] + new_block_lines + lines[end_idx:]
 
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(
             f"Upserted 2D flow area perimeter for {flow_area_name}: "
@@ -1752,8 +1751,7 @@ class GeomStorage:
             logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:start_idx] + updated_block_lines + lines[end_idx:]
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(f"Updated 2D flow area settings for {flow_area_name}")
         return backup_path if backup_path else geom_file
@@ -2099,8 +2097,7 @@ class GeomStorage:
             logger.debug(f"Created backup: {backup_path}")
 
         new_lines = lines[:insert_idx] + new_blocks + lines[insert_idx:]
-        with open(geom_file, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
+        _write_ras_text(geom_file, "".join(new_lines), encoding="utf-8")
 
         logger.info(
             "Inserted %d breaklines for %s into %s",
