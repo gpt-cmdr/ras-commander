@@ -776,6 +776,9 @@ indices = RasUtils.perform_kdtree_query(
 
 ### RasMap
 
+See the [RASMapper API section](rasmapper/index.md) for the complete task-grouped
+reference, including display, classification authoring, stored maps and mesh generation.
+
 ::: ras_commander.RasMap
     options:
       show_root_heading: true
@@ -794,8 +797,6 @@ indices = RasUtils.perform_kdtree_query(
         - add_land_classification_polygon
         - update_land_classification_polygon
         - delete_land_classification_polygon
-        - get_terrain_path
-        - get_landcover_path
         - associate_geometry_layers
         - get_hdf_geometry_association
         - list_results_plans
@@ -894,6 +895,9 @@ RasMap.associate_geometry_layers(
     missing geometry datasets.
 
 ### RasProcess
+
+See [stored maps](rasmapper/stored-maps.md) and
+[geometry completion](rasmapper/geometry-completion.md) for the full method reference.
 
 ::: ras_commander.RasProcess
     options:

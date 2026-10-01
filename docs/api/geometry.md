@@ -337,6 +337,10 @@ back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
 
 ## GeomMesh
 
+The [automated mesh generation reference](rasmapper/mesh-generation.md) provides
+the workflow stages, source-derived signatures and result records. The detailed
+version and repair notes below remain applicable.
+
 Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
 utilities.
 

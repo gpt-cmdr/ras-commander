@@ -24,6 +24,16 @@ Primary classes for project management and execution:
 - [`RasProcess`](core.md#rasprocess) - RasProcess.exe CLI automation, stored maps, and native reference validators
 - [`RasControl`](core.md#rascontrol) - Legacy COM interface
 
+## RASMapper and Automated Mesh Generation
+
+The [RASMapper reference](rasmapper/index.md) groups the spatial APIs by task:
+
+- [Layers and associations](rasmapper/layers.md) — terrain, classifications, reference maps and geometry HDF associations
+- [Display and spatial review](rasmapper/display.md) — layer visibility, bounds, screenshots and review bundles
+- [Stored maps](rasmapper/stored-maps.md) — headless result export, profiles, timesteps and calculated layers
+- [Geometry completion](rasmapper/geometry-completion.md) — native geometry-derived layers and diagnostics
+- [Automated mesh generation](rasmapper/mesh-generation.md) — computation points, refinements, mesh repair and property tables
+
 ## Benefits Analysis
 
 Rasterized depth-comparison benefits and mesh-based WSE comparison:
