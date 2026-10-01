@@ -168,8 +168,7 @@ class Breakout2DPreflight:
         if self.checks.empty:
             return False
         failed = self.checks[
-            self.checks["blocking"].astype(bool)
-            & ~self.checks["passed"].astype(bool)
+            self.checks["blocking"].astype(bool) & ~self.checks["passed"].astype(bool)
         ]
         return failed.empty
 
@@ -179,8 +178,7 @@ class Breakout2DPreflight:
         if self.checks.empty:
             return ["No checks were produced"]
         failed = self.checks[
-            self.checks["blocking"].astype(bool)
-            & ~self.checks["passed"].astype(bool)
+            self.checks["blocking"].astype(bool) & ~self.checks["passed"].astype(bool)
         ]
         return failed["message"].astype(str).tolist()
 
@@ -398,9 +396,7 @@ class RasBreakout2D:
         source_geometry_path = Path(geometry["full_path"])
         source_geometry_hdf = Path(geometry["hdf_path"])
         if not source_geometry_hdf.is_file():
-            raise FileNotFoundError(
-                f"Geometry HDF is required: {source_geometry_hdf}"
-            )
+            raise FileNotFoundError(f"Geometry HDF is required: {source_geometry_hdf}")
         source_unsteady_path = Path(
             RasPlan.get_unsteady_path(unsteady_number, ras_object=ras_object)
         )
@@ -412,7 +408,9 @@ class RasBreakout2D:
             mesh_areas["mesh_name"].astype(str) == str(spec.source_2d_area)
         ]
         if len(selected) != 1:
-            available = sorted(mesh_areas.get("mesh_name", pd.Series(dtype=str)).astype(str))
+            available = sorted(
+                mesh_areas.get("mesh_name", pd.Series(dtype=str)).astype(str)
+            )
             raise ValueError(
                 f"2D flow area {spec.source_2d_area!r} is not unique; "
                 f"available={available}"
@@ -477,8 +475,12 @@ class RasBreakout2D:
         )
         if connection_actions:
             feature_actions = gpd.GeoDataFrame(
-                pd.concat([feature_actions, pd.DataFrame(connection_actions)], ignore_index=True),
-                geometry="geometry", crs=parent_boundary.crs,
+                pd.concat(
+                    [feature_actions, pd.DataFrame(connection_actions)],
+                    ignore_index=True,
+                ),
+                geometry="geometry",
+                crs=parent_boundary.crs,
             )
         checks = _build_checks(
             spec,
@@ -621,8 +623,10 @@ class RasBreakout2D:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
         Geometry BC lines and the cloned unsteady file are intentionally not
-        edited.  ``refresh_hdf`` performs the exact text-to-HDF import.  With
-        ``refresh_method="rasmapper"`` (default) that import runs through the
+        edited. Planned refinement regions are applied to the cloned HDF
+        before perimeter and breakline text edits, while the inherited text
+        and HDF still match. ``refresh_hdf`` performs the exact text-to-HDF
+        import. With ``refresh_method="rasmapper"`` (default) it runs through the
         owned RAS Mapper workflow.  With ``refresh_method="rasexe"`` it runs
         headless: computation points are first regenerated inside the new
         perimeter (the parent's points would otherwise be imported), and
@@ -631,7 +635,9 @@ class RasBreakout2D:
         mode.  That pass also computes property tables, so the cloned HDF
         must first carry a terrain association the child can resolve (set it
         with :meth:`RasMap.set_geometry_association`).
-        ``remesh`` then regenerates computation cells through
+        RAS Mapper's text import replaces the HDF, so its HDF-only refinement
+        regions are reapplied after import. ``remesh`` then regenerates
+        computation cells through
         :class:`GeomMesh`; no option launches a hydraulic simulation.
 
         Args:
@@ -713,6 +719,22 @@ class RasBreakout2D:
         reference_line_specs = _retained_reference_line_specs(preflight)
         refinement_specs = _retained_refinement_specs(preflight)
 
+        # Refinements live only in HDF. Apply them while the clone's inherited
+        # text/HDF are still current, before headless refresh builds any mesh.
+        source_refinement_names = [
+            item["name"]
+            for item in GeomMesh.get_refinement_regions(
+                clone.geometry_number,
+                ras_object=ras_object,
+            )
+        ]
+        GeomMesh.replace_refinement_regions(
+            clone.geometry_number,
+            refinement_specs,
+            expected_existing_names=source_refinement_names,
+            ras_object=ras_object,
+        )
+
         _prepare_geometry_text(
             preflight,
             clone,
@@ -737,46 +759,53 @@ class RasBreakout2D:
                 raise RuntimeError(
                     f"Computation-point regeneration failed: {points.error_message}"
                 )
-            refresh_result = GeomPreprocessor.run_geometry_preprocessor(
-                clone.plan_number,
-                ras_object=ras_object,
-                max_wait=timeout,
-                force=True,
-                clear_geompre=True,
-                geometry_only=True,
-            )
-            if not refresh_result.success or not clone.geometry_hdf.is_file():
-                raise RuntimeError(
-                    "Headless geometry HDF refresh failed: "
-                    f"{refresh_result.error or refresh_result.first_error_line or 'unknown error'}"
+            try:
+                refresh_result = GeomPreprocessor.run_geometry_preprocessor(
+                    clone.plan_number,
+                    ras_object=ras_object,
+                    max_wait=timeout,
+                    force=True,
+                    clear_geompre=True,
+                    geometry_only=True,
                 )
+            except Exception as exc:
+                raise RuntimeError("Headless geometry HDF refresh failed") from exc
+            if not refresh_result.success or not clone.geometry_hdf.is_file():
+                error = refresh_result.error or refresh_result.first_error_line
+                raise RuntimeError(
+                    f"Headless geometry HDF refresh failed: {error or 'unknown error'}"
+                ) from (error if isinstance(error, BaseException) else None)
         elif refresh_hdf:
             from .gui.workflows import MeshRegenerationWorkflow
 
-            refresh_result = MeshRegenerationWorkflow.refresh_geometry_hdf_from_text(
-                geom_number=clone.geometry_number,
-                flow_area_name=preflight.spec.source_2d_area,
-                ras_object=ras_object,
-                timeout=timeout,
-            )
+            try:
+                refresh_result = (
+                    MeshRegenerationWorkflow.refresh_geometry_hdf_from_text(
+                        geom_number=clone.geometry_number,
+                        flow_area_name=preflight.spec.source_2d_area,
+                        ras_object=ras_object,
+                        timeout=timeout,
+                    )
+                )
+            except Exception as exc:
+                raise RuntimeError("Exact geometry HDF refresh failed") from exc
             if not refresh_result.success:
                 raise RuntimeError(
                     f"Exact geometry HDF refresh failed: {refresh_result.error}"
+                ) from (
+                    refresh_result.error
+                    if isinstance(refresh_result.error, BaseException)
+                    else None
                 )
-
-        source_refinement_names = [
-            item["name"]
-            for item in GeomMesh.get_refinement_regions(
+            # Exact RAS Mapper import discards the inherited HDF, including
+            # refinements (which have no text representation). Restore the
+            # plan before meshing without a second refresh.
+            GeomMesh.replace_refinement_regions(
                 clone.geometry_number,
+                refinement_specs,
+                expected_existing_names=[],
                 ras_object=ras_object,
             )
-        ]
-        GeomMesh.replace_refinement_regions(
-            clone.geometry_number,
-            refinement_specs,
-            expected_existing_names=source_refinement_names,
-            ras_object=ras_object,
-        )
 
         containment_result = None
         mesh_result = None
@@ -888,10 +917,13 @@ class RasBreakout2D:
             centers = np.asarray(hdf[f"{base}/Cells Center Coordinate"][()])
             cell_count = len(centers)
             attributes = hdf.get("Geometry/2D Flow Areas/Attributes")
-            if attributes is not None and "Cell Count" in (attributes.dtype.names or ()):
+            if attributes is not None and "Cell Count" in (
+                attributes.dtype.names or ()
+            ):
                 rows = attributes[()]
                 cell_count = next(
-                    int(row["Cell Count"]) for row in rows
+                    int(row["Cell Count"])
+                    for row in rows
                     if HdfUtils.convert_ras_string(row["Name"]) == str(mesh_name)
                 )
             elif "Geometry/2D Flow Areas/Cell Info" in hdf:
@@ -944,9 +976,11 @@ class RasBreakout2D:
             point_a, point_b = point_indexes[row]
             start, count = perimeter_info[row]
             geometry = LineString(
-                [point_coords[point_a],
-                 *perimeter_values[start:start + count],
-                 point_coords[point_b]]
+                [
+                    point_coords[point_a],
+                    *perimeter_values[start : start + count],
+                    point_coords[point_b],
+                ]
             )
             records.append(
                 {
@@ -1039,7 +1073,9 @@ class RasBreakout2D:
         )
 
 
-def _boundary_frame(value: BoundaryInput, explicit_crs: Optional[Any]) -> gpd.GeoDataFrame:
+def _boundary_frame(
+    value: BoundaryInput, explicit_crs: Optional[Any]
+) -> gpd.GeoDataFrame:
     if isinstance(value, gpd.GeoDataFrame):
         frame = value.copy()
     elif isinstance(value, gpd.GeoSeries):
@@ -1067,7 +1103,9 @@ def _union_geometry(frame: gpd.GeoDataFrame) -> BaseGeometry:
     nonempty = frame.geometry[frame.geometry.notna() & ~frame.geometry.is_empty]
     if nonempty.empty:
         return GeometryCollection()
-    return nonempty.union_all() if hasattr(nonempty, "union_all") else nonempty.unary_union
+    return (
+        nonempty.union_all() if hasattr(nonempty, "union_all") else nonempty.unary_union
+    )
 
 
 def _single_geometry(
@@ -1182,8 +1220,7 @@ def _verify_working_source_snapshot(
             "geometry",
         ),
         (
-            working_root
-            / f"{project_name}.g{preflight.source_geometry_number}.hdf",
+            working_root / f"{project_name}.g{preflight.source_geometry_number}.hdf",
             preflight.source_geometry_hdf,
             "geometry HDF",
         ),
@@ -1493,7 +1530,8 @@ def _build_checks(
         and connection_actions["name"].is_unique
     )
     other_structures_absent = all(
-        count == 0 for column, count in unsupported.items()
+        count == 0
+        for column, count in unsupported.items()
         if column != "num_sa_2d_connections"
     )
     pure_2d = bool(
@@ -1502,7 +1540,9 @@ def _build_checks(
         and _bool_value(plan.get("plan_classification_valid"))
     )
     buffered_parent = parent.buffer(float(spec.containment_tolerance))
-    partition_length = float(boundary_segments.get("length", pd.Series(dtype=float)).sum())
+    partition_length = float(
+        boundary_segments.get("length", pd.Series(dtype=float)).sum()
+    )
     perimeter_length = float(child.boundary.length)
     reference_points_need_trim = feature_actions[
         (feature_actions["feature_type"] == "reference_point")
@@ -1733,7 +1773,9 @@ def _retained_refinement_specs(preflight: Breakout2DPreflight) -> list[dict[str,
             continue
         control = controls.get(fid)
         if control is None:
-            raise ValueError(f"Refinement-region controls are unavailable for FID {fid}")
+            raise ValueError(
+                f"Refinement-region controls are unavailable for FID {fid}"
+            )
         polygons = [geometry] if isinstance(geometry, Polygon) else list(geometry.geoms)
         for part_index, polygon in enumerate(polygons, start=1):
             name = _deduplicate_ras_name(
@@ -1856,9 +1898,9 @@ def _read_boundary_face_flow(
                 right=float(areas[-1]),
             )
             above = np.isfinite(stage[:, column]) & (stage[:, column] > elevations[-1])
-            interpolated[above] += (
-                stage[above, column] - elevations[-1]
-            ) * float(row.face_length)
+            interpolated[above] += (stage[above, column] - elevations[-1]) * float(
+                row.face_length
+            )
             interpolated[~np.isfinite(stage[:, column])] = 0.0
             area[:, column] = interpolated
     units = "m3/s" if "m/s" in velocity_units.lower() else "ft3/s"
