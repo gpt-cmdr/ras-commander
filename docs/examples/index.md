@@ -161,11 +161,11 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 
     | Contract | Scope |
     | --- | --- |
-    | Inputs | Completed plan HDF and matching geometry; Named profile-line layer or recorded reference line |
+    | Inputs | Completed plan HDF and matching geometry; Named profile-line layer or geometry reference line |
     | Operations | Extract named-line flow time series; Find sampled peak and inspect face-flow comparison |
     | Outputs | Flow series with selection provenance; Peak-flow summary and comparison plot |
     | Runtime requirements | Current canonical API requires pythonnet and compatible RasMapperLib; External Chippewa fixture described in notebook |
-    | Evidence scope | Saved outputs retain an earlier execution scope and do not qualify the current native API branch. Absolute precomputed flow and summed absolute face flows are different quantities. |
+    | Evidence scope | Saved outputs retain a historical six-face reconstruction, not current native qualification. The native fixture uses seven faces with substantially different flow. Native-associated hydrograph provenance remains unqualified; absolute hydrograph values and summed absolute face flows are different quantities. |
 
 ??? info "416 - 2D Velocity Profile Line Extraction"
 
@@ -394,7 +394,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [410 - 2D HDF Data Extraction](../notebooks/410_2d_hdf_data_extraction.md)<br>HDF mesh and results extraction | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/410_2d_hdf_data_extraction.ipynb) | 5.4 min |
 | [411 - Pipes and Pumps](../notebooks/411_2d_hdf_pipes_and_pumps.md)<br>Extract pipe-network and pump geometry/time series from HDF results and inspect pipe flow and velocity along profile lines. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) | 3.3 min |
 | [412 - 2D Face Data Extraction](../notebooks/412_2d_detail_face_data_extraction.md)<br>HDF mesh and results extraction | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/412_2d_detail_face_data_extraction.ipynb) | 3.3 min |
-| [413 - Profile Line Flow Extraction](../notebooks/413_profile_line_flow_extraction.md)<br>Extract named-line flow series and peaks; distinguish recorded reference hydrographs from reconstructed face-flow aggregation using selection_source. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) | 3 s |
+| [413 - Profile Line Flow Extraction](../notebooks/413_profile_line_flow_extraction.md)<br>Extract named-line flow series and peaks; distinguish native-associated hydrographs of unqualified provenance from face-flow aggregation. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) | 3 s |
 | [414 - Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves](../notebooks/414_depth_varying_mannings_n.md)<br>Experimental, non-production comparison of baseline, table-extension control, and depth-varying-Manning scenarios in the single tested HEC-RAS 7.0 April 2026 Windows-preprocess/Linux-solve temporary-HDF workflow; all other versions and workflows are untested. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/414_depth_varying_mannings_n.ipynb) | 5.4 min |
 | [415 - 2D Spatial Result Queries with HdfResultsQuery](../notebooks/415_2d_spatial_result_queries.md)<br>Query water surface elevation, depth, and velocity at arbitrary (x,y) coordinates, extract profiles along transects, compute flood extent with engineering filters, and generate domain-wide statistics -- all using scipy KDTree spatial ind... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/415_2d_spatial_result_queries.ipynb) | 5.5 min |
 | [416 - 2D Velocity Profile Line Extraction](../notebooks/416_2d_velocity_profile_line.md)<br>Sample native RASMapper velocity, depth and terrain along a polyline at one saved time; distinguish station profiles from recorded reference hydrographs. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/416_2d_velocity_profile_line.ipynb) | 5 s |

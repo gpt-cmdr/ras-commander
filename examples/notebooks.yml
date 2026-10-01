@@ -2555,8 +2555,8 @@ notebooks:
   title: Profile Line Flow Extraction
   series: 400
   series_name: HDF Results
-  summary: Extract named-line flow series and peaks; distinguish recorded reference hydrographs from reconstructed
-    face-flow aggregation using selection_source.
+  summary: Extract named-line flow series and peaks; distinguish native-associated hydrographs of unqualified
+    provenance from face-flow aggregation.
   tags:
   - 2d
   - hdf
@@ -2575,7 +2575,7 @@ notebooks:
   excluded: false
   input_families:
   - Completed plan HDF and matching geometry
-  - Named profile-line layer or recorded reference line
+  - Named profile-line layer or geometry reference line
   operations:
   - Extract named-line flow time series
   - Find sampled peak and inspect face-flow comparison
@@ -2585,8 +2585,10 @@ notebooks:
   runtime_requirements:
   - Current canonical API requires pythonnet and compatible RasMapperLib
   - External Chippewa fixture described in notebook
-  evidence_scope: Saved outputs retain an earlier execution scope and do not qualify the current native
-    API branch. Absolute precomputed flow and summed absolute face flows are different quantities.
+  evidence_scope: Saved outputs retain a historical six-face reconstruction, not current native qualification.
+    The native fixture uses seven faces with substantially different flow. Native-associated hydrograph
+    provenance remains unqualified; absolute hydrograph values and summed absolute face flows are different
+    quantities.
   code_cells: 6
   executed_cells: 6
 - id: 414_depth_varying_mannings_n

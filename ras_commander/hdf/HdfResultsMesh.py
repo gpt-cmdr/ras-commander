@@ -484,8 +484,10 @@ class HdfResultsMesh:
             ``direction``, ``face_count`` and ``selection_source``. Attributes
             include units, variable and face IDs. Preserve this provenance:
             ``try_read_ref_line_flow`` identifies the precomputed hydrograph
-            route; face-selection routes identify aggregation of stored face
-            output, not a new solver calculation. Missing units are not inferred.
+            route, whose observed-versus-computed provenance has not been
+            independently qualified here; face-selection routes identify
+            aggregation of stored face output, not a new solver calculation.
+            Missing units are not inferred.
 
         Notes:
             Requires pythonnet and compatible installed RasMapperLib. For an
@@ -710,8 +712,8 @@ class HdfResultsMesh:
         Return peak flow across a RAS Mapper profile/reference line.
 
         For ``direction="absolute"``, the peak is the maximum of the selected
-        extraction route's absolute-flow series: absolute recorded reference
-        flow or a sum of absolute face flows. Preserve ``selection_source`` to
+        extraction route's absolute-flow series: absolute native-associated
+        hydrograph flow or a sum of absolute face flows. Preserve ``selection_source`` to
         distinguish these quantities. For ``direction="signed"``, the peak timestep is selected by
         maximum signed-flow magnitude and the returned ``peak_flow`` preserves
         the native sign at that timestep. A peak from saved output times need

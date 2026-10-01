@@ -565,7 +565,7 @@ class HdfResultsXsec:
         >>> # Get water surface timeseries for first reference point
         >>> ws = ds['Water Surface'].isel(refpt_id=0)
         >>> # Get all data for a specific reference point by name
-        >>> point_data = ds.sel(refpt_name='Point1')
+        >>> point_data = ds.where(ds['refpt_name'] == 'Point1', drop=True)
         """
         return HdfResultsXsec._reference_timeseries_output(
             hdf_path,

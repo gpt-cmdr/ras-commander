@@ -2470,7 +2470,8 @@ class HdfResultsQuery:
 
         Returns:
             DataFrame with station, x, y, cell_id, mesh_name, velocity,
-            velocity_x, velocity_y, side, step, and entry_face_id.
+            velocity_x, velocity_y, side, step, entry_face_id, and
+            distance_from_seed.
         """
         if time_index == "max":
             raise ValueError(

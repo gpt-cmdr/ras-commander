@@ -18,7 +18,11 @@ do not themselves run a hydraulic simulation.
 
 Native `terrain_raster` arguments currently resolve a **RAS terrain HDF**.
 Coordinates must already match the model; the query does not reproject them.
-`sample_spacing=None` resolves to 50 model coordinate units. Native polyline
+`sample_spacing=None` requests 50 model coordinate units. Returned stations need
+not be uniformly spaced at that request and may repeat. Native minimum-spacing
+and sample-count limits also apply. `wide=True` uses a first-value aggregation
+for repeated station/time-index pairs; keep long output to inspect all samples.
+Native polyline
 methods require a concrete output index and reject `"max"`; time-series ranges
 are start-inclusive/stop-exclusive. The current shared input path rejects 2D
 bridge groups. There is no public render-mode selector in these methods.
@@ -67,8 +71,9 @@ reference-line flow for that quantity when available; do not sum station samples
 ## Recorded reference hydrographs
 
 These methods read HDF datasets recorded during computation, including 2D
-reference results despite the class name. They return an empty Dataset when no
-matching reference output is present. Use `list(result.data_vars)` to discover
+reference results despite the class name. An absent group or no matching numeric
+variables produces an empty Dataset; a present group missing required `Name` or
+timestamps raises `KeyError`. Missing or malformed output is not zero flow. Use `list(result.data_vars)` to discover
 available variables and retain their unit/source attributes. Feature names are
 coordinates, not necessarily xarray indexes; use `isel(refln_id=...)` or
 explicit coordinate filtering instead of assuming `.sel(refln_name=...)` works.
@@ -97,18 +102,25 @@ as zero flow or stage.
 
 ## Named-line Q and extraction provenance
 
-The canonical method needs RasMapperLib. It first attempts a stored reference
-hydrograph, then falls back to face aggregation. Inspect `selection_source` in
+The canonical method needs RasMapperLib. It first attempts a native-associated
+precomputed hydrograph via `ObservedDataLayer.TryReadRefLineFlow`, then falls
+back to face aggregation. This native-associated hydrograph's provenance has
+not been independently qualified as solver output and may be observed data.
+Use `HdfResultsXsec.get_ref_lines_timeseries` for explicit solver-recorded HDF
+Reference Lines datasets. Inspect `selection_source` in
 the returned DataFrame: `try_read_ref_line_flow` is distinct from
 `reference_line_internal_faces` and `rasmapper_perimeter_faces`.
 
-For stored hydrographs, `direction="absolute"` takes `abs(Q)`; for aggregated
+For native-associated hydrographs, `direction="absolute"` takes `abs(Q)`; for aggregated
 faces it sums `abs(Q_face)`. The latter is not a net flux. The signed face
 fallback sums native face signs without a common line-normal correction or
 solver projected-length weighting. `_legacy` is the explicit offline path,
 not an automatic fallback when the native runtime is unavailable.
 The [workflow guide](../../user-guide/2d-profile-and-reference-workflows.md#interpret-named-line-flow-provenance)
-provides the interpretation table.
+provides the interpretation table. The native-associated lookup is by name only,
+so duplicate names across meshes are ambiguous. Its `face_count=0` and empty
+`face_ids` identify the lookup path, not a physical face count; an omitted
+`mesh_name` is reported as an empty string.
 
 ::: ras_commander.hdf.HdfResultsMesh.HdfResultsMesh
     options:
@@ -122,7 +134,11 @@ provides the interpretation table.
 ## Reference-feature authoring
 
 Generate proposed lines first, inspect them, then write to a working geometry.
-Recompute the plan to obtain solver-recorded reference results. A profile line
+Recompute and inspect the resulting reference output groups. In particular,
+`add_reference_points` writes IC-point records; example 314's retained HEC-RAS
+7.0 run did not produce a native Reference Points output group from these.
+Authored point records plus a successful run do not guarantee recorded point
+results. A profile line
 used only for postprocessing does not retroactively become a recorded reference
 location. Reference areas are not covered by these point/line writers.
 

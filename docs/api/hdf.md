@@ -229,9 +229,11 @@ removed before v1.2.0:
 - `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
 
 The canonical profile-line methods above require pythonnet/RasMapperLib. They
-may return a recorded reference hydrograph or aggregate selected face flows;
-these have different signed/absolute-flow semantics. Recorded reference output
-can also be read offline with `HdfResultsXsec.get_ref_lines_timeseries()`.
+may return a native-associated precomputed hydrograph of unqualified provenance
+or aggregate selected face flows; these have different signed/absolute-flow semantics. The native-associated
+hydrograph is not independently established as solver-recorded and may be
+observed data. Explicit solver-recorded Reference Lines HDF output is read with
+`HdfResultsXsec.get_ref_lines_timeseries()`.
 See [Profiles, hydrographs and reference locations](rasmapper/profiles.md) for
 method contracts and [batch workflows](../user-guide/2d-profile-and-reference-workflows.md)
 for plot/export examples. HDF storage should not be confused with the method

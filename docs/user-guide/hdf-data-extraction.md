@@ -149,9 +149,11 @@ See [2D profiles and reference workflows](2d-profile-and-reference-workflows.md)
 for batch plotting and the input/output decision table.
 
 The canonical named-line helper below requires pythonnet and installed
-RasMapperLib components. It first tries a recorded reference-line hydrograph,
+RasMapperLib components. It first tries a native-associated precomputed hydrograph
+whose provenance has not been independently qualified as solver-recorded,
 then native face selection/aggregation. Supply `profile_lines_path` for an ad
-hoc line absent from the native reference geometry. To read recorded reference
+hoc line absent from the native reference geometry. This native-associated
+hydrograph may be observed data. To read explicit solver-recorded Reference Lines
 output offline, use `HdfResultsXsec.get_ref_lines_timeseries()`; an explicitly
 named `get_profile_line_flow_timeseries_legacy()` provides offline face-based
 analysis with different method provenance.
@@ -176,7 +178,8 @@ peak_q = HdfResultsMesh.get_profile_line_peak_flow(
 ```
 
 Inspect `flow_ts["selection_source"]` and preserve it with the exported result.
-For `try_read_ref_line_flow`, absolute mode takes the magnitude of recorded Q.
+For `try_read_ref_line_flow`, absolute mode takes the magnitude of the
+native-associated hydrograph, without establishing its solver/observed provenance.
 For face aggregation it sums absolute face flows; signed mode sums native face
 signs without line-normal correction. Neither fallback automatically reproduces
 solver-weighted net flow across the line. The peak helper inherits the same

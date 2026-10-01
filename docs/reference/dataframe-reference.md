@@ -475,18 +475,26 @@ not. Prefer the dedicated HDF readers and xarray-backed APIs for:
 ### Profile-Line Flow Outputs
 
 `HdfResultsMesh.get_profile_line_flow_timeseries()` returns a profile/reference
-line flow time series. The API uses native HDF reference-line internal faces
-when present, then falls back to RAS Mapper profile-line geometry.
+line flow time series using native RASMapper methods. Depending on
+`selection_source`, it returns a native-associated precomputed hydrograph or
+aggregates selected face flows. The hydrograph branch's observed-versus-computed
+provenance has not been independently qualified; read solver-recorded reference
+matrices with `HdfResultsXsec.get_ref_lines_timeseries()` when those are required.
+See [the extraction-route contracts](../api/rasmapper/profiles.md).
 
 | Column | Meaning |
 |--------|---------|
 | `time` | Output timestamp |
-| `flow` | Sum of selected face flows |
+| `flow` | Native-associated hydrograph value or aggregated face flows; interpretation depends on source and direction |
 | `line_name` | Requested profile/reference line |
-| `mesh_name` | 2D flow area used for extraction |
-| `direction` | `absolute` or `signed` aggregation mode |
-| `face_count` | Count of selected mesh faces |
-| `selection_source` | `reference_line_internal_faces` or `profile_lines_geometry` |
+| `mesh_name` | Selected 2D area; the precomputed-hydrograph branch echoes the supplied name or an empty string |
+| `direction` | `absolute` or `signed`; hydrograph magnitude differs from summed absolute face flows |
+| `face_count` | Selected face count; zero is a sentinel for the precomputed-hydrograph branch |
+| `selection_source` | Canonical: `try_read_ref_line_flow`, `reference_line_internal_faces`, or `rasmapper_perimeter_faces`; `_legacy` may report `profile_lines_geometry` |
+
+Retain the returned `attrs` (units, variable, face IDs) separately when exporting
+CSV. Signed face aggregation uses native face signs without common line-normal
+correction; it is not automatically net discharge across a drawn section.
 
 `HdfResultsMesh.get_profile_line_peak_flow()` returns one peak-Q row derived
 from the time series.
@@ -499,7 +507,7 @@ from the time series.
 | `peak_flow` | Peak flow value; signed mode preserves native sign |
 | `direction` | `absolute` or `signed` aggregation mode |
 | `face_count` | Count of selected mesh faces |
-| `selection_source` | `reference_line_internal_faces` or `profile_lines_geometry` |
+| `selection_source` | Same canonical route values as the underlying time-series method |
 
 See:
 
