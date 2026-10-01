@@ -73,6 +73,7 @@ and [931 — native terrain export](../../notebooks/931_native_rasmapper_terrain
 ::: ras_commander.RasMap
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - associate_geometry_layers
