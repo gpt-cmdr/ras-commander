@@ -345,6 +345,9 @@ class HdfStruc:
         """
         Extracts structure data from a HEC-RAS geometry HDF5 file.
 
+        Missing structure layers return an empty frame. Malformed present
+        datasets and read errors are logged and raised.
+
         Parameters
         ----------
         hdf_path : Path
@@ -366,7 +369,7 @@ class HdfStruc:
         Notes
         -----
         - Group-level attributes are stored in GeoDataFrame.attrs['group_attributes']
-        - Invalid geometries are dropped with warning
+        - Invalid centerline geometry raises an exception
         - All byte strings are decoded to UTF-8
         - CRS is preserved from the source file
         """
@@ -388,11 +391,7 @@ class HdfStruc:
                 
                 for dataset in required_datasets:
                     if dataset not in hdf:
-                        logger.warning(
-                            f"Required structure dataset missing in {hdf_path.name}: "
-                            f"{dataset}; returning empty GeoDataFrame."
-                        )
-                        return GeoDataFrame()
+                        raise ValueError(f"Required structure dataset missing: {dataset}")
 
                 def get_dataset_df(path: str) -> pd.DataFrame:
                     """
@@ -459,20 +458,15 @@ class HdfStruc:
                 
                 # Create LineString geometries for each structure
                 geoms = []
-                invalid_indices = []
                 for i in range(len(centerline_info)):
                     start_idx = centerline_info[i][0]  # Point Starting Index
                     point_count = centerline_info[i][1]  # Point Count
-                    points = centerline_points[start_idx:start_idx + point_count]
-                    if len(points) >= 2:
-                        geoms.append(LineString(points))
-                    else:
-                        invalid_indices.append(i)
-                        logger.debug(
-                            f"Structure index {i} in {hdf_path.name} has "
-                            f"{len(points)} centerline point(s); LineString requires at least 2."
-                        )
-                        geoms.append(None)
+                    points = HdfBase.plan_vertex_ordinates(
+                        centerline_points[start_idx:start_idx + point_count]
+                    )
+                    if start_idx < 0 or point_count < 2 or len(points) != point_count:
+                        raise ValueError(f"Invalid centerline point range for structure {i}")
+                    geoms.append(LineString(points))
 
                 # Create base GeoDataFrame with Structures Attributes and geometries
                 struct_gdf = GeoDataFrame(
@@ -480,19 +474,6 @@ class HdfStruc:
                     geometry=geoms,
                     crs=HdfBase.get_projection(hdf_path)
                 )
-
-                # Drop entries with invalid geometries
-                initial_count = len(struct_gdf)
-                struct_gdf = struct_gdf.dropna(subset=['geometry']).reset_index(drop=True)
-                final_count = len(struct_gdf)
-                if final_count < initial_count:
-                    preview = invalid_indices[:5]
-                    suffix = "..." if len(invalid_indices) > 5 else ""
-                    logger.warning(
-                        f"Dropped {initial_count - final_count} structure(s) from "
-                        f"{hdf_path.name} due to invalid centerline geometry "
-                        f"(indices: {preview}{suffix})."
-                    )
 
                 # Merge Bridge Coefficient Attributes on 'Structure ID'
                 if not bridge_coef.empty and 'Structure ID' in bridge_coef.columns:
@@ -591,7 +572,7 @@ class HdfStruc:
                 return struct_gdf
 
         except Exception as e:
-            logger.error(f"Error reading structures from {hdf_path}: {str(e)}")
+            logger.error(f"Error reading structures from {hdf_path} (Geometry/Structures): {str(e)}")
             raise
 
     @staticmethod

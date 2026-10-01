@@ -677,6 +677,7 @@ class HdfBndry:
             return gpd.GeoDataFrame()
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_breaklines(hdf_path: Path) -> gpd.GeoDataFrame:
         """
@@ -694,9 +695,8 @@ class HdfBndry:
 
         Notes
         -----
-        - Zero-length breaklines are logged and skipped. 
-        - Single-point breaklines are logged and skipped.
-        - These invalid breaklines should be removed in RASMapper to prevent potential issues.
+        Missing layers return an empty frame. Invalid point ranges and read
+        errors are logged and raised; no partial layer is returned.
         """
         breaklines_path = "Geometry/2D Flow Area Break Lines"
         try:
@@ -711,7 +711,7 @@ class HdfBndry:
 
                 bl_line_data = hdf_file[breaklines_path]
                 attributes = bl_line_data["Attributes"][()]
-                
+
                 # Initialize lists to store valid breakline data
                 valid_ids = []
                 valid_names = []
@@ -721,103 +721,61 @@ class HdfBndry:
                 valid_protection_radius = []
                 valid_geoms = []
 
-                # Track invalid breaklines for summary
-                zero_length_count = 0
-                single_point_count = 0
-                other_error_count = 0
-
                 # Process each breakline
                 for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
-                    # Check for zero-length breaklines
-                    if pnt_cnt == 0:
-                        zero_length_count += 1
-                        logger.debug(f"Zero-length breakline found (FID: {idx}, Name: {name})")
-                        continue
+                    if pnt_start < 0 or pnt_cnt < 2:
+                        raise ValueError(f"Invalid point range for breakline {idx} ({name})")
 
-                    # Check for single-point breaklines
-                    if pnt_cnt == 1:
-                        single_point_count += 1
-                        logger.debug(f"Single-point breakline found (FID: {idx}, Name: {name})")
-                        continue
-
-                    try:
-                        points = bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
-                        
-                        # Additional validation of points array
-                        if len(points) < 2:
-                            single_point_count += 1
-                            logger.debug(f"Invalid point count in breakline (FID: {idx}, Name: {name})")
-                            continue
-
-                        if part_cnt == 1:
-                            geom = LineString(points)
-                        else:
-                            parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
-                            geom = MultiLineString([
-                                points[part_pnt_start:part_pnt_start + part_pnt_cnt]
-                                for part_pnt_start, part_pnt_cnt in parts
-                                if part_pnt_cnt > 1  # Skip single-point parts
-                            ])
-                            # Skip if no valid parts remain
-                            if len(geom.geoms) == 0:
-                                other_error_count += 1
-                                logger.debug(f"No valid parts in multipart breakline (FID: {idx}, Name: {name})")
-                                continue
-
-                        valid_ids.append(idx)
-                        valid_names.append(name)
-                        fields = attributes.dtype.names or ()
-                        valid_spacing_near.append(
-                            float(attributes["Cell Spacing Near"][idx])
-                            if "Cell Spacing Near" in fields
-                            else None
-                        )
-                        valid_spacing_far.append(
-                            float(attributes["Cell Spacing Far"][idx])
-                            if "Cell Spacing Far" in fields
-                            else None
-                        )
-                        valid_near_repeats.append(
-                            int(attributes["Near Repeats"][idx])
-                            if "Near Repeats" in fields
-                            else 0
-                        )
-                        valid_protection_radius.append(
-                            int(attributes["Protection Radius"][idx])
-                            if "Protection Radius" in fields
-                            else 0
-                        )
-                        valid_geoms.append(geom)
-
-                    except Exception as e:
-                        other_error_count += 1
-                        logger.debug(f"Error processing breakline {idx}: {str(e)}")
-                        continue
-
-                # Log summary of invalid breaklines
-                total_invalid = zero_length_count + single_point_count + other_error_count
-                if total_invalid > 0:
-                    logger.debug(
-                        f"Breakline processing summary:\n"
-                        f"- Zero-length breaklines: {zero_length_count}\n"
-                        f"- Single-point breaklines: {single_point_count}\n"
-                        f"- Other invalid breaklines: {other_error_count}\n"
-                        f"Consider removing these invalid breaklines using RASMapper."
+                    points = HdfBase.plan_vertex_ordinates(
+                        bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
                     )
+
+                    if len(points) != pnt_cnt:
+                        raise ValueError(f"Truncated points for breakline {idx} ({name})")
+
+                    if part_cnt == 1:
+                        geom = LineString(points)
+                    else:
+                        parts = bl_line_data["Polyline Parts"][()][part_start:part_start + part_cnt]
+                        if part_start < 0 or part_cnt < 1 or len(parts) != part_cnt:
+                            raise ValueError(f"Invalid parts for breakline {idx} ({name})")
+                        lines = []
+                        for offset, count in parts:
+                            line = points[offset:offset + count]
+                            if offset < 0 or count < 2 or len(line) != count:
+                                raise ValueError(f"Invalid part for breakline {idx} ({name})")
+                            lines.append(line)
+                        geom = MultiLineString(lines)
+
+                    valid_ids.append(idx)
+                    valid_names.append(name)
+                    fields = attributes.dtype.names or ()
+                    valid_spacing_near.append(
+                        float(attributes["Cell Spacing Near"][idx])
+                        if "Cell Spacing Near" in fields
+                        else None
+                    )
+                    valid_spacing_far.append(
+                        float(attributes["Cell Spacing Far"][idx])
+                        if "Cell Spacing Far" in fields
+                        else None
+                    )
+                    valid_near_repeats.append(
+                        int(attributes["Near Repeats"][idx])
+                        if "Near Repeats" in fields
+                        else 0
+                    )
+                    valid_protection_radius.append(
+                        int(attributes["Protection Radius"][idx])
+                        if "Protection Radius" in fields
+                        else 0
+                    )
+                    valid_geoms.append(geom)
 
                 # Create GeoDataFrame with valid breaklines
                 if not valid_ids:
-                    logger.warning(
-                        "No valid breaklines found in %s; skipped %d invalid "
-                        "breaklines (zero_length=%d, single_point=%d, other=%d).",
-                        hdf_path.name,
-                        total_invalid,
-                        zero_length_count,
-                        single_point_count,
-                        other_error_count,
-                    )
                     return gpd.GeoDataFrame()
 
                 return gpd.GeoDataFrame(
@@ -841,9 +799,10 @@ class HdfBndry:
                 breaklines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            raise
 
     @staticmethod
+    @log_call
     @standardize_input(file_type='plan_hdf')
     def get_refinement_regions(hdf_path: Path) -> gpd.GeoDataFrame:
         """
@@ -857,7 +816,8 @@ class HdfBndry:
         Returns
         -------
         gpd.GeoDataFrame
-            A GeoDataFrame containing the refinement regions.
+            A GeoDataFrame containing the refinement regions. Missing layers
+            return an empty frame; malformed present layers raise an exception.
         """
         refinement_regions_path = "/Geometry/2D Flow Area Refinement Regions"
         try:
@@ -877,7 +837,11 @@ class HdfBndry:
                 polygon_parts = rr_data["Polygon Parts"][()] if "Polygon Parts" in rr_data else None
                 geoms = list()
                 for pnt_start, pnt_cnt, part_start, part_cnt in rr_data["Polygon Info"][()]:
-                    points = polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    points = HdfBase.plan_vertex_ordinates(
+                        polygon_points[pnt_start : pnt_start + pnt_cnt]
+                    )
+                    if pnt_start < 0 or pnt_cnt < 3 or len(points) != pnt_cnt:
+                        raise ValueError("Invalid refinement region point range")
                     if part_cnt <= 1:
                         geoms.append(Polygon(points))
                     else:
@@ -934,7 +898,7 @@ class HdfBndry:
                 refinement_regions_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            raise
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')

@@ -213,24 +213,26 @@ def test_missing_final_raster_dependencies_log_concisely(
     assert str(tmp_path) not in "\n".join(messages)
 
 
-def test_missing_polygon_parts_warning_is_collapsed(
+def test_missing_polygon_parts_raises_with_full_context(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
 ):
-    """A malformed polygon-parts dataset should warn once, not once per polygon."""
+    """Missing multipart topology must fail rather than invent polygon shells."""
     pytest.importorskip("geopandas")
     geom_hdf = tmp_path / "model.g01.hdf"
     _write_multipart_regions_without_parts(geom_hdf)
 
-    with caplog.at_level("WARNING", logger=LOGGER_NAME):
-        regions = HdfLandCover.get_mannings_region_polygons(geom_hdf)
+    with (
+        caplog.at_level("ERROR", logger=LOGGER_NAME),
+        pytest.raises(ValueError, match="Polygon Parts"),
+    ):
+        HdfLandCover.get_mannings_region_polygons(geom_hdf)
 
-    assert len(regions) == 2
     messages = _hdf_landcover_messages(caplog)
-    assert messages == [
-        "'Polygon Parts' dataset missing for 2 multi-part Manning's n "
-        "calibration polygon(s); using raw point order as polygon shells"
-    ]
+    assert len(messages) == 1
+    assert "Polygon Parts" in messages[0]
+    assert str(geom_hdf) in messages[0]
+    assert "Geometry/Land Cover (Manning's n)" in messages[0]
 
 
 def test_set_landcover_mannings_n_info_is_concise(

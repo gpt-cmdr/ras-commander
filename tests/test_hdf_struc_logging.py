@@ -100,7 +100,7 @@ def test_optional_structure_datasets_absence_quiet_by_default(
     assert any("structures.g01.hdf" in msg for msg in messages)
 
 
-def test_missing_required_structure_dataset_warns_with_filename(
+def test_missing_required_structure_dataset_raises_with_full_context(
     tmp_path,
     caplog,
 ):
@@ -109,10 +109,9 @@ def test_missing_required_structure_dataset_warns_with_filename(
         include_centerline_points=False,
     )
 
-    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-        structures = HdfStruc.get_structures(hdf_path)
+    with caplog.at_level(logging.ERROR, logger=LOGGER_NAME), pytest.raises(ValueError):
+        HdfStruc.get_structures(hdf_path)
 
-    assert structures.empty
     records = [
         record for record in _hdf_struc_records(caplog)
         if record.levelno >= logging.WARNING
@@ -122,10 +121,10 @@ def test_missing_required_structure_dataset_warns_with_filename(
     assert "Required structure dataset missing" in message
     assert "Geometry/Structures/Centerline Points" in message
     assert "malformed.g01.hdf" in message
-    assert str(tmp_path) not in message
+    assert str(hdf_path) in message
 
 
-def test_invalid_centerline_geometry_logs_one_aggregate_warning(
+def test_invalid_centerline_geometry_raises_instead_of_returning_partial_layer(
     tmp_path,
     caplog,
     monkeypatch,
@@ -136,19 +135,21 @@ def test_invalid_centerline_geometry_logs_one_aggregate_warning(
     )
     monkeypatch.setattr(HdfBase, "get_projection", staticmethod(lambda *_args, **_kwargs: None))
 
-    with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
-        structures = HdfStruc.get_structures(hdf_path)
+    with (
+        caplog.at_level(logging.ERROR, logger=LOGGER_NAME),
+        pytest.raises(ValueError, match="centerline point range"),
+    ):
+        HdfStruc.get_structures(hdf_path)
 
-    assert len(structures) == 1
     records = [
         record for record in _hdf_struc_records(caplog)
         if record.levelno >= logging.WARNING
     ]
     assert len(records) == 1
     message = records[0].getMessage()
-    assert "Dropped 1 structure(s)" in message
-    assert "invalid_centerline.g01.hdf" in message
-    assert "indices: [1]" in message
+    assert "Invalid centerline point range for structure 1" in message
+    assert str(hdf_path) in message
+    assert "Geometry/Structures" in message
 
 
 def test_culvert_hydraulics_decodes_byte_type_values(
