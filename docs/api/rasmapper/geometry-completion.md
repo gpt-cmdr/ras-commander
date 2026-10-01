@@ -18,6 +18,11 @@ separate:** use `generate_flow_paths()` when needed. Completion may rebuild 2D
 property tables and mutate more than one layer. Work on a project copy and
 review diagnostics and resulting geometry before accepting it.
 
+With the default `overwrite=False`, `RasGeometryCompute.compute_geometry()`
+skips the pipeline if both edge lines and the interpolation surface already
+exist. That path returns `success=True` without a separate `skipped` flag;
+success alone does not prove the current call recomputed property tables.
+
 Use `RasGeometryCompute` for the Windows in-process path; use the documented
 `RasProcess` path for Linux/Wine completion. Do not infer that every in-process
 method has a Wine equivalent. `RasProcess.complete_geometry()` is a deprecated

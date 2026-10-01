@@ -103,8 +103,16 @@ they do not qualify every geometry, release or hydraulic configuration.
 
 ## Result and audit records
 
-Inspect `MeshResult.ok`/`status`, error information and repair evidence rather
-than cell count alone. `DomainContainmentResult.ok` means no recorded containment
+For `generate()` and `generate_all()`, inspect `MeshResult.ok`/`status`, error
+information and repair evidence rather than cell count alone.
+
+`generate_computation_points()` currently reports successful bootstrap with
+`status == "success"`, while `MeshResult.ok` and `bool(result)` recognize only
+`"complete"`. For this method, check `status`, `cell_count` and `error_message`
+explicitly; a false `ok` alone does not mean bootstrap failed. Its `cell_count`
+counts generated points, not a compiled hydraulic mesh.
+
+`DomainContainmentResult.ok` means no recorded containment
 violations. `BCFixResult.ok` means no unresolved conflicts in that result; these
 are operation-specific states, not hydraulic acceptance criteria.
 

@@ -797,8 +797,6 @@ reference, including display, classification authoring, stored maps and mesh gen
         - add_land_classification_polygon
         - update_land_classification_polygon
         - delete_land_classification_polygon
-        - get_terrain_path
-        - get_landcover_path
         - associate_geometry_layers
         - get_hdf_geometry_association
         - list_results_plans
