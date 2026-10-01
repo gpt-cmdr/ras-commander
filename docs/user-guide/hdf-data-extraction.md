@@ -142,10 +142,19 @@ default to truncation, while the multi-mesh reader defaults to no truncation.
 
 ### Profile-Line Flow and Peak Q
 
-Use the profile-line helpers when you need modeled Q across a named RAS Mapper
-profile/reference line. The API uses native HDF reference-line internal faces
-when present. If those are absent, pass a RAS Mapper Profile Lines feature file
-or initialize a project whose `rasmap_df` resolves `profile_lines_path`.
+Choose between **recorded reference hydrographs**, **native mapped profiles**,
+and **face aggregation** before extracting Q. HDF stores all of these underlying
+results; the file format alone does not establish the hydraulic method.
+See [2D profiles and reference workflows](2d-profile-and-reference-workflows.md)
+for batch plotting and the input/output decision table.
+
+The canonical named-line helper below requires pythonnet and installed
+RasMapperLib components. It first tries a recorded reference-line hydrograph,
+then native face selection/aggregation. Supply `profile_lines_path` for an ad
+hoc line absent from the native reference geometry. To read recorded reference
+output offline, use `HdfResultsXsec.get_ref_lines_timeseries()`; an explicitly
+named `get_profile_line_flow_timeseries_legacy()` provides offline face-based
+analysis with different method provenance.
 
 ```python
 from ras_commander import HdfResultsMesh
@@ -166,9 +175,12 @@ peak_q = HdfResultsMesh.get_profile_line_peak_flow(
 )
 ```
 
-`direction="absolute"` sums absolute face flows to avoid cancellation from
-opposing face-normal signs. `direction="signed"` preserves native HEC-RAS face
-signs, so the line orientation and face normals control the sign convention.
+Inspect `flow_ts["selection_source"]` and preserve it with the exported result.
+For `try_read_ref_line_flow`, absolute mode takes the magnitude of recorded Q.
+For face aggregation it sums absolute face flows; signed mode sums native face
+signs without line-normal correction. Neither fallback automatically reproduces
+solver-weighted net flow across the line. The peak helper inherits the same
+extraction semantics. See the [profile API reference](../api/rasmapper/profiles.md).
 
 ## 1D Cross-Section Results
 

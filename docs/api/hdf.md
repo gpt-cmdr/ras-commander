@@ -225,8 +225,17 @@ removed before v1.2.0:
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
-- `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Flow time series across a RAS Mapper profile/reference line
-- `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and peak time for a profile/reference line
+- `get_profile_line_flow_timeseries(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Native Mapper named-line flow; inspect returned `selection_source`
+- `get_profile_line_peak_flow(hdf_path, line_name, mesh_name=None, profile_lines_path=None, direction="absolute")` - Peak Q and time from the same native named-line extraction path
+
+The canonical profile-line methods above require pythonnet/RasMapperLib. They
+may return a recorded reference hydrograph or aggregate selected face flows;
+these have different signed/absolute-flow semantics. Recorded reference output
+can also be read offline with `HdfResultsXsec.get_ref_lines_timeseries()`.
+See [Profiles, hydrographs and reference locations](rasmapper/profiles.md) for
+method contracts and [batch workflows](../user-guide/2d-profile-and-reference-workflows.md)
+for plot/export examples. HDF storage should not be confused with the method
+used to calculate the stored quantity.
 
 `get_mesh_max_depth()` logs one INFO source message per mesh. Stored `Depth` is
 read only. The fallback is computed only in memory and does not create or write

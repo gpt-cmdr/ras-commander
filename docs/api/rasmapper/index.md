@@ -8,6 +8,7 @@ span several static namespaces; there is no single RASMapper object to create.
 |---|---|---|---|
 | Discover or author spatial layers | [RasMap: layers and associations](layers.md) | Project, `.rasmap`, terrain/classification sources | Layer inventories, registrations, classification HDFs, compiled-HDF associations |
 | Configure a spatial review | [RasMap: display and review](display.md) | Registered layers, geometry selectors, view bounds | Saved `.rasmap` display state; optional native-window screenshots and review bundles |
+| Plot profiles and reference hydrographs | [Profiles and reference results](profiles.md) | Saved plan results, line geometry, and route-specific terrain/runtime | Station profiles, time series, batch plots; explicit extraction provenance |
 | Export hydraulic result maps | [Stored maps](stored-maps.md) | Computed plan HDF, associated terrain, map types and profiles | Raster paths, batch tables, or an orchestration report |
 | Complete geometry-derived layers | [Geometry completion](geometry-completion.md) | Existing compiled geometry HDF and spatial associations | Native edge lines, interpolation surfaces, property tables, validation diagnostics |
 | Author and generate 2D meshes | [Automated mesh generation](mesh-generation.md) | Geometry text, current compiled HDF, domain, spacing and refinements | Computation points, mesh evidence, optional property tables |
@@ -15,6 +16,11 @@ span several static namespaces; there is no single RASMapper object to create.
 | Read mesh and hydraulic results | [HDF API](../hdf.md) | Geometry or computed plan HDF | Geometry, arrays, time series and derived products |
 
 ## Configuration, native processing, and computation
+
+For many-line plotting, start with [2D profiles and reference workflows](../../user-guide/2d-profile-and-reference-workflows.md).
+Solver-recorded reference results are also stored in HDF: choosing a file format
+does not identify whether a quantity was computed during the run or reconstructed
+afterwards. The guide explains that distinction and when a new run is needed.
 
 Editing `.rasmap` visibility does not change hydraulic results. Registering a
 terrain in `.rasmap` does not prove the compiled geometry references it.

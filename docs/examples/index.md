@@ -47,6 +47,18 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | --- | --- |
     | Evidence scope | Saved outputs demonstrate model inspection and sampling only; no hydraulic ensemble or uncertainty estimate was computed. |
 
+??? info "207 - Reference Lines and Points for 2D Calibration"
+
+    [Open notebook](../notebooks/207_reference_lines_and_points.md)
+
+    | Contract | Scope |
+    | --- | --- |
+    | Inputs | Working geometry text; Named line and point coordinates in model CRS |
+    | Operations | Write reference locations; Read geometry text back |
+    | Outputs | Updated geometry text; Reference location inventories |
+    | Runtime requirements | Python geometry authoring; solver required separately for new reference results |
+    | Evidence scope | Retained outputs demonstrate text authoring and readback, not reference hydrographs or a fresh solve. |
+
 ??? info "212 - Native NLCD Land Cover Authoring and Controlled Manning Validation"
 
     [Open notebook](../notebooks/212_landcover_mannings_n_write.md)
@@ -95,6 +107,18 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | Runtime requirements | Source eBFE model and NWM network data; Windows/native geometry dependencies and HEC-RAS; notebook config selects 7.0 |
     | Evidence scope | Checks apply to the selected Shiloh Branch edge and retained sections; domain and boundary adequacy require review for a new extraction. |
 
+??? info "314 - Breakline-Derived Reference Lines And USGS Gauge Points"
+
+    [Open notebook](../notebooks/314_reference_line_generation.md)
+
+    | Contract | Scope |
+    | --- | --- |
+    | Inputs | Working 2D project and channel-aligned breaklines; USGS gauge locations |
+    | Operations | Generate and author reference locations; Preprocess and compute a plan; Plot recorded line hydrographs and nearest-cell gauge WSE |
+    | Outputs | Authored reference geometry; Computed plan results; Line hydrograph and gauge sample figures |
+    | Runtime requirements | Configured HEC-RAS execution runtime; Gauge discovery network access |
+    | Evidence scope | Retained outputs show the demonstrated run. Gauge WSE plots use nearest-cell sampling, not solver-recorded reference-point hydrographs; generated lines still require engineering review. |
+
 ??? info "400 - 1D HDF Data Extraction"
 
     [Open notebook](../notebooks/400_1d_hdf_data_extraction.md)
@@ -130,6 +154,30 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
     | Outputs | GeoDataFrames; DataArray/Dataset results indexed by mesh-local cell or face IDs |
     | Runtime requirements | Python HDF, xarray, and geospatial dependencies; Requested output variables must exist in retained HDFs |
     | Evidence scope | Stored maxima, instantaneous time series, geometry, and derived quantities have different meanings; missing optional output is not zero. |
+
+??? info "413 - Profile Line Flow Extraction"
+
+    [Open notebook](../notebooks/413_profile_line_flow_extraction.md)
+
+    | Contract | Scope |
+    | --- | --- |
+    | Inputs | Completed plan HDF and matching geometry; Named profile-line layer or recorded reference line |
+    | Operations | Extract named-line flow time series; Find sampled peak and inspect face-flow comparison |
+    | Outputs | Flow series with selection provenance; Peak-flow summary and comparison plot |
+    | Runtime requirements | Current canonical API requires pythonnet and compatible RasMapperLib; External Chippewa fixture described in notebook |
+    | Evidence scope | Saved outputs retain an earlier execution scope and do not qualify the current native API branch. Absolute precomputed flow and summed absolute face flows are different quantities. |
+
+??? info "416 - 2D Velocity Profile Line Extraction"
+
+    [Open notebook](../notebooks/416_2d_velocity_profile_line.md)
+
+    | Contract | Scope |
+    | --- | --- |
+    | Inputs | Completed 2D plan HDF and matching geometry; RAS terrain HDF and line coordinates |
+    | Operations | Select a saved result time; Query a native station-wise velocity profile |
+    | Outputs | Station/profile table; Velocity, depth and terrain figure |
+    | Runtime requirements | pythonnet and compatible installed RasMapperLib; Matching RAS terrain and geometry |
+    | Evidence scope | Retained example output illustrates a single-time station profile, not line-integrated discharge or solver-recorded reference output; this editorial update does not requalify native execution. |
 
 ??? info "417 - Inspecting Results and Generating Hydraulic Product Packages"
 
@@ -290,7 +338,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [204 - Culvert GIS Reconstruction and Hydraulic-Validity Checks (1D)](../notebooks/204_culvert_gis_validation.md)<br>Reconstruct 1D culvert barrel locations from geometry, screen invert placement, and compare a pipe-to-box retrofit using computed steady profiles. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/204_culvert_gis_validation.ipynb) | 14 s |
 | [205 - Extract Cross Section XYZ Coordinates from Plain Text Geometry](../notebooks/205_extract_xs_xyz_from_geometry.md)<br>geometry and HTAB workflows | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/205_extract_xs_xyz_from_geometry.ipynb) | 4 s |
 | [206 - Structures and Metadata from Geometry Files](../notebooks/206_structures_and_metadata.md)<br>This notebook demonstrates parsing bridge, culvert, inline weir, and geometry metadata from HEC-RAS plain text geometry files, including: - GeomMetadata: Efficient geometry element counts (HDF-first with text fallback) - GeomBridge: Brid... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/206_structures_and_metadata.ipynb) | 4 s |
-| [207 - Reference Lines and Points for 2D Calibration](../notebooks/207_reference_lines_and_points.md)<br>This notebook demonstrates `GeomReferenceFeatures` — inserting and reading reference lines and reference points in HEC-RAS plain text geometry files. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/207_reference_lines_and_points.ipynb) | 3 s |
+| [207 - Reference Lines and Points for 2D Calibration](../notebooks/207_reference_lines_and_points.md)<br>Author and read back reference lines and points in geometry text; prepare locations for a subsequent model run. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/207_reference_lines_and_points.ipynb) | 3 s |
 | [208 - Bridge Method Comparison](../notebooks/208_bridge_method_comparison.md)<br>Compare bridge hydraulic method selections with a real HEC-RAS bridge example and show the effect on computed WSE. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/208_bridge_method_comparison.ipynb) | 1.7 min |
 | [209 - Culvert Authoring](../notebooks/209_culvert_authoring.md)<br>Write taxonomy-checked culvert records and adjacent ineffective-flow areas, inspect spatial placement, and compute an edited plan for result review. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/209_culvert_authoring.ipynb) | 8 s |
 | [210 - Cross-Section Interpolation Settings](../notebooks/210_xs_interpolation_settings.md)<br>Interpolate cross sections and update bank stations, station/elevation arrays, and expansion/contraction coefficients in an example geometry. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/210_xs_interpolation_settings.ipynb) | 18 s |
@@ -329,7 +377,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [310 - DSS Boundary Extraction](../notebooks/310_dss_boundary_extraction.md)<br>from ras_commander import * | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/310_dss_boundary_extraction.ipynb) | 5 s |
 | [312 - Boundary DataFrame Enhancement: QMult, QMin, and DSS Path Parsing](../notebooks/312_boundary_df_qmult_dss_paths.md)<br>DSS boundary workflows | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/312_boundary_df_qmult_dss_paths.ipynb) | 49 s |
 | [313 - HMS-to-RAS Boundary Condition Matching](../notebooks/313_hms_to_ras_boundary_matching.md)<br>This notebook demonstrates **correlation-based matching** between HEC-HMS DSS hydrograph outputs and HEC-RAS boundary condition locations using the **BaldEagleCrkMulti2D** example project. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/313_hms_to_ras_boundary_matching.ipynb) | 5 s |
-| [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md)<br>This notebook authors 2D HEC-RAS reference features from hydraulic geometry, not arbitrary straight lines. It uses channel-aligned 2D breaklines as longitudinal reference lines, generates 250 ft perpendicular transects from those centerl... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
+| [314 - Breakline-Derived Reference Lines And USGS Gauge Points](../notebooks/314_reference_line_generation.md)<br>Generate transverse reference lines and gauge points, compute a working plan, and batch plot recorded line hydrographs alongside nearest-cell gauge samples. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/314_reference_line_generation.ipynb) | 3.3 min |
 | [315 - 2D Computation Options](../notebooks/315_2d_computation_options.md)<br>Clone 2D plans with typed computation options, run scenario plans, and compare HDF settings, stability messages, and maximum WSE. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/315_2d_computation_options.ipynb) | 2.4 min |
 | [316 - Terrain Modifications: High-Ground and Polygon Writer Validation](../notebooks/316_terrain_modifications.md)<br>This notebook validates ras-commander terrain modification writers with a real HEC-RAS example project. It creates copied terrain sidecar modifications for high-ground lines, boundary-sampled polygon multipoint grading, and `shape_z` pol... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/316_terrain_modifications.ipynb) | 2.9 min |
 | [317 - Restart File Output and Warm-Start Settings](../notebooks/317_restart_file_settings.md)<br>This notebook validates the restart-file API split used by warm-start workflows: | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/317_restart_file_settings.ipynb) | 24 s |
@@ -346,10 +394,10 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [410 - 2D HDF Data Extraction](../notebooks/410_2d_hdf_data_extraction.md)<br>HDF mesh and results extraction | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/410_2d_hdf_data_extraction.ipynb) | 5.4 min |
 | [411 - Pipes and Pumps](../notebooks/411_2d_hdf_pipes_and_pumps.md)<br>Extract pipe-network and pump geometry/time series from HDF results and inspect pipe flow and velocity along profile lines. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/411_2d_hdf_pipes_and_pumps.ipynb) | 3.3 min |
 | [412 - 2D Face Data Extraction](../notebooks/412_2d_detail_face_data_extraction.md)<br>HDF mesh and results extraction | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/412_2d_detail_face_data_extraction.ipynb) | 3.3 min |
-| [413 - Profile Line Flow Extraction](../notebooks/413_profile_line_flow_extraction.md)<br>HDF mesh and results extraction | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) | 3 s |
+| [413 - Profile Line Flow Extraction](../notebooks/413_profile_line_flow_extraction.md)<br>Extract named-line flow series and peaks; distinguish recorded reference hydrographs from reconstructed face-flow aggregation using selection_source. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/413_profile_line_flow_extraction.ipynb) | 3 s |
 | [414 - Controlled Depth-Varying Manning's n for HEC-RAS 2D Linux Solves](../notebooks/414_depth_varying_mannings_n.md)<br>Experimental, non-production comparison of baseline, table-extension control, and depth-varying-Manning scenarios in the single tested HEC-RAS 7.0 April 2026 Windows-preprocess/Linux-solve temporary-HDF workflow; all other versions and workflows are untested. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/414_depth_varying_mannings_n.ipynb) | 5.4 min |
 | [415 - 2D Spatial Result Queries with HdfResultsQuery](../notebooks/415_2d_spatial_result_queries.md)<br>Query water surface elevation, depth, and velocity at arbitrary (x,y) coordinates, extract profiles along transects, compute flood extent with engineering filters, and generate domain-wide statistics -- all using scipy KDTree spatial ind... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/415_2d_spatial_result_queries.ipynb) | 5.5 min |
-| [416 - 2D Velocity Profile Line Extraction](../notebooks/416_2d_velocity_profile_line.md)<br>Extract velocity, depth, and terrain along a user-defined profile line from a completed 2D plan HDF. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/416_2d_velocity_profile_line.ipynb) | 5 s |
+| [416 - 2D Velocity Profile Line Extraction](../notebooks/416_2d_velocity_profile_line.md)<br>Sample native RASMapper velocity, depth and terrain along a polyline at one saved time; distinguish station profiles from recorded reference hydrographs. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/416_2d_velocity_profile_line.ipynb) | 5 s |
 | [417 - Inspecting Results and Generating Hydraulic Product Packages](../notebooks/417_inspect_results_and_generate_hydraulic_products.md)<br>Read and mechanically inspect an existing completed HEC-RAS result HDF, then generate and independently verify a checksum-pinned COG, Arrow/Parquet, GeoJSON, JSON, and PNG derivative package without modifying the producer HDF or generating model output. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/417_inspect_results_and_generate_hydraulic_products.ipynb) | N/A |
 | [420 - Dam Breach Results](../notebooks/420_breach_results_extraction.md)<br>Read breach geometry and hydrographs, clone width and formation-time scenarios, execute the plans, and compare peak flow and breach evolution. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/420_breach_results_extraction.ipynb) | 2.9 min |
 | [430 - 1D Channel Capacity Analysis](../notebooks/430_1d_channel_capacity_analysis.md)<br>This notebook demonstrates the `HdfChannelCapacity` class for analyzing 1D channel capacity using WSE results and bank station elevations. Channel capacity is determined by comparing water surface elevations from multiple AEP storm profi... | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/430_1d_channel_capacity_analysis.ipynb) | 1.3 min |
