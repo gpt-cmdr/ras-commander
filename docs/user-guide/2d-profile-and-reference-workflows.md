@@ -110,7 +110,9 @@ profiles for bridge-specific rendering.
 
 Despite its namespace name, `HdfResultsXsec` also reads **2D reference locations**.
 These readers do not need a Mapper installation. Discover actual variables rather
-than assuming each HEC-RAS version wrote the same set.
+than assuming each HEC-RAS version wrote the same set. This template exports every
+available variable for every recorded line; restrict `variables` to a subset
+when the study needs fewer figures.
 
 ```python
 from pathlib import Path
@@ -124,22 +126,22 @@ results = HdfResultsXsec.get_ref_lines_timeseries(plan_hdf)
 if not results.data_vars:
     raise ValueError("No recorded reference-line time series in this plan HDF.")
 print(list(results.data_vars))
-variable = "Flow"  # Choose a name returned above, e.g. Water Surface if present.
-if variable not in results:
-    raise KeyError(f"{variable!r} unavailable; found {list(results.data_vars)}")
+variables = list(results.data_vars)  # Or select names from this inventory.
 for i in range(results.sizes["refln_id"]):
-    values = results[variable].isel(refln_id=i)
     name = str(results["refln_name"].isel(refln_id=i).item())
     mesh = str(results["mesh_name"].isel(refln_id=i).item())
-    values.to_dataframe(name=variable).to_csv(output / f"line_{i:04d}.csv")
-    fig, ax = plt.subplots()
-    ax.plot(values["time"].values, values.values)
-    ax.set(title=f"{mesh}: {name}", xlabel="Stored output time",
-           ylabel=f"{variable} ({values.attrs.get('units', '')})")
-    fig.autofmt_xdate()
-    fig.tight_layout()
-    fig.savefig(output / f"line_{i:04d}.png", dpi=150)
-    plt.close(fig)
+    for j, variable in enumerate(variables):
+        values = results[variable].isel(refln_id=i)
+        stem = f"line_{i:04d}_variable_{j:02d}"
+        values.to_dataframe(name=variable).to_csv(output / f"{stem}.csv")
+        fig, ax = plt.subplots()
+        ax.plot(values["time"].values, values.values)
+        ax.set(title=f"{mesh}: {name}", xlabel="Stored output time",
+               ylabel=f"{variable} ({values.attrs.get('units', '')})")
+        fig.autofmt_xdate()
+        fig.tight_layout()
+        fig.savefig(output / f"{stem}.png", dpi=150)
+        plt.close(fig)
 ```
 
 Adding a line after the run cannot create missing solver-recorded results.
