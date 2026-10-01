@@ -63,6 +63,32 @@ polygons are preferred and companion text geometry is used only when needed.
 
 Mesh geometry data.
 
+`get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)` returns every
+native perimeter face of a named 2D area as a GeoDataFrame, including faces
+without an assigned BC line. It preserves native `face_id`, `cell0`, `cell1`,
+`interior_cell_id`, `exterior_cell_id`, face-point endpoint IDs, `face_length`,
+and complete face geometry. Physical cells use native `Attributes/Cell Count`;
+ghost cell IDs are retained rather than classified from surface area.
+
+Nullable `bc_line_id`, `bc_line_name`, and `bc_line_type` come from native BC
+associations. The geometry BC type (for example `External`) is distinct from
+the flow forcing type. Duplicate ownership, stale face/endpoints, non-perimeter
+assignments, and missing association tables when BC lines exist raise errors.
+It does not infer attachment from proximity. Inspect `attrs['association_status']`
+and `attrs['length_source']`; native length is in model units. Interior-hole
+boundary faces are included by topology, but rings are not classified.
+
+```python
+from ras_commander.hdf import HdfMesh
+
+faces = HdfMesh.get_mesh_perimeter_faces("child.g01.hdf", "Perimeter 1")
+unassigned = faces.loc[faces.bc_line_id.isna()]
+```
+
+See `scripts/validate_perimeter_bc.py` for real-example native compilation and
+source-preservation acceptance. Read only a current native compiled HDF after
+editing geometry text.
+
 - `get_mesh_area_names(hdf_path)` - List 2D flow areas
 - `get_mesh_areas(hdf_path)` - Read named-area perimeters, with a strictly
   validated collection-level fallback for affected 6.2/6.3-era geometry HDFs

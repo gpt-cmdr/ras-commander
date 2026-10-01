@@ -9,6 +9,19 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Complete 2D perimeter inventory and area-scoped BC replacement**
+
+`HdfMesh.get_mesh_perimeter_faces()` returns all native perimeter faces of a
+named area, including unassigned faces, with native topology, full geometry,
+length, and exact BC ownership. It rejects duplicate/stale ownership and
+unavailable association evidence. `GeomBcLines.replace_bc_lines()` stages
+complete target-area geometry and unsteady forcing replacement with backups
+and rollback, preserving other areas and area-wide rainfall. Explicit clone
+paths are required; native preprocessing remains a separate step. Existing
+upsert and boundary-location methods retain their behavior. See the
+[geometry API](../api/geometry.md#geombclines) and
+[HDF API](../api/hdf.md#hdfmesh).
+
 **Inline precipitation timing and input validation**
 
 `RasUnsteady.set_precipitation_hyetograph()` now preserves one zero-depth start

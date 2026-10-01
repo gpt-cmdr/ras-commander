@@ -594,11 +594,48 @@ Bridge geometry authoring (deck profiles, piers, abutments, approach sections).
 
 2D boundary condition line geometry authoring.
 
+`replace_bc_lines(geom_file, unsteady_files, *, area_2d, lines, ras_object=None)`
+replaces the complete named-area line set and its forcing in one staged
+transaction. Pass explicit paths in a disposable cloned project. Each line
+specification contains `name`, `coordinates`, and `bc_type`: `Normal Depth`
+requires `friction_slope`; `Flow Hydrograph` requires `hydrograph_df` and
+`friction_slope`; `Stage Hydrograph` requires `hydrograph_df`. Hydrographs use
+`hour` and `value` columns. The supplied forcing applies to every supplied flow
+file. An empty `lines` list clears the target area's named perimeter boundaries.
+
+Other areas, 1D boundaries, and area-wide rainfall remain intact. Supply every
+associated unsteady file; an initialized clone `ras_object` verifies this set
+through project DataFrames and rejects flows shared with other geometries.
+Without that context, completeness is the caller's responsibility. The result
+is a DataFrame with `geom_file`, `unsteady_file`, `area_2d`, `bc_line`, and
+`bc_type`, plus removed names and backup paths in `attrs`.
+
+```python
+from ras_commander.geom import GeomBcLines
+
+written = GeomBcLines.replace_bc_lines(
+    "child.g01", ["child.u01"], area_2d="Perimeter 1",
+    lines=[dict(name="OUTLET", coordinates=[(100, 200), (300, 200)],
+                bc_type="Normal Depth", friction_slope=0.001)],
+)
+```
+
+All inputs are validated and staged before replacement, with backups and
+byte-exact rollback on write exceptions. This is exception atomicity across
+the supplied files; individual file swaps are atomic. It does not provide
+crash-atomic visibility across multiple files. Exclude concurrent readers and
+writers. The method does not create the clone or update compiled HDF files.
+Run native preprocessing, then inspect `HdfMesh.get_mesh_perimeter_faces()`
+before relying on native face attachment. A complete disposable example is
+provided in `scripts/validate_perimeter_bc.py`; the companion fleet shell script
+targets `fim-hecras-wine:6.6-clb-v8`.
+
 ### Methods
 
-- `add_bc_line(geom_file, flow_area, name, coordinates, bc_type)` - Add BC line to 2D flow area
-- `get_bc_lines(geom_file, flow_area=None)` - Read existing BC lines
-- `remove_bc_line(geom_file, flow_area, name)` - Remove a BC line
+- `add_bc_lines(geom_file, lines, replace_existing=False)` - Add or upsert named geometry lines
+- `delete_bc_line(geom_file, name)` - Delete a named geometry line
+- `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
+- `replace_bc_lines(...)` - Replace all target-area lines and supplied unsteady references
 
 ## GeomLateral
 
