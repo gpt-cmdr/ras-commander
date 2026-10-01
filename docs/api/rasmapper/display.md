@@ -27,6 +27,7 @@ and [124 — bank lines](../../notebooks/124_rasmapper_bank_lines.md).
 ::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - list_geometries

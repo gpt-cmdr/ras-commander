@@ -3721,7 +3721,7 @@ class RasPlan:
             plan_number_or_path: Plan number or path to the plan file.
             profile: One of ``balanced``, ``speed``, ``size``, or ``nas``.
             additional_variables: Optional additional HDF output variables to enable.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             bool: True when all requested updates succeeded.

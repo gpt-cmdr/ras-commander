@@ -37,6 +37,7 @@ execution evidence.
 ::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - postprocess_stored_maps
@@ -61,6 +62,7 @@ execution evidence.
 ::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - get_store_maps_runtime_provenance

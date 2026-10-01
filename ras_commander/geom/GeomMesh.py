@@ -3284,7 +3284,7 @@ class GeomMesh:
                 Most reliable selector — breaklines can be unnamed or
                 have duplicate names.
             all_breaklines: If True, apply spacing to every breakline.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             Path to .bak backup file created before writing.
@@ -3366,7 +3366,7 @@ class GeomMesh:
                 have duplicate names.
             old_name: Current name of the breakline.  Raises if
                 multiple breaklines share this name.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Returns:
             Path to .bak backup file created before writing.
@@ -3480,7 +3480,7 @@ class GeomMesh:
             old_name: Current name of the region.  Raises if multiple
                 regions share this name.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Raises:
             ValueError: If neither selector is given, both are given,
@@ -3634,7 +3634,7 @@ class GeomMesh:
                 have duplicate names.
             all_regions: If True, apply spacing to every region.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Raises:
             ValueError: If no target is specified, or if the target is
@@ -3925,7 +3925,7 @@ class GeomMesh:
 
         Args:
             geom_number: Geometry number or path to .g## text file.
-            polygon: Region boundary as a list of (x, y) tuples,
+            polygon (list[tuple[float, float]] | Polygon): Region boundary as a list of (x, y) tuples,
                 a Shapely Polygon, or any object whose
                 ``exterior.coords`` yields (x, y) pairs.
                 The ring is closed automatically if needed.
@@ -3938,7 +3938,7 @@ class GeomMesh:
             name: Region name stored in the HDF ``Name`` field
                 (max 32 bytes UTF-8).  Empty string is valid.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
             use_rasmapper: Force product-backed authoring (True) or the
                 low-level native-schema writer (False). ``None`` selects the
                 product path for real geometry on Windows/Wine and retains the
@@ -4131,7 +4131,7 @@ class GeomMesh:
         Args:
             geom_number: Geometry number, .g## text path, or resolvable geometry
                 selector.  A current compiled .g##.hdf workspace must exist.
-            flowlines: GeoDataFrame, GeoSeries, LineString, MultiLineString,
+            flowlines (GeoDataFrame | GeoSeries | LineString | MultiLineString | Iterable): GeoDataFrame, GeoSeries, LineString, MultiLineString,
                 or iterable of shapely line geometries. GeoDataFrame inputs are
                 reprojected to the project CRS when both CRS values are known;
                 inputs without a CRS are assumed to already be in project CRS.
@@ -4146,7 +4146,7 @@ class GeomMesh:
             simplify_tolerance: Optional line simplification tolerance applied
                 before buffering.
             preserve_topology: Passed to shapely ``simplify()``.
-            trim_geometries: Optional GeoDataFrame, geometry, or iterable of
+            trim_geometries (GeoDataFrame | BaseGeometry | Iterable, optional): Optional GeoDataFrame, geometry, or iterable of
                 geometries to subtract from generated buffers. Use this for
                 bridge, confluence, levee, or other overlap avoidance zones.
             trim_distance: Optional buffer distance applied to
@@ -4169,7 +4169,7 @@ class GeomMesh:
                 the compiled geometry HDF/RASMapper files when needed.
             hecras_dir: Override HEC-RAS installation directory for HDF
                 resolution consistency with other ``GeomMesh`` methods.
-            ras_object: Optional RasPrj instance.
+            ras_object (RasPrj, optional): Optional RasPrj instance.
 
         Returns:
             List of dictionaries mapping each written region to its HDF FID,
@@ -4346,7 +4346,7 @@ class GeomMesh:
         Args:
             geom_number: Geometry number ("01", 1) or path to .g## text file.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             Never returns successfully.
@@ -4380,7 +4380,7 @@ class GeomMesh:
             geom_number: Geometry number, .g## text path, or .g##.hdf path.
                 Text inputs require an existing current .g##.hdf.
             hecras_dir: Kept for API symmetry; no DLLs are loaded here.
-            ras_object: Optional RasPrj instance for geometry-number lookup.
+            ras_object (RasPrj, optional): Optional RasPrj instance for geometry-number lookup.
             resolve_paths: If True, return absolute paths resolved relative to
                 the geometry HDF. If False, return the raw HDF attribute text.
 
@@ -4426,7 +4426,7 @@ class GeomMesh:
                 the HEC-RAS ``SedimentSoilsFilename`` slot, not the hydrologic
                 soils layer used to build infiltration data.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for geometry-number lookup.
+            ras_object (RasPrj, optional): Optional RasPrj instance for geometry-number lookup.
             validate: Re-read ``/Geometry`` attributes after execution and
                 verify supplied paths were persisted.
 
@@ -4526,7 +4526,7 @@ class GeomMesh:
             mesh_index: Index of the 2D flow area (default 0).
             force: Force recomputation even if tables are up-to-date.
             hecras_dir: Override HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             True if property tables were computed successfully.
@@ -4633,7 +4633,7 @@ class GeomMesh:
             cell_size: Regular-interval spacing in project units. When None, it
                 is read from ``Storage Area Point Generation Data`` in the text.
             hecras_dir: Override HEC-RAS installation directory (for RasMapperLib).
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
 
         Returns:
             MeshResult with status, mesh_name, cell_count (= number of generated
@@ -4797,7 +4797,7 @@ class GeomMesh:
                 are preserved (read from geometry, not defaulted).
             bl_spacing_far: Optional override for far spacing in project units.
                 If omitted, existing per-breakline values are preserved.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
                 The geometry must be referenced by a plan in *ras_object*.
@@ -5406,7 +5406,7 @@ class GeomMesh:
             min_face_length_ratio: Minimum face-length ratio for mesh quality.
             max_iterations: Maximum fix-loop iterations per mesh area.
             hecras_dir: Override path to the HEC-RAS installation directory.
-            ras_object: Optional RasPrj instance for multi-project support.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
 

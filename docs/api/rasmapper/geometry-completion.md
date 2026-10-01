@@ -38,6 +38,7 @@ contains retained execution outputs.
 ::: ras_commander.RasGeometryCompute.RasGeometryCompute
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - generate_edge_lines
@@ -58,6 +59,7 @@ validation copy. It is not a read-only check.
 ::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false
+      show_root_toc_entry: false
       heading_level: 3
       members:
         - compute_geometry
