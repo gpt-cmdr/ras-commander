@@ -2,6 +2,48 @@
 
 Classes for reading and processing HEC-RAS HDF result files.
 
+## SA/2D native attachment evidence
+
+Call `HdfStruc.get_connection_attachments(hdf_path, connections_df=None,
+ras_object=None)` with an explicit HDF path or plan number. Plan numbers resolve
+through `plan_df` to results; explicit geometry HDF paths are also accepted and
+normally report unverified attachment after preprocessing alone. Supply the
+expected `Name`, `From`, `To` inventory from `GeomLateral.get_connection_data()`
+so a missing imported connection receives a failure row.
+
+The return DataFrame contains those identities, `from_cells`, `from_faces`,
+`to_cells`, `to_faces`, `attachment_verified`, `reason_code`,
+`orientation_verified`, `flux_sign_verified`, `evidence_paths`, `details`,
+`source_hdf` and `native_version`. IDs are tuples of zero-based mesh-local native
+indices; repeated segment cells are preserved. The native headwater/tailwater
+cell lists and face-point chains must map exactly to active cells and their
+incident faces in the named areas. Geographic proximity never establishes
+attachment. Absent, ambiguous, wrong-area, malformed, inactive or unsupported
+native evidence reports `CONNECTION_ATTACHMENT_UNVERIFIED`.
+
+Positive evidence is qualified on actual HEC-RAS 6.6 BaldEagleCrkMulti2D results.
+Three internal levees were verified on both sides. Its geometry-only
+preprocessing output lacked those persisted records. The storage-to-2D dam and
+unqualified versions remain unverified. A caller must establish that results
+are fresh for the authored geometry using input hashes and native compute
+receipts; this reader does not certify source currentness. Orientation and flow
+sign are separate and remain explicitly false in this interface.
+
+Use `scripts/qualify_sa2d_attachment.py` in a fresh disposable workspace:
+
+```text
+uv run python scripts/qualify_sa2d_attachment.py --project <source-copy> --workspace <new-workspace> --plan-number 04 --ras-exe <installed-Ras.exe> --max-wait 120 --compute-start 1999-01-01T12:00:00
+```
+
+The optional five-minute compute collects result-side native connectivity; it
+does not qualify seam conveyance. Without it, the script records preprocessing
+evidence and an explicit unverified outcome. Source hashes, runtime/TCU status,
+elapsed time and native receipts are retained in `sa2d_attachment_receipt.json`.
+Run the script under Wine Python in `fim-hecras-wine:6.6-clb-v8` with the new
+library installed for intended-runtime qualification. Mount source projects
+read-only and choose a fresh output variant; fleet orchestration remains the
+coordinator's responsibility.
+
 ## Core Classes
 
 ### HdfBase

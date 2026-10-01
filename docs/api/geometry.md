@@ -639,6 +639,81 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 
 ## GeomLateral
 
+### Complete SA/2D connection records
+
+Use `GeomLateral.get_connection_data(geom_file)` to read one row per connection.
+The existing `get_connections()` metadata interface is unchanged. The complete
+reader adds `LineCoordinates`, `CrestProfile`, `TerrainProfile`, `Culverts` and
+`Gates` as nested DataFrames; `WeirWidth` and `WeirCoefficient` as model-unit
+scalars; `Breach`, `UnknownRecords`, `ParseIssues` and `DefaultsUsed` as lists;
+and exact `RawBlock` text. Profiles use `Station`/`Elevation`, coordinates use
+`X`/`Y`. Unknown/version-specific records are preserved in raw form, not claimed
+to be decoded hydraulic parameters. An absent terrain profile is empty; no
+terrain is silently sampled. CRS, elevation units and vertical datum inherit
+the source model and are not converted or inferred.
+
+`write_connection_data(geom_file, connections_df, create_backup=True)` replaces
+the connection inventory with the supplied complete rows, preserving unrelated
+geometry text. Omitted rows are removed deliberately. `RawBlock` is authoritative:
+decoded columns are checked against it; use focused setters to edit a physical
+field and reread before a lossless write. Duplicate names and inconsistent rows
+fail before mutation. Both APIs accept strings or `Path` objects; they operate
+on explicit geometry files, with no global project state.
+
+```python
+from pathlib import Path
+import shutil
+from ras_commander import GeomLateral, RasExamples
+
+project = RasExamples.extract_project("BaldEagleCrkMulti2D", output_path="working/sa2d")
+source = project / "BaldEagleDamBrk.g13"
+child = Path("working/sa2d/roundtrip.g13")
+shutil.copy2(source, child)
+records = GeomLateral.get_connection_data(source)
+GeomLateral.write_connection_data(child, records)
+assert records.RawBlock.tolist() == GeomLateral.get_connection_data(child).RawBlock.tolist()
+```
+
+A runnable example is `scripts/sa2d_connection_roundtrip.py`.
+
+### Explicit physical authoring and clipping
+
+`set_connection(..., weir_width=..., weir_coef=..., crest_profile=...)` requires
+explicit physical inputs. `crest_profile` is a DataFrame with `Station` and
+`Elevation`. Supply both exact existing area names and finite line coordinates.
+The historical width 100, coefficient 3 and zero crest are only available with
+`allow_defaults=True`; `DefaultsUsed` records which fields used that choice.
+These numbers are compatibility defaults, not qualified physical geometry.
+Callers supplying the former implicit defaults must opt in or provide measured
+parameters. Use culvert, gate, bridge and profile setters for specialized edits.
+
+`classify_connections(geom_file, child_boundary, retained_area_names=None,
+tolerance=0)` returns a GeoDataFrame with `Name`, `From`, `To`, `action`, `reason`
+and support `geometry`. The child geometry must use the source horizontal CRS
+and model units. Width-expanded line support and explicit culvert barrel
+coordinates are considered; unknown gate/bridge/breach support blocks the edit.
+Actions are `keep`, `drop`, `block`. Every decision has a stable reason code.
+Positive tolerance guards external separation; it does not excuse a physical
+footprint crossing the child perimeter. Named endpoints must remain present.
+
+`GeomStorage.clip_2d_flow_area(geom_file, flow_area_name, geometry,
+containment_tolerance=0, create_backup=True)` stages all changes, retains internal
+records exactly and explicitly reports fully external removals. Partial or
+unknown affected support raises a reason-bearing error before changing the
+original. Unrelated areas and connections are retained. Its return value uses
+the same decision columns; `attrs['backup_path']` identifies the backup and
+`attrs['attachment_status']` remains `CONNECTION_ATTACHMENT_UNVERIFIED`.
+It accepts a contained Polygon; hole-aware/multipart perimeter authoring remains
+outside this API. Existing `set_2d_flow_area_perimeter()` stays compatible and
+does not provide this connection-classification workflow.
+
+Text retention does not establish attachment or hydraulic equivalence. After
+fresh native preprocessing, inspect `HdfStruc.get_connection_attachments()`.
+Missing native evidence remains unverified; an offset line inside only one area
+cannot establish the other attachment. Forward flow, tailwater reversal, wet/dry
+transitions and engineer-selected WSE/volume/peak gates still need hydraulic
+qualification against an unsplit control.
+
 Lateral structure parsing and modification.
 
 ### Methods

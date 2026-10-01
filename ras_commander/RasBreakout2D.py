@@ -18,7 +18,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
+import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -40,21 +41,22 @@ from shapely.geometry.polygon import orient
 from shapely.ops import linemerge, unary_union
 
 from .Decorators import log_call
+from .geom.GeomLateral import GeomLateral
+from .geom.GeomMesh import GeomMesh
+from .geom.GeomParser import GeomParser
+from .geom.GeomReferenceFeatures import GeomReferenceFeatures
+from .geom.GeomStorage import GeomStorage
+from .hdf.HdfBase import HdfBase
+from .hdf.HdfBndry import HdfBndry
+from .hdf.HdfMesh import HdfMesh
+from .hdf.HdfStruc import HdfStruc
+from .hdf.HdfUtils import HdfUtils
 from .LoggingConfig import get_logger
 from .RasGeo import RasGeo
 from .RasMap import RasMap
 from .RasPlan import RasPlan
 from .RasPrj import RasPrj
 from .RasUtils import RasUtils
-from .geom.GeomMesh import GeomMesh
-from .geom.GeomLateral import GeomLateral
-from .geom.GeomReferenceFeatures import GeomReferenceFeatures
-from .geom.GeomStorage import GeomStorage
-from .hdf.HdfBase import HdfBase
-from .hdf.HdfBndry import HdfBndry
-from .hdf.HdfMesh import HdfMesh
-from .hdf.HdfUtils import HdfUtils
-
 
 logger = get_logger(__name__)
 
@@ -158,6 +160,7 @@ class Breakout2DPreflight:
     existing_boundaries: pd.DataFrame
     checks: pd.DataFrame
     source_features: dict[str, gpd.GeoDataFrame]
+    connection_data: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     @property
     def is_ready(self) -> bool:
@@ -254,6 +257,11 @@ class Breakout2DPreparationResult:
     retained_reference_line_count: int
     retained_refinement_region_count: int
     unsteady_sha256_after: str
+    connection_attachments: pd.DataFrame = field(
+        default_factory=lambda: pd.DataFrame(
+            columns=HdfStruc.CONNECTION_ATTACHMENT_COLUMNS
+        )
+    )
 
     @property
     def boundaries_unchanged(self) -> bool:
@@ -499,6 +507,7 @@ class RasBreakout2D:
             existing_boundaries=existing_boundaries,
             checks=checks,
             source_features=source_features,
+            connection_data=GeomLateral.get_connection_data(source_geometry_path),
         )
         logger.info(
             "2D breakout preflight %s: ready=%s, features=%d",
@@ -630,7 +639,7 @@ class RasBreakout2D:
             clone: The :meth:`clone_plan_components` result for that preflight.
             ras_object: The initialized isolated working project.
             refresh_hdf: Rebuild the cloned geometry HDF from text.  Required
-                when outside connections are removed.
+                when connections are retained or removed.
             refresh_method: ``"rasmapper"`` (GUI workflow) or ``"rasexe"``
                 (headless geometry preprocessor; needs a terrain association
                 on the cloned HDF).  Ignored when ``refresh_hdf`` is False.
@@ -674,51 +683,43 @@ class RasBreakout2D:
         ]
         if not approved_connections.empty:
             if not refresh_hdf:
-                raise ValueError("Outside connection removal requires exact native HDF refresh")
+                raise ValueError(
+                    "Connection retention/removal requires exact native HDF refresh"
+                )
             current_connections = _classify_outside_connections(
                 clone.geometry_path, child, float(preflight.spec.containment_tolerance)
             )
             approved_names = set(approved_connections["name"])
             if (
-                not approved_connections["action"].eq("drop").all()
+                not approved_connections["action"].isin(["keep", "drop"]).all()
                 or {item["name"] for item in current_connections} != approved_names
-                or any(item["action"] != "drop" for item in current_connections)
+                or {item["name"]: item["action"] for item in current_connections}
+                != dict(
+                    zip(approved_connections["name"], approved_connections["action"])
+                )
             ):
-                raise ValueError("Cloned connection inventory no longer matches approved outside removals")
-            for name in sorted(approved_names):
-                GeomLateral.delete_connection(clone.geometry_path, name, create_backup=True)
+                raise ValueError(
+                    "Cloned connection inventory no longer matches approved decisions"
+                )
+            cloned_data = GeomLateral.get_connection_data(clone.geometry_path)
+            if dict(zip(cloned_data["Name"], cloned_data["RawBlock"])) != dict(
+                zip(
+                    preflight.connection_data["Name"],
+                    preflight.connection_data["RawBlock"],
+                )
+            ):
+                raise ValueError("Cloned connection records changed since preflight")
         breakline_specs = _retained_breakline_specs(preflight)
         reference_line_specs = _retained_reference_line_specs(preflight)
         refinement_specs = _retained_refinement_specs(preflight)
 
-        GeomStorage.set_2d_flow_area_perimeter(
-            clone.geometry_path,
-            preflight.spec.source_2d_area,
-            geometry=child,
-        )
-        source_breakline_names = _source_names(
-            preflight.source_features.get("breakline"),
-            "Name",
-        )
-        GeomStorage.replace_breaklines(
-            clone.geometry_path,
-            preflight.spec.source_2d_area,
+        _prepare_geometry_text(
+            preflight,
+            clone,
+            child,
+            approved_connections,
             breakline_specs,
-            expected_existing_names=source_breakline_names,
-        )
-        source_reference_lines = GeomReferenceFeatures.get_reference_lines(
-            clone.geometry_path
-        )
-        source_reference_names = [
-            row["name"]
-            for row in source_reference_lines
-            if row.get("storage_area") == preflight.spec.source_2d_area
-        ]
-        GeomReferenceFeatures.replace_reference_lines(
-            clone.geometry_path,
-            preflight.spec.source_2d_area,
             reference_line_specs,
-            expected_existing_names=source_reference_names,
         )
 
         refresh_result = None
@@ -814,9 +815,42 @@ class RasBreakout2D:
         final_unsteady_hash = _sha256_file(clone.unsteady_path)
         if final_unsteady_hash != clone.cloned_unsteady_sha256:
             raise RuntimeError("Geometry preparation modified the cloned unsteady file")
+        retained_connections = GeomLateral.get_connection_data(clone.geometry_path)
+        expected_connections = (
+            preflight.connection_data[
+                preflight.connection_data["Name"].isin(
+                    approved_connections.loc[
+                        approved_connections["action"] == "keep", "name"
+                    ]
+                )
+            ]
+            if not preflight.connection_data.empty
+            else preflight.connection_data
+        )
+        if dict(
+            zip(retained_connections["Name"], retained_connections["RawBlock"])
+        ) != dict(
+            zip(
+                expected_connections.get("Name", []),
+                expected_connections.get("RawBlock", []),
+            )
+        ):
+            raise RuntimeError(
+                "Retained connection records changed during geometry preparation"
+            )
+        attachments = (
+            HdfStruc.get_connection_attachments(
+                clone.geometry_hdf,
+                connections_df=retained_connections,
+                ras_object=ras_object,
+            )
+            if not retained_connections.empty
+            else pd.DataFrame(columns=HdfStruc.CONNECTION_ATTACHMENT_COLUMNS)
+        )
         return Breakout2DPreparationResult(
             clone=clone,
             feature_actions=preflight.feature_actions.copy(),
+            connection_attachments=attachments,
             refresh_result=refresh_result,
             mesh_result=mesh_result,
             containment_result=containment_result,
@@ -1346,51 +1380,91 @@ def _action_record(
     }
 
 
-def _classify_outside_connections(
-    geometry_path: Path, child: BaseGeometry, tolerance: float,
-) -> list[dict[str, Any]]:
-    """Qualify only plain, fully external 2D connection lines for omission.
-
-    Culverts, gates and bridge connections remain unsupported: their spatial
-    extent is not proved by the connection centerline alone.
-    """
-    records = []
-    connections = GeomLateral.get_connections(geometry_path)
-    if connections.empty:
-        return records
-    duplicates = connections["Name"].duplicated(keep=False)
-    for index, row in connections.iterrows():
-        name = str(row.get("Name", "")).strip()
-        line = None
-        reason = "connection_extent_unverified"
-        action = "block"
-        try:
-            plain = (
-                bool(name) and not duplicates.loc[index]
-                and row.get("Type") == "2D to 2D"
-                and not bool(row.get("HasCulvert", True))
-                and not bool(row.get("HasGate", True))
-                and row.get("Conn Routing Type") in (0, 1)
-            )
-            if plain:
-                coords = GeomLateral.get_connection_line_coords(geometry_path, name)
-                xy = coords[["X", "Y"]].to_numpy(dtype=float)
-                if len(xy) >= 2 and np.isfinite(xy).all():
-                    line = LineString(xy)
-                    if line.is_valid and line.is_simple and line.length > 0:
-                        if line.disjoint(child.buffer(tolerance)):
-                            action = "drop"
-                            reason = f"verified_external_connection;distance={line.distance(child):.17g}"
-                        else:
-                            reason = "connection_intersects_child_or_tolerance"
-        except (ValueError, KeyError, TypeError, IndexError):
-            reason = "connection_extent_unverified"
-        record = _action_record(
-            "sa_2d_connection", str(index), name, action, reason, line, None
+def _prepare_geometry_text(
+    preflight: Breakout2DPreflight,
+    clone: Breakout2DCloneResult,
+    child: BaseGeometry,
+    approved_connections: pd.DataFrame,
+    breakline_specs: list[dict[str, Any]],
+    reference_line_specs: list[dict[str, Any]],
+) -> None:
+    """Stage native text edits, preserving complete controls before atomic commit."""
+    original_geometry = clone.geometry_path.read_bytes()
+    retained_text = GeomLateral.get_connection_data(clone.geometry_path)
+    dropped_names = set(
+        approved_connections.loc[approved_connections["action"] == "drop", "name"]
+    )
+    retained_text = retained_text[~retained_text["Name"].isin(dropped_names)]
+    with tempfile.TemporaryDirectory(
+        prefix=".sa2d-breakout-", dir=clone.geometry_path.parent
+    ) as folder:
+        staged_geometry = Path(folder) / clone.geometry_path.name
+        staged_geometry.write_bytes(original_geometry)
+        GeomStorage.set_2d_flow_area_perimeter(
+            staged_geometry,
+            preflight.spec.source_2d_area,
+            geometry=child,
         )
-        # Retain the inspected source line as spatial audit evidence, even for
-        # dropped features (retained_measure remains zero).
-        record["geometry"] = line
+        source_breakline_names = _source_names(
+            preflight.source_features.get("breakline"),
+            "Name",
+        )
+        GeomStorage.replace_breaklines(
+            staged_geometry,
+            preflight.spec.source_2d_area,
+            breakline_specs,
+            expected_existing_names=source_breakline_names,
+        )
+        source_reference_lines = GeomReferenceFeatures.get_reference_lines(
+            staged_geometry
+        )
+        source_reference_names = [
+            row["name"]
+            for row in source_reference_lines
+            if row.get("storage_area") == preflight.spec.source_2d_area
+        ]
+        GeomReferenceFeatures.replace_reference_lines(
+            staged_geometry,
+            preflight.spec.source_2d_area,
+            reference_line_specs,
+            expected_existing_names=source_reference_names,
+        )
+
+        # Restore exact raw records after conventional perimeter/feature writers.
+        GeomLateral.write_connection_data(
+            staged_geometry, retained_text, create_backup=False
+        )
+        if clone.geometry_path.read_bytes() != original_geometry:
+            raise RuntimeError("Cloned geometry changed during staged preparation")
+        GeomParser.create_backup(clone.geometry_path)
+        staged_geometry.replace(clone.geometry_path)
+
+
+def _classify_outside_connections(
+    geometry_path: Path,
+    child: BaseGeometry,
+    tolerance: float,
+) -> list[dict[str, Any]]:
+    """Report complete-footprint keep/drop/block decisions for every control."""
+    records = []
+    decisions = GeomLateral.classify_connections(
+        geometry_path, child, tolerance=tolerance
+    )
+    for index, row in decisions.iterrows():
+        footprint = row["geometry"]
+        if not isinstance(footprint, BaseGeometry):
+            footprint = None
+        action = row["action"]
+        record = _action_record(
+            "sa_2d_connection",
+            str(index),
+            row["Name"],
+            action,
+            row["reason"],
+            footprint,
+            footprint if action == "keep" else None,
+        )
+        record["geometry"] = footprint
         records.append(record)
     return records
 
@@ -1415,7 +1489,7 @@ def _build_checks(
     ]
     outside_connections_verified = (
         len(connection_actions) == unsupported["num_sa_2d_connections"]
-        and connection_actions["action"].eq("drop").all()
+        and connection_actions["action"].isin(["keep", "drop"]).all()
         and connection_actions["name"].is_unique
     )
     other_structures_absent = all(
@@ -1449,10 +1523,16 @@ def _build_checks(
         _check(
             "unsupported_structures_absent",
             other_structures_absent and outside_connections_verified,
-            "Child must exclude all structures; only verified external plain 2D connections may be dropped",
-            details={**unsupported, "verified_external_connections": int(
-                connection_actions["action"].eq("drop").sum()
-            )},
+            "Connections require complete-footprint keep/drop decisions; other structures remain unsupported",
+            details={
+                **unsupported,
+                "verified_external_connections": int(
+                    connection_actions["action"].eq("drop").sum()
+                ),
+                "retained_connections": int(
+                    connection_actions["action"].eq("keep").sum()
+                ),
+            },
         ),
         _check(
             "child_within_parent",

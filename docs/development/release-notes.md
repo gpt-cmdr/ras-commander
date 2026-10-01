@@ -9,6 +9,17 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Complete SA/2D connections, retention on clip and breakout, native attachment checks**
+
+`GeomLateral` reads every SA/2D connection completely as a DataFrame (crest and terrain profiles,
+culverts, gates, breach and unknown records) and writes them back losslessly. `GeomLateral.set_connection`
+now requires explicit width, coefficient and crest profile; `allow_defaults=True` requests and records the
+legacy defaults, and area names are validated instead of silently truncated (intentionally stricter).
+`GeomStorage.clip_2d_flow_area` keeps complete internal connections unchanged, reports external removals and
+rejects partial or unknown support before writing. `RasBreakout2D` retains qualified internal connections and
+returns native attachment evidence separately from text retention; missing evidence reports
+`CONNECTION_ATTACHMENT_UNVERIFIED`.
+
 **Complete 2D perimeter inventory and area-scoped BC replacement**
 
 `HdfMesh.get_mesh_perimeter_faces()` returns all native perimeter faces of a

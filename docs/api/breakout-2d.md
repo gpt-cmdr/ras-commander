@@ -39,8 +39,23 @@ preflight.existing_boundaries
 `preflight()` fails closed unless the selected plan is unsteady and pure 2D,
 the source geometry contains exactly one 2D flow area, the named area is
 unique, the child polygon is valid and contained by the
-parent, and no unsupported structure or reference-point edit is required. It
-classifies child-perimeter segments as inherited parent perimeter or artificial
+parent, and no unsupported structure or reference-point edit is required.
+
+SA/2D connections now receive complete-footprint `keep`, `drop` or `block`
+decisions in `feature_actions`. A fully contained internal connection can remain
+in the child, including a control whose From and To are the same retained area.
+Fully external controls are individually reported before removal. Partial or
+unknown physical support still blocks preparation. The single-area breakout
+scope remains unchanged; this is not a multi-area seam authoring workflow.
+
+Preparation rechecks the approved decisions against the clone, requires fresh
+native HDF refresh for connection edits, and compares the exact retained records
+before and after geometry preparation. `prepared.connection_attachments` reports
+native evidence separately. Rows without both named-end cell/face evidence carry
+`CONNECTION_ATTACHMENT_UNVERIFIED`; successful text retention or preprocessing
+alone cannot establish control qualification.
+
+It classifies child-perimeter segments as inherited parent perimeter or artificial
 cuts. Breaklines, reference lines, and refinement regions are classified as
 keep, clip, or drop against a one-base-cell inward trim plus a small numeric
 round-trip guard. Existing geometry BC lines and unsteady boundary records are

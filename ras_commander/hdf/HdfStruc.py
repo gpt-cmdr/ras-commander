@@ -17,18 +17,22 @@ List of Functions in HdfStruc:
 - get_culvert_hydraulics()
 - get_storage_area_polygons()
 """
-from typing import Dict, Any, List, Union
 from pathlib import Path
+from typing import List
+
 import h5py
 import numpy as np
 import pandas as pd
 from geopandas import GeoDataFrame
-from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon, Point, GeometryCollection
-from .HdfUtils import HdfUtils
-from .HdfXsec import HdfXsec
+from shapely.geometry import (
+    LineString,
+    Polygon,
+)
+
+from ..Decorators import log_call, standardize_input
+from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
-from ..Decorators import standardize_input, log_call
-from ..LoggingConfig import setup_logging, get_logger
+from .HdfUtils import HdfUtils
 
 logger = get_logger(__name__)
 
@@ -52,6 +56,256 @@ class HdfStruc:
         "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/"
         "SA 2D Area Conn"
     )
+
+    CONNECTION_ATTACHMENT_COLUMNS = [
+        "Name",
+        "From",
+        "To",
+        "from_cells",
+        "from_faces",
+        "to_cells",
+        "to_faces",
+        "attachment_verified",
+        "reason_code",
+        "orientation_verified",
+        "flux_sign_verified",
+        "evidence_paths",
+        "details",
+        "source_hdf",
+        "native_version",
+    ]
+
+    @staticmethod
+    def _connection_side_attachment(hdf, result_group, area_name, side):
+        """Read schema-qualified 6.6 native cell IDs and exact mesh topology."""
+        cell_path = f"{result_group.name}/{side} Cells"
+        point_path = f"{result_group.name}/Geometric Info/{side} Face Points"
+        mesh_path = f"Geometry/2D Flow Areas/{area_name}"
+        required = [
+            cell_path,
+            point_path,
+            f"{mesh_path}/Faces FacePoint Indexes",
+            f"{mesh_path}/Faces Cell Indexes",
+            f"{mesh_path}/Cells Surface Area",
+            f"{mesh_path}/FacePoints Coordinate",
+        ]
+        if any(path not in hdf for path in required):
+            return (), (), (), "Native side datasets or active-cell topology absent"
+        if any(not isinstance(hdf[path], h5py.Dataset) for path in required):
+            return (), (), tuple(required), "Unsupported native dataset objects"
+        cells = hdf[cell_path][()]
+        points = hdf[point_path][()]
+        if (
+            cells.ndim != 1
+            or points.ndim != 1
+            or cells.dtype.kind not in "iu"
+            or points.dtype.kind not in "iu"
+            or not len(cells)
+            or len(points) != len(cells) + 1
+        ):
+            return (), (), tuple(required), "Unsupported native side dataset layout"
+        surface = hdf[f"{mesh_path}/Cells Surface Area"]
+        coordinates = hdf[f"{mesh_path}/FacePoints Coordinate"]
+        if surface.ndim != 1 or coordinates.ndim != 2 or coordinates.shape[1] != 2:
+            return (
+                (),
+                (),
+                tuple(required),
+                "Unsupported native active-cell or face-point layout",
+            )
+        faces = hdf[f"{mesh_path}/Faces FacePoint Indexes"][()]
+        adjacency = hdf[f"{mesh_path}/Faces Cell Indexes"][()]
+        point_count = len(coordinates)
+        if (
+            faces.ndim != 2
+            or faces.shape[1] != 2
+            or adjacency.shape != faces.shape
+            or faces.dtype.kind not in "iu"
+            or adjacency.dtype.kind not in "iu"
+            or np.any(points < 0)
+            or np.any(points >= point_count)
+            or np.any(faces < 0)
+            or np.any(faces >= point_count)
+            or np.any(adjacency < -1)
+            or np.any(adjacency >= len(surface))
+            or np.any(cells < 0)
+            or np.any(cells >= len(surface))
+        ):
+            return (), (), tuple(required), "Invalid native cells or face topology"
+        if any(
+            not np.isfinite(surface[int(cell)]) or surface[int(cell)] <= 0
+            for cell in cells
+        ):
+            return (
+                (),
+                (),
+                tuple(required),
+                "Native attachment references inactive cells",
+            )
+        lookup = {}
+        for face_id, pair in enumerate(faces):
+            lookup.setdefault(tuple(sorted(map(int, pair))), []).append(face_id)
+        face_ids = []
+        for cell, first, second in zip(cells, points[:-1], points[1:]):
+            candidates = lookup.get(tuple(sorted((int(first), int(second)))), [])
+            matches = [face for face in candidates if int(cell) in adjacency[face]]
+            if len(matches) != 1:
+                return (
+                    tuple(map(int, cells)),
+                    (),
+                    tuple(required),
+                    "Ambiguous or missing native face/cell incidence",
+                )
+            face_ids.append(matches[0])
+        return tuple(map(int, cells)), tuple(face_ids), tuple(required), ""
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="plan_hdf")
+    def get_connection_attachments(
+        hdf_path: str | Path,
+        connections_df: pd.DataFrame | None = None,
+        *,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Verify both SA/2D ends from native result cell and face receipts.
+
+        Args:
+            hdf_path: Geometry or result HDF path (str or Path), or a plan
+                number resolved to result HDF by the input decorator.
+                Geometry-only preprocessing normally lacks solver receipts.
+            connections_df: Expected Name/From/To inventory. Every expected
+                connection receives a row, including missing native ones.
+            ras_object: Explicit project context for resolving plan numbers.
+
+        Returns:
+            DataFrame with Name, From, To, from_cells, from_faces, to_cells,
+            to_faces, attachment_verified, reason_code, orientation_verified,
+            flux_sign_verified, evidence_paths, details, source_hdf and
+            native_version. IDs are zero-based mesh-local native indices;
+            repeated segment cell IDs are preserved. No mutation is performed.
+
+        Raises:
+            FileNotFoundError: The resolved HDF is absent.
+            ValueError: Expected identity columns are missing or input cannot
+                be resolved by the HDF decorator.
+            OSError: Native HDF cannot be read.
+
+        Notes
+        -----
+        The supported result layout is qualified against HEC-RAS 6.6 native
+        BaldEagleCrkMulti2D output. Other versions fail closed until qualified.
+        Storage-area ends, missing/ambiguous identities, absent native datasets,
+        and invalid cell/face incidence return
+        ``CONNECTION_ATTACHMENT_UNVERIFIED``. No distance or geometric proximity
+        establishes attachment. Exact native face-point IDs map to mesh faces;
+        cells must be active and incident to those faces. Attachment alone does
+        not qualify hydraulic equivalence, flow sign, or head loss. Orientation
+        and flux sign remain explicitly unverified by this method.
+        """
+        columns = HdfStruc.CONNECTION_ATTACHMENT_COLUMNS
+        if connections_df is not None and not {"Name", "From", "To"}.issubset(
+            connections_df.columns
+        ):
+            raise ValueError("connections_df requires Name, From, and To columns")
+        with h5py.File(hdf_path, "r") as hdf:
+            native = []
+            attrs_path = "Geometry/Structures/Attributes"
+            if attrs_path in hdf:
+                attrs = HdfStruc._decode_bytes_columns(
+                    pd.DataFrame(hdf[attrs_path][()])
+                )
+                required = {"Type", "Connection", "US SA/2D", "DS SA/2D"}
+                if required.issubset(attrs.columns):
+                    native = [
+                        {
+                            "Name": row["Connection"].strip(),
+                            "From": row["US SA/2D"].strip(),
+                            "To": row["DS SA/2D"].strip(),
+                        }
+                        for _, row in attrs.iterrows()
+                        if row["Type"].strip() == "Connection"
+                    ]
+            expected = (
+                connections_df[["Name", "From", "To"]].to_dict("records")
+                if connections_df is not None
+                else native
+            )
+            version = HdfUtils.convert_ras_string(hdf.attrs.get("File Version", ""))
+            file_type = HdfUtils.convert_ras_string(hdf.attrs.get("File Type", ""))
+            qualified = (
+                str(version).startswith("HEC-RAS 6.6 ")
+                and file_type == "HEC-RAS Results"
+            )
+            result_base = hdf.get(HdfStruc.SA_2D_CONN_RESULTS_PATH)
+            rows = []
+            for connection in expected:
+                record = dict(
+                    connection,
+                    from_cells=(),
+                    from_faces=(),
+                    to_cells=(),
+                    to_faces=(),
+                    attachment_verified=False,
+                    reason_code="CONNECTION_ATTACHMENT_UNVERIFIED",
+                    orientation_verified=False,
+                    flux_sign_verified=False,
+                    evidence_paths=(),
+                    details="Native result attachment evidence absent",
+                    source_hdf=str(hdf_path),
+                    native_version=str(version),
+                )
+                matches = [
+                    item for item in native if item["Name"] == connection["Name"]
+                ]
+                duplicated = (
+                    sum(item["Name"] == connection["Name"] for item in expected) != 1
+                )
+                if duplicated or len(matches) != 1 or matches[0] != connection:
+                    record["details"] = (
+                        "Missing, ambiguous, or mismatched native connection identity"
+                    )
+                elif not qualified:
+                    record["details"] = (
+                        "Native attachment schema is not qualified for this HEC-RAS version"
+                    )
+                elif result_base is not None:
+                    candidates = {
+                        connection["Name"],
+                        f"{connection['From']} {connection['Name']}",
+                    }
+                    groups = [
+                        result_base[name] for name in candidates if name in result_base
+                    ]
+                    if len(groups) != 1:
+                        record["details"] = (
+                            "Missing or ambiguous native result connection group"
+                        )
+                    else:
+                        evidence, problems = [], []
+                        for end, side in (("from", "Headwater"), ("to", "Tailwater")):
+                            cells, faces, paths, problem = (
+                                HdfStruc._connection_side_attachment(
+                                    hdf,
+                                    groups[0],
+                                    connection["From" if end == "from" else "To"],
+                                    side,
+                                )
+                            )
+                            record[f"{end}_cells"], record[f"{end}_faces"] = (
+                                cells,
+                                faces,
+                            )
+                            evidence.extend(paths)
+                            if problem:
+                                problems.append(f"{end}: {problem}")
+                        record["evidence_paths"] = tuple(evidence)
+                        record["details"] = "; ".join(problems)
+                        record["attachment_verified"] = not problems
+                        if not problems:
+                            record["reason_code"] = "CONNECTION_ATTACHMENT_VERIFIED"
+                rows.append(record)
+            return pd.DataFrame(rows, columns=columns)
 
     @staticmethod
     def _decode_bytes_columns(df: pd.DataFrame) -> pd.DataFrame:

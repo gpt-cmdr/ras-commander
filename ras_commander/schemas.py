@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.18"
+SCHEMA_VERSION = "1.19"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -163,6 +163,214 @@ DATAFRAME_SCHEMAS = {
                 "description": "Normal Depth, Flow Hydrograph, or Stage Hydrograph forcing.",
             },
         ],
+    },
+    "sa2d_connection_attachments": {
+        "description": "Native named-end SA/2D cell and face evidence, independently qualified from text retention.",
+        "accessor": "HdfStruc.get_connection_attachments(...) or Breakout2DPreparationResult.connection_attachments",
+        "source": "HdfStruc.get_connection_attachments()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": dtype, "description": description}
+            for name, dtype, description in (
+                ("Name", "str", "Expected/native connection name."),
+                ("From", "str", "Exact named upstream area."),
+                ("To", "str", "Exact named downstream area."),
+                (
+                    "from_cells",
+                    "object",
+                    "Tuple of native zero-based mesh-local headwater segment cell IDs.",
+                ),
+                (
+                    "from_faces",
+                    "object",
+                    "Tuple of exact headwater face IDs mapped through native point topology.",
+                ),
+                (
+                    "to_cells",
+                    "object",
+                    "Tuple of native zero-based mesh-local tailwater segment cell IDs.",
+                ),
+                (
+                    "to_faces",
+                    "object",
+                    "Tuple of exact tailwater face IDs mapped through native point topology.",
+                ),
+                (
+                    "attachment_verified",
+                    "bool",
+                    "Both named-end active cell and face incidences are verified.",
+                ),
+                (
+                    "reason_code",
+                    "str",
+                    "CONNECTION_ATTACHMENT_VERIFIED or CONNECTION_ATTACHMENT_UNVERIFIED.",
+                ),
+                (
+                    "orientation_verified",
+                    "bool",
+                    "False; attachment does not qualify structure orientation.",
+                ),
+                (
+                    "flux_sign_verified",
+                    "bool",
+                    "False; attachment does not qualify conservative flow sign.",
+                ),
+                (
+                    "evidence_paths",
+                    "object",
+                    "Tuple of native source dataset paths checked.",
+                ),
+                (
+                    "details",
+                    "str",
+                    "Diagnostic for absent, ambiguous or invalid native evidence.",
+                ),
+                (
+                    "source_hdf",
+                    "str",
+                    "Resolved HDF source path; currentness must be established by caller receipts.",
+                ),
+                ("native_version", "str", "Actual HDF native version declaration."),
+            )
+        ],
+        "note": "Positive evidence is currently qualified for HEC-RAS 6.6 result schema; geometry-only preprocessing and storage-area ends remain unverified.",
+    },
+    "sa2d_connection_data": {
+        "description": "Complete SA/2D text connection inventory with authoritative lossless raw blocks.",
+        "accessor": "GeomLateral.get_connection_data(geom_file)",
+        "source": "GeomLateral.get_connection_data()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": dtype, "description": description}
+            for name, dtype, description in (
+                ("Name", "str", "Exact stripped connection name."),
+                ("Type", "str", "Named endpoint area-type classification."),
+                ("From", "str | None", "Exact upstream area name."),
+                ("To", "str | None", "Exact downstream area name."),
+                ("NumPoints", "int64", "Declared crest profile point count."),
+                ("Header", "str", "Native connection header keyword."),
+                ("RawName", "str", "Unstripped source name."),
+                (
+                    "CenterX",
+                    "float64 | None",
+                    "Source header X coordinate in model units.",
+                ),
+                (
+                    "CenterY",
+                    "float64 | None",
+                    "Source header Y coordinate in model units.",
+                ),
+                ("LinePoints", "int64 | None", "Declared centerline point count."),
+                (
+                    "Conn Routing Type",
+                    "int64 | None",
+                    "Native routing code; unknown is not defaulted.",
+                ),
+                ("HasGate", "bool", "Whether a gate section occurs."),
+                ("HasCulvert", "bool", "Whether a culvert section occurs."),
+                (
+                    "StartLine",
+                    "int64",
+                    "One-based source start line; positional metadata.",
+                ),
+                (
+                    "EndLine",
+                    "int64",
+                    "One-based last source line; positional metadata.",
+                ),
+                (
+                    "RawBlock",
+                    "str",
+                    "Exact source block, including unknown records/newlines; authoritative for writing.",
+                ),
+                (
+                    "LineCoordinates",
+                    "object",
+                    "Nested X/Y DataFrame in source horizontal CRS/units.",
+                ),
+                (
+                    "CrestProfile",
+                    "object",
+                    "Nested Station/Elevation DataFrame in source model units/datum.",
+                ),
+                (
+                    "WeirWidth",
+                    "float64 | None",
+                    "Physical weir width in source length units.",
+                ),
+                (
+                    "WeirCoefficient",
+                    "float64 | None",
+                    "Source discharge coefficient; units follow source convention.",
+                ),
+                (
+                    "Culverts",
+                    "object",
+                    "Nested culvert/barrel DataFrame from the existing reader.",
+                ),
+                ("Gates", "object", "Nested gate DataFrame from the existing reader."),
+                ("Breach", "object", "Undecoded breach records, preserved exactly."),
+                (
+                    "TerrainProfile",
+                    "object",
+                    "Nested Station/Elevation DataFrame when persisted; no implicit sampling.",
+                ),
+                (
+                    "DefaultsUsed",
+                    "object",
+                    "List of explicitly requested compatibility default fields.",
+                ),
+                (
+                    "UnknownRecords",
+                    "object",
+                    "Preserved records whose support/physics are not decoded.",
+                ),
+                (
+                    "ParseIssues",
+                    "object",
+                    "List of malformed or missing physical-section diagnostics.",
+                ),
+            )
+        ],
+        "note": "RawBlock is authoritative; nested fields must match it when supplied to the lossless writer.",
+    },
+    "sa2d_connection_actions": {
+        "description": "Read-only complete-support connection retention/removal decisions.",
+        "accessor": "GeomLateral.classify_connections(...) or GeomStorage.clip_2d_flow_area(...)",
+        "source": "GeomLateral.classify_connections()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "Name", "dtype": "str", "description": "Connection name."},
+            {
+                "name": "From",
+                "dtype": "str | None",
+                "description": "Named upstream area.",
+            },
+            {
+                "name": "To",
+                "dtype": "str | None",
+                "description": "Named downstream area.",
+            },
+            {
+                "name": "action",
+                "dtype": "str",
+                "description": "keep, drop or block; no silent omission.",
+            },
+            {
+                "name": "reason",
+                "dtype": "str",
+                "description": "Stable decision reason code.",
+            },
+            {
+                "name": "geometry",
+                "dtype": "geometry",
+                "description": "Full decoded physical support in source CRS/units, or null if unverified.",
+            },
+        ],
+        "note": "Tolerance guards external separation without expanding retention across physical crossings.",
     },
     "container_batch_summary": {
         "description": "Ordered outcomes of host-side container jobs, including failures and reused stages.",

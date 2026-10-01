@@ -41,16 +41,19 @@ Example Usage:
 """
 
 import math
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Union, Optional, List, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence, Union
+
 import pandas as pd
 
 if TYPE_CHECKING:
     from geopandas import GeoDataFrame
+    from shapely.geometry.base import BaseGeometry
 
-from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
 
 logger = get_logger(__name__)
@@ -62,6 +65,103 @@ class GeomStorage:
 
     All methods are static and designed to be used without instantiation.
     """
+
+    @staticmethod
+    @log_call
+    def clip_2d_flow_area(
+        geom_file: Union[str, Path],
+        flow_area_name: str,
+        geometry: "BaseGeometry",
+        *,
+        containment_tolerance: float = 0.0,
+        create_backup: bool = True,
+    ) -> "GeoDataFrame":
+        """Clip a named area while preserving complete internal connection records.
+
+        Args:
+            geom_file: Geometry text in a disposable working project (str or Path).
+            flow_area_name: Exact existing 2D area name; other areas stay unchanged.
+            geometry: Child Polygon in the source geometry's horizontal CRS/units.
+            containment_tolerance: Nonnegative external-separation guard in model
+                units. Does not excuse a footprint crossing the child perimeter.
+            create_backup: Back up the original before the final atomic write.
+
+        Returns:
+            GeoDataFrame: Affected connections, with Name, From, To, action,
+            reason and physical support geometry. Fully contained records are
+            kept, disjoint records dropped. The frame's attrs contain backup_path.
+            Native attachment remains unverified until fresh preprocessing.
+
+        Raises:
+            FileNotFoundError: If the source geometry is absent.
+            ValueError: If the child is invalid/not contained, an area is missing,
+                or a connection crosses the cut or has unknown physical support.
+        """
+        from shapely.geometry import Polygon
+
+        from .GeomLateral import GeomLateral
+
+        geom_file = Path(geom_file)
+        source_bytes = geom_file.read_bytes()
+        if (
+            not isinstance(geometry, Polygon)
+            or geometry.is_empty
+            or not geometry.is_valid
+        ):
+            raise ValueError("geometry must be a valid nonempty Polygon")
+        if geometry.interiors:
+            raise ValueError("Hole-aware 2D perimeter authoring is not qualified")
+        if not math.isfinite(containment_tolerance) or containment_tolerance < 0:
+            raise ValueError("containment_tolerance must be finite and nonnegative")
+        areas = GeomStorage.get_storage_area_polygons(geom_file, exclude_2d=False)
+        selected = areas[areas["Name"] == flow_area_name]
+        if len(selected) != 1:
+            raise ValueError(f"2D area must exist uniquely: {flow_area_name!r}")
+        settings = GeomStorage.get_2d_flow_area_settings(geom_file)
+        if flow_area_name not in settings["name"].values:
+            raise ValueError(f"Not a 2D flow area: {flow_area_name!r}")
+        if not selected.geometry.iloc[0].covers(geometry):
+            raise ValueError(
+                "Child perimeter must be completely contained by the source area"
+            )
+
+        data = GeomLateral.get_connection_data(geom_file)
+        decisions = GeomLateral.classify_connections(
+            geom_file, geometry, tolerance=containment_tolerance
+        )
+        affected = decisions[
+            (decisions["From"] == flow_area_name) | (decisions["To"] == flow_area_name)
+        ].copy()
+        blocked = affected[~affected["action"].isin(["keep", "drop"])]
+        if not blocked.empty:
+            reasons = "; ".join(f"{r.Name}: {r.reason}" for r in blocked.itertuples())
+            raise ValueError(f"Connection clipping blocked before mutation: {reasons}")
+        dropped = set(affected.loc[affected["action"] == "drop", "Name"])
+        retained = data[~data["Name"].isin(dropped)].copy()
+        # Stage every edit and the exact record readback before touching the caller's file.
+        with tempfile.TemporaryDirectory(
+            prefix=".sa2d-clip-", dir=geom_file.parent
+        ) as work:
+            staged = Path(work) / geom_file.name
+            staged.write_bytes(source_bytes)
+            GeomStorage.set_2d_flow_area_perimeter(
+                staged, flow_area_name, geometry=geometry, create_backup=False
+            )
+            GeomLateral.write_connection_data(staged, retained, create_backup=False)
+            actual = GeomLateral.get_connection_data(staged)
+            if dict(zip(actual["Name"], actual["RawBlock"])) != dict(
+                zip(retained["Name"], retained["RawBlock"])
+            ):
+                raise RuntimeError(
+                    "Staged clipping changed a retained connection record"
+                )
+            if geom_file.read_bytes() != source_bytes:
+                raise RuntimeError("Source geometry changed during staged clipping")
+            backup = GeomParser.create_backup(geom_file) if create_backup else None
+            staged.replace(geom_file)
+        affected.attrs["backup_path"] = backup
+        affected.attrs["attachment_status"] = "CONNECTION_ATTACHMENT_UNVERIFIED"
+        return affected
 
     # HEC-RAS format constants
     FIXED_WIDTH_COLUMN = 8      # Character width for numeric data in geometry files
