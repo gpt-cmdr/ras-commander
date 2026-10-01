@@ -176,7 +176,7 @@ Saved output intervals are distinct from the computation timestep. Updating a
 plan's settings does not change an existing result HDF: recompute to produce the
 new output, then inspect the timestamps actually written.
 
-::: ras_commander.RasPlan
+::: ras_commander.RasPlan.RasPlan
     options:
       show_root_heading: false
       heading_level: 3

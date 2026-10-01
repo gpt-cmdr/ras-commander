@@ -35,7 +35,7 @@ contains retained execution outputs.
 
 ## In-process completion and diagnostics
 
-::: ras_commander.RasGeometryCompute
+::: ras_commander.RasGeometryCompute.RasGeometryCompute
     options:
       show_root_heading: false
       heading_level: 3
@@ -55,7 +55,7 @@ contains retained execution outputs.
 `validate_geometry_association_cli()` mutates its target HDF; use an intentional
 validation copy. It is not a read-only check.
 
-::: ras_commander.RasProcess
+::: ras_commander.RasProcess.RasProcess
     options:
       show_root_heading: false
       heading_level: 3

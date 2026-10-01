@@ -33,7 +33,7 @@ and [931 — native terrain export](../../notebooks/931_native_rasmapper_terrain
 
 ## Layer discovery and authoring
 
-::: ras_commander.RasMap
+::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
       heading_level: 3
@@ -70,7 +70,7 @@ and [931 — native terrain export](../../notebooks/931_native_rasmapper_terrain
 
 ## Compiled geometry associations
 
-::: ras_commander.RasMap
+::: ras_commander.RasMap.RasMap
     options:
       show_root_heading: false
       show_root_toc_entry: false
@@ -90,7 +90,7 @@ and [931 — native terrain export](../../notebooks/931_native_rasmapper_terrain
 validation results (or the Boolean convenience result from `is_valid_layer`).
 These checks do not run the hydraulic solver.
 
-::: ras_commander.RasMapValidation
+::: ras_commander.RasMapValidation.RasMapValidation
     options:
       show_root_heading: false
       heading_level: 3
