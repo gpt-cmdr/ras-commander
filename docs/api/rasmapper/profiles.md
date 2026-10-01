@@ -30,7 +30,7 @@ maximum-envelope and timestamp comparisons.
 
 ## Offline spatial sampling
 
-::: ras_commander.HdfResultsQuery
+::: ras_commander.hdf.HdfResultsQuery.HdfResultsQuery
     options:
       show_root_heading: false
       heading_level: 3
@@ -45,7 +45,7 @@ maximum-envelope and timestamp comparisons.
 The `flow` sample column is not automatically whole-line Q. Use recorded
 reference-line flow for that quantity when available; do not sum station samples.
 
-::: ras_commander.HdfResultsQuery
+::: ras_commander.hdf.HdfResultsQuery.HdfResultsQuery
     options:
       show_root_heading: false
       show_root_toc_entry: false
@@ -73,7 +73,7 @@ available variables and retain their unit/source attributes. Feature names are
 coordinates, not necessarily xarray indexes; use `isel(refln_id=...)` or
 explicit coordinate filtering instead of assuming `.sel(refln_name=...)` works.
 
-::: ras_commander.HdfResultsXsec
+::: ras_commander.hdf.HdfResultsXsec.HdfResultsXsec
     options:
       show_root_heading: false
       heading_level: 3
@@ -88,7 +88,7 @@ stored time/feature pair. An empty DataFrame can mean missing output **or a
 caught read error**; inspect logged diagnostics rather than interpreting absence
 as zero flow or stage.
 
-::: ras_commander.HdfResultsPlan
+::: ras_commander.hdf.HdfResultsPlan.HdfResultsPlan
     options:
       show_root_heading: false
       heading_level: 3
@@ -110,7 +110,7 @@ not an automatic fallback when the native runtime is unavailable.
 The [workflow guide](../../user-guide/2d-profile-and-reference-workflows.md#interpret-named-line-flow-provenance)
 provides the interpretation table.
 
-::: ras_commander.HdfResultsMesh
+::: ras_commander.hdf.HdfResultsMesh.HdfResultsMesh
     options:
       show_root_heading: false
       heading_level: 3
@@ -126,7 +126,7 @@ Recompute the plan to obtain solver-recorded reference results. A profile line
 used only for postprocessing does not retroactively become a recorded reference
 location. Reference areas are not covered by these point/line writers.
 
-::: ras_commander.geom.GeomReferenceFeatures
+::: ras_commander.geom.GeomReferenceFeatures.GeomReferenceFeatures
     options:
       show_root_heading: false
       heading_level: 3
@@ -141,7 +141,7 @@ location. Reference areas are not covered by these point/line writers.
 
 ## Inspect geometry and output settings
 
-::: ras_commander.HdfBndry
+::: ras_commander.hdf.HdfBndry.HdfBndry
     options:
       show_root_heading: false
       heading_level: 3
@@ -149,7 +149,7 @@ location. Reference areas are not covered by these point/line writers.
         - get_reference_lines
         - get_reference_points
 
-::: ras_commander.HdfMesh
+::: ras_commander.hdf.HdfMesh.HdfMesh
     options:
       show_root_heading: false
       heading_level: 3
