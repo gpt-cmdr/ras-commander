@@ -3,3 +3,5 @@
 ras_commander/remote/portable_slurm_launcher.py text eol=lf
 # Retain the canary's exact CRLF bytes and intentional native fixed-width padding.
 tests/fixtures/ras_text_crlf/canary_86.f01 -text -diff
+# Native ineffective-flow excerpts retain CRLF and meaningful blank 8-char slots.
+tests/fixtures/ineffective_flow/*.g01 -text -diff
