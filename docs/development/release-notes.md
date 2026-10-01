@@ -9,6 +9,18 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Report duplicate native BC face ownership during read-only inspection**
+
+`HdfBndry.get_bc_external_faces()` and `HdfMesh.get_mesh_perimeter_faces()` accept
+`on_duplicate_ownership="report"` for delivered geometry with repeated native
+BC face associations. Default `"raise"` remains unchanged. Report mode marks
+`duplicate_ownership`, lists `owning_bc_line_ids` / `owning_bc_line_names`, and
+records the duplicate summary in DataFrame attrs. The association reader keeps
+every native row; the perimeter inventory keeps one row per face and nulls
+scalar BC fields when ownership is ambiguous. Other validation stays active
+and source files are read-only. The legacy `validate_unique_faces=False`
+diagnostic shape is preserved. DataFrame schema contract version is 1.20.
+
 **Complete SA/2D connections, retention on clip and breakout, native attachment checks**
 
 `GeomLateral` reads every SA/2D connection completely as a DataFrame (crest and terrain profiles,

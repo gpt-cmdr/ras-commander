@@ -86,7 +86,7 @@ import shutil
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, TYPE_CHECKING, Union
 from uuid import uuid4
 
 import h5py
@@ -1131,7 +1131,11 @@ class HdfMesh:
     @log_call
     @standardize_input(file_type="geom_hdf")
     def get_mesh_perimeter_faces(
-        hdf_path: str | Path, mesh_name: str, *, ras_object=None
+        hdf_path: str | Path,
+        mesh_name: str,
+        *,
+        ras_object=None,
+        on_duplicate_ownership: Literal["raise", "report"] = "raise",
     ) -> "GeoDataFrame":
         """Read every perimeter face of a named 2D area, including unassigned faces.
 
@@ -1147,6 +1151,15 @@ class HdfMesh:
         Length is the native ``Faces NormalUnitVector and Length`` value in
         model units, falling back to complete face geometry length if absent.
         BC columns are nullable for confirmed unassigned faces.
+        ``on_duplicate_ownership="report"`` keeps one row per face and adds
+        ``duplicate_ownership`` (bool), ``owning_bc_line_ids`` and
+        ``owning_bc_line_names`` (parallel lists in native encounter order).
+        Duplicate-owned faces have null scalar BC ID, name and type; unassigned
+        faces have empty owner lists. Repeated native associations are also
+        marked, even for the same owner. Default ``"raise"`` retains strict
+        validation and the original columns. Other validations remain active.
+        ``attrs['duplicate_ownership']`` lists duplicate faces and owners for
+        the requested mesh, with duplicate face and association-row counts.
 
         Physical cells are identified by collection ``Attributes/Cell Count``;
         higher cell IDs identify native ghost cells. Surface area and the
@@ -1167,6 +1180,8 @@ class HdfMesh:
 
         from .HdfBndry import HdfBndry
 
+        if on_duplicate_ownership not in ("raise", "report"):
+            raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
         with h5py.File(hdf_path, "r") as hdf:
             base = "Geometry/2D Flow Areas"
             attributes = hdf[f"{base}/Attributes"][()]
@@ -1300,7 +1315,9 @@ class HdfMesh:
                 geometry="geometry",
                 crs=HdfBase.get_projection(hdf),
             )
-            association = HdfBndry.get_bc_external_faces(hdf_path)
+            association = HdfBndry.get_bc_external_faces(
+                hdf_path, on_duplicate_ownership=on_duplicate_ownership
+            )
             if len(association) and association["mesh_name"].isna().any():
                 raise ValueError(f"Native BC ownership lacks mesh metadata in {hdf_path}")
             if association.attrs["association_status"] == "absent":
@@ -1344,8 +1361,22 @@ class HdfMesh:
                     raise ValueError(
                         f"Stale native BC face/endpoints for {mesh_name!r}, face {row.face_id}"
                     )
+            owner_columns = ["face_id", "bc_line_id", "bc_line_name", "bc_line_type"]
+            if on_duplicate_ownership == "report":
+                owner_columns += [
+                    "duplicate_ownership",
+                    "owning_bc_line_ids",
+                    "owning_bc_line_names",
+                ]
+                # Every native row was validated above. Collapse only the
+                # perimeter join; the association reader remains lossless.
+                duplicate_rows = owners["duplicate_ownership"]
+                owners.loc[
+                    duplicate_rows, ["bc_line_id", "bc_line_name", "bc_line_type"]
+                ] = pd.NA
+                owners = owners.drop_duplicates("face_id")
             result = result.merge(
-                owners[["face_id", "bc_line_id", "bc_line_name", "bc_line_type"]],
+                owners[owner_columns],
                 on="face_id",
                 how="left",
                 validate="one_to_one",
@@ -1365,10 +1396,36 @@ class HdfMesh:
                 "bc_line_type",
                 "geometry",
             ]
+            if on_duplicate_ownership == "report":
+                result["duplicate_ownership"] = result["duplicate_ownership"].eq(True)
+                for column in ("owning_bc_line_ids", "owning_bc_line_names"):
+                    result[column] = result[column].map(
+                        lambda value: value if isinstance(value, list) else []
+                    )
+                columns += [
+                    "duplicate_ownership",
+                    "owning_bc_line_ids",
+                    "owning_bc_line_names",
+                ]
             result = result[columns]
+            summary = [
+                record
+                for record in association.attrs.get("duplicate_ownership", [])
+                if record["mesh_name"] == mesh_name
+            ]
+            if on_duplicate_ownership == "report":
+                native_duplicates = association.loc[
+                    (association["mesh_name"] == mesh_name)
+                    & association["duplicate_ownership"]
+                ]
+                result.attrs.update(
+                    duplicate_ownership=summary,
+                    duplicate_face_count=len(summary),
+                    duplicate_face_row_count=len(native_duplicates),
+                )
             result.attrs.update(
                 association_status=association.attrs["association_status"],
-                face_ownership_unique=True,
+                face_ownership_unique=not summary,
                 length_source=length_source,
                 physical_cell_count=cell_count,
             )

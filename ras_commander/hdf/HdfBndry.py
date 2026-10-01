@@ -26,7 +26,7 @@ List of Functions in HdfBndry:
 
 """
 from pathlib import Path
-from typing import ClassVar, Optional, Union
+from typing import ClassVar, Literal, Optional, Union
 
 import geopandas as gpd
 import h5py
@@ -77,6 +77,7 @@ class HdfBndry:
         *,
         include_geometry: bool = False,
         crs=None,
+        report_ownership: bool = False,
     ) -> pd.DataFrame:
         """Build a typed empty native-association result."""
         result = pd.DataFrame(
@@ -126,7 +127,47 @@ class HdfBndry:
                     "duplicate_face_row_count": 0,
                 }
             )
+        if report_ownership:
+            HdfBndry._report_bc_face_ownership(result)
         return result
+
+    @staticmethod
+    def _report_bc_face_ownership(result: pd.DataFrame) -> None:
+        """Annotate all association rows without choosing or discarding an owner."""
+        keys = (
+            ["mesh_name", "face_id"]
+            if result["mesh_name"].notna().all()
+            else ["face_id"]
+        )
+        result["duplicate_ownership"] = result.duplicated(keys, keep=False)
+        result["owning_bc_line_ids"] = pd.Series(
+            [[] for _ in range(len(result))], index=result.index, dtype="object"
+        )
+        result["owning_bc_line_names"] = pd.Series(
+            [[] for _ in range(len(result))], index=result.index, dtype="object"
+        )
+        summary = []
+        for _, rows in result.groupby(keys, sort=False, dropna=False):
+            owners = rows[["bc_line_id", "bc_line_name"]].drop_duplicates()
+            ids = [None if pd.isna(value) else int(value) for value in owners.bc_line_id]
+            names = [None if pd.isna(value) else str(value) for value in owners.bc_line_name]
+            for index in rows.index:
+                result.at[index, "owning_bc_line_ids"] = ids.copy()
+                result.at[index, "owning_bc_line_names"] = names.copy()
+            if rows["duplicate_ownership"].any():
+                summary.append(
+                    {
+                        "mesh_name": (
+                            str(rows.mesh_name.iloc[0])
+                            if rows.mesh_name.notna().all() and rows.mesh_name.nunique() == 1
+                            else None
+                        ),
+                        "face_id": int(rows.face_id.iloc[0]),
+                        "owning_bc_line_ids": ids,
+                        "owning_bc_line_names": names,
+                    }
+                )
+        result.attrs["duplicate_ownership"] = summary
 
     @staticmethod
     def _find_structured_field(
@@ -156,6 +197,8 @@ class HdfBndry:
         hdf_path: Union[str, Path],
         include_geometry: bool = False,
         validate_unique_faces: bool = True,
+        *,
+        on_duplicate_ownership: Literal["raise", "report"] = "raise",
     ) -> Union[pd.DataFrame, gpd.GeoDataFrame]:
         """Return native BC-line-to-external-face associations.
 
@@ -182,6 +225,17 @@ class HdfBndry:
             Require each mesh-local face to be owned by exactly one native BC
             association. Set to ``False`` only for diagnostics: all native rows
             are returned and duplicate counts are reported in ``DataFrame.attrs``.
+            This legacy switch retains the original column shape.
+        on_duplicate_ownership : {"raise", "report"}, default "raise"
+            With ``"report"``, suppress only duplicate-ownership errors, even
+            when ``validate_unique_faces=True``. Preserve every association
+            and add ``duplicate_ownership`` (bool), ``owning_bc_line_ids`` and
+            ``owning_bc_line_names`` (parallel lists in native encounter order,
+            deduplicated by owner ID/name pair; missing values are ``None``).
+            Repeated associations to the same owner are also marked.
+            ``attrs['duplicate_ownership']`` lists duplicate keys and their
+            owner lists, using ``mesh_name=None`` when mesh metadata is unknown.
+            No files are modified; other validation remains active.
 
         Returns
         -------
@@ -214,6 +268,8 @@ class HdfBndry:
         ``Attributes`` dataset.  Name, mesh, and type remain nullable when the
         Attributes dataset or an optional attribute field is unavailable.
         """
+        if on_duplicate_ownership not in ("raise", "report"):
+            raise ValueError("on_duplicate_ownership must be 'raise' or 'report'")
         with h5py.File(hdf_path, "r") as hdf_file:
             if HdfBndry._BC_EXTERNAL_FACES_PATH not in hdf_file:
                 logger.debug(
@@ -225,6 +281,7 @@ class HdfBndry:
                     "absent",
                     include_geometry=include_geometry,
                     crs=HdfBase.get_projection(hdf_file) if include_geometry else None,
+                    report_ownership=on_duplicate_ownership == "report",
                 )
 
             native = hdf_file[HdfBndry._BC_EXTERNAL_FACES_PATH][()]
@@ -233,6 +290,7 @@ class HdfBndry:
                     "empty",
                     include_geometry=include_geometry,
                     crs=HdfBase.get_projection(hdf_file) if include_geometry else None,
+                    report_ownership=on_duplicate_ownership == "report",
                 )
 
             field_names = native.dtype.names
@@ -373,7 +431,11 @@ class HdfBndry:
                 duplicate_ownership,
                 ownership_columns,
             ].drop_duplicates()
-            if validate_unique_faces and len(duplicate_keys):
+            if (
+                validate_unique_faces
+                and on_duplicate_ownership == "raise"
+                and len(duplicate_keys)
+            ):
                 preview = duplicate_keys.head(10).to_dict("records")
                 raise ValueError(
                     f"Native BC external-face association in {hdf_path} does not have unique "
@@ -612,6 +674,8 @@ class HdfBndry:
                     "topology_mismatch_count": topology_mismatch_count,
                 }
             )
+            if on_duplicate_ownership == "report":
+                HdfBndry._report_bc_face_ownership(result)
             return result
 
     @staticmethod

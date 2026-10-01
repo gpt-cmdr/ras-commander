@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.19"
+SCHEMA_VERSION = "1.20"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -1499,4 +1499,66 @@ DATAFRAME_SCHEMAS = {
             "mutations also add backup_path and recompute_required."
         ),
     },
+}
+
+
+# Explicit report-mode contracts keep the default stable columns unchanged.
+_BC_OWNERSHIP_REPORT_COLUMNS = [
+    {
+        "name": "duplicate_ownership",
+        "dtype": "bool",
+        "description": "Repeated native (mesh, face) association, including repeated rows for one owner.",
+    },
+    {
+        "name": "owning_bc_line_ids",
+        "dtype": "list[int | None]",
+        "description": "Distinct owner ID/name pairs in native encounter order; parallel to owning_bc_line_names.",
+    },
+    {
+        "name": "owning_bc_line_names",
+        "dtype": "list[str | None]",
+        "description": "Native BC names parallel to owning_bc_line_ids; missing metadata is None.",
+    },
+]
+DATAFRAME_SCHEMAS["bc_external_faces"] = {
+    "description": "Every native BC external-face association in native order; no inferred ownership.",
+    "accessor": "HdfBndry.get_bc_external_faces(hdf_path, include_geometry=False)",
+    "source": "HdfBndry.get_bc_external_faces()",
+    "extra_columns": True,
+    "dynamic": False,
+    "columns": [
+        {"name": name, "dtype": dtype, "description": description}
+        for name, dtype, description in (
+            ("bc_line_id", "Int64", "Zero-based native BC Attributes row ID, nullable."),
+            ("bc_line_name", "string", "Native BC name, nullable."),
+            ("mesh_name", "string", "Native mesh name, nullable."),
+            ("bc_line_type", "string", "Native geometry BC type, nullable."),
+            ("face_id", "int64", "Zero-based mesh-local native face ID."),
+            ("fp_start_index", "Int64", "Native start face-point ID, nullable."),
+            ("fp_end_index", "Int64", "Native end face-point ID, nullable."),
+            ("station_start", "float64", "Native start station in model units, nullable."),
+            ("station_end", "float64", "Native end station in model units, nullable."),
+        )
+    ],
+    "note": "Optional geometry is a native face LineString in the HDF CRS. Default raises on repeated face keys; legacy validate_unique_faces=False preserves rows and count attrs with the original columns.",
+}
+DATAFRAME_SCHEMAS["bc_external_faces_report"] = {
+    **DATAFRAME_SCHEMAS["bc_external_faces"],
+    "description": "Lossless native BC associations with explicit duplicate ownership diagnostics.",
+    "accessor": "HdfBndry.get_bc_external_faces(hdf_path, on_duplicate_ownership='report')",
+    "columns": DATAFRAME_SCHEMAS["bc_external_faces"]["columns"] + _BC_OWNERSHIP_REPORT_COLUMNS,
+    "note": "Report mode only: attrs['duplicate_ownership'] is one record per repeated key with mesh_name, face_id and owner lists; [] when absent/empty/unique. Missing mesh metadata uses conservative global face-ID grouping and mesh_name=None. Existing counts/status attrs remain. Other validation stays active; files are read-only.",
+}
+DATAFRAME_SCHEMAS["mesh_perimeter_faces_report"] = {
+    **DATAFRAME_SCHEMAS["mesh_perimeter_faces"],
+    "description": "One row per native perimeter face with explicit ownership diagnostics.",
+    "accessor": "HdfMesh.get_mesh_perimeter_faces(hdf_path, mesh_name, on_duplicate_ownership='report', ras_object=None)",
+    "columns": [
+        {
+            **column,
+            "description": "Scalar native BC ownership; null for unassigned or duplicate-owned faces.",
+        } if column["name"] in ("bc_line_id", "bc_line_name", "bc_line_type") else column
+        for column in DATAFRAME_SCHEMAS["mesh_perimeter_faces"]["columns"]
+    ] + _BC_OWNERSHIP_REPORT_COLUMNS,
+    "note": "Report mode only: unassigned faces have empty owner lists; single-owner faces have singleton lists; repeated native associations have null scalar BC fields and all distinct owners listed. attrs['duplicate_ownership'], duplicate_face_count, duplicate_face_row_count and face_ownership_unique summarize only the requested mesh. Other validation stays active; files are read-only.",
 }
