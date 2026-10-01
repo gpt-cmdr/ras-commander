@@ -10,8 +10,8 @@ from ras_commander import (
     ConflationStatus,
     NetworkAdapter,
     NetworkConflationResult,
-    NetworkEdgeCoverageResult,
     NetworkEdgeCoveragePlanResult,
+    NetworkEdgeCoverageResult,
     NextGenFlowpathAdapter,
     NHDPlusAdapter,
     NWMHydrofabricAdapter,
@@ -895,7 +895,7 @@ def test_public_exports_and_dataframe_schemas_are_registered():
     assert not hasattr(ras_commander, "RasHydrofabric")
     assert not hasattr(ras_commander, "HydrofabricConflationResult")
     assert not hasattr(ras_commander, "HydrofabricAdapter")
-    assert SCHEMA_VERSION == "1.18"
+    assert SCHEMA_VERSION == "1.19"
     assert {
         "network_edge_coverage",
         "network_edge_coverage_parts",

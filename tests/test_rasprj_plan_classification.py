@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
 from ras_commander.RasPlan import RasPlan
 from ras_commander.RasPrj import RasPrj
-from ras_commander.geom.GeomPreprocessor import GeomPreprocessor
 from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
 
 
@@ -111,7 +111,7 @@ def test_classification_and_provenance_columns_are_canonical_schema() -> None:
         "geometry_metadata_error": "str | None",
     }
 
-    assert SCHEMA_VERSION == "1.18"
+    assert SCHEMA_VERSION == "1.19"
     for dataframe, expected in (
         ("plan_df", expected_plan_columns),
         ("geom_df", expected_geom_columns),

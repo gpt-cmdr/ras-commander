@@ -43,12 +43,19 @@ Example Usage:
     >>> print(connections_df)
 """
 
+import math
+import tempfile
 from pathlib import Path
-from typing import Union, Optional, List, Dict, Any, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Union
+
 import pandas as pd
 
-from ..LoggingConfig import get_logger
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
+    from shapely.geometry.base import BaseGeometry
+
 from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from .GeomParser import GeomParser
 from .GeomStorage import GeomStorage
 
@@ -84,6 +91,479 @@ class GeomLateral:
         "Chan Stop Cuts=",
         "Observed WS=",
     )
+
+    CONNECTION_DATA_COLUMNS = [
+        "Name",
+        "Type",
+        "From",
+        "To",
+        "NumPoints",
+        "Header",
+        "RawName",
+        "CenterX",
+        "CenterY",
+        "LinePoints",
+        "Conn Routing Type",
+        "HasGate",
+        "HasCulvert",
+        "StartLine",
+        "EndLine",
+        "RawBlock",
+        "LineCoordinates",
+        "CrestProfile",
+        "WeirWidth",
+        "WeirCoefficient",
+        "Culverts",
+        "Gates",
+        "Breach",
+        "TerrainProfile",
+        "DefaultsUsed",
+        "UnknownRecords",
+        "ParseIssues",
+    ]
+
+    @staticmethod
+    @log_call
+    def get_connection_data(geom_file: Union[str, Path]) -> pd.DataFrame:
+        """Read complete connection records with an authoritative lossless block.
+
+        Physical tables are nested DataFrames, not flattened scalar columns.
+        Breach and UnknownRecords contain undecoded native record strings;
+        these records are preserved, not represented as fully decoded physics.
+        DefaultsUsed lists the fields explicitly defaulted by set_connection.
+        Missing optional profiles are empty Station/Elevation DataFrames.
+        RawBlock preserves original line endings and undecodable source bytes
+        using UTF-8 surrogateescape and is authoritative for writing.
+
+        Args:
+            geom_file: Plain-text geometry path as str or Path.
+
+        Returns:
+            DataFrame with CONNECTION_DATA_COLUMNS, including nested physical
+            tables and ParseIssues for records that cannot be fully decoded.
+
+        Raises:
+            FileNotFoundError: The geometry file does not exist.
+            OSError: The geometry file cannot be read.
+        """
+        geom_file = Path(geom_file)
+        with geom_file.open(
+            "r", encoding="utf-8", errors="surrogateescape", newline=""
+        ) as stream:
+            lines = stream.readlines()
+        metadata = GeomLateral.get_connections(geom_file)
+        rows = []
+        known = {
+            "Connection",
+            "SA/2D Area Conn",
+            "Connection Desc",
+            "Connection Line",
+            "Connection Last Edited Time",
+            "Conn Near Repeats",
+            "Conn Protection Radius",
+            "Connection Up SA",
+            "Connection Dn SA",
+            "From Storage Area",
+            "To Storage Area",
+            "From 2D Area",
+            "To 2D Area",
+            "Conn Routing Type",
+            "Conn Use RC Family",
+            "Conn OverFlow Method 2D",
+            "Conn Weir WD",
+            "Conn Weir Coef",
+            "Conn Weir Is Ogee",
+            "Conn Simple Spill Pos Coef",
+            "Conn Simple Spill Neg Coef",
+            "Conn Weir SE",
+            "#Conn Weir Sta/Elev",
+            "Conn Outlet Rating Curve",
+            "Conn Terrain SE",
+            "#Conn Terrain Sta/Elev",
+        }
+        for index, (_, _, block, header) in enumerate(
+            GeomLateral._iter_connection_blocks(lines)
+        ):
+            row = metadata.iloc[index].to_dict()
+            row.update(header)
+            row["RawBlock"] = "".join(block)
+            row["ParseIssues"] = []
+            name = header["Name"]
+            if not name or metadata["Name"].duplicated(keep=False).iloc[index]:
+                row["ParseIssues"].append("CONNECTION_NAME_INVALID_OR_DUPLICATED")
+            row["LineCoordinates"] = pd.DataFrame(columns=["X", "Y"])
+            if pd.notna(row["LinePoints"]) and row["LinePoints"] > 0:
+                try:
+                    row["LineCoordinates"] = GeomLateral.get_connection_line_coords(
+                        geom_file, name
+                    )
+                    if len(row["LineCoordinates"]) != row["LinePoints"]:
+                        row["ParseIssues"].append("INCOMPLETE_LINE_COORDINATES")
+                except (ValueError, IOError) as error:
+                    row["ParseIssues"].append(f"LINE_COORDINATES: {error}")
+            row["CrestProfile"] = pd.DataFrame(columns=["Station", "Elevation"])
+            if row["NumPoints"]:
+                try:
+                    row["CrestProfile"] = GeomLateral.get_connection_profile(
+                        geom_file, name
+                    )
+                    if len(row["CrestProfile"]) != row["NumPoints"]:
+                        row["ParseIssues"].append("INCOMPLETE_CREST_PROFILE")
+                except (ValueError, IOError) as error:
+                    row["ParseIssues"].append(f"CREST_PROFILE: {error}")
+            if len(row["CrestProfile"]) < 2:
+                row["ParseIssues"].append("CREST_PROFILE_MISSING_OR_INCOMPLETE")
+            row["WeirWidth"] = None
+            row["WeirCoefficient"] = None
+            row["TerrainProfile"] = pd.DataFrame(columns=["Station", "Elevation"])
+            row["Breach"] = []
+            row["DefaultsUsed"] = []
+            row["UnknownRecords"] = []
+            for bi, line in enumerate(block):
+                keyword, _, value = line.partition("=")
+                if keyword == "Conn Weir WD":
+                    row["WeirWidth"] = GeomLateral._parse_optional_float(value)
+                elif keyword == "Conn Weir Coef":
+                    row["WeirCoefficient"] = GeomLateral._parse_optional_float(value)
+                elif keyword in ("Conn Terrain SE", "#Conn Terrain Sta/Elev"):
+                    try:
+                        count = int(value.strip())
+                        row["TerrainProfile"] = GeomLateral._parse_paired_data(
+                            block, bi + 1, count
+                        )
+                        if len(row["TerrainProfile"]) != count:
+                            row["ParseIssues"].append("INCOMPLETE_TERRAIN_PROFILE")
+                    except (ValueError, IOError) as error:
+                        row["ParseIssues"].append(f"TERRAIN_PROFILE: {error}")
+                elif keyword == "Connection Desc" and value.startswith(
+                    "ras-commander DefaultsUsed:"
+                ):
+                    row["DefaultsUsed"] = [
+                        v for v in value.strip().split(":", 1)[1].split(";") if v
+                    ]
+                if "breach" in keyword.lower():
+                    row["Breach"].append(line)
+                if "=" in line and keyword not in known:
+                    row["UnknownRecords"].append(line)
+            row["Culverts"] = pd.DataFrame()
+            row["Gates"] = pd.DataFrame()
+            try:
+                row["Culverts"] = GeomLateral.get_connection_culverts(geom_file, name)
+                if row["HasGate"]:
+                    row["Gates"] = GeomLateral.get_connection_gates(geom_file, name)
+            except (ValueError, IOError, OverflowError) as error:
+                row["ParseIssues"].append(f"PHYSICAL_RECORDS: {error}")
+            rows.append(row)
+        # Object dtype avoids Arrow string coercion rejecting surrogateescaped
+        # vendor bytes; RawBlock must remain a reversible Python string.
+        result = pd.DataFrame(
+            rows, columns=GeomLateral.CONNECTION_DATA_COLUMNS, dtype=object
+        )
+        return result
+
+    @staticmethod
+    def _connection_values_equal(left, right) -> bool:
+        if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+            return left.equals(right)
+        if isinstance(left, list) and isinstance(right, list):
+            return left == right
+        if left is None or right is None:
+            return (left is None and right is None) or (
+                pd.isna(left) and pd.isna(right)
+            )
+        if isinstance(left, (str, bool)):
+            return left == right
+        if pd.isna(left) and pd.isna(right):
+            return True
+        return left == right
+
+    @staticmethod
+    @log_call
+    def write_connection_data(
+        geom_file: Union[str, Path],
+        connections_df: pd.DataFrame,
+        *,
+        create_backup: bool = True,
+    ) -> Optional[Path]:
+        """Replace the connection inventory losslessly, preserving unrelated text.
+
+        Omitted rows remove their connection. RawBlock is authoritative; every
+        supplied decoded column must agree with it (except positional StartLine
+        and EndLine). To edit physical inputs use focused authoring methods and
+        read again, rather than editing only a nested table. Validation precedes
+        backup creation. Return the existing geometry backup convention.
+
+        Args:
+            geom_file: Target plain-text geometry path as str or Path.
+            connections_df: Complete replacement inventory. Name and RawBlock
+                are required; other decoded columns, when supplied, are checked.
+            create_backup: Create a geometry backup before atomic replacement.
+
+        Returns:
+            Backup path, or None when create_backup=False.
+
+        Raises:
+            FileNotFoundError: Target geometry does not exist.
+            TypeError: connections_df is not a DataFrame.
+            ValueError: Names, blocks or decoded columns disagree or duplicate.
+            OSError: The backup or atomic write fails.
+        """
+        geom_file = Path(geom_file)
+        if not isinstance(connections_df, pd.DataFrame):
+            raise TypeError("connections_df must be a DataFrame")
+        if not {"Name", "RawBlock"} <= set(connections_df):
+            raise ValueError("connections_df requires Name and RawBlock")
+        if connections_df["Name"].duplicated().any():
+            raise ValueError("Connection names must be unique")
+        source = geom_file.read_bytes().decode("utf-8", errors="surrogateescape")
+        lines = source.splitlines(keepends=True)
+        blocks = list(GeomLateral._iter_connection_blocks(lines))
+        original_names = {b[3]["Name"] for b in blocks}
+        replacements = {}
+        for row in connections_df.to_dict("records"):
+            raw = row["RawBlock"]
+            if not isinstance(raw, str) or not raw:
+                raise ValueError("RawBlock must be a non-empty string")
+            parsed = list(
+                GeomLateral._iter_connection_blocks(raw.splitlines(keepends=True))
+            )
+            if (
+                len(parsed) != 1
+                or parsed[0][0] != 0
+                or parsed[0][1] != len(raw.splitlines())
+            ):
+                raise ValueError("RawBlock must contain exactly one connection block")
+            if parsed[0][3]["Name"] != row["Name"]:
+                raise ValueError("Name does not agree with RawBlock")
+            replacements[row["Name"]] = raw
+        # Preserve source positions and unrelated records, then append new rows.
+        pieces = []
+        cursor = 0
+        for start, end, _, header in blocks:
+            pieces.extend(lines[cursor:start])
+            if header["Name"] in replacements:
+                pieces.append(replacements[header["Name"]])
+            cursor = end
+        pieces.extend(lines[cursor:])
+        additions = [replacements[n] for n in replacements if n not in original_names]
+        if additions:
+            pieces = "".join(pieces).splitlines(keepends=True)
+            insert_at = GeomLateral._connection_insert_index(pieces)
+            pieces[insert_at:insert_at] = additions
+        proposed = "".join(pieces)
+        # Reuse native readers to verify metadata and nested physical tables.
+        with tempfile.TemporaryDirectory(prefix="ras_connection_validate_") as folder:
+            candidate = Path(folder) / geom_file.name
+            candidate.write_bytes(proposed.encode("utf-8", errors="surrogateescape"))
+            decoded = GeomLateral.get_connection_data(candidate).set_index("Name")
+            if set(decoded.index) != set(replacements) or len(decoded) != len(
+                replacements
+            ):
+                raise ValueError(
+                    "RawBlock boundaries do not reproduce the requested inventory"
+                )
+            for row in connections_df.to_dict("records"):
+                for column in connections_df.columns:
+                    if column in ("Name", "StartLine", "EndLine"):
+                        continue
+                    if column not in decoded.columns:
+                        raise ValueError(f"Unsupported connection column: {column}")
+                    if not GeomLateral._connection_values_equal(
+                        row[column], decoded.at[row["Name"], column]
+                    ):
+                        raise ValueError(
+                            f"{row['Name']}: {column} does not agree with RawBlock"
+                        )
+        backup = GeomParser.create_backup(geom_file) if create_backup else None
+        # safe_write_geometry normalizes mixed newlines; this exact-byte writer
+        # deliberately preserves every retained raw record and unrelated byte.
+        with tempfile.NamedTemporaryFile(
+            dir=geom_file.parent,
+            prefix=geom_file.name + ".",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(proposed.encode("utf-8", errors="surrogateescape"))
+        try:
+            temporary.replace(geom_file)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return backup
+
+    @staticmethod
+    @log_call
+    def classify_connections(
+        geom_file: Union[str, Path],
+        child_boundary: "BaseGeometry",
+        *,
+        retained_area_names: Optional[Sequence[str]] = None,
+        tolerance: float = 0,
+    ) -> "GeoDataFrame":
+        """Classify full physical support as keep/drop/block, without mutation.
+
+        geometry is the union of the width-buffered crest and width-buffered
+        explicit culvert barrels. Undecoded records, gates, bridges and breaches
+        have unverified support and fail closed. Positive tolerance supplies an
+        external separation guard: disjoint support near the child blocks with
+        CONNECTION_NEAR_CHILD_BOUNDARY. Containment remains exact; tolerance
+        never permits physical crossings. Coordinates and widths use model units.
+
+        Args:
+            geom_file: Plain-text geometry path as str or Path.
+            child_boundary: Valid Polygon or MultiPolygon in model coordinates.
+            retained_area_names: Names preserved in the child, or None for all
+                source areas. Both named endpoints must remain.
+            tolerance: Finite nonnegative external separation guard in model
+                units; never expands the child's containment boundary.
+
+        Returns:
+            GeoDataFrame with Name, From, To, action, reason and geometry.
+            Unverified extent produces block; verified disjoint support drop;
+            complete containment with retained endpoints keep.
+
+        Raises:
+            FileNotFoundError: Geometry file does not exist.
+            ValueError: Boundary or tolerance is invalid.
+        """
+        import geopandas as gpd
+        from shapely.geometry import LineString
+        from shapely.ops import unary_union
+
+        if not math.isfinite(float(tolerance)) or tolerance < 0:
+            raise ValueError("tolerance must be finite and nonnegative")
+        if (
+            child_boundary is None
+            or child_boundary.is_empty
+            or not child_boundary.is_valid
+            or child_boundary.geom_type not in ("Polygon", "MultiPolygon")
+        ):
+            raise ValueError("child_boundary must be a non-empty valid polygon")
+        geom_file = Path(geom_file)
+        area_names = set(
+            GeomLateral._storage_area_type_map(
+                geom_file.read_text(
+                    encoding="utf-8", errors="surrogateescape"
+                ).splitlines(True)
+            )
+        )
+        retained = (
+            area_names if retained_area_names is None else set(retained_area_names)
+        )
+        rows = []
+        for data in GeomLateral.get_connection_data(geom_file).to_dict("records"):
+            support = None
+            reason = None
+            coords = data["LineCoordinates"]
+            width = data["WeirWidth"]
+            coefficient = data["WeirCoefficient"]
+            if (
+                len(coords) < 2
+                or width is None
+                or not math.isfinite(width)
+                or width <= 0
+            ):
+                reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+            elif not all(
+                math.isfinite(float(v)) for v in coords[["X", "Y"]].to_numpy().flatten()
+            ):
+                reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+            else:
+                line = LineString(coords[["X", "Y"]].to_numpy())
+                if line.length <= 0:
+                    reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+                else:
+                    footprints = [line.buffer(width / 2)]
+                    culverts = data["Culverts"]
+                    if data["HasCulvert"] and culverts.empty:
+                        reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+                    for barrel in culverts.to_dict("records"):
+                        values = [
+                            barrel.get(k)
+                            for k in (
+                                "us_x",
+                                "us_y",
+                                "ds_x",
+                                "ds_y",
+                                "Span",
+                                "Rise",
+                                "Length",
+                            )
+                        ]
+                        if any(
+                            v is None or not math.isfinite(v) for v in values
+                        ) or any(v <= 0 for v in values[4:]):
+                            reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+                            continue
+                        segment = LineString(
+                            [(values[0], values[1]), (values[2], values[3])]
+                        )
+                        if segment.length <= 0:
+                            reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+                        footprints.append(segment.buffer(barrel["Span"] / 2))
+                    if not culverts.empty:
+                        for _, group in culverts.groupby("GroupIndex"):
+                            if len(group) != group.iloc[0]["NumBarrels"]:
+                                reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+                    support = unary_union(footprints)
+            # Culvert records are decoded above; bridge/gate/breach/unknown
+            # extent cannot be inferred merely from the connection centerline.
+            unknown = [
+                r
+                for r in data["UnknownRecords"]
+                if not r.startswith(
+                    (
+                        "Connection Culv=",
+                        "Conn Culvert Barrel=",
+                        "Conn Culv Bottom n=",
+                        "Conn Culv HTab",
+                    )
+                )
+            ]
+            if (
+                data["HasGate"]
+                or data["Breach"]
+                or data["Conn Routing Type"] != 1
+                or unknown
+                or data["ParseIssues"]
+            ):
+                reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
+            if (
+                coefficient is None
+                or not math.isfinite(coefficient)
+                or coefficient <= 0
+            ):
+                reason = "CONNECTION_PHYSICAL_PARAMETERS_UNVERIFIED"
+            action = "block"
+            if reason is None:
+                if data["From"] not in area_names or data["To"] not in area_names:
+                    reason = "CONNECTION_ENDPOINT_UNVERIFIED"
+                elif data["From"] not in retained or data["To"] not in retained:
+                    reason = "CONNECTION_ENDPOINT_REMOVED"
+                elif support.disjoint(child_boundary):
+                    if support.disjoint(child_boundary.buffer(tolerance)):
+                        action, reason = "drop", "CONNECTION_OUTSIDE_CHILD"
+                    else:
+                        reason = "CONNECTION_NEAR_CHILD_BOUNDARY"
+                elif not child_boundary.covers(support):
+                    reason = "CONNECTION_CROSSES_CHILD_BOUNDARY"
+                else:
+                    action, reason = "keep", "CONNECTION_FULLY_CONTAINED"
+            rows.append(
+                {
+                    "Name": data["Name"],
+                    "From": data["From"],
+                    "To": data["To"],
+                    "action": action,
+                    "reason": reason,
+                    "geometry": support,
+                }
+            )
+        return gpd.GeoDataFrame(
+            rows,
+            columns=["Name", "From", "To", "action", "reason", "geometry"],
+            geometry="geometry",
+        )
 
     @staticmethod
     def _format_profile_values(
@@ -321,8 +801,12 @@ class GeomLateral:
 
     @staticmethod
     def _pad_name(name: str, width: int = 16) -> str:
-        """Left-justify *name* and pad or truncate to *width* characters."""
-        return name.ljust(width)[:width]
+        """Pad a native name without silently truncating its identifier."""
+        if not isinstance(name, str) or not name.strip() or len(name) > width:
+            raise ValueError(f"Name must contain 1 to {width} characters: {name!r}")
+        if any(c in name for c in ",\r\n="):
+            raise ValueError(f"Invalid native name: {name!r}")
+        return name.ljust(width)
 
     @staticmethod
     def _connection_insert_index(lines: List[str]) -> int:
@@ -1331,8 +1815,10 @@ class GeomLateral:
         downstream_area: str,
         *,
         routing_type: int = 1,
-        weir_width: float = 100.0,
-        weir_coef: float = 3.0,
+        weir_width: Optional[float] = None,
+        weir_coef: Optional[float] = None,
+        crest_profile: Optional[pd.DataFrame] = None,
+        allow_defaults: bool = False,
         overflow_method_2d: bool = True,
         create_backup: bool = True,
     ) -> Optional[Path]:
@@ -1346,8 +1832,12 @@ class GeomLateral:
             upstream_area: Upstream storage/2D area name
             downstream_area: Downstream storage/2D area name
             routing_type: Routing type (1 = 2D structure, default)
-            weir_width: Weir width in model units (default 100)
-            weir_coef: Weir discharge coefficient (default 3.0)
+            weir_width: Explicit positive weir width in model units.
+            weir_coef: Explicit positive weir discharge coefficient.
+            crest_profile: Explicit Station/Elevation DataFrame.
+            allow_defaults: Opt into width=100, coefficient=3 and a flat zero
+                crest for missing physical inputs. Defaults are recorded in
+                Connection Desc and exposed by get_connection_data.
             overflow_method_2d: Use 2D overflow method (default True)
             create_backup: Create .bak backup before writing (default True)
 
@@ -1365,9 +1855,121 @@ class GeomLateral:
         if not coordinates or len(coordinates) < 2:
             raise ValueError("coordinates must contain at least 2 (x, y) points")
 
+        # Validate all physical inputs before backups or geometry mutation.
+        for name in (connection_name, upstream_area, downstream_area):
+            GeomLateral._pad_name(name)
+        if any(
+            len(pair) != 2 or not all(math.isfinite(float(v)) for v in pair)
+            for pair in coordinates
+        ):
+            raise ValueError("coordinates must contain finite (x, y) pairs")
+        if any(
+            len(f"{float(v):16.0f}") > GeomLateral.CONN_LINE_COLUMN
+            for pair in coordinates
+            for v in pair
+        ):
+            raise ValueError("coordinate exceeds native fixed-width capacity")
+        if sum(math.dist(a, b) for a, b in zip(coordinates, coordinates[1:])) <= 0:
+            raise ValueError("Connection line must have positive length")
+        defaults_used = []
+        if weir_width is None:
+            if not allow_defaults:
+                raise ValueError(
+                    "Explicit weir_width is required (or allow_defaults=True)"
+                )
+            weir_width = 100.0
+            defaults_used.append("WeirWidth")
+        if weir_coef is None:
+            if not allow_defaults:
+                raise ValueError(
+                    "Explicit weir_coef is required (or allow_defaults=True)"
+                )
+            weir_coef = 3.0
+            defaults_used.append("WeirCoefficient")
+        if any(
+            not math.isfinite(float(v)) or float(v) <= 0
+            for v in (weir_width, weir_coef)
+        ):
+            raise ValueError("Weir width and coefficient must be finite and positive")
+        if crest_profile is None:
+            if not allow_defaults:
+                raise ValueError(
+                    "Explicit crest_profile is required (or allow_defaults=True)"
+                )
+            crest_profile = pd.DataFrame(
+                {"Station": [0.0, 1.0], "Elevation": [0.0, 0.0]}
+            )
+            defaults_used.append("CrestProfile(flat_zero_elevation)")
+        if not isinstance(crest_profile, pd.DataFrame) or not {
+            "Station",
+            "Elevation",
+        } <= set(crest_profile):
+            raise ValueError(
+                "crest_profile must be a DataFrame with Station and Elevation"
+            )
+        profile_values = crest_profile[["Station", "Elevation"]].to_numpy(dtype=float)
+        if len(profile_values) < 2 or any(
+            not math.isfinite(v) for pair in profile_values for v in pair
+        ):
+            raise ValueError(
+                "crest_profile requires at least two finite station/elevation pairs"
+            )
+        stations = profile_values[:, 0]
+        if stations[0] < 0 or any(b <= a for a, b in zip(stations, stations[1:])):
+            raise ValueError(
+                "crest_profile stations must be nonnegative and strictly increasing"
+            )
+        if any(
+            len(f"{int(round(v)):8d}") > GeomLateral.FIXED_WIDTH_COLUMN
+            for pair in profile_values
+            for v in pair
+        ):
+            raise ValueError("crest_profile value exceeds native fixed-width capacity")
+
+        # Validate the native serialized values, not only their Python inputs.
+        # Fixed-width rounding can collapse positive segments or crest stations.
+        coord_lines = GeomStorage._format_breakline_coord_lines(coordinates)
+        serialized_xy = [
+            v
+            for line in coord_lines
+            for v in GeomParser.parse_fixed_width(line, GeomLateral.CONN_LINE_COLUMN)
+        ]
+        serialized_coords = list(zip(serialized_xy[::2], serialized_xy[1::2]))
+        if len(serialized_coords) != len(coordinates) or any(
+            math.dist(a, b) > 0 and math.dist(sa, sb) <= 0
+            for a, b, sa, sb in zip(
+                coordinates, coordinates[1:], serialized_coords, serialized_coords[1:]
+            )
+        ):
+            raise ValueError(
+                "coordinates lose positive segment length at native fixed-width precision"
+            )
+        profile_lines = GeomLateral._format_profile_values(
+            profile_values.flatten().tolist()
+        )
+        serialized_profile = [
+            v
+            for line in profile_lines
+            for v in GeomParser.parse_fixed_width(line, GeomLateral.FIXED_WIDTH_COLUMN)
+        ]
+        serialized_stations = serialized_profile[::2]
+        if len(serialized_stations) != len(stations) or any(
+            b <= a for a, b in zip(serialized_stations, serialized_stations[1:])
+        ):
+            raise ValueError(
+                "crest_profile stations lose ordering at native fixed-width precision"
+            )
+
         try:
             with open(geom_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
+
+            area_names = GeomLateral._storage_area_type_map(lines)
+            for area in (upstream_area, downstream_area):
+                if area not in area_names:
+                    raise ValueError(
+                        f"Named connection endpoint does not exist: {area}"
+                    )
 
             new_block = GeomLateral._build_connection_block(
                 connection_name,
@@ -1379,6 +1981,16 @@ class GeomLateral:
                 weir_coef=weir_coef,
                 overflow_method_2d=overflow_method_2d,
             )
+            new_block[1] = (
+                "Connection Desc=ras-commander DefaultsUsed:"
+                + ";".join(defaults_used)
+                + "\n"
+            )
+            marker = GeomLateral._find_connection_profile_marker(new_block)
+            profile_start = marker[0]
+            new_block[profile_start : profile_start + 2] = [
+                f"Conn Weir SE= {len(profile_values)} \n"
+            ] + profile_lines
 
             existing = GeomLateral._find_connection_block(lines, connection_name)
             if existing is not None:
@@ -2136,8 +2748,6 @@ class GeomLateral:
         """Format pier records as Conn BR: lines."""
         lines: List[str] = []
         for p in piers:
-            skew = p.get('Skew')
-            skew_str = '' if skew is None else str(skew)
             up_sta = p.get('UpstreamStation', 0)
             num_up = p.get('NumUpstreamPoints', 0)
             dn_sta = p.get('DownstreamStation', 0)

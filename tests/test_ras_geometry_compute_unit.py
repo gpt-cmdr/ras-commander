@@ -21,8 +21,11 @@ if str(repo_root) not in sys.path:
 pytest.importorskip("geopandas")
 pytest.importorskip("h5py")
 
-from ras_commander import RasGeometryCompute, RasProcess
-from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION
+from ras_commander import (  # noqa: E402 -- optional dependency guards above
+    RasGeometryCompute,
+    RasProcess,
+)
+from ras_commander.schemas import DATAFRAME_SCHEMAS, SCHEMA_VERSION  # noqa: E402
 
 
 @pytest.fixture
@@ -740,4 +743,4 @@ def test_flow_path_policy_rejects_invalid_fraction(value):
 
 
 def test_reach_length_policy_schema_version():
-    assert SCHEMA_VERSION == "1.18"
+    assert SCHEMA_VERSION == "1.19"
