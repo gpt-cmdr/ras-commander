@@ -12,6 +12,8 @@ solver-recorded reference output; it does not identify the method by itself.
 |---|---|---|---|
 | Sample existing cell results along a straight transect | `HdfResultsQuery.query_profile`: plan HDF, endpoints, variable, time index | DataFrame: station, coordinates, value, cell ID, mesh, nearest-cell distance; nearest-cell sampling | Offline Python/HDF |
 | Obtain a mapped profile along a curved line | `query_polyline_wse_profile`, `query_polyline_velocity_profile`, `query_polyline_flow_profile`: plan HDF, line, concrete time index, spacing, terrain association | DataFrame of native renderer samples along station; WSE, velocity or flow plus depth/terrain | Installed HEC-RAS libraries and pythonnet |
+| Get per-cell peak WSE from the run | `HdfResultsMesh.get_mesh_max_ws`: completed plan HDF | GeoDataFrame from HEC-RAS summary output; each cell's maximum over the computation, with optional time of maximum | Offline Python/HDF |
+| Get another stored mesh summary variable | `HdfResultsMesh.get_mesh_summary`: plan HDF and exact HEC-RAS summary variable name, such as `Maximum Face Velocity` | GeoDataFrame of the summary values with cell or face geometry | Offline Python/HDF |
 | Read reference-line hydrographs already computed by the solver | `HdfResultsXsec.get_ref_lines_timeseries`: completed plan HDF | xarray Dataset of available stored variables with time, line and mesh coordinates | Offline Python/HDF |
 | Read reference-point hydrographs | `HdfResultsXsec.get_ref_points_timeseries`: completed plan HDF | xarray Dataset of available point variables | Offline Python/HDF |
 | Request Q for a named reference or ad hoc profile line | `HdfResultsMesh.get_profile_line_flow_timeseries`: HDF, name, optional feature file | DataFrame with flow, time and **selection_source**; may read a native-associated precomputed hydrograph of unqualified provenance or aggregate face values | Installed HEC-RAS libraries and pythonnet |
@@ -32,6 +34,65 @@ flowchart LR
     E --> F[Recompute plan]
     F --> G[Read recorded reference hydrographs]
 ```
+
+## Read maximum-result datasets
+
+For a per-cell maximum that includes peaks between saved mapping/output
+timestamps, read the HEC-RAS **Summary Output** dataset. For maximum water
+surface elevation, use the convenience method; for another summary variable,
+use the generic summary reader with its HDF variable name:
+
+```python
+from pathlib import Path
+from ras_commander import HdfResultsMesh
+
+plan_hdf = Path("model/Project.p01.hdf")
+
+# One row per 2D cell, read from HEC-RAS Summary Output.
+max_wse = HdfResultsMesh.get_mesh_max_ws(plan_hdf)
+print(max_wse[["mesh_name", "cell_id", "maximum_water_surface"]].head())
+
+# Summary variables can be cell-based or face-based. The exact available
+# variables depend on the HEC-RAS version and what the run retained.
+max_face_velocity = HdfResultsMesh.get_mesh_summary(
+    plan_hdf, "Maximum Face Velocity"
+)
+print(max_face_velocity.head())
+```
+
+These are solver summary datasets, not a reduction of the regular saved
+time-series rows. Each native summary maximum is the largest value encountered
+across the computation steps, not only the snapshots written at the
+mapping/output interval; it can therefore include a peak between those stored
+timestamps. By contrast,
+`HdfResultsMesh.get_mesh_timeseries(..., "Water Surface")` returns the values
+retained at those output timestamps; calling `.max(dim="time")` on that array
+can miss an intervening peak. A direct comparison looks like this (replace
+`"2D Flow Area"` with the exact mesh name in the HDF):
+
+```python
+water_surface_at_outputs = HdfResultsMesh.get_mesh_timeseries(
+    plan_hdf, mesh_name="2D Flow Area", var="Water Surface", truncate=False
+)
+max_of_saved_outputs = water_surface_at_outputs.max(dim="time")
+```
+
+`max_of_saved_outputs` is the maximum of the retained output-interval snapshots;
+`max_wse` is HEC-RAS's summary maximum across the computation. They answer
+different questions and may differ. The summary is a spatial envelope:
+neighboring cells can reach their maxima at different times, so it is not a
+simultaneous water-surface profile.
+
+Do not assume every method named `get_mesh_max_*` reads a native summary
+dataset. In particular, `HdfResultsMesh.get_mesh_max_depth()` reduces the
+retained `Depth` time series, or derives depth from retained `Water Surface`
+and cell minimum elevation when `Depth` is absent. Its temporal resolution is
+therefore the stored output interval and can miss a peak between saved output
+times. Consult the method contract and available HDF datasets when the peak's
+time basis matters. HEC-RAS documents mapping-interval output separately from
+computation-level output; enabling computation-level output is a separate,
+larger diagnostic output option, not required to read the native summary
+maximum ([HEC-RAS 2D computation settings](https://www.hec.usace.army.mil/confluence/rasdocs/r2dum/6.6/running-a-model-with-2d-flow-areas/performing-the-computations)).
 
 ## Batch spatial plots without drawing each plot in the GUI
 
