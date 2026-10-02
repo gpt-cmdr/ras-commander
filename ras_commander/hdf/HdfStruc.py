@@ -18,7 +18,7 @@ List of Functions in HdfStruc:
 - get_storage_area_polygons()
 """
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 import h5py
 import numpy as np
@@ -341,16 +341,21 @@ class HdfStruc:
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
-    def get_structures(hdf_path: Path, datetime_to_str: bool = False) -> GeoDataFrame:
+    def get_structures(hdf_path: Union[Path, str], datetime_to_str: bool = False) -> GeoDataFrame:
         """
         Extracts structure data from a HEC-RAS geometry HDF5 file.
 
-        Missing structure layers return an empty frame. Malformed present
-        datasets and read errors are logged and raised.
+        Missing structure layers return an empty frame. A present empty group,
+        or one containing only an empty ``Property Tables`` subgroup, returns
+        a typed empty GeoDataFrame preserving source CRS/group attributes with
+        ``attrs["structure_status"]="empty_placeholder"``. Populated property
+        tables, unknown child layouts, missing required datasets in nonempty
+        layers and read errors are logged and raised. This is read-only; native
+        coordinate/elevation units are unchanged.
 
         Parameters
         ----------
-        hdf_path : Path
+        hdf_path : Path or str
             Path to the HEC-RAS geometry HDF5 file
         datetime_to_str : bool, optional
             If True, converts datetime objects to ISO format strings, by default False
@@ -382,6 +387,26 @@ class HdfStruc:
                     )
                     return GeoDataFrame()
                 
+                # Native geometry may retain an empty Structures placeholder
+                # containing only an empty Property Tables group. This is not a
+                # partially populated structure layer. Reject every other layout
+                # lacking required datasets rather than discarding structures.
+                structure_group = hdf["Geometry/Structures"]
+                empty_placeholder = len(structure_group) == 0 or (
+                    set(structure_group.keys()) == {"Property Tables"}
+                    and isinstance(structure_group["Property Tables"], h5py.Group)
+                    and len(structure_group["Property Tables"]) == 0
+                )
+                if empty_placeholder:
+                    logger.debug("Empty Geometry/Structures placeholder in %s", hdf_path.name)
+                    result = GeoDataFrame(
+                        {"Structure ID": pd.Series(dtype="int64")},
+                        geometry=[], crs=HdfBase.get_projection(hdf),
+                    )
+                    result.attrs["group_attributes"] = HdfBase.get_attrs(hdf, "Geometry/Structures")
+                    result.attrs["structure_status"] = "empty_placeholder"
+                    return result
+
                 # Check if required datasets exist
                 required_datasets = [
                     "Geometry/Structures/Attributes",

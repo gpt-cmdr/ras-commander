@@ -424,6 +424,14 @@ Cross-section and river geometry extraction from HDF.
 
 ### HdfStruc
 
+`HdfStruc.get_structures()` treats a native empty `Geometry/Structures` group,
+or one containing only an empty `Property Tables` subgroup, as an empty layer.
+It returns typed `Structure ID`/geometry columns, source CRS/group attributes and
+`attrs["structure_status"]="empty_placeholder"`. Populated property tables,
+unrecognized children, and incomplete nonempty layers remain hard errors; no
+actual structure is silently skipped. Source files and native units are unchanged.
+
+
 Structure geometry and SA/2D connections.
 
 - `list_sa2d_connections(hdf_path, *, ras_object=None)` - List SA/2D connections with time-series results
