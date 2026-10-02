@@ -584,7 +584,15 @@ before v1.2.0:
 Boundary condition geometry.
 
 - `get_bc_lines(hdf_path)` - Get BC lines
-- `get_breaklines(hdf_path)` - Get breaklines
+- `get_breaklines(hdf_path)` - Get breaklines. Zero- and one-point source records
+  are excluded from line geometry and returned in `result.attrs["breakline_diagnostics"]`.
+  Each diagnostic preserves native zero-based `bl_id`, `Name`, all decoded source
+  `attributes`, `point_start`, `point_count`, exclusive `point_end`, `part_start`,
+  `part_count`, and `reason_code="BREAKLINE_TOO_FEW_POINTS"`. The list is empty for
+  clean or absent layers and remains available when every record is degenerate.
+  Persist diagnostics separately before GeoParquet/other tabular export because
+  writers may discard attrs. Negative, truncated or out-of-range spans still
+  raise; this read-only extraction does not change source geometry, units or CRS.
 
 ## Utilities
 
