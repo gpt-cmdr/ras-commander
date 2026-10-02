@@ -210,6 +210,8 @@ removed before v1.2.0:
 2D mesh results.
 
 - `get_mesh_max_ws(hdf_path, round_to="100ms")` - GeoDataFrame with `maximum_water_surface` and, when stored, `maximum_water_surface_time`
+- `get_mesh_summary(hdf_path, var)` - GeoDataFrame for a named HEC-RAS summary variable, with cell or face geometry
+- `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers without constructing Shapely geometry
 - `get_mesh_max_depth(hdf_path)` - Maximum depth from stored HEC-RAS `Depth`
   when present, otherwise derived in memory from `Water Surface - Cells Minimum
   Elevation`
@@ -220,8 +222,6 @@ removed before v1.2.0:
 - `iter_mesh_timeseries(hdf_path, mesh_name, var, *, time_selection=None,
   spatial_selection=None, batch_size=None, max_chunk_bytes=16777216)` - Stream
   untruncated, bounded, time-major xarray batches
-- `get_mesh_summary_values(hdf_path, var)` - Read summary values and identifiers
-  without constructing Shapely geometry
 
 - `get_mesh_cells_timeseries(hdf_path, mesh_names=None, var=None, truncate=False, ras_object=None)` - Dictionary of mesh Datasets; select cells/faces afterward
 - `get_mesh_faces_timeseries(hdf_path, mesh_name, truncate=True)` - Available face variables as one Dataset; select `face_velocity` and `face_id` afterward
@@ -244,6 +244,14 @@ read only. The fallback is computed only in memory and does not create or write
 `Depth` in the HDF. Temporary synthetic test HDFs are test artifacts; they are
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
+
+The maximum methods have different temporal bases. `get_mesh_max_ws()` and
+`get_mesh_max_face_v()` read native HEC-RAS Summary Output maxima, which are
+tracked across the computation and can include peaks between saved
+mapping/output timestamps. `get_mesh_max_depth()` instead reduces the retained
+`Depth` series or derives depth from retained `Water Surface`; its maximum is
+limited to those stored output times. See [Maximum values](../user-guide/hdf-data-extraction.md#maximum-values)
+for an example and comparison with a time-series reduction.
 
 ### Bounded and lazy result reads
 

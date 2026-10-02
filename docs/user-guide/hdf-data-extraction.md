@@ -88,6 +88,16 @@ created. Repository tests label temporary, synthetic HDF artifacts separately
 from pre-existing producer HDFs written by HEC-RAS. Reading either kind of file
 does not run HEC-RAS or generate model output.
 
+`get_mesh_max_ws()` and `get_mesh_max_face_v()` read HEC-RAS Summary Output
+maxima tracked across the computation, so they can include a peak between the
+mapping/output timestamps retained in the regular time series. In contrast,
+`get_mesh_max_depth()` reduces the stored `Depth` or `Water Surface` series and
+can miss a peak between those output times. Do not assume all methods named
+`get_mesh_max_*()` share the same time basis. A maximum envelope also is not a
+simultaneous profile: different cells can reach their maxima at different
+times. For the profile and extraction workflow, see
+[2D profiles and reference results](2d-profile-and-reference-workflows.md#read-maximum-result-datasets).
+
 ### Time Series
 
 ```python
