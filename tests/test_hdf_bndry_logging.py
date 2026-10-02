@@ -158,7 +158,7 @@ def test_optional_missing_boundary_groups_log_debug_context(
     assert all(str(tmp_path) not in message for message in optional_group_messages)
 
 
-@pytest.mark.parametrize("invalid_record", [0, 1, 2])
+@pytest.mark.parametrize("invalid_record", [2])
 def test_invalid_breaklines_raise_and_log_full_context(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -166,7 +166,7 @@ def test_invalid_breaklines_raise_and_log_full_context(
 ):
     geom_hdf = tmp_path / "model.g01.hdf"
     _write_invalid_breaklines_hdf(geom_hdf)
-    # Isolate zero-point, single-point, and malformed multipart records.
+    # Isolate the malformed multipart record; degenerate records are diagnostics.
     with h5py.File(geom_hdf, "r+") as hdf_file:
         group = hdf_file["Geometry/2D Flow Area Break Lines"]
         attributes = group["Attributes"][()][invalid_record:invalid_record + 1]
@@ -217,3 +217,78 @@ def test_reference_line_missing_type_logs_debug_fallback(
     assert result["Type"].tolist() == [""]
     messages = _hdf_bndry_messages(caplog)
     assert any("using blank Type values" in message for message in messages)
+
+
+@pytest.mark.parametrize("point_count", [0, 1])
+@pytest.mark.parametrize("valid_line", [False, True])
+def test_degenerate_breaklines_keep_native_diagnostics(tmp_path, point_count, valid_line):
+    import json
+
+    path = tmp_path / "model.g01.hdf"
+    _write_valid_breakline_attributes_hdf(path)
+    with h5py.File(path, "r+") as hdf_file:
+        group = hdf_file["Geometry/2D Flow Area Break Lines"]
+        attributes = group["Attributes"][()]
+        row = attributes.copy()
+        row["Name"] = b"Pankratz Rd (3)"
+        attributes = np.concatenate([attributes, row]) if valid_line else row
+        info = [(0, 2, 0, 1), (1, point_count, 0, 1)] if valid_line else [(1, point_count, 0, 1)]
+        del group["Attributes"]
+        del group["Polyline Info"]
+        group.create_dataset("Attributes", data=attributes)
+        group.create_dataset("Polyline Info", data=np.array(info, dtype=np.int32))
+    result = HdfBndry.get_breaklines(str(path))
+    assert len(result) == int(valid_line)
+    diagnostics = result.attrs["breakline_diagnostics"]
+    assert len(diagnostics) == 1
+    record = diagnostics[0]
+    assert record == {
+        "bl_id": int(valid_line), "Name": "Pankratz Rd (3)",
+        "attributes": {"Name": "Pankratz Rd (3)", "Cell Spacing Near": 20.0,
+                       "Cell Spacing Far": 40.0, "Near Repeats": 2, "Protection Radius": 1},
+        "point_start": 1, "point_count": point_count, "point_end": 1 + point_count,
+        "part_start": 0, "part_count": 1, "reason_code": "BREAKLINE_TOO_FEW_POINTS",
+    }
+    json.dumps(diagnostics)
+    if valid_line:
+        assert result["bl_id"].tolist() == [0]
+        assert list(result.geometry.iloc[0].coords) == [(0.0, 0.0), (1.0, 1.0)]
+
+
+@pytest.mark.parametrize("span", [(-1, 1, 0, 1), (0, -1, 0, 1), (3, 0, 0, 1),
+                                  (2, 1, 0, 1), (1, 2, 0, 1), (0, 1, -1, 1),
+                                  (0, 1, 0, -1), (0, 1, 1, 1)])
+def test_corrupt_degenerate_or_truncated_spans_remain_hard_errors(tmp_path, span):
+    path = tmp_path / "model.g01.hdf"
+    _write_valid_breakline_attributes_hdf(path)
+    with h5py.File(path, "r+") as hdf_file:
+        dataset = hdf_file["Geometry/2D Flow Area Break Lines/Polyline Info"]
+        dataset[0] = span
+    with pytest.raises(ValueError):
+        HdfBndry.get_breaklines(path)
+
+
+def test_clean_and_missing_breaklines_have_empty_diagnostics(tmp_path):
+    path = tmp_path / "model.g01.hdf"
+    _write_valid_breakline_attributes_hdf(path)
+    assert HdfBndry.get_breaklines(path).attrs["breakline_diagnostics"] == []
+    _write_empty_geometry_hdf(path)
+    assert HdfBndry.get_breaklines(path).attrs["breakline_diagnostics"] == []
+
+
+def test_degenerate_breakline_does_not_renumber_following_native_ids(tmp_path):
+    path = tmp_path / "model.g01.hdf"
+    _write_valid_breakline_attributes_hdf(path)
+    with h5py.File(path, "r+") as hdf_file:
+        group = hdf_file["Geometry/2D Flow Area Break Lines"]
+        attributes = np.repeat(group["Attributes"][()], 3)
+        attributes["Name"] = [b"First", b"SinglePoint", b"Last"]
+        del group["Attributes"]
+        del group["Polyline Info"]
+        group.create_dataset("Attributes", data=attributes)
+        group.create_dataset("Polyline Info", data=np.array(
+            [(0, 2, 0, 1), (1, 1, 0, 1), (0, 2, 0, 1)], dtype=np.int32))
+    result = HdfBndry.get_breaklines(path)
+    assert result["bl_id"].tolist() == [0, 2]
+    assert result["Name"].tolist() == ["First", "Last"]
+    assert result.attrs["breakline_diagnostics"][0]["bl_id"] == 1

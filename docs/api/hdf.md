@@ -424,6 +424,14 @@ Cross-section and river geometry extraction from HDF.
 
 ### HdfStruc
 
+`HdfStruc.get_structures()` treats a native empty `Geometry/Structures` group,
+or one containing only an empty `Property Tables` subgroup, as an empty layer.
+It returns typed `Structure ID`/geometry columns, source CRS/group attributes and
+`attrs["structure_status"]="empty_placeholder"`. Populated property tables,
+unrecognized children, and incomplete nonempty layers remain hard errors; no
+actual structure is silently skipped. Source files and native units are unchanged.
+
+
 Structure geometry and SA/2D connections.
 
 - `list_sa2d_connections(hdf_path, *, ras_object=None)` - List SA/2D connections with time-series results
@@ -584,7 +592,15 @@ before v1.2.0:
 Boundary condition geometry.
 
 - `get_bc_lines(hdf_path)` - Get BC lines
-- `get_breaklines(hdf_path)` - Get breaklines
+- `get_breaklines(hdf_path)` - Get breaklines. Zero- and one-point source records
+  are excluded from line geometry and returned in `result.attrs["breakline_diagnostics"]`.
+  Each diagnostic preserves native zero-based `bl_id`, `Name`, all decoded source
+  `attributes`, `point_start`, `point_count`, exclusive `point_end`, `part_start`,
+  `part_count`, and `reason_code="BREAKLINE_TOO_FEW_POINTS"`. The list is empty for
+  clean or absent layers and remains available when every record is degenerate.
+  Persist diagnostics separately before GeoParquet/other tabular export because
+  writers may discard attrs. Negative, truncated or out-of-range spans still
+  raise; this read-only extraction does not change source geometry, units or CRS.
 
 ## Utilities
 

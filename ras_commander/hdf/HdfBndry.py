@@ -743,13 +743,13 @@ class HdfBndry:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_breaklines(hdf_path: Path) -> gpd.GeoDataFrame:
+    def get_breaklines(hdf_path: Union[Path, str]) -> gpd.GeoDataFrame:
         """
         Return 2D mesh area breaklines.
 
         Parameters
         ----------
-        hdf_path : Path
+        hdf_path : Path or str
             Path to the HEC-RAS geometry HDF file.
 
         Returns
@@ -759,8 +759,17 @@ class HdfBndry:
 
         Notes
         -----
-        Missing layers return an empty frame. Invalid point ranges and read
-        errors are logged and raised; no partial layer is returned.
+        Read-only: coordinates retain the source CRS and horizontal units.
+        Missing layers return an empty frame. Records with zero or one point
+        are skipped and retained in ``result.attrs["breakline_diagnostics"]``
+        (an empty list when none are skipped), including all-degenerate layers.
+        Each diagnostic contains the zero-based native ``bl_id``, ``Name``,
+        decoded source ``attributes``, ``point_start``, ``point_count``,
+        exclusive ``point_end``, ``part_start``, ``part_count``, and
+        ``reason_code="BREAKLINE_TOO_FEW_POINTS"``. Persist these attrs explicitly
+        when writing artifacts; tabular writers may not retain them.
+        Negative, out-of-range or truncated spans and read errors remain hard
+        errors; no partial layer is returned for corrupted source records.
         """
         breaklines_path = "Geometry/2D Flow Area Break Lines"
         try:
@@ -771,10 +780,14 @@ class HdfBndry:
                         breaklines_path,
                         hdf_path.name,
                     )
-                    return gpd.GeoDataFrame()
+                    result = gpd.GeoDataFrame()
+                    result.attrs["breakline_diagnostics"] = []
+                    return result
 
                 bl_line_data = hdf_file[breaklines_path]
                 attributes = bl_line_data["Attributes"][()]
+                source_points = bl_line_data["Polyline Points"][()]
+                diagnostics = []
 
                 # Initialize lists to store valid breakline data
                 valid_ids = []
@@ -789,11 +802,46 @@ class HdfBndry:
                 for idx, (pnt_start, pnt_cnt, part_start, part_cnt) in enumerate(bl_line_data["Polyline Info"][()]):
                     name = HdfUtils.convert_ras_string(attributes["Name"][idx])
 
-                    if pnt_start < 0 or pnt_cnt < 2:
+                    # Validate the native span before tolerating a degenerate
+                    # feature. Zero points at the end of the array is valid.
+                    if pnt_start < 0 or pnt_cnt < 0 or pnt_start > len(source_points):
                         raise ValueError(f"Invalid point range for breakline {idx} ({name})")
+                    if pnt_start + pnt_cnt > len(source_points):
+                        raise ValueError(f"Truncated points for breakline {idx} ({name})")
+                    if part_start < 0 or part_cnt < 1:
+                        raise ValueError(f"Invalid parts for breakline {idx} ({name})")
+                    if "Polyline Parts" in bl_line_data:
+                        if part_start + part_cnt > len(bl_line_data["Polyline Parts"]):
+                            raise ValueError(f"Truncated parts for breakline {idx} ({name})")
+                    elif part_cnt != 1:
+                        raise ValueError(f"Missing parts for breakline {idx} ({name})")
+                    if pnt_cnt < 2:
+                        source_attributes = {}
+                        for field in attributes.dtype.names or ():
+                            value = attributes[field][idx]
+                            if isinstance(value, (bytes, str, np.bytes_)):
+                                value = HdfUtils.convert_ras_string(value)
+                            elif isinstance(value, np.generic):
+                                value = value.item()
+                            elif isinstance(value, np.ndarray):
+                                value = value.tolist()
+                            source_attributes[field] = value
+                        diagnostics.append({
+                            "bl_id": idx,
+                            "Name": name,
+                            "attributes": source_attributes,
+                            "point_start": int(pnt_start),
+                            "point_count": int(pnt_cnt),
+                            "point_end": int(pnt_start + pnt_cnt),
+                            "part_start": int(part_start),
+                            "part_count": int(part_cnt),
+                            "reason_code": "BREAKLINE_TOO_FEW_POINTS",
+                        })
+                        logger.warning("Skipping breakline %s (%s): %s points", idx, name, pnt_cnt)
+                        continue
 
                     points = HdfBase.plan_vertex_ordinates(
-                        bl_line_data["Polyline Points"][()][pnt_start:pnt_start + pnt_cnt]
+                        source_points[pnt_start:pnt_start + pnt_cnt]
                     )
 
                     if len(points) != pnt_cnt:
@@ -840,9 +888,11 @@ class HdfBndry:
 
                 # Create GeoDataFrame with valid breaklines
                 if not valid_ids:
-                    return gpd.GeoDataFrame()
+                    result = gpd.GeoDataFrame()
+                    result.attrs["breakline_diagnostics"] = diagnostics
+                    return result
 
-                return gpd.GeoDataFrame(
+                result = gpd.GeoDataFrame(
                     {
                         "bl_id": valid_ids,
                         "Name": valid_names,
@@ -855,6 +905,8 @@ class HdfBndry:
                     geometry="geometry",
                     crs=HdfBase.get_projection(hdf_file)
                 )
+                result.attrs["breakline_diagnostics"] = diagnostics
+                return result
 
         except Exception as e:
             logger.error(
