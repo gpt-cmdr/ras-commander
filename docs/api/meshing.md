@@ -78,9 +78,15 @@ print(preview.conflicts_found, preview.modified_hdf)
 ```
 
 The dry run reports candidates without computing a repair: `conflicts_fixed`
-remains zero. `BCFixResult.ok` only tests whether `unresolvable` is empty, so it
-can be true in a dry run that found conflicts. Inspect `conflicts_found` and
-`modified_hdf` explicitly rather than treating truthiness as clearance.
+remains zero, and every detected conflict is placed in `unresolvable`. Therefore
+`BCFixResult.ok` is false when a dry run finds conflicts. These entries are
+unattempted candidates, not evidence that repair is impossible. Inspect
+`conflicts_found`, `unresolvable`, and `modified_hdf` explicitly.
+
+Repair and its dry run use a proximity buffer of
+`max(0.1, 0.01 * cell_size)` in project length units. The detection-only method
+uses `0.01 * cell_size` without that minimum, so the two methods can report
+different candidate counts for small cells.
 
 ### Repair on a project copy
 

@@ -3259,6 +3259,7 @@ class RasControl:
         ```python
         >>> df_max = df[df['time_string'] == 'Max WS']
         >>> df_timeseries = df[df['datetime'].notna()]  # Excludes Max WS (has NaT)
+        ```
 
         **New in v0.81.0:**
 
@@ -3276,6 +3277,7 @@ class RasControl:
         --------
         Extract and plot time series at a cross section:
 
+        ```python
         >>> from ras_commander import init_ras_project, RasControl
         >>> import matplotlib.pyplot as plt
         >>>
@@ -3295,13 +3297,16 @@ class RasControl:
         >>> plt.ylabel('WSE (ft)')
         >>> plt.legend()
         >>> plt.show()
+        ```
 
         Filter to specific time range using datetime column:
 
+        ```python
         >>> import pandas as pd
         >>> start = pd.Timestamp('1999-02-18')
         >>> end = pd.Timestamp('1999-02-20')
         >>> filtered = df_ts[(df_ts['datetime'] >= start) & (df_ts['datetime'] <= end)]
+        ```
 
         See Also
         --------
@@ -3314,7 +3319,6 @@ class RasControl:
         ----------
         For comparison with HDF-based methods, see:
         ``feature_dev_notes/rascontrol_vs_hdf_comparison.md``
-        ```
         """
         info = RasControl._get_project_info(plan, ras_object)
 

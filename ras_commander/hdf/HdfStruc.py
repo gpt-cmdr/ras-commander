@@ -840,13 +840,13 @@ class HdfStruc:
         >>> info = HdfStruc.get_sa2d_breach_info("02")
         >>> breach_dams = info[info['has_breach']]['structure'].tolist()
         >>> print(f"Breach structures: {breach_dams}")
+        ```
 
         Notes
         -----
         - Returns empty DataFrame if no SA/2D connections found
         - Only structures with "Breaching Variables" have has_breach=True
         - Use in conjunction with RasBreach for reading/modifying breach parameters
-        ```
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
