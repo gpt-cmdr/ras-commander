@@ -47,6 +47,16 @@ RAS Commander represents a practical demonstration of LLM Forward principles app
 
 ## Technical Contributors
 
+### Native HEC-DSS Access
+
+**Gyan Basyal (gyanz)** maintains
+[pydsstools](https://github.com/gyanz/pydsstools), the MIT-licensed Python/Cython
+interface to HEC-DSS. RAS Commander's optional direct precipitation-array
+writer calls pydsstools' native grid API. We gratefully acknowledge this work;
+the upstream implementation is used as a dependency and is not copied into
+RAS Commander. See the [upstream project](https://github.com/gyanz/pydsstools)
+for its documentation, contribution, and sponsorship options.
+
 ### HDF Data Access & Structure Analysis
 
 **Sean Micek, P.E.**
