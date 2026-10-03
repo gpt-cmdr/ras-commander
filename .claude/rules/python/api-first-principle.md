@@ -203,7 +203,7 @@ with open("model.g01") as f:  # NO!
     # Parsing fixed-width format manually...
 ```
 
-### hecras-general-agent
+### ras-commander
 
 When dispatching to specialist agents, **MUST** include API-first context in prompts:
 
@@ -239,7 +239,7 @@ The `ras-commander-api-expert` agent is the **ONLY** exception to this rule.
 - hdf-analyst
 - hecras-results-analyst
 - geometry-parser
-- hecras-general-agent
+- ras-commander
 - Any other HEC-RAS domain agent
 
 ## Anti-Patterns
