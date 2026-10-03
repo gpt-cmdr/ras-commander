@@ -16,6 +16,9 @@ from ras_commander.RasApptainer import (
     ApptainerProfileError,
     ApptainerTransport,
     CommandResult,
+    DEFAULT_OCI_SOURCE,
+    InputCheckError,
+    check_solver_ready,
     RECEIPT_SCHEMA,
     validate_receipt,
 )
@@ -35,7 +38,7 @@ def project(tmp_path):
     folder = tmp_path / "proj"
     folder.mkdir()
     (folder / "TEST.p08").write_bytes(b"Plan Title=x\r\nGeom File=g02\r\n")
-    (folder / "TEST.p08.tmp.hdf").write_bytes(b"HDFDATA\r\n\x00\x01")
+    shutil.copyfile(FIXTURES / "solver_ready.tmp.hdf", folder / "TEST.p08.tmp.hdf")
     (folder / "TEST.b08").write_bytes(b"line1\r\nline2\r\n")
     (folder / "TEST.x02").write_bytes(b"xdata\n")
     return folder
@@ -106,9 +109,32 @@ def test_render_engine_script_invocation(project, profile, tmp_path):
     assert job.geometry_token == "x02"  # x token comes from the plan's geometry, not the plan number
     assert "XTOKEN=x02" in engine and "PLAN=08" in engine
     assert '"$HECRAS/RasUnsteady" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN"' in engine
-    assert "LD_LIBRARY_PATH=/opt/hecras/libs:/opt/hecras/libs/mkl:/opt/hecras/libs/rhel_8" in engine
+    assert "HECRAS=/opt/hecras-runtime/engine" in engine
+    assert ("LD_LIBRARY_PATH=/opt/hecras-runtime/engine/libs:/opt/hecras-runtime/engine/libs/mkl"
+            ":/opt/hecras-runtime/engine/libs/rhel_8") in engine
+    assert "ulimit -s unlimited" in engine
+    assert "OMP_STACKSIZE=2G" in engine and "KMP_STACKSIZE=2G" in engine
     assert "OMP_NUM_THREADS=4" in engine and 'ln -s "$PROJECT.b$PLAN" io.b' in engine
     assert "RasGeomPreprocess" not in engine
+
+
+def test_stack_settings_are_configurable(project, tmp_path):
+    data = _profile_dict()
+    data.update({"stack_unlimited": False, "omp_stacksize": "512M", "kmp_stacksize": "1G"})
+    prof = RasApptainer.profile_from_dict(data)
+    job = RasApptainer.render_job(project, "TEST", 8, prof, tmp_path / "job")
+    engine = (job.job_directory / "engine.sh").read_text(encoding="utf-8")
+    assert "ulimit" not in engine and "OMP_STACKSIZE=512M" in engine and "KMP_STACKSIZE=1G" in engine
+
+
+def test_canonical_image_defaults_and_pull_command():
+    assert DEFAULT_OCI_SOURCE == "docker://rascommander/hec-ras-linux-unsteady_6.6:v1"
+    example = RasApptainer.load_profile(EXAMPLE)
+    assert example.oci_source == DEFAULT_OCI_SOURCE
+    assert example.hecras_dir == "/opt/hecras-runtime/engine"
+    assert example.image.endswith("rascommander-hec-ras-linux-unsteady_6.6-v1.sif")
+    cmd = RasApptainer.pull_command(example)
+    assert cmd.startswith("apptainer pull ") and DEFAULT_OCI_SOURCE in cmd and "sha256sum" in cmd
 
 
 def test_geom_preprocess_is_opt_in(project, tmp_path):
@@ -123,7 +149,7 @@ def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_
     before = (project / "TEST.b08").read_bytes()
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     assert (job.job_directory / "inputs" / "TEST.b08").read_bytes() == b"line1\nline2\n"
-    assert (job.job_directory / "inputs" / "TEST.p08.tmp.hdf").read_bytes() == b"HDFDATA\r\n\x00\x01"
+    assert (job.job_directory / "inputs" / "TEST.p08.tmp.hdf").read_bytes() == (project / "TEST.p08.tmp.hdf").read_bytes()
     assert (project / "TEST.b08").read_bytes() == before
     assert (job.job_directory / "inputs" / "SHA256SUMS").read_text().count("\n") == 3
     meta = json.loads((job.job_directory / "job.json").read_text())
@@ -148,6 +174,72 @@ def test_render_rejects_missing_artifacts_and_nonempty_dir(project, profile, tmp
     (tmp_path / "busy" / "f").write_text("x")
     with pytest.raises(FileExistsError):
         RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "busy")
+
+
+# ---- solver-ready input check -------------------------------------------
+
+PRECIP = "Event Conditions/Meteorology/Precipitation"
+
+
+def _edit_hdf(path, fn):
+    import h5py
+    with h5py.File(path, "r+") as hdf:
+        fn(hdf)
+
+
+def test_check_passes_on_solver_ready_fixture():
+    assert check_solver_ready(FIXTURES / "solver_ready.tmp.hdf") == []
+
+
+def test_check_flags_missing_precip_interpolation_group(project, profile, tmp_path):
+    tmp = project / "TEST.p08.tmp.hdf"
+    _edit_hdf(tmp, lambda h: h.__delitem__(f"{PRECIP}/2D Flow Areas"))
+    problems = check_solver_ready(tmp)
+    assert len(problems) == 1 and "2D Flow Areas/Area1/" in problems[0]
+    job_dir = tmp_path / "job"
+    with pytest.raises(InputCheckError) as exc:
+        RasApptainer.render_job(project, "TEST", 8, profile, job_dir)
+    assert "2D Flow Areas folder not found" in str(exc.value)
+    assert not job_dir.exists() or not any(job_dir.iterdir())  # failed before staging
+    RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "skip", check_inputs=False)
+
+
+def test_check_flags_empty_precip_dataset(project):
+    tmp = project / "TEST.p08.tmp.hdf"
+
+    def empty(h):
+        base = f"{PRECIP}/2D Flow Areas/Area1"
+        del h[f"{base}/Cell Weights"]
+        h.create_dataset(f"{base}/Cell Weights", data=[], dtype="f4")
+    _edit_hdf(tmp, empty)
+    assert any("Cell Weights" in p for p in check_solver_ready(tmp))
+
+
+def test_check_without_gridded_precip_does_not_require_group(project):
+    tmp = project / "TEST.p08.tmp.hdf"
+
+    def drop(h):
+        del h[PRECIP]
+    _edit_hdf(tmp, drop)
+    assert check_solver_ready(tmp) == []
+
+
+def test_check_flags_nan_property_table_but_not_cell_min_elevation(project, profile, tmp_path):
+    tmp = project / "TEST.p08.tmp.hdf"
+
+    def poison(h):
+        h["Geometry/2D Flow Areas/Area1/Faces Minimum Elevation"][1] = float("nan")
+    _edit_hdf(tmp, poison)
+    problems = check_solver_ready(tmp)
+    assert len(problems) == 1 and "Faces Minimum Elevation" in problems[0]  # Cells Minimum Elevation NaN ignored
+    with pytest.raises(InputCheckError):
+        RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+
+
+def test_check_reports_non_hdf5_file(tmp_path):
+    bad = tmp_path / "x.tmp.hdf"
+    bad.write_bytes(b"not hdf")
+    assert "cannot open as HDF5" in check_solver_ready(bad)[0]
 
 
 def test_dry_run_never_touches_transport(project, profile, tmp_path):

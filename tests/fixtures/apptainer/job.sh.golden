@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=testsite-TEST-p08-1f4301de
+#SBATCH --job-name=testsite-TEST-p08-042fe608
 #SBATCH --account=ras
 #SBATCH --partition=compute
 #SBATCH --qos=normal
@@ -9,17 +9,17 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=14336M
 #SBATCH --time=2-00:00:00
-#SBATCH --output=/shared/jobs/ras/testsite-TEST-p08-1f4301de/slurm-%j.out
+#SBATCH --output=/shared/jobs/ras/testsite-TEST-p08-042fe608/slurm-%j.out
 #SBATCH --signal=B:TERM@120
 set -u
 umask 002
 
-JOB_ROOT=/shared/jobs/ras/testsite-TEST-p08-1f4301de
+JOB_ROOT=/shared/jobs/ras/testsite-TEST-p08-042fe608
 IMAGE=/shared/images/ras-hecras-6.6-test.sif
 IMAGE_SHA256=64e1d120207c6c5ea132748a1e5276ef89c474a8be8abd373d1b4ce68320f3b0
-ENGINE_SHA256=414046d08944038d281e12fc38c7f78b8dab32a598854577c2c601ae3c2143e2
-REQUEST_SHA256=1f4301dedd84b2e37cd717c678581be7189c3dabcf0c9610973ec50d4606f903
-JOB_NAME=testsite-TEST-p08-1f4301de
+ENGINE_SHA256=1ffa155be8fd7b07a5f73f6f86a7b8ac6f36211e40a9ce4de4a399bc88cc1af3
+REQUEST_SHA256=042fe6085eef0eed072a0cb7851aa50c02403c01e45042e7d78c7e03a6c31b8e
+JOB_NAME=testsite-TEST-p08-042fe608
 CONTAINER_IDENTITY=sif:sha256:64e1d120207c6c5ea132748a1e5276ef89c474a8be8abd373d1b4ce68320f3b0
 NUM_CORES=4
 NODE_SCRATCH_ROOT=/scratch

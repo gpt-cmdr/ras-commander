@@ -34,9 +34,44 @@ host names, keys or secrets are committed). Key fields:
 | `scratch_root` | Shared filesystem root visible to login and compute nodes; job folders are staged below it |
 | `node_scratch_root` | Node-local scratch (default `/scratch`); the job works in `<root>/$SLURM_JOB_ID/ras` |
 | `image`, `apptainer_image_sha256`, `container_identity` | Shared SIF path, its SHA-256, and the immutable identity (`sif:sha256:<hex>` or `registry/repo@sha256:<hex>`) |
-| `hecras_dir`, `ld_library_path` | Solver install directory inside the image and its library path |
+| `oci_source` | OCI reference used for the one-time pull (default `docker://rascommander/hec-ras-linux-unsteady_6.6:v1`) |
+| `hecras_dir`, `ld_library_path` | Solver directory inside the image and its library path (defaults match the canonical image: `/opt/hecras-runtime/engine`, `.../libs`, `.../libs/mkl`, `.../libs/rhel_8`) |
+| `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | `ulimit -s unlimited`, `OMP_STACKSIZE`, `KMP_STACKSIZE` (default `2G`). Without them the solver crashes at its first wet step on large 2D meshes. `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores` |
 | `num_cores`, `slurm_memory`, `time_limit`, `account`, `partition`, `qos`, `nodelist` | Slurm resources (all but `num_cores` optional) |
 | `geom_preprocess` | Opt in to running `RasGeomPreprocess` inside the image before the solver (default off) |
+
+## Canonical image and pulling it once
+
+The canonical image is `rascommander/hec-ras-linux-unsteady_6.6:v1` (Docker Hub, linux/amd64).
+Contract read from the registry image config: user `rasworker`, workdir `/job`, entrypoint
+`tini -- python -m ras_commander._container_compute` (bypassed: jobs use `apptainer exec`).
+Solver `/opt/hecras-runtime/engine/RasUnsteady`; libraries `/opt/hecras-runtime/engine/libs`,
+`libs/mkl`, `libs/rhel_8`. The image does **not** contain `RasGeomPreprocess` (leave
+`geom_preprocess` false); preprocessing happens on Windows.
+
+An administrator pulls it once, on a node, to shared storage, then records the digest:
+
+```bash
+apptainer pull /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif     docker://rascommander/hec-ras-linux-unsteady_6.6:v1
+sha256sum /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif
+```
+
+`RasApptainer.pull_command(profile)` prints this command for a profile. Put the digest in
+`apptainer_image_sha256` and `container_identity` (`sif:sha256:<digest>`). Jobs refuse to run on a
+mismatch. Do not pull per job.
+
+## Solver-ready inputs and the pre-submit check
+
+`render_job` first runs `ras_commander.RasApptainer.check_solver_ready` on the local, completed tmp.hdf, read-only with HDF5 locking off.
+It raises `InputCheckError` (exported from `ras_commander`) listing every problem, before anything is staged, when:
+
+- gridded precipitation is present but `Event Conditions/Meteorology/Precipitation/2D Flow Areas/<area>/`
+  lacks `Cell/Face Indexes/Info/Weights` (solver: "2D Flow Areas folder not found"), or
+- the 2D property tables (`Faces Minimum Elevation`, `Faces Area Elevation Values/Info`,
+  `Cells Volume Elevation Values/Info`, `Cells Surface Area`) contain NaN (solver SIGSEGV).
+  `Cells Minimum Elevation` legitimately holds NaN and is ignored.
+
+Never run it on a file HEC-RAS is still writing. Pass `check_inputs=False` to skip.
 
 ## Usage
 

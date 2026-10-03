@@ -54,9 +54,19 @@ TERMINAL_STATES = frozenset({
     "COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY",
     "NODE_FAIL", "BOOT_FAIL", "DEADLINE", "PREEMPTED",
 })
+# Canonical image: HEC-RAS 6.6 native Linux unsteady (Docker Hub, pulled once to a SIF).
+# Verified from the registry image config (2026-10-03): linux/amd64, USER rasworker,
+# WORKDIR /job, ENTRYPOINT tini -- python -m ras_commander._container_compute (bypassed
+# here by ``apptainer exec``). Solver: /opt/hecras-runtime/engine/RasUnsteady; vendor libs:
+# /opt/hecras-runtime/engine/libs{,/mkl,/rhel_8}. RasGeomPreprocess is NOT in this image.
+DEFAULT_OCI_SOURCE = "docker://rascommander/hec-ras-linux-unsteady_6.6:v1"
+DEFAULT_HECRAS_DIR = "/opt/hecras-runtime/engine"
 DEFAULT_LD_LIBRARY_PATH = (
-    "/opt/hecras/libs", "/opt/hecras/libs/mkl", "/opt/hecras/libs/rhel_8",
+    f"{DEFAULT_HECRAS_DIR}/libs", f"{DEFAULT_HECRAS_DIR}/libs/mkl",
+    f"{DEFAULT_HECRAS_DIR}/libs/rhel_8",
 )
+_STACK_SIZE = re.compile(r"[1-9][0-9]*[KMGkmg]?\Z")
+_OCI_SOURCE = re.compile(r"docker://[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}\Z")
 
 
 # --------------------------------------------------------------------------
@@ -93,7 +103,7 @@ class ApptainerSiteProfile:
     identity_file: Optional[str] = None
     known_hosts_file: Optional[str] = None
     node_scratch_root: str = "/scratch"
-    hecras_dir: str = "/opt/hecras"
+    hecras_dir: str = DEFAULT_HECRAS_DIR
     ld_library_path: tuple[str, ...] = DEFAULT_LD_LIBRARY_PATH
     ras_version: str = "6.6"
     num_cores: int = 2
@@ -106,6 +116,10 @@ class ApptainerSiteProfile:
     modules: tuple[str, ...] = ()
     environment: Mapping[str, str] = field(default_factory=dict)
     geom_preprocess: bool = False
+    oci_source: str = DEFAULT_OCI_SOURCE
+    stack_unlimited: bool = True
+    omp_stacksize: str = "2G"
+    kmp_stacksize: str = "2G"
     apptainer_executable: str = "apptainer"
     sbatch_executable: str = "sbatch"
     sacct_executable: str = "sacct"
@@ -177,6 +191,13 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
             bad.append(f"environment entry {key!r} is invalid")
     if type(p.geom_preprocess) is not bool:
         bad.append("geom_preprocess must be true or false")
+    if type(p.stack_unlimited) is not bool:
+        bad.append("stack_unlimited must be true or false")
+    for name in ("omp_stacksize", "kmp_stacksize"):
+        if not (isinstance(getattr(p, name), str) and _STACK_SIZE.fullmatch(getattr(p, name))):
+            bad.append(f"{name} must look like '2G' or '512M'")
+    if not (isinstance(p.oci_source, str) and _OCI_SOURCE.fullmatch(p.oci_source)):
+        bad.append("oci_source must look like 'docker://<repo>:<tag>'")
     for name in ("identity_file", "known_hosts_file"):
         v = getattr(p, name)
         if v is not None and (not isinstance(v, str) or "\x00" in v):
@@ -352,6 +373,86 @@ class SshApptainerTransport(ApptainerTransport):
 
 
 # --------------------------------------------------------------------------
+# Pre-submit input check (solver-ready tmp.hdf)
+# --------------------------------------------------------------------------
+
+_PRECIP_GROUP = "Event Conditions/Meteorology/Precipitation"
+_PRECIP_DATASETS = ("Cell Indexes", "Cell Info", "Cell Weights",
+                    "Face Indexes", "Face Info", "Face Weights")
+# "Cells Minimum Elevation" legitimately holds NaN on ghost cells; never checked.
+_PROPERTY_TABLES = ("Faces Minimum Elevation", "Faces Area Elevation Values",
+                    "Faces Area Elevation Info", "Cells Volume Elevation Values",
+                    "Cells Volume Elevation Info", "Cells Surface Area")
+_NAN_CHUNK_ROWS = 1_000_000
+
+
+class InputCheckError(ValueError):
+    """The tmp.hdf is not solver-ready; ``problems`` lists every finding."""
+
+    def __init__(self, tmp_hdf: Union[str, Path], problems: Sequence[str]):
+        self.problems = list(problems)
+        super().__init__(f"{tmp_hdf} is not solver-ready:\n- " + "\n- ".join(self.problems))
+
+
+def _area_names(hdf: Any) -> list[str]:
+    import h5py
+    base = "Geometry/2D Flow Areas"
+    if base not in hdf:
+        return []
+    group = hdf[base]
+    attrs = group.get("Attributes")
+    if attrs is not None and attrs.dtype.names and "Name" in attrs.dtype.names:
+        return [n.decode("utf-8", "replace").strip() if isinstance(n, bytes) else str(n).strip()
+                for n in attrs["Name"]]
+    return [k for k, v in group.items() if isinstance(v, h5py.Group)]
+
+
+def check_solver_ready(tmp_hdf: Union[str, Path]) -> list[str]:
+    """Return the problems that would crash the Linux solver; an empty list means ready.
+
+    Opens the LOCAL, completed file read-only with HDF5 locking disabled. Never call this
+    on a tmp.hdf that HEC-RAS is still writing. Checks: (1) when gridded precipitation is
+    present (``Event Conditions/Meteorology/Precipitation/Values``), every 2D area has the
+    ``.../Precipitation/2D Flow Areas/<area>/`` interpolation datasets, non-empty; (2) the 2D
+    property tables in ``_PROPERTY_TABLES`` contain no NaN (checked when present).
+    """
+    import h5py
+    import numpy as np
+
+    problems: list[str] = []
+    try:
+        hdf = h5py.File(str(tmp_hdf), "r", locking=False)
+    except (OSError, TypeError) as exc:
+        return [f"cannot open as HDF5: {exc}"]
+    with hdf:
+        areas = _area_names(hdf)
+        if not areas:
+            problems.append("no 2D flow areas listed under Geometry/2D Flow Areas")
+        gridded = f"{_PRECIP_GROUP}/Values" in hdf
+        for area in areas:
+            if gridded:
+                base = f"{_PRECIP_GROUP}/2D Flow Areas/{area}"
+                if base not in hdf:
+                    problems.append(
+                        f"missing {base}/ (gridded precipitation present; the solver fails with "
+                        "'2D Flow Areas folder not found'; written by the Windows engine at start-up)")
+                else:
+                    for name in _PRECIP_DATASETS:
+                        node = hdf.get(f"{base}/{name}")
+                        if node is None or not getattr(node, "shape", None) or node.shape[0] == 0:
+                            problems.append(f"missing or empty {base}/{name}")
+            for table in _PROPERTY_TABLES:
+                node = hdf.get(f"Geometry/2D Flow Areas/{area}/{table}")
+                if node is None or getattr(node, "dtype", None) is None or node.dtype.kind != "f" or not node.shape:
+                    continue
+                for start in range(0, node.shape[0], _NAN_CHUNK_ROWS):
+                    if np.isnan(node[start:start + _NAN_CHUNK_ROWS]).any():
+                        problems.append(f"NaN in Geometry/2D Flow Areas/{area}/{table} (solver SIGSEGV)")
+                        break
+    return problems
+
+
+# --------------------------------------------------------------------------
 # Script templates
 # --------------------------------------------------------------------------
 # ENGINE_SCRIPT_TEMPLATE is the ONLY place that knows how the HEC-RAS 6.6 Linux
@@ -371,6 +472,7 @@ HECRAS=@HECRAS_DIR@
 export LD_LIBRARY_PATH=@LD_LIBRARY_PATH@
 export OMP_NUM_THREADS=@CORES@
 export MKL_NUM_THREADS=@CORES@
+@STACK@
 cd /job || exit 1
 
 # The Fortran solver opens files by the base name "io" (see RasCmdr.compute_plan_linux).
@@ -530,6 +632,16 @@ def _fill(template: str, values: Mapping[str, str]) -> str:
     return out
 
 
+def _stack_block(profile: ApptainerSiteProfile) -> str:
+    """Stack settings the solver needs on large 2D meshes (SIGSEGV at the first wet step otherwise)."""
+    lines = []
+    if profile.stack_unlimited:
+        lines.append("ulimit -s unlimited || echo 'warning: ulimit -s unlimited refused' >&2")
+    lines.append(f"export OMP_STACKSIZE={shlex.quote(profile.omp_stacksize)}")
+    lines.append(f"export KMP_STACKSIZE={shlex.quote(profile.kmp_stacksize)}")
+    return "\n".join(lines)
+
+
 def _render_engine_script(profile: ApptainerSiteProfile, project: str, plan: str, xtoken: str) -> str:
     return _fill(ENGINE_SCRIPT_TEMPLATE, {
         "PROJECT": shlex.quote(project),
@@ -538,6 +650,7 @@ def _render_engine_script(profile: ApptainerSiteProfile, project: str, plan: str
         "HECRAS_DIR": shlex.quote(profile.hecras_dir),
         "LD_LIBRARY_PATH": shlex.quote(":".join(profile.ld_library_path)),
         "CORES": str(profile.num_cores),
+        "STACK": _stack_block(profile),
         "GEOM_PREPROCESS": _GEOM_PREPROCESS_BLOCK if profile.geom_preprocess else "",
     })
 
@@ -611,6 +724,16 @@ class RasApptainer:
         return ApptainerSiteProfile(**data)
 
     @staticmethod
+    def pull_command(profile: ApptainerSiteProfile) -> str:
+        """The one-time, administrator-run command that creates the shared SIF (not executed here).
+
+        Run it on a node, then record the printed SHA-256 in the profile
+        (``apptainer_image_sha256`` and ``container_identity: sif:sha256:<digest>``).
+        """
+        return (f"{shlex.quote(profile.apptainer_executable)} pull {shlex.quote(profile.image)} "
+                f"{shlex.quote(profile.oci_source)} && sha256sum {shlex.quote(profile.image)}")
+
+    @staticmethod
     @log_call
     def render_job(
         project_folder: Union[str, Path],
@@ -618,8 +741,12 @@ class RasApptainer:
         plan_number: Union[str, int],
         profile: ApptainerSiteProfile,
         job_directory: Union[str, Path],
+        check_inputs: bool = True,
     ) -> ApptainerJob:
         """Stage Windows-preprocessed artifacts and write the sbatch script. No SSH.
+
+        With ``check_inputs`` (default) the local tmp.hdf is first verified solver-ready
+        (:func:`check_solver_ready`); ``InputCheckError`` is raised before anything is staged.
 
         Writes ``job_directory`` containing ``inputs/`` (tmp.hdf, .b, .x with LF line
         endings and a ``SHA256SUMS``), ``engine.sh``, ``job.sh`` and ``job.json``.
@@ -643,6 +770,10 @@ class RasApptainer:
             )
         if job_directory.exists() and any(job_directory.iterdir()):
             raise FileExistsError(f"job_directory must be new or empty: {job_directory}")
+        if check_inputs:
+            problems = check_solver_ready(project_folder / names[0])
+            if problems:
+                raise InputCheckError(project_folder / names[0], problems)
         inputs = job_directory / "inputs"
         inputs.mkdir(parents=True, exist_ok=True)
 
