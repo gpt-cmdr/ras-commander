@@ -59,8 +59,8 @@ This file is the canonical shared instruction contract for repository-local codi
 - GIS/archive work uses [.claude/skills/cloud-native-gis/SKILL.md](.claude/skills/cloud-native-gis/SKILL.md)
   and canonical installed ras2cng/hms2cng contracts. HMS work routes to the HMS repository's shared
   `hms-commander` skill when available.
-- Claude-native `ras-commander`, `cloud-native-gis`, and legacy `hecras-general-agent` roles are
-  thin adapters. Codex uses shared skills and its native worker mechanisms.
+- Claude-native `ras-commander` and `cloud-native-gis` roles are thin adapters.
+  Codex uses shared skills and its native worker mechanisms.
 - RAS/HMS project MCP calls belong only in a bounded subagent. They are read-only text-information
   queries with non-spatial/non-gridded outputs. The full Python APIs handle heavier or modifying work.
 - Follow installed package contracts, check released versions at setup when possible, and prefer

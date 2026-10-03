@@ -26,9 +26,8 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `ras-commander` | Claude adapter | `.claude/agents/ras-commander.md` |
 | `cloud-native-gis` | Claude adapter | `.claude/agents/cloud-native-gis.md` |
 
-Canonical routing and release/MCP boundaries live in the shared skills. The legacy
-`hecras-general-agent` forwards to the RAS Commander skill. HMS intake lives in the HMS
-repository's `hms-commander` skill; GIS resolves canonical ras2cng/hms2cng guidance on demand.
+Canonical routing and release/MCP boundaries live in the shared skills. HMS intake lives in
+the HMS repository's `hms-commander` skill. GIS reads current ras2cng/hms2cng guidance when needed.
 
 ### HEC-RAS Execution
 
@@ -40,7 +39,6 @@ repository's `hms-commander` skill; GIS resolves canonical ras2cng/hms2cng guida
 | `hecras_plan_execution` | skill | `.claude/skills/hecras_plan_execution/SKILL.md` |
 | `execution.md` | rule | `.claude/rules/hec-ras/execution.md` |
 | `remote.md` | rule | `.claude/rules/hec-ras/remote.md` |
-| `hecras-general-agent` | agent | `.claude/agents/hecras-general-agent.md` |
 | `remote-executor` | agent | `.claude/agents/remote-executor.md` + `.claude/agents/remote-executor/SUBAGENT.md` |
 
 ### HDF Results
@@ -263,7 +261,7 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 ### Commander Intake
 
 `ras-commander` → current RAS specialists/skills, `cloud-native-gis`, or canonical HMS intake.
-Claude `ras-commander` and `hecras-general-agent` → shared `ras-commander` skill.
+Claude `ras-commander` → shared `ras-commander` skill.
 Claude `cloud-native-gis` → shared `cloud-native-gis` skill → current ras2cng/hms2cng contracts.
 Project MCP → bounded read-only informational subagent; heavier work → public Python APIs.
 
@@ -286,7 +284,7 @@ Project MCP → bounded read-only informational subagent; heavier work → publi
 **`hecras_compute_plans`** (skill) -- plan execution
 - Upstream: `hecras_plan_execution` skill (mode decision)
 - Downstream: `hecras_extract_results` skill, `hecras_parse_compute-messages` skill
-- Agents: `hecras-general-agent` (coordinator)
+- Agents: `ras-commander` (coordinator)
 - Rules: `execution.md`, `static-classes.md`, `decorators.md`
 
 **`hecras_compute_remote`** (skill) -- distributed execution
@@ -299,7 +297,7 @@ Project MCP → bounded read-only informational subagent; heavier work → publi
 - Agents: `win32com-automation-expert`
 - Rules: `execution.md`
 
-**`hecras-general-agent`** (agent) -- workflow coordinator
+**`ras-commander`** (agent) -- workflow coordinator
 - Uses skills: `hecras_plan_execution`, `hecras_compute_plans`, `hecras_extract_results`, `hecras_parse_compute-messages`
 - Coordinates agents: `hecras-project-inspector`, `hecras-results-analyst`
 

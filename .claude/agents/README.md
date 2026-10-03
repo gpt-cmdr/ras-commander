@@ -10,7 +10,6 @@ mechanisms; it does not assume these Claude agent definitions are automatically 
 |---|---|---|
 | [ras-commander](ras-commander.md) | [RAS Commander skill](../skills/ras-commander/SKILL.md) | “Just Ask for RAS Commander” task intake and routing |
 | [cloud-native-gis](cloud-native-gis.md) | [Cloud Native GIS skill](../skills/cloud-native-gis/SKILL.md) | RAS/HMS GIS/archive/export using current package contracts |
-| [hecras-general-agent](hecras-general-agent.md) | Same RAS Commander skill | Existing-name compatibility for inspect/plan/execute/analyze requests |
 
 HMS intake lives in the HMS repository's shared `hms-commander` skill. Cross-model tasks load that
 repository's actual guidance when available; the RAS entry point does not duplicate HMS policy.
@@ -41,9 +40,10 @@ tool exposure is unavailable, follow the shared workflow's Python handoff or rep
 ## Maintain adapters
 
 Keep native wrappers thin and place behavior that both harnesses need in shared skills or AGENTS.
-Preserve existing role names when changing routing; record migrations in the manifest. Agent files
+Update active callers and registry references when changing role names. Record the current routing
+in the manifest. Agent files
 can be root-level Markdown definitions or existing folder-based roles; consult the current harness
 requirements before introducing a new layout. Do not copy a workflow policy into a second role.
 
-The entry-point definitions establish routing instructions. Demonstrate actual discovery and
+The entry point definitions establish routing instructions. Demonstrate actual discovery and
 activation in each supported harness before claiming a packaged plugin experience.
