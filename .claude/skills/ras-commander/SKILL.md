@@ -20,7 +20,7 @@ Read [runtime and MCP boundaries](references/runtime-and-mcp.md) before choosing
 | Task | Route |
 |---|---|
 | Project inventory/readiness | `hecras-project-inspector` where available; otherwise the installed RasPrj API |
-| API discovery/integration | `ras-commander-api-expert` where available; current signatures and schemas |
+| API discovery/integration | [RAS API Discovery](../ras-api-discovery/SKILL.md); current signatures and schemas |
 | Plan execution | `hecras_plan_execution`, then the appropriate local/remote execution skill |
 | Result interpretation | Results analyst or HDF specialist through public APIs |
 | Geometry/QA | Geometry or QA specialist with explicit input-change scope |
@@ -29,6 +29,8 @@ Read [runtime and MCP boundaries](references/runtime-and-mcp.md) before choosing
 | Repository contribution/writing review | Relevant contribution instructions and requested auditor; do not impose them on user-created work |
 
 Use native specialist/subagent mechanisms available in the current harness. Claude roles are adapters; Codex should use these shared instructions and available native workers, not assume Claude's Task syntax exists. Direct Python work is appropriate for a small task; delegate domains when useful. MCP calls always require the bounded subagent flow below.
+
+Named repository roles and specialist skills are optional accelerators. A portable package includes only its selected workflows. If a named helper is absent, use the installed public Python API with the same authorization and dependency limits, or report the missing runtime capability. Do not assume a tool or role exists because it appears in a routing table.
 
 ## Coordinate and report
 

@@ -101,6 +101,7 @@ from .callbacks import (
 from .RasBco import BcoMonitor
 
 _LAZY_EXPORTS = {
+    "RasText": (".RasText", "RasText"),
     'RasDocker': ('.RasDocker', 'RasDocker'),
     'RasSlurm': ('.RasSlurm', 'RasSlurm'),
     'SlurmSiteConfig': ('.RasSlurm', 'SlurmSiteConfig'),
@@ -425,7 +426,7 @@ __all__ = [
     'RasDocker', 'ContainerResult', 'ContainerEvent', 'ContainerBatchResult',
     # Core functionality
     'RasPrj', 'init_ras_project', 'get_ras_exe', 'ras', 'create_project_from_template',
-    'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
+    'RasText', 'RasPlan', 'RasUnsteady', 'RasSteady', 'RasUtils', 'RasHydroCompare',
     'ProjectStageError', 'ProjectPopulationError', 'ProjectPathAmbiguityError',
     'ProjectLockedError', 'ProjectDriftError', 'ProjectCopyVerificationError',
     'ProjectPublicationError',

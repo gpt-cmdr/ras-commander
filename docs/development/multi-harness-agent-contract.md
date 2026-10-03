@@ -221,6 +221,35 @@ The repository should continue to satisfy these rules:
 
 - [AGENTS.md](https://github.com/gpt-cmdr/ras-commander/blob/main/AGENTS.md)
 - [CLAUDE.md](https://github.com/gpt-cmdr/ras-commander/blob/main/CLAUDE.md)
-- [agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md)
+- [Portable plugin packaging guidance](../../.claude/plugin/README.md)
 
 
+
+## Portable workflow distribution
+
+Selected shared skills can be assembled into a skills-only portable plugin with
+`python scripts/agent_framework/build_plugin.py --output <new-disposable-destination>`.
+The allowlist and independent plugin identity live in `.claude/plugin/package.json`.
+The generator bundles supporting files, follows transitive local Markdown references,
+rebases targets within the package, and records source/distribution hashes. Canonical
+instructions remain under `.claude/skills/`; generated distributions are artifacts.
+
+Shared API discovery and HMS–RAS integration policy reside in their domain skills,
+with thin native adapters for host delegation. Discover current installed/released
+contracts and required dependencies rather than relying on a model hierarchy, frozen
+signature table, drive path, or unsupported Task import.
+
+Importing a skill does not grant Python, local project access, engine installation,
+or subagent tool isolation. Project MCP remains bounded read-only text information;
+client configuration must expose it only to the child worker. Servers enforce the
+data/operation boundary separately. A client without child tool routing uses a scoped
+Python workflow or reports the limitation. No host-wide activation claim follows from
+packaging alone; demonstrate discovery, routing, bounded delegation, and handoff in
+that host before marketing the experience.
+
+Release maintenance records current stable PyPI metadata and proposes update PRs.
+It does not install into user environments, change pins, widen compatibility ranges,
+merge, or publish. Metadata observation is separate from minimum/latest contract and
+packaging qualification. See the repository `.claude/plugin/README.md` for assembly,
+refresh, host prerequisites, and GitHub Actions permission limits. Editorial standards
+apply to maintained repository/package instructions, not external user deliverables.

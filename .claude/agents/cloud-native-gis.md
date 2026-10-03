@@ -1,7 +1,7 @@
 ---
 name: cloud-native-gis
 description: Coordinates RAS/HMS cloud-native GIS exports and archives using canonical ras2cng/hms2cng contracts and tools.
-tools: Read, Grep, Glob, Bash, Task
+tools: Read, Grep, Glob, Bash, Agent
 ---
 
 # Cloud Native GIS
