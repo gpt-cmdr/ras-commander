@@ -83,18 +83,19 @@ plugins:
           - api/index.md
           - api/core.md
           - api/rasmapper/index.md
-          - api/rasmapper/layers.md
-          - api/rasmapper/display.md
-          - api/rasmapper/profiles.md
-          - api/rasmapper/stored-maps.md
-          - api/rasmapper/geometry-completion.md
-          - api/rasmapper/mesh-generation.md
+          - api/results-queries.md
+          - api/stored-maps.md
+          - api/meshing.md
           - api/hydrofabric.md
           - api/breakout-1d.md
           - api/breakout-2d.md
           - api/benefits.md
           - api/hdf.md
           - api/geometry.md
+          - api/terrain.md
+          - api/fixit.md
+          - api/dss.md
+          - api/remote.md
           - api/model-sources.md
   - mkdocstrings:
       default_handler: python
@@ -103,6 +104,8 @@ plugins:
           paths: [.]
           options:
             docstring_style: google
+            docstring_options:
+              returns_named_value: false
             show_source: true
             show_root_heading: true
             show_root_full_path: false
@@ -238,14 +241,10 @@ nav:
   - API Reference:
     - Overview: api/index.md
     - Core Classes: api/core.md
-    - RASMapper:
-      - Overview: api/rasmapper/index.md
-      - Layers and Associations: api/rasmapper/layers.md
-      - Display and Spatial Review: api/rasmapper/display.md
-      - Profiles and Reference Results: api/rasmapper/profiles.md
-      - Stored Maps: api/rasmapper/stored-maps.md
-      - Geometry Completion: api/rasmapper/geometry-completion.md
-      - Automated Mesh Generation: api/rasmapper/mesh-generation.md
+    - Meshing: api/meshing.md
+    - RASMapper: api/rasmapper/index.md
+    - Results Queries: api/results-queries.md
+    - Stored Maps: api/stored-maps.md
     - Hydrofabric Conflation: api/hydrofabric.md
     - 1D Breakout Extraction: api/breakout-1d.md
     - 2D Breakout Geometry Preparation: api/breakout-2d.md

@@ -75,6 +75,13 @@ docker = init_ras_worker(
 )
 ```
 
+### Exported worker stubs
+
+`SshWorker`, `WinrmWorker`, `SlurmWorker`, `AwsEc2Worker`, and `AzureFrWorker`
+are exported placeholders, not implemented worker backends. Installing their
+extras does not implement execution. The separate `RasSlurm` portable-request
+adapter below is implemented; do not confuse it with the `SlurmWorker` stub.
+
 ## Execution
 
 ### compute_parallel_remote
@@ -267,3 +274,236 @@ pip install ras-commander
 pip install ras-commander[remote-docker]
 pip install ras-commander[remote-all]
 ```
+
+## Complete source reference
+
+### init_ras_worker source reference
+
+::: ras_commander.remote.RasWorker.init_ras_worker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### load_workers_from_json source reference
+
+::: ras_commander.remote.RasWorker.load_workers_from_json
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### compute_parallel_remote source reference
+
+::: ras_commander.remote.Execution.compute_parallel_remote
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### get_worker_status source reference
+
+::: ras_commander.remote.Execution.get_worker_status
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### LocalWorker source reference
+
+::: ras_commander.remote.LocalWorker.LocalWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PsexecWorker source reference
+
+::: ras_commander.remote.PsexecWorker.PsexecWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### DockerWorker source reference
+
+::: ras_commander.remote.DockerWorker.DockerWorker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### ExecutionResult source reference
+
+::: ras_commander.remote.Execution.ExecutionResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PreprocessPolicy source reference
+
+::: ras_commander.remote.ExecutionContract.PreprocessPolicy
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasExecutionRequest source reference
+
+::: ras_commander.remote.ExecutionContract.RasExecutionRequest
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - create
+        - from_dict
+        - read
+        - resolve_paths
+        - to_dict
+        - write
+
+### RasExecutionReceipt source reference
+
+::: ras_commander.remote.ExecutionContract.RasExecutionReceipt
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - read
+        - to_dict
+        - write
+
+### StoredMapsRequest source reference
+
+::: ras_commander.remote.ExecutionContract.StoredMapsRequest
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - from_dict
+        - to_dict
+
+### validate_execution_receipt source reference
+
+::: ras_commander.remote.ExecutionContract.validate_execution_receipt
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### validate_steady_results source reference
+
+::: ras_commander.remote.PortableExecution.validate_steady_results
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### validate_unsteady_results source reference
+
+::: ras_commander.remote.PortableExecution.validate_unsteady_results
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasPortableDocker source reference
+
+::: ras_commander.remote.RasPortableDocker.RasPortableDocker
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - build_execute_command
+        - execute_pool
+        - execute_request
+
+### PortableDockerExecutionResult source reference
+
+::: ras_commander.remote.RasPortableDocker.PortableDockerExecutionResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### PortableDockerPoolResult source reference
+
+::: ras_commander.remote.RasPortableDocker.PortableDockerPoolResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasSlurm source reference
+
+::: ras_commander.RasSlurm.RasSlurm
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - cancel
+        - collect
+        - render_submission
+        - stage
+        - status
+        - submit
+        - submit_batch
+
+### SlurmSiteConfig source reference
+
+::: ras_commander.RasSlurm.SlurmSiteConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmTransportConfig source reference
+
+::: ras_commander.RasSlurm.SlurmTransportConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmSubmission source reference
+
+::: ras_commander.RasSlurm.SlurmSubmission
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - from_dict
+        - read
+        - to_dict
+        - write
+
+### SlurmStatus source reference
+
+::: ras_commander.RasSlurm.SlurmStatus
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmTaskAccounting source reference
+
+::: ras_commander.RasSlurm.SlurmTaskAccounting
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### SlurmCollection source reference
+
+::: ras_commander.RasSlurm.SlurmCollection
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false

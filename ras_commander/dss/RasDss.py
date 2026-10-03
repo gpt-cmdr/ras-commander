@@ -353,16 +353,16 @@ class RasDss:
             - ``dss_file``: Absolute DSS file path.
             - ``pathname``: Exact pathname requested.
             - ``data``: Two-dimensional ``float32`` array in row-major order.
-              The HEC grid no-data sentinel is represented as ``numpy.nan``.
+                The HEC grid no-data sentinel is represented as ``numpy.nan``.
             - ``shape``: ``(rows, columns)``.
             - ``units`` and ``data_type``: DSS parameter metadata.
             - ``grid_type``: ``"albers"``, ``"specified"``, ``"hrap"``, or
-              the runtime grid-info class name for another grid type.
+                the runtime grid-info class name for another grid type.
             - ``crs`` and ``cell_size``: Spatial reference and resolution.
             - ``start_time`` and ``end_time``: Naive ``pandas.Timestamp``
-              values parsed from pathname parts D and E when present.
+                values parsed from pathname parts D and E when present.
             - ``metadata``: Grid dimensions, cell indexes, origin/projection,
-              compression, type codes, missing-value count, and raw timing.
+                compression, type codes, missing-value count, and raw timing.
 
         Raises:
             FileNotFoundError: If ``dss_file`` does not exist.
@@ -638,7 +638,7 @@ class RasDss:
         Args:
             boundaries_df: DataFrame from ras.boundaries_df
             project_dir: Project directory (for resolving relative DSS paths)
-            ras_object: RasPrj object (alternative to project_dir)
+            ras_object (RasPrj, optional): RasPrj object (alternative to project_dir)
 
         Returns:
             Enhanced DataFrame with 'dss_timeseries' column containing extracted data
@@ -761,7 +761,7 @@ class RasDss:
             pathname: DSS pathname to validate
 
         Returns:
-            ValidationResult with detailed diagnostics
+            ValidationResult: Result with detailed diagnostics
 
         Example:
             >>> from ras_commander.dss import RasDss
@@ -874,7 +874,7 @@ class RasDss:
             dss_file: Path to DSS file (str or Path)
 
         Returns:
-            ValidationResult with file existence check outcome
+            ValidationResult: Result with file existence check outcome
 
         Example:
             >>> from pathlib import Path
@@ -952,7 +952,7 @@ class RasDss:
             pathname: DSS pathname to check
 
         Returns:
-            ValidationResult with existence check outcome
+            ValidationResult: Result with existence check outcome
 
         Example:
             >>> result = RasDss.check_pathname_exists(
@@ -1063,7 +1063,7 @@ class RasDss:
             expected_end: Expected end date (optional, datetime or string)
 
         Returns:
-            ValidationResult with data availability check outcome
+            ValidationResult: Result with data availability check outcome
 
         Example:
             >>> from datetime import datetime
@@ -1183,7 +1183,7 @@ class RasDss:
             end_date: Optional end date for availability check
 
         Returns:
-            ValidationReport with all validation results
+            ValidationReport: Result with all validation results
 
         Example:
             >>> report = RasDss.check_pathname(

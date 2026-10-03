@@ -1455,11 +1455,13 @@ class RasPrj:
             Path: The full path of the selected .prj file or None if no suitable file is found.
         
         Example:
+            ```python
             >>> project_file = RasPrj.find_ras_prj("/path/to/ras_project")
             >>> if project_file:
             ...     print(f"Found project file: {project_file}")
             ... else:
             ...     print("No project file found")
+            ```
         """
         from .RasUtils import RasUtils
         folder_path = Path(folder_path)
@@ -1495,8 +1497,10 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
 
         Example:
+            ```python
             >>> project_name = ras.get_project_name()
             >>> print(f"Working with project: {project_name}")
+            ```
         """
         self.check_initialized()
         return self.project_name
@@ -1517,8 +1521,10 @@ class RasPrj:
             IOError: If there's an error reading or writing the project file
 
         Example:
+            ```python
             >>> ras.set_current_plan("01")
             >>> # HEC-RAS will now open with plan 01 active
+            ```
         """
         self.check_initialized()
 
@@ -1587,10 +1593,12 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> # Get all geometry files in the project
             >>> geom_entries = ras.get_prj_entries('Geom')
             >>> print(f"Project contains {len(geom_entries)} geometry files")
         
+            ```
         Note:
             This is a generic method. For specific file types, use the dedicated methods:
             get_plan_entries(), get_flow_entries(), get_unsteady_entries(), get_geom_entries()
@@ -1614,11 +1622,13 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> plan_entries = ras.get_plan_entries()
             >>> print(f"Project contains {len(plan_entries)} plan files")
             >>> # Display the first plan's properties
             >>> if not plan_entries.empty:
             ...     print(plan_entries.iloc[0])
+            ```
         """
         self.check_initialized()
         entries = self._enrich_plan_dataframe(self._get_prj_entries('Plan'))
@@ -1639,11 +1649,13 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> flow_entries = ras.get_flow_entries()
             >>> print(f"Project contains {len(flow_entries)} flow files")
             >>> # Display the first flow file's properties
             >>> if not flow_entries.empty:
             ...     print(flow_entries.iloc[0])
+            ```
         """
         self.check_initialized()
         return self._get_prj_entries('Flow')
@@ -1663,11 +1675,13 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> unsteady_entries = ras.get_unsteady_entries()
             >>> print(f"Project contains {len(unsteady_entries)} unsteady flow files")
             >>> # Display the first unsteady file's properties
             >>> if not unsteady_entries.empty:
             ...     print(unsteady_entries.iloc[0])
+            ```
         """
         self.check_initialized()
         return self._get_prj_entries('Unsteady')
@@ -1712,6 +1726,7 @@ class RasPrj:
             (0 for counts, False for booleans, empty list for mesh_area_names).
 
         Example:
+            ```python
             >>> geom_entries = ras.get_geom_entries()
             >>> print(f"Project contains {len(geom_entries)} geometry files")
             >>> # Display the first geometry file's properties
@@ -1720,6 +1735,7 @@ class RasPrj:
             >>> # Filter to geometries with 2D mesh
             >>> mesh_geoms = geom_entries[geom_entries['has_2d_mesh']]
             >>> print(f"Found {len(mesh_geoms)} geometries with 2D mesh")
+            ```
         """
         self.check_initialized()
         geom_pattern = re.compile(r'Geom File=(\w+)')
@@ -1865,12 +1881,14 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> hdf_entries = ras.get_hdf_entries()
             >>> if hdf_entries.empty:
             ...     print("No computed results found. Run simulations first.")
             ... else:
             ...     print(f"Found results for {len(hdf_entries)} plans")
         
+            ```
         Note:
             This is useful for identifying which plans have been successfully computed
             and can be used for further results analysis.
@@ -1902,7 +1920,9 @@ class RasPrj:
             RuntimeError: If the project has not been initialized.
         
         Example:
+            ```python
             >>> ras.print_data()  # Displays complete project overview
+            ```
         """
         self.check_initialized()
         logger.debug(f"--- Data for {self.project_name} ---")
@@ -1952,6 +1972,7 @@ class RasPrj:
                               Returns an empty DataFrame if no unsteady flow files are present.
         
         Example:
+            ```python
             >>> boundaries = ras.get_boundary_conditions()
             >>> if not boundaries.empty:
             ...     print(f"Found {len(boundaries)} boundary conditions")
@@ -1959,6 +1980,7 @@ class RasPrj:
             ...     flow_hydrographs = boundaries[boundaries['bc_type'] == 'Flow Hydrograph']
             ...     print(f"Project has {len(flow_hydrographs)} flow hydrographs")
         
+            ```
         Note:
             To see unparsed boundary condition lines for debugging, set logging to DEBUG:
             import logging
@@ -2225,9 +2247,11 @@ class RasPrj:
             List[str]: List of plan number strings (e.g., ['01', '02'])
 
         Example:
+            ```python
             >>> ras = init_ras_project('/path/to/project', '6.6')
             >>> plans = ras.get_plans_with_results()
             >>> print(f"Plans with results: {plans}")
+            ```
         """
         self.check_initialized()
         return self.plan_df[
@@ -2242,8 +2266,10 @@ class RasPrj:
             List[str]: List of plan number strings
 
         Example:
+            ```python
             >>> plans_pending = ras.get_plans_without_results()
             >>> print(f"Plans needing execution: {plans_pending}")
+            ```
         """
         self.check_initialized()
         return self.plan_df[
@@ -2268,8 +2294,10 @@ class RasPrj:
             - flow_path: Path to flow file
 
         Example:
+            ```python
             >>> info = ras.get_plan_info('01')
             >>> print(f"Plan: {info['title']}, Has Results: {info['has_results']}")
+            ```
         """
         self.check_initialized()
 
@@ -2304,9 +2332,11 @@ class RasPrj:
             - geometry: Path to geometry HDF file (or None)
 
         Example:
+            ```python
             >>> paths = ras.get_hdf_paths('01')
             >>> if paths['results']:
             ...     data = HdfResultsPlan.get_runtime_data(paths['results'])
+            ```
         """
         self.check_initialized()
 
@@ -2344,10 +2374,12 @@ class RasPrj:
             pd.DataFrame: Updated results_df
 
         Example:
+            ```python
             >>> init_ras_project("path/to/project", "7.0")
             >>> ras.update_results_df(["01"])  # Update specific plan
             >>> ras.update_results_df()  # Update all plans
             >>> print(ras.results_df[['plan_number', 'completed', 'has_errors']])
+            ```
         """
         from ras_commander.ExecutionArtifacts import (
             ResultArtifactAmbiguityError,
@@ -2574,6 +2606,7 @@ def init_ras_project(
                     or if no HEC-RAS project file is found in the folder.
 
     Example:
+        ```python
         >>> # Initialize using project folder (existing behavior)
         >>> init_ras_project("/path/to/project", "7.0")
         >>> print(f"Initialized project: {ras.project_name}")
@@ -2588,6 +2621,7 @@ def init_ras_project(
         >>>
         >>> # Skip results loading for faster initialization
         >>> init_ras_project("/path/to/project", "7.0", load_results_summary=False)
+        ```
     """
     # Convert to Path object for consistent handling
     # Use safe_resolve to preserve drive letters on Windows mapped network drives

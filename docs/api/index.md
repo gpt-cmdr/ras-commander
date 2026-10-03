@@ -24,16 +24,14 @@ Primary classes for project management and execution:
 - [`RasProcess`](core.md#rasprocess) - RasProcess.exe CLI automation, stored maps, and native reference validators
 - [`RasControl`](core.md#rascontrol) - Legacy COM interface
 
-## RASMapper and Automated Mesh Generation
+<a id="rasmapper-and-automated-mesh-generation"></a>
 
-The [RASMapper reference](rasmapper/index.md) groups the spatial APIs by task:
+## Meshing and Spatial Operations
 
-- [Layers and associations](rasmapper/layers.md) — terrain, classifications, reference maps and geometry HDF associations
-- [Display and spatial review](rasmapper/display.md) — layer visibility, bounds, screenshots and review bundles
-- [Profiles and reference results](rasmapper/profiles.md) — offline sampling, native mapped profiles, recorded hydrographs and reference authoring
-- [Stored maps](rasmapper/stored-maps.md) — headless result export, profiles, timesteps and calculated layers
-- [Geometry completion](rasmapper/geometry-completion.md) — native geometry-derived layers and diagnostics
-- [Automated mesh generation](rasmapper/mesh-generation.md) — computation points, refinements, mesh repair and property tables
+- [Meshing](meshing.md) — generation, layout/cell diagnostics, containment, BC conflicts, repairs, and property tables
+- [RASMapper](rasmapper/index.md) — screenshots, map/geometry layers, display, associations, and geometry completion
+- [Results Queries](results-queries.md) — offline sampling, native profiles, and recorded reference hydrographs
+- [Stored Maps](stored-maps.md) — export existing results to raster products
 
 ## Benefits Analysis
 
@@ -98,7 +96,7 @@ Classes for parsing and authoring geometry files:
 - [`GeomBcLines`](geometry.md#geombclines) - 2D boundary condition line authoring
 - [`GeomLateral`](geometry.md#geomlateral) - Lateral structure parsing
 - [`GeomStorage`](geometry.md#geomstorage) - Storage area and 2D flow area writing
-- [`GeomLevee`](geometry.md#geomlevee) - Levee read/write
+- [Cross-section levees](geometry.md#cross-section-levees) - `GeomCrossSection` levee read/write
 - [`RasGeometryUtils`](geometry.md#rasgeometryutils) - Parsing utilities
 - [`GeomInlineWeir`, `GeomBridge`, and `GeomCulvert`](geometry.md#structure-apis) - Inline structures
 - [`RasBreach`](geometry.md#rasbreach) - Breach parameters
@@ -116,13 +114,13 @@ analysis:
 
 Automated geometry repair:
 
-- [`RasFixit`](fixit.md#rasfixit) - Fix blocked obstruction overlaps
+- [`RasFixit`](fixit.md#rasfixit) - Obstructions, HTAB starting elevations, bank stations, ineffective areas, and Manning’s n
 - [`FixResults`](fixit.md#fixresults) - Fix operation results
 - [`log_parser`](fixit.md#log-parser) - HEC-RAS log parsing for error detection
 
 ## DSS Modules
 
-Classes for reading DSS files:
+Classes for reading and writing DSS files:
 
 - [`RasDss`](dss.md#rasdss) - DSS file operations
 
@@ -138,7 +136,10 @@ Classes for distributed execution:
 
 ## Usage Pattern
 
-All primary classes use static methods:
+Most operation classes, such as `RasCmdr` and `HdfMesh`, are static namespaces.
+Call them directly. `RasPrj`, workers, result records, and configuration objects
+are instances; follow their constructors rather than applying this pattern to
+every exported type:
 
 ```python
 # No instantiation needed
@@ -155,7 +156,8 @@ RAS Commander uses two key decorators that affect method behavior:
 
 ### @standardize_input
 
-Automatically converts various input types to the correct HDF file path. This decorator is applied to all HDF methods.
+Automatically converts various input types to the correct HDF file path. Input support is method-specific; use the documented signature and decorator
+for the selected method. Some low-level readers require an explicit path.
 
 **Accepted Input Types:**
 
@@ -169,7 +171,7 @@ Automatically converts various input types to the correct HDF file path. This de
 
 **file_type Parameter:**
 
-```python
+```text
 @standardize_input(file_type='plan_hdf')  # Default - looks for .p##.hdf
 @standardize_input(file_type='geom_hdf')  # Looks for .g##.hdf
 @standardize_input(file_type='plan')      # Looks for .p## (plain text)
@@ -178,6 +180,7 @@ Automatically converts various input types to the correct HDF file path. This de
 **Usage Examples:**
 
 ```python
+from pathlib import Path
 from ras_commander import HdfResultsMesh, init_ras_project
 
 init_ras_project("/path/to/project", "6.5")

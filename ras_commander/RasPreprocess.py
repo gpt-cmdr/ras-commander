@@ -125,7 +125,7 @@ class RasPreprocess:
 
         Args:
             plan_number: Plan number to preprocess (e.g., "01", 1).
-            ras_object: Optional RasPrj instance. If None, uses global ras.
+            ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses global ras.
             max_wait: Maximum seconds to wait for preprocessing (default 300).
             clear_existing: Delete stale preprocessing files before running (default True).
             fix_line_endings: Convert .x file CRLF to LF for Linux (default True).
@@ -134,8 +134,8 @@ class RasPreprocess:
             PreprocessResult: Result with success flag, file paths, and timing.
                 Bool-compatible: ``if preprocess_plan("01"):`` works.
 
-        Raises:
-            No exceptions raised — errors are captured in PreprocessResult.error.
+        Note:
+            Errors are captured in PreprocessResult.error.
 
         Example:
             >>> result = RasPreprocess.preprocess_plan("01")
@@ -641,7 +641,7 @@ class RasPreprocess:
 
         Args:
             plan_number: Plan number (for example ``"06"``).
-            ras_object: Initialized :class:`RasPrj`; defaults to the global project.
+            ras_object (RasPrj, optional): Initialized :class:`RasPrj`; defaults to the global project.
             input_hdf_path: Optional explicit plan ``*.tmp.hdf`` input.
             x_file_path: Optional explicit project ``.x##`` file.
             executable_path: Optional explicit ``RasGeomPreprocess.exe`` path.
@@ -877,7 +877,7 @@ class RasPreprocess:
 
         Args:
             plan_number: Plan number to check (e.g., "01", 1).
-            ras_object: Optional RasPrj instance. If None, uses global ras.
+            ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses global ras.
 
         Returns:
             bool: True if all three files exist and are non-empty.

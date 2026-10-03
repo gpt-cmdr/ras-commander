@@ -310,7 +310,7 @@ from solver reference-area volume. Consult the
 [HEC reference-location definitions](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/latest/geometry-data/reference-locations)
 for the applicable cell/face aggregation rules.
 
-Continue with [the API reference](../api/rasmapper/profiles.md),
+Continue with [the API reference](../api/results-queries.md),
 [HDF extraction](hdf-data-extraction.md),
 [416 — 2D velocity profiles](../notebooks/416_2d_velocity_profile_line.md), and
-[stored maps](../api/rasmapper/stored-maps.md) for raster deliverables.
+[stored maps](../api/stored-maps.md) for raster deliverables.

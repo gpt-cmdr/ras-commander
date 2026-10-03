@@ -972,11 +972,11 @@ class GeomCulvert:
             - DownstreamInvert: Downstream invert elevation
             - DownstreamStation: Downstream station location
             - ChartNumber: Inlet control chart number (legacy alias of the
-              trailing record field; kept as an int for backward compatibility)
+                trailing record field; kept as an int for backward compatibility)
             - UsDistance: Structure US Distance (float) -- the offset of the
-              culvert's upstream face downstream of the upstream bounding cross
-              section. This is the trailing field of the plain-text record;
-              ``set_culverts`` preserves it. Do not treat it as the chart number.
+                culvert's upstream face downstream of the upstream bounding cross
+                section. This is the trailing field of the plain-text record;
+                ``set_culverts`` preserves it. Do not treat it as the chart number.
             - BottomN: Bottom Manning's n (if different)
             - NumBarrels: Number of barrels
 

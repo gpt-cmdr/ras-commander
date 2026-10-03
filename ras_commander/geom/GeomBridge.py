@@ -1802,11 +1802,11 @@ class GeomBridge:
         Returns:
             dict with keys:
             - low_flow_method: one of ``energy``, ``momentum``, ``yarnell``,
-              ``wspro`` or None if no method code is present
+                ``wspro`` or None if no method code is present
             - high_flow_method: ``energy`` or ``pressure_weir`` when available
             - enabled_low_flow_methods: per-method compute flags from BR Coef
             - coefficients: Momentum, Yarnell, pressure-flow, deck/weir, and
-              audit values
+                audit values
             - deck: parsed values from the ``Deck Dist Width WeirC`` record
             - wspro: named WSPRO fields, or None if no WSPro record exists
             - raw: original method records and comma fields for audit
@@ -2276,9 +2276,11 @@ class GeomBridge:
             ValueError: If structure not found
 
         Example:
+            ```python
             >>> htab = GeomBridge.get_htab("model.g08", "River", "Reach", "25548")
             >>> hw_max = htab[htab['Parameter'] == 'HWMax']['Value'].values[0]
             >>> print(f"HW Max: {hw_max}")
+            ```
         """
         geom_file = Path(geom_file)
 
@@ -2410,7 +2412,7 @@ class GeomBridge:
             - Returns None for missing parameters (doesn't raise errors)
             - The 'invert' key contains the minimum LowChord value from deck geometry
             - This can be used to calculate optimal HWMax with safety factors:
-              optimal_hw_max = invert + (max_observed_depth * safety_factor)
+                optimal_hw_max = invert + (max_observed_depth * safety_factor)
         """
         geom_file = Path(geom_file)
 
@@ -3562,7 +3564,7 @@ class GeomBridge:
             - Structures without existing HTAB lines get new lines inserted
             - Structures with existing HTAB lines have values replaced
             - Uses single file read/write cycle for efficiency (faster than calling
-              set_htab() for each structure individually)
+                set_htab() for each structure individually)
 
         Example:
             >>> # Double existing HWMax/MaxFlow values and set optimal curve points
@@ -3798,7 +3800,7 @@ class GeomBridge:
             submerged_curves: Number of submerged curves (default 60, optimal 60)
             points_per_curve: Points per submerged curve (default 50, optimal 50)
             validate: If True, validate parameters before writing (default: True)
-            ras_object: RasPrj object for multi-project workflows
+            ras_object (RasPrj, optional): RasPrj object for multi-project workflows
 
         Returns:
             dict: Parameters applied with keys:
@@ -4003,7 +4005,7 @@ class GeomBridge:
             points_per_curve: Points per submerged curve (optimal 50)
             create_backup: Whether to create a .bak backup before modification (default True).
                           Set to False when called from an orchestrator that manages its own backup.
-            ras_object: RasPrj object for multi-project workflows
+            ras_object (RasPrj, optional): RasPrj object for multi-project workflows
 
         Returns:
             dict: Summary with keys:

@@ -136,7 +136,7 @@ class GeomPreprocessor:
 
         Args:
             plan_number: Plan number or path to a plan file.
-            ras_object: Optional RasPrj instance. If None, uses the global ras.
+            ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses the global ras.
             max_wait: Maximum seconds to wait for preprocessing.
             force: If True, set ``Run HTab=-1`` and
                 ``UNET Use Existing IB Tables=-1`` before running.
@@ -1298,7 +1298,7 @@ class GeomPreprocessor:
             plan_files (Union[str, Path, List[Union[str, Path]]], optional):
                 Full path(s) to the HEC-RAS plan file(s) (.p*).
                 If None, clears all plan files in the project directory.
-            ras_object: An optional RAS object instance.
+            ras_object (RasPrj, optional): An optional RAS object instance.
 
         Returns:
             None: The function deletes files and updates the ras object's geometry dataframe

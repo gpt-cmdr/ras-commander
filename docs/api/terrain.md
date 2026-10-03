@@ -398,3 +398,116 @@ Notebooks 316, 920, 930, and 931 include freshly executed review outputs and
 figures for their bounded terrain workflows. Notebook 612 retains its coherent
 previously computed hydraulic outputs and four final maps; its four hydraulic
 simulations were deliberately not rerun for this terrain-export change.
+
+## Complete source reference
+
+The sections above explain common operations. The source-derived reference below
+includes the remaining public methods and their full signatures. Method-specific
+prerequisites and return contracts take precedence over abbreviated summaries.
+
+### RasTerrain source reference
+
+::: ras_commander.terrain.RasTerrain.RasTerrain
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compute_bank_lines
+        - compute_xs_interpolation_surface
+        - create_terrain_from_rasters
+        - create_terrain_hdf
+        - export_rasmapper_terrain
+        - get_available_versions
+        - profile_vrt_to_tiff
+        - vrt_to_tiff
+
+### Usgs3depAws source reference
+
+::: ras_commander.terrain.Usgs3depAws.Usgs3depAws
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - build_terrain_raster
+        - create_vrt
+        - download_tile_index
+        - download_tiles
+        - find_tiles_for_bbox
+        - list_projects_for_bbox
+        - plan_terrain_tiles
+        - prefetch_terrain_tiles
+        - query_tiles_api
+        - select_projects_for_coverage
+
+### TerrainBuildError source reference
+
+::: ras_commander.terrain.Usgs3depAws.TerrainBuildError
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### RasTerrainMod source reference
+
+::: ras_commander.terrain.RasTerrainMod.RasTerrainMod
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compare_terrain_profiles
+        - compare_terrain_volumes
+        - compute_modified_terrain_raster
+        - get_terrain_extent
+        - get_terrain_profile
+        - get_terrain_volume_elevation
+        - setup_gdal_bridge
+
+### RasTerrainModification source reference
+
+::: ras_commander.terrain.RasTerrainModWriter.RasTerrainModification
+    options:
+      inherited_members: true
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_channel_modification
+        - add_fill_surface_modification
+        - add_high_ground_modification
+        - add_modification_group
+        - add_modification_polygon
+        - apply_modification_to_profile
+        - compare_before_after_profiles
+        - get_modification_profile
+        - list_modifications
+        - sample_modification_surface
+
+### RasTerrainModWriter source reference
+
+::: ras_commander.terrain.RasTerrainModWriter.RasTerrainModWriter
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_channel_modification
+        - add_fill_surface_modification
+        - add_high_ground_modification
+        - add_modification_group
+        - add_modification_polygon
+        - apply_modification_to_profile
+        - compare_before_after_profiles
+        - get_modification_profile
+        - list_modifications
+        - sample_modification_surface
+
+### TerrainExportResult source reference
+
+::: ras_commander.ComputeResults.TerrainExportResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false

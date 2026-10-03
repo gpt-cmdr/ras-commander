@@ -279,7 +279,7 @@ class HdfResultsSediment:
 
         Returns:
             GeoDataFrame: Columns ``mesh_name, cell_id, d<NN>_mm, surface_area, geometry``
-            (grain diameters are always mm regardless of the model unit system).
+                Grain diameters are always mm regardless of the model unit system.
         """
         pct = percentile.upper()
         if pct not in ("D10", "D50", "D90"):

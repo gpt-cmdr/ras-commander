@@ -152,7 +152,7 @@ class RasTerrain:
                 or forward-open 7.1. The existing ``6.4`` installation alias resolves to
                 6.4.1. When omitted, use the exact runtime recorded by
                 ``ras_object``.
-            ras_object: Optional initialized project object for multi-project
+            ras_object (RasPrj, optional): Optional initialized project object for multi-project
                 and runtime-version context. Its ``ras_version`` is checked
                 before filesystem or native work; an unsupported version or a
                 conflict with ``hecras_version`` raises ``ValueError``.
@@ -519,9 +519,9 @@ class RasTerrain:
         Parameters:
             geom_path (Union[str, Path]): Path to a plain-text `.g##` geometry
                 file or compiled `.g##.hdf` geometry HDF file.
-            crs: Optional CRS to assign to the returned GeoDataFrame. If omitted
+            crs (pyproj.CRS or str, optional): Optional CRS to assign to the returned GeoDataFrame. If omitted
                 and an HDF input exposes a CRS, that CRS is preserved.
-            ras_object: Optional RasPrj instance for multi-project workflows.
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project workflows.
 
         Returns:
             geopandas.GeoDataFrame: Bank lines with columns:
@@ -1444,12 +1444,12 @@ class RasTerrain:
             raster_cell_size: Cell size in project units. Required when
                 ``output_raster`` is provided. If provided without
                 ``output_raster``, an in-memory raster array is returned.
-            crs: Optional CRS override. Plain geometry files otherwise try to
+            crs (pyproj.CRS or str, optional): Optional CRS override. Plain geometry files otherwise try to
                 resolve CRS from the sibling geometry HDF/RASMapper projection.
             channel_only: If True, clip/interpolate between left and right
                 bank stations or RAS bank lines. If False, use full XS extents.
             nodata: NoData value for raster output.
-            ras_object: Optional RasPrj instance for project context.
+            ras_object (RasPrj, optional): Optional RasPrj instance for project context.
 
         Returns:
             dict: Contains ``points``, ``triangles``, ``channel_polygon``,
@@ -2090,15 +2090,15 @@ class RasTerrain:
 
         Notes:
             - The RasProcess.exe command requires all paths to be quoted
-              due to spaces in "Program Files".
+                due to spaces in "Program Files".
             - Input rasters are processed in order - first raster has
-              priority in overlapping areas.
+                priority in overlapping areas.
             - The output folder will be created automatically if it doesn't
-              exist.
+                exist.
             - Verified working with HEC-RAS 6.6 (tested 2025-12-25).
             - Threading applies only to GDAL operations that support
-              ``GDAL_NUM_THREADS``; serial HEC-RAS terrain-HDF stages remain
-              serial.
+                ``GDAL_NUM_THREADS``; serial HEC-RAS terrain-HDF stages remain
+                serial.
         """
         # Convert to Path objects. Resolve to ABSOLUTE paths: RasProcess.exe runs with
         # cwd=hecras_path (so HEC's bundled GDAL/PROJ resolve correctly), which means any

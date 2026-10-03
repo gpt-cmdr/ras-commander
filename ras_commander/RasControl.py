@@ -1963,7 +1963,7 @@ class RasControl:
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
-            ras_object: Optional RasPrj instance (uses global ras if None)
+            ras_object (RasPrj, optional): Optional RasPrj instance (uses global ras if None)
             force_recompute: If False (default), checks if results are current
                 before running. If results are up-to-date, skips computation.
                 If True, always runs the plan regardless of current status.
@@ -2979,7 +2979,7 @@ class RasControl:
             **Note on data types:**
 
             - String columns (`river`, `reach`, `node_id`, `profile`) are decoded
-              from COM byte strings and stripped of whitespace
+                from COM byte strings and stripped of whitespace
             - Numeric columns are float64
             - Units depend on project settings (US customary or SI)
 
@@ -3256,8 +3256,10 @@ class RasControl:
 
         To separate "Max WS" from time series data:
 
+        ```python
         >>> df_max = df[df['time_string'] == 'Max WS']
         >>> df_timeseries = df[df['datetime'].notna()]  # Excludes Max WS (has NaT)
+        ```
 
         **New in v0.81.0:**
 
@@ -3275,6 +3277,7 @@ class RasControl:
         --------
         Extract and plot time series at a cross section:
 
+        ```python
         >>> from ras_commander import init_ras_project, RasControl
         >>> import matplotlib.pyplot as plt
         >>>
@@ -3294,13 +3297,16 @@ class RasControl:
         >>> plt.ylabel('WSE (ft)')
         >>> plt.legend()
         >>> plt.show()
+        ```
 
         Filter to specific time range using datetime column:
 
+        ```python
         >>> import pandas as pd
         >>> start = pd.Timestamp('1999-02-18')
         >>> end = pd.Timestamp('1999-02-20')
         >>> filtered = df_ts[(df_ts['datetime'] >= start) & (df_ts['datetime'] <= end)]
+        ```
 
         See Also
         --------
@@ -3461,7 +3467,7 @@ class RasControl:
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
-            ras_object: Optional RasPrj instance (uses global ras if None)
+            ras_object (RasPrj, optional): Optional RasPrj instance (uses global ras if None)
 
         Returns:
             List of time strings (e.g., ["01JAN2000 0000", ...])
@@ -3499,7 +3505,7 @@ class RasControl:
 
         Args:
             plan: Plan number or path to .prj file
-            ras_object: Optional RasPrj instance
+            ras_object (RasPrj, optional): Optional RasPrj instance
 
         Returns:
             List of dicts with 'name' and 'filename' keys
@@ -3532,7 +3538,7 @@ class RasControl:
 
         Args:
             plan: Plan number ("01", "02") or path to .prj file
-            ras_object: Optional RasPrj instance
+            ras_object (RasPrj, optional): Optional RasPrj instance
 
         Returns:
             True if successful
@@ -3679,7 +3685,7 @@ class RasControl:
             plan: Plan number ("01", "02"), project .prj path, or exact
                 .p## / .p##.hdf path. Direct plan/HDF paths resolve only adjacent
                 files and do not require an initialized project or HEC-RAS.
-            ras_object: Optional RasPrj instance (uses global ras if None)
+            ras_object (RasPrj, optional): Optional RasPrj instance (uses global ras if None)
 
         Returns:
             String containing computation messages, or empty string if unavailable

@@ -726,7 +726,7 @@ class GeomParser:
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file (.g##)
-            ras_object: Optional RasPrj instance (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance (unused, for API consistency)
 
         Returns:
             gpd.GeoDataFrame: DataFrame with columns: river, reach, station,
@@ -913,8 +913,8 @@ class GeomParser:
 
         Parameters:
             geom_file: Path to the plain-text HEC-RAS geometry file (``.g##``).
-            ras_object: Optional RasPrj instance used for CRS context.
-            crs: Optional CRS assigned to the returned GeoDataFrame. When omitted,
+            ras_object (RasPrj, optional): Optional RasPrj instance used for CRS context.
+            crs (pyproj.CRS or str, optional): Optional CRS assigned to the returned GeoDataFrame. When omitted,
                 ``ras_object.project_crs`` is used if available.
             dissolve: Return one combined footprint row when True; otherwise
                 return one row per river/reach.
@@ -1045,7 +1045,7 @@ class GeomParser:
 
         Parameters:
             geom_file (Union[str, Path]): Path to geometry file (.g##)
-            ras_object: Optional RasPrj instance (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance (unused, for API consistency)
 
         Returns:
             gpd.GeoDataFrame: DataFrame with columns: river, reach,

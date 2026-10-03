@@ -337,164 +337,18 @@ back to normal-to-line orientation unless `orientation_fallback="raise"` is set.
 
 ## GeomMesh
 
-The [automated mesh generation reference](rasmapper/mesh-generation.md) provides
-the workflow stages, source-derived signatures and result records. The detailed
-version and repair notes below remain applicable.
+See [Meshing: Generation, Diagnostics and Repair](meshing.md) for the complete
+method reference, runtime matrix, diagnostics, and repair evidence.
 
-Headless 2D mesh generation helpers and compiled geometry HDF refinement-region
-utilities.
+<a id="domain-and-mesh-methods"></a>
+<a id="hec-ras-version-support-for-headless-mesh-generation"></a>
+<a id="hec-ras-refinement-region-caveats"></a>
+<a id="refinement-region-methods"></a>
 
-### Domain and Mesh Methods
-
-- `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
-- `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
-
-When the existing automatic-repair loop removes perimeter vertices or applies
-Douglas–Peucker simplification, `generate()` writes the repaired perimeter through
-`GeomStorage.set_2d_flow_area_perimeter(create_backup=True)`, regenerates initial
-computation points, and runs `GeomPreprocessor.run_geometry_preprocessor()` with
-`geometry_only=True`, `force=True`, and `clear_geompre=True`. Supply an initialized
-`ras_object` with a plan referencing that geometry. Work on a disposable project
-copy: repair changes the geometry text and compiled HDF. The loop reloads the HDF,
-checks text/HDF consistency and feature containment, then retries within
-`max_iterations`. `recompile_via_rasexe` still controls the initial missing/stale
-HDF refresh; it is not required for this automatic repair handoff.
-
-`MeshResult.perimeter_repairs` contains one record per persisted repair: `reason`,
-`original_perimeter_hash`, `repaired_perimeter_hash`, `max_vertex_displacement`,
-`area_change`, and `backup_path`. SHA-256 hashes cover ordered closed XY rings as
-compact JSON floating-point pairs, using actual persisted coordinates after
-writer rounding. Displacement is the maximum vertex-to-opposite-boundary distance
-in both directions, in project length units; signed area change is repaired minus
-original polygon area in squared project units. CRS and units remain those of the
-project. Evidence is logged before preprocessing so failures remain traceable.
-Failed repair handoffs and retries raise `RuntimeError` chained to the original
-mesh repair reason, including iteration exhaustion. Ordinary failures before any
-repair retain the existing `MeshResult` behavior. These records describe geometry
-changes; they do not establish hydraulic acceptance.
-- `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations. A missing or broken land-cover link emits a non-fatal warning because HEC-RAS may still return success while populating every cell with the 2D area's scalar default.
-
-Before property-table generation, use
-`RasMap.list_geometry_associations()` to inspect every compiled geometry and
-`RasMap.validate_geometry_associations()` to require the exact terrain and
-land-cover paths needed by the workflow. Registration in `.rasmap` does not
-prove that a geometry HDF is associated. After preprocessing, validate the
-temporary plan HDF; after computation, repeat the check on the final plan HDF
-with `HdfLandCover.audit_final_mannings_n()` and explicit cell-center criteria.
-
-### HEC-RAS Version Support for Headless Mesh Generation
-
-`GeomMesh.generate()` and `GeomMesh.compute_property_tables()` support
-**HEC-RAS 6.0 through 7.0.1**, including the 6.7 betas. They run RASMapper's own
-mesh engine (`RasMapperLib.dll`) from the HEC-RAS installation they load, so
-each release produces its own RASMapper result.
-
-| HEC-RAS | Headless mesh generation | Notes |
-|---|---|---|
-| 6.6, 6.7 Beta 4, 6.7 Beta 5, 7.0, 7.0.1 | Supported | Full retry ladder, including minimum face-length ratio escalation. |
-| 6.3 – 6.5 | Supported | No minimum face-length ratio escalation (see below). |
-| 6.0 – 6.2 | Supported | As above. Preprocessing needs every land-cover, infiltration, and sediment file the geometry references (see below). |
-
-**Why older releases need different calls.** Two RasMapperLib members changed
-their parameters between releases, and `generate()` adapts to whichever form
-the loaded release has:
-
-| RasMapperLib member | 6.0 – 6.2 | 6.3 – 6.3.1 | 6.4.1 – 6.5 | 6.6 and later |
-|---|---|---|---|---|
-| `MeshFV2D(perimeter, points, breaklines, progress, ...)` constructor | 4 parameters | 4 | 4 | 5 (adds `minFaceLengthRatio`) |
-| `PointGenerator.RegenerateMeshPoints` (breakline-aware seeding) | 4 parameters | 6 (adds progress reporters) | 7 (adds `treatInactiveAsNotPresent`) | 7 |
-| `RASD2FlowArea.CreatePropertyTables` (used by `compute_property_tables`) | 3 parameters | 4 (adds per-task reporters) | 4 | 4 |
-
-Before 6.6, `MeshFV2D` has no minimum face-length ratio, so `generate()` skips
-the ratio-escalation step of its retry ladder. A mesh that 6.6 completes only
-after raising the ratio can therefore fail on 6.0 – 6.5; the other retry steps
-still apply.
-
-**Known limitations.**
-
-- **HEC-RAS 6.0 – 6.2 and missing referenced files.** If a land-cover,
-  infiltration, or sediment file referenced by the geometry is missing,
-  HEC-RAS 6.0 – 6.2 skip the geometry during preprocessing without an error,
-  and the plan HDF has no 2D mesh. With these releases,
-  `RasPreprocess.preprocess_plan()` checks for the files first and fails,
-  naming each missing file, instead of reporting success. HEC-RAS 6.3 and
-  later preprocess the mesh anyway, so the check does not apply to them.
-- **Property-table values differ by release.** `compute_property_tables()`
-  writes tables on every supported release, but HEC-RAS changed its
-  property-table computation over time. Values from 6.0 – 6.3.1 differ from
-  6.4.1 and later, which match each other.
-- **Terms and Conditions for Use.** A release must have its TCU accepted for
-  the current user before `Ras.exe` can preprocess headlessly.
-
-**Selecting the HEC-RAS version.** Without `hecras_dir`, `generate()` loads the
-newest installed release it finds (7.0.1, 7.0, 6.6, 6.7 Beta 5, then 6.5 down
-to 6.0), regardless of the project's version. Pass `hecras_dir` to pin the
-release. Only one RasMapperLib version can be loaded per Python process.
-
-**Linux / Wine.** The same behavior applies under Wine
-(`rascommander/hec-ras-wine-precompute_{version}` images). Loading
-RasMapperLib there also requires the `C:\Python311\GDAL` link to the HEC-RAS
-`GDAL` folder, prepared from the Linux side.
-
-**How refinement regions were tested.** A region-only A/B test uses the real
-`RasExamples` Chippewa_2D project: a 200-ft base mesh (357 cells), followed by a
-1,600-ft-square refinement region requesting 40-ft spacing. RAS Mapper must
-reload the authored region before regeneration, the refined mesh must contain
-2,118 cells, and median nearest-neighbor spacing inside the region must be
-40 ft. Native Windows produced the same result on every locally installed 6.x
-runtime: 6.0, 6.1, 6.2, 6.3, 6.3.1, 6.5, 6.6, and 6.7 Beta 5. A 6.4/6.4.1
-installation was not available for this qualification. The private
-`RegenerateMeshPoints` API was also reflected independently in each process:
-`activeRegions` is parameter 2 in every tested release; only the documented
-trailing argument count changes.
-
-HEC-RAS 6.6 was also qualified under Wine 11.0 on CLB07 using the pinned
-`rascommander/hec-ras-wine-precompute_6.6` runtime. Both the RAS Mapper
-product-layer writer and the native-schema fallback produced 2,118 generated
-computation points (also the HDF `Cell Count`), 2,209 compiled cell-center
-rows, 4,376 faces, and 1,600 centers inside the region at exactly 40-ft median
-nearest-neighbor spacing; outside-region spacing was 122.327 ft. The run used
-an isolated writable prefix and the Linux-side `C:\Python311\GDAL` link noted
-above.
-
-### HEC-RAS Refinement-Region Caveats
-
-- **Independent Y spacing is not implemented by HEC-RAS.** RAS Mapper stores
-  both X and Y spacing, but the 6.6 Mapper manual labels Cell Spacing Y as
-  "not implemented yet." `spacing_dy` is preserved for schema fidelity; do
-  not interpret a different Y value as verified anisotropic refinement.
-- **HEC-RAS 6.2 GUI row reordering.** HEC documented that reordering the
-  Refinement Region Editor table could create duplicate regions and deleting
-  those duplicates could crash. The documented workaround was the feature
-  `Send...` command; HEC lists the defect as fixed in 6.3. ras-commander does
-  not drive that GUI reorder path.
-- **HEC-RAS 6.4 breakline interactions.** HEC fixed lost properties after
-  splitting breaklines, incorrect one-cell protection-radius behavior when
-  breakline/region inclusion was disabled, and some breaklines that failed to
-  enforce. Prefer 6.4 or later for models combining these behaviors.
-- **HEC-RAS 6.6 perimeter-loss symptom.** HEC documented exceptional cases in
-  which a 2D perimeter disappeared and the mesh stopped updating or selecting.
-  Product-backed authoring therefore backs up the geometry HDF and requires a
-  fresh RAS Mapper reload before reporting success.
-- **HEC-RAS 6.7 betas.** Beta 2/3 had an initial mesh-recompute
-  "Unknown Error"/arithmetic-overflow issue. Beta 5 passes the region-only
-  qualification above, but a stable release is preferable for production.
-
-See HEC's official [6.2 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/6.2),
-[6.3 fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.3/resolved-issues),
-[6.4 fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/6.4/resolved-issues),
-[6.6 known issues](https://www.hec.usace.army.mil/confluence/rasdocs/raski/6.6),
-[7.0's archived beta fixes](https://www.hec.usace.army.mil/confluence/rasdocs/rasrn/7.0/resolved-issues),
-and the [6.6 Mapper manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/geometry-data/2d-flow-areas).
-
-### Refinement Region Methods
-
-- `add_refinement_region(geom_number, polygon, spacing_dx, ...)` - Add one refinement polygon through RAS Mapper on Windows/Wine, with backup and product-reload verification. The portable fallback writes the complete native nine-field HDF record and semantic polygon metadata.
-- `add_flowline_refinement_regions(geom_number, flowlines, buffer_width, ...)` - Buffer GeoDataFrame or LineString channel flowlines into refinement-region polygons, optionally simplify/trim them, write them through `add_refinement_region()`, and return FID/name/spacing mappings.
-- `replace_refinement_regions(geom_number, regions, expected_existing_names=..., ...)` - Atomically replace or remove the complete HDF refinement-region collection, with an optional optimistic-concurrency guard.
-- `get_refinement_regions(geom_number)` - Read refinement-region FID, name, and spacing values from a compiled geometry HDF.
-- `set_refinement_region_spacing(geom_number, spacing_dx, ...)` - Update spacing for one or more existing refinement regions.
-- `set_refinement_region_name(geom_number, new_name, ...)` - Rename an existing refinement region.
+The [repair contract](meshing.md#repair-persistence-and-failure-contract),
+[version support](meshing.md#hec-ras-version-support-for-headless-mesh-generation),
+and [refinement caveats](meshing.md#hec-ras-refinement-region-caveats) retain the
+existing qualification and failure limits.
 
 ## Structure APIs
 
@@ -772,14 +626,19 @@ Exact RAS Mapper geometry import and legacy mesh-regeneration GUI workflows.
 - `regenerate_mesh(geom_number=..., geometry_name=..., flow_area_name=..., ras_object=..., ...)` - Open/save and validate an already-current exact geometry and compiled mesh.
 - `regenerate_mesh_iterative(...)` - Legacy retry workflow; exact geometry selectors are supported and no first-registration fallback is used.
 
-## GeomLevee
+<a id="geomlevee"></a>
+
+## Cross-section levees
+
+`GeomLevee` is not a public class. Use `GeomCrossSection.get_levees()` and
+`GeomCrossSection.set_levees()`; their full contracts appear below.
 
 Levee station-elevation parsing and modification.
 
 ### Methods
 
-- `get_levees(geom_file, river=None, reach=None, rs=None)` - Read levee data for cross sections
-- `set_levees(geom_file, river, reach, rs, levee_data)` - Write levee station-elevation data
+- `GeomCrossSection.get_levees(...)` - Read left/right levee points; unset points are NaN
+- `GeomCrossSection.set_levees(...)` - Write explicitly selected left/right station and elevation values
 
 ## RasBreach
 
@@ -829,3 +688,449 @@ RasBreach.set_breach_geom(
     weir_coefficient=2.6,
 )
 ```
+
+## Complete source reference
+
+The sections above explain common operations. The source-derived reference below
+includes the remaining public methods and their full signatures. Method-specific
+prerequisites and return contracts take precedence over abbreviated summaries.
+
+### GeomParser source reference
+
+::: ras_commander.geom.GeomParser.GeomParser
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - create_backup
+        - extract_comma_list
+        - extract_keyword_value
+        - extract_river_reach
+        - format_fixed_width
+        - get_1d_footprint
+        - get_geom_title
+        - get_river_centerlines
+        - get_xs_cut_lines
+        - identify_section
+        - interpret_count
+        - parse_fixed_width
+        - rollback_geometry
+        - safe_write_geometry
+        - set_geom_title
+        - update_timestamp
+        - validate_river_reach_rs
+
+### GeomPreprocessor source reference
+
+::: ras_commander.geom.GeomPreprocessor.GeomPreprocessor
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - clear_geompre_files
+        - clear_geompre_hdf
+        - invalidate_legacy_geometry_hdf_preprocessor_cache
+        - run_geometry_preprocessor
+
+### GeomLandCover source reference
+
+::: ras_commander.geom.GeomLandCover.GeomLandCover
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_base_mannings_n
+        - get_region_mannings_n
+        - override_2d_mannings_n
+        - replace_base_mannings_n
+        - set_base_mannings_n
+        - set_mannings_region_polygons
+        - set_region_mannings_n
+
+### ManningsFromLandCover source reference
+
+::: ras_commander.geom.ManningsFromLandCover.ManningsFromLandCover
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - assign
+        - default_landcover_classification_table
+        - default_mannings_table
+        - preview
+
+### GeomCrossSection source reference
+
+::: ras_commander.geom.GeomCrossSection.GeomCrossSection
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - build_cross_section
+        - format_blocked_obstructions
+        - get_bank_stations
+        - get_blocked_obstructions
+        - get_cross_sections
+        - get_expansion_contraction
+        - get_ineffective_flow
+        - get_levees
+        - get_mannings_n
+        - get_station_elevation
+        - get_xs_coords
+        - get_xs_htab_params
+        - interpolate_cross_section
+        - interpolate_station_elevation
+        - optimize_xs_htab_from_results
+        - parse_blocked_obstructions
+        - set_all_xs_htab_params
+        - set_bank_stations
+        - set_blocked_obstructions
+        - set_expansion_contraction
+        - set_ineffective_flow
+        - set_levees
+        - set_mannings_n
+        - set_station_elevation
+        - set_xs_htab_params
+        - validate_blocked_obstructions_hdf
+
+### CrossSectionBankStations source reference
+
+::: ras_commander.geom.GeomCrossSection.CrossSectionBankStations
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### CrossSectionBuildInput source reference
+
+::: ras_commander.geom.GeomCrossSection.CrossSectionBuildInput
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### CrossSectionBuildResult source reference
+
+::: ras_commander.geom.GeomCrossSection.CrossSectionBuildResult
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### CrossSectionManningsN source reference
+
+::: ras_commander.geom.GeomCrossSection.CrossSectionManningsN
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### CrossSectionReachLengths source reference
+
+::: ras_commander.geom.GeomCrossSection.CrossSectionReachLengths
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+
+### GeomStorage source reference
+
+::: ras_commander.geom.GeomStorage.GeomStorage
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - clip_2d_flow_area
+        - get_2d_flow_area_settings
+        - get_elevation_volume
+        - get_storage_area_polygons
+        - get_storage_areas
+        - repair_viewing_rectangle_from_2d_areas
+        - replace_breaklines
+        - set_2d_flow_area_perimeter
+        - set_2d_flow_area_settings
+        - set_breaklines
+        - set_elevation_volume
+
+### GeomProjection source reference
+
+::: ras_commander.geom.GeomProjection.GeomProjection
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - reproject_geometry
+        - reproject_model_geometry
+
+### GeomLateral source reference
+
+::: ras_commander.geom.GeomLateral.GeomLateral
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - classify_connections
+        - delete_connection
+        - get_bridge_approach_xs
+        - get_bridge_data
+        - get_bridge_deck
+        - get_bridge_piers
+        - get_bridge_xs
+        - get_connection_culverts
+        - get_connection_data
+        - get_connection_gates
+        - get_connection_line_coords
+        - get_connection_profile
+        - get_connections
+        - get_lateral_structures
+        - get_weir_profile
+        - set_bridge_approach_xs
+        - set_bridge_coefficients
+        - set_bridge_deck
+        - set_bridge_piers
+        - set_bridge_xs
+        - set_connection
+        - set_connection_culverts
+        - set_connection_gates
+        - set_connection_profile
+        - set_connection_profile_from_terrain
+        - write_connection_data
+
+### GeomInlineWeir source reference
+
+::: ras_commander.geom.GeomInlineWeir.GeomInlineWeir
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_gates
+        - get_profile
+        - get_weirs
+
+### GeomBridge source reference
+
+::: ras_commander.geom.GeomBridge.GeomBridge
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_abutment
+        - get_approach_sections
+        - get_bridge_opening_xs
+        - get_bridges
+        - get_coefficients
+        - get_deck
+        - get_htab
+        - get_htab_dict
+        - get_hydraulic_methods
+        - get_piers
+        - optimize_all_structures_from_results
+        - optimize_htab_from_results
+        - set_abutments
+        - set_all_structures_htab
+        - set_approach_sections
+        - set_coefficients
+        - set_deck
+        - set_htab
+        - set_hydraulic_methods
+        - set_piers
+
+### GeomCulvert source reference
+
+::: ras_commander.geom.GeomCulvert.GeomCulvert
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_adjacent_cross_sections
+        - get_all
+        - get_culverts
+        - set_adjacent_ineffective_flow
+        - set_culvert
+        - set_culverts
+
+### GeomCulvertGIS source reference
+
+::: ras_commander.geom.GeomCulvertGIS.GeomCulvertGIS
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - mesh_cell_min_from_terrain
+        - reconstruct_barrels
+        - validate_2d_inverts
+        - validate_placement
+
+### GeomHtabUtils source reference
+
+::: ras_commander.geom.GeomHtabUtils.GeomHtabUtils
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - calculate_optimal_structure_htab
+        - calculate_optimal_xs_htab
+        - get_structure_htab_defaults
+        - get_xs_htab_defaults
+        - validate_structure_htab_params
+        - validate_xs_htab_params
+
+### GeomHtab source reference
+
+::: ras_commander.geom.GeomHtab.GeomHtab
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_optimization_report
+        - optimize_all_htab_from_results
+        - optimize_structures_htab_from_results
+        - optimize_xs_htab_from_results
+
+### GeomMetadata source reference
+
+::: ras_commander.geom.GeomMetadata.GeomMetadata
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_geometry_counts
+
+### GeomReferenceFeatures source reference
+
+::: ras_commander.geom.GeomReferenceFeatures.GeomReferenceFeatures
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_reference_lines
+        - add_reference_lines_from_longitudinal_line
+        - add_reference_points
+        - generate_reference_lines_from_longitudinal_line
+        - get_reference_lines
+        - get_reference_points
+        - replace_reference_lines
+
+### GeomBcLines source reference
+
+::: ras_commander.geom.GeomBcLines.GeomBcLines
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - add_bc_lines
+        - delete_bc_line
+        - rename_bc_line
+        - replace_bc_lines
+
+### GeomPipeNetwork source reference
+
+::: ras_commander.geom.GeomPipeNetwork.GeomPipeNetwork
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - set_conduit_dimensions
+        - set_pump_group_hq_curve
+
+
+### RasGeometry source reference
+
+::: ras_commander.RasGeometry.RasGeometry
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_bank_stations
+        - get_connection_gates
+        - get_connection_weir_profile
+        - get_connections
+        - get_cross_sections
+        - get_expansion_contraction
+        - get_lateral_structures
+        - get_lateral_weir_profile
+        - get_mannings_n
+        - get_station_elevation
+        - get_storage_areas
+        - get_storage_elevation_volume
+        - interpolate_cross_section
+        - interpolate_station_elevation
+        - set_bank_stations
+        - set_connection_weir_profile
+        - set_expansion_contraction
+        - set_station_elevation
+
+
+### RasGeometryUtils source reference
+
+::: ras_commander.RasGeometryUtils.RasGeometryUtils
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - create_backup
+        - extract_comma_list
+        - extract_keyword_value
+        - format_fixed_width
+        - identify_section
+        - interpret_count
+        - parse_fixed_width
+        - update_timestamp
+        - validate_river_reach_rs
+
+
+### RasBreach source reference
+
+::: ras_commander.RasBreach.RasBreach
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - create_breach_block
+        - list_breach_structures_plan
+        - read_breach_block
+        - set_breach_geom
+        - update_breach_block
+
+
+### RasCrossSections source reference
+
+::: ras_commander.RasCrossSections.RasCrossSections
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_points
+
+
+### VerticalTransform source reference
+
+::: ras_commander.RasCrossSections.VerticalTransform
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - apply
