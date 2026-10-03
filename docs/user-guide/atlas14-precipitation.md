@@ -1,6 +1,6 @@
 # Atlas 14 Precipitation
 
-NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides four hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
+NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides five single-location hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
 
 ## Overview
 
@@ -11,7 +11,7 @@ Atlas 14 is the authoritative source for precipitation frequency estimates, used
 - Dam breach inundation studies (PMF, 0.2% AEP)
 - Sensitivity analysis across multiple AEP events
 
-**Important**: ras-commander hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values.
+**Important**: The pattern-based hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values. `FrequencyStormDdf` instead takes a cumulative depth-duration vector and preserves its 24-hour total, optionally reduced by an explicit TP-40 area factor.
 
 Verify Atlas 14 depths at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
@@ -62,7 +62,8 @@ if ATLAS14_AVAILABLE:
 | Method | HMS Equivalent | Depth Conservation | Durations | Best For |
 |--------|----------------|-------------------|-----------|----------|
 | **Atlas14Storm** | YES (10^-6) | Exact | 6h, 12h, 24h, 96h | Modern Atlas 14, regulatory submittals |
-| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | TP-40 legacy data, variable duration, 48hr gap |
+| **FrequencyStormDdf** | Bounded record agreement | Point or reduced total | 24h / 5min | Depth-duration inputs, 50%/67% placement, optional TP-40 reduction |
+| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | Fixed TP-40 temporal pattern, variable duration, 48hr gap |
 | **ScsTypeStorm** | YES (10^-6) | Exact | 24hr only | SCS Type I/IA/II/III distributions |
 | **StormGenerator** | NO | Exact | Any | Flexible peak positioning (0-100%) |
 
@@ -71,12 +72,15 @@ if ATLAS14_AVAILABLE:
 ```
 Need precipitation hyetograph for HEC-RAS?
 |
-+- Need HMS-equivalent results?
++- Have cumulative depth-duration inputs (24h / 5min)?
+|  --> Use FrequencyStormDdf (50%/67%; optional TP-40 area reduction)
+|
++- Need HMS-equivalent temporal patterns?
 |  |
 |  +- Modern Atlas 14 (6h, 12h, 24h, or 96h)?
 |  |  --> Use Atlas14Storm
 |  |
-|  +- TP-40 or variable duration (6-48hr, including 48hr)?
+|  +- Fixed TP-40 pattern or variable duration (6-48hr, including 48hr)?
 |  |  --> Use FrequencyStorm
 |  |
 |  +- SCS Type I/IA/II/III (24hr only)?
@@ -93,7 +97,7 @@ Need precipitation hyetograph for HEC-RAS?
 **Duration coverage**:
 - 6h: Atlas14Storm or FrequencyStorm
 - 12h: Atlas14Storm or FrequencyStorm
-- 24h: Atlas14Storm, FrequencyStorm, or ScsTypeStorm
+- 24h: Atlas14Storm, FrequencyStorm, FrequencyStormDdf, or ScsTypeStorm
 - 48h: FrequencyStorm only
 - 96h: Atlas14Storm only
 
@@ -526,8 +530,10 @@ point total. Attributes record the point/areal totals, area, factors, knot mode,
 placement and actual peak indices. Annual/partial-duration conversion and TP-49
 durations are outside this interface.
 
-Validation includes seven event vectors, 436 additional no-reduction vectors,
-and 174 area-reduced vectors, all with 288 wet-window intervals. Maximum observed
+Validation includes seven publicly shipped event vectors and private comparisons
+against 436 additional no-reduction vectors and 174 area-reduced vectors, all
+with 288 wet-window intervals. Those additional source vectors are not distributed
+with this repository; the public regression subset includes six neutral fixtures. Maximum observed
 interval differences are below 2.5e-14 inches. Neutral regression fixtures retain
 independently read values or complete-vector digests; no reduction factor was
 fitted to a delivered total. These comparisons establish bounded numerical

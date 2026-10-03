@@ -49,8 +49,8 @@ class FrequencyStormDdf:
         duration order, left first, without globally sorting.
         That ordering matches the delivered data even at DDF slope changes.
 
-        The five-minute central block occupies 12:00–12:05 (zero-based interval
-        index 144). Output includes one zero-depth start row, followed by
+        At 50% placement, the peak block occupies 12:00–12:05 (zero-based
+        interval index 144); at 67%, it occupies 16:00–16:05 (index 192). Output includes one zero-depth start row, followed by
         interval-end ordinates. Optional dry intervals extend the series
         beyond 24 hours; no wet depth is rescaled.
 
