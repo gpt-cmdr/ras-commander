@@ -1,392 +1,49 @@
-# Subagents - Specialist Agent Definitions
+# Claude agent adapters
 
-This directory contains definitions for specialist agents that handle specific domains within ras-commander workflows.
+This directory contains Claude-native delegation roles. Shared workflow contracts live in the
+`AGENTS.md` hierarchy and approved shared skills. Codex uses those contracts and its native worker
+mechanisms; it does not assume these Claude agent definitions are automatically registered.
 
-## What are Subagents?
+## Entry points
 
-**Subagents** are AI assistants spawned by the main agent (Opus orchestrator) to handle specialized tasks. They:
-- **Inherit context automatically** through Claude loader files that import the shared `AGENTS.md` hierarchy
-- **Use specific models** optimized for their role (Sonnet for specialists, Haiku for quick tasks)
-- **Access skills** just like the main agent
-- **Work in focused directories** to get relevant context
+| Role | Canonical workflow | Purpose |
+|---|---|---|
+| [ras-commander](ras-commander.md) | [RAS Commander skill](../skills/ras-commander/SKILL.md) | “Just Ask for RAS Commander” task intake and routing |
+| [cloud-native-gis](cloud-native-gis.md) | [Cloud Native GIS skill](../skills/cloud-native-gis/SKILL.md) | RAS/HMS GIS/archive/export using current package contracts |
+| [hecras-general-agent](hecras-general-agent.md) | Same RAS Commander skill | Existing-name compatibility for inspect/plan/execute/analyze requests |
 
-## Three-Tier Architecture
+HMS intake lives in the HMS repository's shared `hms-commander` skill. Cross-model tasks load that
+repository's actual guidance when available; the RAS entry point does not duplicate HMS policy.
 
-```
-Main Agent (Opus)
-├─ High-level planning and delegation
-├─ Loads: Root CLAUDE.md loader -> AGENTS.md + .claude/rules/**
-└─ Spawns specialist agents when needed
+## Discover specialists
 
-Specialist Subagents (Sonnet)
-├─ Domain expertise (HDF, geometry, remote, USGS)
-├─ Inherit: Claude loader chain for the shared AGENTS.md contract
-├─ Use: Library skills + domain skills
-└─ Spawn task agents (Haiku) for quick ops
+Use [.claude/MANIFEST.md](../MANIFEST.md) for the component registry and relationships. Read the
+selected role's definition and the applicable shared contract. Do not infer available tools or
+supported APIs from a historical example or a model-name category.
 
-Task Subagents (Haiku)
-├─ Fast, focused operations
-├─ Single-file reads, simple transforms
-└─ Cost-effective bulk operations
-```
+Specialists include project inspection, results/HDF analysis, geometry, precipitation, USGS,
+remote execution, QA, API discovery, documentation, and knowledge maintenance. Load only the
+roles needed for the task. Existing specialists are not all migrated thin adapters; audit their
+references and tool declarations when maintaining them.
 
-## Implemented Subagents
+## Delegate bounded work
 
-### Domain Specialists (Sonnet)
-- **hdf-analyst** - HDF file analysis, results extraction
-- **geometry-parser** - Geometry file parsing, cross-section analysis
-- **usgs-integrator** - USGS gauge data integration and validation
-- **remote-executor** - Distributed HEC-RAS execution
-- **precipitation-specialist** - AORC and Atlas 14 workflows
-- **quality-assurance** - RasFixit geometry repair
-- **rasmapper-spatial-reviewer** - RASMapper spatial QA screenshots and contextual review
-- **win32com-automation-expert** - COM automation, GUI interaction
-- **ras-commander-api-expert** - API integration, dataframe structures, spawns explore subagents
-- **api-consistency-auditor** - Enforces API conventions, detects pattern violations
+Give a worker a focused question, authorized project root, versions, allowed operations, relevant
+shared guidance, and expected evidence/artifacts. Assign exclusive files for concurrent edits and
+preserve others' work. Use the configured model appropriate to the task; this directory imposes
+no universal model hierarchy, cost ratio, or automatic provider escalation.
 
-### HEC-RAS Operations System (Sonnet)
-- **hecras-project-inspector** - Project intelligence, DataFrame analysis, execution readiness
-- **hecras-results-analyst** - Results interpretation, quality assessment, anomaly detection
-- **hecras-general-agent** - Thin coordinator for inspect→plan→execute→analyze workflows
+RAS/HMS project MCP tools belong only to bounded read-only informational subagents with
+non-spatial/non-gridded outputs. The main coordinator receives a concise answer with provenance,
+limits, and blockers. Heavy or modifying workflows use the full Python libraries. If subagent MCP
+tool exposure is unavailable, follow the shared workflow's Python handoff or report the limitation.
 
-### Knowledge Management (Opus)
-- **hierarchical-knowledge-agent-skill-memory-curator** - Knowledge organization, structural reasoning
+## Maintain adapters
 
-### Utility Agents (Sonnet)
-- **documentation-generator** - Example notebooks and API docs
-- **example-notebook-librarian** - Notebook management
-- **python-environment-manager** - Environment setup
-- **git-operations** - Git workflows
-- **notebook-runner** - Notebook execution
-- **hecras-notebook-qaqc** - Notebook-driven project linkage QA/QC
+Keep native wrappers thin and place behavior that both harnesses need in shared skills or AGENTS.
+Preserve existing role names when changing routing; record migrations in the manifest. Agent files
+can be root-level Markdown definitions or existing folder-based roles; consult the current harness
+requirements before introducing a new layout. Do not copy a workflow policy into a second role.
 
-### Review Agents (Haiku)
-- **notebook-output-auditor** - Review notebook outputs for errors
-- **notebook-anomaly-spotter** - Detect anomalies in results
-- **conversation-index-scanner** - Pattern matching in conversations
-- **slash-command-finder** - File pattern searching
-- **claude-code-guide** - Documentation lookup
-- **hec-hms-documentation-scout** - Documentation review
-
-### Analysis Agents (Mixed)
-- **conversation-deep-researcher** - Deep analysis (Opus)
-- **best-practice-extractor** - Pattern extraction (Sonnet)
-- **blocker-detector** - Problem identification (Sonnet)
-
-## Agent File Organization
-
-### Two Acceptable Patterns
-
-Agents may be organized using **either** of these patterns:
-
-**Pattern 1: Root-Level Single File** (17 agents):
-```
-.claude/agents/
-├── hdf-analyst.md
-├── geometry-parser.md
-└── usgs-integrator.md
-```
-
-**Pattern 2: Subdirectory with SUBAGENT.md** (9 agents):
-```
-.claude/agents/
-├── git-operations/
-│   └── SUBAGENT.md
-├── python-environment-manager/
-│   └── SUBAGENT.md
-└── win32com-automation-expert/
-    └── SUBAGENT.md
-```
-
-**When to use each**:
-- **Root-level** (`{name}.md`): Simple agents, single file suffices
-- **Subdirectory** (`{name}/SUBAGENT.md`): Agents that may need supporting files (fixtures, test data)
-
-**Both patterns are valid** and documented in `.claude/rules/documentation/hierarchical-knowledge-best-practices.md`.
-
-### Unauthorized Subdirectories
-
-**ONLY 2 agents are permitted to have reference/ subdirectories**:
-
-1. **hierarchical-knowledge-agent-skill-memory-curator/reference/** - Meta-knowledge about the hierarchical system
-2. **claude-code-guide/reference/** - Cached official Anthropic documentation
-
-**All other subdirectories are prohibited**:
-- ❌ NO `researchers/` folders (research artifacts belong in `agent_tasks/.old/`)
-- ❌ NO `examples/` folders (examples belong in `examples/` root or notebooks)
-- ❌ NO `reference/` folders (except 2 documented exceptions)
-- ❌ NO task artifacts (REFACTOR_SUMMARY.md, COMPLETION_SUMMARY.md)
-
-**Rationale**: Agents are **lightweight navigators** (200-400 lines), not documentation repositories. They point to primary sources, not duplicate them.
-
-### File Size Guidelines
-
-**Target**: 200-400 lines per agent file
-
-**Current exceptions** (agents >600 lines, may need review):
-- `code-oracle-codex.md` (963 lines) - Complex CLI integration
-- `code-oracle-gemini.md` (914 lines) - Complex CLI integration
-- `win32com-automation-expert.md` (714 lines) - COM automation patterns
-- `hecras-code-archaeologist.md` (644 lines) - Assembly analysis patterns
-- `git-operations/SUBAGENT.md` (629 lines) - Git workflow patterns
-
-**Note**: These agents handle complex integrations that may justify larger size. However, they should be reviewed for potential duplication of primary sources.
-
-## Subagent Definition Format
-
-```yaml
----
-name: hdf-analyst
-description: |
-  Expert in HEC-RAS HDF file analysis. Extracts results, handles both steady
-  and unsteady plans, processes breach data, and generates hydraulic tables.
-  Use when analyzing HDF files, extracting water surface elevations, or
-  processing model results.
-model: sonnet
-tools: Read, Grep, Bash, Write
-skills: hecras_extract_results
-working_directory: ras_commander/hdf
----
-
-# HDF Analyst Subagent
-
-You are an expert in HEC-RAS HDF file operations.
-
-## Automatic Context Inheritance
-
-When working in `ras_commander/hdf/`, you automatically inherit:
-1. Root `CLAUDE.md` loader, which imports root `AGENTS.md`
-2. `ras_commander/CLAUDE.md` loader, which imports `ras_commander/AGENTS.md`
-3. `ras_commander/hdf/CLAUDE.md` loader, which imports `ras_commander/hdf/AGENTS.md`
-4. .claude/rules/hec-ras/hdf-files.md (detailed HDF guidance)
-
-## Your Expertise
-
-- HdfResultsPlan API for steady and unsteady results
-- Conditional workflows (detect steady vs unsteady)
-- Breach results extraction
-- Hydraulic table generation from preprocessed geometry
-
-## Available Skills
-
-You have access to the `hecras_extract_results` skill which provides:
-- Complete API reference
-- Steady vs unsteady detection patterns
-- Example workflows
-- Common pitfalls and solutions
-
-## Delegation
-
-For quick file reads or simple operations, you can spawn Haiku task agents.
-```
-
-## Context Inheritance Example
-
-When `geometry-parser` subagent works in `ras_commander/geom/`:
-
-```
-Automatic Context Loading:
-1. /CLAUDE.md -> /AGENTS.md (root)
-   → "Use static classes, test with HEC-RAS examples"
-
-2. /ras_commander/CLAUDE.md -> /ras_commander/AGENTS.md (library)
-   → "Module organization, common patterns"
-
-3. /ras_commander/geom/CLAUDE.md -> /ras_commander/geom/AGENTS.md (geometry)
-   → "Fixed-width parsing, bank station interpolation, 450-point limit"
-
-Result: Subagent has full context WITHOUT manual passing!
-```
-
-## Creating Subagent Definitions
-
-1. **Choose domain**: Identify specialized area (HDF, geometry, remote, etc.)
-2. **Select model**: Sonnet for specialists, Haiku for simple tasks
-3. **Specify tools**: Limit to necessary tools for security
-4. **Assign skills**: Which skills should auto-load?
-5. **Set working directory**: Where should the subagent operate?
-6. **Write description**: Include trigger keywords for delegation
-
-## Guidelines
-
-- **One domain per subagent**: Don't mix unrelated expertise
-- **Specify default model**: See Model Selection Framework below
-- **Minimal tool sets**: Only grant necessary permissions
-- **Clear triggers**: Help main agent know when to delegate
-- **Trust context inheritance**: Don't duplicate `AGENTS.md` or source-code contracts
-
-## Model Selection Framework
-
-### Model Capabilities
-
-| Model | Intelligence | Speed | Cost | Best For |
-|-------|-------------|-------|------|----------|
-| **Opus 4.5** | Highest | Slower | $$$ | Complex reasoning, architecture, multi-domain analysis |
-| **Sonnet 4.5** | High | Medium | $$ | Domain specialists, code generation, structured analysis |
-| **Haiku 4.5** | Moderate | Fast | $ | Long context review, pattern matching, log analysis |
-
-### Model Assignment by Task Type
-
-**Use Haiku** for:
-- Reviewing notebook outputs for errors/anomalies
-- Scanning logs and compute messages
-- Pattern matching in large files
-- Documentation lookup
-- Simple file scanning and indexing
-
-**Use Sonnet** for:
-- Domain specialists (HDF, geometry, USGS, remote execution)
-- Code generation and modification
-- Multi-step workflows with clear instructions
-- Analysis requiring domain knowledge
-- Documentation generation
-
-**Use Opus** for:
-- Complex multi-domain reasoning
-- Architecture decisions
-- Tasks where Sonnet struggled (escalation)
-- Orchestration requiring full context
-- Novel problem-solving
-
-### Subagent Model Assignments
-
-| Subagent | Default | Rationale |
-|----------|---------|-----------|
-| **hdf-analyst** | Sonnet | Domain specialist, structured HDF analysis |
-| **geometry-parser** | Sonnet | Domain specialist, fixed-width parsing expertise |
-| **usgs-integrator** | Sonnet | Domain specialist, multi-step workflows |
-| **remote-executor** | Sonnet | Domain specialist, complex configuration |
-| **quality-assurance** | Sonnet | Domain specialist, RasFixit patterns |
-| **rasmapper-spatial-reviewer** | Sonnet | Domain specialist, RASMapper spatial QA/QC |
-| **precipitation-specialist** | Sonnet | Domain specialist, AORC/Atlas 14 workflows |
-| **hecras-project-inspector** | Sonnet | Project analysis, DataFrame inspection |
-| **hecras-results-analyst** | Sonnet | Results interpretation, quality assessment |
-| **hecras-general-agent** | Sonnet | Thin coordinator, workflow orchestration |
-| **documentation-generator** | Sonnet | Content generation, code examples |
-| **example-notebook-librarian** | Sonnet | Notebook management, modifications |
-| **python-environment-manager** | Sonnet | Environment setup, troubleshooting |
-| **git-operations** | Sonnet | Git workflows, conflict resolution |
-| **win32com-automation-expert** | Sonnet | COM automation, GUI interaction |
-| **ras-commander-api-expert** | Sonnet | API integration, dataframe structures, spawns Haiku subagents |
-| **api-consistency-auditor** | Sonnet | API pattern enforcement, violation detection, fix suggestions |
-| **hierarchical-knowledge-agent-skill-memory-curator** | Opus | Knowledge organization, complex reasoning about structure |
-| **notebook-output-auditor** | Haiku | Long context review, output validation |
-| **notebook-anomaly-spotter** | Haiku | Pattern detection in outputs |
-| **notebook-runner** | Sonnet | Execution management, error handling |
-| **conversation-index-scanner** | Haiku | Pattern matching in conversations |
-| **slash-command-finder** | Haiku | File pattern searching |
-| **claude-code-guide** | Haiku | Documentation lookup |
-| **hec-hms-documentation-scout** | Haiku | Documentation review |
-| **best-practice-extractor** | Sonnet | Analysis, pattern extraction |
-| **blocker-detector** | Sonnet | Analysis, problem identification |
-| **conversation-deep-researcher** | Opus | Deep analysis, complex reasoning |
-
-### Escalation Pattern
-
-**Orchestrator should escalate models when**:
-
-1. **Subagent doesn't understand task** → Re-invoke with clearer instructions + higher model
-2. **Output is incomplete or wrong** → Escalate Haiku → Sonnet → Opus
-3. **Task is more complex than expected** → Use `model="opus"` override
-4. **Multiple domains involved** → Consider handling directly as orchestrator
-
-**Example escalation**:
-```python
-# First attempt with default (Haiku)
-result = Task(subagent_type="notebook-output-auditor", prompt="Review outputs...")
-
-# If result is insufficient, escalate to Sonnet
-result = Task(subagent_type="notebook-output-auditor", model="sonnet",
-              prompt="[More detailed instructions]...")
-
-# For complex analysis, use Opus
-result = Task(subagent_type="notebook-output-auditor", model="opus",
-              prompt="[Comprehensive analysis with reasoning required]...")
-```
-
-### Cost Optimization
-
-**Optimize by defaulting to cheaper models**:
-- Long context tasks → Haiku (75x cheaper than Opus)
-- Routine domain work → Sonnet (10x cheaper than Opus)
-- Complex reasoning → Opus (use sparingly)
-
-**Batch similar tasks**:
-- Multiple file reviews → Single Haiku agent with file list
-- Multiple domain analyses → Parallel Sonnet agents
-
-## Critical: Markdown Output Pattern
-
-**All subagents MUST write markdown files and return file paths to the main agent.**
-
-```
-Subagent receives task
-    ↓
-Subagent performs work
-    ↓
-Subagent writes markdown to .claude/outputs/{subagent}/{date}-{task}.md
-    ↓
-Subagent returns file path to main agent
-    ↓
-Main agent reads file as needed
-```
-
-**Why This Pattern**:
-- **Persistence**: Text returns vanish when session ends; files survive
-- **Filterable**: Main agent reads only what's needed
-- **Consolidation**: Hierarchical knowledge agent organizes and prunes
-- **Audit Trail**: All work products traceable and reviewable
-- **Non-Destructive**: Outdated files move to `.old/`, never auto-deleted
-
-**Output Location**: `.claude/outputs/{subagent-name}/`
-
-**File Naming**: `{date}-{subagent}-{task-description}.md`
-
-**Example**:
-```
-.claude/outputs/hdf-analyst/2025-12-15-breach-results-analysis.md
-```
-
-**See**: `.claude/rules/subagent-output-pattern.md` for complete documentation
-
-## Delegation Decision Tree
-
-Main agent uses this logic to decide when to spawn agents:
-
-```
-User Request
-├─ Full HEC-RAS workflow? → hecras-general-agent (Sonnet)
-│   └─ Coordinates: inspect → plan → execute → analyze
-├─ Project analysis/inspection? → hecras-project-inspector (Sonnet)
-│   └─ Uses: DataFrame analysis, execution readiness
-├─ Results interpretation? → hecras-results-analyst (Sonnet)
-│   └─ Uses: hecras_parse_compute-messages, hecras_extract_results skills
-├─ HDF data extraction? → hdf-analyst (Sonnet)
-│   └─ Uses: hecras_extract_results skill
-├─ Geometry file parsing? → geometry-parser (Sonnet)
-│   └─ Uses: hecras_parse_geometry skill
-├─ USGS data integration? → usgs-integrator (Sonnet)
-│   └─ Uses: usgs_integrate_gauges skill
-├─ Simple file read/grep? → quick-reader (Haiku)
-│   └─ Fast, cost-effective
-└─ Complex orchestration? → Handle directly (Opus)
-    └─ Multi-domain coordination
-```
-
-## Benefits
-
-1. **Cost optimization**: Use expensive models only where needed
-2. **Automatic specialization**: Folder context = domain expertise
-3. **Parallel execution**: Multiple agents work concurrently
-4. **Clear boundaries**: Each subagent has defined scope
-
-## Cross-References
-
-**Index files**:
-- `.claude/MANIFEST.md` -- Central registry mapping all agents to related skills, rules, and commands
-- `.claude/skills/README.md` -- Skill catalog (agents invoke skills for workflow patterns)
-- `.claude/rules/README.md` -- Rule organization (rules auto-load context for agents)
-
-**Governance**:
-- `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Lightweight navigator pattern
-- `.claude/rules/subagent-output-pattern.md` -- Subagent markdown output convention
+The entry-point definitions establish routing instructions. Demonstrate actual discovery and
+activation in each supported harness before claiming a packaged plugin experience.

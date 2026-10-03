@@ -17,6 +17,19 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 ## Domain Groups
 
+### Commander Entry Points
+
+| Component | Type | Path |
+|-----------|------|------|
+| `ras-commander` | shared skill | `.claude/skills/ras-commander/SKILL.md` |
+| `cloud-native-gis` | shared skill | `.claude/skills/cloud-native-gis/SKILL.md` |
+| `ras-commander` | Claude adapter | `.claude/agents/ras-commander.md` |
+| `cloud-native-gis` | Claude adapter | `.claude/agents/cloud-native-gis.md` |
+
+Canonical routing and release/MCP boundaries live in the shared skills. The legacy
+`hecras-general-agent` forwards to the RAS Commander skill. HMS intake lives in the HMS
+repository's `hms-commander` skill; GIS resolves canonical ras2cng/hms2cng guidance on demand.
+
 ### HEC-RAS Execution
 
 | Component | Type | Path |
@@ -246,6 +259,13 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 ---
 
 ## Relationship Map
+
+### Commander Intake
+
+`ras-commander` → current RAS specialists/skills, `cloud-native-gis`, or canonical HMS intake.
+Claude `ras-commander` and `hecras-general-agent` → shared `ras-commander` skill.
+Claude `cloud-native-gis` → shared `cloud-native-gis` skill → current ras2cng/hms2cng contracts.
+Project MCP → bounded read-only informational subagent; heavier work → public Python APIs.
 
 ### Technical Writing Domain
 
