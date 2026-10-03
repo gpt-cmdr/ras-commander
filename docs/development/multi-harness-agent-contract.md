@@ -221,7 +221,7 @@ The repository should continue to satisfy these rules:
 
 - [AGENTS.md](https://github.com/gpt-cmdr/ras-commander/blob/main/AGENTS.md)
 - [CLAUDE.md](https://github.com/gpt-cmdr/ras-commander/blob/main/CLAUDE.md)
-- [Portable plugin packaging guidance](../../.claude/plugin/README.md)
+- [Portable plugin packaging guidance](https://github.com/gpt-cmdr/ras-commander/blob/main/.claude/plugin/README.md)
 
 
 
