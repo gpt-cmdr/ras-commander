@@ -261,6 +261,21 @@ def test_missing_keys_are_inserted_outside_description(tmp_path):
     assert RasPlan.get_hdf_output_variables(plan, ras_object=dummy) == ["Face Flow"]
 
 
+def test_insertion_after_unterminated_final_line(tmp_path):
+    plan = tmp_path / "P.p01"
+    plan.write_text("Plan Title=T\nFlow File=u01\nHDF Compression= 1 ", encoding="utf-8")
+    dummy = _DummyRas()
+
+    assert RasPlan.set_hdf_write_parameters(plan, chunk_size_mb=2, ras_object=dummy)
+    assert RasPlan.add_hdf_output_variable(plan, "Face Flow", ras_object=dummy)
+
+    text = plan.read_text(encoding="utf-8")
+    assert "HDF Compression= 1 HDF" not in text
+    assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["effective"]["level"] == 1
+    assert RasPlan.get_hdf_write_parameters(plan, ras_object=dummy)["chunk_size_mb"] == 2
+    assert RasPlan.get_hdf_output_variables(plan, ras_object=dummy) == ["Face Flow"]
+
+
 def test_duplicate_interval_and_hdf_keys_use_first_value_and_update_all(tmp_path):
     plan = tmp_path / "P.p01"
     plan.write_text(

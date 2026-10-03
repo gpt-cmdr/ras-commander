@@ -3401,6 +3401,12 @@ class RasPlan:
         return str(value)
 
     @staticmethod
+    def _terminate_line_before(lines: List[str], index: int) -> None:
+        """Ensure the line before ``index`` ends with a newline before inserting."""
+        if 0 < index <= len(lines) and not lines[index - 1].endswith(("\n", "\r")):
+            lines[index - 1] += "\n"
+
+    @staticmethod
     def _find_hdf_insert_index(lines: List[str]) -> int:
         """
         Find a stable, Description-aware insertion point for HDF write parameters.
@@ -3930,6 +3936,7 @@ class RasPlan:
                     plan_key = RasPlan.HDF_WRITE_PARAMETER_KEYS[api_key]
                     value = RasPlan._format_hdf_parameter_value(requested[api_key])
                     new_lines.append(f"{plan_key}= {value} \n")
+                RasPlan._terminate_line_before(lines, insert_index)
                 lines[insert_index:insert_index] = new_lines
 
             if lines == original_lines:
@@ -4305,6 +4312,7 @@ class RasPlan:
             insert_index = RasPlan._find_hdf_insert_index(lines)
 
             # Insert the new variable
+            RasPlan._terminate_line_before(lines, insert_index)
             lines.insert(insert_index, f"{target_line}\n")
 
             # Write the updated content back to the file
