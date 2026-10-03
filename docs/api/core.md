@@ -71,6 +71,20 @@ assuming every file beside a project is required by the current plan.
 The shallow `project` depth initializes project tables without opening HDF or
 raster datasets for geometry metadata or CRS discovery.
 
+Relative references accept both slash styles, with paired quotes removed.
+Native absolute paths resolve on their host; Windows drive/UNC anchors cannot
+be mapped on POSIX. Unresolved Windows anchors retain
+raw-reference inventory evidence with null local paths and file facts.
+The shared RASMapper resolver preserves foreign references as lexical paths
+without a project-folder prefix; these are not native host resolutions.
+Inventory diagnoses both structured and raw references before reading file facts.
+Resolved `%NAME%` and host `$NAME`/`${NAME}` variables
+expand from the current environment. Unresolved environment-variable handling
+retains legacy lexical behavior and is outside this host-anchor contract.
+See the [inventory reason codes](../reference/dataframe-reference.md#project-asset-inventory).
+Finding a terrain file leaves its readiness `unknown` until its plan dependency
+is established; path resolution alone does not establish hydraulic acceptance.
+
 ```python
 from ras_commander import inspect_project_assets
 
