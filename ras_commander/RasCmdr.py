@@ -384,7 +384,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number (e.g., "01", 1)
-            ras_object: RasPrj instance
+            ras_object (RasPrj, optional): RasPrj instance
 
         Returns:
             Path to the expected HDF file
@@ -411,7 +411,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number or an existing ``.p##`` plan path.
-            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+            ras_object (RasPrj, optional): Explicit initialized :class:`RasPrj`. Uses the package
                 global project only when omitted.
             result_modified_after: Optional timezone-aware filesystem
                 timestamp threshold. This is not a full RAS input-currency
@@ -450,7 +450,7 @@ class RasCmdr:
                 ``"both"``. This names the result family to remove.
             include_message_sidecars: Also remove the plan's exact
                 ``.comp_msgs.txt``, ``.computeMsgs.txt``, and ``.bco##`` files.
-            ras_object: Explicit initialized :class:`RasPrj`. Uses the package
+            ras_object (RasPrj, optional): Explicit initialized :class:`RasPrj`. Uses the package
                 global project only when omitted.
 
         Returns:
@@ -2922,7 +2922,7 @@ class RasCmdr:
 
         Args:
             plan_number: Plan number to cancel (for example, ``"01"``).
-            ras_object: Initialized :class:`RasPrj` object. Uses the global
+            ras_object (RasPrj, optional): Initialized :class:`RasPrj` object. Uses the global
                 project when omitted.
             timeout_seconds: Grace period before force-killing only the already
                 matched processes.
@@ -3111,24 +3111,24 @@ class RasCmdr:
         Notes:
             - For executing multiple plans, consider using compute_parallel() or compute_test_mode().
             - Setting num_cores appropriately is important for performance:
-              * 1-2 cores: Highest efficiency per core, good for small models
-              * 3-8 cores: Good balance for most models
-              * >8 cores: May have diminishing returns due to overhead
+                * 1-2 cores: Highest efficiency per core, good for small models
+                * 3-8 cores: Good balance for most models
+                * >8 cores: May have diminishing returns due to overhead
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
             - When skip_existing=True with dest_folder, the check happens AFTER copying to destination.
             - Verification is version-aware: modern plans inspect HDF completion;
-              legacy plans require a fresh ``.O##`` and inspect available stored
-              messages for errors.
+                legacy plans require a fresh ``.O##`` and inspect available stored
+                messages for errors.
             - Execution failures are returned as
-              ``ComputeResult(success=False)`` with structured failure evidence.
+                ``ComputeResult(success=False)`` with structured failure evidence.
             - Actual runs permanently remove the opposing result family and
-              stale compute-message sidecars before launch, then remove any
-              opposing result recreated by HEC-RAS after completion. Skipped
-              runs do not mutate execution artifacts.
+                stale compute-message sidecars before launch, then remove any
+                opposing result recreated by HEC-RAS after completion. Skipped
+                runs do not mutate execution artifacts.
             - Exact-plan cancellation and final evidence collection happen
-              after the engine deadline when necessary, so wall-clock return
-              time can exceed ``max_runtime`` while ras-commander proves a
-              safe terminal state.
+                after the engine deadline when necessary, so wall-clock return
+                time can exceed ``max_runtime`` while ras-commander proves a
+                safe terminal state.
         """
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
@@ -4337,43 +4337,43 @@ class RasCmdr:
 
         Notes:
             - Worker Assignment: Plans are assigned to workers in a round-robin fashion.
-              For example, with 3 workers and 5 plans, assignment would be:
-              Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
+                For example, with 3 workers and 5 plans, assignment would be:
+                Worker 1: Plans 1 & 4, Worker 2: Plans 2 & 5, Worker 3: Plan 3.
 
             - Resource Management: Each HEC-RAS instance (worker) typically requires:
-              * 2-4 GB of RAM
-              * 2-4 cores for optimal performance
+                * 2-4 GB of RAM
+                * 2-4 cores for optimal performance
 
             - When to use parallel vs. sequential:
-              * Parallel: For independent plans, faster overall completion
-              * Sequential: For dependent plans, consistent resource usage, easier debugging
+                * Parallel: For independent plans, faster overall completion
+                * Sequential: For dependent plans, consistent resource usage, easier debugging
 
             - The function creates worker folders during execution and consolidates results
-              to the destination folder upon completion.
+                to the destination folder upon completion.
 
             - Promotion is an all-or-none safety gate for the successful
-              candidate plans. Before copying any plan or shared geometry
-              artifact, ras-commander holds a cooperative destination lock and
-              requires a complete, globally empty strict HEC-RAS process
-              inventory. A refusal marks every candidate unsuccessful and
-              retains each computed worker folder; its exact recovery path and
-              gate evidence are recorded in ``execution_details_by_plan``.
-              The lock coordinates ras-commander promotions, but an external
-              GUI or process can still start after the inventory snapshot. Do
-              not run HEC-RAS manually against the destination during
-              promotion.
+                candidate plans. Before copying any plan or shared geometry
+                artifact, ras-commander holds a cooperative destination lock and
+                requires a complete, globally empty strict HEC-RAS process
+                inventory. A refusal marks every candidate unsuccessful and
+                retains each computed worker folder; its exact recovery path and
+                gate evidence are recorded in ``execution_details_by_plan``.
+                The lock coordinates ras-commander promotions, but an external
+                GUI or process can still start after the inventory snapshot. Do
+                not run HEC-RAS manually against the destination during
+                promotion.
 
             - Missing worker results, rejected/failed artifact copies, and
-              finalization errors also retain the affected worker folder and
-              mark unpromoted plans unsuccessful with exact failure evidence.
-              Supporting artifacts are copied before the primary result. If a
-              later step fails, ``promotion_failure`` records whether partial
-              promotion is possible and lists every copied destination path.
+                finalization errors also retain the affected worker folder and
+                mark unpromoted plans unsuccessful with exact failure evidence.
+                Supporting artifacts are copied before the primary result. If a
+                later step fails, ``promotion_failure`` records whether partial
+                promotion is possible and lists every copied destination path.
 
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
             - skip_existing checks the SOURCE folder before creating workers. Plans with existing
-              results are not assigned to workers at all.
+                results are not assigned to workers at all.
 
             - verify is passed through to compute_plan() for each worker execution.
         """
@@ -5197,39 +5197,39 @@ class RasCmdr:
 
         Notes:
             - This function was created to replicate the original HEC-RAS command line -test flag,
-              which does not work in recent versions of HEC-RAS.
+                which does not work in recent versions of HEC-RAS.
 
             - Key differences from other compute functions:
-              * compute_plan: Runs a single plan, with option for destination folder
-              * compute_parallel: Runs multiple plans simultaneously in worker folders
-              * compute_test_mode: Runs multiple plans sequentially in a single test folder
+                * compute_plan: Runs a single plan, with option for destination folder
+                * compute_parallel: Runs multiple plans simultaneously in worker folders
+                * compute_test_mode: Runs multiple plans sequentially in a single test folder
 
             - Use cases:
-              * Running plans in a specific order
-              * Ensuring consistent resource usage
-              * Easier debugging (one plan at a time)
-              * Isolated test environment
+                * Running plans in a specific order
+                * Ensuring consistent resource usage
+                * Easier debugging (one plan at a time)
+                * Isolated test environment
 
             - Performance considerations:
-              * Sequential execution is generally slower overall than parallel execution
-              * Each plan gets consistent resource usage
-              * Execution time scales linearly with the number of plans
+                * Sequential execution is generally slower overall than parallel execution
+                * Each plan gets consistent resource usage
+                * Execution time scales linearly with the number of plans
 
             - Promotion is all-or-none for the successful candidate plans.
-              Before copying any plan or shared geometry artifact,
-              ras-commander holds a cooperative destination lock and requires
-              a complete, globally empty strict HEC-RAS process inventory. A
-              refusal marks every candidate unsuccessful and retains the test
-              folder; its exact recovery path and gate evidence are recorded
-              in ``execution_details_by_plan``. The lock coordinates
-              ras-commander promotions, but cannot close the race with a
-              manually launched HEC-RAS GUI/process after the process scan.
+                Before copying any plan or shared geometry artifact,
+                ras-commander holds a cooperative destination lock and requires
+                a complete, globally empty strict HEC-RAS process inventory. A
+                refusal marks every candidate unsuccessful and retains the test
+                folder; its exact recovery path and gate evidence are recorded
+                in ``execution_details_by_plan``. The lock coordinates
+                ras-commander promotions, but cannot close the race with a
+                manually launched HEC-RAS GUI/process after the process scan.
 
             - Missing results, rejected/failed copies, and finalization errors
-              retain the test folder and record its exact path plus structured
-              failure evidence. Supporting artifacts are copied before the
-              primary result; any already copied paths are reported when a
-              later failure makes partial promotion possible.
+                retain the test folder and record its exact path plus structured
+                failure evidence. Supporting artifacts are copied before the
+                primary result; any already copied paths are reported when a
+                later failure makes partial promotion possible.
 
             - This function updates the RAS object's dataframes (plan_df, geom_df, etc.) after execution.
 
@@ -5745,7 +5745,7 @@ class RasCmdr:
             ras_exe_dir (Union[str, Path]): HEC-RAS Linux install directory. For the
                 canonical layout this holds ``RasUnsteady`` + ``libs/``; for the
                 5.0.7 layout it holds ``bin_ras/rasUnsteady64`` + its libraries.
-            ras_object: Optional RAS project object. If None, uses global ras.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ras.
             timeout_sec (int): Maximum execution time in seconds (default 14400 = 4 hours).
             dos2unix (bool): Convert CRLF→LF in text files before execution (default True).
             num_cores (int, optional): Number of cores. If specified, updates plan file.
@@ -6358,7 +6358,7 @@ class RasCmdr:
             plan_number: Plan number whose ``.tmp.hdf`` to preprocess (e.g. "04").
             ras_exe_dir: Directory containing the ``RasGeomPreprocess`` binary and
                 sibling ``libs/`` directory (e.g. ``/opt/hecras/6.6``).
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
             timeout_sec: Maximum preprocessing time in seconds (default 7200).
             dos2unix: Convert CRLF->LF in text files first (default True).
 

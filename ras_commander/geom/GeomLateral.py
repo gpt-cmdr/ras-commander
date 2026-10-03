@@ -1596,8 +1596,8 @@ class GeomLateral:
                   ],
                 }
 
-            If a barrel omits ``us_station``/``ds_station`` they default to the
-            arc-length projection of the barrel midpoint onto the connection line.
+                If a barrel omits ``us_station``/``ds_station`` they default to the
+                arc-length projection of the barrel midpoint onto the connection line.
 
         Returns:
             dict: {culverts_written, barrels_written, backup_path, length_warnings}
@@ -2215,7 +2215,7 @@ class GeomLateral:
         Parameters:
             geom_file: Path to geometry file
             connection_name: Connection name (must already exist)
-            gates: DataFrame or list of dicts with gate parameters:
+            gates (pandas.DataFrame or list[dict]): DataFrame or list of dicts with gate parameters:
                 GateName, Width, Height, InvertElevation, GateCoefficient,
                 NumOpenings, OpeningStations
             create_backup: Create .bak backup before writing (default True)
@@ -3007,7 +3007,7 @@ class GeomLateral:
         Parameters:
             geom_file: Path to geometry file
             connection_name: Connection name
-            piers: DataFrame or list of dicts with pier data
+            piers (pandas.DataFrame or list[dict]): DataFrame or list of dicts with pier data
             create_backup: Create .bak backup before writing (default True)
 
         Returns:

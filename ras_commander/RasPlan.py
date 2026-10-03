@@ -408,7 +408,7 @@ class RasPlan:
         Parameters:
             plan_number (Union[str, Number]): The plan number to update (accepts int, float, numpy types, etc.).
             new_geom (Union[str, Number]): The new geometry number to set (accepts int, float, numpy types, etc.).
-            ras_object: An optional RAS object instance.
+            ras_object (RasPrj, optional): An optional RAS object instance.
 
         Returns:
             pd.DataFrame: The updated geometry DataFrame.
@@ -2800,7 +2800,7 @@ class RasPlan:
         Args:
             plan_number_or_path: Plan number or path to the plan file.
             mesh_name: Optional 2D flow area name to filter the returned areas.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             Dict[str, Any]: Parsed options with ``plan``, ``default``, and
@@ -2911,7 +2911,7 @@ class RasPlan:
             equation_set: ``"DWE"``/``0`` or ``"SWE-ELM"``/``1``.
             initial_conditions_time_hours: 2D initial conditions ramp-up time.
             include_default: Also update the default unnamed 2D settings block.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             bool: True when the plan file was written or already matched.
@@ -3057,7 +3057,7 @@ class RasPlan:
                 with the equation-set change.
             initial_conditions_time_hours: Optional 2D initial conditions time.
             include_default: Also update the default unnamed 2D settings block.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             bool: True when the plan file was updated or already matched.
@@ -3291,7 +3291,7 @@ class RasPlan:
 
         Args:
             plan_number_or_path: Plan number or explicit plan-file path.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             Dict[str, Optional[Any]]: Parsed restart-output settings, including
@@ -3391,7 +3391,7 @@ class RasPlan:
                 or ``"DDMMMYYYY,hhmm"``.
             recurrence_interval_hours: Hours between subsequent restart writes.
             write_at_sim_end: Also write a restart file at the final time step.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             bool: True when the plan file was updated or already current.
@@ -3506,7 +3506,7 @@ class RasPlan:
 
         Args:
             plan_number_or_path: Plan number or path to the plan file.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             Dict[str, Optional[Any]]: HDF write settings keyed by ras-commander
@@ -3591,7 +3591,7 @@ class RasPlan:
             spatial_parts: Number of spatial column groups.
             use_max_rows: Use maximum possible time rows per chunk.
             fixed_rows: Fixed number of time rows when ``use_max_rows`` is False.
-            ras_object: Optional RAS project object. If None, uses global ``ras``.
+            ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ``ras``.
 
         Returns:
             bool: True when the plan file was updated, False on error.
@@ -3996,7 +3996,7 @@ class RasPlan:
 
         Args:
             plan_number: Plan number (e.g., "01", "08")
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
 
         Returns:
             str: 'Steady', 'Unsteady', or 'Unknown'
@@ -4048,7 +4048,7 @@ class RasPlan:
 
         Args:
             plan_number: Plan number (e.g., "01", "08")
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
 
         Returns:
             bool: True if steady state, False otherwise
@@ -4151,7 +4151,7 @@ class RasPlan:
             number_column: Column name for the number (e.g., 'flow_number')
             prj_entry_type: PRJ entry type for get_prj_entries() (e.g., 'Flow')
             file_prefix: File prefix letter (e.g., 'f', 'u', 'g')
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[Path]: Full path if found, None otherwise.
@@ -4202,7 +4202,7 @@ class RasPlan:
             new_title: Optional new title (max 32 chars). None keeps original.
             title_keyword: Keyword in file for title line (e.g., 'Flow Title')
             copy_hdf: Whether to copy the companion .hdf file.
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             str: The new component number.
@@ -4306,7 +4306,7 @@ class RasPlan:
             force: If True, skip reference checks.
             permanent_delete: If True, permanently delete files. If False (default),
                 move files to {project_folder}/Backup/{timestamp}_{label}/.
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             Optional[Path]: Path to backup folder if files were backed up, None if
@@ -4403,7 +4403,7 @@ class RasPlan:
                 (e.g., 'Geom File', 'unsteady_number', 'Flow File')
             plan_ref_filter_fn: Optional callable(row) -> bool for additional filtering
                 of which plan rows should be updated. If None, all matching rows are updated.
-            ras_object: Optional RAS object instance.
+            ras_object (RasPrj, optional): Optional RAS object instance.
 
         Returns:
             str: The new component number.

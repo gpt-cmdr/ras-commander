@@ -496,12 +496,14 @@ class RasTerrainMod:
             - difference: float - proposed - existing (positive = fill, negative = cut)
 
         Example:
+            ```python
             >>> df = RasTerrainMod.compare_terrain_profiles(
             ...     "existing.rasmap", "proposed.rasmap", "project.g01.hdf",
             ...     x_coords=[3400000, 3410000], y_coords=[612000, 612000]
             ... )
             >>> cut_volume = df[df['difference'] < 0]['difference'].sum()
             >>> fill_volume = df[df['difference'] > 0]['difference'].sum()
+            ```
         """
         existing = RasTerrainMod.get_terrain_profile(
             rasmap_existing, geom_hdf_path, x_coords, y_coords, filter_tolerance

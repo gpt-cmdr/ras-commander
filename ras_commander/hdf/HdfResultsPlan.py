@@ -71,9 +71,12 @@ class HdfResultsPlan:
         """
         Get unsteady attributes from a HEC-RAS HDF plan file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: A DataFrame containing the decoded unsteady attributes.
@@ -113,9 +116,12 @@ class HdfResultsPlan:
         """
         Get results unsteady summary attributes from a HEC-RAS HDF plan file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: A DataFrame containing the decoded results unsteady summary attributes.
@@ -155,9 +161,12 @@ class HdfResultsPlan:
         """
         Get volume accounting attributes from a HEC-RAS HDF plan file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to the HEC-RAS plan HDF file.
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             Optional[pd.DataFrame]: DataFrame containing the decoded volume accounting attributes,
@@ -195,9 +204,12 @@ class HdfResultsPlan:
         """
         Extract detailed runtime and computational performance metrics from HDF file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             Optional[pd.DataFrame]: DataFrame containing runtime statistics or None if data cannot be extracted
@@ -206,7 +218,7 @@ class HdfResultsPlan:
             - Times are reported in multiple units (ms, s, hours)
             - Compute speeds are calculated as simulation-time/compute-time ratios
             - Process times include: geometry, preprocessing, event conditions, 
-              and unsteady flow computations
+                and unsteady flow computations
         """
         try:
             if hdf_path is None:
@@ -375,10 +387,13 @@ class HdfResultsPlan:
         """
         Get reference line or point summary output from HDF file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
             reftype (str): Type of reference data ('lines' or 'points')
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: DataFrame containing reference summary data
@@ -422,9 +437,12 @@ class HdfResultsPlan:
         """
         Check if HDF file contains steady state results.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             bool: True if the HDF contains steady state results, False otherwise
@@ -447,9 +465,12 @@ class HdfResultsPlan:
         """
         Extract profile names from steady state results.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             List[str]: List of profile names (e.g., ['50Pct', '10Pct', '1Pct'])
@@ -637,11 +658,14 @@ class HdfResultsPlan:
         """
         Extract water surface elevation (WSE) data for steady state profiles.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
             profile_index (int, optional): Index of profile to extract (0-based). If None, extracts all profiles.
             profile_name (str, optional): Name of profile to extract (e.g., '1Pct'). If specified, overrides profile_index.
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: DataFrame containing WSE data with columns:
@@ -786,9 +810,12 @@ class HdfResultsPlan:
         """
         Get steady flow attributes and metadata from HEC-RAS HDF plan file.
 
+        Note:
+            The input decorator accepts keyword-only ``ras_object`` for
+            project-number resolution; it is not in the underlying signature.
+
         Args:
             hdf_path (Path): Path to HEC-RAS plan HDF file
-            ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Returns:
             pd.DataFrame: DataFrame containing steady flow attributes including:

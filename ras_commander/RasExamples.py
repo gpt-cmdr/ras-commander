@@ -396,7 +396,7 @@ class RasExamples:
         - Linux: ~/.local/share/ras-commander/examples
 
         Args:
-            version_number: HEC-RAS version (default: '7.0')
+            version_number (str): HEC-RAS version (default: '7.0')
 
         Returns:
             Path: Directory where projects will be extracted
@@ -575,8 +575,8 @@ class RasExamples:
         only through the lower-level curator API.
 
         Returns:
-            List of ``ModelMetadata`` records from the reviewed ScienceBase
-            registry. No network request or large download is performed.
+            list[ModelMetadata]: Records from the reviewed ScienceBase
+                registry. No network request or large download is performed.
         """
         from ras_commander.sources.federal.usgs_sciencebase import UsgsScienceBase
 

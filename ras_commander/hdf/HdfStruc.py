@@ -176,7 +176,7 @@ class HdfStruc:
                 Geometry-only preprocessing normally lacks solver receipts.
             connections_df: Expected Name/From/To inventory. Every expected
                 connection receives a row, including missing native ones.
-            ras_object: Explicit project context for resolving plan numbers.
+            ras_object (RasPrj, optional): Explicit project context for resolving plan numbers.
 
         Returns:
             DataFrame with Name, From, To, from_cells, from_faces, to_cells,
@@ -836,6 +836,7 @@ class HdfStruc:
 
         Examples
         --------
+        ```python
         >>> info = HdfStruc.get_sa2d_breach_info("02")
         >>> breach_dams = info[info['has_breach']]['structure'].tolist()
         >>> print(f"Breach structures: {breach_dams}")
@@ -845,6 +846,7 @@ class HdfStruc:
         - Returns empty DataFrame if no SA/2D connections found
         - Only structures with "Breaching Variables" have has_breach=True
         - Use in conjunction with RasBreach for reading/modifying breach parameters
+        ```
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:

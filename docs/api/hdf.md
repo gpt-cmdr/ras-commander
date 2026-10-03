@@ -103,7 +103,8 @@ polygons are preferred and companion text geometry is used only when needed.
 
 ### HdfMesh
 
-Mesh geometry data.
+Mesh geometry data. See [Meshing](meshing.md) for the diagnostic-to-repair
+workflow and operation-specific failure limits.
 
 `get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)` returns every
 native perimeter face of a named 2D area as a GeoDataFrame, including faces
@@ -234,7 +235,7 @@ or aggregate selected face flows; these have different signed/absolute-flow sema
 hydrograph is not independently established as solver-recorded and may be
 observed data. Explicit solver-recorded Reference Lines HDF output is read with
 `HdfResultsXsec.get_ref_lines_timeseries()`.
-See [Profiles, hydrographs and reference locations](rasmapper/profiles.md) for
+See [Profiles, hydrographs and reference locations](results-queries.md) for
 method contracts and [batch workflows](../user-guide/2d-profile-and-reference-workflows.md)
 for plot/export examples. HDF storage should not be confused with the method
 used to calculate the stored quantity.
@@ -395,7 +396,7 @@ Plan-level results.
 - `get_runtime_data(hdf_path)` - Runtime statistics
 - `get_volume_accounting(hdf_path)` - Volume accounting data
 - `get_compute_messages(hdf_path)` - Computation messages
-- `get_compute_options(hdf_path)` - Computation options used
+- `get_unsteady_info(hdf_path)` - Unsteady result metadata; use `HdfPlan.get_plan_parameters()` for plan parameters
 - `is_steady_plan(hdf_path)` - Check if steady state
 - `get_steady_profile_names(hdf_path)` - Get steady profile names
 - `get_steady_wse(hdf_path)` - Get steady water surface elevations
@@ -470,8 +471,8 @@ Storage area volume-elevation curve extraction from HDF.
 
 1D channel capacity analysis (multi-AEP).
 
-- `get_channel_capacity(hdf_path, river=None, reach=None)` - Compute channel capacity from cross-section geometry and results
-- `get_multi_aep_capacity(hdf_paths, aep_labels)` - Compare capacity across multiple AEP simulations
+- `analyze_channel_capacity(...)` - Run channel capacity analysis from geometry and result inputs; see the full signature below
+- `compare_conditions(existing_results, proposed_results, level="segments")` - Compare previously analyzed channel conditions
 
 ### HdfStruc1D
 
@@ -661,3 +662,504 @@ max_wse = HdfResultsMesh.get_mesh_max_ws(hdf_path)
 # Get runtime stats
 runtime = HdfResultsPlan.get_runtime_data(hdf_path)
 ```
+
+## Complete source reference
+
+The sections above explain common operations. The source-derived reference below
+includes the remaining public methods and their full signatures. Method-specific
+prerequisites and return contracts take precedence over abbreviated summaries.
+
+### HdfBase source reference
+
+::: ras_commander.hdf.HdfBase.HdfBase
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_2d_flow_area_names_and_counts
+        - get_attrs
+        - get_dataset_info
+        - get_polylines_from_parts
+        - get_projection
+        - get_result_unit_metadata
+        - get_simulation_start_time
+        - get_unsteady_timestamps
+        - plan_vertex_ordinates
+        - print_attrs
+        - strip_results
+
+### HdfUtils source reference
+
+::: ras_commander.hdf.HdfUtils.HdfUtils
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - convert_df_datetimes_to_str
+        - convert_hdf5_attrs_to_dict
+        - convert_ras_hdf_value
+        - convert_ras_string
+        - convert_timesteps_to_datetimes
+        - find_nearest_neighbors
+        - parse_duration
+        - parse_ras_datetime
+        - parse_ras_datetime_ms
+        - parse_ras_window_datetime
+        - parse_run_time_window
+        - perform_kdtree_query
+        - resolve_hdf_paths
+        - scan_hdf_files
+
+### HdfPlan source reference
+
+::: ras_commander.hdf.HdfPlan.HdfPlan
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_2d_flow_options
+        - get_geometry_information
+        - get_plan_end_time
+        - get_plan_information
+        - get_plan_met_precip
+        - get_plan_parameters
+        - get_plan_start_time
+        - get_plan_timestamps_list
+        - get_starting_wse_method
+
+### HdfMesh source reference
+
+::: ras_commander.hdf.HdfMesh.HdfMesh
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - combine_faces_to_linestring
+        - diagnose_mesh_cell_polygons
+        - diagnose_mesh_layout
+        - extend_face_property_tables
+        - extend_linux_tmp_face_property_tables
+        - find_nearest_cell
+        - find_nearest_face
+        - get_face_ids_in_calibration_region
+        - get_face_ids_in_polygon
+        - get_faces_along_profile_line
+        - get_mannings_calibration_table
+        - get_mesh_area_attributes
+        - get_mesh_area_names
+        - get_mesh_areas
+        - get_mesh_cell_faces
+        - get_mesh_cell_points
+        - get_mesh_cell_polygons
+        - get_mesh_cell_property_tables
+        - get_mesh_face_hydraulic_properties_at_stage
+        - get_mesh_face_property_tables
+        - get_mesh_perimeter_faces
+        - get_mesh_sloped_topology
+        - get_reference_line_internal_faces
+        - pin_property_tables
+        - recompute_face_mannings_n_from_landcover_curves
+        - sample_linux_tmp_face_mannings_n_from_landcover_curves
+        - set_face_mannings_n_values
+        - set_mesh_face_property_tables
+        - set_mesh_pinned_attribute
+        - transform_linux_tmp_face_mannings_n
+        - write_linux_tmp_face_property_tables
+
+### HdfXsec source reference
+
+::: ras_commander.hdf.HdfXsec.HdfXsec
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - generate_river_edge_lines
+        - get_1d_footprint
+        - get_cross_sections
+        - get_river_bank_lines
+        - get_river_centerlines
+        - get_river_edge_lines
+        - get_river_flow_paths
+        - get_river_reaches
+        - get_river_stationing
+        - get_xs_coords
+        - get_xs_interpolation_surface
+
+### HdfBndry source reference
+
+::: ras_commander.hdf.HdfBndry.HdfBndry
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_bc_external_faces
+        - get_bc_lines
+        - get_breaklines
+        - get_reference_lines
+        - get_reference_points
+        - get_refinement_regions
+
+### HdfStruc source reference
+
+::: ras_commander.hdf.HdfStruc.HdfStruc
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_connection_attachments
+        - get_culvert_hydraulics
+        - get_geom_structures_attrs
+        - get_sa2d_breach_info
+        - get_storage_area_polygons
+        - get_structures
+        - list_sa2d_connections
+
+### HdfStorageArea source reference
+
+::: ras_commander.hdf.HdfStorageArea.HdfStorageArea
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - compute_stage_storage_curve
+        - compute_volume_below_elevation
+        - get_storage_area_for_breach_structure
+        - get_storage_area_names
+        - get_storage_area_properties
+        - get_terrain_path_from_geom_hdf
+        - get_volume_elevation_curve
+
+### HdfStruc1D source reference
+
+::: ras_commander.hdf.HdfStruc1D.HdfStruc1D
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_structure_max_values
+        - list_1d_structures
+
+### HdfHydraulicTables source reference
+
+::: ras_commander.hdf.HdfHydraulicTables.HdfHydraulicTables
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_all_xs_htabs
+        - get_xs_htab
+
+### HdfResultsPlan source reference
+
+::: ras_commander.hdf.HdfResultsPlan.HdfResultsPlan
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_compute_messages
+        - get_compute_messages_hdf_only
+        - get_reference_summary
+        - get_reference_timeseries
+        - get_runtime_data
+        - get_steady_info
+        - get_steady_profile_names
+        - get_steady_results
+        - get_steady_wse
+        - get_unsteady_info
+        - get_unsteady_summary
+        - get_volume_accounting
+        - is_steady_plan
+        - list_steady_variables
+
+### HdfResultsMesh source reference
+
+::: ras_commander.hdf.HdfResultsMesh.HdfResultsMesh
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export_depth_rasters_at_times
+        - export_max_depth_raster
+        - get_boundary_conditions_timeseries
+        - get_flood_extent_polygon
+        - get_mesh_cells_timeseries
+        - get_mesh_faces_timeseries
+        - get_mesh_last_iter
+        - get_mesh_max_depth
+        - get_mesh_max_face_v
+        - get_mesh_max_iter
+        - get_mesh_max_ws
+        - get_mesh_max_ws_err
+        - get_mesh_min_face_v
+        - get_mesh_min_ws
+        - get_mesh_summary
+        - get_mesh_summary_output
+        - get_mesh_summary_output_group
+        - get_mesh_summary_values
+        - get_mesh_timeseries
+        - get_profile_line_flow_timeseries
+        - get_profile_line_flow_timeseries_legacy
+        - get_profile_line_peak_flow
+        - iter_mesh_timeseries
+
+### HdfResultView source reference
+
+::: ras_commander.hdf.HdfResultView.HdfResultView
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - iter_batches
+        - reduce
+        - select
+        - to_arrow
+        - to_numpy
+        - to_pandas
+        - to_xarray
+
+### HdfResultsXsec source reference
+
+::: ras_commander.hdf.HdfResultsXsec.HdfResultsXsec
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_ref_lines_timeseries
+        - get_ref_points_timeseries
+        - get_xsec_summary
+        - get_xsec_timeseries
+
+### HdfResultsBreach source reference
+
+::: ras_commander.hdf.HdfResultsBreach.HdfResultsBreach
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_breach_summary
+        - get_breach_timeseries
+        - get_breaching_variables
+        - get_structure_variables
+
+### HdfResultsSediment source reference
+
+::: ras_commander.hdf.HdfResultsSediment.HdfResultsSediment
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_active_layer_grain_class
+        - get_bed_change_volumes
+        - get_cell_bed_change
+        - get_cell_bed_change_timeseries
+        - get_cell_bed_elevation
+        - get_sediment_mesh_areas
+        - is_sediment_plan
+
+### HdfResultsProducts source reference
+
+::: ras_commander.hdf.HdfResultsProducts.HdfResultsProducts
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export
+        - inspect_result
+
+### HdfPipe source reference
+
+::: ras_commander.hdf.HdfPipe.HdfPipe
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - extract_timeseries_for_conduit
+        - extract_timeseries_for_node
+        - get_pipe_conduits
+        - get_pipe_inlets
+        - get_pipe_network
+        - get_pipe_network_summary
+        - get_pipe_network_timeseries
+        - get_pipe_nodes
+        - get_pipe_profile
+
+### HdfPump source reference
+
+::: ras_commander.hdf.HdfPump.HdfPump
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - get_pump_groups
+        - get_pump_operation_timeseries
+        - get_pump_station_summary
+        - get_pump_station_timeseries
+        - get_pump_stations
+
+### HdfInfiltration source reference
+
+::: ras_commander.hdf.HdfInfiltration.HdfInfiltration
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - calculate_soil_statistics
+        - calculate_total_significant_percentage
+        - calculate_weighted_parameters
+        - create_infiltration_group
+        - create_infiltration_override_regions
+        - get_classification_polygons
+        - get_infiltration_baseoverrides
+        - get_infiltration_calibration_regions
+        - get_infiltration_layer_data
+        - get_infiltration_map
+        - get_infiltration_parameters
+        - get_infiltration_region_names
+        - get_infiltration_region_overrides
+        - get_infiltration_region_polygons
+        - get_infiltration_stats
+        - get_landcover_raster_stats
+        - get_preprocessed_infiltration
+        - get_preprocessed_infiltration_stats
+        - get_significant_mukeys
+        - get_soil_raster_stats
+        - get_soils_raster_stats
+        - save_statistics
+        - scale_infiltration_base_overrides
+        - scale_infiltration_baseoverrides
+        - scale_infiltration_data
+        - scale_infiltration_region_overrides
+        - scale_infiltration_sidecar_parameters
+        - set_infiltration_base_overrides
+        - set_infiltration_baseoverrides
+        - set_infiltration_layer_data
+        - set_infiltration_region_overrides
+        - set_infiltration_sidecar_parameters
+
+### HdfLandCover source reference
+
+::: ras_commander.hdf.HdfLandCover.HdfLandCover
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - audit_final_mannings_n
+        - build_landcover_depth_roughness_curves
+        - compare_base_vs_calibrated
+        - compute_final_mannings_raster
+        - estimate_final_mannings_raster
+        - get_classification_polygons
+        - get_landcover_association
+        - get_landcover_raster_map
+        - get_mannings_calibration_table
+        - get_mannings_region_cell_mapping
+        - get_mannings_region_polygons
+        - get_preprocessed_mannings_n
+        - get_preprocessed_mannings_stats
+        - set_landcover_mannings_n
+        - set_landcover_raster_map
+
+### HdfPlot source reference
+
+::: ras_commander.hdf.HdfPlot.HdfPlot
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - plot_mesh_cells
+        - plot_time_series
+
+### HdfResultsPlot source reference
+
+::: ras_commander.hdf.HdfResultsPlot.HdfResultsPlot
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - plot_results_max_wsel
+        - plot_results_max_wsel_time
+        - plot_results_mesh_variable
+
+### HdfFluvialPluvial source reference
+
+::: ras_commander.hdf.HdfFluvialPluvial.HdfFluvialPluvial
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - calculate_fluvial_pluvial_boundary
+        - generate_fluvial_pluvial_polygons
+
+### HdfBenefitAreas source reference
+
+::: ras_commander.hdf.HdfBenefitAreas.HdfBenefitAreas
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - identify_benefit_areas
+
+### HdfChannelCapacity source reference
+
+::: ras_commander.hdf.HdfChannelCapacity.HdfChannelCapacity
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - analyze_channel_capacity
+        - compare_conditions
+        - determine_capacity
+        - extract_bank_elevations
+        - extract_max_wse
+        - extract_steady_profile_wse
+        - segment_channel
+        - system_capacity_summary
+
+### HdfResultsAnalysis source reference
+
+::: ras_commander.hdf.HdfResultsAnalysis.HdfResultsAnalysis
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - analyze_critical_duration
+
+### HdfProject source reference
+
+::: ras_commander.hdf.HdfProject.HdfProject
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - export_extent_geojson
+        - get_project_bounds_latlon
+        - get_project_crs
+        - get_project_extent

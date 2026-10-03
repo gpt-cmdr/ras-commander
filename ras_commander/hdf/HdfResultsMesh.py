@@ -477,7 +477,7 @@ class HdfResultsMesh:
                 or sums native face-normal signs without line-orientation
                 correction in a fallback. These are not interchangeable fluxes.
             truncate: Trim leading and trailing zero-flow samples when true.
-            ras_object: Optional initialized project context.
+            ras_object (RasPrj, optional): Optional initialized project context.
 
         Returns:
             DataFrame with ``time``, ``flow``, ``line_name``, ``mesh_name``,
@@ -1499,7 +1499,7 @@ class HdfResultsMesh:
         Get last iteration count for each mesh cell.
 
         Args:
-            hdf_path (Path): Path to the HDF file.
+            hdf_file (Path): Path to the HDF file.
 
         Returns:
             pd.DataFrame: DataFrame containing last iteration counts.
@@ -1926,7 +1926,7 @@ class HdfResultsMesh:
             output_path (Union[str, Path], optional): Output GeoTIFF path.
                 If None, writes to a temporary file.
             resolution_m (float): Grid cell size in CRS units (default 3.0).
-            crs: Output CRS. If None, uses the CRS from the HDF file.
+            crs (pyproj.CRS or str, optional): Output CRS. If None, uses the CRS from the HDF file.
             method (str): Interpolation method for griddata (default "linear").
             nodata (float): Nodata value for the raster (default -9999.0).
 
@@ -2318,7 +2318,7 @@ class HdfResultsMesh:
         Args:
             plan_number (str): Plan number (e.g., "01").
             profile (str): Profile to map — "Max", "Min", or timestamp string.
-            ras_object: Optional RAS project object.
+            ras_object (RasPrj, optional): Optional RAS project object.
             ras_version (str): Optional HEC-RAS version for RasProcess.exe.
             timeout (int): RasProcess.exe timeout in seconds (default 600).
 
@@ -2820,7 +2820,7 @@ class HdfResultsMesh:
         Return the HDF group for a given mesh and summary output variable.
 
         Args:
-            hdf_path (h5py.File): Open HDF file object.
+            hdf_file (h5py.File): Open HDF file object.
             mesh_name (str): Name of the mesh.
             var (str): Name of the summary output variable.
 

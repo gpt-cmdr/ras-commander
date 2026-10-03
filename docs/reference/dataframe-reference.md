@@ -480,7 +480,7 @@ line flow time series using native RASMapper methods. Depending on
 aggregates selected face flows. The hydrograph branch's observed-versus-computed
 provenance has not been independently qualified; read solver-recorded reference
 matrices with `HdfResultsXsec.get_ref_lines_timeseries()` when those are required.
-See [the extraction-route contracts](../api/rasmapper/profiles.md).
+See [the extraction-route contracts](../api/results-queries.md).
 
 | Column | Meaning |
 |--------|---------|
