@@ -5303,6 +5303,7 @@ class RasUnsteady:
         units: str = "mm",
         ratio: Optional[float] = None,
         historic: bool = False,
+        text_ratio_prepared: bool = False,
     ) -> "PrecipRasterImportResult":
         """
         Write a precipitation payload built by ``_read_netcdf_precipitation``.
@@ -5336,6 +5337,10 @@ class RasUnsteady:
                 overwrite=True,
                 ratio=ratio,
                 historic=historic,
+                # The caller has already validated and prepared the replacement
+                # .u## text in memory; it is committed only after this HDF write
+                # succeeds so a failed payload write cannot advertise empty rain.
+                _text_ratio_prepared=text_ratio_prepared,
             )
             with h5py.File(hdf_path, "a") as f:
                 precip_grp = f.require_group(f"{met_path}/Precipitation")
@@ -6476,6 +6481,7 @@ class RasUnsteady:
             units=units_out,
             ratio=effective_ratio,
             historic=historic,
+            text_ratio_prepared=True,
         )
 
         # Write the updated file
