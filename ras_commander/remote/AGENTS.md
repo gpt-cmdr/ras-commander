@@ -13,6 +13,7 @@ This file is the canonical local instruction file for `ras_commander/remote/`.
 - Implemented workers: `PsexecWorker.py`, `LocalWorker.py`, `DockerWorker.py`
 - Stub or optional backends: `SshWorker.py`, `WinrmWorker.py`, `SlurmWorker.py`, `AwsEc2Worker.py`, `AzureFrWorker.py`
 - Dispatch and orchestration: `Execution.py`, `Utils.py`
+- Slurm + Apptainer native-Linux unsteady (profile, sbatch renderer, SSH transport, receipts): `ras_commander/RasApptainer.py`; guide in `docs/user-guide/slurm-apptainer-execution.md`. Its engine command is isolated in `ENGINE_SCRIPT_TEMPLATE`.
 
 ## Critical Rules
 
