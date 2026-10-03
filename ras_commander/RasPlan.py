@@ -97,6 +97,30 @@ from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
 
+def _iter_plan_key_lines(lines):
+    """
+    Yield ``(index, key, raw_value)`` for ``Key=Value`` lines of a plan file.
+
+    The key is the exact text before the first ``=`` (no stripping), so it only
+    matches at the start of a line, and lines inside a ``Begin DESCRIPTION`` ...
+    ``END DESCRIPTION`` block are skipped. Callers compare ``key`` for equality.
+    """
+    in_description = False
+    for i, line in enumerate(lines):
+        marker = line.strip().upper()
+        if in_description:
+            if marker.startswith("END DESCRIPTION"):
+                in_description = False
+            continue
+        if marker.startswith("BEGIN DESCRIPTION"):
+            in_description = "END DESCRIPTION" not in marker
+            continue
+        if "=" not in line:
+            continue
+        key, raw = line.split("=", 1)
+        yield i, key, raw
+
+
 class RasPlan:
     """
     A class for operations on HEC-RAS plan files.
@@ -231,12 +255,6 @@ class RasPlan:
         "time_step_max_halving": {"plan_key": "Computation Time Step Max Halving", "type": "int", "min_version": 5.0},
         "time_step_residence_courant": {"plan_key": "Computation Time Step Residence Courant", "type": "bool", "min_version": 5.0},
     }
-
-    VALID_PLAN_INTERVALS = [
-        '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '15SEC', '20SEC', '30SEC',
-        '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '15MIN', '20MIN', '30MIN',
-        '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '1DAY'
-    ]
 
     HDF_ADDITIONAL_OUTPUT_VARIABLES = [
         "Cell Cumulative Excess Depth",
@@ -1373,12 +1391,16 @@ class RasPlan:
 
         # Handle core settings specially to convert to integers
         core_keys = {'UNET D1 Cores', 'UNET D2 Cores', 'PS Cores'}
+        found_value = None
+        if key != 'Description':
+            for _, line_key, raw in _iter_plan_key_lines(content.splitlines()):
+                if line_key == key:
+                    found_value = raw.strip()
+                    break
         if key in core_keys:
-            pattern = f"{key}=(.*)"
-            match = re.search(pattern, content)
-            if match:
+            if found_value is not None:
                 try:
-                    return int(match.group(1).strip())
+                    return int(found_value)
                 except ValueError:
                     logger = logging.getLogger(__name__)
                     logger.error(f"Could not convert {key} value to integer")
@@ -1391,10 +1413,8 @@ class RasPlan:
             match = re.search(r'Begin DESCRIPTION(.*?)END DESCRIPTION', content, re.DOTALL)
             return match.group(1).strip() if match else None
         else:
-            pattern = f"{key}=(.*)"
-            match = re.search(pattern, content)
-            if match:
-                return match.group(1).strip()
+            if found_value is not None:
+                return found_value
             else:
                 logger = logging.getLogger(__name__)
                 logger.debug(f"Key '{key}' not found in the plan file.")
@@ -1524,10 +1544,15 @@ class RasPlan:
         '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '12MIN',
         '15MIN', '20MIN', '30MIN',
         '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR',
-        '1DAY',
+        '1DAY', '1WEEK', '1MON', '1YEAR',
     )
 
-    _INTERVAL_UNIT_SECONDS = {"SEC": 1.0, "MIN": 60.0, "HOUR": 3600.0, "DAY": 86400.0}
+    # MON and YEAR are calendar based; nominal 30/365 day lengths are used only
+    # for ordering, never for multiple checks.
+    _INTERVAL_UNIT_SECONDS = {
+        "SEC": 1.0, "MIN": 60.0, "HOUR": 3600.0, "DAY": 86400.0,
+        "WEEK": 604800.0, "MON": 2592000.0, "YEAR": 31536000.0,
+    }
 
     @staticmethod
     def interval_to_seconds(interval: str) -> float:
@@ -1543,11 +1568,13 @@ class RasPlan:
                 f"Invalid HEC-RAS interval '{interval}'. "
                 f"Must be one of {list(RasPlan.VALID_PLAN_INTERVALS)}"
             )
-        match = re.fullmatch(r"([\d.]+)(SEC|MIN|HOUR|DAY)", text)
+        match = re.fullmatch(r"([\d.]+)(SEC|MIN|HOUR|DAY|WEEK|MON|YEAR)", text)
         return float(match.group(1)) * RasPlan._INTERVAL_UNIT_SECONDS[match.group(2)]
 
     @staticmethod
-    def _is_multiple(value_s: float, base_s: float) -> bool:
+    def _is_multiple(value_s: float, base_s: float, text: str = "") -> bool:
+        if str(text).upper().endswith(("MON", "YEAR")):
+            return True  # calendar based; not comparable to a fixed step
         ratio = value_s / base_s
         return abs(ratio - round(ratio)) < 1e-9
 
@@ -1570,9 +1597,10 @@ class RasPlan:
         - the Hydrograph (``output``), Detailed (``instantaneous``) and Mapping
           intervals must each be >= the computation interval and an even multiple
           of it ("... needs to be an even interval of the computation time step");
-        - the Detailed interval must not be smaller than the Hydrograph interval
-          ("The interval for detailed output is less than the hydrograph output
-          interval");
+        - a Detailed interval smaller than the Hydrograph interval logs a warning
+          only ("The interval for detailed output is less than the hydrograph
+          output interval" exists in Ras.exe, but it was not confirmed to block a
+          compute, so it is not returned as a problem);
         - when ``simulation_start_time`` (``'HH:MM'``) is given, it must fall on a
           multiple of the Hydrograph output interval (HEC-RAS: "change the
           simulation Starting Time to an even interval of the selected Hydrograph
@@ -1582,7 +1610,8 @@ class RasPlan:
         sides are supplied.
 
         Returns:
-            List[str]: Human-readable problems (empty when everything is valid).
+            List[str]: Human-readable problems (empty when everything is valid);
+            advisory conditions are logged as warnings instead.
         """
         problems: List[str] = []
         supplied = {
@@ -1612,7 +1641,7 @@ class RasPlan:
                     problems.append(
                         f"{key} ({supplied[key]}) is less than the Computation Interval ({computation_interval})"
                     )
-                elif not RasPlan._is_multiple(value_s, comp):
+                elif not RasPlan._is_multiple(value_s, comp, supplied[key]):
                     problems.append(
                         f"{key} ({supplied[key]}) must be an even multiple of the "
                         f"Computation Interval ({computation_interval})"
@@ -1620,9 +1649,13 @@ class RasPlan:
 
         out_s, det_s = seconds.get('Output Interval'), seconds.get('Instantaneous Interval')
         if out_s is not None and det_s is not None and det_s < out_s:
-            problems.append(
-                f"Instantaneous (detailed) Interval ({instantaneous_interval}) is less than "
-                f"the Output (hydrograph) Interval ({output_interval})"
+            # Ras.exe contains this message, but no source (manual or compute)
+            # shows that HEC-RAS refuses to run, so it is advisory only.
+            logger.warning(
+                "Instantaneous (detailed) Interval (%s) is less than the Output "
+                "(hydrograph) Interval (%s); HEC-RAS reports this as a problem in the "
+                "unsteady flow editor but it was not confirmed to block a compute",
+                instantaneous_interval, output_interval,
             )
 
         if simulation_start_time and out_s is not None and out_s < 86400.0:
@@ -1667,13 +1700,11 @@ class RasPlan:
         key_to_name = {v: k for k, v in RasPlan.PLAN_INTERVAL_KEYS.items()}
         values: Dict[str, Optional[str]] = {name: None for name in RasPlan.PLAN_INTERVAL_KEYS}
         with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-            for line in file:
-                if "=" not in line:
-                    continue
-                key, raw = line.split("=", 1)
-                name = key_to_name.get(key.strip())
-                if name and values[name] is None:
-                    values[name] = raw.strip()
+            lines = file.readlines()
+        for _, key, raw in _iter_plan_key_lines(lines):
+            name = key_to_name.get(key)
+            if name and values[name] is None:
+                values[name] = raw.strip()
         return values
 
     @staticmethod
@@ -1684,8 +1715,9 @@ class RasPlan:
         output_interval: Optional[str] = None,
         instantaneous_interval: Optional[str] = None,
         mapping_interval: Optional[str] = None,
-        validate: bool = True,
-        ras_object=None
+        ras_object=None,
+        *,
+        validate: bool = True
     ) -> None:
         """
         Update the computation, output, detailed and mapping intervals in a plan file.
@@ -1697,10 +1729,11 @@ class RasPlan:
         output_interval (Optional[str]): Hydrograph Output Interval (``Output Interval=``).
         instantaneous_interval (Optional[str]): Detailed Output Interval (``Instantaneous Interval=``).
         mapping_interval (Optional[str]): Mapping Output Interval (``Mapping Interval=``).
-        validate (bool): Check the relationships described in ``validate_plan_intervals``
-            against the *resulting* plan (new values merged with those already in the
-            file, plus the simulation start time). Default True.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
+        validate (bool): Keyword-only. Check the relationships described in
+            ``validate_plan_intervals`` against the *resulting* plan (new values merged
+            with those already in the file, including values you did not change, plus
+            the simulation start time). Default True.
 
         Raises:
         ValueError: If the plan file is not found or if an invalid/inconsistent interval is provided
@@ -1756,11 +1789,7 @@ class RasPlan:
         if validate:
             effective: Dict[str, str] = {}
             start_time = None
-            for line in lines:
-                if "=" not in line:
-                    continue
-                key, raw = line.split("=", 1)
-                key = key.strip()
+            for _, key, raw in _iter_plan_key_lines(lines):
                 if key in interval_keys:
                     effective.setdefault(key, raw.strip().upper())
                 elif key == "Simulation Date" and start_time is None:
@@ -1785,10 +1814,7 @@ class RasPlan:
 
         remaining = dict(requested)
         last_interval_index = None
-        for i, line in enumerate(lines):
-            if "=" not in line:
-                continue
-            key = line.split("=", 1)[0].strip()
+        for i, key, _raw in _iter_plan_key_lines(lines):
             if key in interval_keys:
                 last_interval_index = i
                 if key in remaining:
@@ -3771,11 +3797,8 @@ class RasPlan:
 
         try:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                for line in file:
-                    if "=" not in line:
-                        continue
-                    key, raw_value = line.split("=", 1)
-                    api_key = plan_key_to_api_key.get(key.strip())
+                for _, key, raw_value in _iter_plan_key_lines(file.readlines()):
+                    api_key = plan_key_to_api_key.get(key)
                     if not api_key:
                         continue
                     raw_value = raw_value.strip()
@@ -3880,10 +3903,7 @@ class RasPlan:
             original_lines = list(lines)
 
             updated_keys = set()
-            for i, line in enumerate(lines):
-                if "=" not in line:
-                    continue
-                line_key = line.split("=", 1)[0].strip()
+            for i, line_key, _raw in _iter_plan_key_lines(lines):
                 for api_key, plan_key in RasPlan.HDF_WRITE_PARAMETER_KEYS.items():
                     if line_key == plan_key and api_key in requested:
                         value = RasPlan._format_hdf_parameter_value(requested[api_key])
@@ -3909,6 +3929,9 @@ class RasPlan:
             _write_ras_text(
                 plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
             )
+
+            if hasattr(ras_obj, "get_plan_entries"):
+                ras_obj.plan_df = ras_obj.get_plan_entries()
 
             logger.info(f"Updated HDF write parameters in plan file: {plan_file_path.name}")
             return True
@@ -4028,13 +4051,14 @@ class RasPlan:
 
         Notes:
             The keys exist in HEC-RAS 5.0.7 through 7.0 (checked in Ras.exe). A warning is
-            logged when the plan's ``Program Version`` is older than 5.07. HEC-RAS
-            7.x development builds (Beta 2026-03-30) list a new result storage and
-            compression format (~40% smaller); its plan keys are not yet documented.
+            logged when the plan's ``Program Version`` is older than 5.07. ``plan_df``
+            is refreshed after the write. The effect of these keys on a computed HDF
+            (compression filter, chunk shape) was not confirmed in a HEC-RAS compute
+            when this helper was written; check with ``HdfPlan.get_hdf_output_settings``.
         """
         if isinstance(level, bool) or not isinstance(level, int) or not 0 <= level <= 9:
             raise ValueError("level must be an integer 0 (off) to 9")
-        if level > 4:
+        if level > 1:
             logger.warning(
                 "HDF compression level %s: HEC-RAS notes levels above 1 only minimally reduce "
                 "file size while slowing disk writes", level

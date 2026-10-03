@@ -316,8 +316,8 @@ class HdfPlan:
                   dataset (``name``, ``shape``, ``chunks``, ``compression``,
                   ``compression_opts``, ``shuffle``, ``stored_mb``, ``raw_mb``,
                   ``ratio``).
-                - ``n_timesteps``: length of ``Time Date Stamp`` (the output cadence
-                  as written), or None.
+                - ``n_timesteps``: length of ``Time Date Stamp`` under Base Output
+                  (the mapping-interval cadence, not the Hydrograph Output Interval), or None.
                 - ``file_size_mb``: size of the HDF file on disk.
         """
         try:

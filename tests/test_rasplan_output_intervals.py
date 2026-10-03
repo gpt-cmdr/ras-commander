@@ -64,9 +64,14 @@ def test_update_intervals_roundtrips_other_lines_and_crlf(upgu1):
 
 
 def test_update_intervals_does_not_touch_wq_output_interval(upgu1):
-    RasPlan.update_plan_intervals(upgu1, output_interval="15MIN", ras_object=_DummyRas())
-    assert "WQ Output Interval=15MIN" in upgu1.read_text()
-    assert "WQ Max Comp Step=1HOUR" in upgu1.read_text()
+    # Fixture has WQ Output Interval=15MIN; use a different value so a clobbered
+    # WQ line would be detected.
+    RasPlan.update_plan_intervals(upgu1, output_interval="5MIN", ras_object=_DummyRas())
+    text = upgu1.read_text()
+    assert "WQ Output Interval=15MIN" in text
+    assert "WQ Output Interval=5MIN" not in text
+    assert "\nOutput Interval=5MIN" in text
+    assert "WQ Max Comp Step=1HOUR" in text
 
 
 @pytest.mark.parametrize(
@@ -75,7 +80,6 @@ def test_update_intervals_does_not_touch_wq_output_interval(upgu1):
         ({"output_interval": "7MIN"}, "Invalid Output Interval"),
         ({"computation_interval": "2MIN", "output_interval": "3MIN"}, "even multiple"),
         ({"output_interval": "30SEC"}, "less than the Computation Interval"),
-        ({"instantaneous_interval": "10MIN"}, "less than the Output"),
         ({"computation_interval": "1HOUR"}, "less than the Computation"),
     ],
 )
@@ -150,12 +154,139 @@ def test_set_hdf_compression_zero_nine_and_validation(upgu1):
             RasPlan.set_hdf_compression(upgu1, bad, ras_object=_DummyRas())
 
 
-def test_clone_plan_interval_aliases_map_to_update_arguments():
-    # hydrograph/instantaneous aliases must be accepted by update_plan_intervals.
-    import inspect
-    params = inspect.signature(RasPlan.update_plan_intervals).parameters
-    for name in ("output_interval", "instantaneous_interval", "validate"):
-        assert name in params
+def _make_project(tmp_path):
+    from ras_commander import RasPrj
+
+    shutil.copyfile(FIXTURE, tmp_path / "UPGU1.p01")
+    (tmp_path / "UPGU1.prj").write_text(
+        "Proj Title=UPGU1\nCurrent Plan=p01\nPlan File=p01\n", encoding="utf-8"
+    )
+    project = RasPrj()
+    project.initialize(tmp_path, ras_exe_path="Ras.exe")
+    return project
+
+
+def test_clone_plan_interval_aliases_forwarded(tmp_path, monkeypatch):
+    project = _make_project(tmp_path)
+    captured = {}
+
+    def fake_update(plan, **kwargs):
+        captured["plan"] = plan
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(RasPlan, "update_plan_intervals", staticmethod(fake_update))
+    RasPlan.clone_plan(
+        "01",
+        intervals={"hydrograph": "15MIN", "detailed": "1HOUR", "mapping": "15MIN"},
+        ras_object=project,
+    )
+    kwargs = captured["kwargs"]
+    assert kwargs["output_interval"] == "15MIN"
+    assert kwargs["instantaneous_interval"] == "1HOUR"
+    assert kwargs["mapping_interval"] == "15MIN"
+    assert "hydrograph_output_interval" not in kwargs
+    assert kwargs["ras_object"] is project
+
+
+def test_update_intervals_positional_compat_with_base(upgu1):
+    # Base signature: (plan, computation, output, instantaneous, mapping, ras_object)
+    dummy = _DummyRas()
+    RasPlan.update_plan_intervals(str(upgu1), None, "15MIN", None, None, dummy)
+    assert RasPlan.get_plan_intervals(upgu1, ras_object=dummy)["output"] == "15MIN"
+    with pytest.raises(TypeError):
+        RasPlan.update_plan_intervals(str(upgu1), None, "15MIN", None, None, dummy, False)
+
+
+DESC_PLAN = (
+    "Plan Title=T\n"
+    "Simulation Date=30JUN2025,00:00,09JUL2025,06:00\n"
+    "Begin DESCRIPTION:\n"
+    "Output Interval=30MIN\n"
+    "HDF Compression=9\n"
+    "Mapping Interval=2HOUR\n"
+    "END DESCRIPTION:\n"
+    "Computation Interval=1MIN\n"
+    "Output Interval=1HOUR\n"
+    "Mapping Interval=1HOUR\n"
+    "HDF Compression= 1 \n"
+    "  Output Interval=45MIN\n"
+)
+
+
+def test_keys_match_only_at_line_start_outside_description(tmp_path):
+    plan = tmp_path / "P.p01"
+    plan.write_text(DESC_PLAN, encoding="utf-8")
+    dummy = _DummyRas()
+    assert RasPlan.get_plan_intervals(plan, ras_object=dummy) == {
+        "computation": "1MIN", "output": "1HOUR", "instantaneous": None, "mapping": "1HOUR",
+    }
+    assert RasPlan.get_plan_value(plan, "Output Interval", ras_object=dummy) == "1HOUR"
+    assert RasPlan.get_plan_value(plan, "Mapping Interval", ras_object=dummy) == "1HOUR"
+    assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["level"] == 1
+
+    RasPlan.update_plan_intervals(plan, output_interval="15MIN", ras_object=dummy)
+    RasPlan.set_hdf_compression(plan, 0, ras_object=dummy)
+    text = plan.read_text()
+    assert "Begin DESCRIPTION:\nOutput Interval=30MIN\nHDF Compression=9\nMapping Interval=2HOUR\nEND DESCRIPTION:" in text
+    assert "\nOutput Interval=15MIN\n" in text
+    assert "  Output Interval=45MIN" in text
+    assert RasPlan.get_plan_intervals(plan, ras_object=dummy)["output"] == "15MIN"
+    assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["level"] == 0
+
+
+def test_set_hdf_compression_refreshes_plan_df(tmp_path):
+    project = _make_project(tmp_path)
+    assert project.plan_df.iloc[0]["HDF Compression"] == "1"
+    assert RasPlan.set_hdf_compression("01", 0, ras_object=project)
+    assert project.plan_df.iloc[0]["HDF Compression"] == "0"
+    assert RasPlan.set_hdf_write_parameters("01", chunk_size_mb=2, ras_object=project)
+    assert project.plan_df.iloc[0]["HDF Chunk Size"] == "2"
+
+
+@pytest.mark.parametrize("token", ["1WEEK", "1MON", "1YEAR"])
+def test_long_interval_tokens_accepted(upgu1, token):
+    assert token in RasPlan.VALID_PLAN_INTERVALS
+    RasPlan.update_plan_intervals(upgu1, output_interval=token, validate=False, ras_object=_DummyRas())
+    assert RasPlan.get_plan_intervals(upgu1, ras_object=_DummyRas())["output"] == token
+    assert RasPlan.validate_plan_intervals("1MIN", token) == []
+
+
+def test_detailed_smaller_than_hydrograph_is_not_an_error(upgu1):
+    # Ras.exe has a message for this but it was not confirmed to block a compute.
+    assert RasPlan.validate_plan_intervals("1MIN", "30MIN", "10MIN") == []
+    RasPlan.update_plan_intervals(upgu1, instantaneous_interval="10MIN", ras_object=_DummyRas())
+    assert RasPlan.get_plan_intervals(upgu1, ras_object=_DummyRas())["instantaneous"] == "10MIN"
+
+
+def test_get_hdf_output_settings_small_h5py_fixture(tmp_path):
+    import h5py
+    import pandas as pd
+    import numpy as np
+    from ras_commander import HdfPlan
+
+    path = tmp_path / "UPGU1.p01.hdf"
+    with h5py.File(path, "w") as f:
+        params = f.create_group("Plan Data/Plan Parameters")
+        params.attrs["HDF Compression"] = np.int32(1)
+        params.attrs["HDF Chunk Size"] = np.float32(1.0)
+        params.attrs["Other"] = "ignored"
+        ts = f.create_group("Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series")
+        ts.create_dataset("Time Date Stamp", data=np.array([b"t"] * 5, dtype="S20"))
+        ts.create_dataset(
+            "Area/Water Surface", data=np.zeros((5, 100), dtype="f4"), chunks=(1, 100),
+            compression="gzip", compression_opts=1,
+        )
+        ts.create_dataset("Area/Plain", data=np.ones((5, 10), dtype="f4"))
+    out = HdfPlan.get_hdf_output_settings(path)
+    assert out["write_parameters"]["HDF Compression"] == 1
+    assert "Other" not in out["write_parameters"]
+    assert out["n_timesteps"] == 5
+    df = out["time_series"].set_index("name")
+    assert df.loc["Area/Water Surface", "compression"] == "gzip"
+    assert tuple(df.loc["Area/Water Surface", "chunks"]) == (1, 100)
+    assert pd.isna(df.loc["Area/Plain", "compression"])
+    assert pd.isna(df.loc["Area/Plain", "chunks"])
+    assert out["file_size_mb"] > 0
 
 
 def test_plan_df_exposes_intervals_and_hdf_keys(tmp_path):
