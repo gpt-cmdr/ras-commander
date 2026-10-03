@@ -17,6 +17,7 @@ All of the methods in this class are static and are designed to be used without 
 - get_plan_timestamps_list()
 - get_plan_information()
 - get_plan_parameters()
+- get_hdf_output_settings()
 - get_plan_met_precip()
 - get_geometry_information()
 - get_starting_wse_method()
@@ -293,6 +294,81 @@ class HdfPlan:
 
         except Exception as e:
             raise ValueError(f"Failed to get plan parameter attributes: {str(e)}")
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_hdf_output_settings(hdf_path: Path) -> Dict[str, Any]:
+        """
+        Report how a computed plan HDF was actually written (compression and cadence).
+
+        Use this to confirm that the plan-file settings written by
+        ``RasPlan.set_hdf_compression`` / ``RasPlan.update_plan_intervals`` were honored.
+
+        Args:
+            hdf_path (Path): Path to the HEC-RAS plan HDF file.
+
+        Returns:
+            dict with:
+                - ``write_parameters``: ``HDF ...`` attributes from
+                  ``Plan Data/Plan Parameters`` (compression, chunk size, ...).
+                - ``time_series``: DataFrame, one row per 2D/1D unsteady time-series
+                  dataset (``name``, ``shape``, ``chunks``, ``compression``,
+                  ``compression_opts``, ``shuffle``, ``stored_mb``, ``raw_mb``,
+                  ``ratio``).
+                - ``n_timesteps``: length of ``Time Date Stamp`` (the output cadence
+                  as written), or None.
+                - ``file_size_mb``: size of the HDF file on disk.
+        """
+        try:
+            with h5py.File(hdf_path, 'r') as hdf_file:
+                write_parameters: Dict[str, Any] = {}
+                params_path = HdfPlan._PLAN_PARAMETERS_PATH
+                if params_path in hdf_file:
+                    for key in hdf_file[params_path].attrs.keys():
+                        if key.startswith("HDF "):
+                            write_parameters[key] = HdfPlan._decode_hdf_attr_value(
+                                hdf_file[params_path].attrs[key]
+                            )
+
+                rows: List[Dict[str, Any]] = []
+                ts_root = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+                n_timesteps = None
+                if ts_root in hdf_file:
+                    stamp_path = f"{ts_root}/Time Date Stamp"
+                    if stamp_path in hdf_file:
+                        n_timesteps = int(hdf_file[stamp_path].shape[0])
+
+                    def _collect(name, obj):
+                        if isinstance(obj, h5py.Dataset) and obj.ndim == 2 and obj.size > 0:
+                            raw = obj.size * obj.dtype.itemsize
+                            stored = obj.id.get_storage_size()
+                            rows.append({
+                                "name": name,
+                                "shape": obj.shape,
+                                "chunks": obj.chunks,
+                                "compression": obj.compression,
+                                "compression_opts": obj.compression_opts,
+                                "shuffle": obj.shuffle,
+                                "stored_mb": stored / 1e6,
+                                "raw_mb": raw / 1e6,
+                                "ratio": stored / raw if raw else None,
+                            })
+
+                    hdf_file[ts_root].visititems(_collect)
+
+            return {
+                "write_parameters": write_parameters,
+                "time_series": pd.DataFrame(
+                    rows,
+                    columns=["name", "shape", "chunks", "compression", "compression_opts",
+                             "shuffle", "stored_mb", "raw_mb", "ratio"],
+                ),
+                "n_timesteps": n_timesteps,
+                "file_size_mb": Path(hdf_path).stat().st_size / 1e6,
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to get HDF output settings: {str(e)}")
 
     @staticmethod
     def _decode_hdf_attr_value(value: Any) -> Any:

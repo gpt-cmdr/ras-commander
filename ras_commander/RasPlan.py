@@ -46,7 +46,11 @@ List of Functions in RasPlan:
 - get_unsteady_path(): Get the full path for an unsteady number
 - get_geom_path(): Get the full path for a geometry number
 - update_run_flags(): Update various run flags in a plan file
-- update_plan_intervals(): Update computation and output intervals
+- update_plan_intervals(): Update computation/output/detailed/mapping intervals (validated)
+- get_plan_intervals(): Read the four plan intervals
+- validate_plan_intervals(): Check interval strings and HEC-RAS relationships
+- interval_to_seconds(): Convert an interval string to seconds
+- get_hdf_compression() / set_hdf_compression(): HDF5 compression level and chunk size
 - update_plan_description(): Update the description in a plan file
 - read_plan_description(): Read the description from a plan file
 - read_geom_description(): Read the description from a geometry file
@@ -1115,8 +1119,12 @@ class RasPlan:
                 'output_interval': 'output_interval',
                 'mapping': 'mapping_interval',
                 'mapping_interval': 'mapping_interval',
-                'hydrograph': 'hydrograph_output_interval',
-                'hydrograph_output_interval': 'hydrograph_output_interval',
+                'hydrograph': 'output_interval',
+                'hydrograph_output_interval': 'output_interval',
+                'instantaneous': 'instantaneous_interval',
+                'instantaneous_interval': 'instantaneous_interval',
+                'detailed': 'instantaneous_interval',
+                'detailed_output_interval': 'instantaneous_interval',
             }
             for key, value in intervals.items():
                 mapped_key = key_mapping.get(key.lower().replace(' ', '_'))
@@ -1335,7 +1343,10 @@ class RasPlan:
             'UNET Use Existing IB Tables', 'UNET 1D Methodology', 'UNET D2 Solver Type', 
             'UNET D2 Name', 'Run RASMapper', 'Run HTab', 'Run UNET',
             'Write IC File', 'Write IC File at Fixed DateTime', 'IC Time',
-            'Write IC File Reoccurance', 'Write IC File at Sim End'
+            'Write IC File Reoccurance', 'Write IC File at Sim End',
+            'Output Interval', 'Instantaneous Interval', 'Write Detailed',
+            'HDF Write Warmup', 'HDF Write Time Slices', 'HDF Flush', 'HDF Compression',
+            'HDF Chunk Size', 'HDF Spatial Parts', 'HDF Use Max Rows', 'HDF Fixed Rows'
         }
 
         if key not in supported_plan_keys:
@@ -1490,6 +1501,181 @@ class RasPlan:
             raise
 
 
+    # ------------------------------------------------------------------
+    # Output / mapping interval support
+    # ------------------------------------------------------------------
+
+    # Plan-file keys controlling the unsteady output cadence, keyed by the
+    # ras-commander argument name. HEC-RAS GUI names are in the comments.
+    PLAN_INTERVAL_KEYS = {
+        "computation": "Computation Interval",      # Computation Interval
+        "output": "Output Interval",                # Hydrograph Output Interval
+        "instantaneous": "Instantaneous Interval",  # Detailed Output Interval
+        "mapping": "Mapping Interval",              # Mapping Output Interval
+    }
+
+    # Interval strings offered by the HEC-RAS 5.0.7 - 7.0 unsteady-flow
+    # editor drop-downs (verified against the string tables in Ras.exe for
+    # 5.0.7, 6.3.1, 6.6 and 7.0).
+    VALID_PLAN_INTERVALS = (
+        '0.1SEC', '0.2SEC', '0.3SEC', '0.4SEC', '0.5SEC',
+        '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '12SEC',
+        '15SEC', '20SEC', '30SEC',
+        '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '12MIN',
+        '15MIN', '20MIN', '30MIN',
+        '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR',
+        '1DAY',
+    )
+
+    _INTERVAL_UNIT_SECONDS = {"SEC": 1.0, "MIN": 60.0, "HOUR": 3600.0, "DAY": 86400.0}
+
+    @staticmethod
+    def interval_to_seconds(interval: str) -> float:
+        """
+        Convert a HEC-RAS interval string (e.g. ``'15MIN'``) to seconds.
+
+        Raises:
+            ValueError: If the string is not a valid HEC-RAS interval.
+        """
+        text = str(interval).strip().upper()
+        if text not in RasPlan.VALID_PLAN_INTERVALS:
+            raise ValueError(
+                f"Invalid HEC-RAS interval '{interval}'. "
+                f"Must be one of {list(RasPlan.VALID_PLAN_INTERVALS)}"
+            )
+        match = re.fullmatch(r"([\d.]+)(SEC|MIN|HOUR|DAY)", text)
+        return float(match.group(1)) * RasPlan._INTERVAL_UNIT_SECONDS[match.group(2)]
+
+    @staticmethod
+    def _is_multiple(value_s: float, base_s: float) -> bool:
+        ratio = value_s / base_s
+        return abs(ratio - round(ratio)) < 1e-9
+
+    @staticmethod
+    def validate_plan_intervals(
+        computation_interval: Optional[str] = None,
+        output_interval: Optional[str] = None,
+        instantaneous_interval: Optional[str] = None,
+        mapping_interval: Optional[str] = None,
+        simulation_start_time: Optional[str] = None,
+    ) -> List[str]:
+        """
+        Check interval strings and their relationships against HEC-RAS rules.
+
+        Rules (HEC-RAS 6.x unsteady-flow editor; messages taken from the Ras.exe
+        string table and the HEC-RAS User's Manual "Unsteady Flow Computation
+        Settings"):
+
+        - every value must be one of ``VALID_PLAN_INTERVALS``;
+        - the Hydrograph (``output``), Detailed (``instantaneous``) and Mapping
+          intervals must each be >= the computation interval and an even multiple
+          of it ("... needs to be an even interval of the computation time step");
+        - the Detailed interval must not be smaller than the Hydrograph interval
+          ("The interval for detailed output is less than the hydrograph output
+          interval");
+        - when ``simulation_start_time`` (``'HH:MM'``) is given, it must fall on a
+          multiple of the Hydrograph output interval (HEC-RAS: "change the
+          simulation Starting Time to an even interval of the selected Hydrograph
+          Output Interval").
+
+        Pass only the values you know; relationships are checked only when both
+        sides are supplied.
+
+        Returns:
+            List[str]: Human-readable problems (empty when everything is valid).
+        """
+        problems: List[str] = []
+        supplied = {
+            'Computation Interval': computation_interval,
+            'Output Interval': output_interval,
+            'Instantaneous Interval': instantaneous_interval,
+            'Mapping Interval': mapping_interval,
+        }
+        seconds: Dict[str, float] = {}
+        for key, value in supplied.items():
+            if value is None:
+                continue
+            try:
+                seconds[key] = RasPlan.interval_to_seconds(value)
+            except ValueError:
+                problems.append(
+                    f"Invalid {key}: {value!r}. Must be one of {list(RasPlan.VALID_PLAN_INTERVALS)}"
+                )
+
+        comp = seconds.get('Computation Interval')
+        if comp is not None:
+            for key in ('Output Interval', 'Instantaneous Interval', 'Mapping Interval'):
+                value_s = seconds.get(key)
+                if value_s is None:
+                    continue
+                if value_s < comp:
+                    problems.append(
+                        f"{key} ({supplied[key]}) is less than the Computation Interval ({computation_interval})"
+                    )
+                elif not RasPlan._is_multiple(value_s, comp):
+                    problems.append(
+                        f"{key} ({supplied[key]}) must be an even multiple of the "
+                        f"Computation Interval ({computation_interval})"
+                    )
+
+        out_s, det_s = seconds.get('Output Interval'), seconds.get('Instantaneous Interval')
+        if out_s is not None and det_s is not None and det_s < out_s:
+            problems.append(
+                f"Instantaneous (detailed) Interval ({instantaneous_interval}) is less than "
+                f"the Output (hydrograph) Interval ({output_interval})"
+            )
+
+        if simulation_start_time and out_s is not None and out_s < 86400.0:
+            match = re.match(r"\s*(\d{1,2}):?(\d{2})", str(simulation_start_time))
+            if match:
+                start_s = int(match.group(1)) * 3600 + int(match.group(2)) * 60
+                if not RasPlan._is_multiple(start_s, out_s):
+                    problems.append(
+                        f"Simulation start time {simulation_start_time} is not an even multiple of "
+                        f"the Output Interval ({output_interval}); HEC-RAS will refuse to compute"
+                    )
+        return problems
+
+    @staticmethod
+    @log_call
+    def get_plan_intervals(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Dict[str, Optional[str]]:
+        """
+        Read the computation, output, detailed and mapping intervals from a plan file.
+
+        Args:
+            plan_number_or_path: Plan number or path to the plan file.
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            Dict[str, Optional[str]]: Keys ``computation``, ``output`` (Hydrograph
+            Output Interval), ``instantaneous`` (Detailed Output Interval) and
+            ``mapping``; values are the raw plan strings (e.g. ``'15MIN'``) or None
+            when the key is absent.
+
+        Raises:
+            ValueError: If the plan file cannot be found.
+        """
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if not plan_file_path or not Path(plan_file_path).exists():
+            raise ValueError(f"Plan file not found: {plan_number_or_path}")
+
+        key_to_name = {v: k for k, v in RasPlan.PLAN_INTERVAL_KEYS.items()}
+        values: Dict[str, Optional[str]] = {name: None for name in RasPlan.PLAN_INTERVAL_KEYS}
+        with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
+            for line in file:
+                if "=" not in line:
+                    continue
+                key, raw = line.split("=", 1)
+                name = key_to_name.get(key.strip())
+                if name and values[name] is None:
+                    values[name] = raw.strip()
+        return values
+
     @staticmethod
     @log_call
     def update_plan_intervals(
@@ -1498,31 +1684,37 @@ class RasPlan:
         output_interval: Optional[str] = None,
         instantaneous_interval: Optional[str] = None,
         mapping_interval: Optional[str] = None,
+        validate: bool = True,
         ras_object=None
     ) -> None:
         """
-        Update the computation and output intervals in a HEC-RAS plan file.
+        Update the computation, output, detailed and mapping intervals in a plan file.
 
         Parameters:
         plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
-        computation_interval (Optional[str]): The new computation interval. Valid entries include:
-            '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '15SEC', '20SEC', '30SEC',
-            '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '15MIN', '20MIN', '30MIN',
-            '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '1DAY'
-        output_interval (Optional[str]): The new output interval. Valid entries are the same as computation_interval.
-        instantaneous_interval (Optional[str]): The new instantaneous interval. Valid entries are the same as computation_interval.
-        mapping_interval (Optional[str]): The new mapping interval. Valid entries are the same as computation_interval.
+        computation_interval (Optional[str]): New computation interval. Valid entries are
+            ``RasPlan.VALID_PLAN_INTERVALS`` ('0.1SEC' ... '1SEC' ... '1MIN' ... '1HOUR' ... '1DAY').
+        output_interval (Optional[str]): Hydrograph Output Interval (``Output Interval=``).
+        instantaneous_interval (Optional[str]): Detailed Output Interval (``Instantaneous Interval=``).
+        mapping_interval (Optional[str]): Mapping Output Interval (``Mapping Interval=``).
+        validate (bool): Check the relationships described in ``validate_plan_intervals``
+            against the *resulting* plan (new values merged with those already in the
+            file, plus the simulation start time). Default True.
         ras_object (RasPrj, optional): Specific RAS object to use. If None, uses the global ras instance.
 
         Raises:
-        ValueError: If the plan file is not found or if an invalid interval is provided
+        ValueError: If the plan file is not found or if an invalid/inconsistent interval is provided
         IOError: If there's an error reading or writing the plan file
 
-        Note: This function does not check if the intervals are equal divisors. Ensure you use valid values from HEC-RAS.
+        Notes:
+            Lines that are not intervals are written back untouched (line endings are
+            normalised to CRLF like every other ras-commander writer). A missing
+            interval key is inserted after the last existing interval key.
+            Short output/mapping intervals enlarge the plan HDF; see
+            ``set_hdf_compression``.
 
         Example:
-        >>> RasPlan.update_plan_intervals("01", computation_interval="5SEC", output_interval="1MIN", instantaneous_interval="1HOUR", mapping_interval="5MIN")
-        >>> RasPlan.update_plan_intervals("/path/to/plan.p01", computation_interval="10SEC", output_interval="30SEC")
+        >>> RasPlan.update_plan_intervals("01", computation_interval="30SEC", output_interval="15MIN", instantaneous_interval="1HOUR", mapping_interval="15MIN")
         """
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
@@ -1533,47 +1725,98 @@ class RasPlan:
             if plan_file_path is None or not Path(plan_file_path).exists():
                 raise ValueError(f"Plan file not found: {plan_file_path}")
 
-        valid_intervals = [
-            '1SEC', '2SEC', '3SEC', '4SEC', '5SEC', '6SEC', '10SEC', '15SEC', '20SEC', '30SEC',
-            '1MIN', '2MIN', '3MIN', '4MIN', '5MIN', '6MIN', '10MIN', '15MIN', '20MIN', '30MIN',
-            '1HOUR', '2HOUR', '3HOUR', '4HOUR', '6HOUR', '8HOUR', '12HOUR', '1DAY'
-        ]
-
-        interval_mapping = {
+        requested = {
             'Computation Interval': computation_interval,
             'Output Interval': output_interval,
             'Instantaneous Interval': instantaneous_interval,
-            'Mapping Interval': mapping_interval
+            'Mapping Interval': mapping_interval,
         }
+        requested = {
+            key: str(value).strip().upper() for key, value in requested.items() if value is not None
+        }
+        if not requested:
+            return
+
+        # Value validity is always enforced; relationships only when validate=True.
+        for key, value in requested.items():
+            if value not in RasPlan.VALID_PLAN_INTERVALS:
+                raise ValueError(
+                    f"Invalid {key}: {value}. Must be one of {list(RasPlan.VALID_PLAN_INTERVALS)}"
+                )
 
         try:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
-
-            for i, line in enumerate(lines):
-                for key, value in interval_mapping.items():
-                    if value is not None:
-                        if value.upper() not in valid_intervals:
-                            raise ValueError(f"Invalid {key}: {value}. Must be one of {valid_intervals}")
-                        if line.strip().startswith(key):
-                            lines[i] = f"{key}={value.upper()}\n"
-
-            _write_ras_text(
-                plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
-            )
-
-            logger = logging.getLogger(__name__)
-            logger.info("Updated intervals in plan file: %s", Path(plan_file_path).name)
-            logger.debug("Updated intervals in plan file path: %s", plan_file_path)
-
         except IOError as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"Error updating intervals in plan file {plan_file_path}: {e}")
+            logger.error(f"Error reading plan file {plan_file_path}: {e}")
             raise
-     
-     
 
+        interval_keys = set(RasPlan.PLAN_INTERVAL_KEYS.values())
 
+        if validate:
+            effective: Dict[str, str] = {}
+            start_time = None
+            for line in lines:
+                if "=" not in line:
+                    continue
+                key, raw = line.split("=", 1)
+                key = key.strip()
+                if key in interval_keys:
+                    effective.setdefault(key, raw.strip().upper())
+                elif key == "Simulation Date" and start_time is None:
+                    parts = [p.strip() for p in raw.split(",")]
+                    if len(parts) >= 2:
+                        start_time = parts[1]
+            effective.update(requested)
+            # Hand-edited values already in the file that are not valid strings are
+            # ignored rather than blamed on this call.
+            for key in list(effective):
+                if key not in requested and effective[key] not in RasPlan.VALID_PLAN_INTERVALS:
+                    del effective[key]
+            problems = RasPlan.validate_plan_intervals(
+                computation_interval=effective.get('Computation Interval'),
+                output_interval=effective.get('Output Interval'),
+                instantaneous_interval=effective.get('Instantaneous Interval'),
+                mapping_interval=effective.get('Mapping Interval'),
+                simulation_start_time=start_time,
+            )
+            if problems:
+                raise ValueError("Inconsistent plan intervals: " + "; ".join(problems))
+
+        remaining = dict(requested)
+        last_interval_index = None
+        for i, line in enumerate(lines):
+            if "=" not in line:
+                continue
+            key = line.split("=", 1)[0].strip()
+            if key in interval_keys:
+                last_interval_index = i
+                if key in remaining:
+                    lines[i] = f"{key}={remaining.pop(key)}\n"
+
+        if remaining:
+            if last_interval_index is None:
+                for i, line in enumerate(lines):
+                    if line.startswith(("Encroach Param=", "Geom File=", "Flow File=")):
+                        last_interval_index = i
+                if last_interval_index is None:
+                    last_interval_index = len(lines) - 1
+            new_lines = [
+                f"{key}={remaining[key]}\n"
+                for key in RasPlan.PLAN_INTERVAL_KEYS.values() if key in remaining
+            ]
+            if lines and not lines[last_interval_index].endswith("\n"):
+                lines[last_interval_index] += "\n"
+            lines[last_interval_index + 1:last_interval_index + 1] = new_lines
+
+        _write_ras_text(
+            plan_file_path, "".join(lines), encoding="utf-8", errors="replace"
+        )
+        if hasattr(ras_obj, "get_plan_entries"):
+            ras_obj.plan_df = ras_obj.get_plan_entries()
+
+        logger.info("Updated intervals in plan file: %s", Path(plan_file_path).name)
+        logger.debug("Updated intervals in plan file path: %s", plan_file_path)
 
 
     @staticmethod
@@ -3586,7 +3829,7 @@ class RasPlan:
             write_warmup: Write warmup time steps to output file.
             write_time_slices: Write time-sliced steps in addition to basic time steps.
             hdf_flush: Commit writes every time step for crash diagnostics.
-            compression: Gzip/deflate compression level, 1 to 9.
+            compression: Gzip/deflate compression level, 0 (off, no chunking) to 9.
             chunk_size_mb: Maximum chunk size in MB.
             spatial_parts: Number of spatial column groups.
             use_max_rows: Use maximum possible time rows per chunk.
@@ -3599,8 +3842,8 @@ class RasPlan:
         ras_obj = ras_object or ras
         ras_obj.check_initialized()
 
-        if compression is not None and not 1 <= compression <= 9:
-            raise ValueError("compression must be between 1 and 9")
+        if compression is not None and not 0 <= compression <= 9:
+            raise ValueError("compression must be between 0 (off) and 9")
         if chunk_size_mb is not None and chunk_size_mb < 1:
             raise ValueError("chunk_size_mb must be >= 1")
         if spatial_parts is not None and spatial_parts < 1:
@@ -3704,6 +3947,122 @@ class RasPlan:
             use_max_rows=use_max_rows,
             fixed_rows=fixed_rows,
             ras_object=ras_object
+        )
+
+    # HEC-RAS defaults when an "HDF ..." key is absent from the plan file. Source:
+    # the HDF5 Write Parameters help text in Ras.exe 6.x ("A compression level of 1 is
+    # the default ..."; "... the default value of 1MB") and plans saved by 5.0.7-6.6.
+    HDF_COMPRESSION_DEFAULTS = {
+        "level": 1,
+        "chunk_size_mb": 1,
+        "spatial_parts": 1,
+        "use_max_rows": False,
+        "fixed_rows": 1,
+    }
+
+    # Oldest plan "Program Version" (as written in the plan, e.g. 5.07 = 5.0.7) for
+    # which the HDF-key set below is confirmed present in Ras.exe.
+    HDF_COMPRESSION_MIN_PROGRAM_VERSION = 5.07
+
+    @staticmethod
+    @log_call
+    def get_hdf_compression(
+        plan_number_or_path: Union[str, Number, Path],
+        ras_object=None
+    ) -> Dict[str, Any]:
+        """
+        Get the HDF5 compression/chunking settings of a plan file.
+
+        Returns a dict with the raw plan values (None when the key is absent) under
+        ``level`` (``HDF Compression``; 0 = off, 1-9 = gzip level), ``chunk_size_mb``
+        (``HDF Chunk Size``), ``spatial_parts`` (``HDF Spatial Parts``), ``use_max_rows``
+        (``HDF Use Max Rows``) and ``fixed_rows`` (``HDF Fixed Rows``), plus:
+
+        - ``effective``: the same five settings with HEC-RAS defaults filled in for
+          absent keys (``HDF_COMPRESSION_DEFAULTS``);
+        - ``enabled``: whether datasets will be gzip-compressed (effective level > 0).
+          With compression off HEC-RAS writes contiguous (unchunked) datasets.
+        """
+        options = RasPlan.get_hdf_write_parameters(plan_number_or_path, ras_object=ras_object)
+        raw = {
+            "level": options.get("compression"),
+            "chunk_size_mb": options.get("chunk_size_mb"),
+            "spatial_parts": options.get("spatial_parts"),
+            "use_max_rows": options.get("use_max_rows"),
+            "fixed_rows": options.get("fixed_rows"),
+        }
+        effective = {
+            key: RasPlan.HDF_COMPRESSION_DEFAULTS[key] if value is None else value
+            for key, value in raw.items()
+        }
+        raw["effective"] = effective
+        raw["enabled"] = bool(effective["level"])
+        return raw
+
+    @staticmethod
+    @log_call
+    def set_hdf_compression(
+        plan_number_or_path: Union[str, Number, Path],
+        level: int,
+        chunk_size_mb: Optional[int] = None,
+        ras_object=None
+    ) -> bool:
+        """
+        Set the HDF5 gzip compression level (and optionally chunk size) in a plan file.
+
+        Args:
+            plan_number_or_path: Plan number or path to the plan file.
+            level: ``HDF Compression`` value. 0 turns compression (and chunking) off;
+                1-9 is the gzip/deflate level. HEC-RAS defaults to 1 because "higher
+                compression levels only minimally reduce the file size while slowing
+                the disk writes" (HDF5 Write Parameters help, Ras.exe 6.x).
+            chunk_size_mb: Optional ``HDF Chunk Size`` (maximum chunk size in MB;
+                HEC-RAS default 1).
+            ras_object: Optional RAS project object. If None, uses global ``ras``.
+
+        Returns:
+            bool: True when the plan file was updated (or already current).
+
+        Raises:
+            ValueError: If ``level`` is not an integer 0-9 or ``chunk_size_mb`` < 1.
+
+        Notes:
+            The keys exist in HEC-RAS 5.0.7 through 7.0 (checked in Ras.exe). A warning is
+            logged when the plan's ``Program Version`` is older than 5.07. HEC-RAS
+            7.x development builds (Beta 2026-03-30) list a new result storage and
+            compression format (~40% smaller); its plan keys are not yet documented.
+        """
+        if isinstance(level, bool) or not isinstance(level, int) or not 0 <= level <= 9:
+            raise ValueError("level must be an integer 0 (off) to 9")
+        if level > 4:
+            logger.warning(
+                "HDF compression level %s: HEC-RAS notes levels above 1 only minimally reduce "
+                "file size while slowing disk writes", level
+            )
+
+        ras_obj = ras_object or ras
+        ras_obj.check_initialized()
+        plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
+        if plan_file_path and Path(plan_file_path).exists():
+            try:
+                with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
+                    for line in file:
+                        if line.startswith("Program Version="):
+                            version = float(line.split("=", 1)[1].strip())
+                            if version < RasPlan.HDF_COMPRESSION_MIN_PROGRAM_VERSION:
+                                logger.warning(
+                                    "Plan Program Version %s predates HDF compression keys "
+                                    "verified for >= 5.0.7", version
+                                )
+                            break
+            except (ValueError, OSError):
+                pass
+
+        return RasPlan.set_hdf_write_parameters(
+            plan_number_or_path,
+            compression=level,
+            chunk_size_mb=chunk_size_mb,
+            ras_object=ras_object,
         )
 
     @staticmethod
