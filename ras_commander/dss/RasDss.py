@@ -1308,6 +1308,74 @@ class RasDss:
 
     @staticmethod
     @log_call
+    def write_precip_grid_arrays(
+        dss_file: Union[str, Path],
+        pathname: str,
+        data: np.ndarray,
+        interval_bounds: Union[List, np.ndarray, pd.DatetimeIndex],
+        *,
+        transform: Any,
+        crs: Any,
+        units: str,
+        nodata: Optional[float] = None,
+        overwrite: bool = False,
+    ) -> List[str]:
+        """Write interval precipitation arrays directly to a new native DSS7 file.
+
+        Uses optional MIT-licensed gyanz/pydsstools, without Java or Vortex.
+        Install ``ras-commander[dss-native]`` on a supported Python/platform.
+        NetCDF precipitation generation and existing Java DSS APIs are unchanged.
+
+        Args:
+            dss_file: Output file. Existing files require explicit overwrite;
+                overwrite replaces the entire file, it does not append records.
+            pathname: Six-part template, e.g. ``/UTM15/BASIN/PRECIP///ATLAS14/``.
+                D/E must be blank and become each interval's start/end.
+            data: Nonnegative interval depths, shape (time, row, column).
+                Row zero is north, columns run west to east. NaN and masked
+                cells are NoData. Infinity and negative depths are rejected.
+            interval_bounds: Exactly n_times+1 increasing, timezone-naive,
+                whole-minute datetimes. No timezone conversion is performed;
+                use the same clock as the receiving model. Unequal intervals
+                are supported; DSS end-of-day timestamps use 2400.
+            transform: Rasterio/Affine transform or six coefficients in
+                (a,b,c,d,e,f) order (not GDAL geotransform order), mapping
+                pixel corners. Requires north-up, unrotated square cells.
+            crs: Explicit projected CRS accepted by pyproj. No reprojection
+                occurs. Reproject geographic Atlas 14 grids before calling.
+            units: ``inches``/``IN`` or ``mm``. Numeric values are unchanged;
+                the records represent PER-CUM depth over each D/E interval,
+                not cumulative storm totals or precipitation rates.
+            nodata: Optional input sentinel, in the same units as data.
+            overwrite: Replace the whole output file after successful writing.
+
+        Returns:
+            Exact record pathnames written. Output uses DSS7 specified-time
+            grids; no generic promise of RAS/HMS version compatibility is made.
+
+        Raises:
+            ImportError: Native optional dependencies are unavailable.
+            ValueError: Array, pathname, units, geometry, or times are invalid.
+            FileExistsError: Output exists and overwrite is false.
+            RuntimeError: Written records could not be read back.
+
+        Notes:
+            A temporary sibling file is closed and its record metadata read
+            back before publication. No per-timestep raster files are created.
+            New output publication requires filesystem hard-link support to
+            refuse a concurrently created target atomically.
+            See https://github.com/gyanz/pydsstools for the upstream library.
+        """
+        from ._native_grid import write_precip_grid_arrays
+
+        return write_precip_grid_arrays(
+            dss_file, pathname, data, interval_bounds,
+            transform=transform, crs=crs, units=units,
+            nodata=nodata, overwrite=overwrite,
+        )
+
+    @staticmethod
+    @log_call
     def write_grid_timeseries(
         dss_file: Union[str, Path],
         pathname: str,

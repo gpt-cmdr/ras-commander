@@ -9,6 +9,21 @@ or gridded precipitation records.
 
 ### Methods
 
+#### write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *, transform, crs, units, nodata=None, overwrite=False)
+
+Write NumPy interval-depth arrays directly to DSS7 specified-time grids using
+optional `ras-commander[dss-native]` (gyanz/pydsstools). Requires no Java/Vortex.
+`data` is `(time, row, column)` with row zero north. Provide `n_times+1`
+timezone-naive whole-minute boundaries, projected CRS, square north-up Affine
+transform, and explicit inches or mm units. Records use PER-CUM depth. No
+reprojection or numeric unit conversion is performed. NaN/masked values and
+`nodata` become native DSS missing values. Existing files fail unless
+`overwrite=True`, which replaces the whole file after writing and readback.
+
+Returns exact pathnames with D/E interval start/end times. See
+[Direct precipitation arrays](../user-guide/dss-operations.md#direct-precipitation-arrays-to-dss7)
+for an example and compatibility limits.
+
 #### get_catalog(dss_file)
 Get catalog of all paths in a DSS file.
 
