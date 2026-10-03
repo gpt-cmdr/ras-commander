@@ -2,6 +2,10 @@
 
 RAS Commander reads and writes HEC-DSS boundary and precipitation data.
 
+`RasDss.write_grid_timeseries()` already writes arrays directly to gridded DSS
+through HEC Monolith. Existing Monolith users do not need pydsstools for this
+capability. The native writer below is an optional backend alternative.
+
 ## Direct precipitation arrays to DSS7
 
 `RasDss.write_precip_grid_arrays()` writes NumPy arrays through the native
@@ -13,10 +17,25 @@ default output of the gridded Atlas 14 generators; DSS is an explicit alternativ
 uv pip install "ras-commander[dss-native]"
 ```
 
-This extra uses pydsstools 3.x (at least 3.1), whose native wheels depend on Python and
-platform support. The Windows roundtrip tests use Python 3.12. If your current
-Python lacks a wheel, use a supported Python environment rather than assuming
-the standard NetCDF environment can load the native extension.
+This extra uses pydsstools 3.x (at least 3.1). For the tested **3.1.0** release,
+Windows x64 wheels cover CPython 3.9–3.13; there is no CPython 3.14 Windows
+wheel. Python 3.11/3.12 requires NumPy >=1.26,<2; Python 3.13 requires NumPy
+>=2.1. Dependencies also include pandas, affine, pyproj, and pydantic >=2,<3.
+Install these together through the extra so the resolver honors their version
+constraints. The Windows roundtrip tests use Python 3.12.
+
+**Windows runtime requirement:** the inspected CPython 3.12 wheel imports
+`VCRUNTIME140.dll` and Windows Universal CRT components. It does not bundle
+these DLLs. The Python distribution may supply the Visual C runtime; otherwise
+install the applicable [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+On the validation workstation, uv's CPython supplied `VCRUNTIME140.dll` and
+Windows supplied `ucrtbase.dll`. Passing tests on that development machine
+does not establish installation on a clean Windows machine.
+
+A compatible **wheel needs the runtime, not a compiler**. Building pydsstools
+from source on Windows additionally requires Visual Studio Build Tools with
+the C++ workload; see the [upstream installation guide](https://pydsstools.readthedocs.io/en/latest/installation.html).
+Use a supported Python/wheel combination if a source build is not intended.
 
 ```python
 from affine import Affine
