@@ -234,6 +234,60 @@ def test_keys_match_only_at_line_start_outside_description(tmp_path):
     assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["level"] == 0
 
 
+def test_missing_keys_are_inserted_outside_description(tmp_path):
+    plan = tmp_path / "P.p01"
+    description = (
+        "Begin DESCRIPTION:\n"
+        "Calibration Method=example\n"
+        "Output Interval=30MIN\n"
+        "HDF Compression=9\n"
+        "HDF Additional Output Variable=Face Flow\n"
+        "END DESCRIPTION:\n"
+    )
+    plan.write_text("Plan Title=T\n" + description + "Flow File=u01\n", encoding="utf-8")
+    dummy = _DummyRas()
+
+    RasPlan.update_plan_intervals(plan, output_interval="15MIN", ras_object=dummy)
+    assert RasPlan.set_hdf_compression(plan, 0, ras_object=dummy)
+    assert RasPlan.add_hdf_output_variable(plan, "Face Flow", ras_object=dummy)
+
+    text = plan.read_text(encoding="utf-8")
+    assert description in text
+    assert text.index("Output Interval=15MIN") > text.index("END DESCRIPTION:")
+    assert text.index("HDF Compression= 0 ") > text.index("END DESCRIPTION:")
+    assert text.index("HDF Additional Output Variable=Face Flow", text.index("END DESCRIPTION:")) > 0
+    assert RasPlan.get_plan_intervals(plan, ras_object=dummy)["output"] == "15MIN"
+    assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["effective"]["level"] == 0
+    assert RasPlan.get_hdf_output_variables(plan, ras_object=dummy) == ["Face Flow"]
+
+
+def test_duplicate_interval_and_hdf_keys_use_first_value_and_update_all(tmp_path):
+    plan = tmp_path / "P.p01"
+    plan.write_text(
+        "Plan Title=T\n"
+        "Computation Interval=1MIN\n"
+        "Output Interval=30MIN\n"
+        "Output Interval=1HOUR\n"
+        "HDF Compression= 1 \n"
+        "HDF Compression= 5 \n",
+        encoding="utf-8",
+    )
+    dummy = _DummyRas()
+
+    assert RasPlan.get_plan_intervals(plan, ras_object=dummy)["output"] == "30MIN"
+    assert RasPlan.get_hdf_write_parameters(plan, ras_object=dummy)["compression"] == 1
+    assert RasPlan.get_hdf_compression(plan, ras_object=dummy)["level"] == 1
+
+    RasPlan.update_plan_intervals(plan, output_interval="15MIN", ras_object=dummy)
+    assert RasPlan.set_hdf_compression(plan, 0, ras_object=dummy)
+
+    text = plan.read_text(encoding="utf-8")
+    assert text.count("Output Interval=15MIN") == 2
+    assert text.count("HDF Compression= 0 ") == 2
+    assert RasPlan.get_plan_intervals(plan, ras_object=dummy)["output"] == "15MIN"
+    assert RasPlan.get_hdf_write_parameters(plan, ras_object=dummy)["compression"] == 0
+
+
 def test_set_hdf_compression_refreshes_plan_df(tmp_path):
     project = _make_project(tmp_path)
     assert project.plan_df.iloc[0]["HDF Compression"] == "1"
@@ -241,6 +295,20 @@ def test_set_hdf_compression_refreshes_plan_df(tmp_path):
     assert project.plan_df.iloc[0]["HDF Compression"] == "0"
     assert RasPlan.set_hdf_write_parameters("01", chunk_size_mb=2, ras_object=project)
     assert project.plan_df.iloc[0]["HDF Chunk Size"] == "2"
+
+
+@pytest.mark.parametrize(
+    "getter",
+    [
+        RasPlan.get_plan_intervals,
+        RasPlan.get_hdf_write_parameters,
+        RasPlan.get_hdf_compression,
+    ],
+)
+def test_output_getters_raise_for_nonexistent_plan(tmp_path, getter):
+    project = _make_project(tmp_path)
+    with pytest.raises(ValueError, match="Plan file not found"):
+        getter("99", ras_object=project)
 
 
 @pytest.mark.parametrize("token", ["1WEEK", "1MON", "1YEAR"])

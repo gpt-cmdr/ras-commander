@@ -26,7 +26,7 @@ Allowed interval strings: `0.1SEC`-`0.5SEC`, `1SEC`...`30SEC` (1-6, 10, 12, 15, 
 `12HOUR`, `1DAY`, `1WEEK`, `1MON`, `1YEAR`. These were checked against the string tables of Ras.exe 5.0.7,
 6.3.1, 6.6 and 7.0; the HDF keys are present in all of them.
 
-Relationships enforced by HEC-RAS (and by `RasPlan.validate_plan_intervals`):
+Relationships checked by HEC-RAS (and by `RasPlan.validate_plan_intervals`):
 
 - Hydrograph, Detailed and Mapping intervals must be at least the computation
   interval and an even multiple of it.

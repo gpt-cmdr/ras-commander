@@ -1725,7 +1725,8 @@ class RasPlan:
         Parameters:
         plan_number_or_path (Union[str, Path]): The plan number (1 to 99) or full path to the plan file
         computation_interval (Optional[str]): New computation interval. Valid entries are
-            ``RasPlan.VALID_PLAN_INTERVALS`` ('0.1SEC' ... '1SEC' ... '1MIN' ... '1HOUR' ... '1DAY').
+            ``RasPlan.VALID_PLAN_INTERVALS`` ('0.1SEC' ... '1SEC' ... '1MIN' ... '1HOUR' ...
+            '1DAY', '1WEEK', '1MON', '1YEAR').
         output_interval (Optional[str]): Hydrograph Output Interval (``Output Interval=``).
         instantaneous_interval (Optional[str]): Detailed Output Interval (``Instantaneous Interval=``).
         mapping_interval (Optional[str]): Mapping Output Interval (``Mapping Interval=``).
@@ -1812,24 +1813,31 @@ class RasPlan:
             if problems:
                 raise ValueError("Inconsistent plan intervals: " + "; ".join(problems))
 
-        remaining = dict(requested)
+        present_keys = set()
         last_interval_index = None
         for i, key, _raw in _iter_plan_key_lines(lines):
             if key in interval_keys:
                 last_interval_index = i
-                if key in remaining:
-                    lines[i] = f"{key}={remaining.pop(key)}\n"
+                if key in requested:
+                    # HEC-RAS updates every occurrence when a hand-edited plan
+                    # contains duplicate interval records. Keep reads first-wins
+                    # and restore that single effective value on every write.
+                    lines[i] = f"{key}={requested[key]}\n"
+                    present_keys.add(key)
 
-        if remaining:
+        missing_keys = set(requested) - present_keys
+        if missing_keys:
             if last_interval_index is None:
-                for i, line in enumerate(lines):
-                    if line.startswith(("Encroach Param=", "Geom File=", "Flow File=")):
+                for i, key, _raw in _iter_plan_key_lines(lines):
+                    if key in {"Encroach Param", "Geom File", "Flow File"}:
                         last_interval_index = i
                 if last_interval_index is None:
+                    # Append after a complete Description block rather than using
+                    # a raw-line index that could point inside one.
                     last_interval_index = len(lines) - 1
             new_lines = [
-                f"{key}={remaining[key]}\n"
-                for key in RasPlan.PLAN_INTERVAL_KEYS.values() if key in remaining
+                f"{key}={requested[key]}\n"
+                for key in RasPlan.PLAN_INTERVAL_KEYS.values() if key in missing_keys
             ]
             if lines and not lines[last_interval_index].endswith("\n"):
                 lines[last_interval_index] += "\n"
@@ -3395,24 +3403,25 @@ class RasPlan:
     @staticmethod
     def _find_hdf_insert_index(lines: List[str]) -> int:
         """
-        Find a stable insertion point for HDF write parameters.
+        Find a stable, Description-aware insertion point for HDF write parameters.
         """
-        for i, line in enumerate(lines):
-            if line.startswith("Calibration Method="):
+        key_lines = list(_iter_plan_key_lines(lines))
+        for i, key, _raw in key_lines:
+            if key == "Calibration Method":
                 return i
 
         insert_index = None
-        for i, line in enumerate(lines):
-            if line.startswith("HDF "):
+        for i, key, _raw in key_lines:
+            if key.startswith("HDF "):
                 insert_index = i + 1
 
         if insert_index is not None:
             return insert_index
 
-        for i, line in enumerate(lines):
-            if line.startswith("Write HDF5 File="):
+        for i, key, _raw in key_lines:
+            if key == "Write HDF5 File":
                 return i
-            if line.startswith("UNET "):
+            if key.startswith("UNET "):
                 insert_index = i + 1
 
         return insert_index if insert_index is not None else len(lines)
@@ -3786,8 +3795,7 @@ class RasPlan:
 
         plan_file_path = RasPlan._resolve_plan_file_path(plan_number_or_path, ras_obj)
         if not plan_file_path or not plan_file_path.exists():
-            logger.error(f"Plan file not found: {plan_number_or_path}")
-            return {key: None for key in RasPlan.HDF_WRITE_PARAMETER_KEYS}
+            raise ValueError(f"Plan file not found: {plan_number_or_path}")
 
         values = {key: None for key in RasPlan.HDF_WRITE_PARAMETER_KEYS}
         plan_key_to_api_key = {
@@ -3800,6 +3808,8 @@ class RasPlan:
                 for _, key, raw_value in _iter_plan_key_lines(file.readlines()):
                     api_key = plan_key_to_api_key.get(key)
                     if not api_key:
+                        continue
+                    if values[api_key] is not None:
                         continue
                     raw_value = raw_value.strip()
                     if api_key in {"write_warmup", "write_time_slices", "hdf_flush", "use_max_rows"}:
@@ -4004,7 +4014,8 @@ class RasPlan:
         - ``effective``: the same five settings with HEC-RAS defaults filled in for
           absent keys (``HDF_COMPRESSION_DEFAULTS``);
         - ``enabled``: whether datasets will be gzip-compressed (effective level > 0).
-          With compression off HEC-RAS writes contiguous (unchunked) datasets.
+          Per the Ras.exe help text, compression off writes contiguous (unchunked)
+          datasets.
         """
         options = RasPlan.get_hdf_write_parameters(plan_number_or_path, ras_object=ras_object)
         raw = {
@@ -4281,36 +4292,17 @@ class RasPlan:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
-            # Check if this variable already exists
-            target_line = f"HDF Additional Output Variable={variable}"
-            for line in lines:
-                if line.strip() == target_line:
+            # Check only real plan keys; a Description block may contain an
+            # illustrative HDF Additional Output Variable line.
+            target_key = "HDF Additional Output Variable"
+            target_line = f"{target_key}={variable}"
+            for _, key, raw_value in _iter_plan_key_lines(lines):
+                if key == target_key and raw_value.strip() == variable:
                     logger.debug("HDF output variable %r already exists in plan", variable)
                     return True
 
-            # Find the best location to insert (near other HDF settings)
-            insert_index = None
-            for i, line in enumerate(lines):
-                if line.startswith("HDF Compression="):
-                    # Insert before HDF Compression
-                    insert_index = i
-                    break
-                elif line.startswith("HDF "):
-                    # Track last HDF line as fallback
-                    insert_index = i + 1
-
-            # If no HDF settings found, find Write HDF5 File or end of UNET settings
-            if insert_index is None:
-                for i, line in enumerate(lines):
-                    if line.startswith("Write HDF5 File="):
-                        insert_index = i
-                        break
-                    elif line.startswith("UNET "):
-                        insert_index = i + 1
-
-            # Fallback to end of file
-            if insert_index is None:
-                insert_index = len(lines)
+            # Reuse the Description-aware placement used for HDF write keys.
+            insert_index = RasPlan._find_hdf_insert_index(lines)
 
             # Insert the new variable
             lines.insert(insert_index, f"{target_line}\n")
@@ -4359,9 +4351,9 @@ class RasPlan:
         variables = []
         try:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
-                for line in file:
-                    if line.startswith("HDF Additional Output Variable="):
-                        var_name = line.split("=", 1)[1].strip()
+                for _, key, raw_value in _iter_plan_key_lines(file.readlines()):
+                    if key == "HDF Additional Output Variable":
+                        var_name = raw_value.strip()
                         variables.append(var_name)
 
             logger.debug("Found %d HDF output variables in plan", len(variables))
@@ -4474,15 +4466,14 @@ class RasPlan:
             with open(plan_file_path, 'r', encoding='utf-8', errors='replace') as file:
                 lines = file.readlines()
 
-            # Find and remove the variable line
-            target_line = f"HDF Additional Output Variable={variable}"
-            new_lines = []
-            removed = False
-            for line in lines:
-                if line.strip() == target_line:
-                    removed = True
-                else:
-                    new_lines.append(line)
+            # Do not alter matching text inside a Description block.
+            target_key = "HDF Additional Output Variable"
+            remove_indices = {
+                i for i, key, raw_value in _iter_plan_key_lines(lines)
+                if key == target_key and raw_value.strip() == variable
+            }
+            removed = bool(remove_indices)
+            new_lines = [line for i, line in enumerate(lines) if i not in remove_indices]
 
             if not removed:
                 logger.debug("HDF output variable %r not found in plan", variable)
