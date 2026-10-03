@@ -74,6 +74,7 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/plan-output-intervals-hdf-compression.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
           - user-guide/2d-profile-and-reference-workflows.md
@@ -195,6 +196,7 @@ nav:
       - Project Initialization: getting-started/project-initialization.md
     - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
+    - Output Intervals & HDF Compression: user-guide/plan-output-intervals-hdf-compression.md
     - Container Execution: user-guide/container-execution.md
     - Container HPC Design: user-guide/container-hpc-design.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md

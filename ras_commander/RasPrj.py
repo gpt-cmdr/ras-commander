@@ -806,6 +806,17 @@ class RasPrj:
             'IC Time',
             'Write IC File Reoccurance',
             'Write IC File at Sim End',
+            'Output Interval',
+            'Instantaneous Interval',
+            'Write Detailed',
+            'HDF Write Warmup',
+            'HDF Write Time Slices',
+            'HDF Flush',
+            'HDF Compression',
+            'HDF Chunk Size',
+            'HDF Spatial Parts',
+            'HDF Use Max Rows',
+            'HDF Fixed Rows',
             'description'  # Special case for description block
         }
 
@@ -916,6 +927,19 @@ class RasPrj:
                 'IC Time': r'IC Time=(.*)',
                 'Write IC File Reoccurance': r'Write IC File Reoccurance=(.*)',
                 'Write IC File at Sim End': r'Write IC File at Sim End=(.*)',
+                # Output interval / HDF output controls (see RasPlan.get_plan_intervals,
+                # RasPlan.get_hdf_compression).
+                'Output Interval': r'Output Interval=(.+)',
+                'Instantaneous Interval': r'Instantaneous Interval=(.+)',
+                'Write Detailed': r'Write Detailed=(.+)',
+                'HDF Write Warmup': r'HDF Write Warmup=(.+)',
+                'HDF Write Time Slices': r'HDF Write Time Slices=(.+)',
+                'HDF Flush': r'HDF Flush=(.+)',
+                'HDF Compression': r'HDF Compression=(.+)',
+                'HDF Chunk Size': r'HDF Chunk Size=(.+)',
+                'HDF Spatial Parts': r'HDF Spatial Parts=(.+)',
+                'HDF Use Max Rows': r'HDF Use Max Rows=(.+)',
+                'HDF Fixed Rows': r'HDF Fixed Rows=(.+)',
             }
             
             # END Exception to Style Guide
@@ -2159,7 +2183,10 @@ class RasPrj:
                 'Mapping Interval', 'Run HTab', 'Run UNet', 'Run Sediment', 'Run PostProcess',
                 'Run WQNet', 'Run RASMapper', 'UNET Use Existing IB Tables', 'HDF_Results_Path',
                 'UNET 1D Methodology', 'Write IC File', 'Write IC File at Fixed DateTime',
-                'IC Time', 'Write IC File Reoccurance', 'Write IC File at Sim End'
+                'IC Time', 'Write IC File Reoccurance', 'Write IC File at Sim End',
+                'Write Detailed', 'HDF Write Warmup', 'HDF Write Time Slices', 'HDF Flush',
+                'HDF Compression', 'HDF Chunk Size', 'HDF Spatial Parts', 'HDF Use Max Rows',
+                'HDF Fixed Rows'
             ]
             
             # Additional convenience columns
