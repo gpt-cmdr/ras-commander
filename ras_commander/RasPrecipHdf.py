@@ -604,6 +604,8 @@ class RasPrecipHdf:
         require_met_bc_block: bool = True,
         overwrite: bool = False,
         dry_run: bool = False,
+        ratio: Optional[float] = None,
+        historic: bool = False,
     ) -> PrecipRasterImportResult:
         """
         Write an ``Imported Raster Data`` payload into an unsteady flow HDF.
@@ -648,6 +650,13 @@ class RasPrecipHdf:
             written and the result is marked skipped.
         dry_run : bool, default False
             Validate inputs and report the layout without writing.
+        ratio : float, optional
+            Precipitation multiplier to write on the HDF precipitation group.
+            When omitted, an inherited non-unit text or HDF ratio is rejected
+            rather than silently retained.
+        historic : bool, default False
+            Declare observed or analysis precipitation. This writes HDF
+            ``Ratio=1.0`` and rejects any contradictory non-unit ``ratio``.
 
         Returns
         -------
@@ -667,6 +676,18 @@ class RasPrecipHdf:
 
         started = time.perf_counter()
         hdf_path = Path(unsteady_hdf_path)
+
+        # Keep the direct payload writer subject to the same source-agnostic
+        # retained-ratio guard as the public boundary setters.  Import lazily to
+        # avoid a module-level RasUnsteady/RasPrecipHdf cycle.
+        from .RasUnsteady import RasUnsteady
+
+        effective_ratio = RasUnsteady._effective_precipitation_ratio(
+            ratio, historic=historic
+        )
+        RasUnsteady._preflight_precipitation_ratio(
+            hdf_path.with_suffix(""), None, effective_ratio
+        )
 
         if met_variable not in _SUPPORTED_MET_VARIABLES:
             raise ValueError(
@@ -839,6 +860,16 @@ class RasPrecipHdf:
                 )
                 for attr_name, attr_value in attributes:
                     RasPrecipHdf._write_attr(dataset, attr_name, attr_value)
+            if effective_ratio is not None:
+                precip_grp = f.require_group(
+                    "Event Conditions/Meteorology/Precipitation"
+                )
+                RasUnsteady._write_precipitation_ratio_attribute(
+                    precip_grp,
+                    effective_ratio,
+                    hdf_path,
+                    historic=historic,
+                )
 
         logger.debug(
             "Wrote %s Imported Raster Data to %s: %d time steps, %d x %d cells, units=%s",

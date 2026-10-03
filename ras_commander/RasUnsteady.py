@@ -5334,6 +5334,8 @@ class RasUnsteady:
                 nodata=-9999.0,
                 require_met_bc_block=False,
                 overwrite=True,
+                ratio=ratio,
+                historic=historic,
             )
             with h5py.File(hdf_path, "a") as f:
                 precip_grp = f.require_group(f"{met_path}/Precipitation")
@@ -5578,11 +5580,26 @@ class RasUnsteady:
     def _effective_precipitation_ratio(
         ratio: Optional[float], *, historic: bool
     ) -> Optional[float]:
-        """Return the ratio to write for an explicitly historic precipitation source."""
+        """Return the ratio to write, enforcing observed-rainfall provenance."""
         # Observed and analysis precipitation is already the event rainfall. A
         # cloned design-storm plan can carry an areal-reduction factor, so never
         # retain it merely because the historic caller omitted ``ratio``.
-        return 1.0 if historic and ratio is None else ratio
+        if not historic:
+            return ratio
+        if ratio is not None:
+            try:
+                numeric_ratio = float(ratio)
+            except (TypeError, ValueError):
+                # Preserve the established positive/finite validation and its
+                # diagnostic in the common preflight below.
+                return ratio
+            if not np.isclose(numeric_ratio, 1.0):
+                raise ValueError(
+                    "historic=True requires ratio=1.0 because observed precipitation "
+                    "must not be scaled by a design-storm ARF. Pass historic=False and "
+                    "ratio=<value> only for a deliberate design-storm workflow."
+                )
+        return 1.0
 
     @staticmethod
     def _write_precipitation_ratio_attribute(
@@ -5624,7 +5641,13 @@ class RasUnsteady:
         capabilities: Optional["GriddedPrecipitationCapabilities"],
         ratio: Optional[float],
     ) -> None:
-        """Validate explicit and retained ratios before mutating a model."""
+        """Validate explicit and retained ratios before mutating a model.
+
+        An omitted ratio is safe only when both retained representations are
+        unit (or absent).  HEC-RAS can rebuild one representation from the
+        other, so inspect the unsteady text and its sidecar HDF rather than
+        treating either as authoritative on its own.
+        """
         numeric_ratio: Optional[float] = None
         if ratio is not None:
             try:
@@ -5647,31 +5670,75 @@ class RasUnsteady:
                 "precipitation ratio. Pre-scale the source values intentionally "
                 "and pass ratio=1.0, or use HEC-RAS 6.2+."
             )
-        if capabilities and not capabilities.ratio_applied and ratio is None:
+
+        if numeric_ratio is not None and not np.isclose(numeric_ratio, 1.0):
+            logger.info(
+                "%s will use explicit precipitation Ratio=%s for a deliberate "
+                "design-storm workflow",
+                unsteady_path.name,
+                RasUnsteady._format_met_float(numeric_ratio),
+            )
+
+        if ratio is None:
+            retained_ratios: List[Tuple[Path, str, float]] = []
             ratio_prefix = "Met BC=Precipitation|Ratio="
-            with open(
-                unsteady_path, "r", encoding="utf-8", errors="replace"
-            ) as source:
-                existing_line = next(
-                    (line for line in source if line.startswith(ratio_prefix)),
-                    None,
-                )
-            if existing_line is not None:
-                raw_ratio = existing_line[len(ratio_prefix):].strip()
-                try:
-                    existing_ratio = float(raw_ratio) if raw_ratio else 1.0
-                except ValueError as exc:
-                    raise ValueError(
-                        f"Unparseable precipitation ratio {raw_ratio!r} in "
-                        f"{unsteady_path.name}"
-                    ) from exc
-                if not np.isclose(existing_ratio, 1.0):
-                    raise ValueError(
-                        f"{unsteady_path.name} retains precipitation Ratio={raw_ratio}, "
-                        f"but HEC-RAS {capabilities.version} does not apply that ratio. "
-                        "Pass ratio=1.0 to clear the ineffective setting and pre-scale "
-                        "the source intentionally, or use HEC-RAS 6.2+."
+            if unsteady_path.exists():
+                with open(
+                    unsteady_path, "r", encoding="utf-8", errors="replace"
+                ) as source:
+                    existing_line = next(
+                        (line for line in source if line.startswith(ratio_prefix)),
+                        None,
                     )
+                if existing_line is not None:
+                    raw_ratio = existing_line[len(ratio_prefix):].strip()
+                    try:
+                        existing_ratio = float(raw_ratio) if raw_ratio else 1.0
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Unparseable precipitation ratio {raw_ratio!r} in "
+                            f"{unsteady_path.name}"
+                        ) from exc
+                    if not np.isclose(existing_ratio, 1.0):
+                        retained_ratios.append((unsteady_path, raw_ratio, existing_ratio))
+
+            hdf_path = Path(f"{unsteady_path}.hdf")
+            if hdf_path.exists():
+                import h5py
+
+                precip_path = "Event Conditions/Meteorology/Precipitation"
+                with h5py.File(hdf_path, "r") as hdf_file:
+                    if precip_path in hdf_file:
+                        existing = hdf_file[precip_path].attrs.get("Ratio")
+                        if existing is not None:
+                            try:
+                                existing_ratio = float(existing)
+                            except (TypeError, ValueError) as exc:
+                                raise ValueError(
+                                    "Unparseable precipitation HDF Ratio "
+                                    f"{existing!r} in {hdf_path.name}"
+                                ) from exc
+                            if not np.isclose(existing_ratio, 1.0):
+                                retained_ratios.append(
+                                    (
+                                        hdf_path,
+                                        RasUnsteady._format_met_float(existing_ratio),
+                                        existing_ratio,
+                                    )
+                                )
+
+            if retained_ratios:
+                source_path, raw_ratio, _ = retained_ratios[0]
+                legacy_note = ""
+                if capabilities and not capabilities.ratio_applied:
+                    legacy_note = (
+                        f" HEC-RAS {capabilities.version} does not apply that ratio."
+                    )
+                raise ValueError(
+                    f"{source_path.name} retains precipitation Ratio={raw_ratio}.{legacy_note} "
+                    "Pass historic=True (or ratio=1.0) for observed data, or "
+                    f"ratio={raw_ratio} to keep the design-storm ARF deliberately."
+                )
 
     @staticmethod
     @log_call
@@ -5845,12 +5912,13 @@ class RasUnsteady:
             supplied as a two-digit unsteady-flow number.
         ratio : float, optional
             Set ``Met BC=Precipitation|Ratio``. HEC-RAS 6.0-6.1 do not apply
-            this multiplier, so those releases require 1.0. Passing 1.0 also
-            clears an ineffective retained non-unit ratio.
+            this multiplier, so those releases require 1.0. When omitted, a
+            retained non-unit text or HDF ratio raises rather than silently
+            scaling the new source; pass 1.0 or a deliberate design value.
         historic : bool, default False
             Set true for observed or analysis precipitation. With ``ratio=None``
-            the text and HDF ratios are reset to 1.0. A non-unit value is only
-            appropriate when explicitly requested for an unusual workflow.
+            the text and HDF ratios are reset to 1.0. A non-unit ``ratio`` is
+            contradictory and raises.
 
         Returns
         -------
@@ -6004,11 +6072,13 @@ class RasUnsteady:
             Duration represented by a nonzero first rate/amount frame.
         ratio : float, optional
             Positive HEC-RAS precipitation multiplier. Non-unit values for
-            observed precipitation should be unusual and explicit.
+            design storms are allowed only when explicit. Omitting it rejects
+            a retained non-unit text or HDF value.
         historic : bool, default False
             Set true for observed or analysis precipitation (MRMS, AORC, Stage
             IV, gauge-adjusted grids, or QPF analysis). With ``ratio=None`` this
-            writes 1.0 to both the unsteady file and its HDF sidecar.
+            writes 1.0 to both the unsteady file and its HDF sidecar; a non-unit
+            ``ratio`` raises.
 
         Returns
         -------
@@ -6082,11 +6152,13 @@ class RasUnsteady:
             (the dialog default) and a warning reports any non-zero data dropped.
         ratio : float, optional
             Set ``Met BC=Precipitation|Ratio``. HEC-RAS multiplies all
-            precipitation by this factor. When omitted the existing value is kept,
-            and a warning is logged if it is not 1.
+            precipitation by this factor. When omitted, a retained non-unit
+            value in either the text or HDF raises before mutation. Pass
+            ``historic=True`` (or ``ratio=1.0``) for observed data, or an
+            explicit design-storm value to retain an ARF deliberately.
         historic : bool, default False
-            Set true for observed or analysis precipitation. This changes an
-            omitted ratio to 1.0 instead of retaining a cloned plan's value.
+            Set true for observed or analysis precipitation. This writes 1.0;
+            a non-unit ``ratio`` is contradictory and raises.
 
         Returns
         -------
@@ -6109,7 +6181,8 @@ class RasUnsteady:
         >>> # Set gridded precipitation from AORC NetCDF
         >>> RasUnsteady.set_gridded_precipitation(
         ...     unsteady_file="04",
-        ...     netcdf_path="Precipitation/aorc_april2020_shg.nc"
+        ...     netcdf_path="Precipitation/aorc_april2020_shg.nc",
+        ...     historic=True,
         ... )
 
         Notes
@@ -6486,9 +6559,11 @@ class RasUnsteady:
             HEC-RAS spatial interpolation method.
         ratio : float, optional
             HEC-RAS precipitation multiplier. Non-unit values for observed
-            precipitation should be unusual and explicit.
+            precipitation are rejected when ``historic=True``. Omitting this
+            value rejects a retained non-unit text or HDF ratio.
         historic : bool, default False
-            Reset an omitted ratio to 1.0 for observed or analysis precipitation.
+            Reset the text and HDF ratio to 1.0 for observed or analysis
+            precipitation.
         nodata_policy : {"error", "zero"}, default "error"
             Fail on NoData by default; ``"zero"`` explicitly treats it as dry.
         cache_path : str or Path, optional
@@ -6633,9 +6708,9 @@ class RasUnsteady:
         HEC-Vortex or HEC-MetVue and use
         :meth:`configure_gridded_dss_precipitation`.
 
-        Set ``historic=True`` for observed or analysis precipitation to reset an
-        omitted ratio to 1.0. Non-unit values for observed precipitation should
-        be unusual and explicit.
+        Set ``historic=True`` for observed or analysis precipitation to write a
+        unit ratio. A retained non-unit text or HDF ratio requires an explicit
+        design choice, and a non-unit ratio with ``historic=True`` raises.
         """
         from .precip.RasPrecipGrid import (
             GriddedPrecipitationImportResult,

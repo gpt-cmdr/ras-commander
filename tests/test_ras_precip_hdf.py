@@ -519,16 +519,18 @@ def test_set_gridded_precipitation_writes_units_ratio_and_creates_hdf(tmp_path):
         assert f["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"] == np.float32(1.0)
 
 
-def test_set_gridded_precipitation_warns_about_existing_ratio(tmp_path, caplog):
+def test_set_gridded_precipitation_rejects_retained_nonunit_ratio(tmp_path, caplog):
     u01, ras_object = _project(tmp_path, ratio_line="Met BC=Precipitation|Ratio=0.8937\n")
     _two_cell_netcdf(tmp_path)
-    with caplog.at_level(logging.WARNING, logger=UNSTEADY_LOGGER):
+    before = u01.read_bytes()
+    with caplog.at_level(logging.WARNING, logger=UNSTEADY_LOGGER), pytest.raises(
+        ValueError, match="historic=True"
+    ):
         RasUnsteady.set_gridded_precipitation(
             u01, "Precipitation/storm.nc", ras_object=ras_object, units="in",
             value_type="amount", first_timestep_hours=0.1,
         )
-    assert "Met BC=Precipitation|Ratio=0.8937" in u01.read_text(encoding="utf-8")
-    assert any("Ratio=0.8937" in r.getMessage() for r in caplog.records)
+    assert u01.read_bytes() == before
 
 
 def test_set_gridded_precipitation_replaces_existing_ratio(tmp_path):
@@ -576,27 +578,23 @@ def test_historic_gridded_precipitation_resets_cloned_ratio_in_text_and_hdf(
     assert "0.8768" in warnings
 
 
-def test_historic_gridded_precipitation_honors_explicit_ratio(tmp_path):
+def test_historic_gridded_precipitation_rejects_explicit_nonunit_ratio(tmp_path):
     u01, ras_object = _project(
         tmp_path, ratio_line="Met BC=Precipitation|Ratio=0.8768\n"
     )
     _two_cell_netcdf(tmp_path)
 
-    RasUnsteady.set_gridded_precipitation(
-        u01,
-        "Precipitation/storm.nc",
-        ras_object=ras_object,
-        units="in",
-        value_type="amount",
-        first_timestep_hours=0.1,
-        ratio=0.9,
-        historic=True,
-    )
-
-    assert "Met BC=Precipitation|Ratio=0.9\n" in u01.read_text(encoding="utf-8")
-    with h5py.File(Path(str(u01) + ".hdf"), "r") as hdf:
-        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
-        assert ratio == pytest.approx(0.9)
+    with pytest.raises(ValueError, match="historic=True requires ratio=1.0"):
+        RasUnsteady.set_gridded_precipitation(
+            u01,
+            "Precipitation/storm.nc",
+            ras_object=ras_object,
+            units="in",
+            value_type="amount",
+            first_timestep_hours=0.1,
+            ratio=0.9,
+            historic=True,
+        )
 
 
 @pytest.mark.parametrize(

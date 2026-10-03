@@ -9,13 +9,15 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
-**Historic gridded precipitation writes a unit ratio**
+**Gridded precipitation rejects an inherited non-unit ratio**
 
-The gridded NetCDF, GeoTIFF, GRIB, and DSS setters accept `historic=True` for
-observed or analysis rainfall. When `ratio` is omitted, the unsteady-file and
-HDF precipitation ratios are written as 1.0, with a warning when a cloned plan
-carried a different value. Generic and design-storm behavior is unchanged;
-non-unit historic ratios remain explicit-only.
+The gridded NetCDF, GeoTIFF, GRIB, and DSS setters, and the direct native-HDF
+writer, reject an omitted `ratio` when either the unsteady file or its HDF
+sidecar retains a non-unit precipitation ratio. The error identifies the
+retained value and requires an explicit decision: `historic=True` (or
+`ratio=1.0`) for observed/analysis rainfall, or `ratio=<value>` to deliberately
+keep a design-storm ARF. `historic=True` writes 1.0 to text and HDF and rejects
+a non-unit `ratio`; an explicit non-unit design ratio remains supported.
 
 **Report duplicate native BC face ownership during read-only inspection**
 

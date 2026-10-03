@@ -21,7 +21,7 @@ GeoTIFF and GRIB setters return `GriddedPrecipitationImportResult` with source h
 
 ## Historic precipitation ratio
 
-HEC-RAS multiplies gridded precipitation by `Met BC=Precipitation|Ratio` and the matching HDF `Ratio` attribute. For observed or analysis sources, pass `historic=True` to the NetCDF, GeoTIFF, GRIB, or DSS setter. An omitted `ratio` is then written as `1.0` in both places, replacing a scale factor inherited from a cloned design-storm plan and logging the old value. This applies to MRMS, AORC, Stage IV, gauge-adjusted grids, and analysis QPF. A non-unit ratio remains available only as an explicit `ratio=` argument and is unusual for observed rainfall. Generic calls without `historic=True` retain their existing ratio behavior so design-storm workflows are unchanged.
+HEC-RAS multiplies gridded precipitation by `Met BC=Precipitation|Ratio` and the matching HDF `Ratio` attribute. For observed or analysis sources, pass `historic=True` to the NetCDF, GeoTIFF, GRIB, or DSS setter; it writes `1.0` in both places, replacing a scale factor inherited from a cloned design-storm plan and logging the old value. This applies to MRMS, AORC, Stage IV, gauge-adjusted grids, and analysis QPF. When `ratio` is omitted, every generic setter also rejects a retained non-unit value in either representation rather than silently scaling new data. Resolve that error with `historic=True` (or `ratio=1.0`) for observed data, or an explicit non-unit `ratio=<value>` to retain a design-storm ARF deliberately. `historic=True, ratio=<non-unit>` is contradictory and raises.
 
 Install dependencies from a terminal:
 
