@@ -19,6 +19,10 @@ Configure global gridded rainfall with `RasUnsteady`, then validate the solver-f
 
 GeoTIFF and GRIB setters return `GriddedPrecipitationImportResult` with source hashes, cache location, translation route, qualification, and HDF receipt. The established NetCDF setter retains its `None` return contract. For lower-level array ingestion, use `RasPrecipGrid` and `RasPrecipHdf`.
 
+## Historic precipitation ratio
+
+HEC-RAS multiplies gridded precipitation by `Met BC=Precipitation|Ratio` and the matching HDF `Ratio` attribute. For observed or analysis sources, pass `historic=True` to the NetCDF, GeoTIFF, GRIB, or DSS setter. An omitted `ratio` is then written as `1.0` in both places, replacing a scale factor inherited from a cloned design-storm plan and logging the old value. This applies to MRMS, AORC, Stage IV, gauge-adjusted grids, and analysis QPF. A non-unit ratio remains available only as an explicit `ratio=` argument and is unusual for observed rainfall. Generic calls without `historic=True` retain their existing ratio behavior so design-storm workflows are unchanged.
+
 Install dependencies from a terminal:
 
 ```console
@@ -115,7 +119,7 @@ mrms_netcdf = PrecipMrms.to_ras_netcdf(
 )
 RasUnsteady.set_gridded_precipitation(
     "03", mrms_netcdf, dataset_name="APCP_surface",
-    units="mm", value_type="cumulative", ras_object=ras,
+    units="mm", value_type="cumulative", historic=True, ras_object=ras,
 )
 ```
 
@@ -144,7 +148,7 @@ netcdf = PrecipAorc.download(
 RasUnsteady.set_gridded_precipitation(
     "03", netcdf, dataset_name="APCP_surface",
     units="mm", value_type="amount", first_timestep_hours=1.0,
-    ras_object=ras,
+    historic=True, ras_object=ras,
 )
 ```
 

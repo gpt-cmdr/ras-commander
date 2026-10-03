@@ -9,6 +9,14 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Historic gridded precipitation writes a unit ratio**
+
+The gridded NetCDF, GeoTIFF, GRIB, and DSS setters accept `historic=True` for
+observed or analysis rainfall. When `ratio` is omitted, the unsteady-file and
+HDF precipitation ratios are written as 1.0, with a warning when a cloned plan
+carried a different value. Generic and design-storm behavior is unchanged;
+non-unit historic ratios remain explicit-only.
+
 **Report duplicate native BC face ownership during read-only inspection**
 
 `HdfBndry.get_bc_external_faces()` and `HdfMesh.get_mesh_perimeter_faces()` accept

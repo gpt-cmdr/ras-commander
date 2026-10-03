@@ -543,6 +543,62 @@ def test_set_gridded_precipitation_replaces_existing_ratio(tmp_path):
     assert text.count("Met BC=Precipitation|Ratio=") == 1
 
 
+def test_historic_gridded_precipitation_resets_cloned_ratio_in_text_and_hdf(
+    tmp_path, caplog
+):
+    u01, ras_object = _project(
+        tmp_path, ratio_line="Met BC=Precipitation|Ratio=0.8768\n"
+    )
+    _two_cell_netcdf(tmp_path)
+    hdf_path = Path(str(u01) + ".hdf")
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.require_group("Event Conditions/Meteorology/Precipitation").attrs[
+            "Ratio"
+        ] = np.float32(0.8768)
+
+    with caplog.at_level(logging.WARNING, logger=UNSTEADY_LOGGER):
+        RasUnsteady.set_gridded_precipitation(
+            u01,
+            "Precipitation/storm.nc",
+            ras_object=ras_object,
+            units="in",
+            value_type="amount",
+            first_timestep_hours=0.1,
+            historic=True,
+        )
+
+    assert "Met BC=Precipitation|Ratio=1\n" in u01.read_text(encoding="utf-8")
+    with h5py.File(hdf_path, "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(1.0)
+    warnings = "\n".join(record.getMessage() for record in caplog.records)
+    assert u01.name in warnings
+    assert "0.8768" in warnings
+
+
+def test_historic_gridded_precipitation_honors_explicit_ratio(tmp_path):
+    u01, ras_object = _project(
+        tmp_path, ratio_line="Met BC=Precipitation|Ratio=0.8768\n"
+    )
+    _two_cell_netcdf(tmp_path)
+
+    RasUnsteady.set_gridded_precipitation(
+        u01,
+        "Precipitation/storm.nc",
+        ras_object=ras_object,
+        units="in",
+        value_type="amount",
+        first_timestep_hours=0.1,
+        ratio=0.9,
+        historic=True,
+    )
+
+    assert "Met BC=Precipitation|Ratio=0.9\n" in u01.read_text(encoding="utf-8")
+    with h5py.File(Path(str(u01) + ".hdf"), "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(0.9)
+
+
 @pytest.mark.parametrize(
     "kwargs, error",
     [

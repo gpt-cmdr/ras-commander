@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -311,6 +312,51 @@ def test_direct_geotiff_api_writes_durable_netcdf_and_native_hdf(tmp_path):
             "Event Conditions/Meteorology/Precipitation/Imported Raster Data/Values"
         ][...]
         np.testing.assert_array_equal(values[-1].reshape(2, 2), [[3, 4], [5, 6]])
+
+
+@pytest.mark.parametrize(
+    ("writer_name", "source_name"),
+    [
+        ("set_gridded_precipitation_geotiff", "observed.tif"),
+        ("set_gridded_precipitation_grib", "observed.grib2"),
+    ],
+)
+def test_historic_raster_adapters_reset_cloned_ratio(
+    tmp_path, caplog, writer_name, source_name
+):
+    source = _write_tiff(tmp_path / source_name, np.ones((2, 2)), units="mm")
+    unsteady = tmp_path / "GeoTiffRain.u01"
+    unsteady.write_text(
+        "Flow Title=Historic rain\n"
+        "Program Version=6.60\n"
+        "Met BC=Precipitation|Ratio=0.8768\n",
+        encoding="ascii",
+    )
+    hdf_path = Path(str(unsteady) + ".hdf")
+    with h5py.File(hdf_path, "w") as hdf:
+        hdf.require_group("Event Conditions/Meteorology/Precipitation").attrs[
+            "Ratio"
+        ] = 0.8768
+
+    with caplog.at_level(logging.WARNING, logger="ras_commander.RasUnsteady"):
+        getattr(RasUnsteady, writer_name)(
+            unsteady,
+            source,
+            timestamps=["2024-01-01 01:00"],
+            units="mm",
+            value_type="amount",
+            first_timestep_hours=1.0,
+            historic=True,
+            ras_object=_dummy_project(tmp_path),
+        )
+
+    assert "Met BC=Precipitation|Ratio=1\n" in unsteady.read_text(encoding="utf-8")
+    with h5py.File(hdf_path, "r") as hdf:
+        ratio = hdf["Event Conditions/Meteorology/Precipitation"].attrs["Ratio"]
+        assert ratio == pytest.approx(1.0)
+    warnings = "\n".join(record.getMessage() for record in caplog.records)
+    assert unsteady.name in warnings
+    assert "0.8768" in warnings
 
 
 @pytest.mark.parametrize(
