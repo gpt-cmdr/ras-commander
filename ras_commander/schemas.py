@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.20"
+SCHEMA_VERSION = "1.21"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,18 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "frequency_storm_ddf": {
+        "description": "Duration-dependent frequency storm with a zero start row and interval-end depths.",
+        "accessor": "FrequencyStormDdf.generate_hyetograph(depths_inches, durations_minutes)",
+        "source": "ras_commander.precip.FrequencyStormDdf.generate_hyetograph()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "hour", "dtype": "float64", "description": "Elapsed hours; zero start followed by five-minute interval ends."},
+            {"name": "incremental_depth", "dtype": "float64", "description": "Rainfall depth in inches for the ending interval; zero at the start."},
+            {"name": "cumulative_depth", "dtype": "float64", "description": "Cumulative rainfall depth in inches through the interval end."},
+        ],
+    },
     "mesh_perimeter_faces": {
         "description": "Every native perimeter face of one 2D area, including confirmed unassigned faces.",
         "accessor": "HdfMesh.get_mesh_perimeter_faces(hdf_path, mesh_name, ras_object=None)",
