@@ -470,6 +470,45 @@ for aep_pct, total_depth in aep_depths.items():
     print(f"Completed {return_period}-yr ({total_depth} inches)")
 ```
 
+## Gridded Atlas 14 units and QC
+
+`AbmHyetographGrid.generate_from_asc_files()` converts raw PFDS ASCII depth
+values to inches using **`scale_factor=0.001`** by default. For example, the
+raw Texas grid value `16905` means **16.905 inches**. NOAA documents these grids
+in thousandths of inches in its
+[Texas grid metadata](https://hdsc.nws.noaa.gov/pfds/meta/na14_vol11_tx_grid_metadata.xml).
+This corrects the previous `0.01` default, which produced ten times the intended
+depth for these files. Regenerate affected ASCII-derived storms. An explicit
+`scale_factor=0.001` used with earlier versions was already correct.
+
+The remotely accessed CONUS NetCDF uses different packing metadata, including
+`scale_factor=0.01`; its decoding is unchanged. Check each source product's
+metadata. For ASCII products intentionally stored in hundredths of inches or
+already in inches, explicitly pass `scale_factor=0.01` or `1.0`, respectively.
+The ASCII `nodata_value` override remains in **post-scaling** units.
+
+Generated incremental and cumulative variables are in inches. Built-in QC
+rejects empty, missing, nonfinite, negative, or incorrectly labelled rainfall
+and compares every stored cumulative value with the cumulative sum of the
+increments. Without an independent depth, a passing result is explicitly
+`internal_consistency_only`: both variables originate from the same generated
+series, so this cannot establish correct source units or product selection.
+
+```python
+qc = AbmHyetographGrid.verify_pixel(
+    "houston.nc", lat=29.75, lon=-95.45,
+    expected_depth_inches=16.905,  # Independently checked value at the selected cell
+)
+assert qc["passed"], qc["failure_reasons"]
+```
+
+Use an independently verified reference for the **selected nearest cell**, return
+period, and storm duration; the number above is an example from a Houston crop.
+Check `lat_actual` and `lon_actual`. This tests total depth and internal
+consistency, not nested-duration frequency matching, areal reduction, the temporal
+pattern, or HEC-RAS ingestion. Zero-depth references require zero computed depth;
+NoData pixels fail QC and are never treated as dry pixels.
+
 ## Example Notebooks
 
 Complete workflow demonstrations:
