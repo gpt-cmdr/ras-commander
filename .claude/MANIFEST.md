@@ -156,6 +156,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 | Component | Type | Path |
 |-----------|------|------|
+| `technical-writing-auditor` | skill | `.claude/skills/technical-writing-auditor/SKILL.md` |
 | `hierarchical-knowledge-best-practices.md` | rule | `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` |
 | `mkdocs-config.md` | rule | `.claude/rules/documentation/mkdocs-config.md` |
 | `notebook-standards.md` | rule | `.claude/rules/documentation/notebook-standards.md` |
@@ -245,6 +246,15 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 ---
 
 ## Relationship Map
+
+### Technical Writing Domain
+
+**`technical-writing-auditor`** (shared skill) -- scoped writing reviews and editorial revisions
+- Shared contract: root `AGENTS.md`, `docs/AGENTS.md`
+- Canonical guidance: `.claude/references/writing/technical-writing-guide.md`, `.claude/references/writing/technical-writing-standard.md`
+- Protocol: `.claude/skills/technical-writing-auditor/references/audit-protocol.md`
+- Codex discovery: existing allowlisted `sync_codex_skill_bridge.py` bridge
+- Scope: repository-maintained technical prose and intended contributions across docs, notebook explanations, API docstrings, comments, diagnostics, and release notes; external user artifacts are excluded
 
 ### HEC-RAS Execution Domain
 
