@@ -20,7 +20,7 @@ The primary workflow is:
 3. Export as HEC-DSS through HEC-Vortex or NetCDF/direct hyetograph inputs for HEC-RAS
 
 Design Storm Generation:
-Four HMS-validated methods are available for design storm hyetograph generation:
+Design-storm methods have different temporal patterns and qualification scopes:
 
 1. **StormGenerator** (Alternating Block Method):
    - Flexible peak positioning (0-100%)
@@ -51,6 +51,9 @@ Choose StormGenerator for flexible peak positioning or non-HMS workflows.
 Choose Atlas14Storm for HMS-equivalent workflows with official Atlas 14 patterns (supports 6h, 12h, 24h, 96h).
 Choose FrequencyStorm for TP-40 workflows or when 48-hour duration is needed.
 Choose ScsTypeStorm for SCS Type I/IA/II/III distributions (24-hour only).
+Choose FrequencyStormDdf for the duration-dependent Hydro-35 configuration
+with eight/ten knots, 24h/5min, 50%/67% placement and optional bounded TP-40 reduction.
+FrequencyStorm's fixed pattern is not a general DDF frequency-storm solver.
 
 Spatial Variance Analysis:
 Atlas14Grid and Atlas14Variance provide tools to assess whether uniform rainfall
@@ -207,6 +210,8 @@ from .PrecipAorc import PrecipAorc
 from .PrecipHrrr import PrecipHrrr
 from .PrecipMrms import PrecipMrms
 from .StormGenerator import StormGenerator
+from .FrequencyStormDdf import FrequencyStormDdf
+from .Tp40Reduction import Tp40Reduction
 from .Atlas14Grid import Atlas14Grid
 from .Atlas14Variance import Atlas14Variance
 from .AbmHyetographGrid import AbmHyetographGrid
@@ -251,7 +256,9 @@ __all__ = [
     'PrecipHrrr',                  # HRRR real-time forecast download
     'PrecipMrms',                  # MRMS QPE catalog, download, DSS/direct processing, and animation
     'StormGenerator',
-    'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF → DSS conversion
+    'FrequencyStormDdf',
+    'Tp40Reduction',
+    'VortexCli',                   # HEC-Vortex CLI wrapper for GRIB2/NetCDF Ã¢â€ â€™ DSS conversion
     'GriddedPrecipitationCapabilities',
     'PrecipCapabilities',
     'PrecipitationSource',

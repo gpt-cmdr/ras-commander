@@ -470,6 +470,72 @@ for aep_pct, total_depth in aep_depths.items():
     print(f"Completed {return_period}-yr ({total_depth} inches)")
 ```
 
+## Duration-dependent frequency rainfall and TP-40 reduction
+
+`FrequencyStormDdf` constructs a balanced storm from cumulative depth-duration
+inputs. It supports 24-hour storms at five-minute intervals, standard eight
+knots or ten explicit knots, and 50% or 67% peak placement. The existing
+`FrequencyStorm` fixed pattern and generic per-cell `AbmHyetographGrid` remain
+separate methods with unchanged behavior.
+
+```python
+from ras_commander.precip import FrequencyStormDdf
+
+hyeto = FrequencyStormDdf.generate_hyetograph(
+    depths_inches=[1.3, 2.58, 5.02, 7.17, 8.74, 11.4, 13.9, 16.4],
+    durations_minutes=[5, 15, 60, 120, 180, 360, 720, 1440],
+    peak_position_percent=50,
+    area_reduction_method="TP-40",
+    storm_area_sqmi=100.0,  # Explicit evaluation-area choice, in square miles
+    simulation_duration_hours=120,
+)
+```
+
+The output columns are `hour`, `incremental_depth` and `cumulative_depth`, with
+depths in inches. Row zero is a zero-depth start marker, followed by interval-end
+values. Do not export that marker as an extra rainfall interval to DSS. The 50%
+placement interval ends at 12:05; 67% ends at 16:05. Dry intervals extend the
+control window without stretching or rescaling the storm.
+
+Hydro-35 supplies absent 10/30-minute knots. Explicit knots are retained. Area
+reduction acts on the augmented cumulative depths, before log-log interpolation
+and differencing. Increments are placed in duration order, alternating left
+first. This ordering matches the independently read reference records even at
+slope transitions. HEC's manual describes sorting; agreement with these records
+does not establish universal equivalence across all settings or software versions.
+
+`Tp40Reduction.factor(duration_minutes, storm_area_sqmi)` exposes the bounded
+HEC-HMS compatibility relation `1 - f_D * (1 - exp(-0.015 * A))`. Area `A` is in
+square miles. Coefficients at 30, 60, 180, 360 and 1440 minutes are respectively
+0.48, 0.35, 0.22, 0.17 and 0.09, interpolated in log-log space. This interface
+accepts 5–1440 minutes and 0–400 square miles and rejects values outside those
+bounds; it neither extrapolates nor silently clamps excessive area.
+
+**Short-duration convention:** the inspected HMS implementation uses the
+30-minute coefficient for 5-, 10- and 15-minute depths. This convention matches
+the delivered reduction records, but differs from the technical manual's prose
+that durations below 30 minutes are unadjusted. This API deliberately implements
+that bounded HMS compatibility convention. It is not a general recommendation
+to apply those factors to every watershed.
+
+Use `area_reduction_method="none"` for already reduced inputs. Supplying an area
+with that option is rejected to avoid ambiguous configuration. The caller must
+choose the documented evaluation storm area; it is not inferred from grid cells
+or subbasin geometry. The reduced total is retained, not normalized back to the
+point total. Attributes record the point/areal totals, area, factors, knot mode,
+placement and actual peak indices. Annual/partial-duration conversion and TP-49
+durations are outside this interface.
+
+Validation includes seven event vectors, 436 additional no-reduction vectors,
+and 174 area-reduced vectors, all with 288 wet-window intervals. Maximum observed
+interval differences are below 2.5e-14 inches. Neutral regression fixtures retain
+independently read values or complete-vector digests; no reduction factor was
+fitted to a delivered total. These comparisons establish bounded numerical
+agreement, not hydraulic validation, universal correctness, or a novelty claim.
+
+References: [HEC frequency-storm technical reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm)
+and [HEC-HMS technical reference manual](https://www.hec.usace.army.mil/Software/hec-hms/documentation/HEC-HMS_Technical_Reference_Manual-20231106.pdf).
+
 ## Example Notebooks
 
 Complete workflow demonstrations:
