@@ -1,0 +1,67 @@
+{
+  "description": "6x6 native-cell Houston crop of NOAA Atlas 14 Texas 100-year precipitation depth grids. Raw values retained in thousandths of inches. Public-domain NOAA data.",
+  "retrieved": "2026-10-03",
+  "crop_bounds": [
+    -95.45,
+    29.7,
+    -95.4,
+    29.75
+  ],
+  "sources": [
+    {
+      "url": "https://hdsc.nws.noaa.gov/pfds/meta/na14_vol11_tx_grid_metadata.xml",
+      "file": "tx_metadata.xml",
+      "sha256": "4f00f9a45f7ffce7dd325273bfdb51dce56651ca307192ea252d07179f9f60e5"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr05ma.zip",
+      "file": "tx100yr05ma.zip",
+      "sha256": "d08164f6dc458df68232228e0bdc4724c06a3cdbd8624b8e90459d337c2677e6"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr10ma.zip",
+      "file": "tx100yr10ma.zip",
+      "sha256": "a1ccf1737410917fef80cb74803347a84bc0fa726ba876e8c23914c61546a385"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr15ma.zip",
+      "file": "tx100yr15ma.zip",
+      "sha256": "16936e35176ba4f02f9fdc2b5e104552437a4e1ec6cb17ce68f169c2cac6bf4c"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr30ma.zip",
+      "file": "tx100yr30ma.zip",
+      "sha256": "7b4a01a6dbf2c145b111703335e316ef55bec19c6c07100c78bd3c978c21362c"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr60ma.zip",
+      "file": "tx100yr60ma.zip",
+      "sha256": "fbe40597fbcfbd0728899cd07c22e26da7cf384c95fa0fcc06e0e28f3822e50d"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr02ha.zip",
+      "file": "tx100yr02ha.zip",
+      "sha256": "e9eb617998866a3765e21d7d4062c2c8a0818e330bf2713a923a92b05c42e6e0"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr03ha.zip",
+      "file": "tx100yr03ha.zip",
+      "sha256": "63fe7f99824f0b92203f6a3c928e45bf10f1914a99592dced6e19eebb0251419"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr06ha.zip",
+      "file": "tx100yr06ha.zip",
+      "sha256": "264c81d1a4401538bd47852cbeb8a0b9738c5d3ddb404b1342f08466b5489dbc"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr12ha.zip",
+      "file": "tx100yr12ha.zip",
+      "sha256": "c4dc87f91b155eafc0f5c80dbb527b2f15ee91038a57bf4205142d917d00d38b"
+    },
+    {
+      "url": "https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr24ha.zip",
+      "file": "tx100yr24ha.zip",
+      "sha256": "8f0acb2e5468e134c3f5e0abdf3de57acf7eebe482fa20a0058fb82046e104e9"
+    }
+  ]
+}

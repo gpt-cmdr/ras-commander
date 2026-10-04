@@ -720,14 +720,15 @@ class AbmHyetographGrid:
         peak_position_percent: float = 50.0,
         output_netcdf: Union[str, Path] = 'abm_hyetograph.nc',
         nodata_value: Optional[float] = None,
-        scale_factor: float = 0.01,
+        scale_factor: float = 0.001,
     ) -> Path:
         """
         Generate gridded ABM hyetographs from pre-downloaded NOAA Atlas 14 .asc files.
 
         Uses ESRI ASCII raster grids downloaded from NOAA Atlas 14. Values in .asc
-        files are in hundredths of inches by default; scale_factor=0.01 converts to
-        inches.
+        PFDS depth grids store thousandths of inches; scale_factor=0.001 converts
+        to inches. This differs from the CONUS NetCDF packing scale of 0.01.
+        Specify a different factor explicitly for products with other units.
 
         Args:
             asc_files: Dict mapping duration_hours (float) to .asc file path.
@@ -743,7 +744,7 @@ class AbmHyetographGrid:
             output_netcdf: Output NetCDF file path (default: 'abm_hyetograph.nc')
             nodata_value: Override NODATA value from .asc header (post scale_factor).
                 If None, reads NODATA_value from header.
-            scale_factor: Multiplier to convert raw .asc values to inches (default: 0.01)
+            scale_factor: Multiplier to convert raw .asc values to inches (default: 0.001)
 
         Returns:
             Path: Path to output NetCDF file
@@ -831,79 +832,109 @@ class AbmHyetographGrid:
         lat: float,
         lon: float,
         tolerance_pct: float = 0.1,
+        *,
+        expected_depth_inches: Optional[float] = None,
     ) -> dict:
-        """
-        QC verification: internal consistency check for a pixel in the NetCDF output.
+        """Check a pixel's depth series and optionally an independent source total.
 
-        Extracts the incremental time series for the nearest grid cell and verifies
-        that its sum matches the stored cumulative depth at the final timestep.
-        This validates depth conservation and NetCDF write integrity without
-        requiring an external data source.
+        Without ``expected_depth_inches``, this checks only internal consistency:
+        stored cumulative depths must match the cumulative sum of increments.
+        Both are derived from the same generated series, so this alone cannot
+        detect incorrect input units, scaling, or a wrong source product.
 
-        The reference depth is taken directly from ``precip_cumulative[-1]`` in
-        the NetCDF — this value is the Atlas 14 interpolated depth used during
-        generation, so the check confirms that no depth was lost during the ABM
-        rearrangement and float32 encoding.
+        Supply an independently verified depth in inches at this grid cell to
+        check the storm total against its source. This does not validate nested
+        duration depths, temporal distribution, areal reduction, or RAS ingestion.
+        Missing, nonfinite, negative, or empty precipitation series fail QC.
 
         Args:
-            netcdf_path: Path to NetCDF output from generate() or generate_from_asc_files()
-            lat: Target latitude in decimal degrees
-            lon: Target longitude in decimal degrees
-            tolerance_pct: Maximum acceptable deviation as % of reference depth
-                (default: 0.1% — float32 encoding introduces ~0.001–0.01% error)
+            netcdf_path: Output from generate() or generate_from_asc_files().
+            lat: Target latitude in decimal degrees (nearest cell is used).
+            lon: Target longitude in decimal degrees.
+            tolerance_pct: Finite, nonnegative maximum percentage error.
+                Internal cumulative errors use the final stored depth as the
+                denominator. A zero reference requires exact zero error.
+            expected_depth_inches: Optional finite, nonnegative independent
+                reference for this cell, duration, and return period, in inches.
 
         Returns:
-            dict with keys:
-                pixel_total_in (float): Sum of incremental depths at pixel
-                reference_depth_in (float): Cumulative depth at final timestep from NetCDF
-                error_pct (float): Absolute percentage deviation from reference
-                passed (bool): True if error_pct <= tolerance_pct
-                lat_actual (float): Latitude of the nearest grid cell used
-                lon_actual (float): Longitude of the nearest grid cell used
-                time_series (numpy.ndarray): Incremental depth series (inches/interval)
+            dict: Existing total, reference, error, passed, actual coordinates,
+            and time_series fields, plus internal_error_pct, validation_scope,
+            reference_source, and failure_reasons. error_pct is infinite for
+            invalid series or nonzero depth against a zero reference.
 
         Raises:
-            ImportError: If xarray is not installed
+            ValueError: Invalid coordinates, tolerance, or expected depth.
+            ImportError: xarray is unavailable.
         """
+        if not np.isfinite(tolerance_pct) or tolerance_pct < 0:
+            raise ValueError("tolerance_pct must be finite and nonnegative")
+        if not np.isfinite(lat) or not np.isfinite(lon):
+            raise ValueError("lat and lon must be finite")
+        if expected_depth_inches is not None and (
+            not np.isfinite(expected_depth_inches) or expected_depth_inches < 0
+        ):
+            raise ValueError("expected_depth_inches must be finite and nonnegative")
+
         try:
             import xarray as xr
         except ImportError:
             raise ImportError(
-                "xarray required for verify_pixel. "
-                "Install with: pip install xarray"
+                "xarray required for verify_pixel. Install with: pip install xarray"
             )
 
-        ds = xr.open_dataset(netcdf_path, decode_timedelta=False)
-
-        lat_idx = int(np.argmin(np.abs(ds.lat.values - lat)))
-        lon_idx = int(np.argmin(np.abs(ds.lon.values - lon)))
-
-        lat_actual = float(ds.lat.values[lat_idx])
-        lon_actual = float(ds.lon.values[lon_idx])
-        time_series = ds['precip_incremental'].values[:, lat_idx, lon_idx].astype(np.float64)
-        # Reference depth: cumulative depth at final timestep (same Atlas 14 source as generation)
-        reference_depth = float(ds['precip_cumulative'].values[-1, lat_idx, lon_idx])
-        ds.close()
-
-        pixel_total = float(np.nansum(time_series))
-
-        error_pct = (abs(pixel_total - reference_depth) / reference_depth * 100.0
-                     if reference_depth > 1e-9 else 0.0)
-        passed = error_pct <= tolerance_pct
-
-        if passed:
-            logger.info(
-                f"QC PASS: pixel ({lat_actual:.4f}N, {lon_actual:.4f}E) "
-                f"total={pixel_total:.4f}in, ref={reference_depth:.4f}in, "
-                f"error={error_pct:.4f}%"
+        with xr.open_dataset(netcdf_path, decode_timedelta=False) as ds:
+            lat_idx = int(np.argmin(np.abs(ds.lat.values - lat)))
+            lon_idx = int(np.argmin(np.abs(ds.lon.values - lon)))
+            lat_actual = float(ds.lat.values[lat_idx])
+            lon_actual = float(ds.lon.values[lon_idx])
+            pixel = ds.isel(lat=lat_idx, lon=lon_idx)
+            time_series = pixel['precip_incremental'].values.astype(np.float64)
+            cumulative = pixel['precip_cumulative'].values.astype(np.float64)
+            units_valid = all(
+                ds[name].attrs.get('units', '').strip().lower() in ('in', 'inch', 'inches')
+                for name in ('precip_incremental', 'precip_cumulative')
             )
+
+        reasons = []
+        if not units_valid:
+            reasons.append('Precipitation units must be declared in inches.')
+        valid_series = (
+            time_series.ndim == 1 and cumulative.shape == time_series.shape
+            and time_series.size > 0
+            and np.all(np.isfinite(time_series)) and np.all(np.isfinite(cumulative))
+            and np.all(time_series >= 0) and np.all(cumulative >= 0)
+        )
+        stored_depth = float(cumulative[-1]) if cumulative.ndim == 1 and cumulative.size else float('nan')
+        reference_depth = (float(expected_depth_inches)
+                           if expected_depth_inches is not None else stored_depth)
+        pixel_total = float(np.sum(time_series)) if time_series.size else float('nan')
+        error_pct = internal_error_pct = float('inf')
+        if not valid_series:
+            reasons.append('Precipitation series must be nonempty, finite, and nonnegative.')
         else:
-            logger.warning(
-                f"QC FAIL: pixel ({lat_actual:.4f}N, {lon_actual:.4f}E) "
-                f"total={pixel_total:.4f}in, ref={reference_depth:.4f}in, "
-                f"error={error_pct:.4f}% > tolerance={tolerance_pct}%"
+            internal_difference = float(np.max(np.abs(np.cumsum(time_series) - cumulative)))
+            internal_error_pct = (
+                internal_difference / stored_depth * 100.0 if stored_depth > 0
+                else (0.0 if internal_difference == 0 else float('inf'))
             )
+            difference = abs(pixel_total - reference_depth)
+            error_pct = (difference / reference_depth * 100.0 if reference_depth > 0
+                         else (0.0 if difference == 0 else float('inf')))
+            if internal_error_pct > tolerance_pct:
+                reasons.append('Stored cumulative depths disagree with the incremental series.')
+            if error_pct > tolerance_pct:
+                reasons.append('Total depth disagrees with the reference depth.')
 
+        passed = not reasons
+        scope = ('independent_total_and_internal_consistency'
+                 if expected_depth_inches is not None else 'internal_consistency_only')
+        (logger.info if passed else logger.warning)(
+            f"QC {'PASS' if passed else 'FAIL'} ({scope}): "
+            f"pixel ({lat_actual:.4f}N, {lon_actual:.4f}E), "
+            f"total={pixel_total:.4f}in, ref={reference_depth:.4f}in, "
+            f"error={error_pct:.4f}%" + (f"; {' '.join(reasons)}" if reasons else ''),
+        )
         return {
             'pixel_total_in': pixel_total,
             'reference_depth_in': reference_depth,
@@ -912,6 +943,11 @@ class AbmHyetographGrid:
             'lat_actual': lat_actual,
             'lon_actual': lon_actual,
             'time_series': time_series,
+            'internal_error_pct': internal_error_pct,
+            'validation_scope': scope,
+            'reference_source': ('expected_depth_inches' if expected_depth_inches is not None
+                                 else 'stored_cumulative'),
+            'failure_reasons': reasons,
         }
 
     @staticmethod
@@ -1307,7 +1343,7 @@ class AbmHyetographGrid:
     @staticmethod
     def _load_asc_file(
         asc_path: Union[str, Path],
-        scale_factor: float = 0.01,
+        scale_factor: float = 0.001,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """
         Load NOAA Atlas 14 ESRI ASCII raster (.asc) file.
@@ -1320,16 +1356,16 @@ class AbmHyetographGrid:
             cellsize      <float>   (degrees)
             NODATA_value  <float>
 
-        NOAA Atlas 14 .asc files store values in hundredths of inches (×0.01 to
-        convert to inches) or thousandths of inches (×0.001). Check the product
-        documentation for the correct scale_factor.
+        NOAA PFDS depth .asc files store thousandths of inches (×0.001).
+        Check the product metadata before overriding scale_factor; the CONUS
+        NetCDF packing scale (0.01) does not apply to these ASCII grids.
 
         Row 0 in the data array is the NORTHERNMOST row (ESRI convention).
 
         Args:
             asc_path: Path to the ESRI ASCII raster file
             scale_factor: Multiplier applied to raw values to convert to inches
-                (default: 0.01 for hundredths-of-inches)
+                (default: 0.001 for thousandths-of-inches)
 
         Returns:
             Tuple of:
@@ -1342,6 +1378,9 @@ class AbmHyetographGrid:
             FileNotFoundError: If asc_path does not exist
             ValueError: If data array dimensions do not match header
         """
+        if not np.isfinite(scale_factor) or scale_factor <= 0:
+            raise ValueError("scale_factor must be finite and positive")
+
         asc_path = Path(asc_path)
         if not asc_path.exists():
             raise FileNotFoundError(f"ASC file not found: {asc_path}")
