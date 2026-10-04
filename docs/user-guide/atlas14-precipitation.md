@@ -731,3 +731,7 @@ Complete workflow demonstrations:
 - [Plan Execution](plan-execution.md) - Batch scenario execution
 - `ras_commander/precip/CLAUDE.md` - Complete method comparison and validation details
 - NOAA PFDS: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
+
+### Existing-model shared-pattern notebook
+
+[Notebook 731](../notebooks/731_atlas14_shared_temporal_existing_model.md) applies an original NOAA depth raster and one explicitly selected temporal curve to an existing model footprint. It checks interval depths and masks, serializes Float32 intervals before explicit bilinear SHG conversion, and optionally attaches the resulting DSS to a staged model copy without running a solver.
