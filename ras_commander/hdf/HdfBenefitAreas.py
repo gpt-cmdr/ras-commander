@@ -108,20 +108,20 @@ class HdfBenefitAreas:
                              Default: "polygon_edges"
             dissolve: Whether to dissolve polygons by contiguous group. If False,
                      returns individual mesh cell polygons. Default: True
-            ras_object: Optional RAS project object (for multi-project workflows).
+            ras_object (RasPrj, optional): Optional RAS project object (for multi-project workflows).
                        If None, uses global ras object.
 
         Returns:
             Dictionary with five GeoDataFrames:
-              - benefit_polygons: Areas with WSE reduction (wse_difference < 0)
+                - benefit_polygons: Areas with WSE reduction (wse_difference < 0)
                   Columns: group_id, cell_count, area_sqft, area_acres, geometry
-              - rise_polygons: Areas with WSE increase (wse_difference > 0)
+                - rise_polygons: Areas with WSE increase (wse_difference > 0)
                   Columns: group_id, cell_count, area_sqft, area_acres, geometry
-              - existing_points: Max WSE points from existing plan
+                - existing_points: Max WSE points from existing plan
                   Columns: mesh_name, cell_id, max_wse, geometry
-              - proposed_points: Max WSE points from proposed plan
+                - proposed_points: Max WSE points from proposed plan
                   Columns: mesh_name, cell_id, max_wse, geometry
-              - difference_points: Matched points with WSE differences
+                - difference_points: Matched points with WSE differences
                   Columns: mesh_name, cell_id, existing_wse, proposed_wse,
                           wse_difference, change_type, geometry
 
@@ -305,7 +305,7 @@ class HdfBenefitAreas:
         Args:
             hdf_input: Plan number, filename, or full path
             label: Label for error messages ("existing" or "proposed")
-            ras_object: RAS project object for resolving plan numbers
+            ras_object (RasPrj, optional): RAS project object for resolving plan numbers
 
         Returns:
             Path: Resolved HDF file path

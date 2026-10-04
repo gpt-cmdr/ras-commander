@@ -513,21 +513,22 @@ class Usgs3depAws:
             Tuple of ``(selected_projects, coverage_report)``:
 
             - ``selected_projects`` is a GeoDataFrame in EPSG:4326, newest
-              first, with three added columns: ``_year``,
-              ``_coverage_area_fraction`` (the fraction of the bbox this
-              project was selected to cover), and ``_coverage_region`` (the
-              WGS84 geometry assigned to that project).
+                first, with three added columns: ``_year``,
+                ``_coverage_area_fraction`` (the fraction of the bbox this
+                project was selected to cover), and ``_coverage_region`` (the
+                WGS84 geometry assigned to that project).
             - ``coverage_report`` is a dict with ``bbox_area``,
-              ``covered_fraction``, ``uncovered_fraction``,
-              ``uncovered_geometry`` (None when fully covered), and
-              ``projects`` (one ``{project, year, area_fraction}`` entry per
-              selected project, newest first).
+                ``covered_fraction``, ``uncovered_fraction``,
+                ``uncovered_geometry`` (None when fully covered), and
+                ``projects`` (one ``{project, year, area_fraction}`` entry per
+                selected project, newest first).
 
         Raises:
             ValueError: If the coverage fractions are outside their valid
                 ranges.
 
         Example:
+            ```python
             >>> from shapely.geometry import box
             >>> bbox = box(-77.5, 40.0, -76.5, 41.0)
             >>> projects = Usgs3depAws.list_projects_for_bbox(bbox, resolution=1)
@@ -538,6 +539,7 @@ class Usgs3depAws:
             1.0
             >>> [entry['project'] for entry in report['projects']]
             ['PA_Northcentral_2019_B19', 'PA_South_Central_2017_D17']
+            ```
         """
         if not 0.0 < min_coverage_fraction <= 1.0:
             raise ValueError(
@@ -1436,6 +1438,7 @@ class Usgs3depAws:
                 ``min_year`` matches no project in the bbox.
 
         Example:
+            ```python
             # Default: Downloads tiles from most recent project (3 concurrent)
             tiles = Usgs3depAws.download_tiles(bbox, 1, "Terrain")
 
@@ -1468,6 +1471,7 @@ class Usgs3depAws:
                 return_provenance=True,
             )
             print(provenance[0]['source_url'], provenance[0]['etag'])
+            ```
         """
         if resolution != 1:
             raise NotImplementedError(
@@ -2385,6 +2389,7 @@ class Usgs3depAws:
                 ``TERRAIN_REASON_TILE_NOT_CACHED``.
 
         Example:
+            ```python
             >>> receipt = Usgs3depAws.build_terrain_raster(
             ...     "Terrain/maha_creek_epsg2277.tif",
             ...     project_crs="EPSG:2277",
@@ -2398,6 +2403,7 @@ class Usgs3depAws:
             0
             >>> receipt["hec_terrain"]["source_member_count"]
             1
+            ```
         """
         output_raster = Path(output_raster)
         receipt_path = (
@@ -2837,7 +2843,7 @@ class Usgs3depAws:
         Return the normalized linear unit of a projected CRS and its metres.
 
         Args:
-            crs: Anything ``pyproj.CRS.from_user_input`` accepts.
+            crs (pyproj.CRS or str, optional): Anything ``pyproj.CRS.from_user_input`` accepts.
 
         Returns:
             ``(unit_key, metres_per_unit)``, using exact factors for metre,

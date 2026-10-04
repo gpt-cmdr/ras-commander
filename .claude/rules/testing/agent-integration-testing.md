@@ -223,7 +223,7 @@ Write a summary after each integration test:
 - `hecras_plan_execution` skill
 - `hecras_compute_plans` skill
 - `hecras-results-analyst` agent
-- `hecras-general-agent` coordinator
+- `ras-commander` coordinator
 
 **Test Workflow**:
 ```
@@ -336,7 +336,7 @@ Complete all items before marking an agent system as complete:
 - `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` -- Agent architecture
 
 **Agents** (test these):
-- `hecras-general-agent` -- Primary integration test target
+- `ras-commander` -- Primary integration test target
 - `hecras-project-inspector` -- Component test target
 - `hecras-results-analyst` -- Component test target
 

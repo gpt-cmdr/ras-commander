@@ -193,7 +193,7 @@ native-associated hydrograph, without establishing its solver/observed provenanc
 For face aggregation it sums absolute face flows; signed mode sums native face
 signs without line-normal correction. Neither fallback automatically reproduces
 solver-weighted net flow across the line. The peak helper inherits the same
-extraction semantics. See the [profile API reference](../api/rasmapper/profiles.md).
+extraction semantics. See the [profile API reference](../api/results-queries.md).
 
 ## 1D Cross-Section Results
 

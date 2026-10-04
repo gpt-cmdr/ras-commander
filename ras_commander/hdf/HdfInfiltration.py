@@ -293,7 +293,7 @@ class HdfInfiltration:
             mesh_name: Specific 2D flow area. If None, reads all.
             variable: Infiltration variable name. Common values:
                 'Curve Number', 'Abstraction Ratio', 'Minimum Infiltration Rate'
-            ras_object: Optional RasPrj object for path resolution.
+            ras_object (RasPrj, optional): Optional RasPrj object for path resolution.
 
         Returns:
             DataFrame with columns: mesh_name, cell_id, value
@@ -361,7 +361,7 @@ class HdfInfiltration:
             hdf_path: Geometry HDF path, plan number ("01"), or geometry number ("g01").
             mesh_name: Specific 2D flow area. If None, computes for all.
             variable: Infiltration variable name.
-            ras_object: Optional RasPrj object.
+            ras_object (RasPrj, optional): Optional RasPrj object.
 
         Returns:
             DataFrame with columns: mesh_name, variable, n_cells,
@@ -851,7 +851,7 @@ class HdfInfiltration:
 
         Args:
             hdf_path: Path to an infiltration HDF file.
-            ras_object: Optional RasPrj object for API consistency.
+            ras_object (RasPrj, optional): Optional RasPrj object for API consistency.
 
         Returns:
             GeoDataFrame with ``polygon_index``, ``class_name``, and geometry.
@@ -1896,7 +1896,7 @@ class HdfInfiltration:
         
         Args:
             hdf_path: Optional path to the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df
-            ras_object: Optional RAS object. If not provided, uses global ras instance
+            ras_object (RasPrj, optional): Optional RAS object. If not provided, uses global ras instance
             
         Returns:
             Dictionary mapping raster values to mukeys
@@ -2031,7 +2031,7 @@ class HdfInfiltration:
         Args:
             hdf_path: Optional path to the HDF file. If not provided, uses first infiltration_hdf_path from rasmap_df
             mukey: Mukey identifier
-            ras_object: Optional RAS object. If not provided, uses global ras instance
+            ras_object (RasPrj, optional): Optional RAS object. If not provided, uses global ras instance
 
         Returns:
             Optional[Dict[str, float]]: Dictionary of infiltration parameters, or None if mukey not found

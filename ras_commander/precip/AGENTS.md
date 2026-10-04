@@ -11,6 +11,10 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 
 - Use `Atlas14Storm`, `FrequencyStorm`, or `ScsTypeStorm` when the task requires HMS-equivalent design-storm behavior.
 - Use `StormGenerator` when the task needs flexible peak placement and does not need HMS equivalence.
+- Use `FrequencyStormDdf` for the duration-dependent Hydro-35 configuration qualified
+  against the seven reference HMS 4.10 events: 24h, 5min, centered peak, final input
+  depths without additional area reduction or series conversion. `FrequencyStorm`
+  is fixed-pattern scaling; do not treat it as a general DDF frequency-storm solver.
 - Use `PrecipAorc` for historical precipitation and calibration workflows.
 - Use `Atlas14Grid`, `Atlas14Variance`, and `AbmHyetographGrid` for spatial Atlas 14 analysis and rain-on-grid workflows.
 - Use `AbmHyetographGrid.to_ras_netcdf()` to convert interval-ending ABM rate grids to projected HEC-RAS GDAL NetCDF forcing; keep storm-end and forcing-end metadata distinct when extending zero-rate frames through the plan end.

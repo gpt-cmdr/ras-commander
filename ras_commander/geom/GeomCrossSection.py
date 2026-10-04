@@ -1832,15 +1832,15 @@ class GeomCrossSection:
 
         Manning's n resolution follows ``mannings_strategy``:
             - ``auto``/``landcover``: land cover, neighbor interpolation, user,
-              defaults.
+                defaults.
             - ``neighbor``/``adjacent``: neighbor interpolation, user, land cover,
-              defaults.
+                defaults.
             - ``user``: user, land cover, neighbor, defaults.
             - ``default``: logged defaults only.
 
         Parameters:
             input_spec: Optional dataclass or mapping of builder inputs.
-            **kwargs: Builder fields; see :class:`CrossSectionBuildInput`.
+            **kwargs (Any): Builder fields; see :class:`CrossSectionBuildInput`.
 
         Returns:
             CrossSectionBuildResult with resolved DataFrames and formatted lines.
@@ -2306,7 +2306,7 @@ class GeomCrossSection:
             xs_id: Optional cross-section identifier. Accepts the ``xs_id``
                 returned by this method, a unique RS string, ``(river, reach,
                 rs)``, or a mapping with River/Reach/RS fields.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -2394,7 +2394,7 @@ class GeomCrossSection:
             obstructions: DataFrame/list containing ``start_sta``, ``end_sta``,
                 and ``elevation`` values, or ``BlockedObstruction`` objects.
             create_backup: Whether to create a ``.bak`` backup before writing.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -2485,7 +2485,7 @@ class GeomCrossSection:
             geom_number: Geometry number or direct ``.g##`` text path.
             hdf_path: Optional explicit geometry HDF path. If omitted,
                 ``<geom_file>.hdf`` is used.
-            ras_object: Optional ``RasPrj`` instance for geometry-number
+            ras_object (RasPrj, optional): Optional ``RasPrj`` instance for geometry-number
                 resolution.
 
         Returns:
@@ -3211,7 +3211,7 @@ class GeomCrossSection:
             rs: Optional river-station filter. If supplied, ``river`` and
                 ``reach`` are required.
             xs_id: Optional exact ID from the returned ``xs_id`` column.
-            ras_object: Optional RasPrj instance for API consistency (unused)
+            ras_object (RasPrj, optional): Optional RasPrj instance for API consistency (unused)
 
         Returns:
             pd.DataFrame: Columns ``xs_id``, ``left_station``,
@@ -3351,7 +3351,7 @@ class GeomCrossSection:
             reach: Optional target reach
             rs: Optional target river station
             create_backup: Whether to create a .bak backup before modification
-            ras_object: Optional RasPrj instance for API consistency (unused)
+            ras_object (RasPrj, optional): Optional RasPrj instance for API consistency (unused)
 
         Returns:
             Optional[Path]: Backup path if ``create_backup=True``, otherwise None.
@@ -3697,6 +3697,7 @@ class GeomCrossSection:
                 - Subsection (str): 'LOB' (Left Overbank), 'Channel', or 'ROB' (Right Overbank)
 
         Example:
+            ```python
             >>> mann = GeomCrossSection.get_mannings_n("BaldEagle.g01", "Bald Eagle", "Loc Hav", "138154.4")
             >>> print(mann)
                Station  n_value Subsection
@@ -3706,6 +3707,7 @@ class GeomCrossSection:
             >>>
             >>> # Calculate average channel Manning's n
             >>> channel_n = mann[mann['Subsection'] == 'Channel']['n_value'].mean()
+            ```
         """
         geom_file = Path(geom_file)
 
@@ -4199,7 +4201,7 @@ class GeomCrossSection:
             river (Optional[str]): Filter by specific river name. If None, returns all rivers.
             reach (Optional[str]): Filter by specific reach name. If None, returns all reaches.
             rs (Optional[str]): Filter by specific river station. If None, returns all stations.
-            ras_object: Optional RasPrj instance for multi-project workflows (unused, for API consistency)
+            ras_object (RasPrj, optional): Optional RasPrj instance for multi-project workflows (unused, for API consistency)
 
         Returns:
             pd.DataFrame: DataFrame with columns:
@@ -4383,10 +4385,10 @@ class GeomCrossSection:
 
         Notes:
             - Handles two geometry file formats:
-              1. Combined format: "XS HTab Starting El and Incr=val1,val2, val3"
-              2. Separate format: "HTAB Starting El and Incr=" and "HTAB Number of Points="
+                1. Combined format: "XS HTab Starting El and Incr=val1,val2, val3"
+                2. Separate format: "HTAB Starting El and Incr=" and "HTAB Number of Points="
             - If HTAB lines are not present, starting_el/increment/num_points will be None
-              (HEC-RAS uses defaults: starting=invert+0.5-1.0, increment=1.0, points~20)
+                (HEC-RAS uses defaults: starting=invert+0.5-1.0, increment=1.0, points~20)
             - invert/top are always computed from station-elevation data
 
         Example:
@@ -4562,7 +4564,7 @@ class GeomCrossSection:
             - If HTAB lines don't exist in the file, they are inserted
             - Geometry file is modified in-place with backup (.bak) created
             - HTAB lines are inserted after "Type RM Length" line, before
-              "XS GIS Cut Line" or "#Sta/Elev"
+                "XS GIS Cut Line" or "#Sta/Elev"
 
         File Format:
             HTAB Starting El and Incr=     580.0,      0.1

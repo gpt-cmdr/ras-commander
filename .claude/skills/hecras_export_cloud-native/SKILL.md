@@ -19,7 +19,9 @@ description: |
 
 When the user asks to export HEC-RAS results to GeoParquet, PMTiles, or PostGIS, use this skill with the `ras2cng` CLI (RAS to Cloud Native GIS). This CLI wraps ras-commander parsers to export HEC-RAS geometry and results to GeoParquet, vector/raster PMTiles, and PostGIS.
 
-**Repo**: `C:\GH\ras2cng`
+For current intake and package discovery, start with [Cloud Native GIS](../cloud-native-gis/SKILL.md).
+Treat commands below as examples to check against the installed release's help; resolve the
+ras2cng checkout from the current environment rather than assuming a workstation path.
 
 ---
 

@@ -75,7 +75,7 @@ Consult .claude/agents/README.md for the full list. Key agents by domain:
 
 | Domain | Agent |
 |--------|-------|
-| HEC-RAS execution | hecras-general-agent, remote-executor |
+| HEC-RAS execution | ras-commander, remote-executor |
 | HDF results | hdf-analyst, hecras-results-analyst |
 | Geometry | geometry-parser |
 | USGS integration | usgs-integrator |

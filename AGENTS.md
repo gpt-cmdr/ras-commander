@@ -52,6 +52,21 @@ This file is the canonical shared instruction contract for repository-local codi
 - Use local ignored working folders such as `working/`, `scripts/`, or `ras_agent/` at repo root for temporary outputs and extracted scripts.
 - If a `TASK.md` contains stale `C:\GH\...` paths, remap them to `G:\GH\...` before failing.
 
+## Commander Entry Points
+
+- “Just Ask for RAS Commander” routes through the shared
+  [.claude/skills/ras-commander/SKILL.md](.claude/skills/ras-commander/SKILL.md) coordinator.
+- GIS/archive work uses [.claude/skills/cloud-native-gis/SKILL.md](.claude/skills/cloud-native-gis/SKILL.md)
+  and canonical installed ras2cng/hms2cng contracts. HMS work routes to the HMS repository's shared
+  `hms-commander` skill when available.
+- Claude-native `ras-commander` and `cloud-native-gis` roles are thin adapters.
+  Codex uses shared skills and its native worker mechanisms.
+- RAS/HMS project MCP calls belong only in a bounded subagent. They are read-only text-information
+  queries with non-spatial/non-gridded outputs. The full Python APIs handle heavier or modifying work.
+- Follow installed package contracts, check released versions at setup when possible, and prefer
+  current compatible PyPI releases in authorized managed environments. Preserve user pins and
+  report updates/blockers instead of silently changing shared environments.
+
 ## RAS Commander First
 
 - Hard rule: RAS Commander rules everything around RAS. Never invoke `Ras.exe` directly from ad hoc shell commands, raw subprocess calls, one-off scripts, manual command-line probes, notebooks, tests, or agent harness glue.
@@ -185,10 +200,39 @@ generator fails the live build — treat the docs as production.
   `.claude/scripts/generate_notebooks_metadata.py` (seeds/refreshes `examples/notebooks.yml`, the
   metadata source of truth) then `.claude/scripts/validate_notebooks_yml.py` (coverage + required
   fields are build-fatal). Curate the new entry's `summary` / `tags` / `difficulty`.
-- **Authoring voice (docs & notebooks).** Mechanics-forward: lead with *how to drive the API*; defer
-  method selection, parameter appropriateness, and regulatory / standard-of-care questions to HEC's
-  manuals and the reader's regional/agency references. Examples demonstrate mechanics on real data —
-  they are not endorsed engineering workflows.
+- **Authoring voice (docs & notebooks).** Mechanics-forward: lead with *how to drive the API*.
+  State supported library capabilities and observations confidently. Explain HEC methods with
+  relevant manual references; identify project recommendations and support them with evidence.
+  Regulatory acceptance and standard-of-care decisions depend on applicable requirements and
+  professional judgment. Examples demonstrate mechanics on real data; do not imply agency endorsement.
+
+## Technical Writing
+
+This editorial contract applies only to repository-maintained RAS Commander content and intended
+contributions. It does not govern user-created work outside the repository, even when produced
+with RAS Commander or its agents. External writing assistance follows the user’s requirements.
+
+- Follow [the concise writing guide](.claude/references/writing/technical-writing-guide.md) for authored
+  technical prose and [the extended standard](.claude/references/writing/technical-writing-standard.md)
+  for terminology, evidence, citations, and surface-specific styles.
+- HEC documentation is the primary technical source for HEC-RAS terminology, methods, controls,
+  and documented behavior. Select the relevant document/version. Library behavior comes from
+  current source, schemas, and qualification evidence; do not infer it from a HEC manual alone.
+- Speak with authority about supported RAS Commander capabilities, observations, and original
+  findings. HEC approval or citation is not required for project evidence. Match explanation to
+  the audience; distinguish established results, interpretations, recommendations, and uncertainty.
+- RAS Commander is an independent open source project that complements HEC's work. Maintain an
+  objective, respectful third-party voice without implying HEC/USACE affiliation, endorsement,
+  certification, or support.
+- Published HEC references must be passive citations and reader-activated links. Do not introduce
+  citation-driven runtime fetching, live embeds, mirrored/scraped manuals, or automated HEC contact.
+  Research browsing is permitted; separately governed software/data acquisition is unchanged.
+- Preserve technical meaning, identifiers, exact labels, numerical values, units, formulas,
+  uncertainty, and retained outputs. Explain claim scope and evidence; flag unresolved conflicts.
+- Use the shared `technical-writing-auditor` skill for requested writing reviews or scoped
+  editorial revisions. Its canonical source is
+  [.claude/skills/technical-writing-auditor/SKILL.md](.claude/skills/technical-writing-auditor/SKILL.md);
+  Codex exposure uses the existing generated bridge. A writing audit is not hydraulic approval.
 
 ## Testing And Validation
 

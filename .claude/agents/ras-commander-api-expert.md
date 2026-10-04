@@ -52,7 +52,7 @@ The following agents **MUST** use the API-First Principle and **MUST NOT** use E
 - `hdf-analyst` - Must use HdfResults* classes
 - `hecras-results-analyst` - Must use HdfResultsPlan/HdfResultsMesh
 - `geometry-parser` - Must use Geom* classes
-- `hecras-general-agent` - Must include API-first context in dispatches
+- `ras-commander` - Must include API-first context in dispatches
 
 See `.claude/rules/python/api-first-principle.md` for the complete API-First Principle.
 

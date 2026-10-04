@@ -2598,6 +2598,7 @@ class HdfMesh:
 
         Example
         -------
+        ```python
         >>> topology = HdfMesh.get_mesh_sloped_topology(plan_hdf_path)
         >>> print(f"Mesh: {topology['mesh_name']}")
         >>> print(f"Cells: {topology['n_cells']}, Faces: {topology['n_faces']}")
@@ -2605,6 +2606,7 @@ class HdfMesh:
         >>> # Access faces connected to facepoint 0
         >>> start, count = topology['facepoint_face_info'][0]
         >>> connected_faces = topology['facepoint_face_values'][start:start+count, 0]
+        ```
         """
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:

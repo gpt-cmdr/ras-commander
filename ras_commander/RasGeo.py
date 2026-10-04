@@ -68,7 +68,7 @@ class RasGeo:
             plan_files (Union[str, Path, List[Union[str, Path]]], optional):
                 Full path(s) to the HEC-RAS plan file(s) (.p*).
                 If None, clears all plan files in the project directory.
-            ras_object: An optional RAS object instance.
+            ras_object (RasPrj, optional): An optional RAS object instance.
 
         Returns:
             None: The function deletes files and updates the ras object's geometry dataframe

@@ -1,8 +1,9 @@
-"""Check that curated RASMapper API members actually rendered in MkDocs HTML.
+"""Check that API members and compatibility anchors rendered in MkDocs HTML.
 
 A strict MkDocs build can succeed when Griffe resolves an exported class name
 as a module and silently omits its explicitly listed methods. Check the output,
-not just the directive syntax. This intentionally covers only RASMapper pages.
+not just the directive syntax. This covers every API page and the DataFrame
+reference, including explicitly retained compatibility anchors.
 """
 from __future__ import annotations
 
@@ -76,17 +77,17 @@ def listed_anchors(markdown: str) -> set[str]:
 def validate(docs_dir: Path, site_dir: Path) -> list[str]:
     errors: list[str] = []
     total = 0
-    pages = sorted((docs_dir / "api" / "rasmapper").glob("*.md"))
+    pages = sorted((docs_dir / "api").rglob("*.md")) + [docs_dir / "reference" / "dataframe-reference.md"]
     if not pages:
-        return [f"No RASMapper Markdown pages found under {docs_dir}"]
+        return [f"No API Markdown pages found under {docs_dir}"]
     for page in pages:
-        expected = listed_anchors(page.read_text(encoding="utf-8"))
+        markdown = page.read_text(encoding="utf-8")
+        expected = listed_anchors(markdown)
+        expected.update(re.findall(r'<a\s+id="([^"]+)"', markdown))
         total += len(expected)
-        if page.stem != "index" and not expected:
-            errors.append(f"{page.name}: no explicitly listed members parsed; check directive syntax")
-        relative = Path("api") / "rasmapper"
-        if page.stem != "index":
-            relative /= page.stem
+        relative = page.relative_to(docs_dir).with_suffix("")
+        if page.stem == "index":
+            relative = relative.parent
         html_path = site_dir / relative / "index.html"
         if not html_path.is_file():
             errors.append(f"{page.name}: missing built page {html_path}")
@@ -94,14 +95,14 @@ def validate(docs_dir: Path, site_dir: Path) -> list[str]:
         inventory = AnchorInventory()
         inventory.feed(html_path.read_text(encoding="utf-8"))
         for anchor in sorted(expected - inventory.ids.keys()):
-            errors.append(f"{page.name}: missing method anchor {anchor}")
-        for anchor in sorted(inventory.review_ids):
+            errors.append(f"{page.name}: missing API/compatibility anchor {anchor}")
+        for anchor in sorted(inventory.review_ids | expected):
             if inventory.ids[anchor] > 1:
                 errors.append(f"{page.name}: duplicate API/heading ID {anchor}")
     if total == 0:
-        errors.append("No explicitly listed RASMapper API members found; refusing a vacuous pass")
+        errors.append("No explicitly listed API members found; refusing a vacuous pass")
     if not errors:
-        print(f"Validated {total} listed methods across {len(pages)} RASMapper pages.")
+        print(f"Validated {total} API/compatibility anchors across {len(pages)} reference pages.")
     return errors
 
 

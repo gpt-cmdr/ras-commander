@@ -17,6 +17,18 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 ## Domain Groups
 
+### Commander Entry Points
+
+| Component | Type | Path |
+|-----------|------|------|
+| `ras-commander` | shared skill | `.claude/skills/ras-commander/SKILL.md` |
+| `cloud-native-gis` | shared skill | `.claude/skills/cloud-native-gis/SKILL.md` |
+| `ras-commander` | Claude adapter | `.claude/agents/ras-commander.md` |
+| `cloud-native-gis` | Claude adapter | `.claude/agents/cloud-native-gis.md` |
+
+Canonical routing and release/MCP boundaries live in the shared skills. HMS intake lives in
+the HMS repository's `hms-commander` skill. GIS reads current ras2cng/hms2cng guidance when needed.
+
 ### HEC-RAS Execution
 
 | Component | Type | Path |
@@ -27,7 +39,6 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `hecras_plan_execution` | skill | `.claude/skills/hecras_plan_execution/SKILL.md` |
 | `execution.md` | rule | `.claude/rules/hec-ras/execution.md` |
 | `remote.md` | rule | `.claude/rules/hec-ras/remote.md` |
-| `hecras-general-agent` | agent | `.claude/agents/hecras-general-agent.md` |
 | `remote-executor` | agent | `.claude/agents/remote-executor.md` + `.claude/agents/remote-executor/SUBAGENT.md` |
 
 ### HDF Results
@@ -156,6 +167,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 
 | Component | Type | Path |
 |-----------|------|------|
+| `technical-writing-auditor` | skill | `.claude/skills/technical-writing-auditor/SKILL.md` |
 | `hierarchical-knowledge-best-practices.md` | rule | `.claude/rules/documentation/hierarchical-knowledge-best-practices.md` |
 | `mkdocs-config.md` | rule | `.claude/rules/documentation/mkdocs-config.md` |
 | `notebook-standards.md` | rule | `.claude/rules/documentation/notebook-standards.md` |
@@ -246,6 +258,22 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 
 ## Relationship Map
 
+### Commander Intake
+
+`ras-commander` → current RAS specialists/skills, `cloud-native-gis`, or canonical HMS intake.
+Claude `ras-commander` → shared `ras-commander` skill.
+Claude `cloud-native-gis` → shared `cloud-native-gis` skill → current ras2cng/hms2cng contracts.
+Project MCP → bounded read-only informational subagent; heavier work → public Python APIs.
+
+### Technical Writing Domain
+
+**`technical-writing-auditor`** (shared skill) -- scoped writing reviews and editorial revisions
+- Shared contract: root `AGENTS.md`, `docs/AGENTS.md`
+- Canonical guidance: `.claude/references/writing/technical-writing-guide.md`, `.claude/references/writing/technical-writing-standard.md`
+- Protocol: `.claude/skills/technical-writing-auditor/references/audit-protocol.md`
+- Codex discovery: existing allowlisted `sync_codex_skill_bridge.py` bridge
+- Scope: repository-maintained technical prose and intended contributions across docs, notebook explanations, API docstrings, comments, diagnostics, and release notes; external user artifacts are excluded
+
 ### HEC-RAS Execution Domain
 
 **`hecras_plan_execution`** (skill) -- execution mode selection
@@ -256,7 +284,7 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 **`hecras_compute_plans`** (skill) -- plan execution
 - Upstream: `hecras_plan_execution` skill (mode decision)
 - Downstream: `hecras_extract_results` skill, `hecras_parse_compute-messages` skill
-- Agents: `hecras-general-agent` (coordinator)
+- Agents: `ras-commander` (coordinator)
 - Rules: `execution.md`, `static-classes.md`, `decorators.md`
 
 **`hecras_compute_remote`** (skill) -- distributed execution
@@ -269,7 +297,7 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 - Agents: `win32com-automation-expert`
 - Rules: `execution.md`
 
-**`hecras-general-agent`** (agent) -- workflow coordinator
+**`ras-commander`** (agent) -- workflow coordinator
 - Uses skills: `hecras_plan_execution`, `hecras_compute_plans`, `hecras_extract_results`, `hecras_parse_compute-messages`
 - Coordinates agents: `hecras-project-inspector`, `hecras-results-analyst`
 

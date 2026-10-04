@@ -4,16 +4,9 @@ Core classes for HEC-RAS project management and execution.
 
 ## Important Notes
 
-!!! warning "Static Class Pattern"
-    All primary classes use static methods - do NOT instantiate:
-    ```python
-    # Correct
-    RasCmdr.compute_plan("01")
-
-    # Wrong - will fail
-    cmd = RasCmdr()
-    cmd.compute_plan("01")
-    ```
+Most operation classes are static namespaces: call `RasCmdr.compute_plan()` or
+`RasPlan` methods directly. `RasPrj` project objects, workers, result records,
+and configuration types are instances. Construct those as documented.
 
 !!! warning "RASMapper Flag Inversion"
     When using `RasPlan.update_run_flags()`, note that RASMapper flags have **inverted logic**:
@@ -24,9 +17,10 @@ Core classes for HEC-RAS project management and execution.
     This is a HEC-RAS quirk, not a library bug.
 
 !!! tip "Input Flexibility"
-    Most methods accept multiple input types via `@standardize_input`:
+    Decorated HDF readers accept the input forms documented for each method.
+    Project selectors require initialization; direct paths are also supported:
     ```python
-    # All valid for HDF methods:
+    # Accepted by this reader:
     HdfResultsMesh.get_mesh_max_ws("01")           # Plan number
     HdfResultsMesh.get_mesh_max_ws(1)              # Integer
     HdfResultsMesh.get_mesh_max_ws(Path("x.hdf")) # Path object
@@ -36,6 +30,14 @@ Core classes for HEC-RAS project management and execution.
 
 ### init_ras_project
 
+<a id="ras_commander.init_ras_project--create-a-new-rasprj-instance-with-prj-file"></a>
+
+<a id="ras_commander.init_ras_project--initialize-using-direct-prj-file-path-new-feature"></a>
+
+<a id="ras_commander.init_ras_project--initialize-using-project-folder-existing-behavior"></a>
+
+<a id="ras_commander.init_ras_project--skip-results-loading-for-faster-initialization"></a>
+
 ::: ras_commander.init_ras_project
     options:
       show_root_heading: true
@@ -43,23 +45,40 @@ Core classes for HEC-RAS project management and execution.
 
 ### RasPrj
 
-::: ras_commander.RasPrj
+Project initialization populates paths and metadata tables on a `RasPrj` instance.
+See the [DataFrame reference](../reference/dataframe-reference.md) for those
+instance attributes; the operations below are the source-derived methods.
+
+<a id="ras_commander.RasPrj"></a>
+
+::: ras_commander.RasPrj.RasPrj
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - project_folder
-        - project_name
-        - prj_file
-        - ras_exe_path
-        - plan_df
-        - geom_df
-        - flow_df
-        - unsteady_df
-        - boundaries_df
-        - rasmap_df
-        - get_hdf_entries
+        - check_initialized
+        - find_ras_prj
         - get_boundary_conditions
+        - get_flow_entries
+        - get_geom_entries
+        - get_hdf_entries
+        - get_hdf_paths
+        - get_plan_entries
+        - get_plan_info
+        - get_plan_value
+        - get_plans_with_results
+        - get_plans_without_results
+        - get_prj_entries
+        - get_project_name
+        - get_project_units
+        - get_results_entries
+        - get_unsteady_entries
+        - initialize
+        - print_data
+        - refresh_project_crs
+        - set_current_plan
+        - update_results_df
 
 ### Project asset inspection
 
@@ -193,19 +212,24 @@ treated as requiring manual review.
 
 ### RasCmdr
 
-::: ras_commander.RasCmdr
+<a id="ras_commander.RasCmdr"></a>
+
+::: ras_commander.RasCmdr.RasCmdr
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
+        - cancel_plan
+        - cancel_plan_exact
+        - compute_parallel
+        - compute_plan
+        - compute_plan_linux
+        - compute_test_mode
         - inspect_execution_evidence
         - inspect_plan_processes
+        - preprocess_geometry_linux
         - remove_plan_execution_artifacts
-        - compute_plan
-        - cancel_plan_exact
-        - cancel_plan
-        - compute_parallel
-        - compute_test_mode
 
 ### Structured execution evidence
 
@@ -429,7 +453,9 @@ are distinct from the final `ComputeResult` and its artifact-handling outcome.
 
 ##### Linux-Hosted Unsteady Preparation
 
-::: ras_commander.RasPreprocess
+<a id="ras_commander.RasPreprocess"></a>
+
+::: ras_commander.RasPreprocess.RasPreprocess
     options:
       show_root_heading: true
       heading_level: 6
@@ -464,7 +490,9 @@ compute-message parsing, and HDF readability/`Geometry`-group validation.
 
 ##### BcoMonitor Utility
 
-::: ras_commander.BcoMonitor
+<a id="ras_commander.BcoMonitor"></a>
+
+::: ras_commander.RasBco.BcoMonitor
     options:
       show_root_heading: true
       heading_level: 6
@@ -474,7 +502,9 @@ compute-message parsing, and HDF readability/`Geometry`-group validation.
 
 ##### ExecutionCallback Protocol
 
-::: ras_commander.ExecutionCallback
+<a id="ras_commander.ExecutionCallback"></a>
+
+::: ras_commander.ExecutionCallback.ExecutionCallback
     options:
       show_root_heading: true
       heading_level: 6
@@ -483,16 +513,26 @@ All callback methods are **optional** - implement only what you need. The protoc
 
 ### RasControl
 
-::: ras_commander.RasControl
+<a id="ras_commander.RasControl"></a>
+
+::: ras_commander.RasControl.RasControl
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - run_plan
-        - inspect_processes
+        - cleanup_orphans
+        - force_cleanup_all
+        - get_comp_msgs
+        - get_controller_progid
+        - get_output_times
+        - get_plans
         - get_steady_results
         - get_unsteady_results
-        - get_output_times
+        - inspect_processes
+        - list_processes
+        - run_plan
+        - scan_orphans
         - set_current_plan
 
 #### RasControl Details
@@ -578,104 +618,285 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
 
 ### RasPlan
 
-::: ras_commander.RasPlan
+<a id="ras_commander.RasPlan"></a>
+
+::: ras_commander.RasPlan.RasPlan
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
+        - add_hdf_output_variable
+        - apply_hdf_output_profile
+        - clone_geom
         - clone_plan
+        - clone_steady
+        - clone_unsteady
+        - create_plan_variants
+        - delete_geom
+        - delete_plan
+        - delete_steady
+        - delete_unsteady
+        - disable_hdf_output_variable
+        - enable_hdf_output_variable
+        - get_2d_flow_options
+        - get_flow_path
+        - get_geom_path
+        - get_hdf_output_options
+        - get_hdf_output_variables
+        - get_hdf_write_parameters
+        - get_next_number
+        - get_plan_flow_type
         - get_plan_path
-        - get_results_path
+        - get_plan_title
+        - get_plan_value
         - get_restart_output_settings
-        - set_restart_output_settings
+        - get_results_path
+        - get_sediment_output_variables
+        - get_shortid
+        - get_unsteady_path
+        - is_plan_steady_state
+        - list_2d_flow_option_names
+        - list_available_hdf_output_variables
+        - list_hdf_output_setting_profiles
+        - read_flow_description
+        - read_geom_description
+        - read_plan_description
+        - remove_hdf_output_variable
+        - renumber_geom
+        - renumber_plan
+        - renumber_steady
+        - renumber_unsteady
+        - set_2d_equation_set
+        - set_2d_flow_options
         - set_geom
+        - set_geom_preprocessor
+        - set_hdf_output_options
+        - set_hdf_output_variable
+        - set_hdf_output_variables
+        - set_hdf_write_parameters
+        - set_num_cores
+        - set_plan_title
+        - set_restart_output_settings
+        - set_sediment_output_variables
+        - set_shortid
         - set_steady
         - set_unsteady
-        - set_num_cores
-        - get_2d_flow_options
-        - set_2d_flow_options
-        - set_2d_equation_set
-        - list_2d_flow_option_names
-        - update_plan_intervals
+        - update_flow_description
+        - update_geom_description
         - update_plan_description
-        - get_plan_value
+        - update_plan_intervals
+        - update_run_flags
+        - update_simulation_date
+        - use_optimal_hdf_settings
 
 ### RasFlowOptimization
 
-::: ras_commander.RasFlowOptimization
+<a id="ras_commander.RasFlowOptimization"></a>
+
+::: ras_commander.RasFlowOptimization.RasFlowOptimization
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - copy_plan_with_optimization
-        - enable_plan
-        - set_settings
-        - get_settings
-        - disable_plan
-        - list_flow_hydrographs
         - compute_plan_and_get_trials
+        - copy_plan_with_optimization
+        - disable_plan
+        - enable_plan
+        - get_settings
         - get_trial_results
+        - list_flow_hydrographs
         - parse_compute_messages
+        - set_settings
 
 ### RasGeo
 
-::: ras_commander.RasGeo
+`RasGeo` is a deprecated compatibility namespace. Prefer the
+[geometry APIs](geometry.md), including `GeomLandCover` for roughness editing.
+
+
+<a id="ras_commander.RasGeo"></a>
+
+::: ras_commander.RasGeo.RasGeo
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
         - clear_geompre_files
-        - get_base_mannings_table
-        - get_regional_mannings
-        - set_base_mannings_table
+        - clone_geom
+        - get_mannings_baseoverrides
+        - get_mannings_regionoverrides
+        - set_mannings_baseoverrides
+        - set_mannings_regionoverrides
 
 ### RasUnsteady
 
-::: ras_commander.RasUnsteady
+<a id="ras_commander.RasUnsteady"></a>
+
+::: ras_commander.RasUnsteady.RasUnsteady
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - clone_unsteady
-        - get_unsteady_path
-        - inspect_boundary_blocks
+        - batch_update_dss_references
+        - configure_gridded_dss_precipitation
         - delete_boundary
-        - get_restart_settings
-        - set_flow_title
-        - set_restart_settings
+        - disable_meteorology
+        - ensure_2d_boundary_location
+        - extract_boundary_and_tables
+        - extract_tables
+        - get_dss_boundaries
+        - get_gate_openings
+        - get_gridded_precipitation_capabilities
+        - get_groundwater_interflow
         - get_initial_conditions
-        - set_initial_conditions
-        - get_boundary_tables
-        - set_normal_depth_boundary
+        - get_initial_flow_method
+        - get_initial_storage_elevations
+        - get_inline_hydrograph_boundaries
+        - get_lateral_inflow_hydrograph
+        - get_met_precipitation_config
+        - get_meteorological_stations
+        - get_min_storage_elevations
+        - get_navigation_dam
+        - get_non_newtonian_clastic
+        - get_non_newtonian_concentration
+        - get_non_newtonian_herschel_bulkley
+        - get_non_newtonian_method
+        - get_non_newtonian_shear
+        - get_point_evapotranspiration
+        - get_prior_ws_filename
+        - get_rating_curve
+        - get_restart_settings
+        - get_rules_bc
+        - get_stage_flow_hydrograph
+        - get_uniform_lateral_inflow_hydrograph
+        - get_unique_dss_subbasins
+        - identify_tables
+        - inspect_boundary_blocks
+        - parse_fixed_width_table
+        - preview_dss_references
+        - print_boundaries_and_tables
+        - read_unsteady_description
+        - replace_2d_boundary_locations
+        - set_boundary_dss_link
+        - set_boundary_inline_hydrograph
+        - set_constant_precipitation
+        - set_flow_hydrograph_qmin
         - set_flow_hydrograph_slope
+        - set_gate_openings
+        - set_gridded_precipitation
+        - set_gridded_precipitation_geotiff
+        - set_gridded_precipitation_grib
+        - set_groundwater_interflow
+        - set_hydrograph_fixed_start_time
+        - set_ic_from_output_profile
+        - set_initial_conditions
+        - set_initial_flow_method
+        - set_initial_storage_elevation
+        - set_lateral_inflow_hydrograph
+        - set_met_precipitation_mode
+        - set_meteorological_station
+        - set_navigation_dam
+        - set_non_newtonian_clastic
+        - set_non_newtonian_concentration
+        - set_non_newtonian_herschel_bulkley
+        - set_non_newtonian_method
+        - set_non_newtonian_shear
+        - set_normal_depth_boundary
+        - set_point_evapotranspiration
         - set_precipitation_hyetograph
+        - set_prior_ws_filename
+        - set_rating_curve
+        - set_restart_settings
+        - set_rules_bc
+        - set_stage_flow_hydrograph
+        - set_stage_hydrograph_tw_check
+        - set_uniform_lateral_inflow_hydrograph
+        - update_boundary_dss_paths
+        - update_dss_path_by_station
+        - update_dss_run_identifier
+        - update_flow_multiplier_by_station
+        - update_flow_title
+        - update_restart_settings
+        - update_unsteady_description
+        - validate_initial_flow_stations
+        - write_table_to_file
 
 ### RasSteady
 
-::: ras_commander.RasSteady
+<a id="ras_commander.RasSteady"></a>
+
+::: ras_commander.RasSteady.RasSteady
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - read_flow_file
-        - write_flow_file
-        - create_flow_file
-        - update_flow_file
-        - validate_flow_file_data
         - boundary
+        - create_flow_file
+        - critical_depth
         - known_water_surface
         - normal_depth
-        - critical_depth
         - rating_curve
+        - read_flow_file
+        - update_flow_file
+        - validate_flow_file_data
+        - write_flow_file
+
+Compatibility aliases: `create` → `create_flow_file`, `known_ws` → `known_water_surface`, `parse_flow_file` → `read_flow_file`, `read` → `read_flow_file`, `update` → `update_flow_file`, `validate` → `validate_flow_file_data`, `write` → `write_flow_file`, `write_file` → `write_flow_file`.
 
 ## Utilities
 
 ### RasUtils
 
-::: ras_commander.RasUtils
+<a id="ras_commander.RasUtils"></a>
+
+::: ras_commander.RasUtils.RasUtils
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
+      members:
+        - backup_files
+        - calculate_error_metrics
+        - calculate_percent_bias
+        - calculate_rmse
+        - check_file_access
+        - clone_file
+        - consolidate_dataframe
+        - convert_to_dataframe
+        - create_directory
+        - decode_byte_strings
+        - discover_ras_versions
+        - dos2unix
+        - find_files_by_extension
+        - find_nearest_neighbors
+        - find_nearest_value
+        - find_valid_ras_folders
+        - get_file_modification_time
+        - get_file_size
+        - get_next_number
+        - get_plan_path
+        - horizontal_distance
+        - ignore_windows_reserved
+        - is_valid_ras_folder
+        - is_windows_reserved_name
+        - normalize_ras_number
+        - perform_kdtree_query
+        - remove_prj_entry
+        - remove_with_retry
+        - rename_prj_entry
+        - rollback_geometry
+        - safe_resolve
+        - safe_write_geometry
+        - save_to_excel
+        - update_file
+        - update_plan_file
+        - update_project_file
+        - validate_geometry_file_basic
 
 #### Method Categories
 
@@ -759,51 +980,37 @@ indices = RasUtils.perform_kdtree_query(
 
 ### RasExamples
 
-::: ras_commander.RasExamples
+<a id="ras_commander.RasExamples"></a>
+
+::: ras_commander.RasExamples.RasExamples
     options:
-      show_root_heading: true
+      show_root_heading: false
       heading_level: 3
+      show_source: false
       members:
-        - list_projects
-        - list_categories
-        - list_sciencebase_models
-        - get_sciencebase_model_info
-        - inspect_sciencebase_model
-        - validate_sciencebase_model
+        - clean_projects_directory
+        - download_fema_ble_model
         - download_sciencebase_model
         - extract_project
-        - get_project_path
+        - get_example_projects
+        - get_sciencebase_model_info
+        - inspect_sciencebase_model
+        - is_project_extracted
+        - list_categories
+        - list_projects
+        - list_sciencebase_models
+        - validate_sciencebase_model
+
+<a id="ras_commander.RasMap"></a>
 
 ### RasMap
 
 See the [RASMapper API section](rasmapper/index.md) for the complete task-grouped
-reference, including display, classification authoring, stored maps and mesh generation.
+reference for display, classification authoring, and geometry completion.
+[Meshing](meshing.md), [Results Queries](results-queries.md), and
+[Stored Maps](stored-maps.md) have dedicated reference pages.
 
-::: ras_commander.RasMap
-    options:
-      show_root_heading: true
-      heading_level: 3
-      members:
-        - parse_rasmap
-        - list_terrain_layers
-        - list_terrain_display_settings
-        - get_terrain_display_settings
-        - set_terrain_display_settings
-        - list_land_classification_layers
-        - list_landcover_layers
-        - list_soils_layers
-        - list_infiltration_layers
-        - list_land_classification_polygons
-        - add_land_classification_polygon
-        - update_land_classification_polygon
-        - delete_land_classification_polygon
-        - associate_geometry_layers
-        - get_hdf_geometry_association
-        - list_results_plans
-        - list_calculated_layers
-        - add_calculated_layer
-        - remove_calculated_layer
-        - add_wse_comparison_layers
+Full method reference: [RasMap](rasmapper/index.md).
 
 #### RASMapper Layer Discovery
 
@@ -894,22 +1101,14 @@ RasMap.associate_geometry_layers(
     HEC-RAS. It does not compile plain-text `.g##` geometry into HDF or create
     missing geometry datasets.
 
+<a id="ras_commander.RasProcess"></a>
+
 ### RasProcess
 
-See [stored maps](rasmapper/stored-maps.md) and
-[geometry completion](rasmapper/geometry-completion.md) for the full method reference.
+See [stored maps](stored-maps.md) and
+[geometry completion](rasmapper/index.md) for the full method reference.
 
-::: ras_commander.RasProcess
-    options:
-      show_root_heading: true
-      heading_level: 3
-      members:
-        - find_rasprocess
-        - get_plan_timestamps
-        - store_maps
-        - store_all_maps
-        - validate_geometry_association_cli
-        - run_command
+Full method reference: [RasProcess](stored-maps.md).
 
 #### RasProcess Details
 

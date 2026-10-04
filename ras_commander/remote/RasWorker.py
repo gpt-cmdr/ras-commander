@@ -72,8 +72,8 @@ def init_ras_worker(
     Args:
         worker_type: Type of worker - "psexec", "local", "ssh", "winrm", "docker",
                      "slurm", "aws_ec2", "azure_fr"
-        ras_object: RasPrj object to get ras_exe_path from. If None, uses global ras.
-        **kwargs: Worker-type specific configuration parameters
+        ras_object (RasPrj, optional): RasPrj object to get ras_exe_path from. If None, uses global ras.
+        **kwargs (Any): Worker-type specific configuration parameters
 
     Common kwargs (all worker types):
         ras_exe_path: Path to HEC-RAS.exe on target machine (optional - obtained from ras object if not provided)
@@ -203,7 +203,7 @@ def load_workers_from_json(
 
     Args:
         json_path: Path to JSON file containing worker configurations
-        ras_object: RasPrj object to get ras_exe_path from. If None, uses global ras.
+        ras_object (RasPrj, optional): RasPrj object to get ras_exe_path from. If None, uses global ras.
         enabled_only: If True, only load workers with "enabled": true (default True)
 
     Returns:

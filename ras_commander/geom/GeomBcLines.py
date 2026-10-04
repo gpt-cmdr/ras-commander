@@ -660,6 +660,7 @@ class GeomBcLines:
         Flow Area in a Chippewa-style geometry, then attach Normal
         Depth in the unsteady file via `set_normal_depth_boundary`:
 
+        ```python
         >>> from ras_commander import GeomBcLines, RasUnsteady
         >>> result = GeomBcLines.add_bc_lines(
         ...     "project.g01",
@@ -679,6 +680,7 @@ class GeomBcLines:
         ...     area_2d="Perimeter 1",
         ...     bc_line="DSNormalDepth",
         ... )
+        ```
 
         See Also
         --------

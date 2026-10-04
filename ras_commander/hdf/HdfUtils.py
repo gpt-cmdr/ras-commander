@@ -292,7 +292,7 @@ class HdfUtils:
         Args:
             ras_folder: Path to HEC-RAS project folder
             plan_number: Plan number (e.g., "01", "08")
-            ras_object: Optional RAS object instance
+            ras_object (RasPrj, optional): Optional RAS object instance
 
         Returns:
             Dictionary with 'plan' and 'geometry' HDF paths (or None if not found)

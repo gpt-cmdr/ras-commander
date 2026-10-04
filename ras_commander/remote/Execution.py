@@ -102,7 +102,7 @@ def compute_parallel_remote(
     Args:
         plan_numbers: Single plan number or list of plan numbers to execute
         workers: List of initialized worker objects (from init_ras_worker)
-        ras_object: RasPrj object for the project. If None, uses global ras.
+        ras_object (RasPrj, optional): RasPrj object for the project. If None, uses global ras.
         num_cores: Number of cores to allocate per plan execution
         clear_geompre: Clear geometry preprocessor files (.c## files) before execution
         force_geompre: Clear cached geometry products in place and force execution
