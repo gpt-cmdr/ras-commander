@@ -80,6 +80,35 @@ are supported.
 
 Never run it on a file HEC-RAS is still writing. Pass `check_inputs=False` to skip.
 
+### Gridded DSS dependencies
+
+For a materialized precipitation group with `Mode=Gridded` and `Source=DSS`,
+`render_job` treats `DSS Filename` and `DSS Pathname` as an input dependency.
+The filename must be a non-empty relative path from the temporary HDF, resolve
+to an existing regular `.dss` file within the source project's parent directory,
+and fit a collision-resistant staged filename in the HDF attribute's fixed-width
+capacity. Absolute paths, symlinks, missing pathnames, and paths that escape
+that directory fail before staging.
+
+The renderer copies the DSS into `inputs/` under a digest-derived filename and
+rewrites **only the staged temporary HDF** to that relative filename. It reads
+the attribute back and confirms that `Mode`, `Source`, `DSS Pathname`, and
+`Ratio` did not change. The source HDF and DSS remain unchanged. Source and
+staged DSS hashes, the source reference, staged name, and DSS pathname are
+recorded in the request and input manifest. `check_solver_ready` runs again
+after this staged-HDF change.
+
+### Completed Windows preprocessing
+
+`RasPreprocess` does not treat the presence of gridded rainfall mapping datasets
+as proof that native preprocessing has finished. It waits for this launch's
+exact `RasProcess.exe CompletePreProcess` writer to exit (or records that none
+was observed after a bounded grace period), then requires an unchanged temporary
+HDF fingerprint for two seconds. After its owned processes have ended and the
+file is quiescent, it performs the full solver-ready check. Missing geometry
+preprocessing, precipitation mappings, or non-finite property-table values
+remain terminal input failures; they are never repaired by the staging path.
+
 ## Usage
 
 ```python
