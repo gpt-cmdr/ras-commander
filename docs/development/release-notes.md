@@ -9,6 +9,51 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.104.0 (October 2026)
+
+**Read-only text metadata API**
+
+`RasText.read_project_metadata()` and `RasText.read_plan_metadata()` read
+selected project and plan fields from caller-supplied text or bytes. They do
+not open files, initialize projects or resolve component references; the
+caller owns file access and size limits. Results keep source strings, list
+repeated occurrences and report absent fields. Bytes decode as UTF-8 (with or
+without a byte-order mark) and fall back to Latin-1 with a warning. The
+constrained ras-commander-mcp 0.4 server uses this API (#482).
+
+**Frequency storms from depth-duration inputs**
+
+`FrequencyStormDdf.generate_hyetograph()` builds balanced storms from eight or
+ten explicitly labelled depth-duration values, with 50% or 67% peak placement
+and optional dry tails. `Tp40Reduction` applies a bounded, explicit
+point-to-area reduction for 0–400 mi². Results were compared against HEC-HMS
+4.10 reference series (#480, #481).
+
+**Gridded precipitation writing and consumer checks**
+
+`RasDss.write_precip_grid_arrays()` writes interval-depth arrays to DSS7
+through the optional native backend (`ras-commander[dss-native]`); the existing
+Monolith writer is unchanged (#476). Native precipitation writing accepts
+`grid_reference_origin` so receiving models keep fixed global cell indexes,
+midnight DSS paths are returned exactly, conflicting legacy precipitation
+hydrographs are rejected before mutation, and
+`HdfPlan.get_plan_met_precip_values()` inspects the solver's precipitation
+datasets (#483).
+
+**Plan output intervals and HDF compression**
+
+`RasPlan.get_plan_intervals()`, `validate_plan_intervals()` and
+`interval_to_seconds()` read and check plan intervals; `update_plan_intervals()`
+validates the result unless `validate=False`. `get_hdf_compression()` and
+`set_hdf_compression()` manage HDF write settings, and `plan_df` exposes the
+interval and HDF write keys (#473).
+
+**Slurm/Apptainer execution (offline-tested)**
+
+`RasApptainer` renders, submits, polls and collects one native HEC-RAS 6.6
+unsteady plan per Slurm allocation from Windows preprocessing artifacts, with
+hash-verified inputs and outputs. Testing so far is offline only (#484).
+
 **Gridded precipitation rejects an inherited non-unit ratio**
 
 The gridded NetCDF, GeoTIFF, GRIB, and DSS setters, and the direct native-HDF
@@ -134,6 +179,12 @@ Notebook inventory now counts recorded `execution_count` values, including
 silent definition cells, rather than counting only cells with saved output.
 Execution counts do not establish success or freshness; evidence scope remains
 explicit in the catalog.
+
+**Fixes and documentation**
+
+- `StormGenerator` Atlas 14 return-period labels started one class too high;
+  PDS and AMS columns now match NOAA's labelled export (#470).
+- API reference reorganized, with mesh diagnostics and repair coverage (#474).
 
 ### v0.103.0 (September 2026)
 
