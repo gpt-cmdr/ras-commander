@@ -873,6 +873,8 @@ class PrecipAorc:
         - Creates unique file names based on storm date: storm_YYYYMMDD.nc
         - Plan Short ID format: "Storm_MMDD" (e.g., "Storm_0430")
         - All files are created in the project folder
+        - AORC is historic analysis rainfall, so cloned plans are reset to a
+          precipitation ratio of 1.0.
         """
         import pandas as pd
 
@@ -998,6 +1000,7 @@ class PrecipAorc:
                     units="mm",
                     value_type="amount",
                     first_timestep_hours=1.0,
+                    historic=True,
                 )
 
                 # 4. Clone plan file

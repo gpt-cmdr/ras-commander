@@ -34,6 +34,10 @@ This file is the canonical local instruction file for `ras_commander/precip/`.
 - Inline precipitation uses interval-end depths and one zero-depth start ordinate.
   Align observed timestamps to the existing boundary start, cover the simulation
   window explicitly, and compare native cumulative forcing at matching times.
+- Observed or analysis gridded precipitation must use `historic=True` (or an
+  explicit `ratio=1.0`). Generic boundary setters reject a retained non-unit
+  text or HDF ratio until the caller explicitly chooses unit observed rainfall
+  or a deliberate design-storm ARF.
 - Preserve exact-depth conservation behavior for storm-generation methods that promise it.
 - Do not describe `StormGenerator` as HMS-equivalent.
 - Respect NOAA data-source assumptions, bounds, and duration limitations when exposing Atlas 14 methods.

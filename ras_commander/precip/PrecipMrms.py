@@ -454,7 +454,9 @@ class PrecipMrms:
         """
         Export MRMS QPE grids to a HEC-RAS GDAL-raster NetCDF input.
 
-        The export path is intended for ``RasUnsteady.set_gridded_precipitation``.
+        The export path is intended for ``RasUnsteady.set_gridded_precipitation``
+        with ``historic=True`` so a cloned design-storm plan cannot retain an
+        areal-reduction ratio.
         MRMS interval-ending depths are accumulated in millimeters and a zero
         cumulative frame is prepended so HEC-RAS does not treat the first QPE
         amount as the import datum. When ``first_timestep_hours`` is omitted it

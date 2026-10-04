@@ -24,7 +24,7 @@ def test_notebook_covers_native_authoring_precompute_and_final_results():
     assert 'value_type="cumulative"' in source
     assert "first_timestep_hours=1.0" in source
     assert "end_time=SIM_END" in source
-    assert "ratio=1.0" in source
+    assert "historic=True" in source
 
     assert "RasPreprocess.preprocess_plan(" in source
     assert "Event Conditions/Meteorology/Precipitation/Values" in source

@@ -9,6 +9,21 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Gridded precipitation rejects an inherited non-unit ratio**
+
+The gridded NetCDF, GeoTIFF, GRIB, and DSS setters, and the direct native-HDF
+writer, reject an omitted `ratio` when either the unsteady file or its HDF
+sidecar retains a non-unit precipitation ratio. The error identifies the
+retained value and requires an explicit decision: `historic=True` (or
+`ratio=1.0`) for observed/analysis rainfall, or `ratio=<value>` to deliberately
+keep a design-storm ARF. The boundary setters write the chosen ratio to both
+text and HDF. The payload-only direct writer writes an explicit ratio to HDF
+only after verifying that the sibling text already matches; otherwise it raises
+without changing either file and directs callers to `RasUnsteady`. On an
+existing payload it can repair that HDF attribute without rewriting the raster.
+`historic=True` requires 1.0; an explicit non-unit design ratio remains
+supported when both representations agree.
+
 **Report duplicate native BC face ownership during read-only inspection**
 
 `HdfBndry.get_bc_external_faces()` and `HdfMesh.get_mesh_perimeter_faces()` accept

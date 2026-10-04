@@ -19,6 +19,13 @@ payload written for a variable that has **no** ``Met BC=`` block in the plaintex
 silently destroyed on the next save. ``write_gridded_precip_raster`` therefore
 verifies the plaintext block exists before writing.
 
+The precipitation ratio *does* have a plaintext representation.  This direct
+writer deliberately does not edit the ``.u##`` file: when an explicit ratio (or
+``historic=True``) is requested, its sibling text must already contain the same
+ratio.  Use ``RasUnsteady`` to change that line first.  This keeps the direct
+writer limited to the native imported-raster payload and prevents a later
+HEC-RAS save from restoring a contradictory plaintext ratio.
+
 Units are honored by HEC-RAS, not decorative. The reader computes
 ``factor = Ratio * VerticalUnits.ConvertTo(project_precip_units)``, so a payload
 mislabelled ``mm`` in a US Customary project is silently divided by 25.4. ``units``
@@ -604,6 +611,9 @@ class RasPrecipHdf:
         require_met_bc_block: bool = True,
         overwrite: bool = False,
         dry_run: bool = False,
+        ratio: Optional[float] = None,
+        historic: bool = False,
+        _text_ratio_prepared: bool = False,
     ) -> PrecipRasterImportResult:
         """
         Write an ``Imported Raster Data`` payload into an unsteady flow HDF.
@@ -648,6 +658,18 @@ class RasPrecipHdf:
             written and the result is marked skipped.
         dry_run : bool, default False
             Validate inputs and report the layout without writing.
+        ratio : float, optional
+            Precipitation multiplier to write on the HDF precipitation group.
+            When omitted, an inherited non-unit text or HDF ratio is rejected
+            rather than silently retained.  When supplied, the sibling ``.u##``
+            text must already have the same ``Met BC=Precipitation|Ratio`` line;
+            update that line with :class:`RasUnsteady` before calling this
+            payload-only writer.
+        historic : bool, default False
+            Declare observed or analysis precipitation. This writes HDF
+            ``Ratio=1.0`` only when the sibling text already says ``Ratio=1``;
+            otherwise use :class:`RasUnsteady` to update the text first. A
+            contradictory non-unit ``ratio`` is rejected.
 
         Returns
         -------
@@ -667,6 +689,22 @@ class RasPrecipHdf:
 
         started = time.perf_counter()
         hdf_path = Path(unsteady_hdf_path)
+
+        # Keep the direct payload writer subject to the same source-agnostic
+        # retained-ratio guard as the public boundary setters.  Import lazily to
+        # avoid a module-level RasUnsteady/RasPrecipHdf cycle.
+        from .RasUnsteady import RasUnsteady
+
+        effective_ratio = RasUnsteady._effective_precipitation_ratio(
+            ratio, historic=historic
+        )
+        RasUnsteady._preflight_precipitation_ratio(
+            hdf_path.with_suffix(""), None, effective_ratio
+        )
+        if effective_ratio is not None and not _text_ratio_prepared:
+            RasPrecipHdf._require_matching_precipitation_ratio_line(
+                hdf_path.with_suffix(""), effective_ratio
+            )
 
         if met_variable not in _SUPPORTED_MET_VARIABLES:
             raise ValueError(
@@ -782,6 +820,39 @@ class RasPrecipHdf:
             )
 
         if skipped:
+            if effective_ratio is not None:
+                precip_path = "Event Conditions/Meteorology/Precipitation"
+                with h5py.File(hdf_path, "r") as f:
+                    existing_ratio = (
+                        f[precip_path].attrs.get("Ratio")
+                        if precip_path in f else None
+                    )
+                try:
+                    hdf_matches = (
+                        existing_ratio is not None
+                        and math.isclose(
+                            float(existing_ratio),
+                            float(effective_ratio),
+                            rel_tol=1e-5,
+                            abs_tol=1e-8,
+                        )
+                    )
+                except (TypeError, ValueError):
+                    hdf_matches = False
+                if not hdf_matches:
+                    if dry_run:
+                        return _result(dry_run=True)
+                    # The imported payload remains untouched.  The preflight above
+                    # established that the paired plaintext already agrees, so this
+                    # is the one safe direct-HDF repair on a skipped payload.
+                    with h5py.File(hdf_path, "a") as f:
+                        precip_grp = f.require_group(precip_path)
+                        RasUnsteady._write_precipitation_ratio_attribute(
+                            precip_grp,
+                            effective_ratio,
+                            hdf_path,
+                            historic=historic,
+                        )
             logger.info(
                 "Imported Raster Data already present in %s; skipped (overwrite=False)",
                 hdf_path.name,
@@ -839,6 +910,16 @@ class RasPrecipHdf:
                 )
                 for attr_name, attr_value in attributes:
                     RasPrecipHdf._write_attr(dataset, attr_name, attr_value)
+            if effective_ratio is not None:
+                precip_grp = f.require_group(
+                    "Event Conditions/Meteorology/Precipitation"
+                )
+                RasUnsteady._write_precipitation_ratio_attribute(
+                    precip_grp,
+                    effective_ratio,
+                    hdf_path,
+                    historic=historic,
+                )
 
         logger.debug(
             "Wrote %s Imported Raster Data to %s: %d time steps, %d x %d cells, units=%s",
@@ -847,6 +928,41 @@ class RasPrecipHdf:
         return _result(created_hdf=not existed)
 
     # ---------------------------------------------------------------- helpers
+
+    @staticmethod
+    def _require_matching_precipitation_ratio_line(
+        unsteady_path: Path, ratio: float
+    ) -> None:
+        """Require the plaintext ratio that HEC-RAS will retain on its next save."""
+        prefix = "Met BC=Precipitation|Ratio="
+        if not unsteady_path.exists():
+            raise ValueError(
+                f"{unsteady_path.name} is required to verify precipitation Ratio="
+                f"{ratio:g}. Update the paired unsteady text via RasUnsteady before "
+                "using this payload-only HDF writer."
+            )
+        with open(unsteady_path, "r", encoding="utf-8", errors="replace") as source:
+            line = next((candidate for candidate in source if candidate.startswith(prefix)), None)
+        if line is None:
+            raise ValueError(
+                f"{unsteady_path.name} has no {prefix!r} line. Update the paired "
+                "unsteady text via RasUnsteady before using this payload-only HDF writer."
+            )
+        raw_ratio = line[len(prefix):].strip()
+        try:
+            text_ratio = float(raw_ratio) if raw_ratio else 1.0
+        except ValueError as exc:
+            raise ValueError(
+                f"Unparseable precipitation Ratio={raw_ratio!r} in {unsteady_path.name}. "
+                "Update the paired unsteady text via RasUnsteady before using this "
+                "payload-only HDF writer."
+            ) from exc
+        if not math.isclose(text_ratio, float(ratio), rel_tol=1e-5, abs_tol=1e-8):
+            raise ValueError(
+                f"{unsteady_path.name} has precipitation Ratio={raw_ratio or '1'}, but "
+                f"the direct HDF writer was asked for Ratio={ratio:g}. Update the paired "
+                "unsteady text via RasUnsteady before using this payload-only HDF writer."
+            )
 
     @staticmethod
     def _require_positive_dimensions(n_times: int, n_cells: int) -> None:
