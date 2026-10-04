@@ -52,6 +52,21 @@ This file is the canonical shared instruction contract for repository-local codi
 - Use local ignored working folders such as `working/`, `scripts/`, or `ras_agent/` at repo root for temporary outputs and extracted scripts.
 - If a `TASK.md` contains stale `C:\GH\...` paths, remap them to `G:\GH\...` before failing.
 
+## Commander Entry Points
+
+- “Just Ask for RAS Commander” routes through the shared
+  [.claude/skills/ras-commander/SKILL.md](.claude/skills/ras-commander/SKILL.md) coordinator.
+- GIS/archive work uses [.claude/skills/cloud-native-gis/SKILL.md](.claude/skills/cloud-native-gis/SKILL.md)
+  and canonical installed ras2cng/hms2cng contracts. HMS work routes to the HMS repository's shared
+  `hms-commander` skill when available.
+- Claude-native `ras-commander` and `cloud-native-gis` roles are thin adapters.
+  Codex uses shared skills and its native worker mechanisms.
+- RAS/HMS project MCP calls belong only in a bounded subagent. They are read-only text-information
+  queries with non-spatial/non-gridded outputs. The full Python APIs handle heavier or modifying work.
+- Follow installed package contracts, check released versions at setup when possible, and prefer
+  current compatible PyPI releases in authorized managed environments. Preserve user pins and
+  report updates/blockers instead of silently changing shared environments.
+
 ## RAS Commander First
 
 - Hard rule: RAS Commander rules everything around RAS. Never invoke `Ras.exe` directly from ad hoc shell commands, raw subprocess calls, one-off scripts, manual command-line probes, notebooks, tests, or agent harness glue.

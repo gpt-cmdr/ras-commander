@@ -405,7 +405,7 @@ def init_ssh_worker(**kwargs) -> SshWorker:
 - `hecras_compute_remote` -- Remote execution workflow patterns
 
 **Agents** (collaborate with):
-- `hecras-general-agent` -- Coordinator that delegates remote execution to you
+- `ras-commander` -- Coordinator that delegates remote execution to you
 
 **Primary sources**:
 - `ras_commander/remote/AGENTS.md` -- Remote execution architecture
