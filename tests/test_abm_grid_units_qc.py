@@ -25,6 +25,10 @@ def generated(tmp_path):
 def test_noaa_default_units_and_independent_total(generated):
     raw = np.loadtxt(DATA / "houston_24h.asc", skiprows=6)
     with xr.open_dataset(generated, decode_timedelta=False) as ds:
+        assert ds.attrs['temporal_method'] == 'alternating_block'
+        assert ds.attrs['spatial_method'] == 'per_cell_depth_duration_curve'
+        assert ds.attrs['areal_reduction'] == 'none_applied_by_api'
+        assert ds.attrs['block_order'] == 'descending_increment_depth_left_first'
         np.testing.assert_allclose(ds.precip_incremental.sum("time"), raw / 1000,
                                    rtol=1e-6)
         lat, lon = float(ds.lat[0]), float(ds.lon[0])
