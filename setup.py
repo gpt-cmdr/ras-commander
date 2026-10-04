@@ -181,6 +181,8 @@ setup(
         'mesh': ['pythonnet>=3.0.5'],
         # DSS file operations (requires Java JRE/JDK 8+)
         'dss': ['pyjnius'],
+        # Native direct NumPy -> DSS7 grids, without Java/Vortex (optional wheels).
+        'dss-native': ['pydsstools>=3.1.0,<4', 'pyproj', 'affine'],
         # Everything (all optional dependencies)
         'all': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES + [
             'paramiko>=3.0',

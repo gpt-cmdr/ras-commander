@@ -1,6 +1,81 @@
 # DSS Operations
 
-RAS Commander provides read access to HEC-DSS files for extracting boundary condition data.
+RAS Commander reads and writes HEC-DSS boundary and precipitation data.
+
+`RasDss.write_grid_timeseries()` already writes arrays directly to gridded DSS
+through HEC Monolith. Existing Monolith users do not need pydsstools for this
+capability. The native writer below is an optional backend alternative.
+
+## Direct precipitation arrays to DSS7
+
+`RasDss.write_precip_grid_arrays()` writes NumPy arrays through the native
+[pydsstools](https://github.com/gyanz/pydsstools) library by Gyan Basyal (gyanz),
+without Java, Vortex, or intermediate timestep raster files. NetCDF remains the
+default output of the gridded Atlas 14 generators; DSS is an explicit alternative.
+
+```bash
+uv pip install "ras-commander[dss-native]"
+```
+
+This extra uses pydsstools 3.x (at least 3.1). For the tested **3.1.0** release,
+Windows x64 wheels cover CPython 3.9–3.13; there is no CPython 3.14 Windows
+wheel. Python 3.11/3.12 requires NumPy >=1.26,<2; Python 3.13 requires NumPy
+>=2.1. Dependencies also include pandas, affine, pyproj, and pydantic >=2,<3.
+Install these together through the extra so the resolver honors their version
+constraints. The Windows roundtrip tests use Python 3.12.
+
+**Windows runtime requirement:** the inspected CPython 3.12 wheel imports
+`VCRUNTIME140.dll` and Windows Universal CRT components. It does not bundle
+these DLLs. The Python distribution may supply the Visual C runtime; otherwise
+install the applicable [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+On the validation workstation, uv's CPython supplied `VCRUNTIME140.dll` and
+Windows supplied `ucrtbase.dll`. Passing tests on that development machine
+does not establish installation on a clean Windows machine.
+
+A compatible **wheel needs the runtime, not a compiler**. Building pydsstools
+from source on Windows additionally requires Visual Studio Build Tools with
+the C++ workload; see the [upstream installation guide](https://pydsstools.readthedocs.io/en/latest/installation.html).
+Use a supported Python/wheel combination if a source build is not intended.
+
+```python
+from affine import Affine
+import numpy as np
+import pandas as pd
+from ras_commander import RasDss
+
+# Two interval depths (mm), north-most row first, west-most column first.
+depths = np.array([[[1., 2.], [3., np.nan]], [[4., 5.], [6., np.nan]]])
+paths = RasDss.write_precip_grid_arrays(
+    "rainfall.dss", "/UTM15/BASIN/PRECIP///DESIGN/", depths,
+    pd.date_range("2020-01-01", periods=3, freq="6min"),
+    transform=Affine(100, 0, 300000, 0, -100, 3300000),
+    crs="EPSG:26915", units="mm",
+)
+```
+
+Pass **n+1 interval boundaries for n grids**, using the same timezone-naive
+clock as the receiving model. Each record is PER-CUM precipitation depth over
+its D/E start/end times. Supply incremental depths, not rainfall intensity or
+cumulative totals since storm start. `units="inches"` is also supported; the
+writer labels units explicitly and does not multiply or divide input values.
+
+The transform maps pixel corners in `(a,b,c,d,e,f)` Affine order. Grids must
+have square, unrotated cells in an explicit projected CRS. Geographic Atlas 14
+arrays must first be reprojected; this method does not interpret latitude and
+longitude as projected coordinates. NaN, masked cells, and an explicit `nodata=`
+sentinel become native DSS missing values. Negative depths and infinity fail.
+
+The writer creates DSS7 specified-time grids, closes and checks the temporary
+file, then publishes it. Existing files are protected by default;
+`overwrite=True` replaces the **entire file**, rather than appending records.
+New-file publication uses a same-directory hard link to prevent concurrent
+writers from overwriting each other; the destination filesystem must support
+hard links. Explicit overwrite uses atomic replacement.
+The tests verify native DSS readback of values, orientation, missing cells,
+CRS, units, and interval pathnames. They do not establish acceptance by every
+RAS/HMS version. Configure a receiving RAS project through
+`RasUnsteady.configure_gridded_dss_precipitation()` and validate the intended
+engine/version as part of the project workflow.
 
 ## Overview
 
@@ -11,7 +86,7 @@ The `RasDss` class reads HEC-DSS time series data using HEC's Monolith Java libr
 - Lazy loading - no overhead unless DSS methods are called
 - Tested with 84 DSS files totaling 6.64 GB
 
-## Requirements
+## Java bridge requirements
 
 ```bash
 # Install pyjnius (Java bridge)
