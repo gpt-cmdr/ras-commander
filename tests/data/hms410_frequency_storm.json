@@ -1,9 +1,4 @@
 {
-  "source": "Texas GLO RBFS Central Region, reference, March2025 report Deliverable49, Table8-1 printed171; HMS4.10 delivered DSS via RasDss HEC Monolith",
-  "package_id": "dd6d19a5-1da9-438e-a268-649406020d98",
-  "public_catalog": "https://dmqt.cloud.tdis.io/",
-  "archive": "12040205_12070104_Dry Bayou-Austin Bayou-Lower Oyster Creek.zip",
-  "member_prefix": "Supplemental Data/Hydrologic Calculations/Atlas-14 Rainfall/",
   "durations_minutes": [
     5,
     15,
@@ -2134,5 +2129,6 @@
         0.02078167142457456
       ]
     }
-  }
+  },
+  "source": "Independent delivered HEC-HMS 4.10 records read with HEC-DSS Java Monolith; source identity retained in private validation manifest."
 }

@@ -1,4 +1,4 @@
-"""Delivered reference HMS 4.10 rainfall is the oracle, not another generator."""
+"""Independent delivered rainfall is comparison evidence, not presumed canonical truth."""
 import json
 from pathlib import Path
 
