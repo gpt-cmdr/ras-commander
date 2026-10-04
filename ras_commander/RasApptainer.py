@@ -25,6 +25,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import uuid
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from .Decorators import log_call
@@ -54,11 +55,8 @@ TERMINAL_STATES = frozenset({
     "COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "OUT_OF_MEMORY",
     "NODE_FAIL", "BOOT_FAIL", "DEADLINE", "PREEMPTED",
 })
-# Canonical image: HEC-RAS 6.6 native Linux unsteady (Docker Hub, pulled once to a SIF).
-# Verified from the registry image config (2026-10-03): linux/amd64, USER rasworker,
-# WORKDIR /job, ENTRYPOINT tini -- python -m ras_commander._container_compute (bypassed
-# here by ``apptainer exec``). Solver: /opt/hecras-runtime/engine/RasUnsteady; vendor libs:
-# /opt/hecras-runtime/engine/libs{,/mkl,/rhel_8}. RasGeomPreprocess is NOT in this image.
+# Default image layout is derived from its Dockerfile and registry metadata.  It has not
+# been qualified by a live run through this API; sites must qualify their own profile.
 DEFAULT_OCI_SOURCE = "docker://rascommander/hec-ras-linux-unsteady_6.6:v1"
 DEFAULT_HECRAS_DIR = "/opt/hecras-runtime/engine"
 DEFAULT_LD_LIBRARY_PATH = (
@@ -66,7 +64,14 @@ DEFAULT_LD_LIBRARY_PATH = (
     f"{DEFAULT_HECRAS_DIR}/libs/rhel_8",
 )
 _STACK_SIZE = re.compile(r"[1-9][0-9]*[KMGkmg]?\Z")
-_OCI_SOURCE = re.compile(r"docker://[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}\Z")
+_OCI_SOURCE = re.compile(
+    r"docker://[a-z0-9][a-z0-9._/-]*(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127}|@sha256:[0-9a-f]{64})\Z"
+)
+_ZERO_SHA256 = "0" * 64
+_FIM_ONLY_FIELDS = frozenset({
+    "launcher_python_executable", "max_concurrent", "memory_per_task", "ras_executable",
+    "rsync_executable", "timeout_seconds", "transfer_mode",
+})
 
 
 # --------------------------------------------------------------------------
@@ -122,6 +127,7 @@ class ApptainerSiteProfile:
     kmp_stacksize: str = "2G"
     apptainer_executable: str = "apptainer"
     sbatch_executable: str = "sbatch"
+    scancel_executable: str = "scancel"
     sacct_executable: str = "sacct"
     squeue_executable: str = "squeue"
     ssh_executable: str = "ssh"
@@ -197,12 +203,15 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
         if not (isinstance(getattr(p, name), str) and _STACK_SIZE.fullmatch(getattr(p, name))):
             bad.append(f"{name} must look like '2G' or '512M'")
     if not (isinstance(p.oci_source, str) and _OCI_SOURCE.fullmatch(p.oci_source)):
-        bad.append("oci_source must look like 'docker://<repo>:<tag>'")
+        bad.append(
+            "oci_source must look like 'docker://<repo>:<tag>' or "
+            "'docker://<repo>@sha256:<digest>'"
+        )
     for name in ("identity_file", "known_hosts_file"):
         v = getattr(p, name)
         if v is not None and (not isinstance(v, str) or "\x00" in v):
             bad.append(f"{name} must be a path string")
-    for name in ("apptainer_executable", "sbatch_executable", "sacct_executable",
+    for name in ("apptainer_executable", "sbatch_executable", "scancel_executable", "sacct_executable",
                  "squeue_executable", "ssh_executable", "scp_executable"):
         value = getattr(p, name)
         if not (isinstance(value, str) and (_MODULE.fullmatch(value) or _safe_posix(value))):
@@ -225,6 +234,7 @@ class ApptainerJob:
     project_name: str
     plan_number: str
     geometry_token: str
+    attempt_id: str
     state: str = "RENDERED"  # RENDERED | SUBMITTING | SUBMITTED
     slurm_job_id: Optional[str] = None
     dry_run: bool = False
@@ -245,6 +255,7 @@ class ApptainerStatus:
     exit_code: Optional[str] = None
     elapsed: Optional[str] = None
     node: Optional[str] = None
+    reason: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -298,8 +309,8 @@ def validate_receipt(payload: Any) -> dict:
         if not isinstance(payload[key], dict):
             raise ValueError(f"Receipt {key} must be an object")
         for name, record in payload[key].items():
-            parts = name.split("/")
-            if name.startswith("/") or "\\" in name or any(x in {"", ".", ".."} for x in parts):
+            parts = re.split(r"[\\\\/]", name)
+            if name.startswith(("/", "\\")) or any(x in {"", ".", ".."} for x in parts):
                 raise ValueError(f"Unsafe receipt path: {name!r}")
             if (not isinstance(record, dict) or set(record) != {"sha256", "size_bytes"}
                     or type(record["size_bytes"]) is not int or record["size_bytes"] < 0
@@ -380,6 +391,10 @@ _PRECIP_GROUP = "Event Conditions/Meteorology/Precipitation"
 _PRECIP_DATASETS = ("Cell Indexes", "Cell Info", "Cell Weights",
                     "Face Indexes", "Face Info", "Face Weights")
 # "Cells Minimum Elevation" legitimately holds NaN on ghost cells; never checked.
+# ``Cells Minimum Elevation`` legitimately contains NaN in ghost cells.  Every
+# other floating property table emitted for a 2D area is solver input and must
+# be finite.  The named list documents the HEC-RAS 6.6 tables; the traversal
+# below deliberately also catches future floating property tables.
 _PROPERTY_TABLES = ("Faces Minimum Elevation", "Faces Area Elevation Values",
                     "Faces Area Elevation Info", "Cells Volume Elevation Values",
                     "Cells Volume Elevation Info", "Cells Surface Area")
@@ -407,14 +422,16 @@ def _area_names(hdf: Any) -> list[str]:
     return [k for k, v in group.items() if isinstance(v, h5py.Group)]
 
 
-def check_solver_ready(tmp_hdf: Union[str, Path]) -> list[str]:
+def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = False) -> list[str]:
     """Return the problems that would crash the Linux solver; an empty list means ready.
 
     Opens the LOCAL, completed file read-only with HDF5 locking disabled. Never call this
     on a tmp.hdf that HEC-RAS is still writing. Checks: (1) when gridded precipitation is
-    present (``Event Conditions/Meteorology/Precipitation/Values``), every 2D area has the
+    present, every 2D area has the
     ``.../Precipitation/2D Flow Areas/<area>/`` interpolation datasets, non-empty; (2) the 2D
-    property tables in ``_PROPERTY_TABLES`` contain no NaN (checked when present).
+    property tables contain no NaN; and (3) unless ``geom_preprocess=True`` (for an image that
+    ships ``RasGeomPreprocess``), ``/Geometry/GeomPreprocess`` is present and non-empty.
+    2D-specific checks are skipped for valid 1D/storage-area-only plans.
     """
     import h5py
     import numpy as np
@@ -426,9 +443,23 @@ def check_solver_ready(tmp_hdf: Union[str, Path]) -> list[str]:
         return [f"cannot open as HDF5: {exc}"]
     with hdf:
         areas = _area_names(hdf)
-        if not areas:
-            problems.append("no 2D flow areas listed under Geometry/2D Flow Areas")
-        gridded = f"{_PRECIP_GROUP}/Values" in hdf
+        if not geom_preprocess:
+            geompre = hdf.get("Geometry/GeomPreprocess")
+            if (geompre is None or not hasattr(geompre, "keys") or not len(geompre)):
+                problems.append(
+                    "missing or empty Geometry/GeomPreprocess; this profile does not run "
+                    "RasGeomPreprocess in the image"
+                )
+        precip = hdf.get(_PRECIP_GROUP)
+        mode = precip.attrs.get("Mode") if precip is not None else None
+        if isinstance(mode, bytes):
+            mode = mode.decode("utf-8", "replace")
+        # Older completed HDFs did not persist Mode, so retain Values as a conservative
+        # compatibility signal.  A non-gridded explicit mode always wins.
+        gridded = bool(precip is not None and (
+            str(mode).strip().casefold() == "gridded" or
+            (mode is None and f"{_PRECIP_GROUP}/Values" in hdf)
+        ))
         for area in areas:
             if gridded:
                 base = f"{_PRECIP_GROUP}/2D Flow Areas/{area}"
@@ -441,13 +472,21 @@ def check_solver_ready(tmp_hdf: Union[str, Path]) -> list[str]:
                         node = hdf.get(f"{base}/{name}")
                         if node is None or not getattr(node, "shape", None) or node.shape[0] == 0:
                             problems.append(f"missing or empty {base}/{name}")
-            for table in _PROPERTY_TABLES:
-                node = hdf.get(f"Geometry/2D Flow Areas/{area}/{table}")
-                if node is None or getattr(node, "dtype", None) is None or node.dtype.kind != "f" or not node.shape:
-                    continue
+            area_group = hdf[f"Geometry/2D Flow Areas/{area}"]
+            float_tables: list[tuple[str, Any]] = []
+
+            def find_float_tables(name: str, node: Any) -> None:
+                if (getattr(node, "dtype", None) is not None and node.dtype.kind == "f"
+                        and node.shape and name != "Cells Minimum Elevation"):
+                    float_tables.append((name, node))
+
+            area_group.visititems(find_float_tables)
+            for table, node in float_tables:
                 for start in range(0, node.shape[0], _NAN_CHUNK_ROWS):
                     if np.isnan(node[start:start + _NAN_CHUNK_ROWS]).any():
-                        problems.append(f"NaN in Geometry/2D Flow Areas/{area}/{table} (solver SIGSEGV)")
+                        problems.append(
+                            f"NaN in Geometry/2D Flow Areas/{area}/{table} (solver SIGSEGV)"
+                        )
                         break
     return problems
 
@@ -483,13 +522,16 @@ ln -s "$PROJECT.b$PLAN" io.b
 ln -s "$PROJECT.$XTOKEN" io.X
 ln -s "$PROJECT.$XTOKEN" io.x
 @GEOM_PREPROCESS@
-"$HECRAS/RasUnsteady" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN" > solver.log 2>&1
+"$HECRAS/RasUnsteady" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN" > solver.log 2>&1 &
+SOLVER_PID=$!
+trap 'kill -TERM "$SOLVER_PID" 2>/dev/null; wait "$SOLVER_PID"; exit 143' TERM
+wait "$SOLVER_PID"
 RC=$?
 find . -maxdepth 1 -type l -name 'io.*' -delete
 [ "$RC" -eq 0 ] || exit "$RC"
 
 grep -qi 'Finished Unsteady Flow Simulation' solver.log || { echo 'missing completion banner' >&2; exit 4; }
-if grep -Eqi 'unsteady flow encountered an error|forrtl:|segmentation fault|fatal error' solver.log; then
+if grep -Eqi 'encountered an error|did not complete|failed to converge|computations were stopped|fatal error|forrtl:|segmentation fault|^\\s*(error\\s*:|hdf_error\\b)' solver.log; then
   echo 'fatal solver message' >&2; exit 4
 fi
 mv "$PROJECT.p$PLAN.tmp.hdf" "$PROJECT.p$PLAN.hdf" || exit 4
@@ -534,9 +576,28 @@ inventory_json() {  # inventory_json <dir> <name-prefix>
   local dir=$1 prefix=$2 sep="" f n
   while IFS= read -r f; do
     n=${f#"$dir"/}
-    printf '%s\\n    "%s%s": {"sha256": "%s", "size_bytes": %s}' "$sep" "$prefix" "$n" "$(sha_of "$f")" "$(stat -c %s "$f")"
+    printf '%s\\n    ' "$sep"
+    json_string "$prefix$n"
+    printf ': {"sha256": "%s", "size_bytes": %s}' "$(sha_of "$f")" "$(stat -c %s "$f")"
     sep=","
   done < <(find "$dir" -type f ! -name SHA256SUMS ! -name receipt.json | LC_ALL=C sort)
+}
+
+json_string() {  # JSON string without assuming python/jq in the image.
+  local value=$1
+  local char char_code i
+  printf '"'
+  for ((i=0; i<${#value}; i++)); do
+    char=${value:i:1}
+    case "$char" in
+      '"') printf '%s' '\\\"' ;;
+      $'\\n') printf '%s' '\\n' ;;
+      $'\\r') printf '%s' '\\r' ;;
+      $'\\t') printf '%s' '\\t' ;;
+      *) printf -v char_code '%d' "'$char"; if [ "$char_code" -eq 92 ]; then printf '%s' '\\\\\\\\'; else printf '%s' "$char"; fi ;;
+    esac
+  done
+  printf '"'
 }
 
 write_receipt() {
@@ -547,13 +608,13 @@ write_receipt() {
     printf '{\\n'
     printf '  "schema": "ras-commander-apptainer-receipt/v1",\\n'
     printf '  "request_sha256": "%s",\\n' "$REQUEST_SHA256"
-    printf '  "job_name": "%s",\\n' "$JOB_NAME"
-    printf '  "slurm_job_id": "%s",\\n' "$SLURM_JOB_ID"
-    printf '  "node": "%s",\\n' "$node"
-    printf '  "container_identity": "%s",\\n' "$CONTAINER_IDENTITY"
-    printf '  "apptainer_image_sha256": "%s",\\n' "$IMAGE_SHA256"
-    printf '  "status": "%s",\\n' "$STATUS"
-    printf '  "reason_code": "%s",\\n' "$REASON"
+    printf '  "job_name": '; json_string "$JOB_NAME"; printf ',\\n'
+    printf '  "slurm_job_id": '; json_string "$SLURM_JOB_ID"; printf ',\\n'
+    printf '  "node": '; json_string "$node"; printf ',\\n'
+    printf '  "container_identity": '; json_string "$CONTAINER_IDENTITY"; printf ',\\n'
+    printf '  "apptainer_image_sha256": '; json_string "$IMAGE_SHA256"; printf ',\\n'
+    printf '  "status": '; json_string "$STATUS"; printf ',\\n'
+    printf '  "reason_code": '; json_string "$REASON"; printf ',\\n'
     printf '  "exit_code": %s,\\n' "$RC"
     printf '  "started_at": "%s",\\n' "$STARTED"
     printf '  "finished_at": "%s",\\n' "$finished"
@@ -562,7 +623,7 @@ write_receipt() {
     printf '  "input_hashes": {%s\\n  },\\n' "$(inventory_json "$JOB_ROOT/inputs" "")"
     printf '  "outputs": {%s\\n  },\\n' "$(inventory_json "$OUT" "")"
     printf '  "copy_verified": %s,\\n' "$COPY_OK"
-    printf '  "detail": "%s"\\n' "$(printf '%s' "$DETAIL" | tr -cd 'A-Za-z0-9 ._:/=-')"
+    printf '  "detail": '; json_string "$DETAIL"; printf '\\n'
     printf '}\\n'
   } > "$OUT/receipt.json"
 }
@@ -579,6 +640,7 @@ copy_back() {
     [ "$(sha_of "$OUT/project/$n")" = "$sum" ] || return 1
   done
   [ -f "$SCRATCH/engine.log" ] && cp -p "$SCRATCH/engine.log" "$OUT/logs/engine.log"
+  [ -f "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" ] && cp -p "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" "$OUT/logs/slurm-$SLURM_JOB_ID.out"
   return 0
 }
 
@@ -593,6 +655,7 @@ run_job() {
   cp -p "$JOB_ROOT/inputs/SHA256SUMS" "$SCRATCH/input.sha256"
   cp -p "$JOB_ROOT/engine.sh" "$SCRATCH/control/engine.sh"
   (cd "$WORK" && sha256sum --quiet -c "$SCRATCH/input.sha256") || { REASON=STAGE_MISMATCH; return 1; }
+  ulimit -s unlimited || { REASON=STACK_LIMIT_FAILED; DETAIL="host ulimit -s unlimited failed"; return 1; }
 
   "$APPTAINER" exec --cleanenv \\
     --bind "$WORK:/job" --bind "$SCRATCH/control:/control:ro" --bind "$SCRATCH/tmp:/tmp" \\
@@ -636,7 +699,7 @@ def _stack_block(profile: ApptainerSiteProfile) -> str:
     """Stack settings the solver needs on large 2D meshes (SIGSEGV at the first wet step otherwise)."""
     lines = []
     if profile.stack_unlimited:
-        lines.append("ulimit -s unlimited || echo 'warning: ulimit -s unlimited refused' >&2")
+        lines.append("ulimit -s unlimited || { echo 'ulimit -s unlimited refused' >&2; exit 5; }")
     lines.append(f"export OMP_STACKSIZE={shlex.quote(profile.omp_stacksize)}")
     lines.append(f"export KMP_STACKSIZE={shlex.quote(profile.kmp_stacksize)}")
     return "\n".join(lines)
@@ -667,7 +730,7 @@ def _sbatch_directives(profile: ApptainerSiteProfile, job_name: str, remote_dir:
         lines.append(f"#SBATCH --mem={profile.slurm_memory}")
     lines += [f"#SBATCH --time={profile.time_limit}",
               f"#SBATCH --output={remote_dir}/slurm-%j.out",
-              "#SBATCH --signal=B:TERM@120"]
+              "#SBATCH --signal=B:TERM@600"]
     return "\n".join(lines)
 
 
@@ -689,12 +752,114 @@ def _canonical_sha256(payload: Any) -> str:
                                      allow_nan=False).encode("utf-8")).hexdigest()
 
 
+def _job_script_request_hash(script: str) -> str:
+    """Hash the job script with its self-referential request value normalized."""
+    normalized = re.sub(r"^(REQUEST_SHA256=).*$", r"\1<REQUEST_SHA256>", script,
+                        flags=re.MULTILINE)
+    normalized = re.sub(r"attempt-[0-9a-f]{32}", "attempt-<ATTEMPT_ID>", normalized)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _expected_simulation_end(tmp_hdf: Path) -> str:
+    """Read the authoritative planned end time carried by the compiled HDF."""
+    import h5py
+
+    with h5py.File(tmp_hdf, "r", locking=False) as hdf:
+        info = hdf.get("Plan Data/Plan Information")
+        value = info.attrs.get("Simulation End Time") if info is not None else None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    if not isinstance(value, str) or not value.strip() or value.strip().casefold() == "unknown":
+        raise ValueError("Compiled plan HDF lacks a usable Plan Data/Plan Information Simulation End Time")
+    return value.strip()
+
+
+def _load_request(job: ApptainerJob) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load and validate the immutable render evidence before an external action."""
+    payload = json.loads((Path(job.job_directory) / "job.json").read_text(encoding="utf-8"))
+    request = payload.get("request")
+    if not isinstance(request, dict) or _canonical_sha256(request) != job.request_sha256:
+        raise RuntimeError("Rendered request evidence is missing or does not match this job handle")
+    inputs = request.get("input_hashes")
+    if not isinstance(inputs, dict) or not inputs:
+        raise RuntimeError("Rendered request has no staged input hashes")
+    input_dir = Path(job.job_directory) / "inputs"
+    for name, digest in inputs.items():
+        path = input_dir / name
+        if not _SAFE_NAME.fullmatch(str(name)) or sha256_file(path) != digest:
+            raise RuntimeError(f"Staged input does not match rendered request: {name}")
+    manifest = input_dir / "SHA256SUMS"
+    if sha256_file(manifest) != request.get("input_manifest_sha256"):
+        raise RuntimeError("Staged SHA256SUMS does not match rendered request")
+    engine = Path(job.job_directory) / "engine.sh"
+    if sha256_file(engine) != request.get("engine_sha256"):
+        raise RuntimeError("Staged engine.sh does not match rendered request")
+    script = Path(job.job_directory) / "job.sh"
+    script_text = script.read_text(encoding="utf-8")
+    if _job_script_request_hash(script_text) != request.get("job_sha256"):
+        raise RuntimeError("Staged job.sh does not match rendered request")
+    if sha256_file(script) != payload.get("job_file_sha256"):
+        raise RuntimeError("Staged job.sh file hash changed after rendering")
+    return request, payload
+
+
+def _remote_input_check_command(remote: str, request: Mapping[str, Any]) -> str:
+    """Return a shell fragment that verifies expected hashes, not remote metadata."""
+    checks = "".join(
+        f"{request['input_hashes'][name]}  {name}\\n" for name in sorted(request["input_hashes"])
+    )
+    return (
+        f"cd {shlex.quote(remote)}/inputs && "
+        f"test \"$(sha256sum SHA256SUMS | cut -d' ' -f1)\" = {shlex.quote(str(request['input_manifest_sha256']))} && "
+        f"printf %s {shlex.quote(checks)} | sha256sum --quiet -c -"
+    )
+
+
+def _normal_time(value: Any) -> str:
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    return " ".join(str(value).upper().split())
+
+
+def _validate_collected_solve(destination: Path, job: ApptainerJob,
+                              expected_end: str) -> Optional[str]:
+    """Validate the promoted solve artifact, including its exact final time."""
+    from .RasCmdr import RasCmdr
+
+    result_hdf = destination / "project" / f"{job.project_name}.p{job.plan_number}.hdf"
+    solver_log = destination / "project" / "solver.log"
+    ok, reason = RasCmdr._validate_linux_solve(solver_log, result_hdf, job.plan_number)
+    if not ok:
+        return reason
+    try:
+        import h5py
+
+        stamps: list[str] = []
+        with h5py.File(result_hdf, "r", locking=False) as hdf:
+            def collect_stamps(name: str, node: Any) -> None:
+                if (isinstance(node, h5py.Dataset) and name.startswith("Results/Unsteady/")
+                        and name.endswith("Time Date Stamp") and node.size):
+                    stamps.append(_normal_time(node[-1]))
+            hdf.visititems(collect_stamps)
+        if _normal_time(expected_end) not in stamps:
+            return f"result HDF does not contain expected final simulation time {expected_end!r}"
+    except Exception as exc:
+        return f"could not validate final simulation time: {exc}"
+    return None
+
+
 # --------------------------------------------------------------------------
 # Public static API
 # --------------------------------------------------------------------------
 
 class RasApptainer:
     """Static namespace for native HEC-RAS 6.6 unsteady execution via Slurm + Apptainer."""
+
+    @staticmethod
+    @log_call
+    def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = False) -> list[str]:
+        """Return pre-submit solver-readiness findings for a completed tmp.hdf."""
+        return check_solver_ready(tmp_hdf, geom_preprocess=geom_preprocess)
 
     @staticmethod
     @log_call
@@ -714,6 +879,14 @@ class RasApptainer:
             problems.append(f"unsupported schema {schema!r} (expected {PROFILE_SCHEMA!r})")
         data = {k: v for k, v in data.items() if not k.startswith("_")}  # "_comment" keys
         known = {f.name for f in fields(ApptainerSiteProfile)}
+        # fim-commander's memory setting describes a task; this API requests one
+        # task, so it is a safe fallback when the native Slurm memory is omitted.
+        if "memory_per_task" in data and "slurm_memory" not in data:
+            data["slurm_memory"] = data["memory_per_task"]
+        fim_only = sorted(set(data) & _FIM_ONLY_FIELDS)
+        for key in fim_only:
+            logger.info("Ignoring fim-commander-only profile field %s for RasApptainer", key)
+            data.pop(key)
         for key in sorted(set(data) - known):
             problems.append(f"unknown field {key!r}")
         for f in fields(ApptainerSiteProfile):
@@ -771,7 +944,7 @@ class RasApptainer:
         if job_directory.exists() and any(job_directory.iterdir()):
             raise FileExistsError(f"job_directory must be new or empty: {job_directory}")
         if check_inputs:
-            problems = check_solver_ready(project_folder / names[0])
+            problems = check_solver_ready(project_folder / names[0], geom_preprocess=profile.geom_preprocess)
             if problems:
                 raise InputCheckError(project_folder / names[0], problems)
         inputs = job_directory / "inputs"
@@ -787,9 +960,14 @@ class RasApptainer:
                 shutil.copyfile(source, inputs / name)
             else:
                 (inputs / name).write_bytes(data.replace(b"\r\n", b"\n"))  # LF for Linux solver
+        # RasUnsteady reads these compiled-HDF attributes, not merely OMP/MKL.
+        # The source tmp.hdf is immutable; only the staged copy is rewritten.
+        from .RasCmdr import RasCmdr
+        core_evidence = RasCmdr._set_linux_hdf_num_cores(inputs / names[0], profile.num_cores)
         staged = {n: sha256_file(inputs / n) for n in names}
         (inputs / "SHA256SUMS").write_text(
             "".join(f"{staged[n]}  {n}\n" for n in sorted(names)), encoding="utf-8", newline="\n")
+        manifest_sha = sha256_file(inputs / "SHA256SUMS")
 
         engine = _render_engine_script(profile, project_name, plan, xtoken)
         (job_directory / "engine.sh").write_text(engine, encoding="utf-8", newline="\n")
@@ -798,26 +976,25 @@ class RasApptainer:
         profile_view = profile.to_dict()
         for local_only in ("identity_file", "known_hosts_file"):
             profile_view.pop(local_only, None)
-        request_sha = _canonical_sha256({
-            "schema": JOB_SCHEMA, "project": project_name, "plan": plan, "xtoken": xtoken,
-            "staged_inputs": staged, "engine_sha256": engine_sha, "profile": profile_view,
-        })
-        job_name = f"{profile.site_name}-{project_name}-p{plan}-{request_sha[:8]}"[:128]
+        # Job names intentionally do not encode the request: the normalized script hash below
+        # is part of the request, and a unique attempt path prevents staging collisions.
+        job_name = f"{profile.site_name}-{project_name}-p{plan}"[:128]
         if not _TOKEN.fullmatch(job_name):
             raise ValueError(f"Derived job name is not a safe Slurm token: {job_name!r}")
-        remote_dir = f"{profile.scratch_root.rstrip('/')}/{job_name}"
+        attempt_id = uuid.uuid4().hex
+        remote_dir = f"{profile.scratch_root.rstrip('/')}/{job_name}/attempt-{attempt_id}"
 
         env_lines = "\n".join(f"export {k}={shlex.quote(str(v))}"
                               for k, v in sorted(profile.environment.items()))
         module_lines = "\n".join(f"module load {shlex.quote(m)}" for m in profile.modules)
-        script = _fill(JOB_SCRIPT_TEMPLATE, {
+        script_values = {
             "SBATCH": _sbatch_directives(profile, job_name, remote_dir),
             "MODULES": module_lines,
             "JOB_ROOT": shlex.quote(remote_dir),
             "IMAGE": shlex.quote(profile.image),
             "IMAGE_SHA": profile.apptainer_image_sha256,
             "ENGINE_SHA": engine_sha,
-            "REQUEST_SHA": request_sha,
+            "REQUEST_SHA": "<REQUEST_SHA256>",
             "JOB_NAME": shlex.quote(job_name),
             "IDENTITY": shlex.quote(profile.container_identity),
             "CORES": str(profile.num_cores),
@@ -827,17 +1004,29 @@ class RasApptainer:
             "PLAN": shlex.quote(plan),
             "XTOKEN": shlex.quote(xtoken),
             "ENVIRONMENT": env_lines,
-        })
+        }
+        template_job_sha = _job_script_request_hash(_fill(JOB_SCRIPT_TEMPLATE, script_values))
+        request = {
+            "schema": JOB_SCHEMA, "project": project_name, "plan": plan, "xtoken": xtoken,
+            "input_hashes": staged, "input_manifest_sha256": manifest_sha,
+            "engine_sha256": engine_sha, "job_sha256": template_job_sha,
+            "expected_simulation_end": _expected_simulation_end(inputs / names[0]),
+            "profile": profile_view,
+        }
+        request_sha = _canonical_sha256(request)
+        script_values["REQUEST_SHA"] = request_sha
+        script = _fill(JOB_SCRIPT_TEMPLATE, script_values)
         (job_directory / "job.sh").write_text(script, encoding="utf-8", newline="\n")
 
         job = ApptainerJob(
             job_name=job_name, request_sha256=request_sha, job_directory=job_directory,
             remote_directory=remote_dir, project_name=project_name, plan_number=plan,
-            geometry_token=xtoken,
+            geometry_token=xtoken, attempt_id=attempt_id,
         )
         RasApptainer._persist(job, extra={
             "source_input_sha256": source_hashes, "staged_input_sha256": staged,
-            "profile": profile_view,
+            "core_evidence": core_evidence, "profile": profile_view, "request": request,
+            "job_file_sha256": sha256_file(job_directory / "job.sh"),
         })
         return job
 
@@ -877,22 +1066,31 @@ class RasApptainer:
             return replace(job, dry_run=True)
         if transport is None or profile is None:
             raise ValueError("A transport and profile are required unless dry_run=True")
+        if profile.apptainer_image_sha256 == _ZERO_SHA256 or profile.container_identity.endswith(_ZERO_SHA256):
+            raise ApptainerProfileError([
+                "all-zero image digest is a placeholder and cannot be submitted; record the SIF SHA-256"
+            ])
         if job.state != "RENDERED":
             raise RuntimeError(
                 f"Job is in state {job.state}; refusing to submit again. "
                 "Render a new job after reconciling the remote attempt."
             )
+        request, _ = _load_request(job)
         remote = job.remote_directory
         root = remote.rsplit("/", 1)[0]
-        for argv in (["mkdir", "-p", root], ["mkdir", remote]):  # last mkdir is exclusive
+        # An interrupted upload can be retried only within its unique attempt
+        # directory.  No request root or another attempt is ever reconciled.
+        for argv in (["mkdir", "-p", root], ["bash", "-c",
+                      f"rm -rf -- {shlex.quote(remote)} && mkdir -- {shlex.quote(remote)}"]):
             result = transport.run(argv)
             if result.returncode != 0:
                 raise RuntimeError(f"Remote directory setup failed ({argv}): {result.stderr.strip()}")
         transport.put_tree(Path(job.job_directory), remote)
-        check = transport.run(["bash", "-c",
-                               f"cd {shlex.quote(remote)}/inputs && sha256sum --quiet -c SHA256SUMS"])
+        check = transport.run(["bash", "-c", _remote_input_check_command(remote, request)])
         if check.returncode != 0:
-            raise RuntimeError(f"Remote input hash verification failed: {check.stderr.strip()}")
+            raise RuntimeError(
+                f"Remote staged-input verification against request failed: {check.stderr.strip()}"
+            )
         job = replace(job, state="SUBMITTING")
         RasApptainer._persist(job)
         result = transport.run([profile.sbatch_executable, "--parsable", f"{remote}/job.sh"])
@@ -919,17 +1117,36 @@ class RasApptainer:
         jid = job.slurm_job_id
         result = transport.run([profile.sacct_executable, "-X", "-n", "-P", "-j", jid,
                                 "-o", "JobID,State,ExitCode,Elapsed,NodeList"])
-        if result.returncode != 0:
-            raise RuntimeError(f"sacct failed: {result.stderr.strip()}")
-        for line in result.stdout.splitlines():
-            cols = line.split("|")
-            if len(cols) >= 5 and cols[0] == jid:
-                state = cols[1].split()[0].rstrip("+") if cols[1].strip() else "UNKNOWN"
-                return ApptainerStatus(jid, state, state in TERMINAL_STATES,
-                                       cols[2] or None, cols[3] or None, cols[4] or None)
+        sacct_reason = None
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                cols = line.split("|")
+                if len(cols) >= 5 and cols[0] == jid:
+                    state = cols[1].split()[0].rstrip("+") if cols[1].strip() else "UNKNOWN"
+                    return ApptainerStatus(jid, state, state in TERMINAL_STATES,
+                                           cols[2] or None, cols[3] or None, cols[4] or None)
+        else:
+            sacct_reason = f"sacct failed: {result.stderr.strip() or result.returncode}"
         queue = transport.run([profile.squeue_executable, "-h", "-j", jid, "-o", "%T"])
-        state = queue.stdout.strip().split()[0] if queue.returncode == 0 and queue.stdout.strip() else "UNKNOWN"
-        return ApptainerStatus(jid, state, state in TERMINAL_STATES)
+        if queue.returncode == 0 and queue.stdout.strip():
+            state = queue.stdout.strip().split()[0]
+            return ApptainerStatus(jid, state, state in TERMINAL_STATES, reason=sacct_reason)
+        reason = sacct_reason or "sacct has no record yet"
+        if queue.returncode != 0:
+            reason += f"; squeue failed: {queue.stderr.strip() or queue.returncode}"
+        return ApptainerStatus(jid, "UNKNOWN", False, reason=reason)
+
+    @staticmethod
+    @log_call
+    def cancel(job: ApptainerJob, transport: ApptainerTransport,
+               profile: ApptainerSiteProfile) -> CommandResult:
+        """Cancel this explicitly identified allocation; no cluster contact occurs otherwise."""
+        if not job.slurm_job_id:
+            raise ValueError("Job has not been submitted")
+        result = transport.run([profile.scancel_executable, job.slurm_job_id])
+        if result.returncode != 0:
+            raise RuntimeError(f"scancel failed for {job.slurm_job_id}: {result.stderr.strip()}")
+        return result
 
     @staticmethod
     @log_call
@@ -948,6 +1165,7 @@ class RasApptainer:
         dest = Path(destination) if destination else Path(job.job_directory) / "collected" / state.slurm_job_id
         if dest.exists():
             raise FileExistsError(f"Collect destination already exists: {dest}")
+        request, _ = _load_request(job)
         transport.get_tree(f"{job.remote_directory}/out/{state.slurm_job_id}", dest)
         problems: list[str] = []
         receipt: Optional[dict] = None
@@ -957,6 +1175,16 @@ class RasApptainer:
                 problems.append("receipt request_sha256 does not match the submitted job")
             if receipt["slurm_job_id"] != state.slurm_job_id:
                 problems.append("receipt slurm_job_id does not match the allocation")
+            expected_image = request["profile"]["apptainer_image_sha256"]
+            if receipt["apptainer_image_sha256"] != expected_image:
+                problems.append("receipt image SHA-256 does not match the rendered request")
+            if receipt["container_identity"] != request["profile"]["container_identity"]:
+                problems.append("receipt container identity does not match the rendered request")
+            expected_inputs = request["input_hashes"]
+            if (set(receipt["input_hashes"]) != set(expected_inputs)
+                    or any(receipt["input_hashes"][name]["sha256"] != digest
+                           for name, digest in expected_inputs.items())):
+                problems.append("receipt input hashes do not match the rendered request")
             if receipt["status"] != "succeeded":
                 problems.append(f"receipt reports {receipt['status']} ({receipt['reason_code']})")
             for name, record in receipt["outputs"].items():
@@ -964,6 +1192,12 @@ class RasApptainer:
                 if not path.is_file() or path.stat().st_size != record["size_bytes"] \
                         or sha256_file(path) != record["sha256"]:
                     problems.append(f"output hash/size mismatch: {name}")
+            if receipt["status"] == "succeeded":
+                completion_problem = _validate_collected_solve(
+                    dest, job, request["expected_simulation_end"]
+                )
+                if completion_problem:
+                    problems.append(f"result validation failed: {completion_problem}")
         except (OSError, ValueError, KeyError) as exc:
             problems.append(f"receipt unusable: {exc}")
         if state.state != "COMPLETED":

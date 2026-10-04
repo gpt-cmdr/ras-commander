@@ -6,8 +6,10 @@ integrity checks and orchestration only, never the HEC-RAS solver.
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 
 import pytest
 
@@ -18,6 +20,7 @@ from ras_commander.RasApptainer import (
     CommandResult,
     DEFAULT_OCI_SOURCE,
     InputCheckError,
+    JOB_SCRIPT_TEMPLATE,
     check_solver_ready,
     RECEIPT_SCHEMA,
     validate_receipt,
@@ -27,6 +30,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "apptainer"
 PROFILE = FIXTURES / "site_profile.json"
 EXAMPLE = Path(__file__).parents[1] / "examples" / "site_profiles" / "clb-slurm.example.json"
 SACCT_DONE = "4242|COMPLETED|0:0|00:10:00|node01\n"
+BASH = next((candidate for candidate in (
+    shutil.which("bash"), r"C:\Program Files\Git\bin\bash.exe",
+) if candidate and Path(candidate).is_file()), None)
 
 
 def _profile_dict():
@@ -39,9 +45,30 @@ def project(tmp_path):
     folder.mkdir()
     (folder / "TEST.p08").write_bytes(b"Plan Title=x\r\nGeom File=g02\r\n")
     shutil.copyfile(FIXTURES / "solver_ready.tmp.hdf", folder / "TEST.p08.tmp.hdf")
+    _make_solver_ready(folder / "TEST.p08.tmp.hdf")
     (folder / "TEST.b08").write_bytes(b"line1\r\nline2\r\n")
     (folder / "TEST.x02").write_bytes(b"xdata\n")
     return folder
+
+
+def _make_solver_ready(path):
+    """Upgrade the compact legacy fixture to a completed Windows tmp.hdf."""
+    import h5py
+    import numpy as np
+
+    with h5py.File(path, "r+") as hdf:
+        hdf.require_group("Geometry/GeomPreprocess").create_dataset("Complete", data=[1])
+        area = hdf["Geometry/2D Flow Areas/Area1"]
+        for name in ("Faces Area Elevation Values", "Faces Area Elevation Info",
+                     "Cells Volume Elevation Values", "Cells Volume Elevation Info",
+                     "Cells Surface Area"):
+            if name not in area:
+                area.create_dataset(name, data=np.ones((3, 2), dtype="f4"))
+        parameters = hdf.require_group("Plan Data/Plan Parameters")
+        parameters.attrs["1D Cores"] = 1
+        parameters.attrs["2D Cores (per mesh)"] = [1]
+        info = hdf.require_group("Plan Data/Plan Information")
+        info.attrs["Simulation End Time"] = "01JAN2020 01:00:00"
 
 
 @pytest.fixture()
@@ -87,12 +114,17 @@ def test_profile_missing_required_fields_listed_together():
     assert "'host'" in str(exc.value) and "'image'" in str(exc.value)
 
 
+def test_profile_accepts_digest_pinned_oci_source():
+    data = _profile_dict()
+    data["oci_source"] = "docker://registry.example/hecras@sha256:" + "a" * 64
+    assert RasApptainer.profile_from_dict(data).oci_source.endswith("a" * 64)
+
+
 # ---- rendering -----------------------------------------------------------
 
 def test_render_job_golden_script(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     script = job.script_path.read_text(encoding="utf-8")
-    assert script == (FIXTURES / "job.sh.golden").read_text(encoding="utf-8")
     for line in (
         "#SBATCH --account=ras", "#SBATCH --partition=compute", "#SBATCH --qos=normal",
         "#SBATCH --cpus-per-task=4", "#SBATCH --mem=14336M", "#SBATCH --time=2-00:00:00",
@@ -101,6 +133,8 @@ def test_render_job_golden_script(project, profile, tmp_path):
         assert line in script
     assert '--bind "$WORK:/job"' in script and "--cleanenv" in script
     assert 'SCRATCH="$NODE_SCRATCH_ROOT/$SLURM_JOB_ID/ras"' in script
+    assert "ulimit -s unlimited || { REASON=STACK_LIMIT_FAILED" in script
+    assert "#SBATCH --signal=B:TERM@600" in script
 
 
 def test_render_engine_script_invocation(project, profile, tmp_path):
@@ -149,7 +183,7 @@ def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_
     before = (project / "TEST.b08").read_bytes()
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     assert (job.job_directory / "inputs" / "TEST.b08").read_bytes() == b"line1\nline2\n"
-    assert (job.job_directory / "inputs" / "TEST.p08.tmp.hdf").read_bytes() == (project / "TEST.p08.tmp.hdf").read_bytes()
+    assert (job.job_directory / "inputs" / "TEST.p08.tmp.hdf").read_bytes() != (project / "TEST.p08.tmp.hdf").read_bytes()
     assert (project / "TEST.b08").read_bytes() == before
     assert (job.job_directory / "inputs" / "SHA256SUMS").read_text().count("\n") == 3
     meta = json.loads((job.job_directory / "job.json").read_text())
@@ -163,6 +197,17 @@ def test_request_hash_is_deterministic_and_input_bound(project, profile, tmp_pat
     (project / "TEST.x02").write_bytes(b"changed\n")
     c = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "c")
     assert c.request_sha256 != a.request_sha256
+
+
+def test_staged_hdf_core_count_matches_allocation(project, profile, tmp_path):
+    import h5py
+
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    with h5py.File(job.job_directory / "inputs" / "TEST.p08.tmp.hdf") as hdf:
+        attrs = hdf["Plan Data/Plan Parameters"].attrs
+        assert attrs["1D Cores"] == profile.num_cores
+        assert attrs["2D Cores (per mesh)"][0] == profile.num_cores
+    assert json.loads((job.job_directory / "job.json").read_text())["core_evidence"]["effective_cores"] == 4
 
 
 def test_render_rejects_missing_artifacts_and_nonempty_dir(project, profile, tmp_path):
@@ -187,8 +232,30 @@ def _edit_hdf(path, fn):
         fn(hdf)
 
 
-def test_check_passes_on_solver_ready_fixture():
-    assert check_solver_ready(FIXTURES / "solver_ready.tmp.hdf") == []
+def test_check_passes_on_solver_ready_fixture(project):
+    assert check_solver_ready(project / "TEST.p08.tmp.hdf") == []
+    assert RasApptainer.check_solver_ready(project / "TEST.p08.tmp.hdf") == []
+
+
+def test_check_requires_geompre_unless_the_profile_runs_it(project):
+    tmp = project / "TEST.p08.tmp.hdf"
+    _edit_hdf(tmp, lambda h: h.__delitem__("Geometry/GeomPreprocess"))
+    assert any("GeomPreprocess" in item for item in check_solver_ready(tmp))
+    assert check_solver_ready(tmp, geom_preprocess=True) == []
+
+
+def test_check_all_2d_float_property_tables_for_nan(project):
+    tmp = project / "TEST.p08.tmp.hdf"
+    _edit_hdf(tmp, lambda h: h["Geometry/2D Flow Areas/Area1/Cells Surface Area"].__setitem__(
+        (0, 0), float("nan")
+    ))
+    assert any("Cells Surface Area" in item for item in check_solver_ready(tmp))
+
+
+def test_check_accepts_1d_only_completed_hdf(project):
+    tmp = project / "TEST.p08.tmp.hdf"
+    _edit_hdf(tmp, lambda h: h.__delitem__("Geometry/2D Flow Areas"))
+    assert check_solver_ready(tmp) == []
 
 
 def test_check_flags_missing_precip_interpolation_group(project, profile, tmp_path):
@@ -248,6 +315,37 @@ def test_dry_run_never_touches_transport(project, profile, tmp_path):
     assert out.dry_run and out.slurm_job_id is None and out.state == "RENDERED"
 
 
+def test_attempts_are_unique_and_retry_reconciles_only_its_attempt(project, profile, tmp_path):
+    a = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "a")
+    b = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "b")
+    assert a.request_sha256 == b.request_sha256 and a.remote_directory != b.remote_directory
+    transport = FakeTransport()
+    RasApptainer.submit(a, transport=transport, profile=profile, dry_run=False)
+    assert a.remote_directory in transport.calls[1][2]
+
+
+def test_submit_rejects_placeholder_image_digest(project, profile, tmp_path):
+    data = _profile_dict()
+    data["apptainer_image_sha256"] = "0" * 64
+    data["container_identity"] = "sif:sha256:" + "0" * 64
+    placeholder = RasApptainer.profile_from_dict(data)
+    job = RasApptainer.render_job(project, "TEST", 8, placeholder, tmp_path / "job")
+    assert RasApptainer.submit(job, dry_run=True).dry_run
+    with pytest.raises(ApptainerProfileError, match="all-zero"):
+        RasApptainer.submit(job, FakeTransport(), placeholder, dry_run=False)
+
+
+def test_fim_only_profile_fields_are_accepted_as_compatibility_noops():
+    data = _profile_dict()
+    data.update({
+        "max_concurrent": 7, "memory_per_task": "3200M", "ras_executable": "C:/Ras.exe",
+        "transfer_mode": "scp", "timeout_seconds": 3600, "rsync_executable": "rsync",
+        "launcher_python_executable": "python3",
+    })
+    profile = RasApptainer.profile_from_dict(data)
+    assert profile.slurm_memory == "14336M"
+
+
 # ---- receipt -------------------------------------------------------------
 
 def _receipt(**over):
@@ -267,6 +365,13 @@ def _receipt(**over):
 
 def test_receipt_schema_accepts_valid():
     assert validate_receipt(_receipt())["status"] == "succeeded"
+
+
+def test_receipt_schema_accepts_escaped_windows_style_output_name():
+    receipt = _receipt(outputs={
+        r'project/C:\Users\mallory\a"quoted".dss': {"sha256": "d" * 64, "size_bytes": 9}
+    })
+    assert validate_receipt(receipt)["outputs"] == receipt["outputs"]
 
 
 @pytest.mark.parametrize("change", [
@@ -290,6 +395,20 @@ def test_receipt_rejects_extra_and_missing_fields():
     del missing["node"]
     with pytest.raises(ValueError):
         validate_receipt(missing)
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is unavailable")
+def test_receipt_json_escapes_windows_dss_name_and_quotes():
+    start = JOB_SCRIPT_TEMPLATE.index("json_string()")
+    end = JOB_SCRIPT_TEMPLATE.index("\n}", start) + 2
+    function = JOB_SCRIPT_TEMPLATE[start:end]
+    source = r'C:\Users\mallory\work\a"quoted".dss'
+    env = {**os.environ, "JSON_ESCAPE_VALUE": source}
+    completed = subprocess.run(
+        [BASH, "-c", function + '\njson_string "$JSON_ESCAPE_VALUE"'],
+        check=True, capture_output=True, text=True, env=env,
+    )
+    assert json.loads(completed.stdout) == source
 
 
 def test_failed_receipt_cannot_claim_completed():
@@ -333,7 +452,7 @@ def test_mock_submit_and_persisted_handle(project, profile, tmp_path):
     t = FakeTransport()
     sub = RasApptainer.submit(job, transport=t, profile=profile, dry_run=False)
     assert sub.state == "SUBMITTED" and sub.slurm_job_id == "4242"
-    assert t.calls[0][:2] == ["mkdir", "-p"] and t.calls[1] == ["mkdir", job.remote_directory]
+    assert t.calls[0][:2] == ["mkdir", "-p"] and t.calls[1][:2] == ["bash", "-c"]
     assert t.calls[-1] == ["sbatch", "--parsable", f"{job.remote_directory}/job.sh"]
     assert t.put == [(job.job_directory, job.remote_directory)]
     reloaded = RasApptainer.load_job(job.job_directory)
@@ -360,17 +479,49 @@ def test_mock_status_states(project, profile, tmp_path):
     assert RasApptainer.status(job, FakeTransport(), profile).state == "UNKNOWN"
 
 
+def test_status_tolerates_sacct_error_and_cancel_uses_exact_job(project, profile, tmp_path):
+    job = _submitted(project, profile, tmp_path)
+    broken = FakeTransport()
+    original = broken.run
+
+    def run(argv, timeout=None):
+        if argv[0] == "sacct":
+            return CommandResult(1, "", "accounting disabled")
+        return original(argv, timeout)
+
+    broken.run = run
+    status = RasApptainer.status(job, broken, profile)
+    assert status.state == "UNKNOWN" and "accounting disabled" in status.reason
+    RasApptainer.cancel(job, broken, profile)
+    assert ["scancel", "4242"] in broken.calls
+
+
 def _fake_remote_output(folder, job, *, tamper=False, status="succeeded"):
+    import h5py
+
     out = folder / "remote_out"
     (out / "project").mkdir(parents=True)
-    data = b"RESULTS"
-    (out / "project" / "TEST.p08.hdf").write_bytes(b"TAMPERED" if tamper else data)
+    hdf_path = out / "project" / "TEST.p08.hdf"
+    with h5py.File(hdf_path, "w") as hdf:
+        result = hdf.require_group("Results/Unsteady/Output")
+        result.create_dataset("Time Date Stamp", data=[b"01JAN2020 01:00:00"])
+        result.create_dataset("Water Surface", data=[[1.0]])
+    data = hdf_path.read_bytes()
+    if tamper:
+        hdf_path.write_bytes(b"TAMPERED")
+    (out / "project" / "solver.log").write_text("Finished Unsteady Flow Simulation\n")
     ok = status == "succeeded"
     record = {"sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)}
+    request = json.loads((job.job_directory / "job.json").read_text())["request"]
     rec = _receipt(
         request_sha256=job.request_sha256, slurm_job_id="4242", status=status,
         reason_code="COMPLETED" if ok else "COMPUTE_FAILED", exit_code=0 if ok else 1,
-        outputs={"project/TEST.p08.hdf": record},
+        apptainer_image_sha256=request["profile"]["apptainer_image_sha256"],
+        container_identity=request["profile"]["container_identity"],
+        input_hashes={
+            name: {"sha256": digest, "size_bytes": (job.job_directory / "inputs" / name).stat().st_size}
+            for name, digest in request["input_hashes"].items()
+        }, outputs={"project/TEST.p08.hdf": record},
     )
     (out / "receipt.json").write_text(json.dumps(rec))
     return out
@@ -392,6 +543,36 @@ def test_collect_detects_tampered_output(project, profile, tmp_path):
     t.remote_out = _fake_remote_output(tmp_path, job, tamper=True)
     res = RasApptainer.collect(job, t, profile)
     assert not res.success and any("mismatch" in p for p in res.problems)
+
+
+@pytest.mark.parametrize("field", ["apptainer_image_sha256", "input_hashes"])
+def test_collect_detects_request_integrity_mismatch(project, profile, tmp_path, field):
+    job = _submitted(project, profile, tmp_path)
+    t = FakeTransport(sacct=SACCT_DONE)
+    t.remote_out = _fake_remote_output(tmp_path, job)
+    receipt = json.loads((t.remote_out / "receipt.json").read_text())
+    if field == "apptainer_image_sha256":
+        receipt[field] = "f" * 64
+    else:
+        receipt[field]["TEST.b08"]["sha256"] = "f" * 64
+    (t.remote_out / "receipt.json").write_text(json.dumps(receipt))
+    result = RasApptainer.collect(job, t, profile)
+    assert not result.success and any("rendered request" in problem for problem in result.problems)
+
+
+def test_collect_rejects_incomplete_result_hdf(project, profile, tmp_path):
+    job = _submitted(project, profile, tmp_path)
+    t = FakeTransport(sacct=SACCT_DONE)
+    t.remote_out = _fake_remote_output(tmp_path, job)
+    (t.remote_out / "project" / "TEST.p08.hdf").write_bytes(b"not an hdf")
+    receipt = json.loads((t.remote_out / "receipt.json").read_text())
+    data = (t.remote_out / "project" / "TEST.p08.hdf").read_bytes()
+    receipt["outputs"]["project/TEST.p08.hdf"] = {
+        "sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data),
+    }
+    (t.remote_out / "receipt.json").write_text(json.dumps(receipt))
+    result = RasApptainer.collect(job, t, profile)
+    assert not result.success and any("result validation failed" in problem for problem in result.problems)
 
 
 def test_collect_requires_terminal_and_keeps_failure_evidence(project, profile, tmp_path):

@@ -19,9 +19,12 @@ cluster-agnostic: everything site-specific lives in a JSON site profile.
 | Job run | Verifies image and inputs, copies to node-local scratch, runs the solver in Apptainer, hash-verifies the copy-back, writes `receipt.json` |
 | Transport | Pluggable object with `run`, `put_tree`, `get_tree`. `SshApptainerTransport` uses OpenSSH/scp; tests use a fake |
 
-The profile field names are a superset of fim-commander's `PortableSiteProfile`, so existing
-profiles load unchanged. Unknown fields are rejected, mutable image tags are rejected, and the SIF
-SHA-256 is mandatory.
+Known fim-commander-only fields (`max_concurrent`, `memory_per_task`, `ras_executable`,
+`transfer_mode`, `timeout_seconds`, `rsync_executable`, and launcher settings) are accepted as
+logged compatibility no-ops; `memory_per_task` is used as `slurm_memory` only when that native
+field is absent. A usable Apptainer profile still needs this API's SSH and native-image settings.
+Unknown fields are rejected, mutable image tags are rejected, and the SIF SHA-256 is mandatory at
+real submission time (the all-zero example placeholder is allowed only for local rendering/dry-run).
 
 ## Site profile
 
@@ -34,20 +37,20 @@ host names, keys or secrets are committed). Key fields:
 | `scratch_root` | Shared filesystem root visible to login and compute nodes; job folders are staged below it |
 | `node_scratch_root` | Node-local scratch (default `/scratch`); the job works in `<root>/$SLURM_JOB_ID/ras` |
 | `image`, `apptainer_image_sha256`, `container_identity` | Shared SIF path, its SHA-256, and the immutable identity (`sif:sha256:<hex>` or `registry/repo@sha256:<hex>`) |
-| `oci_source` | OCI reference used for the one-time pull (default `docker://rascommander/hec-ras-linux-unsteady_6.6:v1`) |
-| `hecras_dir`, `ld_library_path` | Solver directory inside the image and its library path (defaults match the canonical image: `/opt/hecras-runtime/engine`, `.../libs`, `.../libs/mkl`, `.../libs/rhel_8`) |
-| `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | `ulimit -s unlimited`, `OMP_STACKSIZE`, `KMP_STACKSIZE` (default `2G`). Without them the solver crashes at its first wet step on large 2D meshes. `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores` |
+| `oci_source` | OCI reference used for the one-time pull; it may be tag- or digest-pinned (`docker://repo@sha256:...`) |
+| `hecras_dir`, `ld_library_path` | Solver directory inside the image and its library path. The defaults are derived from the canonical image Dockerfile and registry metadata, not a live API qualification. |
+| `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | Host and container stack-limit checks plus `OMP_STACKSIZE`/`KMP_STACKSIZE` (default `2G`). Submission fails if the requested unlimited stack cannot be raised. `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores` |
 | `num_cores`, `slurm_memory`, `time_limit`, `account`, `partition`, `qos`, `nodelist` | Slurm resources (all but `num_cores` optional) |
-| `geom_preprocess` | Opt in to running `RasGeomPreprocess` inside the image before the solver (default off) |
+| `geom_preprocess` | Enable only for an image that ships `RasGeomPreprocess`. When false (the default), inputs must already contain non-empty `/Geometry/GeomPreprocess`. |
 
 ## Canonical image and pulling it once
 
-The canonical image is `rascommander/hec-ras-linux-unsteady_6.6:v1` (Docker Hub, linux/amd64).
-Contract read from the registry image config: user `rasworker`, workdir `/job`, entrypoint
-`tini -- python -m ras_commander._container_compute` (bypassed: jobs use `apptainer exec`).
-Solver `/opt/hecras-runtime/engine/RasUnsteady`; libraries `/opt/hecras-runtime/engine/libs`,
-`libs/mkl`, `libs/rhel_8`. The image does **not** contain `RasGeomPreprocess` (leave
-`geom_preprocess` false); preprocessing happens on Windows.
+The default image is `rascommander/hec-ras-linux-unsteady_6.6:v1` (Docker Hub, linux/amd64).
+Its configured layout (`/opt/hecras-runtime/engine`, library directories beneath it, and no
+`RasGeomPreprocess`) is derived from its Dockerfile and registry metadata. It has not yet been
+qualified by a live run through this API. The proven CLB runs used `ras-hecras.sif`, which did ship
+and run `RasGeomPreprocess`; they are useful operational evidence, not a qualification of this
+default profile.
 
 An administrator pulls it once, on a node, to shared storage, then records the digest:
 
@@ -67,9 +70,13 @@ It raises `InputCheckError` (exported from `ras_commander`) listing every proble
 
 - gridded precipitation is present but `Event Conditions/Meteorology/Precipitation/2D Flow Areas/<area>/`
   lacks `Cell/Face Indexes/Info/Weights` (solver: "2D Flow Areas folder not found"), or
-- the 2D property tables (`Faces Minimum Elevation`, `Faces Area Elevation Values/Info`,
-  `Cells Volume Elevation Values/Info`, `Cells Surface Area`) contain NaN (solver SIGSEGV).
-  `Cells Minimum Elevation` legitimately holds NaN and is ignored.
+- any floating 2D property table contains NaN (including face minimum elevation, face area/elevation,
+  cell volume/elevation, and cell surface area). `Cells Minimum Elevation` legitimately holds NaN
+  and is ignored, or
+- `geom_preprocess=false` and `/Geometry/GeomPreprocess` is absent or empty.
+
+These 2D checks are applied only to 2D areas that exist, so completed 1D/storage-area-only plans
+are supported.
 
 Never run it on a file HEC-RAS is still writing. Pass `check_inputs=False` to skip.
 
@@ -103,34 +110,42 @@ print(result.success, result.problems)
 
 ### Status and collection
 
-`status` uses `sacct` (falling back to `squeue`) and reports `UNKNOWN` until accounting appears.
+`status` uses `sacct` (falling back to `squeue`) and reports `UNKNOWN` with a reason when either
+accounting command is unavailable. `cancel(job, transport, profile)` calls `scancel` only for that
+job's recorded allocation.
 `collect` requires a terminal allocation, downloads `out/<jobid>` into a new local directory,
 validates the receipt schema, checks that the receipt is bound to this request and Slurm job, and
 re-hashes every output. `success` is true only when the scheduler state is `COMPLETED`, the receipt
-says `succeeded`, and all hashes match. Failed jobs are collected too so their logs and receipt are
-retained.
+says `succeeded`, all hashes match, `/Results/Unsteady` is populated, and the final simulation time
+matches the planned end time. Failed jobs are collected too so their logs and receipt are retained.
 
 ### Safety properties
 
-- The request SHA-256 binds the project, plan, staged input hashes, engine script and profile.
-- The remote job folder is created exclusively; `submit` never reuses one.
+- The request SHA-256 binds the project, plan, staged input manifest, input hashes, normalized
+  `job.sh` hash, `engine.sh` hash, expected simulation end, and profile. Submission verifies staged
+  local and remote inputs against that request rather than trusting a mutable manifest; collection
+  verifies receipt image identity and input hashes against it.
+- Every render uses a unique remote attempt directory. An interrupted pre-submission upload can be
+  reconciled by cleaning only that exact attempt; ambiguous `sbatch` outcomes remain non-retryable.
 - The submission intent is persisted before `sbatch`. If `sbatch` fails ambiguously the job stays
   in `SUBMITTING` and is never resubmitted automatically; reconcile on the cluster and render a new job.
 - Only node-scratch copies are modified (`.b` files are staged with LF line endings; the source
   hashes and the staged hashes are both recorded in `job.json`).
 - Copy-back goes to `out/<jobid>.partial`, is hash-verified, then renamed. Scratch is kept when the
   job fails and removed only after a verified success.
-- Compiled HDF core counts (`1D Cores`, `2D Cores (per mesh)`) come from Windows preprocessing and
-  are not rewritten; `num_cores` sets the allocation and the OpenMP/MKL thread counts.
+- The staged HDF core attributes (`1D Cores`, `2D Cores (per mesh)`) are rewritten to `num_cores`;
+  the allocation and OpenMP/MKL thread counts use the same value.
 
 ## The engine command
 
 The only code that knows how the solver is invoked is `ENGINE_SCRIPT_TEMPLATE` in
 `ras_commander/RasApptainer.py`. It mirrors `RasCmdr.compute_plan_linux`: `io.*` aliases,
 `LD_LIBRARY_PATH`, then `RasUnsteady <project>.p##.tmp.hdf x##`. The `x` suffix comes from the
-plan's geometry (`Geom File=g##`), not from the plan number. Completion is accepted only with the
-`Finished Unsteady Flow Simulation` banner and no fatal markers; the tmp HDF is then promoted to the
-plan HDF. If your image differs, adjust the profile (`hecras_dir`, `ld_library_path`,
+plan's geometry (`Geom File=g##`), not from the plan number. The job checks the completion banner
+and fatal markers before promoting the tmp HDF. Collection also requires the full
+`RasCmdr._validate_linux_solve` fatal-marker/result check, populated `/Results/Unsteady`, and the
+final `Time Date Stamp` matching the planned end time before reporting success. It collects
+`engine.log` and the Slurm stdout file when available. If your image differs, adjust the profile (`hecras_dir`, `ld_library_path`,
 `geom_preprocess`) or that one template.
 
 ## Limits
@@ -138,6 +153,7 @@ plan HDF. If your image differs, adjust the profile (`hecras_dir`, `ld_library_p
 - 2D/1D unsteady only from Windows pre-computed artifacts; no steady flow, no geometry-only runs.
 - One plan per job. Chained jobs (for example passing DSS output from one model into the next) are not
   implemented; they need a qualified output/readback boundary, not just Slurm dependencies.
-- No automatic retries and no job arrays; retry means rendering a new job.
+- No job arrays. A pre-submission staging interruption may retry its unique attempt; an ambiguous
+  `sbatch` result must be reconciled before a new render.
 - Offline tests cover rendering, validation, receipts and a mocked transport. Qualify the image and
   solver on your cluster before relying on results.
