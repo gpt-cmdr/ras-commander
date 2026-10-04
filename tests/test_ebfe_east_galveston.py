@@ -4,19 +4,42 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import zipfile
+
+import pytest
 
 from ras_commander import RasExamples
 from ras_commander.sources.base import ModelType
 from ras_commander.sources.federal.ebfe_models import RasEbfeModels
 
 
-def _write_nested_ras_submission(path: Path) -> None:
+def _component_zip(path: Path, files: dict[str, bytes]) -> None:
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("EastGalvestonBay/EastGalvestonBay.prj", "Proj Title=Fixture\n")
-        archive.writestr("EastGalvestonBay/EastGalvestonBay.p01", "Geom File=g01\n")
-        archive.writestr("EastGalvestonBay/EastGalvestonBay.g01", "Geom Title=Fixture\n")
-        archive.writestr("EastGalvestonBay/EastGalvestonBay.u01", "Flow Title=Fixture\n")
+        for name, content in files.items():
+            archive.writestr(name, content)
+
+
+def _write_nested_ras_submission(path: Path) -> None:
+    input_zip = path.parent / "Input.zip"
+    terrain_zip = path.parent / "Terrain.zip"
+    land_cover_zip = path.parent / "LandCover.zip"
+    output_zip = path.parent / "Output.zip"
+    _component_zip(input_zip, {
+        "Input/EastGalvestonBay.prj": b"Proj Title=Fixture\n",
+        "Input/EastGalvestonBay.p01": b"Geom File=g01\n",
+        "Input/EastGalvestonBay.g01": b"Geom Title=Fixture\n",
+        "Input/EastGalvestonBay.u01": b"Flow Title=Fixture\n",
+        "Input/Features/archived.sr.lock": b"",
+    })
+    _component_zip(terrain_zip, {"Terrain/Terrain.hdf": b"terrain"})
+    _component_zip(land_cover_zip, {"LandCover/LandCover.hdf": b"land"})
+    _component_zip(output_zip, {"Output/EastGalvestonBay.p01.hdf": b"result"})
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(input_zip, "RAS_Submittal/Input.zip")
+        archive.write(terrain_zip, "RAS_Submittal/Terrain.zip")
+        archive.write(land_cover_zip, "RAS_Submittal/LandCover.zip")
+        archive.write(output_zip, "RAS_Submittal/Output.zip")
 
 
 def _delivery(root: Path) -> Path:
@@ -86,20 +109,18 @@ def test_east_galveston_nested_extraction_is_generated_and_not_a_runtime_claim(t
         "_standardize_ras_model_tree",
         staticmethod(lambda _folder: {"project_count": 1}),
     )
-    monkeypatch.setattr(
-        RasEbfeModels,
-        "_discover_valid_ras_projects",
-        staticmethod(lambda folder: [Path(folder) / "EastGalvestonBay"]),
-    )
-
     output = RasEbfeModels.organize_east_galveston_bay(
         source, tmp_path / "organized", extract_ras_nested=True, validate_dss=False
     )
 
-    assert (output / "RAS Model" / "EastGalvestonBay" / "EastGalvestonBay.prj").is_file()
+    assert list((output / "RAS Model").rglob("EastGalvestonBay.prj"))
     manifest = json.loads((output / "agent" / "east_galveston_manifest.json").read_text())
     assert manifest["ras_submission"]["extracted"] is True
-    assert manifest["ras_projects"] == ["EastGalvestonBay"]
+    assert manifest["ras_submission"]["output_archive_included"] is False
+    assert manifest["ras_projects"]
+    assert not list((output / "RAS Model").rglob("*.p01.hdf"))
+    assert not list((output / "RAS Model").rglob("*.sr.lock"))
+    assert manifest["archived_gis_locks_removed"] == ["Features/archived.sr.lock"]
     assert manifest["hec_ras_executed"] is False
     assert manifest["validation_status"] == "unverified"
 
@@ -136,7 +157,6 @@ def test_east_galveston_rejects_partial_outer_extraction(tmp_path, monkeypatch):
     (partial / "RAS_Submittal.zip").write_bytes(b"truncated")
 
     try:
-        import pytest
         with pytest.raises(RuntimeError, match="Existing extraction is incomplete"):
             RasEbfeModels.organize_east_galveston_bay(
                 archive, tmp_path / "organized", extract_ras_nested=False
@@ -173,3 +193,45 @@ def test_rasexamples_ebfe_facade_does_not_initialize_or_change_hec_examples(tmp_
         "downloaded_folder": tmp_path / "raw",
         "extract_ras_nested": False,
     }
+
+
+
+def _deflate64_fixture(tmp_path: Path) -> Path:
+    executable = RasEbfeModels._find_7zip_executable()
+    if executable is None:
+        pytest.skip("7-Zip is unavailable")
+    payload = tmp_path / "payload.txt"
+    payload.write_bytes(b"Deflate64 regression fixture\n" * 10_000)
+    archive = tmp_path / "deflate64.zip"
+    subprocess.run(
+        [str(executable), "a", "-tzip", "-mm=Deflate64", "-y", str(archive), str(payload)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    with zipfile.ZipFile(archive) as stream:
+        assert stream.getinfo("payload.txt").compress_type == 9
+    return archive
+
+
+def test_verified_extraction_uses_7zip_for_deflate64_and_preserves_receipt(tmp_path):
+    archive = _deflate64_fixture(tmp_path)
+    destination = tmp_path / "extracted"
+
+    audit = RasEbfeModels._extract_zip_verified(archive, destination)
+
+    assert audit["valid"] is True
+    assert audit["backend"] == "7zip"
+    assert (destination / "payload.txt").read_bytes() == b"Deflate64 regression fixture\n" * 10_000
+    receipt = json.loads((destination / RasEbfeModels._EXTRACTION_RECEIPT_NAME).read_text())
+    assert receipt["audit"]["crc32_verified"] is True
+    assert receipt["audit"]["backend"] == "7zip"
+
+
+def test_verified_deflate64_extraction_fails_closed_without_7zip(tmp_path, monkeypatch):
+    archive = _deflate64_fixture(tmp_path)
+    monkeypatch.setattr(RasEbfeModels, "_find_7zip_executable", staticmethod(lambda: None))
+
+    with pytest.raises(RuntimeError, match="unsupported by Python's zipfile"):
+        RasEbfeModels._extract_zip_verified(archive, tmp_path / "extracted")
+    assert not (tmp_path / "extracted").exists()

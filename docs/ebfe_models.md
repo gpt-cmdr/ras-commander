@@ -170,8 +170,15 @@ The organizer downloads and verified-extracts the 10.7 GB outer archive in
 both modes. `extract_ras_nested=False` retains the nested RAS submission in the
 raw extraction and avoids expanding it into the generated `RAS Model` folder.
 Use `extract_ras_nested=True` only after allocating additional local storage.
-The organizer records extraction state but does not execute HEC-RAS or promote
-a runtime qualification.
+It extracts Input, Terrain, and LandCover by default; the approximately 10 GB
+Output archive stays in the immutable source unless `include_results=True` is
+explicitly selected. A local 7-Zip CLI is required when the public outer ZIP
+contains Deflate64 members unsupported by the active Python runtime. The
+organizer records extraction state but does not execute HEC-RAS or promote a
+runtime qualification. Zero-byte `*.sr.lock` files delivered under `Features/`
+are archived GIS session artifacts. The organizer removes them only from its
+generated copy and records every removed relative path in the manifest; it does
+not remove other locks or alter the source archive.
 
 ### Austin–Oyster reconstruction boundary
 
