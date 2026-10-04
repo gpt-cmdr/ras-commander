@@ -1,0 +1,56 @@
+[
+  {
+    "case": "area_minimum",
+    "depth_duration_inches": [1.14, 2.27, 4.31, 6.09, 7.41, 9.8, 12.3, 15.0],
+    "durations_minutes": [5, 15, 60, 120, 180, 360, 720, 1440],
+    "storm_area_sqmi": 0.0111769,
+    "peak_position_percent": 50,
+    "expected_total_inches": 14.999773686746634,
+    "reference_quantized_11_decimal_sha256": "38570786c4891741880bb446130df847ca06fa6608eb786d832450280d183432",
+    "reference_incremental_samples": {
+      "0": 0.01493038890649044,
+      "71": 0.024275197079169527,
+      "143": 0.6666463526947485,
+      "144": 1.1399082676946357,
+      "145": 0.46326271966923355,
+      "215": 0.02819820225083078,
+      "287": 0.014967562855953543
+    }
+  },
+  {
+    "case": "area_median",
+    "depth_duration_inches": [1.17, 2.32, 4.41, 6.27, 7.65, 10.1, 12.7, 15.4],
+    "durations_minutes": [5, 15, 60, 120, 180, 360, 720, 1440],
+    "storm_area_sqmi": 1.5397,
+    "peak_position_percent": 50,
+    "expected_total_inches": 15.36835645529205,
+    "reference_quantized_11_decimal_sha256": "7c9842f30511f7dcb262c38dbaf450f6d880c6a7760c11a7d3b6dfcf109d42b1",
+    "reference_incremental_samples": {
+      "0": 0.014918215570315895,
+      "71": 0.02437294106472542,
+      "143": 0.671064451918842,
+      "144": 1.157178200066389,
+      "145": 0.4663329242147876,
+      "215": 0.029403200494177925,
+      "287": 0.01495572908690813
+    }
+  },
+  {
+    "case": "area_maximum",
+    "depth_duration_inches": [1.16, 2.3, 4.38, 6.24, 7.63, 10.1, 12.7, 15.5],
+    "durations_minutes": [5, 15, 60, 120, 180, 360, 720, 1440],
+    "storm_area_sqmi": 9.3851,
+    "peak_position_percent": 50,
+    "expected_total_inches": 15.316813399848964,
+    "reference_quantized_11_decimal_sha256": "33585720e20189857ecad777647ca150143b7e0bba18059ae4d09c522c27fb3b",
+    "reference_incremental_samples": {
+      "0": 0.015650524864514143,
+      "71": 0.025314668141949527,
+      "143": 0.6302047114798847,
+      "144": 1.0868829398106834,
+      "145": 0.4379388672995807,
+      "215": 0.029653072989604633,
+      "287": 0.015689076278467086
+    }
+  }
+]

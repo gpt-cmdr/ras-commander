@@ -1,6 +1,6 @@
 # Atlas 14 Precipitation
 
-NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides four hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
+NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides five single-location hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
 
 ## Overview
 
@@ -11,7 +11,7 @@ Atlas 14 is the authoritative source for precipitation frequency estimates, used
 - Dam breach inundation studies (PMF, 0.2% AEP)
 - Sensitivity analysis across multiple AEP events
 
-**Important**: ras-commander hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values.
+**Important**: The pattern-based hyetograph methods take `total_depth_inches` as an **input parameter**. You specify the depth from the NOAA PFDS website for your location and AEP; the methods generate the temporal distribution for that depth. They do not automatically query NOAA for depth values. `FrequencyStormDdf` instead takes a cumulative depth-duration vector and preserves its 24-hour total, optionally reduced by an explicit TP-40 area factor.
 
 Verify Atlas 14 depths at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
@@ -62,7 +62,8 @@ if ATLAS14_AVAILABLE:
 | Method | HMS Equivalent | Depth Conservation | Durations | Best For |
 |--------|----------------|-------------------|-----------|----------|
 | **Atlas14Storm** | YES (10^-6) | Exact | 6h, 12h, 24h, 96h | Modern Atlas 14, regulatory submittals |
-| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | TP-40 legacy data, variable duration, 48hr gap |
+| **FrequencyStormDdf** | Bounded record agreement | Point or reduced total | 24h / 5min | Depth-duration inputs, 50%/67% placement, optional TP-40 reduction |
+| **FrequencyStorm** | YES (10^-6) | Exact | 6-48hr | Fixed TP-40 temporal pattern, variable duration, 48hr gap |
 | **ScsTypeStorm** | YES (10^-6) | Exact | 24hr only | SCS Type I/IA/II/III distributions |
 | **StormGenerator** | NO | Exact | Any | Flexible peak positioning (0-100%) |
 
@@ -71,12 +72,15 @@ if ATLAS14_AVAILABLE:
 ```
 Need precipitation hyetograph for HEC-RAS?
 |
-+- Need HMS-equivalent results?
++- Have cumulative depth-duration inputs (24h / 5min)?
+|  --> Use FrequencyStormDdf (50%/67%; optional TP-40 area reduction)
+|
++- Need HMS-equivalent temporal patterns?
 |  |
 |  +- Modern Atlas 14 (6h, 12h, 24h, or 96h)?
 |  |  --> Use Atlas14Storm
 |  |
-|  +- TP-40 or variable duration (6-48hr, including 48hr)?
+|  +- Fixed TP-40 pattern or variable duration (6-48hr, including 48hr)?
 |  |  --> Use FrequencyStorm
 |  |
 |  +- SCS Type I/IA/II/III (24hr only)?
@@ -93,7 +97,7 @@ Need precipitation hyetograph for HEC-RAS?
 **Duration coverage**:
 - 6h: Atlas14Storm or FrequencyStorm
 - 12h: Atlas14Storm or FrequencyStorm
-- 24h: Atlas14Storm, FrequencyStorm, or ScsTypeStorm
+- 24h: Atlas14Storm, FrequencyStorm, FrequencyStormDdf, or ScsTypeStorm
 - 48h: FrequencyStorm only
 - 96h: Atlas14Storm only
 
@@ -470,15 +474,13 @@ for aep_pct, total_depth in aep_depths.items():
     print(f"Completed {return_period}-yr ({total_depth} inches)")
 ```
 
-## Duration-dependent frequency rainfall: reference benchmark
+## Duration-dependent frequency rainfall and TP-40 reduction
 
-`FrequencyStormDdf` reproduces the seven delivered HMS 4.10 frequency storms
-from the Texas GLO RBFS **Dry Bayou–Austin Bayou–Lower Oyster Creek** package.
-The March 2025 baseline report, printed page 171,
-describes a small `Dummy_Riverine` HMS model used to supply the local RAS rainfall
-hyetograph. The source RAS plan uses a **uniform area precipitation boundary**;
-its meteorological gridded rainfall is disabled. This benchmark does not establish
-equivalence for a spatially varying rainfall grid.
+`FrequencyStormDdf` constructs a balanced storm from cumulative depth-duration
+inputs. It supports 24-hour storms at five-minute intervals, standard eight
+knots or ten explicit knots, and 50% or 67% peak placement. The existing
+`FrequencyStorm` fixed pattern and generic per-cell `AbmHyetographGrid` remain
+separate methods with unchanged behavior.
 
 ```python
 from ras_commander.precip import FrequencyStormDdf
@@ -486,42 +488,59 @@ from ras_commander.precip import FrequencyStormDdf
 hyeto = FrequencyStormDdf.generate_hyetograph(
     depths_inches=[1.3, 2.58, 5.02, 7.17, 8.74, 11.4, 13.9, 16.4],
     durations_minutes=[5, 15, 60, 120, 180, 360, 720, 1440],
-    simulation_duration_hours=240,  # Reproduce the delivered ten-day dry tail
+    peak_position_percent=50,
+    area_reduction_method="TP-40",
+    storm_area_sqmi=100.0,  # Explicit evaluation-area choice, in square miles
+    simulation_duration_hours=120,
 )
 ```
 
-The output has elapsed `hour` values and `incremental_depth` and `cumulative_depth`
-values in inches, with one zero-depth start row. The wet storm is 24 hours at five-minute
-intervals. The central peak interval ends at **12:05**, and subsequent dry
-intervals extend through the requested window. Do not pass the initial sentinel
-as an extra five-minute depth when writing an interval-based DSS series.
+The output columns are `hour`, `incremental_depth` and `cumulative_depth`, with
+depths in inches. Row zero is a zero-depth start marker, followed by interval-end
+values. Do not export that marker as an extra rainfall interval to DSS. The 50%
+placement interval ends at 12:05; 67% ends at 16:05. Dry intervals extend the
+control window without stretching or rescaling the storm.
 
-The method uses all eight labelled depths, inserts the published Hydro-35
-10- and 30-minute depths, interpolates cumulative depth in log-log space, then
-places consecutive duration increments around the center, left first. It
-preserves their duration order. A global descending sort changes the delivered
-storm at depth-duration slope transitions. This is a qualification against
-delivered files; HEC's manual describes sorting, so the observed ordering is not
-claimed as universal behavior across HMS versions and settings. See the
-[HEC frequency-storm technical reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm).
+Hydro-35 supplies absent 10/30-minute knots. Explicit knots are retained. Area
+reduction acts on the augmented cumulative depths, before log-log interpolation
+and differencing. Increments are placed in duration order, alternating left
+first. This ordering matches the independently read reference records even at
+slope transitions. HEC's manual describes sorting; agreement with these records
+does not establish universal equivalence across all settings or software versions.
 
-Supported scope is **24h / 5min / 50% centered placement**, using final input
-depths. This API does not apply areal reduction or annual/partial-duration series
-conversion. The reference meteorology files use No Reduction and matching annual-series
-conversion flags. Other durations, interval lengths, peak positions, and
-conversion/reduction workflows need separate qualification. Explicit duration
-labels prevent confusion with other eight-depth HMS input tables.
+`Tp40Reduction.factor(duration_minutes, storm_area_sqmi)` exposes the bounded
+HEC-HMS compatibility relation `1 - f_D * (1 - exp(-0.015 * A))`. Area `A` is in
+square miles. Coefficients at 30, 60, 180, 360 and 1440 minutes are respectively
+0.48, 0.35, 0.22, 0.17 and 0.09, interpolated in log-log space. This interface
+accepts 5–1440 minutes and 0–400 square miles and rejects values outside those
+bounds; it neither extrapolates nor silently clamps excessive area.
 
-`FrequencyStorm` remains the existing **fixed Brays Bayou temporal pattern**;
-scaling its total does not reproduce an arbitrary DDF curve. `StormGenerator`
-and `AbmHyetographGrid` retain their existing general alternating-block behavior.
-Use `FrequencyStormDdf` explicitly for this qualified duration-dependent route.
+**Short-duration convention:** the inspected HMS implementation uses the
+30-minute coefficient for 5-, 10- and 15-minute depths. This convention matches
+the delivered reduction records, but differs from the technical manual's prose
+that durations below 30 minutes are unadjusted. This API deliberately implements
+that bounded HMS compatibility convention. It is not a general recommendation
+to apply those factors to every watershed.
 
-The compact regression fixture `tests/data/hms410_frequency_storm.json`
-contains the original seven-event ordinates read through HEC Monolith, source
-member names, and package identity. It is an external reference, not output
-generated by this new implementation. Model packages are published through
-[TDIS](https://dmqt.cloud.tdis.io/).
+Use `area_reduction_method="none"` for already reduced inputs. Supplying an area
+with that option is rejected to avoid ambiguous configuration. The caller must
+choose the documented evaluation storm area; it is not inferred from grid cells
+or subbasin geometry. The reduced total is retained, not normalized back to the
+point total. Attributes record the point/areal totals, area, factors, knot mode,
+placement and actual peak indices. Annual/partial-duration conversion and TP-49
+durations are outside this interface.
+
+Validation includes seven publicly shipped event vectors and private comparisons
+against 436 additional no-reduction vectors and 174 area-reduced vectors, all
+with 288 wet-window intervals. Those additional source vectors are not distributed
+with this repository; the public regression subset includes six neutral fixtures. Maximum observed
+interval differences are below 2.5e-14 inches. Neutral regression fixtures retain
+independently read values or complete-vector digests; no reduction factor was
+fitted to a delivered total. These comparisons establish bounded numerical
+agreement, not hydraulic validation, universal correctness, or a novelty claim.
+
+References: [HEC frequency-storm technical reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm)
+and [HEC-HMS technical reference manual](https://www.hec.usace.army.mil/Software/hec-hms/documentation/HEC-HMS_Technical_Reference_Manual-20231106.pdf).
 
 ## Example Notebooks
 
