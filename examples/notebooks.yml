@@ -445,6 +445,9 @@ notebooks:
   functions_used:
   - RasExamples.extract_project
   - ras.prj_file
+  functions_used_extraction_warnings:
+  - 'cell 8: Python 3.12 AST parsing failed (invalid syntax, line 1); regex fallback may include comments/strings
+    and needs review'
   hec_refs: []
   learning_paths: []
   excluded: false
@@ -3568,13 +3571,17 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - HdfLandCover.sanitize_classification_names
   - HdfMesh.get_mesh_areas
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasMap.list_landcover_layers
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
   - RasUnsteady.configure_gridded_dss_precipitation
+  - RasUnsteady.delete_boundary
   - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.inspect_boundary_blocks
   - ras.plan_df
   hec_refs: []
   learning_paths: []
