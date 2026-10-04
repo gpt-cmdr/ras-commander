@@ -9,7 +9,7 @@ See [Example Projects](example-projects.md) for the CRS-valid source catalog and
 !!! tip "New here? Start with the 100s."
     Run **100 → 101 → 110** for the core initialize → inspect → execute loop, then branch into the series that matches your work: **200s** geometry & calibration, **300s** unsteady & DSS, **400s** HDF results, **900s** data integration & forecasting.
 
-*140 notebooks indexed - 128 with runtime data, 12 without.*
+*141 notebooks indexed - 128 with runtime data, 13 without.*
 
 ## Selected Workflow Contracts
 
@@ -440,7 +440,7 @@ These optional contracts are curated in `examples/notebooks.yml` and published u
 | [728 - Extending Gridded DSS Forcing Through the Simulation Window](../notebooks/728_extend_gridded_dss_forcing_window.md)<br>preserve and extend a model-covering gridded DSS family with three explicit dry intervals, then verify temporary/final HDF forcing, a HEC-RAS 7.0 compute, the dry-tail plateau, active-cell agreement, runtime diagnostics, and hydraulic results on Bald Eagle Creek | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/728_extend_gridded_dss_forcing_window.ipynb) | 1.3 min |
 | [729 - Direct GeoTIFF Gridded Rain-on-Grid](../notebooks/729_direct_geotiff_gridded_rain_on_grid.md)<br>Author projected precipitation GeoTIFFs, validate temporary plan-HDF rainfall, compute Bald Eagle, and inspect final rainfall and hydraulics | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/729_direct_geotiff_gridded_rain_on_grid.ipynb) | 42 s |
 | [730 - Raster Processing Performance Profiling](../notebooks/730_raster_processing_performance_profiling.md)<br>Measure stored-map and VRT-to-GeoTIFF configurations, graph CPU, memory, throughput, and IOPS tradeoffs, and write an HTML decision report from a copied HEC-RAS project. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/730_raster_processing_performance_profiling.ipynb) | N/A |
-| [731 - Atlas 14 Shared Temporal Pattern for an Existing Model](../notebooks/731_atlas14_shared_temporal_existing_model.md)<br>Scale one NOAA temporal curve by each native raster cell depth, validate NetCDF rainfall, export Float32 intervals through explicit bilinear SHG conversion, and optionally attach DSS to a staged model copy. No solver run. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/731_atlas14_shared_temporal_existing_model.ipynb) | N/A |
+| [731 - Atlas 14 Shared Temporal Pattern for an Existing Model](../notebooks/731_atlas14_shared_temporal_existing_model.md)<br>Apply a shared NOAA temporal curve to an existing model footprint, validate native rainfall NetCDF, export Float32 intervals with explicit bilinear SHG conversion, and optionally configure a staged model copy without computing. | [.ipynb](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/731_atlas14_shared_temporal_existing_model.ipynb) | N/A |
 
 ## 800s - Quality Assurance
 
