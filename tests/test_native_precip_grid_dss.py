@@ -62,6 +62,32 @@ def test_real_dss_roundtrip_metadata_orientation_missing_and_times(inputs):
     assert ('jnius' in sys.modules) == java_was_loaded
 
 
+def test_explicit_grid_reference_preserves_indexes_and_physical_bounds(inputs):
+    paths = RasDss.write_precip_grid_arrays(**inputs, grid_reference_origin=(0, 0))
+    with Open(str(inputs['dss_file'])) as reader:
+        record = reader.read_grid(paths[0])
+        assert tuple(record.gridinfo.lower_left_cell) == (3000, 32998)
+        assert tuple(record.gridinfo.coords_cell0) == (0, 0)
+        np.testing.assert_allclose(tuple(record.transform), tuple(inputs['transform']))
+        np.testing.assert_allclose(record.read(), inputs['data'][0], rtol=1e-6)
+
+
+@pytest.mark.parametrize('origin', [(1, 0), (0,), (float('nan'), 0), (0, float('inf'))])
+def test_invalid_or_misaligned_grid_reference_rejected(inputs, origin):
+    with pytest.raises(ValueError, match='grid_reference_origin'):
+        RasDss.write_precip_grid_arrays(**inputs, grid_reference_origin=origin)
+    assert not inputs['dss_file'].exists()
+
+
+def test_fractional_reference_uses_dss_coordinate_precision(inputs):
+    inputs['transform'] = Affine(100, 0, 300000.1, 0, -100, 3300000.2)
+    paths = RasDss.write_precip_grid_arrays(**inputs, grid_reference_origin=(.1, .2))
+    with Open(str(inputs['dss_file'])) as reader:
+        info = reader.read_grid(paths[0]).gridinfo
+        assert tuple(info.lower_left_cell) == (3000, 32998)
+        np.testing.assert_array_equal(info.coords_cell0, np.array([.1, .2], dtype=np.float32))
+
+
 def test_masked_mm_and_preserve_existing_file(inputs):
     inputs['units'] = 'mm'
     inputs['data'] = np.ma.array(inputs['data'], mask=False)

@@ -5531,6 +5531,28 @@ class RasUnsteady:
         return capabilities
 
     @staticmethod
+    def _preflight_legacy_precipitation_boundaries(unsteady_path: Path) -> None:
+        """Reject conflicting legacy area rainfall before enabling global grids."""
+        lines = unsteady_path.read_text(encoding="utf-8", errors="replace").splitlines(True)
+        conflicts = [
+            block for block in RasUnsteady._find_boundary_blocks(lines)
+            if block["bc_type"] == "Precipitation Hydrograph"
+        ]
+        if conflicts:
+            locations = "; ".join(
+                f"boundary {block['boundary_index'] + 1} ({block['location'].strip()})"
+                for block in conflicts
+            )
+            raise ValueError(
+                f"Cannot enable global gridded precipitation in {unsteady_path.name}: "
+                f"legacy Precipitation Hydrograph remains at {locations}. "
+                "HEC-RAS 6.6 rejects these simultaneous rainfall sources before compute. "
+                "Review the intended forcing, stage the project with stage_project(), "
+                "then use RasUnsteady.inspect_boundary_blocks() and delete_boundary() "
+                "to explicitly remove the superseded legacy boundary. No files were changed."
+            )
+
+    @staticmethod
     def _preflight_gridded_precipitation_request(
         unsteady_path: Path,
         ras_object: Optional[Any],
@@ -5539,6 +5561,7 @@ class RasUnsteady:
         value_type: str,
     ) -> Optional["GriddedPrecipitationCapabilities"]:
         """Reject unsupported version semantics before creating derived files."""
+        RasUnsteady._preflight_legacy_precipitation_boundaries(unsteady_path)
         capabilities = RasUnsteady._gridded_precipitation_capabilities(
             unsteady_path, ras_object
         )
@@ -5790,6 +5813,17 @@ class RasUnsteady:
         -------
         None
             The .u## file and its .u##.hdf sidecar metadata are updated in place.
+
+        Raises
+        ------
+        ValueError
+            A legacy area ``Precipitation Hydrograph`` boundary remains. HEC-RAS
+            6.6 rejected that boundary together with global gridded rainfall in
+            consumer testing; the API conservatively rejects the conflict for
+            all versions before modifying text or HDF. Review the intended
+            forcing and explicitly remove a superseded boundary with
+            ``stage_project()``, ``inspect_boundary_blocks()``, and
+            ``delete_boundary()`` before retrying. No boundary is auto-deleted.
         """
         ras_obj = ras_object or ras
         is_unsteady_number = isinstance(unsteady_file, str) and len(unsteady_file) <= 2
@@ -5808,6 +5842,7 @@ class RasUnsteady:
         from .RasUtils import RasUtils
 
         unsteady_path = RasUtils.safe_resolve(unsteady_path)
+        RasUnsteady._preflight_legacy_precipitation_boundaries(unsteady_path)
         capabilities = RasUnsteady._gridded_precipitation_capabilities(
             unsteady_path,
             ras_obj if ras_object is not None or is_unsteady_number else None,
@@ -5941,6 +5976,17 @@ class RasUnsteady:
             contract. Use :meth:`set_gridded_precipitation_geotiff` or
             :meth:`set_gridded_precipitation_grib` when a structured ingestion
             result is required for those source formats.
+
+        Raises
+        ------
+        ValueError
+            A legacy area ``Precipitation Hydrograph`` boundary remains. HEC-RAS
+            6.6 rejected that boundary together with global gridded rainfall in
+            consumer testing; the API conservatively rejects the conflict for
+            all versions before modifying text or HDF. Review the intended
+            forcing and explicitly remove a superseded boundary with
+            ``stage_project()``, ``inspect_boundary_blocks()``, and
+            ``delete_boundary()`` before retrying. No boundary is auto-deleted.
         """
         RasUnsteady._set_gridded_precipitation_with_result(
             unsteady_file=unsteady_file,

@@ -352,7 +352,9 @@ class RasDss:
 
             - ``dss_file``: Absolute DSS file path.
             - ``pathname``: Exact pathname requested.
-            - ``data``: Two-dimensional ``float32`` array in row-major order.
+            - ``data``: Two-dimensional ``float32`` array in HEC row-major order.
+                Row zero is south, columns run west to east. Flip rows before
+                using a north-up raster transform or the native precipitation writer.
                 The HEC grid no-data sentinel is represented as ``numpy.nan``.
             - ``shape``: ``(rows, columns)``.
             - ``units`` and ``data_type``: DSS parameter metadata.
@@ -1319,6 +1321,7 @@ class RasDss:
         units: str,
         nodata: Optional[float] = None,
         overwrite: bool = False,
+        grid_reference_origin: Optional[Tuple[float, float]] = None,
     ) -> List[str]:
         """Write interval precipitation arrays directly to a new native DSS7 file.
 
@@ -1348,6 +1351,14 @@ class RasDss:
                 not cumulative storm totals or precipitation rates.
             nodata: Optional input sentinel, in the same units as data.
             overwrite: Replace the whole output file after successful writing.
+            grid_reference_origin: Optional physical (x, y) coordinate of the
+                lower-left corner of cell (0, 0), in CRS units. The raster's
+                lower-left corner must
+                align with this reference at whole-cell offsets. Required when
+                a receiving model addresses rainfall by fixed grid-cell indexes,
+                such as legacy HMS HRAP file discretizations; use the model's
+                reference, commonly (0, 0). None preserves local indexing from
+                the raster lower-left corner. Neither choice reprojects data.
 
         Returns:
             Exact record pathnames written. Output uses DSS7 specified-time
@@ -1372,6 +1383,7 @@ class RasDss:
             dss_file, pathname, data, interval_bounds,
             transform=transform, crs=crs, units=units,
             nodata=nodata, overwrite=overwrite,
+            grid_reference_origin=grid_reference_origin,
         )
 
     @staticmethod
@@ -1402,6 +1414,8 @@ class RasDss:
                 preserved; Parts D and E are replaced with each timestep's
                 start/end window.
             data: 3-D array with shape ``(n_times, n_rows, n_cols)``.
+                HEC row order: row zero is south, columns run west to east.
+                For north-up raster arrays pass ``data[:, ::-1, :]``.
                 NaN/inf values and values equal to ``grid_info["nodata_value"]``
                 are written as the HEC grid no-data sentinel.
             times: Timezone-naive datetime values. Pass ``n_times + 1`` values
@@ -1539,7 +1553,7 @@ class RasDss:
 
             for index, (start_time, end_time) in enumerate(time_windows):
                 d_part = RasDss._format_grid_dss_datetime(start_time)
-                e_part = RasDss._format_grid_dss_datetime(end_time)
+                e_part = RasDss._format_native_grid_end_datetime(end_time)
                 record_parts = list(path_parts)
                 record_parts[3] = d_part
                 record_parts[4] = e_part

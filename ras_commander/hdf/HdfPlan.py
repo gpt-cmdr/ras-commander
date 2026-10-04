@@ -18,6 +18,7 @@ All of the methods in this class are static and are designed to be used without 
 - get_plan_information()
 - get_plan_parameters()
 - get_plan_met_precip()
+- get_plan_met_precip_values()
 - get_geometry_information()
 - get_starting_wse_method()
 
@@ -552,6 +553,58 @@ class HdfPlan:
             logger.error(f"Failed to get precipitation attributes: {str(e)}")
             return {}
         
+    @staticmethod
+    @log_call
+    @standardize_input(file_type='plan_hdf')
+    def get_plan_met_precip_values(
+        hdf_path: Union[str, Path, int, h5py.File], *, ras_object=None,
+    ) -> Dict[str, Any]:
+        """Read materialized solver precipitation arrays without unit conversion.
+
+        Args:
+            hdf_path: Plan HDF path, plan identifier or open HDF handle accepted
+                by the HDF input decorator.
+            ras_object: Optional RasPrj context for resolving plan identifiers.
+
+        Returns:
+            Dictionary with ``values`` (time by precipitation-grid cell), raw
+            ``timestamps``, group ``attributes``, ``value_attributes`` and
+            ``timestamp_attributes``. Arrays are independent copies. Attribute
+            byte strings are decoded; timestamp encodings and numerical values
+            are preserved. Cell columns are precipitation-grid indexes, not
+            hydraulic mesh-cell indexes. No depth/rate or time-unit inference
+            is made. Native materialization was checked on HEC-RAS 6.6.
+
+        Raises:
+            KeyError: Solver Values/Timestamp datasets are absent. An imported
+                raster sidecar alone is not materialized solver precipitation.
+            ValueError: Dataset dimensions or time-axis lengths are inconsistent.
+        """
+        group_path = "Event Conditions/Meteorology/Precipitation"
+
+        def attributes(obj):
+            return {
+                key: value.decode('utf-8') if isinstance(value, bytes) else value
+                for key, value in obj.attrs.items()
+            }
+
+        with h5py.File(hdf_path, 'r') as hdf:
+            values_path = group_path + '/Values'
+            times_path = group_path + '/Timestamp'
+            if values_path not in hdf or times_path not in hdf:
+                raise KeyError(f"Materialized precipitation Values/Timestamp absent in {hdf_path}")
+            values = hdf[values_path]
+            times = hdf[times_path]
+            if (values.ndim != 2 or not all(values.shape) or times.ndim != 1
+                    or values.shape[0] != times.shape[0]):
+                raise ValueError(f"Inconsistent precipitation shapes: {values.shape}, {times.shape}")
+            return {
+                'values': values[...], 'timestamps': times[...],
+                'attributes': attributes(hdf[group_path]),
+                'value_attributes': attributes(values),
+                'timestamp_attributes': attributes(times),
+            }
+
     @staticmethod
     @log_call
     @standardize_input(file_type='geom_hdf')
