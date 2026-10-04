@@ -123,6 +123,7 @@ Current built-in organizers include:
 | Slug | HUC8 | Delivery Notes |
 |---|---:|---|
 | `spring-creek` | 12040102 | Single 2D model with nested final archive. |
+| `east-galveston-bay` | 12040202 | Public 2D delivery with a copied HMS project and optional nested RAS extraction. The outer inventory does not establish the RAS version, plan/geometry IDs, flow regime, or runtime readiness. |
 | `austin-oyster` | 12040205 | One HEC-RAS 5.07 2D unsteady project with seven plans. The compiled terrain, land cover, DSS inputs, projection, RASMapper file, geometry HDF, and seven result HDFs are delivered; deterministic reconstruction is required before runtime qualification. |
 | `north-galveston-bay` | 12040203 | Compound HMS plus nested 2D RAS delivery. |
 | `upper-guadalupe` | 12100201 | Four cascaded HEC-RAS 6.3.1 2D watershed models with complete modified-terrain triplets. Fresh `p01` source-run qualification is tracked in the [Record of Deficiencies](https://github.com/gpt-cmdr/ras-commander/blob/main/agent_tasks/2026-09-25_upper_guadalupe_record_of_deficiencies.md). |
@@ -138,6 +139,39 @@ Current built-in organizers include:
 | `tickfaw` | 08070203 | Large Louisiana 2D model archive. |
 | `lake-maurepas` | 08070204 | Louisiana 2D model archive. |
 | `lower-brazos` | 12070104 | Very large component delivery; manifest-only by default. |
+
+### East Galveston Bay source boundary
+
+`east-galveston-bay` is the public FEMA eBFE/BLE delivery for HUC8 `12040202`.
+It is separate from any RBFS source package. The public outer archive identifies
+a 2D delivery, an HEC-HMS project at `Hydrology/HMS/EastGalvestonBay`, and a
+nested `Hydraulic_Models/RAS_Submittal.zip`. It does not establish a HEC-RAS
+version, plan or geometry identifiers, flow regime, or hydraulic readiness.
+
+```python
+from pathlib import Path
+from ras_commander import RasExamples
+from ras_commander.sources import RasEbfeModels
+
+# Canonical source-aware API.
+organized = RasEbfeModels.organize_model(
+    "east-galveston-bay",
+    output_root=Path(r"D:/eBFE/organized"),
+    extract_ras_nested=False,
+)
+
+# Convenience entry point; it never changes RasExamples.extract_project().
+organized = RasExamples.organize_ebfe_model(
+    "east-galveston-bay", output_path=Path(r"D:/eBFE/organized")
+)
+```
+
+The organizer downloads and verified-extracts the 10.7 GB outer archive in
+both modes. `extract_ras_nested=False` retains the nested RAS submission in the
+raw extraction and avoids expanding it into the generated `RAS Model` folder.
+Use `extract_ras_nested=True` only after allocating additional local storage.
+The organizer records extraction state but does not execute HEC-RAS or promote
+a runtime qualification.
 
 ### Austin–Oyster reconstruction boundary
 

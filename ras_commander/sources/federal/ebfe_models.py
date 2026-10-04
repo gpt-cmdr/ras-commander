@@ -96,6 +96,13 @@ class RasEbfeModels:
         "https://ebfedata.s3.amazonaws.com/12070205_SanGabriel/"
         "12070205_Models.zip"
     )
+    _EAST_GALVESTON_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12040202_EastGalvestonBay/"
+        "12040202_Models.zip"
+    )
+    _EAST_GALVESTON_SOURCE_SIZE = 10_715_815_166
+    _EAST_GALVESTON_SOURCE_ETAG = "9fbf42de8cc3dced4efef71c16afcf06-624"
+    _EAST_GALVESTON_RAS_SUBMITTAL_SIZE = 10_715_541_993
     _AUSTIN_OYSTER_SOURCE_URL = (
         "https://ebfedata.s3.amazonaws.com/12040205_AustinOyster/"
         "12040205_Models.zip"
@@ -333,6 +340,10 @@ class RasEbfeModels:
         "north-galveston": "north-galveston-bay",
         "north-galveston-bay": "north-galveston-bay",
         "12040203": "north-galveston-bay",
+        "east-galveston": "east-galveston-bay",
+        "east-galveston-bay": "east-galveston-bay",
+        "eastgalvestonbay": "east-galveston-bay",
+        "12040202": "east-galveston-bay",
         "austin-oyster": "austin-oyster",
         "austinoyster": "austin-oyster",
         "12040205": "austin-oyster",
@@ -400,6 +411,49 @@ class RasEbfeModels:
             "output_name": "SpringCreek_12040102",
             "ras_version": "5.0.7",
             "notes": "Single 2D unsteady model with nested final archive.",
+        },
+        "east-galveston-bay": {
+            "study_area": "EastGalvestonBay_12040202",
+            "huc8": "12040202",
+            "organizer": "organize_east_galveston_bay",
+            "download_subdir": "12040202_EastGalvestonBay",
+            "output_name": "EastGalvestonBay_12040202",
+            # The public outer inventory establishes only a 2D delivery. The
+            # nested RAS archive has not been inspected for its engine version,
+            # plan IDs, or hydraulic readiness.
+            "ras_version": "unverified",
+            "model_type": ModelType.UNKNOWN,
+            "source_url": _EAST_GALVESTON_SOURCE_URL,
+            "file_size_bytes": _EAST_GALVESTON_SOURCE_SIZE,
+            "notes": (
+                "Public FEMA eBFE/BLE 2D delivery with an HEC-HMS project and "
+                "a nested RAS_Submittal.zip. The delivered HEC-RAS version, "
+                "plan/geometry identifiers, flow regime, and runtime readiness "
+                "remain unverified until the nested submission is inspected."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "delivery_type": "standard_zip",
+                "public_delivery_model_type": "2D",
+                "model_type_evidence": "public eBFE outer inventory",
+                "hydrologic_project": "Hydrology/HMS/EastGalvestonBay",
+                "nested_ras_submission": "Hydraulic_Models/RAS_Submittal.zip",
+                "nested_ras_submission_size_bytes": _EAST_GALVESTON_RAS_SUBMITTAL_SIZE,
+                "validation_status": "unverified",
+                "validation_level": "not_started",
+                "hec_ras_executed": False,
+                "native_hydraulic_readiness": False,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12040202_Models.zip",
+                    "url": _EAST_GALVESTON_SOURCE_URL,
+                    "size_bytes": _EAST_GALVESTON_SOURCE_SIZE,
+                    "etag": _EAST_GALVESTON_SOURCE_ETAG,
+                    # The specialized organizer retains the outer archive and
+                    # extracts its nested RAS submission only when requested.
+                    "extract": False,
+                }],
+            },
         },
         "north-galveston-bay": {
             "study_area": "NorthGalvestonBay_12040203",
@@ -1870,6 +1924,174 @@ class RasEbfeModels:
         RasEbfeModels._emit(f"\nSee {output_folder / 'agent' / 'model_log.md'} for details")
 
         return output_folder
+
+    @staticmethod
+    @log_call
+    def organize_east_galveston_bay(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+        extract_ras_nested: bool = False,
+        validate_dss: bool = True,
+    ) -> Path:
+        """Organize the public East Galveston Bay eBFE/BLE delivery.
+
+        The public outer archive contains an HEC-HMS project and a large nested
+        ``RAS_Submittal.zip``.  The outer inventory establishes a 2D delivery,
+        but it does not establish an HEC-RAS version, plan identifiers, or
+        runtime readiness.  This organizer copies the HMS and documentation
+        assets immediately.  It extracts and standardizes the nested RAS
+        submission only when ``extract_ras_nested=True``; organization does not
+        execute HEC-RAS.
+        """
+        RasEbfeModels._ensure_console_output_safe()
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12040202_EastGalvestonBay"
+        ).resolve()
+        output = Path(
+            output_folder or "./ebfe_organized/EastGalvestonBay_12040202"
+        ).resolve()
+        folders = {
+            "hms": output / "HMS Model",
+            "ras": output / "RAS Model",
+            "spatial": output / "Spatial Data",
+            "docs": output / "Documentation",
+            "agent": output / "agent",
+        }
+        for folder in folders.values():
+            folder.mkdir(parents=True, exist_ok=True)
+
+        archive = source if source.suffix.casefold() == ".zip" else source / "12040202_Models.zip"
+        if archive.is_file():
+            asset = RasEbfeModels._MODEL_REGISTRY["east-galveston-bay"]["extra"]["source_assets"][0]
+            source_identity = RasEbfeModels._validate_source_asset_identity(
+                archive,
+                expected_size_bytes=asset["size_bytes"],
+                expected_etag=asset["etag"],
+            )
+            extracted_root = archive.parent / f"{archive.stem}_extracted"
+            # `_extract_zip_verified` audits any existing tree against this
+            # exact ZIP before reusing it; a present Hydraulic_Models folder is
+            # not evidence of a complete or source-matching extraction.
+            RasEbfeModels._extract_zip_verified(
+                archive, extracted_root, "East Galveston Bay source archive"
+            )
+            source_root = extracted_root
+        elif (source / "Hydraulic_Models").is_dir():
+            # A pre-extracted legacy tree is usable for organization, but its
+            # provenance cannot substitute for the verified public ZIP.
+            source_root = source
+            source_identity = {
+                "path": str(source_root),
+                "mode": "pre_extracted_tree",
+                "archive_identity_verified": False,
+            }
+        else:
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive = RasEbfeModels.download_source_asset(
+                "east-galveston-bay", "models", archive.parent
+            )
+            source_identity = RasEbfeModels._validate_source_asset_identity(
+                archive,
+                expected_size_bytes=RasEbfeModels._EAST_GALVESTON_SOURCE_SIZE,
+                expected_etag=RasEbfeModels._EAST_GALVESTON_SOURCE_ETAG,
+            )
+            source_root = archive.parent / f"{archive.stem}_extracted"
+            RasEbfeModels._extract_zip_verified(
+                archive, source_root, "East Galveston Bay source archive"
+            )
+
+        hms_summary = RasEbfeModels._organize_delivered_hms_projects(
+            source_root / "Hydrology" / "HMS",
+            folders["hms"],
+            "East Galveston Bay",
+            "12040202",
+        )
+        docs_copied = 0
+        for relative in (
+            Path("480120_Hydraulics_metadata.xml"),
+            Path("Hydraulic_Models/2D_Model_Inventory.xlsx"),
+        ):
+            candidate = source_root / relative
+            if candidate.is_file():
+                shutil.copy2(candidate, folders["docs"] / candidate.name)
+                docs_copied += 1
+
+        ras_archive = source_root / "Hydraulic_Models" / "RAS_Submittal.zip"
+        ras_extracted = False
+        dss_results: List[Dict[str, Any]] = []
+        projects: List[Path] = []
+        standardization: Dict[str, Any] = {}
+        if ras_archive.is_file() and (
+            ras_archive.stat().st_size
+            != RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE
+        ):
+            raise RuntimeError(
+                "East Galveston Bay nested RAS_Submittal.zip size mismatch: "
+                f"expected {RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE}, "
+                f"found {ras_archive.stat().st_size}."
+            )
+        if extract_ras_nested:
+            if not ras_archive.is_file():
+                raise FileNotFoundError(
+                    "East Galveston Bay source is missing "
+                    "Hydraulic_Models/RAS_Submittal.zip."
+                )
+            RasEbfeModels._extract_zip_verified(
+                ras_archive, folders["ras"], "East Galveston Bay RAS submission"
+            )
+            RasEbfeModels._extract_nested_split_component_archives(folders["ras"])
+            RasEbfeModels._normalize_split_delivery_ras_folder(folders["ras"])
+            standardization = RasEbfeModels._standardize_ras_model_tree(folders["ras"])
+            projects = RasEbfeModels._discover_valid_ras_projects(folders["ras"])
+            RasEbfeModels._organize_spatial_from_ras(folders["ras"], folders["spatial"])
+            if validate_dss:
+                dss_results = RasEbfeModels._validate_dss_files(folders["ras"])
+            ras_extracted = True
+        else:
+            (folders["ras"] / "README.md").write_text(
+                "# Nested RAS Submission Not Extracted\n\n"
+                "The public eBFE source keeps the RAS model in "
+                "`Hydraulic_Models/RAS_Submittal.zip`. Run "
+                "`organize_east_galveston_bay(..., extract_ras_nested=True)` "
+                "to extract it into this generated folder. The public outer "
+                "inventory alone does not establish the HEC-RAS version, plan "
+                "or geometry identifiers, flow regime, or runtime readiness.\n",
+                encoding="utf-8",
+            )
+
+        manifest = {
+            "schema_version": 1,
+            "source_program": "fema_ebfe",
+            "source_identity": source_identity,
+            "source_url": RasEbfeModels._EAST_GALVESTON_SOURCE_URL,
+            "huc8": "12040202",
+            "public_delivery_model_type": "2D",
+            "ras_submission": {
+                "relative_path": "Hydraulic_Models/RAS_Submittal.zip",
+                "expected_size_bytes": RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE,
+                "extracted": ras_extracted,
+            },
+            "hms": hms_summary,
+            "documentation_files_copied": docs_copied,
+            "ras_projects": [str(path.relative_to(folders["ras"])) for path in projects],
+            "standardization": standardization,
+            "dss_validation": dss_results,
+            "validation_status": "unverified",
+            "hec_ras_executed": False,
+        }
+        (folders["agent"] / "east_galveston_manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+        (folders["agent"] / "model_log.md").write_text(
+            "# East Galveston Bay eBFE Delivery\n\n"
+            "This folder is organized from the public FEMA eBFE/BLE source. "
+            "The outer inventory identifies a 2D delivery; the nested RAS "
+            "submission has not been used as evidence of HEC-RAS version, plan "
+            "identifiers, flow regime, or hydraulic readiness. Organization "
+            "does not execute HEC-RAS. See `east_galveston_manifest.json`.\n",
+            encoding="utf-8",
+        )
+        return output
 
     @staticmethod
     @log_call
