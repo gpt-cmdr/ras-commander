@@ -352,8 +352,8 @@ class RasDss:
 
             - ``dss_file``: Absolute DSS file path.
             - ``pathname``: Exact pathname requested.
-            - ``data``: Two-dimensional ``float32`` array in HEC row-major order:
-              row zero is south, columns run west to east. Flip rows before
+            - ``data``: Two-dimensional ``float32`` array in HEC row-major order.
+              Row zero is south, columns run west to east. Flip rows before
               using a north-up raster transform or the native precipitation writer.
                 The HEC grid no-data sentinel is represented as ``numpy.nan``.
             - ``shape``: ``(rows, columns)``.
