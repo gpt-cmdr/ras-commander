@@ -7,3 +7,5 @@ tests/fixtures/ras_text_crlf/canary_86.f01 -text -diff
 tests/fixtures/ineffective_flow/*.g01 -text -diff
 # FEMA BLE UPGU1 plan (HEC-RAS 6.6 upgrade); byte-exact so CRLF/padding round-trip is testable.
 tests/fixtures/plan_output_intervals/UPGU1.p01 -text -diff
+# HEC-RAS example BaldEagleDamBrk.u02 (gate openings); byte-exact CRLF for fixed-width round-trip tests.
+tests/fixtures/rasunsteady_fixed_width/*.u02 -text -diff

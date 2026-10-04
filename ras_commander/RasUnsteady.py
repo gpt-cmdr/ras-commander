@@ -1860,15 +1860,14 @@ class RasUnsteady:
                             elif line.startswith('Gate Openings='):
                                 count = int(line.split('=', 1)[1].strip())
                                 gate['count'] = count
-                                vals: list[float] = []
-                                i += 1
-                                while i < len(lines) and len(vals) < count:
-                                    parts = lines[i].split()
-                                    if not parts or lines[i].startswith('Boundary Location='):
-                                        break
-                                    vals.extend(float(v) for v in parts)
-                                    i += 1
-                                gate['values'] = vals[:count]
+                                data_start = i + 1
+                                i = RasUnsteady._fixed_width_data_end(
+                                    lines, data_start, count,
+                                    stop_at_blank_line=True,
+                                )
+                                gate['values'] = RasUnsteady._read_fixed_width_values(
+                                    lines, data_start, i, count
+                                )
                                 gate_blocks.append(gate)
                                 break  # done with this gate's data lines
                             i += 1
@@ -1953,20 +1952,18 @@ class RasUnsteady:
         # Determine the range of old data lines after Gate Openings=
         old_count = int(lines[target_openings_idx].split('=', 1)[1].strip())
         data_start = target_openings_idx + 1
-        data_end = data_start
-        vals_read = 0
-        while data_end < len(lines) and vals_read < old_count:
-            parts = lines[data_end].split()
-            if not parts or lines[data_end].startswith('Boundary Location='):
-                break
-            vals_read += len(parts)
-            data_end += 1
+        data_end = RasUnsteady._fixed_width_data_end(
+            lines, data_start, old_count, stop_at_blank_line=True,
+        )
 
         # Build new data lines: 8-char fixed-width fields, 10 per line
         new_data_lines = []
         for row_start in range(0, len(values), 10):
             chunk = values[row_start:row_start + 10]
-            line_str = ''.join(f'{v:8g}' for v in chunk) + '\n'
+            line_str = ''.join(
+                RasUnsteady._format_general_fixed_width_value(v)
+                for v in chunk
+            ) + '\n'
             new_data_lines.append(line_str)
 
         # Replace the Gate Openings= header + data lines
@@ -2054,16 +2051,13 @@ class RasUnsteady:
                             'dss_path': '',
                             'use_dss': False,
                         }
-                        vals: list[float] = []
-                        i += 1
-                        while i < len(lines) and len(vals) < count:
-                            if lines[i].startswith('Boundary Location=') or lines[i].startswith('Ground Water Darcy'):
-                                break
-                            parts = lines[i].split()
-                            if parts:
-                                vals.extend(float(v) for v in parts)
-                            i += 1
-                        gw['values'] = vals[:count]
+                        data_start = i + 1
+                        i = RasUnsteady._fixed_width_data_end(
+                            lines, data_start, count, stop_at_blank_line=False,
+                        )
+                        gw['values'] = RasUnsteady._read_fixed_width_values(
+                            lines, data_start, i, count
+                        )
                         while i < len(lines) and not lines[i].startswith('Boundary Location='):
                             line = lines[i]
                             if line.startswith('Ground Water Darcy K='):
@@ -2153,15 +2147,10 @@ class RasUnsteady:
                             target_interval_idx = candidate_interval_idx
                             count = int(lines[i].split('=', 1)[1].strip())
                             target_data_start = i + 1
-                            j = target_data_start
-                            parsed = 0
-                            while j < len(lines) and parsed < count:
-                                if lines[j].startswith('Boundary Location=') or lines[j].startswith('Ground Water Darcy'):
-                                    break
-                                parts = lines[j].split()
-                                if parts:
-                                    parsed += len(parts)
-                                j += 1
+                            j = RasUnsteady._fixed_width_data_end(
+                                lines, target_data_start, count,
+                                stop_at_blank_line=False,
+                            )
                             target_data_end = j
                             while j < len(lines) and not lines[j].startswith('Boundary Location='):
                                 line = lines[j]
@@ -2194,7 +2183,7 @@ class RasUnsteady:
         for row_start in range(0, len(values), 10):
             row_vals = values[row_start:row_start + 10]
             row_str = ''.join(
-                f'{v:8.2f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
+                RasUnsteady._format_legacy_integer_or_fixed(v, 2)
                 for v in row_vals
             )
             new_data_lines.append(row_str + '\n')
@@ -2387,7 +2376,10 @@ class RasUnsteady:
                 for i in range(0, len(vals), 10):
                     chunk = vals[i:i+10]
                     result_lines.append(
-                        ''.join(f'{v:8g}' for v in chunk) + '\n'
+                        ''.join(
+                            RasUnsteady._format_general_fixed_width_value(v)
+                            for v in chunk
+                        ) + '\n'
                     )
                 return result_lines
 
@@ -4780,7 +4772,9 @@ class RasUnsteady:
         formatted_values = []
         for i in range(0, len(df), 10):
             row = df['Value'].iloc[i:i+10]
-            formatted_row = ''.join(f'{value:8.2f}' for value in row)
+            formatted_row = ''.join(
+                RasUnsteady._format_fixed_width_value(value) for value in row
+            )
             formatted_values.append(formatted_row + '\n')
         
         # Replace old table with new formatted values
@@ -4874,7 +4868,8 @@ class RasUnsteady:
         - The unique Interval= line inside the selected boundary block is updated
 
         **Fixed-Width Format**:
-        - Values formatted as 8-character fixed-width fields (8.2f)
+        - Values formatted as 8-character fixed-width fields (two decimals,
+          ``ValueError`` if a value cannot fit)
         - 10 incremental-depth values per line
         - Count includes a zero-depth ordinate at the existing boundary start.
         - A value at time t is the depth over the preceding interval.
@@ -4971,9 +4966,10 @@ class RasUnsteady:
         except FloatingPointError as exc:
             raise ValueError("Precipitation depth exceeds the fixed-width numeric range") from exc
         precip_values = np.diff(rounded_cumulative, prepend=0.0)
-        fields = [f"{value:8.2f}" for value in precip_values]
-        if any(len(field) != 8 for field in fields):
-            raise ValueError("Precipitation depth cannot be represented in an 8-character field")
+        fields = [
+            RasUnsteady._format_fixed_width_value(value, min_decimals=2)
+            for value in precip_values
+        ]
         interval_str = (
             f"{interval_minutes // 60}HOUR"
             if interval_minutes % 60 == 0 else f"{interval_minutes}MIN"
@@ -9343,9 +9339,9 @@ class RasUnsteady:
         formatted_rows = []
         for i in range(0, num_values, 10):
             row_values = values[i:i+10]
-            formatted_row = ''.join(f'{v:8.2f}' if abs(v) < 1e7 else f'{v:8.1f}'
-                                    for v in row_values)
-            formatted_rows.append(formatted_row)
+            formatted_rows.append(''.join(
+                RasUnsteady._format_fixed_width_value(v) for v in row_values
+            ))
 
         # Read the file
         with open(
@@ -12038,12 +12034,10 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, len(interleaved), 10):
             row_vals = interleaved[k:k + 10]
-            formatted_row = ''
-            for v in row_vals:
-                if abs(v) < 1e7:
-                    formatted_row += f'{v:8.1f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
-                else:
-                    formatted_row += f'{v:8.0f}'
+            formatted_row = ''.join(
+                RasUnsteady._format_legacy_integer_or_fixed(v, 1)
+                for v in row_vals
+            )
             formatted_lines.append(formatted_row + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -12287,18 +12281,175 @@ class RasUnsteady:
         return pd.DataFrame({'stage': stages[:min_len], 'flow': flows[:min_len]})
 
     @staticmethod
+    def _format_fixed_width_value(
+        value: float,
+        *,
+        max_decimals: int = 2,
+        min_decimals: int = 0,
+        trim_trailing_zeros: bool = False,
+        zero_as_blank: bool = False,
+    ) -> str:
+        """Return one HEC-RAS inline-table field without allowing overflow.
+
+        HEC-RAS unsteady-flow tables are ten adjacent 8-character fields per
+        row with no separator.  The HEC-authored example
+        ``BaldEagleCrkMulti2D/BaldEagleDamBrk.u01`` shows HEC-RAS itself
+        filling all eight characters with no separating space
+        (``   7200070666.6669333.34   68000``), writing exact integers without
+        a decimal point, and otherwise using as many decimals as fit.  No
+        exponent notation appears in the tables of 124 surveyed ``.u##``
+        files, so this helper emits fixed-decimal text only.  (HEC-RAS 6.6
+        was also observed to *accept* scientific notation such as
+        ``1.00E+08`` at preprocessing; that is tolerance, not the format
+        HEC-RAS writes.)
+
+        Retain the requested decimal precision where it fits, then reduce it
+        one place at a time.  ``min_decimals`` retains a format's mandated
+        precision (the precipitation writer uses exactly two).  A value that
+        cannot fit is rejected rather than allowed to merge into the next
+        field.  A value that rounds to zero is written as positive zero
+        (never ``-0.00``).  ``zero_as_blank`` must only be used for tables
+        whose reader treats a blank field as ``0.0``.
+        """
+        if isinstance(value, (str, bytes)):
+            raise ValueError(
+                f"HEC-RAS inline-table value must be numeric, got {value!r}"
+            )
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"HEC-RAS inline-table value must be numeric, got {value!r}"
+            ) from exc
+        if not math.isfinite(numeric_value):
+            raise ValueError(
+                f"HEC-RAS inline-table value must be finite, got {value!r}"
+            )
+        if min_decimals < 0 or max_decimals < min_decimals:
+            raise ValueError(
+                "max_decimals must be greater than or equal to non-negative "
+                "min_decimals"
+            )
+        if zero_as_blank and numeric_value == 0:
+            return " " * 8
+
+        for decimals in range(max_decimals, min_decimals - 1, -1):
+            text = f"{numeric_value:.{decimals}f}"
+            if float(text) == 0:
+                # Never emit negative zero ("-0.00", "-0") for tiny negatives.
+                text = f"{0.0:.{decimals}f}"
+            if trim_trailing_zeros and "." in text:
+                text = text.rstrip("0").rstrip(".")
+            if len(text) <= 8:
+                return text.rjust(8)
+
+        raise ValueError(
+            "HEC-RAS inline-table value cannot be represented in an "
+            f"8-character field without overflow: {numeric_value!r}"
+        )
+
+    @staticmethod
+    def _format_legacy_integer_or_fixed(value: float, decimals: int) -> str:
+        """Format like the legacy ``int if integral else %8.{decimals}f`` rule.
+
+        The groundwater, rating-curve, and lateral-inflow writers historically
+        wrote integral values up to 99,999 without a decimal point and all
+        other values with ``decimals`` fixed places.  This keeps that output
+        byte-identical wherever it fitted in eight characters and only drops
+        decimals where the legacy expression overflowed the field.
+        """
+        text = RasUnsteady._format_fixed_width_value(value, max_decimals=decimals)
+        numeric_value = float(value)
+        if numeric_value == int(numeric_value) and abs(numeric_value) <= 99999:
+            return RasUnsteady._format_fixed_width_value(numeric_value, max_decimals=0)
+        return text
+
+    @staticmethod
+    def _format_general_fixed_width_value(value: float) -> str:
+        """Format like the legacy ``%8g`` gate/navigation-dam rule, safely.
+
+        Values the legacy ``f"{v:8g}"`` wrote as a plain decimal of at most
+        eight characters (six significant digits) are reproduced
+        byte-for-byte.  Non-zero values below ``1e-4`` keep the legacy ``%g``
+        exponent form (``1e-07``) with as many significant digits as fit, so
+        they are not silently written as zero; HEC-RAS 6.6 parses such fields
+        although it does not write them itself.  Values that ``%8g`` would
+        have written in exponent form or wider than eight characters fall
+        back to the fixed-decimal rule of :meth:`_format_fixed_width_value`
+        (``ValueError`` if even the integer form cannot fit).
+        """
+        # Validates numeric/finite input and yields positive zero for 0/-0.
+        zero_text = RasUnsteady._format_fixed_width_value(value, max_decimals=0)
+        numeric_value = float(value)
+        if numeric_value == 0:
+            return zero_text
+        legacy = f"{numeric_value:g}"
+        if "e" not in legacy and len(legacy) <= 8:
+            return legacy.rjust(8)
+        if abs(numeric_value) < 1e-4:
+            for digits in range(6, 0, -1):
+                compact = f"{numeric_value:.{digits}g}"
+                if len(compact) <= 8:
+                    return compact.rjust(8)
+        return RasUnsteady._format_fixed_width_value(
+            numeric_value, max_decimals=6, trim_trailing_zeros=True
+        )
+
+    @staticmethod
+    def _fixed_width_data_end(
+        lines: List[str],
+        start: int,
+        count: int,
+        *,
+        stop_at_blank_line: bool,
+    ) -> int:
+        """Return the index after the fixed-width data rows starting at ``start``.
+
+        Rows are counted by their 8-character fields (not whitespace tokens),
+        so adjacent full-width fields such as ``150000123456.7`` count as two
+        values.  Scanning stops once ``count`` fields have been seen, or at the
+        first keyword line (any line containing ``=``), so the following
+        metadata line (for example the next ``Gate Name=``) is never consumed.
+        """
+        j = start
+        seen = 0
+        while j < len(lines) and seen < count:
+            line = lines[j]
+            if "=" in line:
+                break
+            stripped = line.rstrip("\r\n")
+            if not stripped.strip():
+                if stop_at_blank_line:
+                    break
+                j += 1
+                continue
+            seen += sum(
+                1
+                for k in range(0, len(stripped), 8)
+                if stripped[k:k + 8].strip()
+            )
+            j += 1
+        return j
+
+    @staticmethod
+    def _read_fixed_width_values(
+        lines: List[str], start: int, end: int, count: int
+    ) -> List[float]:
+        """Parse the first ``count`` 8-character fields of ``lines[start:end]``."""
+        if end <= start or count <= 0:
+            return []
+        table = RasUnsteady.parse_fixed_width_table(lines, start, end)
+        return [float(v) for v in table["Value"].tolist()][:count]
+
+    @staticmethod
     def _fmt8(v: float) -> str:
-        """Format a value into an 8-character fixed-width field matching HEC-RAS style."""
-        if v == 0.0:
-            return ' ' * 8
-        if v == int(v) and abs(v) < 1e8:
-            return f'{int(v):>8}'
-        for decimals in range(6, 0, -1):
-            s = f'{v:.{decimals}f}'.rstrip('0').rstrip('.')
-            if len(s) <= 8:
-                return s.rjust(8)
-        s = f'{v:.0f}'
-        return s[:8].rjust(8)
+        """Backward-compatible 8-character formatter for stage/flow tables."""
+        return RasUnsteady._format_fixed_width_value(
+            v,
+            max_decimals=6,
+            trim_trailing_zeros=True,
+            zero_as_blank=True,
+        )
 
     @staticmethod
     @log_call
@@ -12786,13 +12937,10 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, value_count, 10):
             row_vals = flow_values[k:k + 10]
-            row_str = ''
-            for v in row_vals:
-                fv = float(v)
-                if abs(fv) < 1e7:
-                    row_str += f'{fv:8.1f}' if fv != int(fv) or abs(fv) > 99999 else f'{int(fv):>8}'
-                else:
-                    row_str += f'{fv:8.0f}'
+            row_str = ''.join(
+                RasUnsteady._format_legacy_integer_or_fixed(v, 1)
+                for v in row_vals
+            )
             formatted_lines.append(row_str + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -13195,13 +13343,10 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, value_count, 10):
             row_vals = flow_values[k:k + 10]
-            row_str = ''
-            for v in row_vals:
-                fv = float(v)
-                if abs(fv) < 1e7:
-                    row_str += f'{fv:8.1f}' if fv != int(fv) or abs(fv) > 99999 else f'{int(fv):>8}'
-                else:
-                    row_str += f'{fv:8.0f}'
+            row_str = ''.join(
+                RasUnsteady._format_legacy_integer_or_fixed(v, 1)
+                for v in row_vals
+            )
             formatted_lines.append(row_str + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
