@@ -251,4 +251,15 @@ with RAS Commander or its agents. External writing assistance follows the userâ€
 - If a change is Claude-only, keep it in `CLAUDE.md`, `.claude/rules/`, `.claude/agents/`, or `.claude/commands/` as appropriate.
 - If you change the instruction architecture, also update:
   - [docs/development/multi-harness-agent-contract.md](docs/development/multi-harness-agent-contract.md)
-  - [agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md](agent_tasks/2026-04-25_multi_harness_agent_framework_migration_plan.md)
+  - [portable plugin packaging guidance](.claude/plugin/README.md)
+
+## Portable Plugin Maintenance
+
+Canonical selected skills are packaged by `scripts/agent_framework/build_plugin.py` using
+`.claude/plugin/package.json`. Generated distributions contain rebased supporting references
+and source hashes; maintain the canonical sources rather than editing bundles. Read
+[plugin packaging and activation guidance](.claude/plugin/README.md) before preparing a release.
+A skills-only plugin grants no Python/runtime/project access and does not enforce client tool isolation.
+PyPI discovery automation proposes review PRs, not unattended installs or publication.
+Repository writing standards govern repository content and contributions only, including packaged
+instructions; they do not govern external user deliverables produced with these workflows.

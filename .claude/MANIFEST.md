@@ -22,6 +22,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | Component | Type | Path |
 |-----------|------|------|
 | `ras-commander` | shared skill | `.claude/skills/ras-commander/SKILL.md` |
+| `ras-api-discovery` | shared skill | `.claude/skills/ras-api-discovery/SKILL.md` |
 | `cloud-native-gis` | shared skill | `.claude/skills/cloud-native-gis/SKILL.md` |
 | `ras-commander` | Claude adapter | `.claude/agents/ras-commander.md` |
 | `cloud-native-gis` | Claude adapter | `.claude/agents/cloud-native-gis.md` |
@@ -452,3 +453,7 @@ Project MCP → bounded read-only informational subagent; heavier work → publi
 **Line Budget**: 200-400 lines per file. Documented exceptions: `code-oracle-codex.md`, `code-oracle-gemini.md`, `win32com-automation-expert.md`, `hecras-code-archaeologist.md`.
 
 **Updates**: When adding a new component, update this manifest AND add cross-references to related existing components.
+
+## Portable package and release maintenance
+
+The generated skills-only plugin is defined by `.claude/plugin/package.json` and assembled with `scripts/agent_framework/build_plugin.py`. Canonical sources remain `.claude/skills/`; generated bundles are distributions, not a second instruction corpus. API discovery routes through `ras-api-discovery`; the API expert is a thin Claude adapter.

@@ -1,0 +1,72 @@
+name: Commander plugin maintenance
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  schedule:
+    - cron: '23 8 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: commander-plugin-maintenance
+  cancel-in-progress: false
+
+jobs:
+  propose-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install metadata version parser only
+        run: python -m pip install 'packaging>=24,<27'
+      - name: Check current stable PyPI metadata
+        run: python scripts/agent_framework/refresh_release_snapshot.py
+      - name: Assemble canonical skills-only distribution
+        run: python scripts/agent_framework/build_plugin.py --output "${{ runner.temp }}/commander-plugin"
+      - name: Retain distribution for maintainer review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ras-commander-plugin-candidate
+          path: ${{ runner.temp }}/commander-plugin
+      - name: Propose release-metadata update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          UPDATE_BRANCH: automation/commander-release-watch
+        shell: bash
+        run: |
+          if git diff --quiet -- .claude/plugin/release-snapshot.json; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin "$UPDATE_BRANCH" >/dev/null; then
+            git fetch origin "$UPDATE_BRANCH:refs/remotes/origin/$UPDATE_BRANCH"
+          fi
+          git checkout -B "$UPDATE_BRANCH"
+          git add .claude/plugin/release-snapshot.json
+          git commit -m "Record current Commander package releases for compatibility review"
+          git push --force-with-lease origin "$UPDATE_BRANCH"
+          cat > "$RUNNER_TEMP/commander-update-body.md" <<'BODY'
+          ## Current package discovery
+
+          Updates stable PyPI metadata and archive hashes for review. The workflow artifact contains a fresh skills-only plugin assembled from canonical sources.
+
+          Metadata discovery does not establish compatibility. Review minimum/latest library contracts, wheel/sdist metadata and entry points, read-only/bounded MCP behavior, and host activation evidence before changing bounds or publishing a release. User environments and dependency pins are unchanged.
+
+          This workflow does not merge, publish packages/plugins, or register MCP servers. The plugin's version remains an independent identity and should change when a distribution is released.
+          BODY
+          existing=$(gh pr list --head "$UPDATE_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "Refresh Commander release compatibility evidence" --body-file "$RUNNER_TEMP/commander-update-body.md"
+          else
+            gh pr create --draft --base main --head "$UPDATE_BRANCH" --title "Refresh Commander release compatibility evidence" --body-file "$RUNNER_TEMP/commander-update-body.md"
+          fi

@@ -1,7 +1,7 @@
 ---
 name: ras-commander
 description: Entry point for HEC-RAS tasks; coordinates project inspection, execution, results, geometry, GIS, and HMS handoffs through shared RAS Commander workflows.
-tools: Read, Grep, Glob, Bash, Task
+tools: Read, Grep, Glob, Bash, Agent
 ---
 
 # RAS Commander

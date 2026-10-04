@@ -1,0 +1,20 @@
+{
+  "manifest": {
+    "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+    "name": "ras-commander",
+    "version": "0.1.0",
+    "description": "Coordinate HEC-RAS, API discovery, and cloud-native GIS workflows through current public packages.",
+    "author": {
+      "name": "gpt-cmdr",
+      "url": "https://github.com/gpt-cmdr"
+    },
+    "homepage": "https://rascommander.info/ras/",
+    "repository": "https://github.com/gpt-cmdr/ras-commander",
+    "license": "MIT"
+  },
+  "skills": [
+    "ras-commander",
+    "cloud-native-gis",
+    "ras-api-discovery"
+  ]
+}
