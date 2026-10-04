@@ -79,6 +79,16 @@ class RasPreprocess:
             "rasunsteady64.exe",
         }
     )
+    _GRIDDED_PRECIPITATION_GROUP = "Event Conditions/Meteorology/Precipitation"
+    _GRIDDED_PRECIPITATION_INTERPOLATION_DATASETS = (
+        "Cell Indexes",
+        "Cell Info",
+        "Cell Weights",
+        "Face Indexes",
+        "Face Info",
+        "Face Weights",
+    )
+    _GRIDDED_PRECIPITATION_STABLE_SECONDS = 0.5
 
     @staticmethod
     def _ras_compute_command_line(
@@ -333,18 +343,20 @@ class RasPreprocess:
                 elapsed_seconds=time.time() - start_time,
             )
 
+        gridded_stability_state: Dict[str, object] = {}
         if requires_gridded_precipitation:
             alternate_signal_condition = lambda: (
-                RasPreprocess._materialized_gridded_precipitation_ready(
+                RasPreprocess._stable_materialized_gridded_precipitation_ready(
                     tmp_hdf,
                     b_file,
                     x_file,
+                    gridded_stability_state,
                     artifact_baseline=artifact_baseline,
                 )
             )
             alternate_signal_description = (
-                "fresh preprocessing artifacts with materialized gridded "
-                "precipitation"
+                "fresh preprocessing artifacts with structurally materialized "
+                "gridded precipitation and interpolation mappings"
             )
         else:
             alternate_signal_condition = lambda: (
@@ -404,10 +416,10 @@ class RasPreprocess:
 
         # The BCO marker is written before the owned RasUnsteady process is
         # guaranteed to have started. That distinction matters for gridded
-        # precipitation: Ras.exe materializes Imported Raster Data as the
-        # shallow Precipitation/Values and Timestamp datasets during the
-        # transition to the solver. Killing on the earlier BCO marker can
-        # leave a plausible-looking .tmp.hdf that the solver cannot read.
+        # precipitation: Ras.exe materializes Imported Raster Data as Values
+        # and Timestamp before it writes the per-area Cell/Face interpolation
+        # mappings. Killing on the earlier BCO marker can leave a
+        # plausible-looking .tmp.hdf that the solver cannot read.
         if (
             signal_detected
             and signal_source == "bco"
@@ -416,16 +428,17 @@ class RasPreprocess:
         ):
             readiness_deadline = start_time + float(max_wait)
             while process.poll() is None and time.time() < readiness_deadline:
-                if RasPreprocess._materialized_gridded_precipitation_ready(
+                if RasPreprocess._stable_materialized_gridded_precipitation_ready(
                     tmp_hdf,
                     b_file,
                     x_file,
+                    gridded_stability_state,
                     artifact_baseline=artifact_baseline,
                 ):
                     signal_source = "bco_materialized_precipitation"
                     logger.info(
                         "Gridded precipitation readiness confirmed by fresh "
-                        "preprocessing artifacts and materialized solver datasets"
+                        "preprocessing artifacts and gridded interpolation mappings"
                     )
                     break
                 time.sleep(0.1)
@@ -441,8 +454,8 @@ class RasPreprocess:
                     timed_out=True,
                     error=(
                         "HEC-RAS reported the BCO computation-start marker, but "
-                        "fresh preprocessing artifacts with materialized gridded "
-                        "precipitation were not observed before the preprocessing "
+                        "fresh preprocessing artifacts with gridded interpolation "
+                        "mappings were not observed before the preprocessing "
                         f"timeout ({int(max_wait)} seconds)."
                     ),
                     elapsed_seconds=time.time() - start_time,
@@ -579,10 +592,33 @@ class RasPreprocess:
                     full_result_copied=full_result_copied,
                     error=(
                         "Gridded precipitation is configured, but HEC-RAS "
-                        "preprocessing did not create solver-ready "
-                        "Event Conditions/Meteorology/Precipitation/Values and "
-                        f"Timestamp datasets in {tmp_hdf.name}: {detail}. "
-                        "Imported Raster Data alone is not solver-ready."
+                        "preprocessing did not create structurally materialized "
+                        f"precipitation in {tmp_hdf.name}: {detail}. Imported "
+                        "Raster Data alone is not solver-ready."
+                    ),
+                    elapsed_seconds=time.time() - start_time,
+                )
+            solver_ready, detail = (
+                RasPreprocess._validate_completed_gridded_preprocessing(
+                    tmp_hdf
+                )
+            )
+            if not solver_ready:
+                return PreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    tmp_hdf_path=tmp_hdf,
+                    b_file_path=b_file,
+                    x_file_path=x_file,
+                    signal_source=signal_source,
+                    full_result_copied=full_result_copied,
+                    error=(
+                        "Gridded precipitation is configured, but HEC-RAS "
+                        "preprocessing did not create a completed Linux "
+                        f"solver-ready temporary HDF in {tmp_hdf.name}: {detail}. "
+                        "Imported Raster Data or partial interpolation mappings "
+                        "alone are not solver-ready."
                     ),
                     elapsed_seconds=time.time() - start_time,
                 )
@@ -1201,9 +1237,18 @@ class RasPreprocess:
     def _validate_materialized_gridded_precipitation(
         tmp_hdf: Path,
     ) -> Tuple[bool, str]:
-        """Validate the solver-facing precipitation datasets in a temp HDF."""
-        values_path = "Event Conditions/Meteorology/Precipitation/Values"
-        timestamp_path = "Event Conditions/Meteorology/Precipitation/Timestamp"
+        """Check only the active writer's gridded-rainfall structure.
+
+        This inexpensive predicate is deliberately *not* a solver-readiness
+        check.  It is safe to call while the Windows engine owns ``tmp_hdf``:
+        it reads paths, shapes, and the small 2D-area name table, never the
+        precipitation, weight, or geometry-table payloads.
+        ``check_solver_ready`` performs the final completed-file numerical
+        checks after this process is stopped.
+        """
+        precipitation = RasPreprocess._GRIDDED_PRECIPITATION_GROUP
+        values_path = f"{precipitation}/Values"
+        timestamp_path = f"{precipitation}/Timestamp"
         try:
             import h5py
 
@@ -1227,8 +1272,119 @@ class RasPreprocess:
                         "Values and Timestamp lengths differ "
                         f"({values.shape[0]} != {timestamps.shape[0]})",
                     )
+
+                areas_path = "Geometry/2D Flow Areas"
+                areas_group = hdf.get(areas_path)
+                if areas_group is None:
+                    return True, "ready (no 2D flow areas)"
+                attributes = areas_group.get("Attributes")
+                if (
+                    attributes is not None
+                    and attributes.dtype.names
+                    and "Name" in attributes.dtype.names
+                ):
+                    area_names = []
+                    for name in attributes["Name"]:
+                        if isinstance(name, bytes):
+                            name = name.decode("utf-8", "replace")
+                        name = str(name).strip()
+                        if name:
+                            area_names.append(name)
+                else:
+                    area_names = [
+                        name
+                        for name, node in areas_group.items()
+                        if isinstance(node, h5py.Group)
+                    ]
+
+                missing_interpolation = []
+                for area_name in area_names:
+                    area_path = f"{precipitation}/2D Flow Areas/{area_name}"
+                    area_group = hdf.get(area_path)
+                    if area_group is None:
+                        missing_interpolation.append(f"{area_path}/")
+                        continue
+                    for dataset_name in (
+                        RasPreprocess._GRIDDED_PRECIPITATION_INTERPOLATION_DATASETS
+                    ):
+                        dataset_path = f"{area_path}/{dataset_name}"
+                        dataset = hdf.get(dataset_path)
+                        if (
+                            dataset is None
+                            or not getattr(dataset, "shape", None)
+                            or dataset.shape[0] == 0
+                        ):
+                            missing_interpolation.append(dataset_path)
+                if missing_interpolation:
+                    return (
+                        False,
+                        "missing or empty gridded interpolation dataset(s): "
+                        + ", ".join(missing_interpolation),
+                    )
         except Exception as exc:
             return False, f"could not inspect {Path(tmp_hdf).name}: {exc}"
+        return True, "ready"
+
+    @staticmethod
+    def _stable_materialized_gridded_precipitation_ready(
+        tmp_hdf: Path,
+        b_file: Path,
+        x_file: Path,
+        stability_state: Dict[str, object],
+        artifact_baseline: Optional[
+            Dict[Path, Optional[Tuple[int, int]]]
+        ] = None,
+    ) -> bool:
+        """Require one short unchanged-HDF interval after structural readiness.
+
+        The engine can create an interpolation dataset before it has finished
+        flushing neighboring metadata.  Requiring a stable size/mtime window
+        prevents stopping at that transition without reading active payloads.
+        """
+        if not RasPreprocess._materialized_gridded_precipitation_ready(
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        ):
+            stability_state.clear()
+            return False
+        current = RasPreprocess._artifact_state(tmp_hdf)
+        now = time.monotonic()
+        if stability_state.get("fingerprint") != current:
+            stability_state.clear()
+            stability_state["fingerprint"] = current
+            stability_state["observed_at"] = now
+            return False
+        observed_at = stability_state.get("observed_at")
+        return (
+            isinstance(observed_at, Number)
+            and now - float(observed_at)
+            >= RasPreprocess._GRIDDED_PRECIPITATION_STABLE_SECONDS
+        )
+
+    @staticmethod
+    def _validate_completed_gridded_preprocessing(
+        tmp_hdf: Path,
+    ) -> Tuple[bool, str]:
+        """Run the expensive Linux input gate once after the writer is stopped."""
+        before = RasPreprocess._artifact_state(tmp_hdf)
+        if before is None:
+            return False, f"missing {Path(tmp_hdf).name}"
+        try:
+            # This check reads property-table chunks to reject NaNs and also
+            # verifies Geometry/GeomPreprocess.  Do not call it while the
+            # Windows engine may still be writing the temporary HDF.
+            from .RasApptainer import check_solver_ready
+
+            problems = check_solver_ready(tmp_hdf, geom_preprocess=False)
+        except Exception as exc:
+            return False, f"could not validate completed {Path(tmp_hdf).name}: {exc}"
+        after = RasPreprocess._artifact_state(tmp_hdf)
+        if after != before:
+            return False, f"{Path(tmp_hdf).name} changed during solver-readiness validation"
+        if problems:
+            return False, "; ".join(problems)
         return True, "ready"
 
     @staticmethod
