@@ -1966,7 +1966,12 @@ class RasUnsteady:
         new_data_lines = []
         for row_start in range(0, len(values), 10):
             chunk = values[row_start:row_start + 10]
-            line_str = ''.join(f'{v:8g}' for v in chunk) + '\n'
+            line_str = ''.join(
+                RasUnsteady._format_fixed_width_value(
+                    v, max_decimals=6, trim_trailing_zeros=True
+                )
+                for v in chunk
+            ) + '\n'
             new_data_lines.append(line_str)
 
         # Replace the Gate Openings= header + data lines
@@ -2194,7 +2199,9 @@ class RasUnsteady:
         for row_start in range(0, len(values), 10):
             row_vals = values[row_start:row_start + 10]
             row_str = ''.join(
-                f'{v:8.2f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
+                RasUnsteady._format_fixed_width_value(
+                    v, trim_trailing_zeros=True
+                )
                 for v in row_vals
             )
             new_data_lines.append(row_str + '\n')
@@ -2387,7 +2394,12 @@ class RasUnsteady:
                 for i in range(0, len(vals), 10):
                     chunk = vals[i:i+10]
                     result_lines.append(
-                        ''.join(f'{v:8g}' for v in chunk) + '\n'
+                        ''.join(
+                            RasUnsteady._format_fixed_width_value(
+                                v, max_decimals=6, trim_trailing_zeros=True
+                            )
+                            for v in chunk
+                        ) + '\n'
                     )
                 return result_lines
 
@@ -4780,7 +4792,9 @@ class RasUnsteady:
         formatted_values = []
         for i in range(0, len(df), 10):
             row = df['Value'].iloc[i:i+10]
-            formatted_row = ''.join(f'{value:8.2f}' for value in row)
+            formatted_row = ''.join(
+                RasUnsteady._format_fixed_width_value(value) for value in row
+            )
             formatted_values.append(formatted_row + '\n')
         
         # Replace old table with new formatted values
@@ -4971,9 +4985,10 @@ class RasUnsteady:
         except FloatingPointError as exc:
             raise ValueError("Precipitation depth exceeds the fixed-width numeric range") from exc
         precip_values = np.diff(rounded_cumulative, prepend=0.0)
-        fields = [f"{value:8.2f}" for value in precip_values]
-        if any(len(field) != 8 for field in fields):
-            raise ValueError("Precipitation depth cannot be represented in an 8-character field")
+        fields = [
+            RasUnsteady._format_fixed_width_value(value, min_decimals=2)
+            for value in precip_values
+        ]
         interval_str = (
             f"{interval_minutes // 60}HOUR"
             if interval_minutes % 60 == 0 else f"{interval_minutes}MIN"
@@ -9343,9 +9358,9 @@ class RasUnsteady:
         formatted_rows = []
         for i in range(0, num_values, 10):
             row_values = values[i:i+10]
-            formatted_row = ''.join(f'{v:8.2f}' if abs(v) < 1e7 else f'{v:8.1f}'
-                                    for v in row_values)
-            formatted_rows.append(formatted_row)
+            formatted_rows.append(''.join(
+                RasUnsteady._format_fixed_width_value(v) for v in row_values
+            ))
 
         # Read the file
         with open(
@@ -12038,12 +12053,12 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, len(interleaved), 10):
             row_vals = interleaved[k:k + 10]
-            formatted_row = ''
-            for v in row_vals:
-                if abs(v) < 1e7:
-                    formatted_row += f'{v:8.1f}' if v != int(v) or abs(v) > 99999 else f'{int(v):>8}'
-                else:
-                    formatted_row += f'{v:8.0f}'
+            formatted_row = ''.join(
+                RasUnsteady._format_fixed_width_value(
+                    v, max_decimals=1, trim_trailing_zeros=True
+                )
+                for v in row_vals
+            )
             formatted_lines.append(formatted_row + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -12287,18 +12302,66 @@ class RasUnsteady:
         return pd.DataFrame({'stage': stages[:min_len], 'flow': flows[:min_len]})
 
     @staticmethod
+    def _format_fixed_width_value(
+        value: float,
+        *,
+        max_decimals: int = 2,
+        min_decimals: int = 0,
+        trim_trailing_zeros: bool = False,
+        zero_as_blank: bool = False,
+    ) -> str:
+        """Return one HEC-RAS inline-table field without allowing overflow.
+
+        HEC-RAS unsteady-flow tables use ten adjacent, 8-character decimal
+        fields per row.  HEC-RAS-authored UPGU3 ``.u08`` data use ordinary
+        fixed-decimal notation (for example ``169333.3``), not exponential
+        notation.  Retain the requested decimal precision where it fits, then
+        reduce it one place at a time.  ``min_decimals`` retains a format's
+        mandated precision (the precipitation writer uses exactly two).
+        A value that cannot fit is rejected rather than allowed to merge into
+        the next field.
+        """
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"HEC-RAS inline-table value must be numeric, got {value!r}"
+            ) from exc
+        if not math.isfinite(numeric_value):
+            raise ValueError(
+                f"HEC-RAS inline-table value must be finite, got {value!r}"
+            )
+        if min_decimals < 0 or max_decimals < min_decimals:
+            raise ValueError(
+                "max_decimals must be greater than or equal to non-negative "
+                "min_decimals"
+            )
+        if zero_as_blank and numeric_value == 0:
+            return " " * 8
+
+        for decimals in range(max_decimals, min_decimals - 1, -1):
+            text = f"{numeric_value:.{decimals}f}"
+            if trim_trailing_zeros and "." in text:
+                text = text.rstrip("0").rstrip(".")
+                if text == "-0":
+                    text = "0"
+            if len(text) <= 8:
+                return text.rjust(8)
+
+        raise ValueError(
+            "HEC-RAS inline-table value cannot be represented in an "
+            f"8-character field without overflow: {numeric_value!r}"
+        )
+
+    @staticmethod
     def _fmt8(v: float) -> str:
-        """Format a value into an 8-character fixed-width field matching HEC-RAS style."""
-        if v == 0.0:
-            return ' ' * 8
-        if v == int(v) and abs(v) < 1e8:
-            return f'{int(v):>8}'
-        for decimals in range(6, 0, -1):
-            s = f'{v:.{decimals}f}'.rstrip('0').rstrip('.')
-            if len(s) <= 8:
-                return s.rjust(8)
-        s = f'{v:.0f}'
-        return s[:8].rjust(8)
+        """Backward-compatible 8-character formatter for stage/flow tables."""
+        return RasUnsteady._format_fixed_width_value(
+            v,
+            max_decimals=6,
+            trim_trailing_zeros=True,
+            zero_as_blank=True,
+        )
 
     @staticmethod
     @log_call
@@ -12786,13 +12849,12 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, value_count, 10):
             row_vals = flow_values[k:k + 10]
-            row_str = ''
-            for v in row_vals:
-                fv = float(v)
-                if abs(fv) < 1e7:
-                    row_str += f'{fv:8.1f}' if fv != int(fv) or abs(fv) > 99999 else f'{int(fv):>8}'
-                else:
-                    row_str += f'{fv:8.0f}'
+            row_str = ''.join(
+                RasUnsteady._format_fixed_width_value(
+                    v, max_decimals=1, trim_trailing_zeros=True
+                )
+                for v in row_vals
+            )
             formatted_lines.append(row_str + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -13195,13 +13257,12 @@ class RasUnsteady:
         formatted_lines = []
         for k in range(0, value_count, 10):
             row_vals = flow_values[k:k + 10]
-            row_str = ''
-            for v in row_vals:
-                fv = float(v)
-                if abs(fv) < 1e7:
-                    row_str += f'{fv:8.1f}' if fv != int(fv) or abs(fv) > 99999 else f'{int(fv):>8}'
-                else:
-                    row_str += f'{fv:8.0f}'
+            row_str = ''.join(
+                RasUnsteady._format_fixed_width_value(
+                    v, max_decimals=1, trim_trailing_zeros=True
+                )
+                for v in row_vals
+            )
             formatted_lines.append(row_str + '\n')
 
         with open(unsteady_path, 'r', encoding='utf-8', errors='ignore') as f:

@@ -136,6 +136,93 @@ def test_ensure_location_then_author_inline_flow_hydrograph(tmp_path):
     assert unsteady.read_bytes() == before
 
 
+def test_inline_hydrograph_large_values_use_8_character_fields_and_round_trip(tmp_path):
+    """Regression for joined ordinates above 99,999.99 cfs."""
+    geometry = _write_geometry(tmp_path / "breakout.g02")
+    unsteady = _write_unsteady(tmp_path / "breakout.u02")
+    RasUnsteady.ensure_2d_boundary_location(
+        unsteady,
+        geometry,
+        area_2d="Breakout Area",
+        bc_line="Breakout Inflow",
+    )
+    values = [
+        0.0,
+        99_999.99,
+        100_000.0,
+        100_000.12,
+        10_000_000.0,
+        -100_000.0,
+        -99_999.1,
+        -12.34,
+        12.34,
+        42.0,
+        1.25,
+        -1.25,
+    ]
+    hydrograph = pd.DataFrame({"hour": list(range(len(values))), "value": values})
+
+    assert RasUnsteady.set_boundary_inline_hydrograph(
+        unsteady,
+        hydrograph,
+        area_2d="Breakout Area",
+        bc_line="Breakout Inflow",
+    )
+
+    lines = unsteady.read_text(encoding="utf-8").splitlines()
+    header = lines.index("Flow Hydrograph= 12 ")
+    assert [len(line) for line in lines[header + 1:header + 3]] == [80, 16]
+    assert lines[header + 1][16:24].strip() == "100000.0"
+    assert lines[header + 1][32:40].strip() == "10000000"
+    assert lines[header + 1][40:48].strip() == "-100000"
+
+    class _Initialized:
+        def check_initialized(self):
+            return None
+
+    read_back = RasUnsteady.extract_tables(
+        unsteady, ras_object=_Initialized()
+    )["Flow Hydrograph="]["Value"].tolist()
+    assert read_back == pytest.approx(
+        [
+            0.0,
+            99_999.99,
+            100_000.0,
+            100_000.1,
+            10_000_000.0,
+            -100_000.0,
+            -99_999.1,
+            -12.34,
+            12.34,
+            42.0,
+            1.25,
+            -1.25,
+        ]
+    )
+
+
+def test_inline_hydrograph_rejects_values_that_cannot_fit_a_field(tmp_path):
+    geometry = _write_geometry(tmp_path / "breakout.g02")
+    unsteady = _write_unsteady(tmp_path / "breakout.u02")
+    RasUnsteady.ensure_2d_boundary_location(
+        unsteady,
+        geometry,
+        area_2d="Breakout Area",
+        bc_line="Breakout Inflow",
+    )
+    before = unsteady.read_bytes()
+
+    with pytest.raises(ValueError, match="8-character field"):
+        RasUnsteady.set_boundary_inline_hydrograph(
+            unsteady,
+            pd.DataFrame({"hour": [0.0, 1.0], "value": [1.0, 100_000_000.0]}),
+            area_2d="Breakout Area",
+            bc_line="Breakout Inflow",
+        )
+
+    assert unsteady.read_bytes() == before
+
+
 def test_ensure_location_supports_empty_unsteady_boundary_collection(tmp_path):
     geometry = _write_geometry(tmp_path / "breakout.g02")
     unsteady = tmp_path / "breakout.u02"
