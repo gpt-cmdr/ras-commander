@@ -353,8 +353,8 @@ class RasDss:
             - ``dss_file``: Absolute DSS file path.
             - ``pathname``: Exact pathname requested.
             - ``data``: Two-dimensional ``float32`` array in HEC row-major order.
-              Row zero is south, columns run west to east. Flip rows before
-              using a north-up raster transform or the native precipitation writer.
+                Row zero is south, columns run west to east. Flip rows before
+                using a north-up raster transform or the native precipitation writer.
                 The HEC grid no-data sentinel is represented as ``numpy.nan``.
             - ``shape``: ``(rows, columns)``.
             - ``units`` and ``data_type``: DSS parameter metadata.
@@ -1352,7 +1352,8 @@ class RasDss:
             nodata: Optional input sentinel, in the same units as data.
             overwrite: Replace the whole output file after successful writing.
             grid_reference_origin: Optional physical (x, y) coordinate of the
-                lower-left corner of cell (0, 0), in CRS units. The raster lower-left corner must
+                lower-left corner of cell (0, 0), in CRS units. The raster's
+                lower-left corner must
                 align with this reference at whole-cell offsets. Required when
                 a receiving model addresses rainfall by fixed grid-cell indexes,
                 such as legacy HMS HRAP file discretizations; use the model's
