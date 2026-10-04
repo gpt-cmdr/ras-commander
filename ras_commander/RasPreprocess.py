@@ -88,7 +88,7 @@ class RasPreprocess:
         "Face Info",
         "Face Weights",
     )
-    _GRIDDED_PRECIPITATION_STABLE_SECONDS = 0.5
+    _GRIDDED_PRECIPITATION_STABLE_SECONDS = 2.0
 
     @staticmethod
     def _ras_compute_command_line(
@@ -351,6 +351,7 @@ class RasPreprocess:
                     b_file,
                     x_file,
                     gridded_stability_state,
+                    started_at=start_time,
                     artifact_baseline=artifact_baseline,
                 )
             )
@@ -392,7 +393,13 @@ class RasPreprocess:
         monitor_source = getattr(monitor, "signal_source", None)
         signal_source = (
             (
-                "materialized_gridded_precipitation"
+                "materialized_gridded_precipitation_"
+                + str(
+                    gridded_stability_state.get(
+                        "writer_observation",
+                        "writer_not_observed_after_grace",
+                    )
+                )
                 if requires_gridded_precipitation
                 else "owned_process_artifacts"
             )
@@ -433,9 +440,18 @@ class RasPreprocess:
                     b_file,
                     x_file,
                     gridded_stability_state,
+                    started_at=start_time,
                     artifact_baseline=artifact_baseline,
                 ):
-                    signal_source = "bco_materialized_precipitation"
+                    signal_source = (
+                        "bco_materialized_precipitation_"
+                        + str(
+                            gridded_stability_state.get(
+                                "writer_observation",
+                                "writer_not_observed_after_grace",
+                            )
+                        )
+                    )
                     logger.info(
                         "Gridded precipitation readiness confirmed by fresh "
                         "preprocessing artifacts and gridded interpolation mappings"
@@ -1014,6 +1030,84 @@ class RasPreprocess:
         return stat.st_size, stat.st_mtime_ns
 
     @staticmethod
+    def _normalized_preprocess_path(value: object) -> str:
+        """Normalize a command-line path for exact process ownership checks."""
+        text = str(value).strip().strip('"')
+        try:
+            return os.path.normcase(os.path.abspath(text))
+        except (OSError, ValueError):
+            return os.path.normcase(text)
+
+    @staticmethod
+    def _is_exact_complete_preprocess_process(
+        info: Dict[str, object],
+        tmp_hdf: Path,
+        started_at: float,
+    ) -> bool:
+        """Return whether one process is this launch's active HDF writer."""
+        try:
+            if float(info.get("create_time") or 0.0) < float(started_at) - 2.0:
+                return False
+            if str(info.get("name") or "").casefold() != "rasprocess.exe":
+                return False
+            arguments = tuple(info.get("cmdline") or ())
+        except (TypeError, ValueError):
+            return False
+        return (
+            "completepreprocess" in {
+                str(argument).strip().casefold() for argument in arguments
+            }
+            and RasPreprocess._normalized_preprocess_path(tmp_hdf)
+            in {
+                RasPreprocess._normalized_preprocess_path(argument)
+                for argument in arguments
+            }
+        )
+
+    @staticmethod
+    def _active_complete_preprocess_writers(
+        tmp_hdf: Path,
+        started_at: float,
+    ) -> Tuple[int, ...]:
+        """Return exact launch-owned ``CompletePreProcess`` writer PIDs.
+
+        HDF size/mtime stability alone cannot prove that the detached Windows
+        writer is done.  This intentionally excludes similarly named RAS
+        processes and only reports a process with the exact temporary HDF,
+        ``CompletePreProcess`` action, and launch-window creation time.
+        """
+        try:
+            import psutil
+        except Exception:
+            # Fail closed: process ownership is required before early stop.
+            return (-1,)
+        writers = []
+        try:
+            processes = psutil.process_iter(["pid", "name", "cmdline", "create_time"])
+            for candidate in processes:
+                try:
+                    info = candidate.info
+                    if RasPreprocess._is_exact_complete_preprocess_process(
+                        info,
+                        tmp_hdf,
+                        started_at,
+                    ):
+                        writers.append(int(info["pid"]))
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                ):
+                    continue
+        except Exception:
+            # Enumeration failure is indistinguishable from an unobserved writer.
+            return (-1,)
+        return tuple(sorted(set(writers)))
+
+    @staticmethod
     def _detect_first_run_tcu_dialog(
         root_pid: Optional[int] = None,
     ) -> Optional[str]:
@@ -1331,15 +1425,18 @@ class RasPreprocess:
         b_file: Path,
         x_file: Path,
         stability_state: Dict[str, object],
+        *,
+        started_at: float,
         artifact_baseline: Optional[
             Dict[Path, Optional[Tuple[int, int]]]
         ] = None,
     ) -> bool:
-        """Require one short unchanged-HDF interval after structural readiness.
+        """Require a quiescent writer and unchanged-HDF interval before stopping.
 
-        The engine can create an interpolation dataset before it has finished
-        flushing neighboring metadata.  Requiring a stable size/mtime window
-        prevents stopping at that transition without reading active payloads.
+        The engine can create all mapping datasets while an orphaned
+        ``RasProcess.exe CompletePreProcess`` is still writing property tables.
+        A stable size/mtime window is therefore accepted only after this
+        launch's exact writer is absent for the same bounded interval.
         """
         if not RasPreprocess._materialized_gridded_precipitation_ready(
             tmp_hdf,
@@ -1349,10 +1446,48 @@ class RasPreprocess:
         ):
             stability_state.clear()
             return False
-        current = RasPreprocess._artifact_state(tmp_hdf)
         now = time.monotonic()
+        writers = RasPreprocess._active_complete_preprocess_writers(
+            tmp_hdf,
+            started_at,
+        )
+        if writers:
+            if stability_state.get("active_completepreprocess_pids") != writers:
+                logger.info(
+                    "Waiting for exact CompletePreProcess writer(s) before "
+                    "stopping gridded preprocessing: %s",
+                    ", ".join(str(pid) for pid in writers),
+                )
+            stability_state["completepreprocess_seen"] = True
+            stability_state["active_completepreprocess_pids"] = writers
+            stability_state.pop("writer_absent_since", None)
+            stability_state.pop("fingerprint", None)
+            stability_state.pop("observed_at", None)
+            return False
+        stability_state.pop("active_completepreprocess_pids", None)
+        if "writer_absent_since" not in stability_state:
+            stability_state["writer_absent_since"] = now
+            stability_state["writer_observation"] = (
+                "writer_quiescent"
+                if stability_state.get("completepreprocess_seen")
+                else "writer_not_observed_after_grace"
+            )
+            logger.info(
+                "No exact CompletePreProcess writer is active; requiring %.1fs "
+                "writer/HDF quiescence (%s)",
+                RasPreprocess._GRIDDED_PRECIPITATION_STABLE_SECONDS,
+                stability_state["writer_observation"],
+            )
+            return False
+        writer_absent_since = stability_state["writer_absent_since"]
+        if (
+            not isinstance(writer_absent_since, Number)
+            or now - float(writer_absent_since)
+            < RasPreprocess._GRIDDED_PRECIPITATION_STABLE_SECONDS
+        ):
+            return False
+        current = RasPreprocess._artifact_state(tmp_hdf)
         if stability_state.get("fingerprint") != current:
-            stability_state.clear()
             stability_state["fingerprint"] = current
             stability_state["observed_at"] = now
             return False
@@ -1636,16 +1771,8 @@ class RasPreprocess:
             )
             return (), ()
 
-        def normalized_path(value: object) -> str:
-            text = str(value).strip().strip('"')
-            try:
-                return os.path.normcase(os.path.abspath(text))
-            except (OSError, ValueError):
-                return os.path.normcase(text)
-
-        exact_project = normalized_path(project_file)
-        exact_plan = normalized_path(plan_file)
-        exact_tmp_hdf = normalized_path(tmp_hdf)
+        exact_project = RasPreprocess._normalized_preprocess_path(project_file)
+        exact_plan = RasPreprocess._normalized_preprocess_path(plan_file)
         earliest_create_time = float(started_at) - 2.0
         roots = []
 
@@ -1660,10 +1787,8 @@ class RasPreprocess:
                     continue
                 arguments = tuple(info.get("cmdline") or ())
                 normalized_arguments = {
-                    normalized_path(argument) for argument in arguments
-                }
-                lowered_arguments = {
-                    str(argument).strip().casefold() for argument in arguments
+                    RasPreprocess._normalized_preprocess_path(argument)
+                    for argument in arguments
                 }
             except (
                 psutil.NoSuchProcess,
@@ -1679,10 +1804,10 @@ class RasPreprocess:
                 and exact_project in normalized_arguments
                 and exact_plan in normalized_arguments
             )
-            complete_preprocess = (
-                name == "rasprocess.exe"
-                and "completepreprocess" in lowered_arguments
-                and exact_tmp_hdf in normalized_arguments
+            complete_preprocess = RasPreprocess._is_exact_complete_preprocess_process(
+                info,
+                tmp_hdf,
+                started_at,
             )
             if ras_launcher or complete_preprocess:
                 roots.append(candidate)
