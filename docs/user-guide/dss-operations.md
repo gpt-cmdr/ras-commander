@@ -65,6 +65,20 @@ arrays must first be reprojected; this method does not interpret latitude and
 longitude as projected coordinates. NaN, masked cells, and an explicit `nodata=`
 sentinel become native DSS missing values. Negative depths and infinity fail.
 
+For consumers that address rainfall by fixed cell indexes, pass
+`grid_reference_origin=(x0, y0)` in CRS units. The lower-left raster corner must
+be a whole number of cells from that reference. For example, a legacy HMS HRAP
+file discretization can require `(0, 0)` rather than local raster indexes.
+Without this option, the native writer indexes from the raster's lower-left
+corner. Equal physical extents alone do not establish compatibility with an
+index-based discretization.
+
+An HMS 4.13 check using the official `tenk` example reproduced all four basins'
+precipitation and discharge exactly with both Monolith grids and native grids
+using the required reference origin. The locally indexed native variant
+completed computation but supplied zero rainfall. Check computed precipitation
+as well as completion status when changing a grid source.
+
 The writer creates DSS7 specified-time grids, closes and checks the temporary
 file, then publishes it. Existing files are protected by default;
 `overwrite=True` replaces the **entire file**, rather than appending records.
@@ -291,6 +305,17 @@ The pathname is a template. Parts A/B/C/F are preserved, while Parts D/E are
 rebuilt for each timestep using the start/end window. For period data such as
 precipitation, pass either `n_times + 1` boundary times or `n_times` interval
 end times.
+
+Monolith `write_grid_timeseries()` and `read_grid()` use HEC's south-first row
+order. For north-up raster arrays, pass `data[:, ::-1, :]` to the Monolith
+writer; the native `write_precip_grid_arrays()` accepts north-first arrays
+directly. Both run columns west to east. End-of-day E parts use the previous
+date with `2400`, matching the actual DSS catalog and returned exact paths.
+
+For specified-grid cross-library exchange, supply ASCII WKT1_GDAL projection
+text. The tested pydsstools 3.1 reader cannot decode Unicode characters in some
+WKT2 strings written through Monolith. This concerns projection serialization;
+changing WKT syntax does not reproject the rainfall.
 
 `dss_version` is keyword-only. Pass `6` or `7` when creating a new database,
 or omit it to retain the HEC bridge default. An explicit version must match an

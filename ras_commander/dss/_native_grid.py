@@ -14,7 +14,8 @@ import pandas as pd
 
 
 def write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *,
-                             transform, crs, units, nodata=None, overwrite=False):
+                             transform, crs, units, nodata=None, overwrite=False,
+                             grid_reference_origin=None):
     """Implementation for RasDss.write_precip_grid_arrays; imports remain lazy."""
     try:
         from affine import Affine
@@ -93,18 +94,35 @@ def write_precip_grid_arrays(dss_file, pathname, data, interval_bounds, *,
         data_units=canonical_units, nodata=UNDEFINED, is_interval=True,
         min_xy=(affine.c, affine.f + affine.e * values.shape[1]),
     )
+    if grid_reference_origin is not None:
+        reference = np.asarray(grid_reference_origin, dtype=float)
+        if reference.shape != (2,) or not np.isfinite(reference).all():
+            raise ValueError("grid_reference_origin must contain two finite CRS coordinates")
+        lower_left = np.array([affine.c, affine.f + affine.e * values.shape[1]])
+        indexes = (lower_left - reference) / affine.a
+        if not np.allclose(indexes, np.rint(indexes), rtol=0, atol=1e-8):
+            raise ValueError("raster lower-left corner must align with grid_reference_origin at whole-cell offsets")
+        info.coords_cell0 = tuple(reference)
+        info.lower_left_cell = tuple(int(value) for value in np.rint(indexes))
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f'.{target.stem}.{uuid4().hex}.dss')
     try:
         with Open(str(temporary), version=7) as writer:
             for path, frame in zip(paths, values):
-                writer.put_grid(frame, path, info, flipud=True, inplace=False)
+                writer.put_grid(frame, path, info, flipud=True, inplace=False,
+                                normalize=grid_reference_origin is None)
         # Reopen after close: upstream may log native failures instead of raising.
         with Open(str(temporary)) as reader:
             for path in paths:
                 record = reader.read_grid(path, metadata_only=True)
                 if record is None or tuple(record.gridinfo.shape) != values.shape[1:]:
                     raise RuntimeError(f"DSS grid write verification failed: {path}")
+                if grid_reference_origin is not None and (
+                        tuple(record.gridinfo.lower_left_cell) != tuple(info.lower_left_cell)
+                        or not np.allclose(record.gridinfo.coords_cell0,
+                                           np.asarray(info.coords_cell0, dtype=np.float32),
+                                           rtol=0, atol=1e-8)):
+                    raise RuntimeError(f"DSS grid reference verification failed: {path}")
         if overwrite:
             os.replace(temporary, target)
         else:
