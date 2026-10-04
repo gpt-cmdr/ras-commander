@@ -116,17 +116,13 @@ class StormGenerator:
     ]
 
     # Return period mapping (columns in quantiles array)
-    # CRITICAL: PDS and AMS series have DIFFERENT column structures!
-    # - PDS (Partial Duration Series): 10 columns, includes 2-year (AEP 50%)
-    # - AMS (Annual Maximum Series): 9 columns, starts at 5-year (AEP 20%), NO 2-year!
-    #
-    # PDS AEP: 50%, 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%, 0.1%, 0.05%
-    # PDS ARI: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 years
-    #
-    # AMS AEP: 20%, 10%, 4%, 2%, 1%, 0.5%, 0.2%, 0.1%, 0.05%
-    # AMS ARI: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 years (NO 2-year!)
-    STANDARD_ARI_VALUES_PDS = ['2', '5', '10', '25', '50', '100', '200', '500', '1000', '2000']
-    STANDARD_ARI_VALUES_AMS = ['5', '10', '25', '50', '100', '200', '500', '1000', '2000']
+    # PDS and AMS series have different column counts. The labels below match
+    # the headers of NOAA's labelled CSV export (fe_text_mean.csv):
+    # - PDS: 10 columns, ARI 1, 2, 5, 10, 25, 50, 100, 200, 500, 1000 years
+    # - AMS: 9 columns, AEP 1/2, 1/5, 1/10, 1/25, 1/50, 1/100, 1/200, 1/500, 1/1000
+    # Atlas 14 does not publish a 2000-year value.
+    STANDARD_ARI_VALUES_PDS = ['1', '2', '5', '10', '25', '50', '100', '200', '500', '1000']
+    STANDARD_ARI_VALUES_AMS = ['2', '5', '10', '25', '50', '100', '200', '500', '1000']
 
     # Legacy alias for backwards compatibility (assumes PDS)
     STANDARD_ARI_VALUES = STANDARD_ARI_VALUES_PDS
@@ -204,7 +200,7 @@ class StormGenerator:
             units: Unit system - 'english' or 'metric'
             series: Time series type - 'ams' (annual maximum, default) or 'pds' (partial duration).
                    AMS is the standard for engineering design and matches typical Atlas 14 tables.
-                   PDS values are lower for the same return period (especially < 10-year events).
+                   PDS values are higher than or equal to AMS values for the same return period (most noticeably for frequent events).
             timeout: Request timeout in seconds
             project_folder: Optional path to project folder for caching. If provided,
                           data is cached to {project_folder}/NOAA_Atlas_14/
@@ -385,9 +381,9 @@ class StormGenerator:
             come from STANDARD_DURATIONS_HOURS and STANDARD_ARI_VALUES_PDS/AMS,
             which match the official NOAA Atlas 14 API structure specification.
 
-            CRITICAL: PDS and AMS series have DIFFERENT column structures!
-            - PDS: 10 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000] year
-            - AMS: 9 columns [5, 10, 25, 50, 100, 200, 500, 1000, 2000] year (NO 2-year!)
+            PDS and AMS series have different column structures:
+            - PDS: 10 columns [1, 2, 5, 10, 25, 50, 100, 200, 500, 1000] year
+            - AMS: 9 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000] year
         """
         quantiles = data_dict.get('quantiles', [])
 
@@ -407,11 +403,11 @@ class StormGenerator:
         series = data_dict.get('ser', 'pds').lower()
 
         if series == 'ams':
-            # AMS has 9 columns: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year (NO 2-year!)
+            # AMS has 9 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000 year
             ari_cols = StormGenerator.STANDARD_ARI_VALUES_AMS[:num_aris]
-            logger.debug(f"Using AMS ARI mapping (9 columns, no 2-year): {ari_cols}")
+            logger.debug(f"Using AMS ARI mapping (9 columns): {ari_cols}")
         else:
-            # PDS has 10 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year
+            # PDS has 10 columns: 1, 2, 5, 10, 25, 50, 100, 200, 500, 1000 year
             ari_cols = StormGenerator.STANDARD_ARI_VALUES_PDS[:num_aris]
             logger.debug(f"Using PDS ARI mapping (10 columns): {ari_cols}")
 
@@ -466,9 +462,9 @@ class StormGenerator:
             come from STANDARD_DURATIONS_HOURS and STANDARD_ARI_VALUES_PDS/AMS,
             which match the official NOAA Atlas 14 API structure specification.
 
-            CRITICAL: PDS and AMS series have DIFFERENT column structures!
-            - PDS: 10 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000] year
-            - AMS: 9 columns [5, 10, 25, 50, 100, 200, 500, 1000, 2000] year (NO 2-year!)
+            PDS and AMS series have different column structures:
+            - PDS: 10 columns [1, 2, 5, 10, 25, 50, 100, 200, 500, 1000] year
+            - AMS: 9 columns [2, 5, 10, 25, 50, 100, 200, 500, 1000] year
         """
         quantiles = data_dict.get('quantiles', [])
 
@@ -488,11 +484,11 @@ class StormGenerator:
         series = data_dict.get('ser', 'pds').lower()
 
         if series == 'ams':
-            # AMS has 9 columns: 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year (NO 2-year!)
+            # AMS has 9 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000 year
             ari_cols = self.STANDARD_ARI_VALUES_AMS[:num_aris]
-            logger.debug(f"Using AMS ARI mapping (9 columns, no 2-year): {ari_cols}")
+            logger.debug(f"Using AMS ARI mapping (9 columns): {ari_cols}")
         else:
-            # PDS has 10 columns: 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000 year
+            # PDS has 10 columns: 1, 2, 5, 10, 25, 50, 100, 200, 500, 1000 year
             ari_cols = self.STANDARD_ARI_VALUES_PDS[:num_aris]
             logger.debug(f"Using PDS ARI mapping (10 columns): {ari_cols}")
 
