@@ -37,6 +37,8 @@ import pandas as pd
 if TYPE_CHECKING:
     import geopandas as gpd
 
+    from .._landcover_native import LandCoverSanitizationResult
+
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
@@ -796,6 +798,61 @@ class HdfLandCover:
             hecras_version=hecras_version,
             ras_object=ras_object,
         )
+
+    @staticmethod
+    @log_call
+    def sanitize_classification_names(
+        landcover_hdf_path: Union[str, Path],
+        raster_path: Optional[Union[str, Path]] = None,
+        hecras_version: Optional[str] = None,
+        ras_object: Any = None,
+    ) -> "LandCoverSanitizationResult":
+        """Sanitize land-cover labels through the native HEC-RAS 6.6 editor.
+
+        This labels-only operation preserves classification IDs, all numeric
+        class parameters, and the companion TIFF.  It is qualified only for
+        HEC-RAS 6.6/6.6.0 because it calls RASMapper's native sanitizer and writes
+        a legacy V1 sidecar back in the current V2 schema.  It does not
+        recreate or resample the raster.
+
+        Args:
+            landcover_hdf_path: Native RASMapper land-cover sidecar.
+            raster_path: Exact companion TIFF path. When omitted, the wrapper
+                resolves the path registered by RASMapper and records it in the
+                result; supplied paths must match that native association.
+            hecras_version: Explicit HEC-RAS 6.6 or 6.6.0 version. Required when
+                ``ras_object`` does not provide ``ras_version``.
+            ras_object: Initialized project object used to infer ``ras_version``.
+
+        Returns:
+            A ``LandCoverSanitizationResult`` containing native rename records,
+            complete before/after class-parameter snapshots, sidecar schema
+            versions, a durable backup path, and matching companion-TIFF
+            SHA-256 values.
+        """
+        version = hecras_version
+        if version is None and ras_object is not None:
+            version = getattr(ras_object, "ras_version", None)
+        if not version:
+            raise ValueError(
+                "hecras_version is required for native land-cover "
+                "classification-name sanitization."
+            )
+        from .._landcover_native import sanitize_landcover_classification_names
+
+        result = sanitize_landcover_classification_names(
+            landcover_hdf_path,
+            raster_path=raster_path,
+            hecras_version=str(version),
+        )
+        logger.info(
+            "Sanitized land-cover labels through RASMapper %s: %d rename(s), "
+            "TIFF unchanged=%s",
+            version,
+            len(result.renames),
+            result.tiff_sha256_before == result.tiff_sha256_after,
+        )
+        return result
 
 
     # ---- Phase 3: Comparison and Statistics ----
