@@ -10,14 +10,15 @@ Nothing here contacts a cluster unless a transport is supplied and
 offline. The receipt written by the job is computational/transfer evidence
 only; it is never a statement that results are acceptable engineering output.
 
-The profile field names are a superset of fim-commander's
-``PortableSiteProfile`` so that existing site profiles load unchanged.
+Selected fim-commander ``PortableSiteProfile`` fields are accepted as logged
+compatibility no-ops. A usable profile still needs this API's SSH and
+native-image settings.
 """
 
 from __future__ import annotations
 
 from dataclasses import MISSING, asdict, dataclass, field, fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -68,6 +69,8 @@ _OCI_SOURCE = re.compile(
     r"docker://[a-z0-9][a-z0-9._/-]*(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127}|@sha256:[0-9a-f]{64})\Z"
 )
 _ZERO_SHA256 = "0" * 64
+_WINDOWS_ABSOLUTE_DSS = re.compile(r"^[A-Za-z]:[\\/].*\.dss\s*$", re.IGNORECASE)
+_WRITE_DSS_FILE = re.compile(r"^\s*Write DSS File\s*=\s*T\s*$", re.IGNORECASE)
 _FIM_ONLY_FIELDS = frozenset({
     "launcher_python_executable", "max_concurrent", "memory_per_task", "ras_executable",
     "rsync_executable", "timeout_seconds", "transfer_mode",
@@ -276,7 +279,7 @@ def validate_receipt(payload: Any) -> dict:
         "schema", "request_sha256", "job_name", "slurm_job_id", "node",
         "container_identity", "apptainer_image_sha256", "status", "reason_code",
         "exit_code", "started_at", "finished_at", "elapsed_seconds", "num_cores",
-        "input_hashes", "outputs", "copy_verified", "detail",
+        "input_hashes", "outputs", "copy_verified", "dss_output_rewrite", "detail",
     }
     if not isinstance(payload, dict) or set(payload) != required:
         missing = sorted(required - set(payload)) if isinstance(payload, dict) else "not an object"
@@ -291,6 +294,13 @@ def validate_receipt(payload: Any) -> dict:
         raise ValueError("Invalid receipt slurm_job_id")
     if type(payload["exit_code"]) is not int or type(payload["copy_verified"]) is not bool:
         raise ValueError("Invalid receipt exit_code/copy_verified")
+    rewrite = payload["dss_output_rewrite"]
+    if rewrite is not None:
+        if (not isinstance(rewrite, dict) or set(rewrite) != {"input", "source_path", "staged_path"}
+                or not _SAFE_NAME.fullmatch(str(rewrite["input"]))
+                or not isinstance(rewrite["source_path"], str)
+                or not _SAFE_NAME.fullmatch(str(rewrite["staged_path"]))):
+            raise ValueError("Invalid receipt dss_output_rewrite")
     if payload["status"] not in {"succeeded", "failed"}:
         raise ValueError("Invalid receipt status")
     if payload["status"] == "succeeded" and (
@@ -390,14 +400,10 @@ class SshApptainerTransport(ApptainerTransport):
 _PRECIP_GROUP = "Event Conditions/Meteorology/Precipitation"
 _PRECIP_DATASETS = ("Cell Indexes", "Cell Info", "Cell Weights",
                     "Face Indexes", "Face Info", "Face Weights")
-# "Cells Minimum Elevation" legitimately holds NaN on ghost cells; never checked.
 # ``Cells Minimum Elevation`` legitimately contains NaN in ghost cells.  Every
 # other floating property table emitted for a 2D area is solver input and must
 # be finite.  The named list documents the HEC-RAS 6.6 tables; the traversal
 # below deliberately also catches future floating property tables.
-_PROPERTY_TABLES = ("Faces Minimum Elevation", "Faces Area Elevation Values",
-                    "Faces Area Elevation Info", "Cells Volume Elevation Values",
-                    "Cells Volume Elevation Info", "Cells Surface Area")
 _NAN_CHUNK_ROWS = 1_000_000
 
 
@@ -559,6 +565,7 @@ APPTAINER=@APPTAINER@
 PROJECT=@PROJECT@
 PLAN=@PLAN@
 XTOKEN=@XTOKEN@
+DSS_OUTPUT_REWRITE=@DSS_OUTPUT_REWRITE@
 @ENVIRONMENT@
 OUT_FINAL="$JOB_ROOT/out/$SLURM_JOB_ID"
 OUT="$OUT_FINAL.partial"
@@ -570,7 +577,7 @@ STATUS=failed; REASON=LAUNCH_FAILED; DETAIL=""; RC=1; COPY_OK=false
 ENGINE_PID=""; TERMINATED=0
 trap 'TERMINATED=1; [ -n "$ENGINE_PID" ] && kill -TERM "$ENGINE_PID" 2>/dev/null' TERM
 
-sha_of() { sha256sum "$1" | cut -d' ' -f1; }
+sha_of() { sha256sum < "$1" | cut -d' ' -f1; }
 
 inventory_json() {  # inventory_json <dir> <name-prefix>
   local dir=$1 prefix=$2 sep="" f n
@@ -623,6 +630,7 @@ write_receipt() {
     printf '  "input_hashes": {%s\\n  },\\n' "$(inventory_json "$JOB_ROOT/inputs" "")"
     printf '  "outputs": {%s\\n  },\\n' "$(inventory_json "$OUT" "")"
     printf '  "copy_verified": %s,\\n' "$COPY_OK"
+    printf '  "dss_output_rewrite": %s,\\n' "$DSS_OUTPUT_REWRITE"
     printf '  "detail": '; json_string "$DETAIL"; printf '\\n'
     printf '}\\n'
   } > "$OUT/receipt.json"
@@ -640,7 +648,6 @@ copy_back() {
     [ "$(sha_of "$OUT/project/$n")" = "$sum" ] || return 1
   done
   [ -f "$SCRATCH/engine.log" ] && cp -p "$SCRATCH/engine.log" "$OUT/logs/engine.log"
-  [ -f "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" ] && cp -p "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" "$OUT/logs/slurm-$SLURM_JOB_ID.out"
   return 0
 }
 
@@ -655,7 +662,7 @@ run_job() {
   cp -p "$JOB_ROOT/inputs/SHA256SUMS" "$SCRATCH/input.sha256"
   cp -p "$JOB_ROOT/engine.sh" "$SCRATCH/control/engine.sh"
   (cd "$WORK" && sha256sum --quiet -c "$SCRATCH/input.sha256") || { REASON=STAGE_MISMATCH; return 1; }
-  ulimit -s unlimited || { REASON=STACK_LIMIT_FAILED; DETAIL="host ulimit -s unlimited failed"; return 1; }
+  @HOST_STACK@
 
   "$APPTAINER" exec --cleanenv \\
     --bind "$WORK:/job" --bind "$SCRATCH/control:/control:ro" --bind "$SCRATCH/tmp:/tmp" \\
@@ -671,6 +678,9 @@ run_job() {
 run_job
 JOB_OK=$?
 mkdir -p "$JOB_ROOT/out" && mkdir "$OUT" || { echo "output directory exists: $OUT" >&2; exit 2; }
+mkdir -p "$OUT/logs" || { echo "could not create output logs directory" >&2; exit 2; }
+# Preserve scheduler stdout even when image/input/scratch staging fails before copy-back.
+[ -f "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" ] && cp -p "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" "$OUT/logs/slurm-$SLURM_JOB_ID.out"
 if [ -d "$WORK" ]; then
   if copy_back; then COPY_OK=true; else REASON=COPY_BACK_FAILED; DETAIL="copy-back or hash verification failed"; fi
 fi
@@ -703,6 +713,14 @@ def _stack_block(profile: ApptainerSiteProfile) -> str:
     lines.append(f"export OMP_STACKSIZE={shlex.quote(profile.omp_stacksize)}")
     lines.append(f"export KMP_STACKSIZE={shlex.quote(profile.kmp_stacksize)}")
     return "\n".join(lines)
+
+
+def _host_stack_block(profile: ApptainerSiteProfile) -> str:
+    """Return the host-side limit check only when unlimited stack is requested."""
+    if not profile.stack_unlimited:
+        return ""
+    return ('ulimit -s unlimited || { REASON=STACK_LIMIT_FAILED; '
+            'DETAIL="host ulimit -s unlimited failed"; return 1; }')
 
 
 def _render_engine_script(profile: ApptainerSiteProfile, project: str, plan: str, xtoken: str) -> str:
@@ -750,6 +768,32 @@ def _plan_geometry_token(project_folder: Path, project: str, plan: str) -> str:
 def _canonical_sha256(payload: Any) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"),
                                      allow_nan=False).encode("utf-8")).hexdigest()
+
+
+def _rewrite_windows_dss_output(flow_path: Path, project_name: str) -> Optional[dict[str, str]]:
+    """Rewrite a requested Windows DSS output path in the staged flow file only."""
+    lines = flow_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if not _WRITE_DSS_FILE.fullmatch(line.rstrip("\n")):
+            continue
+        for candidate_index in range(index + 1, len(lines)):
+            candidate = lines[candidate_index]
+            source_path = candidate.strip()
+            if not source_path:
+                continue
+            if not _WINDOWS_ABSOLUTE_DSS.fullmatch(source_path):
+                break
+            replacement = f"{project_name}.dss"
+            indent = candidate[:len(candidate) - len(candidate.lstrip())]
+            ending = "\n" if candidate.endswith("\n") else ""
+            lines[candidate_index] = f"{indent}{replacement}{ending}"
+            flow_path.write_text("".join(lines), encoding="utf-8", newline="\n")
+            return {
+                "input": flow_path.name,
+                "source_path": source_path,
+                "staged_path": replacement,
+            }
+    return None
 
 
 def _job_script_request_hash(script: str) -> str:
@@ -806,7 +850,7 @@ def _load_request(job: ApptainerJob) -> tuple[dict[str, Any], dict[str, Any]]:
 def _remote_input_check_command(remote: str, request: Mapping[str, Any]) -> str:
     """Return a shell fragment that verifies expected hashes, not remote metadata."""
     checks = "".join(
-        f"{request['input_hashes'][name]}  {name}\\n" for name in sorted(request["input_hashes"])
+        f"{request['input_hashes'][name]}  {name}\n" for name in sorted(request["input_hashes"])
     )
     return (
         f"cd {shlex.quote(remote)}/inputs && "
@@ -816,9 +860,29 @@ def _remote_input_check_command(remote: str, request: Mapping[str, Any]) -> str:
 
 
 def _normal_time(value: Any) -> str:
+    """Canonicalize HEC-RAS timestamps, including its end-of-day ``2400`` spelling."""
     if isinstance(value, bytes):
         value = value.decode("utf-8", "replace")
-    return " ".join(str(value).upper().split())
+    text = " ".join(str(value).upper().split())
+    parts = text.split()
+    if len(parts) != 2:
+        return text
+    clock = parts[1].replace(":", "")
+    if not clock.isdigit() or len(clock) not in {3, 4, 6}:
+        return text
+    if len(clock) == 3:
+        clock = f"0{clock}"
+    if len(clock) == 4:
+        clock += "00"
+    hour, minute, second = int(clock[:2]), int(clock[2:4]), int(clock[4:])
+    if hour > 24 or minute > 59 or second > 59 or (hour == 24 and (minute or second)):
+        return text
+    try:
+        parsed = datetime.strptime(parts[0], "%d%b%Y")
+    except ValueError:
+        return text
+    canonical = parsed + timedelta(hours=hour, minutes=minute, seconds=second)
+    return canonical.strftime("%d%b%Y %H:%M:%S").upper()
 
 
 def _validate_collected_solve(destination: Path, job: ApptainerJob,
@@ -960,6 +1024,7 @@ class RasApptainer:
                 shutil.copyfile(source, inputs / name)
             else:
                 (inputs / name).write_bytes(data.replace(b"\r\n", b"\n"))  # LF for Linux solver
+        dss_output_rewrite = _rewrite_windows_dss_output(inputs / names[1], project_name)
         # RasUnsteady reads these compiled-HDF attributes, not merely OMP/MKL.
         # The source tmp.hdf is immutable; only the staged copy is rewritten.
         from .RasCmdr import RasCmdr
@@ -1003,6 +1068,8 @@ class RasApptainer:
             "PROJECT": shlex.quote(project_name),
             "PLAN": shlex.quote(plan),
             "XTOKEN": shlex.quote(xtoken),
+            "DSS_OUTPUT_REWRITE": shlex.quote(json.dumps(dss_output_rewrite, separators=(",", ":"))),
+            "HOST_STACK": _host_stack_block(profile),
             "ENVIRONMENT": env_lines,
         }
         template_job_sha = _job_script_request_hash(_fill(JOB_SCRIPT_TEMPLATE, script_values))
@@ -1011,6 +1078,7 @@ class RasApptainer:
             "input_hashes": staged, "input_manifest_sha256": manifest_sha,
             "engine_sha256": engine_sha, "job_sha256": template_job_sha,
             "expected_simulation_end": _expected_simulation_end(inputs / names[0]),
+            "dss_output_rewrite": dss_output_rewrite,
             "profile": profile_view,
         }
         request_sha = _canonical_sha256(request)
@@ -1070,6 +1138,9 @@ class RasApptainer:
             raise ApptainerProfileError([
                 "all-zero image digest is a placeholder and cannot be submitted; record the SIF SHA-256"
             ])
+        # The caller may hold a stale immutable handle.  Consult durable state before
+        # any remote reconciliation: only an untouched rendered attempt is safe to clean.
+        job = RasApptainer.load_job(job.job_directory)
         if job.state != "RENDERED":
             raise RuntimeError(
                 f"Job is in state {job.state}; refusing to submit again. "
@@ -1185,6 +1256,8 @@ class RasApptainer:
                     or any(receipt["input_hashes"][name]["sha256"] != digest
                            for name, digest in expected_inputs.items())):
                 problems.append("receipt input hashes do not match the rendered request")
+            if receipt["dss_output_rewrite"] != request.get("dss_output_rewrite"):
+                problems.append("receipt DSS output rewrite does not match the rendered request")
             if receipt["status"] != "succeeded":
                 problems.append(f"receipt reports {receipt['status']} ({receipt['reason_code']})")
             for name, record in receipt["outputs"].items():

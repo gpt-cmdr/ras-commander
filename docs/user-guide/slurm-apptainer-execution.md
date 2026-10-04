@@ -39,7 +39,7 @@ host names, keys or secrets are committed). Key fields:
 | `image`, `apptainer_image_sha256`, `container_identity` | Shared SIF path, its SHA-256, and the immutable identity (`sif:sha256:<hex>` or `registry/repo@sha256:<hex>`) |
 | `oci_source` | OCI reference used for the one-time pull; it may be tag- or digest-pinned (`docker://repo@sha256:...`) |
 | `hecras_dir`, `ld_library_path` | Solver directory inside the image and its library path. The defaults are derived from the canonical image Dockerfile and registry metadata, not a live API qualification. |
-| `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | Host and container stack-limit checks plus `OMP_STACKSIZE`/`KMP_STACKSIZE` (default `2G`). Submission fails if the requested unlimited stack cannot be raised. `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores` |
+| `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | When `stack_unlimited=true`, the job checks both host and container stack limits; it fails with `STACK_LIMIT_FAILED` if either cannot be raised. `OMP_STACKSIZE`/`KMP_STACKSIZE` default to `2G`; `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores`. |
 | `num_cores`, `slurm_memory`, `time_limit`, `account`, `partition`, `qos`, `nodelist` | Slurm resources (all but `num_cores` optional) |
 | `geom_preprocess` | Enable only for an image that ships `RasGeomPreprocess`. When false (the default), inputs must already contain non-empty `/Geometry/GeomPreprocess`. |
 
@@ -130,7 +130,9 @@ matches the planned end time. Failed jobs are collected too so their logs and re
 - The submission intent is persisted before `sbatch`. If `sbatch` fails ambiguously the job stays
   in `SUBMITTING` and is never resubmitted automatically; reconcile on the cluster and render a new job.
 - Only node-scratch copies are modified (`.b` files are staged with LF line endings; the source
-  hashes and the staged hashes are both recorded in `job.json`).
+  hashes and the staged hashes are both recorded in `job.json`). If `Write DSS File = T` is
+  followed by a Windows-absolute DSS path, the staged `.b` copy rewrites that path to the relative
+  `<project>.dss`; the original is untouched and the request and receipt record the rewrite.
 - Copy-back goes to `out/<jobid>.partial`, is hash-verified, then renamed. Scratch is kept when the
   job fails and removed only after a verified success.
 - The staged HDF core attributes (`1D Cores`, `2D Cores (per mesh)`) are rewritten to `num_cores`;
@@ -146,7 +148,8 @@ and fatal markers before promoting the tmp HDF. Collection also requires the ful
 `RasCmdr._validate_linux_solve` fatal-marker/result check, populated `/Results/Unsteady`, and the
 final `Time Date Stamp` matching the planned end time before reporting success. It collects
 `engine.log` and the Slurm stdout file when available. If your image differs, adjust the profile (`hecras_dir`, `ld_library_path`,
-`geom_preprocess`) or that one template.
+`geom_preprocess`) or that one template. Scheduler stdout and the `logs/` directory are retained
+on all job failure paths; `engine.log` exists only after node-scratch staging begins.
 
 ## Limits
 

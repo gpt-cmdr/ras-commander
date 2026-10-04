@@ -9,7 +9,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
+from dataclasses import replace
 
 import pytest
 
@@ -122,7 +124,7 @@ def test_profile_accepts_digest_pinned_oci_source():
 
 # ---- rendering -----------------------------------------------------------
 
-def test_render_job_golden_script(project, profile, tmp_path):
+def test_render_job_script(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     script = job.script_path.read_text(encoding="utf-8")
     for line in (
@@ -158,7 +160,9 @@ def test_stack_settings_are_configurable(project, tmp_path):
     prof = RasApptainer.profile_from_dict(data)
     job = RasApptainer.render_job(project, "TEST", 8, prof, tmp_path / "job")
     engine = (job.job_directory / "engine.sh").read_text(encoding="utf-8")
+    script = job.script_path.read_text(encoding="utf-8")
     assert "ulimit" not in engine and "OMP_STACKSIZE=512M" in engine and "KMP_STACKSIZE=1G" in engine
+    assert "STACK_LIMIT_FAILED" not in script
 
 
 def test_canonical_image_defaults_and_pull_command():
@@ -188,6 +192,23 @@ def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_
     assert (job.job_directory / "inputs" / "SHA256SUMS").read_text().count("\n") == 3
     meta = json.loads((job.job_directory / "job.json").read_text())
     assert meta["source_input_sha256"]["TEST.b08"] != meta["staged_input_sha256"]["TEST.b08"]
+
+
+def test_windows_dss_output_path_is_rewritten_only_in_staged_flow(project, profile, tmp_path):
+    source = project / "TEST.b08"
+    original = ("Write DSS File        =        T\r\n"
+                r"C:\Users\mallory\ras_work\TEST.dss" + "\r\n")
+    source.write_bytes(original.encode("utf-8"))
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    staged = (job.job_directory / "inputs" / "TEST.b08").read_text(encoding="utf-8")
+    rewrite = json.loads((job.job_directory / "job.json").read_text())["request"]["dss_output_rewrite"]
+    assert source.read_bytes() == original.encode("utf-8")
+    assert "TEST.dss" in staged and r"C:\Users\mallory" not in staged
+    assert rewrite == {
+        "input": "TEST.b08", "source_path": r"C:\Users\mallory\ras_work\TEST.dss",
+        "staged_path": "TEST.dss",
+    }
+    assert 'DSS_OUTPUT_REWRITE=' in job.script_path.read_text(encoding="utf-8")
 
 
 def test_request_hash_is_deterministic_and_input_bound(project, profile, tmp_path):
@@ -357,7 +378,7 @@ def _receipt(**over):
         "finished_at": "2026-10-03T11:00:00+00:00", "elapsed_seconds": 3600, "num_cores": 4,
         "input_hashes": {"TEST.b08": {"sha256": "c" * 64, "size_bytes": 3}},
         "outputs": {"project/TEST.p08.hdf": {"sha256": "d" * 64, "size_bytes": 9}},
-        "copy_verified": True, "detail": "",
+        "copy_verified": True, "dss_output_rewrite": None, "detail": "",
     }
     rec.update(over)
     return rec
@@ -372,6 +393,14 @@ def test_receipt_schema_accepts_escaped_windows_style_output_name():
         r'project/C:\Users\mallory\a"quoted".dss': {"sha256": "d" * 64, "size_bytes": 9}
     })
     assert validate_receipt(receipt)["outputs"] == receipt["outputs"]
+
+
+def test_receipt_schema_accepts_dss_output_rewrite():
+    rewrite = {
+        "input": "TEST.b08", "source_path": r"C:\Users\mallory\TEST.dss",
+        "staged_path": "TEST.dss",
+    }
+    assert validate_receipt(_receipt(dss_output_rewrite=rewrite))["dss_output_rewrite"] == rewrite
 
 
 @pytest.mark.parametrize("change", [
@@ -411,6 +440,23 @@ def test_receipt_json_escapes_windows_dss_name_and_quotes():
     assert json.loads(completed.stdout) == source
 
 
+@pytest.mark.skipif(BASH is None or os.name == "nt",
+                    reason="backslash filenames require a POSIX filesystem and Bash")
+def test_receipt_hash_for_backslash_name_has_no_gnu_escape_marker():
+    start = JOB_SCRIPT_TEMPLATE.index("sha_of()")
+    end = JOB_SCRIPT_TEMPLATE.index("\n\n", start)
+    function = JOB_SCRIPT_TEMPLATE[start:end]
+    completed = subprocess.run(
+        [BASH, "-c", function + """
+dir=$(mktemp -d)
+file="$dir/a\\b.dss"
+printf payload > "$file"
+sha_of "$file"""],
+        check=True, capture_output=True, text=True,
+    )
+    assert completed.stdout.strip() == hashlib.sha256(b"payload").hexdigest()
+
+
 def test_failed_receipt_cannot_claim_completed():
     with pytest.raises(ValueError):
         validate_receipt(_receipt(status="failed", exit_code=1))
@@ -442,6 +488,43 @@ class FakeTransport(ApptainerTransport):
         shutil.copytree(self.remote_out, local_dir)
 
 
+class LocalBashTransport(ApptainerTransport):
+    """Test transport that executes generated bash argv against a local Bash filesystem."""
+
+    def __init__(self):
+        self.calls, self.executed = [], []
+
+    def run(self, argv, timeout=None):
+        argv = list(argv)
+        self.calls.append(argv)
+        if argv[0] == "sbatch":
+            return CommandResult(0, "4242\n")
+        if argv[:2] == ["bash", "-c"]:
+            command = [BASH, "-c", argv[2]]
+            self.executed.append(argv)
+        else:
+            command = [BASH, "-c", shlex.join(argv)]
+        done = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+        return CommandResult(done.returncode, done.stdout, done.stderr)
+
+    def put_tree(self, local_dir, remote_dir):
+        done = subprocess.run(
+            [BASH, "-c", f"mkdir -p {shlex.quote(remote_dir)} && cp -a "
+             f"{shlex.quote(str(local_dir))}/. {shlex.quote(remote_dir)}/"],
+            capture_output=True, text=True, check=False,
+        )
+        if done.returncode:
+            raise RuntimeError(done.stderr)
+
+    def get_tree(self, remote_dir, local_dir):
+        raise NotImplementedError
+
+
+def _bash_tempdir():
+    return subprocess.run([BASH, "-c", "mktemp -d"], check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+
 def _submitted(project, profile, tmp_path):
     job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
     return RasApptainer.submit(job, transport=FakeTransport(), profile=profile, dry_run=False)
@@ -459,6 +542,61 @@ def test_mock_submit_and_persisted_handle(project, profile, tmp_path):
     assert reloaded.slurm_job_id == "4242" and reloaded.state == "SUBMITTED"
     with pytest.raises(RuntimeError, match="refusing to submit again"):
         RasApptainer.submit(reloaded, transport=t, profile=profile, dry_run=False)
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is unavailable")
+def test_submit_executes_remote_input_check_under_bash(project, profile, tmp_path):
+    root = _bash_tempdir()
+    try:
+        local_profile = replace(profile, scratch_root=f"{root}/remote")
+        job = RasApptainer.render_job(project, "TEST", 8, local_profile, tmp_path / "job")
+        transport = LocalBashTransport()
+        submitted = RasApptainer.submit(job, transport=transport, profile=local_profile, dry_run=False)
+        assert submitted.state == "SUBMITTED"
+        assert any(argv[:2] == ["bash", "-c"] for argv in transport.executed)
+    finally:
+        subprocess.run([BASH, "-c", f"rm -rf -- {shlex.quote(root)}"], check=False)
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is unavailable")
+def test_pre_stage_failure_retains_scheduler_stdout_and_logs_directory(project, profile, tmp_path):
+    root = _bash_tempdir()
+    try:
+        local_profile = replace(
+            profile, scratch_root=f"{root}/remote", node_scratch_root=f"{root}/node",
+            image=f"{root}/image.sif",
+        )
+        job = RasApptainer.render_job(project, "TEST", 8, local_profile, tmp_path / "job")
+        setup = (f"mkdir -p {shlex.quote(job.remote_directory)} && cp -a "
+                 f"{shlex.quote(str(job.job_directory))}/. {shlex.quote(job.remote_directory)}/ && "
+                 f"printf wrong-image > {shlex.quote(local_profile.image)} && "
+                 f"printf scheduler-output > {shlex.quote(job.remote_directory)}/slurm-902.out")
+        subprocess.run([BASH, "-c", setup], check=True, capture_output=True, text=True)
+        completed = subprocess.run(
+            [BASH, str(job.script_path)], env={**os.environ, "SLURM_JOB_ID": "902"},
+            check=False, capture_output=True, text=True,
+        )
+        receipt = json.loads(subprocess.run(
+            [BASH, "-c", f"cat {shlex.quote(job.remote_directory)}/out/902/receipt.json"],
+            check=True, capture_output=True, text=True,
+        ).stdout)
+        assert completed.returncode != 0
+        assert receipt["status"] == "failed" and receipt["reason_code"] == "IMAGE_MISMATCH"
+        assert "logs/slurm-902.out" in receipt["outputs"]
+    finally:
+        subprocess.run([BASH, "-c", f"rm -rf -- {shlex.quote(root)}"], check=False)
+
+
+def test_stale_rendered_handle_never_reconciles_or_resubmits(project, profile, tmp_path):
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    transport = FakeTransport()
+    RasApptainer.submit(job, transport=transport, profile=profile, dry_run=False)
+    before = list(transport.calls)
+    with pytest.raises(RuntimeError, match="SUBMITTED"):
+        RasApptainer.submit(job, transport=transport, profile=profile, dry_run=False)
+    assert transport.calls == before
+    assert sum(call[0] == "sbatch" for call in transport.calls) == 1
+    assert sum(call[:2] == ["bash", "-c"] and "rm -rf" in call[2] for call in transport.calls) == 1
 
 
 def test_ambiguous_sbatch_failure_blocks_resubmission(project, profile, tmp_path):
@@ -496,7 +634,7 @@ def test_status_tolerates_sacct_error_and_cancel_uses_exact_job(project, profile
     assert ["scancel", "4242"] in broken.calls
 
 
-def _fake_remote_output(folder, job, *, tamper=False, status="succeeded"):
+def _fake_remote_output(folder, job, *, tamper=False, status="succeeded", end_stamp="01JAN2020 01:00:00"):
     import h5py
 
     out = folder / "remote_out"
@@ -504,7 +642,7 @@ def _fake_remote_output(folder, job, *, tamper=False, status="succeeded"):
     hdf_path = out / "project" / "TEST.p08.hdf"
     with h5py.File(hdf_path, "w") as hdf:
         result = hdf.require_group("Results/Unsteady/Output")
-        result.create_dataset("Time Date Stamp", data=[b"01JAN2020 01:00:00"])
+        result.create_dataset("Time Date Stamp", data=[end_stamp.encode("ascii")])
         result.create_dataset("Water Surface", data=[[1.0]])
     data = hdf_path.read_bytes()
     if tamper:
@@ -573,6 +711,16 @@ def test_collect_rejects_incomplete_result_hdf(project, profile, tmp_path):
     (t.remote_out / "receipt.json").write_text(json.dumps(receipt))
     result = RasApptainer.collect(job, t, profile)
     assert not result.success and any("result validation failed" in problem for problem in result.problems)
+
+
+def test_collect_accepts_hec_ras_2400_end_time(project, profile, tmp_path):
+    _edit_hdf(project / "TEST.p08.tmp.hdf", lambda h: h["Plan Data/Plan Information"].attrs.__setitem__(
+        "Simulation End Time", "01JAN2020 2400"
+    ))
+    job = _submitted(project, profile, tmp_path)
+    transport = FakeTransport(sacct=SACCT_DONE)
+    transport.remote_out = _fake_remote_output(tmp_path, job, end_stamp="02JAN2020 0000")
+    assert RasApptainer.collect(job, transport, profile).success
 
 
 def test_collect_requires_terminal_and_keeps_failure_evidence(project, profile, tmp_path):
