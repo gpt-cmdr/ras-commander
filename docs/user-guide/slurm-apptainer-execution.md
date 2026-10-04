@@ -102,12 +102,14 @@ after this staged-HDF change.
 
 `RasPreprocess` does not treat the presence of gridded rainfall mapping datasets
 as proof that native preprocessing has finished. It waits for this launch's
-exact `RasProcess.exe CompletePreProcess` writer to exit (or records that none
-was observed after a bounded grace period), then requires an unchanged temporary
-HDF fingerprint for two seconds. After its owned processes have ended and the
-file is quiescent, it performs the full solver-ready check. Missing geometry
-preprocessing, precipitation mappings, or non-finite property-table values
-remain terminal input failures; they are never repaired by the staging path.
+exact `RasProcess.exe CompletePreProcess` writer to be observed and then exit,
+followed by two seconds of unchanged file-stat state. It does not open the HDF
+while the owned engine lifecycle is active. If that exact writer is never
+observed, the bounded run reports a timeout instead of authorizing an early
+stop. After owned processes have ended and the file is quiescent, it performs
+the structural and full solver-ready checks. Missing geometry preprocessing,
+precipitation mappings, or non-finite property-table values remain terminal
+input failures; they are never repaired by the staging path.
 
 ## Usage
 

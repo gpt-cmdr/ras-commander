@@ -346,7 +346,7 @@ class RasPreprocess:
         gridded_stability_state: Dict[str, object] = {}
         if requires_gridded_precipitation:
             alternate_signal_condition = lambda: (
-                RasPreprocess._stable_materialized_gridded_precipitation_ready(
+                RasPreprocess._completepreprocess_handoff_ready(
                     tmp_hdf,
                     b_file,
                     x_file,
@@ -356,8 +356,8 @@ class RasPreprocess:
                 )
             )
             alternate_signal_description = (
-                "fresh preprocessing artifacts with structurally materialized "
-                "gridded precipitation and interpolation mappings"
+                "an observed CompletePreProcess writer that has exited with "
+                "quiescent preprocessing artifacts"
             )
         else:
             alternate_signal_condition = lambda: (
@@ -393,13 +393,7 @@ class RasPreprocess:
         monitor_source = getattr(monitor, "signal_source", None)
         signal_source = (
             (
-                "materialized_gridded_precipitation_"
-                + str(
-                    gridded_stability_state.get(
-                        "writer_observation",
-                        "writer_not_observed_after_grace",
-                    )
-                )
+                "completepreprocess_writer_quiescent"
                 if requires_gridded_precipitation
                 else "owned_process_artifacts"
             )
@@ -423,10 +417,11 @@ class RasPreprocess:
 
         # The BCO marker is written before the owned RasUnsteady process is
         # guaranteed to have started. That distinction matters for gridded
-        # precipitation: Ras.exe materializes Imported Raster Data as Values
-        # and Timestamp before it writes the per-area Cell/Face interpolation
-        # mappings. Killing on the earlier BCO marker can leave a
-        # plausible-looking .tmp.hdf that the solver cannot read.
+        # precipitation: the BCO marker is telemetry, not proof that it is
+        # safe to open or stop around the temporary HDF.  A native
+        # CompletePreProcess writer can continue after it.  Keep polling only
+        # process metadata and filesystem stat state until an observed writer
+        # exits; no HDF inspection occurs in this active-engine loop.
         if (
             signal_detected
             and signal_source == "bco"
@@ -435,7 +430,7 @@ class RasPreprocess:
         ):
             readiness_deadline = start_time + float(max_wait)
             while process.poll() is None and time.time() < readiness_deadline:
-                if RasPreprocess._stable_materialized_gridded_precipitation_ready(
+                if RasPreprocess._completepreprocess_handoff_ready(
                     tmp_hdf,
                     b_file,
                     x_file,
@@ -443,18 +438,10 @@ class RasPreprocess:
                     started_at=start_time,
                     artifact_baseline=artifact_baseline,
                 ):
-                    signal_source = (
-                        "bco_materialized_precipitation_"
-                        + str(
-                            gridded_stability_state.get(
-                                "writer_observation",
-                                "writer_not_observed_after_grace",
-                            )
-                        )
-                    )
+                    signal_source = "bco_completepreprocess_writer_quiescent"
                     logger.info(
-                        "Gridded precipitation readiness confirmed by fresh "
-                        "preprocessing artifacts and gridded interpolation mappings"
+                        "Observed CompletePreProcess writer exited with quiescent "
+                        "preprocessing artifacts; stopping before solver startup"
                     )
                     break
                 time.sleep(0.1)
@@ -469,10 +456,10 @@ class RasPreprocess:
                     signal_source="timeout",
                     timed_out=True,
                     error=(
-                        "HEC-RAS reported the BCO computation-start marker, but "
-                        "fresh preprocessing artifacts with gridded interpolation "
-                        "mappings were not observed before the preprocessing "
-                        f"timeout ({int(max_wait)} seconds)."
+                        "HEC-RAS reported the BCO computation-start marker, but an "
+                        "exact launch-owned CompletePreProcess writer was not "
+                        "observed to exit with quiescent artifacts before the "
+                        f"preprocessing timeout ({int(max_wait)} seconds)."
                     ),
                     elapsed_seconds=time.time() - start_time,
                 )
@@ -1331,14 +1318,12 @@ class RasPreprocess:
     def _validate_materialized_gridded_precipitation(
         tmp_hdf: Path,
     ) -> Tuple[bool, str]:
-        """Check only the active writer's gridded-rainfall structure.
+        """Check a completed temporary HDF's gridded-rainfall structure.
 
         This inexpensive predicate is deliberately *not* a solver-readiness
-        check.  It is safe to call while the Windows engine owns ``tmp_hdf``:
-        it reads paths, shapes, and the small 2D-area name table, never the
-        precipitation, weight, or geometry-table payloads.
-        ``check_solver_ready`` performs the final completed-file numerical
-        checks after this process is stopped.
+        check, but it still opens the HDF.  Call it only after all owned native
+        writers are stopped and the file is quiescent.  ``check_solver_ready``
+        performs the final completed-file numerical checks afterward.
         """
         precipitation = RasPreprocess._GRIDDED_PRECIPITATION_GROUP
         values_path = f"{precipitation}/Values"
@@ -1420,7 +1405,7 @@ class RasPreprocess:
         return True, "ready"
 
     @staticmethod
-    def _stable_materialized_gridded_precipitation_ready(
+    def _completepreprocess_handoff_ready(
         tmp_hdf: Path,
         b_file: Path,
         x_file: Path,
@@ -1431,27 +1416,25 @@ class RasPreprocess:
             Dict[Path, Optional[Tuple[int, int]]]
         ] = None,
     ) -> bool:
-        """Require a quiescent writer and unchanged-HDF interval before stopping.
+        """Return when an observed native writer has ended and artifacts are quiet.
 
-        The engine can create all mapping datasets while an orphaned
-        ``RasProcess.exe CompletePreProcess`` is still writing property tables.
-        A stable size/mtime window is therefore accepted only after this
-        launch's exact writer is absent for the same bounded interval.
+        This is an active-engine predicate.  It intentionally never opens the
+        temporary HDF: HDF5 readers can deny Windows writer access.  The caller
+        must stop its owned process tree and run completed-file structural and
+        solver-readiness validation separately after this method returns true.
         """
-        if not RasPreprocess._materialized_gridded_precipitation_ready(
-            tmp_hdf,
-            b_file,
-            x_file,
-            artifact_baseline=artifact_baseline,
-        ):
-            stability_state.clear()
-            return False
-        now = time.monotonic()
         writers = RasPreprocess._active_complete_preprocess_writers(
             tmp_hdf,
             started_at,
         )
         if writers:
+            if writers == (-1,):
+                logger.warning(
+                    "Could not enumerate CompletePreProcess writers; refusing "
+                    "gridded-preprocessing handoff"
+                )
+                stability_state.clear()
+                return False
             if stability_state.get("active_completepreprocess_pids") != writers:
                 logger.info(
                     "Waiting for exact CompletePreProcess writer(s) before "
@@ -1464,19 +1447,37 @@ class RasPreprocess:
             stability_state.pop("fingerprint", None)
             stability_state.pop("observed_at", None)
             return False
+
+        # The narrow process matcher may not have observed a writer yet.  That
+        # absence is not evidence that no writer can still start, so it cannot
+        # authorize an early stop or any HDF read.
+        if not stability_state.get("completepreprocess_seen"):
+            stability_state.pop("active_completepreprocess_pids", None)
+            stability_state.pop("writer_absent_since", None)
+            stability_state.pop("fingerprint", None)
+            stability_state.pop("observed_at", None)
+            return False
+
+        if not RasPreprocess._preprocessing_artifacts_ready(
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        ):
+            stability_state.pop("writer_absent_since", None)
+            stability_state.pop("fingerprint", None)
+            stability_state.pop("observed_at", None)
+            return False
+
+        now = time.monotonic()
         stability_state.pop("active_completepreprocess_pids", None)
         if "writer_absent_since" not in stability_state:
             stability_state["writer_absent_since"] = now
-            stability_state["writer_observation"] = (
-                "writer_quiescent"
-                if stability_state.get("completepreprocess_seen")
-                else "writer_not_observed_after_grace"
-            )
+            stability_state["writer_observation"] = "writer_quiescent"
             logger.info(
-                "No exact CompletePreProcess writer is active; requiring %.1fs "
-                "writer/HDF quiescence (%s)",
+                "Observed CompletePreProcess writer is no longer active; "
+                "requiring %.1fs writer/stat quiescence",
                 RasPreprocess._GRIDDED_PRECIPITATION_STABLE_SECONDS,
-                stability_state["writer_observation"],
             )
             return False
         writer_absent_since = stability_state["writer_absent_since"]
@@ -1557,7 +1558,12 @@ class RasPreprocess:
             Dict[Path, Optional[Tuple[int, int]]]
         ] = None,
     ) -> bool:
-        """Return whether fresh artifacts contain solver-ready gridded rain."""
+        """Inspect a completed, writer-free HDF for gridded-rain structure.
+
+        This is not safe while an owned HEC-RAS process may be writing the
+        temporary HDF.  Active preprocessing uses
+        :meth:`_completepreprocess_handoff_ready` instead.
+        """
         if not RasPreprocess._preprocessing_artifacts_ready(
             tmp_hdf,
             b_file,
@@ -1583,7 +1589,13 @@ class RasPreprocess:
         ] = None,
         require_materialized_gridded_precipitation: bool = False,
     ) -> bool:
-        """Return whether owned preprocessing artifacts are solver-ready."""
+        """Return whether owned preprocessing reached a safe handoff point.
+
+        With gridded precipitation this method deliberately does not inspect
+        the HDF while the owned process may still write it.  It therefore
+        refuses the materialized-rain option; callers must use the dedicated
+        CompletePreProcess lifecycle handoff and validate only after cleanup.
+        """
         if not RasPreprocess._unsteady_compute_started(
             root_pid,
             tmp_hdf,
@@ -1594,12 +1606,7 @@ class RasPreprocess:
             return False
         if not require_materialized_gridded_precipitation:
             return True
-        materialized, _detail = (
-            RasPreprocess._validate_materialized_gridded_precipitation(
-                tmp_hdf
-            )
-        )
-        return materialized
+        return False
 
     @staticmethod
     def _unsteady_compute_started(
