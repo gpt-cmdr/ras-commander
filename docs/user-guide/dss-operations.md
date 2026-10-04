@@ -49,7 +49,7 @@ paths = RasDss.write_precip_grid_arrays(
     "rainfall.dss", "/UTM15/BASIN/PRECIP///DESIGN/", depths,
     pd.date_range("2020-01-01", periods=3, freq="6min"),
     transform=Affine(100, 0, 300000, 0, -100, 3300000),
-    crs="EPSG:26915", units="mm",
+    crs="EPSG:26915", units="mm", grid_reference_origin=(0, 0),
 )
 ```
 
@@ -78,6 +78,25 @@ precipitation and discharge exactly with both Monolith grids and native grids
 using the required reference origin. The locally indexed native variant
 completed computation but supplied zero rainfall. Check computed precipitation
 as well as completion status when changing a grid source.
+
+The HEC-RAS 6.6 Davis check also required `(0, 0)` for its aligned native SHG
+grid; local indexes otherwise placed the raster at the wrong location. With
+the reference restored, NetCDF, Monolith DSS and native DSS all computed and
+materialized the intended 110-cell, six-interval precipitation field. This
+qualifies those versioned configurations, not every projection or model setup.
+
+Before enabling global gridded rainfall, explicitly review and remove any
+superseded legacy `Precipitation Hydrograph` boundary in a staged project.
+HEC-RAS 6.6 rejected the tested combination before preprocessing. The gridded
+setters conservatively reject that combination across versions before mutation;
+they never delete a boundary automatically. Use `inspect_boundary_blocks()` and
+`delete_boundary()` to select and remove the intended block.
+
+After native preprocessing, `HdfPlan.get_plan_met_precip_values()` reads the
+solver's raw precipitation Values and Timestamp arrays with their attributes.
+It rejects an imported-raster sidecar without materialized solver datasets.
+The reader preserves encoded timestamps and numerical values; use method and
+unit metadata when comparing interval depths with cumulative import series.
 
 The writer creates DSS7 specified-time grids, closes and checks the temporary
 file, then publishes it. Existing files are protected by default;
