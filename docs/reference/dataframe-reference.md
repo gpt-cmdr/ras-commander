@@ -142,6 +142,11 @@ parsed from the plan text are strings unless noted:
 | `breach_active_count` | nullable Int64 | number of stored definitions whose local `RasBreach` `is_active` flag is true; not evidence that a breach initiated during computation |
 | `Computation Interval` | str | computation time step (`Computation Interval=`) |
 | `Mapping Interval` | str | RAS Mapper output interval (`Mapping Interval=`) |
+| `Output Interval` | str | hydrograph output interval (`Output Interval=`) |
+| `Instantaneous Interval` | str | detailed output interval (`Instantaneous Interval=`) |
+| `Write Detailed` | str | detailed-log flag (`Write Detailed=`) |
+| `HDF Compression` / `HDF Chunk Size` / `HDF Spatial Parts` / `HDF Use Max Rows` / `HDF Fixed Rows` | str | HDF5 compression and chunking keys when present in the plan; see [Output Intervals and HDF Compression](../user-guide/plan-output-intervals-hdf-compression.md) |
+| `HDF Write Warmup` / `HDF Write Time Slices` / `HDF Flush` | str | HDF5 write toggles (`-1` on, `0` off) when present |
 | `Simulation Date` | str | simulation date/time window (`Simulation Date=`) |
 | `Run HTab` / `Run UNet` / `Run PostProcess` / `Run Sediment` / `Run WQNet` | str | run-flag toggles parsed from the plan |
 | `UNET D1 Cores` / `UNET D2 Cores` / `PS Cores` | int / None | core counts; cast to `int` when present, else `None` |
