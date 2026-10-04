@@ -6,6 +6,7 @@ The caller owns file access, size limits, and trust boundaries.
 """
 
 from typing import Iterable
+from .Decorators import log_call
 
 
 class RasText:
@@ -91,6 +92,7 @@ class RasText:
                 "warnings": ["Description block has no end marker."] if in_description else []}
 
     @staticmethod
+    @log_call
     def read_project_metadata(content: str | bytes,
                               fields: Iterable[str] | None = None) -> dict:
         """Read project title, component references, current plan and unit marker.
@@ -102,10 +104,15 @@ class RasText:
         Returns:
             Encoding, selected fields as lists of source strings, and absent fields.
             Component references are opaque strings, never resolved as paths.
+
+        Raises:
+            TypeError: If content is neither text nor bytes.
+            ValueError: If content contains NUL or a field is unsupported.
         """
         return RasText._metadata(content, fields, RasText.PROJECT_FIELDS, True)
 
     @staticmethod
+    @log_call
     def read_plan_metadata(content: str | bytes,
                            fields: Iterable[str] | None = None) -> dict:
         """Read selected scalar plan settings and optional narrative description.
@@ -117,5 +124,9 @@ class RasText:
         Returns:
             Encoding, selected fields as lists of source strings, and absent fields.
             Time strings retain the file's basis; timezone is not inferred.
+
+        Raises:
+            TypeError: If content is neither text nor bytes.
+            ValueError: If content contains NUL or a field is unsupported.
         """
         return RasText._metadata(content, fields, RasText.PLAN_FIELDS, False)
