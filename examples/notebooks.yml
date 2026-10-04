@@ -445,9 +445,6 @@ notebooks:
   functions_used:
   - RasExamples.extract_project
   - ras.prj_file
-  functions_used_extraction_warnings:
-  - 'cell 8: Python 3.12 AST parsing failed (invalid syntax, line 1); regex fallback may include comments/strings
-    and needs review'
   hec_refs: []
   learning_paths: []
   excluded: false
