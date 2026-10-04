@@ -199,6 +199,7 @@ nav:
     - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
     - Container Execution: user-guide/container-execution.md
+    - Slurm + Apptainer Execution: user-guide/slurm-apptainer-execution.md
     - Container HPC Design: user-guide/container-hpc-design.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md

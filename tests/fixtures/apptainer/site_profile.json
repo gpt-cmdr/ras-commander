@@ -1,0 +1,17 @@
+{
+  "schema": "ras-commander-apptainer-profile/v1",
+  "site_name": "testsite",
+  "host": "login.example.org",
+  "ssh_user": "rasuser",
+  "scratch_root": "/shared/jobs/ras",
+  "image": "/shared/images/ras-hecras-6.6-test.sif",
+  "apptainer_image_sha256": "64e1d120207c6c5ea132748a1e5276ef89c474a8be8abd373d1b4ce68320f3b0",
+  "container_identity": "sif:sha256:64e1d120207c6c5ea132748a1e5276ef89c474a8be8abd373d1b4ce68320f3b0",
+  "num_cores": 4,
+  "slurm_memory": "14336M",
+  "time_limit": "2-00:00:00",
+  "account": "ras",
+  "partition": "compute",
+  "qos": "normal",
+  "nodelist": "node01"
+}

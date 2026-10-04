@@ -265,8 +265,10 @@ container. Resume records remain available for a later invocation.
 
 For TACC, use an external scheduler to distribute independent runs. The
 [implementation comparison and TACC design notes](container-hpc-design.md)
-describe the proposed Apptainer/Slurm integration and the staging changes
-needed in ras2fim. That backend has not yet been implemented or qualified.
+describe the Apptainer/Slurm staging design and ras2fim changes. The separate
+[`RasApptainer`](slurm-apptainer-execution.md) API now renders, submits, and
+collects one native-Linux unsteady Slurm allocation; it remains offline-tested
+only and requires site/image qualification.
 
 ## What runs inside each container
 

@@ -81,6 +81,8 @@ docker = init_ras_worker(
 are exported placeholders, not implemented worker backends. Installing their
 extras does not implement execution. The separate `RasSlurm` portable-request
 adapter below is implemented; do not confuse it with the `SlurmWorker` stub.
+`RasApptainer` is a separate static API for one native-Linux unsteady solve per
+Slurm allocation; see [Slurm + Apptainer Execution](../user-guide/slurm-apptainer-execution.md).
 
 ## Execution
 
@@ -454,6 +456,23 @@ pip install ras-commander[remote-all]
         - status
         - submit
         - submit_batch
+
+### RasApptainer source reference
+
+::: ras_commander.RasApptainer.RasApptainer
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - cancel
+        - check_solver_ready
+        - collect
+        - load_profile
+        - pull_command
+        - render_job
+        - status
+        - submit
 
 ### SlurmSiteConfig source reference
 
