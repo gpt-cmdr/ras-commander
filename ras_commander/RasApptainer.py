@@ -841,7 +841,10 @@ def _gridded_dss_dependency(source_tmp_hdf: Path) -> Optional[dict[str, Any]]:
         capacity = attr_dtype.itemsize if attr_dtype.kind == "S" else None
 
     source_sha256 = sha256_file(source_dss)
-    max_digest_chars = 20 if capacity is None else min(20, capacity - 5)
+    # h5py's fixed-string attribute ``modify`` path reserves one NUL byte.
+    # Retain that byte so exact staged-name readback works for native S25
+    # attributes while keeping a collision-resistant digest-derived basename.
+    max_digest_chars = 20 if capacity is None else min(20, capacity - 6)
     if max_digest_chars < 12:
         raise ValueError(
             "DSS Filename attribute cannot hold a collision-resistant staged name"

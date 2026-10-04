@@ -257,13 +257,56 @@ def test_render_stages_external_gridded_dss_and_rebinds_only_staged_hdf(
         assert hdf[PRECIP]["Timestamp"][...].tolist() == source_timestamps.tolist()
     with h5py.File(staged_hdf, "r") as hdf:
         precipitation = hdf[PRECIP]
+        filename_dtype = precipitation.attrs.get_id("DSS Filename").dtype
         filename = precipitation.attrs["DSS Filename"]
         filename = filename.decode() if isinstance(filename, bytes) else str(filename)
         assert filename == dependency["staged_name"]
+        assert filename.endswith(".dss")
+        assert filename_dtype.kind == "S"
+        # Fixed S25 attributes reserve a terminal byte in h5py's modify path.
+        assert len(filename.encode("utf-8")) == filename_dtype.itemsize - 1
         assert precipitation.attrs["DSS Pathname"] == source_pathname
         assert precipitation.attrs["Ratio"] == source_ratio
         assert precipitation["Values"][...].tolist() == source_values.tolist()
         assert precipitation["Timestamp"][...].tolist() == source_timestamps.tolist()
+
+
+def test_render_rebinds_native_nullterm_s25_dss_filename(project, profile, tmp_path):
+    """Exercise the fixed-width string storage used by native HEC-RAS HDFs."""
+    import h5py
+    import numpy as np
+
+    _configure_gridded_dss(project)
+    source_hdf = project / "TEST.p08.tmp.hdf"
+    with h5py.File(source_hdf, "r+") as hdf:
+        precipitation = hdf[PRECIP]
+        del precipitation.attrs["DSS Filename"]
+        string_type = h5py.h5t.C_S1.copy()
+        string_type.set_size(25)
+        string_type.set_cset(h5py.h5t.CSET_ASCII)
+        string_type.set_strpad(h5py.h5t.STR_NULLTERM)
+        scalar = h5py.h5s.create(h5py.h5s.SCALAR)
+        attribute = h5py.h5a.create(
+            precipitation.id,
+            b"DSS Filename",
+            string_type,
+            scalar,
+        )
+        attribute.write(np.array(b"..\\rainfall.dss", dtype="S25"))
+
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    dependency = json.loads((job.job_directory / "job.json").read_text())["request"][
+        "gridded_dss_input"
+    ]
+    with h5py.File(job.job_directory / "inputs" / "TEST.p08.tmp.hdf", "r") as hdf:
+        precipitation = hdf[PRECIP]
+        filename = precipitation.attrs["DSS Filename"]
+        filename = filename.decode() if isinstance(filename, bytes) else str(filename)
+        string_type = precipitation.attrs.get_id("DSS Filename").get_type()
+        assert string_type.get_strpad() == h5py.h5t.STR_NULLTERM
+        assert filename == dependency["staged_name"]
+        assert filename.endswith(".dss")
+        assert len(filename.encode("utf-8")) == 24
 
 
 @pytest.mark.parametrize(
