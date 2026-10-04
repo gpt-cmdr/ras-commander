@@ -26,6 +26,12 @@ The fuller experience comes from public Python APIs with the dependencies and au
 
 Before claiming “Just Ask” activation on a host, demonstrate discovery, direct/indirect invocation, version discovery, relevant domain routing, bounded delegation, Python handoff, missing-tool behavior, and scoped output on that host. Packaging alone is not an activation demonstration. Installed/imported skills are snapshots; updates require regeneration and host refresh or rescan/republication as applicable. See [official skill guidance](https://developers.openai.com/plugins/build/skills).
 
+## Current qualification
+
+The generated root manifest and selected entry/GIS skills passed local Codex CLI 0.160.0 marketplace installation and native catalog intake on October 4, 2026. A fresh read-only session selected cached skill paths without supplied filesystem paths. Current Claude Code 2.1.287 static component validation also passed; authenticated Claude invocation was not available on the checked Linux profile.
+
+The Codex child probe selected explicit custom roles but did not expose their configured project MCP servers. This client has not qualified child-only MCP integration. Keep MCP wiring outside this plugin and verify the intended client before enabling it. These checks establish guidance discovery and routing, not hydraulic execution, GIS export, runtime installation, or universal invocation.
+
 ## Release maintenance
 
 `release-watch.json` lists distributions whose current stable PyPI metadata informs maintenance. `refresh_release_snapshot.py` records released versions, dependency metadata, archive identity/hashes, and missing/unavailable sources. It never installs packages, edits dependency pins, widens compatibility bounds, accepts HEC terms, or publishes anything. Metadata discovery is not evidence of tested compatibility.

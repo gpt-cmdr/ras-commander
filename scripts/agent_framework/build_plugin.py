@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit, unquote
 
-from sync_codex_skill_bridge import is_shared_skill, parse_frontmatter
+from sync_codex_skill_bridge import is_shared_skill, parse_frontmatter, validate_codex_skill_metadata
 
 LINK = re.compile(r'(!?\[[^\]\n]*\]\(\s*)(<[^>\n]+>|[^\s)]+)([^)\n]*\))')
 REFERENCE = re.compile(r'(^ {0,3}\[[^\]\n]+\]:\s*)(<[^>\n]+>|[^\s]+)([^\n]*)', re.MULTILINE)
@@ -55,12 +55,15 @@ def build(repo: Path, output: Path) -> None:
     sources: dict[Path, Path] = {}
     selected: dict[str, Path] = {}
     for name in config['skills']:
-        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', name):
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?', name) or '--' in name:
             raise ValueError(f'Invalid portable skill name: {name}')
         directory = canonical / 'skills' / name
         skill = confined(directory / 'SKILL.md', canonical)
         if not is_shared_skill(directory):
             raise ValueError(f'Skill is not approved for shared distribution: {name}')
+        metadata_errors = validate_codex_skill_metadata(directory)
+        if metadata_errors:
+            raise ValueError('; '.join(metadata_errors))
         if parse_frontmatter(skill).get('name') != name:
             raise ValueError(f'Skill name differs from selected directory: {name}')
         selected[name] = directory.resolve()
@@ -132,7 +135,9 @@ def build(repo: Path, output: Path) -> None:
                     front = []
                     for line in lines[1:closing]:
                         if line.split(':', 1)[0] in BRIDGE_FIELDS:
-                            custom.append('  ' + line)
+                            key, value = line.split(':', 1)
+                            # Agent Skills metadata is a string-to-string map.
+                            custom.append(f'  {key}: {json.dumps(value.strip().strip(chr(34)).strip(chr(39)))}\n')
                         else:
                             front.append(line)
                     if custom:
