@@ -9,6 +9,7 @@ from various sources for use in HEC-RAS rain-on-grid 2D models:
 - Atlas14Grid - Spatially distributed PFE grids with remote access (HTTP range requests)
 - Atlas14Variance - Spatial variance analysis for uniform vs. distributed rainfall decisions
 - AbmHyetographGrid - Per-pixel Alternating Block Method hyetograph grids (NetCDF for HEC-RAS rain-on-grid)
+- Atlas14HyetographGrid - One duration-total depth raster scaled by a shared NOAA temporal curve
 - FrequencyStormDdf - Balanced depth-duration storms with optional bounded TP-40 reduction
 - Tp40Reduction - Explicit duration-dependent point-to-area factors
 - VortexCli - HEC-Vortex CLI wrapper for converting GRIB2/NetCDF to HEC-DSS
@@ -221,6 +222,7 @@ from .StormGenerator import StormGenerator
 from .FrequencyStormDdf import FrequencyStormDdf
 from .Tp40Reduction import Tp40Reduction
 from .Atlas14Grid import Atlas14Grid
+from .Atlas14HyetographGrid import Atlas14HyetographGrid
 from .Atlas14Variance import Atlas14Variance
 from .AbmHyetographGrid import AbmHyetographGrid
 from .VortexCli import VortexCli
@@ -278,6 +280,7 @@ __all__ = [
     'PrecipitationNetcdfResult',
     'RasPrecipGrid',
     'Atlas14Grid',                 # Remote access to NOAA Atlas 14 CONUS grids
+    'Atlas14HyetographGrid',       # Single-duration depths times an explicitly selected shared NOAA curve
     'Atlas14Variance',             # Spatial variance analysis for precipitation
     'AbmHyetographGrid',           # Per-pixel ABM hyetograph grid generation (NetCDF for HEC-RAS rain-on-grid)
     'Atlas14Storm',                # HMS-equivalent Atlas 14 hyetograph generation

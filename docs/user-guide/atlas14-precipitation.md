@@ -1,6 +1,6 @@
 # Atlas 14 Precipitation
 
-NOAA Atlas 14 provides official precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides five single-location hyetograph generation methods and two spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
+NOAA Atlas 14 provides precipitation frequency estimates for design storm modeling in the United States. The ras-commander precipitation subpackage provides five single-location hyetograph methods, two explicitly named gridded storm methods, and spatial analysis tools for integrating Atlas 14 data into HEC-RAS workflows.
 
 ## Overview
 
@@ -16,6 +16,13 @@ Atlas 14 is the authoritative source for precipitation frequency estimates, used
 Verify Atlas 14 depths at: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
 ## Quick Start
+
+**Choose the temporal method explicitly.** The alternating-block example below
+builds a synthetic pattern from multiple durations. For a single duration's
+spatial depth grid multiplied by an official NOAA temporal curve, use
+`Atlas14HyetographGrid` as described in [Gridded design-storm methods](#gridded-design-storm-methods).
+These methods answer different design questions; an Atlas 14 depth does not
+uniquely specify a hyetograph or establish the resulting flood's AEP.
 
 Generate a 24-hour, 1% AEP (100-year) design storm using the Alternating Block Method:
 
@@ -275,6 +282,129 @@ if SCS_TYPE_AVAILABLE:
 **SCS type options**: `'I'`, `'IA'`, `'II'`, `'III'` (case-insensitive)
 
 **Constraint**: 24-hour duration only (HMS constraint, matches TR-55 specification)
+
+## Gridded design-storm methods
+
+| API | Spatial input | Temporal construction | What varies between cells? |
+|---|---|---|---|
+| `Atlas14HyetographGrid` | One duration-total depth raster | One explicitly selected NOAA cumulative percentage curve, differenced into interval fractions | Depth; normalized temporal fractions are shared |
+| `AbmHyetographGrid` | Multiple duration-depth rasters | Log-log interpolation, differences, descending block sort and alternating placement | Depth and potentially normalized temporal fractions |
+
+### Shared NOAA temporal distribution
+
+Install the optional dependencies with
+`pip install "ras-commander[precip]" "hms-commander>=0.3.1"`.
+
+`Atlas14HyetographGrid` implements `rainfall[t, y, x] = depth[y, x] * fraction[t]`.
+It obtains the dimensionless curve from the existing `Atlas14Storm` API and
+applies it uniformly in time to all valid cells. This is a spatially varying
+depth field with a shared temporal distribution, not uniform rainfall depth
+and not a per-cell alternating-block calculation.
+
+The caller must select temporal `state`, `region`, `quartile`, and
+`probability_column`. Region numbers are NOAA temporal-distribution regions,
+not political districts. The `50%` column is a temporal-curve exceedance
+selection; it is neither a 50% peak-position request nor the storm AEP.
+The selected temporal duration must match the depth raster duration.
+Supported temporal durations are 6, 12, 24 and 96 hours; a 48-hour curve is
+not silently substituted or stretched from another duration.
+
+For an original NOAA ASCII raster, read its `.xml` metadata and `.prj` first:
+
+```python
+from ras_commander.precip import Atlas14HyetographGrid
+
+# The official Texas tx100yr24ha product is 100-year/24-hour PDS,
+# NAD83 geographic coordinates, with integer values in thousandths of inches.
+output = Atlas14HyetographGrid.generate_from_asc_file(
+    asc_path="tx100yr24ha.asc",
+    scale_factor=0.001,
+    source_crs="EPSG:4269",
+    bounds=(-94.8, 29.4, -94.3, 30.0),
+    ari_years=100,
+    storm_duration_hours=24,
+    timestep_minutes=30,
+    state="tx",
+    region=3,
+    quartile="All Cases",
+    probability_column="50%",
+    depth_frequency_basis="PDS",
+    output_netcdf="atlas14_shared_pattern.nc",
+)
+```
+
+Obtain that source from [NOAA's Texas raster archive](https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx100yr24ha.zip).
+The corresponding [official temporal CSV](https://hdsc.nws.noaa.gov/pub/hdsc/data/tx/tx_3_24h_temporal.csv)
+contains the five supported tables. The example's selections are explicit
+example values, not automatic geographic recommendations.
+
+`generate(bounds=..., ...)` downloads one requested duration through
+`Atlas14Grid`; `generate_from_depth_grid(depth_grid=..., x=..., y=...,
+source_crs=..., ...)` accepts an already prepared raster in inches.
+Neither entry point guesses a temporal region. The raw-grid route requires
+the caller to identify the input depth duration/frequency correctly.
+
+The NetCDF is a **design-storm data product**, with interval depth, cumulative
+depth, total depth, temporal fractions, CRS and interval bounds. It preserves
+source NoData and cell-center registration. Source raster cropping does not
+reproject or resample the raster. Missing cells are never converted to dry
+cells, and the API adds no artificial missing first interval. Consult the
+interval bounds rather than interpreting a timestamp as an instantaneous rate.
+CF time coordinates use the synthetic origin `1970-01-01 00:00:00` solely to
+encode elapsed time. It is **not an observed event date**. Rebase those
+intervals explicitly to the intended model start when preparing forcing;
+`xr.open_dataset(path, decode_times=False)` exposes the numeric elapsed hours.
+Writing this file does not by itself qualify a HEC-RAS or HEC-HMS import route.
+Consumer conversion must explicitly handle projection, units, timestamps and
+NoData; use the established NetCDF/DSS APIs and verify receiving-engine values.
+
+The API applies **no areal reduction and no AMS/PDS conversion**. Recorded
+frequency-basis metadata describes the supplied depths; it does not convert
+them. This is not a recommendation to omit areal reduction in a study.
+If depths were adjusted upstream, retain that provenance and do not reduce
+them a second time. TP-40's bounded domain is not extended by the grid method.
+
+### Alternating-block and balanced frequency storms
+
+Alternating-block construction from multiple duration depths is established,
+not a newly invented temporal method. The [HEC-HMS Frequency Storm technical
+reference](https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/meteorology/precipitation/frequency-storm)
+describes nested or balanced storms, log-log depth-duration interpolation,
+incremental blocks and alternating arrangement. Such storms target multiple
+durations at a common precipitation frequency; that does not imply that an
+observed storm has the same exceedance probability at every duration.
+
+`AbmHyetographGrid` keeps its existing method and defaults. Its name already
+selects alternating-block construction. It is not silently redirected to a
+NOAA empirical temporal curve. Its implementation sorts interval blocks,
+places them left-first around the specified peak, clamps negative increments,
+and rescales to retain the total. Its automatic subhourly inputs are estimated
+from **centroid DDF ratios**; they are not independent subhourly rasters for
+every cell. These choices are disclosed approximations, and total conservation
+does not prove all moving-window duration maxima or full HMS equivalence.
+Use `FrequencyStormDdf` for its separately documented bounded scalar workflow.
+
+HEC also documents the [precipitation-frequency grid plus user-specified
+temporal pattern workflow](https://www.hec.usace.army.mil/confluence/hmsdocs/hmsguides/meteorologic-methods-in-hms/flow-frequency-simulation-options-in-hec-hms/applying-depth-area-analysis-to-precipitation-frequency-grids)
+and [application of NOAA temporal patterns](https://www.hec.usace.army.mil/confluence/hmsdocs/hmsguides/meteorologic-methods-in-hms/flow-frequency-simulation-options-in-hec-hms/applying-noaa-atlas-14-temporal-patterns).
+Choose the shared-pattern API when that is the specified design method; choose
+ABM when a synthetic multi-duration construction is required. Neither is
+universally preferable, and neither establishes spatial storm coherence merely
+by applying point-frequency depths simultaneously across a domain. Select
+duration, temporal pattern, storm area and reduction assumptions for the
+evaluation location and governing study criteria.
+
+### Method provenance and compatibility
+
+New shared-pattern output identifies its temporal/spatial method, curve
+selection, units, CRS and input frequency basis. Its source metadata records
+the ASCII filename, scale and crop or the remote grid URL and selected product.
+Caller-supplied arrays can carry upstream provenance via `source_metadata`.
+ABM output records its
+interpolation, block placement, negative-increment treatment and absence of
+automatic reduction/conversion. There is no common method selector with a
+silent default. Existing ABM calls retain their numerical behavior; selecting
+the new class is an explicit change of methodology.
 
 ## Atlas 14 Grid and Spatial Variance
 
@@ -602,4 +732,6 @@ Complete workflow demonstrations:
 - `ras_commander/precip/CLAUDE.md` - Complete method comparison and validation details
 - NOAA PFDS: https://hdsc.nws.noaa.gov/pfds/pfds_map_cont.html
 
+### Existing-model shared-pattern notebook
 
+[Notebook 731](../notebooks/731_atlas14_shared_temporal_existing_model.md) applies an original NOAA depth raster and one explicitly selected temporal curve to an existing model footprint. It checks interval depths and masks, serializes Float32 intervals before explicit bilinear SHG conversion, and optionally attaches the resulting DSS to a staged model copy without running a solver.

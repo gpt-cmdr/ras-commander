@@ -3554,6 +3554,33 @@ notebooks:
   excluded: false
   code_cells: 14
   executed_cells: 0
+- id: 731_atlas14_shared_temporal_existing_model
+  filename: 731_atlas14_shared_temporal_existing_model.ipynb
+  title: Atlas 14 Shared Temporal Pattern for an Existing Model
+  series: 700
+  series_name: Sensitivity & Precipitation
+  summary: Apply a shared NOAA temporal curve to an existing model footprint, validate native rainfall
+    NetCDF, export Float32 intervals with explicit bilinear SHG conversion, and optionally configure a
+    staged model copy without computing.
+  tags:
+  - precipitation
+  difficulty: intermediate
+  est_runtime: null
+  data_project: null
+  functions_used:
+  - HdfMesh.get_mesh_areas
+  - RasDss.get_catalog
+  - RasDss.read_grid
+  - RasPlan.clone_plan
+  - RasPlan.clone_unsteady
+  - RasUnsteady.configure_gridded_dss_precipitation
+  - RasUnsteady.get_met_precipitation_config
+  - ras.plan_df
+  hec_refs: []
+  learning_paths: []
+  excluded: false
+  code_cells: 9
+  executed_cells: 0
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb
   title: Quality Assurance with RasCheck
