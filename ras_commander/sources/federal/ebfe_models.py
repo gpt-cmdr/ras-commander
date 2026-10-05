@@ -96,6 +96,13 @@ class RasEbfeModels:
         "https://ebfedata.s3.amazonaws.com/12070205_SanGabriel/"
         "12070205_Models.zip"
     )
+    _EAST_GALVESTON_SOURCE_URL = (
+        "https://ebfedata.s3.amazonaws.com/12040202_EastGalvestonBay/"
+        "12040202_Models.zip"
+    )
+    _EAST_GALVESTON_SOURCE_SIZE = 10_715_815_166
+    _EAST_GALVESTON_SOURCE_ETAG = "9fbf42de8cc3dced4efef71c16afcf06-624"
+    _EAST_GALVESTON_RAS_SUBMITTAL_SIZE = 10_715_541_993
     _AUSTIN_OYSTER_SOURCE_URL = (
         "https://ebfedata.s3.amazonaws.com/12040205_AustinOyster/"
         "12040205_Models.zip"
@@ -333,6 +340,10 @@ class RasEbfeModels:
         "north-galveston": "north-galveston-bay",
         "north-galveston-bay": "north-galveston-bay",
         "12040203": "north-galveston-bay",
+        "east-galveston": "east-galveston-bay",
+        "east-galveston-bay": "east-galveston-bay",
+        "eastgalvestonbay": "east-galveston-bay",
+        "12040202": "east-galveston-bay",
         "austin-oyster": "austin-oyster",
         "austinoyster": "austin-oyster",
         "12040205": "austin-oyster",
@@ -400,6 +411,49 @@ class RasEbfeModels:
             "output_name": "SpringCreek_12040102",
             "ras_version": "5.0.7",
             "notes": "Single 2D unsteady model with nested final archive.",
+        },
+        "east-galveston-bay": {
+            "study_area": "EastGalvestonBay_12040202",
+            "huc8": "12040202",
+            "organizer": "organize_east_galveston_bay",
+            "download_subdir": "12040202_EastGalvestonBay",
+            "output_name": "EastGalvestonBay_12040202",
+            # The public outer inventory establishes only a 2D delivery. The
+            # nested RAS archive has not been inspected for its engine version,
+            # plan IDs, or hydraulic readiness.
+            "ras_version": "unverified",
+            "model_type": ModelType.UNKNOWN,
+            "source_url": _EAST_GALVESTON_SOURCE_URL,
+            "file_size_bytes": _EAST_GALVESTON_SOURCE_SIZE,
+            "notes": (
+                "Public FEMA eBFE/BLE 2D delivery with an HEC-HMS project and "
+                "a nested RAS_Submittal.zip. The delivered HEC-RAS version, "
+                "plan/geometry identifiers, flow regime, and runtime readiness "
+                "remain unverified until the nested submission is inspected."
+            ),
+            "extra": {
+                "source_program": "fema_ebfe",
+                "delivery_type": "standard_zip",
+                "public_delivery_model_type": "2D",
+                "model_type_evidence": "public eBFE outer inventory",
+                "hydrologic_project": "Hydrology/HMS/EastGalvestonBay",
+                "nested_ras_submission": "Hydraulic_Models/RAS_Submittal.zip",
+                "nested_ras_submission_size_bytes": _EAST_GALVESTON_RAS_SUBMITTAL_SIZE,
+                "validation_status": "unverified",
+                "validation_level": "not_started",
+                "hec_ras_executed": False,
+                "native_hydraulic_readiness": False,
+                "source_assets": [{
+                    "role": "models",
+                    "name": "12040202_Models.zip",
+                    "url": _EAST_GALVESTON_SOURCE_URL,
+                    "size_bytes": _EAST_GALVESTON_SOURCE_SIZE,
+                    "etag": _EAST_GALVESTON_SOURCE_ETAG,
+                    # The specialized organizer retains the outer archive and
+                    # extracts its nested RAS submission only when requested.
+                    "extract": False,
+                }],
+            },
         },
         "north-galveston-bay": {
             "study_area": "NorthGalvestonBay_12040203",
@@ -1870,6 +1924,192 @@ class RasEbfeModels:
         RasEbfeModels._emit(f"\nSee {output_folder / 'agent' / 'model_log.md'} for details")
 
         return output_folder
+
+    @staticmethod
+    @log_call
+    def organize_east_galveston_bay(
+        downloaded_folder: Optional[Union[str, Path]] = None,
+        output_folder: Optional[Union[str, Path]] = None,
+        extract_ras_nested: bool = False,
+        include_results: bool = False,
+        validate_dss: bool = True,
+    ) -> Path:
+        """Organize the public East Galveston Bay eBFE/BLE delivery.
+
+        The public outer archive contains an HEC-HMS project and a large nested
+        ``RAS_Submittal.zip``.  The outer inventory establishes a 2D delivery,
+        but it does not establish an HEC-RAS version, plan identifiers, or
+        runtime readiness.  This organizer copies the HMS and documentation
+        assets immediately. It extracts only the Input, Terrain, and LandCover
+        archives from the nested RAS submission when ``extract_ras_nested=True``.
+        The delivered Output archive remains unexpanded unless
+        ``include_results=True``. Organization does not execute HEC-RAS.
+        """
+        RasEbfeModels._ensure_console_output_safe()
+        source = Path(
+            downloaded_folder or "./ebfe_downloads/12040202_EastGalvestonBay"
+        ).resolve()
+        output = Path(
+            output_folder or "./ebfe_organized/EastGalvestonBay_12040202"
+        ).resolve()
+        folders = {
+            "hms": output / "HMS Model",
+            "ras": output / "RAS Model",
+            "spatial": output / "Spatial Data",
+            "docs": output / "Documentation",
+            "agent": output / "agent",
+        }
+        for folder in folders.values():
+            folder.mkdir(parents=True, exist_ok=True)
+
+        archive = source if source.suffix.casefold() == ".zip" else source / "12040202_Models.zip"
+        if archive.is_file():
+            asset = RasEbfeModels._MODEL_REGISTRY["east-galveston-bay"]["extra"]["source_assets"][0]
+            source_identity = RasEbfeModels._validate_source_asset_identity(
+                archive,
+                expected_size_bytes=asset["size_bytes"],
+                expected_etag=asset["etag"],
+            )
+            extracted_root = archive.parent / f"{archive.stem}_extracted"
+            # `_extract_zip_verified` audits any existing tree against this
+            # exact ZIP before reusing it; a present Hydraulic_Models folder is
+            # not evidence of a complete or source-matching extraction.
+            RasEbfeModels._extract_zip_verified(
+                archive, extracted_root, "East Galveston Bay source archive"
+            )
+            source_root = extracted_root
+        elif (source / "Hydraulic_Models").is_dir():
+            # A pre-extracted legacy tree is usable for organization, but its
+            # provenance cannot substitute for the verified public ZIP.
+            source_root = source
+            source_identity = {
+                "path": str(source_root),
+                "mode": "pre_extracted_tree",
+                "archive_identity_verified": False,
+            }
+        else:
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive = RasEbfeModels.download_source_asset(
+                "east-galveston-bay", "models", archive.parent
+            )
+            source_identity = RasEbfeModels._validate_source_asset_identity(
+                archive,
+                expected_size_bytes=RasEbfeModels._EAST_GALVESTON_SOURCE_SIZE,
+                expected_etag=RasEbfeModels._EAST_GALVESTON_SOURCE_ETAG,
+            )
+            source_root = archive.parent / f"{archive.stem}_extracted"
+            RasEbfeModels._extract_zip_verified(
+                archive, source_root, "East Galveston Bay source archive"
+            )
+
+        hms_summary = RasEbfeModels._organize_delivered_hms_projects(
+            source_root / "Hydrology" / "HMS",
+            folders["hms"],
+            "East Galveston Bay",
+            "12040202",
+        )
+        docs_copied = 0
+        for relative in (
+            Path("480120_Hydraulics_metadata.xml"),
+            Path("Hydraulic_Models/2D_Model_Inventory.xlsx"),
+        ):
+            candidate = source_root / relative
+            if candidate.is_file():
+                shutil.copy2(candidate, folders["docs"] / candidate.name)
+                docs_copied += 1
+
+        ras_archive = source_root / "Hydraulic_Models" / "RAS_Submittal.zip"
+        ras_extracted = False
+        dss_results: List[Dict[str, Any]] = []
+        projects: List[Path] = []
+        standardization: Dict[str, Any] = {}
+        archived_gis_locks_removed: List[str] = []
+        if ras_archive.is_file() and (
+            ras_archive.stat().st_size
+            != RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE
+        ):
+            raise RuntimeError(
+                "East Galveston Bay nested RAS_Submittal.zip size mismatch: "
+                f"expected {RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE}, "
+                f"found {ras_archive.stat().st_size}."
+            )
+        if extract_ras_nested:
+            if not ras_archive.is_file():
+                raise FileNotFoundError(
+                    "East Galveston Bay source is missing "
+                    "Hydraulic_Models/RAS_Submittal.zip."
+                )
+            component_members = {
+                "RAS_Submittal/Input.zip",
+                "RAS_Submittal/Terrain.zip",
+                "RAS_Submittal/LandCover.zip",
+            }
+            if include_results:
+                component_members.add("RAS_Submittal/Output.zip")
+            RasEbfeModels._extract_zip_verified(
+                ras_archive,
+                folders["ras"],
+                "East Galveston Bay RAS submission",
+                include_relative_paths=component_members,
+            )
+            RasEbfeModels._extract_nested_split_component_archives(folders["ras"])
+            RasEbfeModels._normalize_split_delivery_ras_folder(folders["ras"])
+            archived_gis_locks_removed = RasEbfeModels._remove_archived_gis_locks(
+                folders["ras"]
+            )
+            standardization = RasEbfeModels._standardize_ras_model_tree(folders["ras"])
+            projects = RasEbfeModels._discover_valid_ras_projects(folders["ras"])
+            RasEbfeModels._organize_spatial_from_ras(folders["ras"], folders["spatial"])
+            if validate_dss:
+                dss_results = RasEbfeModels._validate_dss_files(folders["ras"])
+            ras_extracted = True
+        else:
+            (folders["ras"] / "README.md").write_text(
+                "# Nested RAS Submission Not Extracted\n\n"
+                "The public eBFE source keeps the RAS model in "
+                "`Hydraulic_Models/RAS_Submittal.zip`. Run "
+                "`organize_east_galveston_bay(..., extract_ras_nested=True)` "
+                "to extract it into this generated folder. The public outer "
+                "inventory alone does not establish the HEC-RAS version, plan "
+                "or geometry identifiers, flow regime, or runtime readiness.\n",
+                encoding="utf-8",
+            )
+
+        manifest = {
+            "schema_version": 1,
+            "source_program": "fema_ebfe",
+            "source_identity": source_identity,
+            "source_url": RasEbfeModels._EAST_GALVESTON_SOURCE_URL,
+            "huc8": "12040202",
+            "public_delivery_model_type": "2D",
+            "ras_submission": {
+                "relative_path": "Hydraulic_Models/RAS_Submittal.zip",
+                "expected_size_bytes": RasEbfeModels._EAST_GALVESTON_RAS_SUBMITTAL_SIZE,
+                "extracted": ras_extracted,
+                "output_archive_included": bool(extract_ras_nested and include_results),
+            },
+            "hms": hms_summary,
+            "documentation_files_copied": docs_copied,
+            "ras_projects": [str(path.relative_to(folders["ras"])) for path in projects],
+            "standardization": standardization,
+            "archived_gis_locks_removed": archived_gis_locks_removed,
+            "dss_validation": dss_results,
+            "validation_status": "unverified",
+            "hec_ras_executed": False,
+        }
+        (folders["agent"] / "east_galveston_manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+        (folders["agent"] / "model_log.md").write_text(
+            "# East Galveston Bay eBFE Delivery\n\n"
+            "This folder is organized from the public FEMA eBFE/BLE source. "
+            "The outer inventory identifies a 2D delivery; the nested RAS "
+            "submission has not been used as evidence of HEC-RAS version, plan "
+            "identifiers, flow regime, or hydraulic readiness. Organization "
+            "does not execute HEC-RAS. See `east_galveston_manifest.json`.\n",
+            encoding="utf-8",
+        )
+        return output
 
     @staticmethod
     @log_call
@@ -7886,10 +8126,24 @@ projects point to that single organized target. See
         destination: Path,
         members: List[tuple[zipfile.ZipInfo, Path]],
     ) -> Dict[str, Any]:
-        """Audit extracted member existence, size, and CRC32."""
+        """Audit extracted member existence, size, CRC32, and exact file set."""
         missing = []
         size_mismatches = []
         crc_mismatches = []
+        expected_files = {
+            relative.as_posix().casefold()
+            for member, relative in members
+            if not member.is_dir()
+        }
+        unexpected_files = []
+        for path in Path(destination).rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(destination).as_posix()
+            if relative == RasEbfeModels._EXTRACTION_RECEIPT_NAME:
+                continue
+            if relative.casefold() not in expected_files:
+                unexpected_files.append(relative)
         file_count = 0
         total_size = 0
         for member, relative in members:
@@ -7926,12 +8180,18 @@ projects point to that single organized target. See
                 continue
             total_size += actual_size
         return {
-            "valid": not missing and not size_mismatches and not crc_mismatches,
+            "valid": (
+                not missing
+                and not size_mismatches
+                and not crc_mismatches
+                and not unexpected_files
+            ),
             "file_count": file_count,
             "verified_bytes": total_size,
             "missing": missing,
             "size_mismatches": size_mismatches,
             "crc_mismatches": crc_mismatches,
+            "unexpected_files": sorted(unexpected_files),
         }
 
     @staticmethod
@@ -7950,6 +8210,7 @@ projects point to that single organized target. See
                 "file_count": audit["file_count"],
                 "verified_bytes": audit["verified_bytes"],
                 "crc32_verified": True,
+                "backend": audit.get("backend", "zipfile"),
             },
             "maximum_expanded_path_length": maximum_path_length,
         }
@@ -7960,24 +8221,88 @@ projects point to that single organized target. See
             json.dump(receipt, stream, indent=2)
 
     @staticmethod
+    def _find_7zip_executable() -> Optional[Path]:
+        """Return a local 7-Zip CLI for ZIP methods unsupported by ``zipfile``."""
+        candidates = [shutil.which(name) for name in ("7z", "7zz", "7za")]
+        for variable in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+            root = os.environ.get(variable)
+            if root:
+                candidates.append(str(Path(root) / "7-Zip" / "7z.exe"))
+        for candidate in candidates:
+            if candidate and Path(candidate).is_file():
+                return Path(candidate)
+        return None
+
+    @staticmethod
+    def _extract_zip_with_7zip(zip_path: Path, destination: Path) -> None:
+        """Extract a prevalidated ZIP with 7-Zip, failing closed on any warning."""
+        executable = RasEbfeModels._find_7zip_executable()
+        if executable is None:
+            raise RuntimeError(
+                f"{zip_path.name} uses a ZIP compression method unsupported by "
+                "Python's zipfile. Install 7-Zip (7z.exe) or use a compatible "
+                "Python 3.10 eBFE decoder; no files were promoted."
+            )
+        result = subprocess.run(
+            [str(executable), "x", "-y", "-bb0", f"-o{destination}", str(zip_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(
+                f"7-Zip extraction failed for {zip_path.name} (exit "
+                f"{result.returncode}): {detail[-2000:]}"
+            )
+
+    @staticmethod
     def _extract_zip_verified(
         zip_path: Path,
         destination: Path,
         description: str = "",
+        *,
+        include_relative_paths: Optional[set[str]] = None,
     ) -> Dict[str, Any]:
-        """Extract atomically with traversal, long-path, timestamp, and size checks."""
+        """Extract validated ZIP members atomically with a full CRC audit.
+
+        ``include_relative_paths`` is an exact, POSIX-relative allowlist for a
+        bounded generated delivery. The complete central directory is still
+        validated and sealed in the receipt; nonselected members remain in the
+        immutable source archive.
+        """
         zip_path = Path(zip_path)
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         with zipfile.ZipFile(zip_path, "r") as archive:
-            members = RasEbfeModels._validated_zip_members(archive)
-            identity = RasEbfeModels._zip_archive_identity(zip_path, members)
+            all_members = RasEbfeModels._validated_zip_members(archive)
+            identity = RasEbfeModels._zip_archive_identity(zip_path, all_members)
+            if include_relative_paths is None:
+                members = all_members
+            else:
+                requested = {str(item).replace("\\", "/").casefold() for item in include_relative_paths}
+                members = [
+                    (member, relative)
+                    for member, relative in all_members
+                    if member.is_dir() or relative.as_posix().casefold() in requested
+                ]
+                selected = {
+                    relative.as_posix().casefold()
+                    for member, relative in members
+                    if not member.is_dir()
+                }
+                missing = sorted(requested - selected)
+                if missing:
+                    raise RuntimeError(
+                        f"ZIP selection is missing required member(s) in "
+                        f"{zip_path.name}: {missing}"
+                    )
+                identity["selected_file_count"] = len(selected)
+                identity["selected_relative_paths"] = sorted(selected)
+
             maximum_path_length = max(
-                (
-                    len(str(destination / relative))
-                    for _, relative in members
-                ),
+                (len(str(destination / relative)) for _, relative in members),
                 default=len(str(destination)),
             )
             if maximum_path_length > RasEbfeModels._WINDOWS_PATH_WARNING_LENGTH:
@@ -7993,14 +8318,13 @@ projects point to that single organized target. See
                 )
 
             if destination.exists() and any(destination.iterdir()):
-                audit = RasEbfeModels._audit_zip_extraction(
-                    destination, members
-                )
+                audit = RasEbfeModels._audit_zip_extraction(destination, members)
                 if not audit["valid"]:
                     details = (
                         audit["missing"][:3]
                         + [item["path"] for item in audit["size_mismatches"][:3]]
                         + [item["path"] for item in audit["crc_mismatches"][:3]]
+                        + audit["unexpected_files"][:3]
                     )
                     raise RuntimeError(
                         "Existing extraction is incomplete and was preserved "
@@ -8008,6 +8332,7 @@ projects point to that single organized target. See
                         f"{details}. Move it aside explicitly or choose a new "
                         "download_root before retrying."
                     )
+                audit["backend"] = "existing_verified"
                 RasEbfeModels._write_extraction_receipt(
                     destination, identity, audit, maximum_path_length
                 )
@@ -8016,47 +8341,59 @@ projects point to that single organized target. See
             if destination.exists():
                 os.rmdir(RasEbfeModels._windows_extended_path(destination))
 
-            temporary = Path(
-                tempfile.mkdtemp(
-                    prefix=f".{destination.name}.extracting-",
-                    dir=destination.parent,
-                )
-            )
+            temporary = Path(tempfile.mkdtemp(
+                prefix=f".{destination.name}.extracting-", dir=destination.parent,
+            ))
             try:
-                total = sum(
-                    member.file_size
+                unsupported = {
+                    member.compress_type
                     for member, _ in members
                     if not member.is_dir()
-                )
-                with RasEbfeModels._progress(
-                    total=total,
-                    unit="B",
-                    unit_scale=True,
-                    desc=f"    {zip_path.name}",
-                    mininterval=2.0,
-                ) as progress:
-                    for member, relative in members:
-                        target = temporary / relative
-                        target_text = RasEbfeModels._windows_extended_path(target)
-                        if member.is_dir():
-                            os.makedirs(target_text, exist_ok=True)
-                            continue
-                        os.makedirs(
-                            RasEbfeModels._windows_extended_path(target.parent),
-                            exist_ok=True,
+                    and member.compress_type not in {
+                        zipfile.ZIP_STORED,
+                        zipfile.ZIP_DEFLATED,
+                        zipfile.ZIP_BZIP2,
+                        zipfile.ZIP_LZMA,
+                    }
+                }
+                if unsupported:
+                    if include_relative_paths is not None:
+                        raise RuntimeError(
+                            "Bounded ZIP extraction includes unsupported compression "
+                            f"method(s) {sorted(unsupported)} in {zip_path.name}; "
+                            "select supported members or use the complete verified "
+                            "extraction backend."
                         )
-                        with archive.open(member, "r") as source_stream:
-                            with open(target_text, "wb") as target_stream:
-                                shutil.copyfileobj(source_stream, target_stream)
-                        timestamp = RasEbfeModels._zip_member_timestamp(member)
-                        os.utime(target_text, (timestamp, timestamp))
-                        progress.update(member.file_size)
+                    RasEbfeModels._extract_zip_with_7zip(zip_path, temporary)
+                    backend = "7zip"
+                else:
+                    total = sum(member.file_size for member, _ in members if not member.is_dir())
+                    with RasEbfeModels._progress(
+                        total=total, unit="B", unit_scale=True,
+                        desc=f"    {zip_path.name}", mininterval=2.0,
+                    ) as progress:
+                        for member, relative in members:
+                            target = temporary / relative
+                            target_text = RasEbfeModels._windows_extended_path(target)
+                            if member.is_dir():
+                                os.makedirs(target_text, exist_ok=True)
+                                continue
+                            os.makedirs(
+                                RasEbfeModels._windows_extended_path(target.parent),
+                                exist_ok=True,
+                            )
+                            with archive.open(member, "r") as source_stream:
+                                with open(target_text, "wb") as target_stream:
+                                    shutil.copyfileobj(source_stream, target_stream)
+                            timestamp = RasEbfeModels._zip_member_timestamp(member)
+                            os.utime(target_text, (timestamp, timestamp))
+                            progress.update(member.file_size)
+                    backend = "zipfile"
 
                 audit = RasEbfeModels._audit_zip_extraction(temporary, members)
+                audit["backend"] = backend
                 if not audit["valid"]:
-                    raise RuntimeError(
-                        f"Extraction audit failed for {zip_path}: {audit}"
-                    )
+                    raise RuntimeError(f"Extraction audit failed for {zip_path}: {audit}")
                 RasEbfeModels._write_extraction_receipt(
                     temporary, identity, audit, maximum_path_length
                 )
@@ -8069,14 +8406,10 @@ projects point to that single organized target. See
                 expected_parent = destination.parent.absolute()
                 if (
                     temporary.parent.absolute() == expected_parent
-                    and temporary.name.startswith(
-                        f".{destination.name}.extracting-"
-                    )
+                    and temporary.name.startswith(f".{destination.name}.extracting-")
                     and temporary.exists()
                 ):
-                    shutil.rmtree(
-                        RasEbfeModels._windows_extended_path(temporary)
-                    )
+                    shutil.rmtree(RasEbfeModels._windows_extended_path(temporary))
                 raise
 
     @staticmethod
@@ -8794,6 +9127,30 @@ projects point to that single organized target. See
     def _normalize_split_delivery_ras_folder(ras_folder: Path) -> Dict[str, int]:
         """Normalize common split-delivery Input/Terrain/LandCover/Output folders."""
         return RasEbfeModels._normalize_north_galveston_ras_submission(ras_folder)
+
+    @staticmethod
+    def _remove_archived_gis_locks(ras_folder: Path) -> List[str]:
+        """Remove only delivered zero-byte Feature GIS ``.sr.lock`` artifacts.
+
+        These source-side ArcGIS session locks are not HEC-RAS solver locks.
+        They are removed only from a generated organization copy and recorded in
+        its manifest. Nonempty locks and locks outside ``Features`` remain for
+        explicit review.
+        """
+        ras_folder = Path(ras_folder)
+        removed: List[str] = []
+        for path in sorted(ras_folder.rglob("*.sr.lock")):
+            if not path.is_file() or path.stat().st_size != 0:
+                continue
+            try:
+                relative = path.relative_to(ras_folder)
+            except ValueError:
+                continue
+            if "features" not in {part.casefold() for part in relative.parts[:-1]}:
+                continue
+            path.unlink()
+            removed.append(relative.as_posix())
+        return removed
 
     @staticmethod
     def _copy_documentation_assets(source_root: Path, docs_folder: Path) -> int:

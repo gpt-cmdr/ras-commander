@@ -25,6 +25,8 @@ from ras_commander.RasApptainer import (
     JOB_SCRIPT_TEMPLATE,
     check_solver_ready,
     RECEIPT_SCHEMA,
+    _gridded_dss_dependency,
+    _stage_gridded_dss_dependency,
     validate_receipt,
 )
 
@@ -71,6 +73,27 @@ def _make_solver_ready(path):
         parameters.attrs["2D Cores (per mesh)"] = [1]
         info = hdf.require_group("Plan Data/Plan Information")
         info.attrs["Simulation End Time"] = "01JAN2020 01:00:00"
+
+
+def _configure_gridded_dss(project: Path, reference=r"..\rainfall.dss"):
+    """Add a small external gridded-DSS declaration to the synthetic plan HDF."""
+    import h5py
+    import numpy as np
+
+    source = project.parent / "rainfall.dss"
+    source.write_bytes(b"synthetic DSS dependency")
+    with h5py.File(project / "TEST.p08.tmp.hdf", "r+") as hdf:
+        precipitation = hdf[PRECIP]
+        precipitation.attrs["Mode"] = np.array(b"Gridded", dtype="S16")
+        precipitation.attrs["Source"] = np.array(b"DSS", dtype="S16")
+        precipitation.attrs["DSS Filename"] = np.array(reference.encode(), dtype="S25")
+        precipitation.attrs["DSS Pathname"] = np.array(
+            b"/SHG/DESIGN/PRECIPITATION/01JAN2000/30MIN/ATLAS14/",
+            dtype="S96",
+        )
+        precipitation.attrs["Ratio"] = np.float32(1.0)
+        precipitation.create_dataset("Timestamp", data=[0.0])
+    return source
 
 
 @pytest.fixture()
@@ -192,6 +215,152 @@ def test_staged_inputs_lf_normalized_and_source_untouched(project, profile, tmp_
     assert (job.job_directory / "inputs" / "SHA256SUMS").read_text().count("\n") == 3
     meta = json.loads((job.job_directory / "job.json").read_text())
     assert meta["source_input_sha256"]["TEST.b08"] != meta["staged_input_sha256"]["TEST.b08"]
+    assert meta["request"]["gridded_dss_input"] is None
+
+
+def test_render_stages_external_gridded_dss_and_rebinds_only_staged_hdf(
+    project,
+    profile,
+    tmp_path,
+):
+    import h5py
+
+    source_dss = _configure_gridded_dss(project)
+    source_dss_bytes = source_dss.read_bytes()
+    source_hdf = project / "TEST.p08.tmp.hdf"
+    with h5py.File(source_hdf, "r") as hdf:
+        precipitation = hdf[PRECIP]
+        source_reference = precipitation.attrs["DSS Filename"]
+        source_pathname = precipitation.attrs["DSS Pathname"]
+        source_ratio = precipitation.attrs["Ratio"]
+        source_values = precipitation["Values"][...]
+        source_timestamps = precipitation["Timestamp"][...]
+
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    meta = json.loads((job.job_directory / "job.json").read_text())
+    dependency = meta["request"]["gridded_dss_input"]
+    staged_dss = job.job_directory / "inputs" / dependency["staged_name"]
+    staged_hdf = job.job_directory / "inputs" / "TEST.p08.tmp.hdf"
+
+    assert dependency["source_reference"] == r"..\rainfall.dss"
+    assert dependency["source_sha256"] == dependency["staged_sha256"]
+    assert source_dss.read_bytes() == source_dss_bytes
+    assert staged_dss.read_bytes() == source_dss_bytes
+    assert dependency["staged_name"] in meta["request"]["input_hashes"]
+    assert dependency["staged_name"] in meta["source_input_sha256"]
+    assert dependency["staged_name"] in meta["staged_input_sha256"]
+    assert dependency["staged_name"] in (job.job_directory / "inputs" / "SHA256SUMS").read_text()
+
+    with h5py.File(source_hdf, "r") as hdf:
+        assert hdf[PRECIP].attrs["DSS Filename"] == source_reference
+        assert hdf[PRECIP]["Values"][...].tolist() == source_values.tolist()
+        assert hdf[PRECIP]["Timestamp"][...].tolist() == source_timestamps.tolist()
+    with h5py.File(staged_hdf, "r") as hdf:
+        precipitation = hdf[PRECIP]
+        filename_dtype = precipitation.attrs.get_id("DSS Filename").dtype
+        filename = precipitation.attrs["DSS Filename"]
+        filename = filename.decode() if isinstance(filename, bytes) else str(filename)
+        assert filename == dependency["staged_name"]
+        assert filename.endswith(".dss")
+        assert filename_dtype.kind == "S"
+        # Fixed S25 attributes reserve a terminal byte in h5py's modify path.
+        assert len(filename.encode("utf-8")) == filename_dtype.itemsize - 1
+        assert precipitation.attrs["DSS Pathname"] == source_pathname
+        assert precipitation.attrs["Ratio"] == source_ratio
+        assert precipitation["Values"][...].tolist() == source_values.tolist()
+        assert precipitation["Timestamp"][...].tolist() == source_timestamps.tolist()
+
+
+def test_render_rebinds_native_nullterm_s25_dss_filename(project, profile, tmp_path):
+    """Exercise the fixed-width string storage used by native HEC-RAS HDFs."""
+    import h5py
+    import numpy as np
+
+    _configure_gridded_dss(project)
+    source_hdf = project / "TEST.p08.tmp.hdf"
+    with h5py.File(source_hdf, "r+") as hdf:
+        precipitation = hdf[PRECIP]
+        del precipitation.attrs["DSS Filename"]
+        string_type = h5py.h5t.C_S1.copy()
+        string_type.set_size(25)
+        string_type.set_cset(h5py.h5t.CSET_ASCII)
+        string_type.set_strpad(h5py.h5t.STR_NULLTERM)
+        scalar = h5py.h5s.create(h5py.h5s.SCALAR)
+        attribute = h5py.h5a.create(
+            precipitation.id,
+            b"DSS Filename",
+            string_type,
+            scalar,
+        )
+        attribute.write(np.array(b"..\\rainfall.dss", dtype="S25"))
+
+    job = RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    dependency = json.loads((job.job_directory / "job.json").read_text())["request"][
+        "gridded_dss_input"
+    ]
+    with h5py.File(job.job_directory / "inputs" / "TEST.p08.tmp.hdf", "r") as hdf:
+        precipitation = hdf[PRECIP]
+        filename = precipitation.attrs["DSS Filename"]
+        filename = filename.decode() if isinstance(filename, bytes) else str(filename)
+        string_type = precipitation.attrs.get_id("DSS Filename").get_type()
+        assert string_type.get_strpad() == h5py.h5t.STR_NULLTERM
+        assert filename == dependency["staged_name"]
+        assert filename.endswith(".dss")
+        assert len(filename.encode("utf-8")) == 24
+
+
+@pytest.mark.parametrize(
+    "reference, create_source, error",
+    [
+        (r"..\missing.dss", False, "regular existing .dss file"),
+        (r"C:\outside.dss", False, "must be relative"),
+    ],
+)
+def test_render_rejects_invalid_gridded_dss_dependency(
+    project,
+    profile,
+    tmp_path,
+    reference,
+    create_source,
+    error,
+):
+    source = _configure_gridded_dss(project, reference=reference)
+    if not create_source:
+        source.unlink()
+
+    with pytest.raises((FileNotFoundError, ValueError), match=error):
+        RasApptainer.render_job(project, "TEST", 8, profile, tmp_path / "job")
+    assert not (tmp_path / "job").exists()
+
+
+def test_gridded_dss_dependency_rejects_directory_and_staging_collision(project):
+    import h5py
+
+    source = _configure_gridded_dss(project)
+    source.unlink()
+    source.mkdir()
+    with pytest.raises(FileNotFoundError, match="regular existing .dss file"):
+        _gridded_dss_dependency(project / "TEST.p08.tmp.hdf")
+
+    source.rmdir()
+    source.write_bytes(b"synthetic DSS dependency")
+    dependency = _gridded_dss_dependency(project / "TEST.p08.tmp.hdf")
+    inputs = project / "inputs"
+    inputs.mkdir()
+    (inputs / dependency["staged_name"]).write_bytes(b"different")
+    staged_hdf = inputs / "TEST.p08.tmp.hdf"
+    shutil.copyfile(project / "TEST.p08.tmp.hdf", staged_hdf)
+    with pytest.raises(FileExistsError, match="filename collision"):
+        _stage_gridded_dss_dependency(
+            project / "TEST.p08.tmp.hdf",
+            staged_hdf,
+            inputs,
+            dependency,
+        )
+    with h5py.File(project / "TEST.p08.tmp.hdf", "r") as hdf:
+        source_reference = hdf[PRECIP].attrs["DSS Filename"]
+    with h5py.File(staged_hdf, "r") as hdf:
+        assert hdf[PRECIP].attrs["DSS Filename"] == source_reference
 
 
 def test_windows_dss_output_path_is_rewritten_only_in_staged_flow(project, profile, tmp_path):

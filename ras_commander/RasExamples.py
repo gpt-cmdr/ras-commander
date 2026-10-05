@@ -37,6 +37,7 @@ List of Functions in RasExamples:
 - inspect_sciencebase_model()
 - validate_sciencebase_model()
 - download_sciencebase_model()
+- organize_ebfe_model()
 - extract_project()
 - is_project_extracted()
 - clean_projects_directory()
@@ -693,6 +694,37 @@ class RasExamples:
             extract=extract,
             show_progress=show_progress,
             signed_download_urls=signed_download_urls,
+        )
+
+    @classmethod
+    @log_call(logger)
+    def organize_ebfe_model(
+        cls,
+        model_key: str,
+        output_path: Union[str, Path, None] = None,
+        *,
+        downloaded_folder: Union[str, Path, None] = None,
+        **kwargs,
+    ) -> Path:
+        """Organize a public FEMA eBFE/BLE delivery through its source adapter.
+
+        This convenience method is deliberately separate from
+        :meth:`extract_project`: ``extract_project`` remains limited to the
+        official HEC example release archive. ``output_path`` is the parent
+        directory; the eBFE registry selects the model-specific output name.
+        """
+        from ras_commander.sources.federal.ebfe_models import RasEbfeModels
+
+        output_root = cls.projects_dir if output_path is None else Path(output_path)
+        if not output_root.is_absolute():
+            output_root = Path.cwd() / output_root
+        return RasEbfeModels.organize_model(
+            model_key,
+            output_root=output_root,
+            downloaded_folder=(
+                Path(downloaded_folder) if downloaded_folder is not None else None
+            ),
+            **kwargs,
         )
 
     @classmethod

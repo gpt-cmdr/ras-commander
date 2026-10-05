@@ -41,7 +41,11 @@ central-directory record. Deferred-size Deflate64 members in archives with no
 central directory are reported as unsupported because the dependency does not
 expose the exact compressed boundary.
 
-This is a direct recovery API. `RasEbfeModels` does not automatically invoke it.
+This is a direct recovery API. `RasEbfeModels` validates every central-directory
+path before extracting. When a complete ZIP contains Deflate64 members and the
+optional decoder is absent, its verified extraction path can use a locally
+installed 7-Zip CLI, then performs the same size and CRC32 audit before atomic
+promotion. Without either decoder it fails without promoting files.
 Archive member names are untrusted input. A `sink_factory` must normalize each
 name and verify that its output path remains below the intended destination.
 
@@ -91,6 +95,7 @@ bundle = load_audit_bundle(audit_folder)
         - organize_bayou_darbonne
         - organize_boeuf
         - organize_cibolo
+        - organize_east_galveston_bay
         - organize_double_mountain_fork_brazos
         - organize_eleven_point
         - organize_lake_maurepas

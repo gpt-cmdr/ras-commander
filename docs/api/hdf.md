@@ -583,6 +583,7 @@ Land-cover sidecar and final Manning's n extraction.
 
 - `get_landcover_raster_map(hdf_path)` - Read land-cover class IDs, names, and Manning's n values
 - `set_landcover_mannings_n(hdf_path, mapping, hecras_version=...)` - Set sidecar Manning's n through native RASMapper serialization
+- `sanitize_classification_names(hdf_path, raster_path=..., hecras_version="6.6")` - Opt in to HEC-RAS 6.6's native labels-only sanitizer. It preserves IDs, numeric parameters, and exact companion-TIFF bytes; a legacy V1 sidecar is saved as native V2, with the returned result retaining before/after mappings and a durable backup path. This method is qualified only for `6.6`/`6.6.0`; it never rebuilds or resamples the raster.
 - `get_classification_polygons(hdf_path)` - Read land-cover sidecar classification polygon overrides
 - `get_preprocessed_mannings_n(hdf_path)` - Read preprocessed cell-center Manning's n values from geometry HDF
 - `audit_final_mannings_n(hdf_path, ...)` - Strictly audit solver-owned final cell/face Manning arrays
@@ -1079,6 +1080,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - get_preprocessed_mannings_stats
         - set_landcover_mannings_n
         - set_landcover_raster_map
+        - sanitize_classification_names
 
 ### HdfPlot source reference
 

@@ -21,7 +21,7 @@ from dataclasses import MISSING, asdict, dataclass, field, fields, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import shlex
 import shutil
@@ -770,6 +770,164 @@ def _canonical_sha256(payload: Any) -> str:
                                      allow_nan=False).encode("utf-8")).hexdigest()
 
 
+def _decode_hdf_string(value: Any) -> str:
+    """Decode one HDF scalar string without changing its stored representation."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace").rstrip("\x00")
+    return str(value).rstrip("\x00")
+
+
+def _gridded_dss_dependency(source_tmp_hdf: Path) -> Optional[dict[str, Any]]:
+    """Resolve the external DSS dependency declared by a gridded plan HDF.
+
+    This is deliberately limited to a materialized ``Mode=Gridded`` and
+    ``Source=DSS`` precipitation group.  The referenced DSS must be a regular
+    local file relative to the source temporary HDF; a staging job never
+    follows an absolute or ambiguous reference.
+    """
+    import h5py
+
+    source_tmp_hdf = Path(source_tmp_hdf)
+    precipitation_path = "Event Conditions/Meteorology/Precipitation"
+    with h5py.File(source_tmp_hdf, "r", locking=False) as hdf:
+        precipitation = hdf.get(precipitation_path)
+        if precipitation is None:
+            return None
+        mode = _decode_hdf_string(precipitation.attrs.get("Mode", ""))
+        source = _decode_hdf_string(precipitation.attrs.get("Source", ""))
+        if mode.strip().casefold() != "gridded" or source.strip().casefold() != "dss":
+            return None
+        if "DSS Filename" not in precipitation.attrs:
+            raise ValueError("Gridded DSS precipitation lacks a DSS Filename attribute")
+        reference_value = precipitation.attrs["DSS Filename"]
+        reference = _decode_hdf_string(reference_value).strip()
+        pathname = _decode_hdf_string(
+            precipitation.attrs.get("DSS Pathname", "")
+        ).strip()
+        if not reference:
+            raise ValueError("Gridded DSS precipitation has an empty DSS Filename")
+        if not pathname:
+            raise ValueError("Gridded DSS precipitation lacks a DSS Pathname attribute")
+        windows_path = PureWindowsPath(reference)
+        if (
+            windows_path.is_absolute()
+            or windows_path.drive
+            or windows_path.root
+            or Path(reference.replace("\\", "/")).is_absolute()
+        ):
+            raise ValueError(
+                "Gridded DSS Filename must be relative to the source temporary HDF"
+            )
+        parts = windows_path.parts
+        if not parts:
+            raise ValueError("Gridded DSS Filename has no usable path components")
+        source_dss = (source_tmp_hdf.parent / Path(*parts)).resolve()
+        try:
+            source_dss.relative_to(source_tmp_hdf.parent.resolve().parent)
+        except ValueError as exc:
+            raise ValueError(
+                "Gridded DSS Filename escapes the source project's parent directory"
+            ) from exc
+        if (
+            source_dss.suffix.casefold() != ".dss"
+            or not source_dss.is_file()
+            or source_dss.is_symlink()
+        ):
+            raise FileNotFoundError(
+                "Gridded DSS dependency must be a regular existing .dss file: "
+                f"{source_dss}"
+            )
+        attr_dtype = precipitation.attrs.get_id("DSS Filename").dtype
+        capacity = attr_dtype.itemsize if attr_dtype.kind == "S" else None
+
+    source_sha256 = sha256_file(source_dss)
+    # h5py's fixed-string attribute ``modify`` path reserves one NUL byte.
+    # Retain that byte so exact staged-name readback works for native S25
+    # attributes while keeping a collision-resistant digest-derived basename.
+    max_digest_chars = 20 if capacity is None else min(20, capacity - 6)
+    if max_digest_chars < 12:
+        raise ValueError(
+            "DSS Filename attribute cannot hold a collision-resistant staged name"
+        )
+    staged_name = f"d{source_sha256[:max_digest_chars]}.dss"
+    if not _SAFE_NAME.fullmatch(staged_name):  # defensive; name is digest-derived
+        raise ValueError(f"Derived staged DSS filename is unsafe: {staged_name!r}")
+    return {
+        "source_reference": reference,
+        "source_path": str(source_dss),
+        "source_sha256": source_sha256,
+        "source_size_bytes": source_dss.stat().st_size,
+        "staged_name": staged_name,
+        "dss_pathname": pathname,
+        "filename_capacity": capacity,
+    }
+
+
+def _stage_gridded_dss_dependency(
+    source_tmp_hdf: Path,
+    staged_tmp_hdf: Path,
+    inputs: Path,
+    dependency: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Copy one declared DSS and rebind only the staged HDF's filename attr."""
+    import h5py
+    import numpy as np
+
+    source_dss = Path(str(dependency["source_path"]))
+    staged_name = str(dependency["staged_name"])
+    staged_dss = Path(inputs) / staged_name
+    if staged_dss.exists():
+        raise FileExistsError(f"Staged DSS filename collision: {staged_dss.name}")
+    if sha256_file(source_dss) != dependency["source_sha256"]:
+        raise RuntimeError("Gridded DSS dependency changed while the job was being rendered")
+    shutil.copyfile(source_dss, staged_dss)
+    staged_sha256 = sha256_file(staged_dss)
+    if staged_sha256 != dependency["source_sha256"]:
+        raise RuntimeError("Staged gridded DSS hash does not match its source dependency")
+
+    precipitation_path = "Event Conditions/Meteorology/Precipitation"
+    preserve_names = ("Mode", "Source", "DSS Pathname", "Ratio")
+    with h5py.File(staged_tmp_hdf, "r+", locking=False) as hdf:
+        precipitation = hdf.get(precipitation_path)
+        if precipitation is None or "DSS Filename" not in precipitation.attrs:
+            raise ValueError("Staged HDF lost its gridded DSS Filename attribute")
+        before_reference = _decode_hdf_string(
+            precipitation.attrs["DSS Filename"]
+        ).strip()
+        if before_reference != dependency["source_reference"]:
+            raise ValueError("Staged HDF DSS Filename differs from the resolved source reference")
+        preserved = {
+            name: precipitation.attrs.get(name)
+            for name in preserve_names
+        }
+        attr_dtype = precipitation.attrs.get_id("DSS Filename").dtype
+        encoded_name = staged_name.encode("utf-8")
+        if attr_dtype.kind == "S":
+            if len(encoded_name) > attr_dtype.itemsize:
+                raise ValueError("Staged DSS filename exceeds the HDF attribute capacity")
+            precipitation.attrs.modify("DSS Filename", np.bytes_(encoded_name))
+        else:
+            precipitation.attrs.modify("DSS Filename", staged_name)
+        hdf.flush()
+
+    with h5py.File(staged_tmp_hdf, "r", locking=False) as hdf:
+        precipitation = hdf.get(precipitation_path)
+        if precipitation is None:
+            raise ValueError("Staged HDF lacks its precipitation group after rebinding")
+        readback = _decode_hdf_string(precipitation.attrs.get("DSS Filename", "")).strip()
+        if readback != staged_name:
+            raise ValueError("Staged HDF DSS Filename did not persist exactly")
+        for name, value in preserved.items():
+            current = precipitation.attrs.get(name)
+            if not np.array_equal(np.asarray(current), np.asarray(value)):
+                raise ValueError(f"Staged HDF changed precipitation attribute {name!r}")
+    return {
+        **dict(dependency),
+        "staged_sha256": staged_sha256,
+        "staged_size_bytes": staged_dss.stat().st_size,
+    }
+
+
 def _rewrite_windows_dss_output(flow_path: Path, project_name: str) -> Optional[dict[str, str]]:
     """Rewrite a requested Windows DSS output path in the staged flow file only."""
     lines = flow_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
@@ -986,8 +1144,9 @@ class RasApptainer:
         (:func:`check_solver_ready`); ``InputCheckError`` is raised before anything is staged.
 
         Writes ``job_directory`` containing ``inputs/`` (tmp.hdf, .b, .x with LF line
-        endings and a ``SHA256SUMS``), ``engine.sh``, ``job.sh`` and ``job.json``.
-        The source project is never modified.
+        endings, any declared external gridded-DSS input, and ``SHA256SUMS``),
+        ``engine.sh``, ``job.sh`` and ``job.json``. The source project is never
+        modified.
         """
         project_folder = Path(project_folder)
         job_directory = Path(job_directory)
@@ -1011,6 +1170,7 @@ class RasApptainer:
             problems = check_solver_ready(project_folder / names[0], geom_preprocess=profile.geom_preprocess)
             if problems:
                 raise InputCheckError(project_folder / names[0], problems)
+        gridded_dss_dependency = _gridded_dss_dependency(project_folder / names[0])
         inputs = job_directory / "inputs"
         inputs.mkdir(parents=True, exist_ok=True)
 
@@ -1024,14 +1184,32 @@ class RasApptainer:
                 shutil.copyfile(source, inputs / name)
             else:
                 (inputs / name).write_bytes(data.replace(b"\r\n", b"\n"))  # LF for Linux solver
+        input_names = list(names)
+        staged_gridded_dss = None
+        if gridded_dss_dependency is not None:
+            staged_gridded_dss = _stage_gridded_dss_dependency(
+                project_folder / names[0],
+                inputs / names[0],
+                inputs,
+                gridded_dss_dependency,
+            )
+            staged_name = str(staged_gridded_dss["staged_name"])
+            source_hashes[staged_name] = str(staged_gridded_dss["source_sha256"])
+            input_names.append(staged_name)
         dss_output_rewrite = _rewrite_windows_dss_output(inputs / names[1], project_name)
         # RasUnsteady reads these compiled-HDF attributes, not merely OMP/MKL.
         # The source tmp.hdf is immutable; only the staged copy is rewritten.
         from .RasCmdr import RasCmdr
         core_evidence = RasCmdr._set_linux_hdf_num_cores(inputs / names[0], profile.num_cores)
-        staged = {n: sha256_file(inputs / n) for n in names}
+        if check_inputs:
+            problems = check_solver_ready(
+                inputs / names[0], geom_preprocess=profile.geom_preprocess
+            )
+            if problems:
+                raise InputCheckError(inputs / names[0], problems)
+        staged = {n: sha256_file(inputs / n) for n in input_names}
         (inputs / "SHA256SUMS").write_text(
-            "".join(f"{staged[n]}  {n}\n" for n in sorted(names)), encoding="utf-8", newline="\n")
+            "".join(f"{staged[n]}  {n}\n" for n in sorted(input_names)), encoding="utf-8", newline="\n")
         manifest_sha = sha256_file(inputs / "SHA256SUMS")
 
         engine = _render_engine_script(profile, project_name, plan, xtoken)
@@ -1079,6 +1257,7 @@ class RasApptainer:
             "engine_sha256": engine_sha, "job_sha256": template_job_sha,
             "expected_simulation_end": _expected_simulation_end(inputs / names[0]),
             "dss_output_rewrite": dss_output_rewrite,
+            "gridded_dss_input": staged_gridded_dss,
             "profile": profile_view,
         }
         request_sha = _canonical_sha256(request)

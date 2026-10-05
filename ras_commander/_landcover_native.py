@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Optional, Union
@@ -41,6 +42,25 @@ _NODATA_NAME = "NoData"
 _NODATA_ID = 0
 _NODATA_MANNINGS = float(np.finfo(np.float32).max)
 _SIDECAR_EDIT_LOCK = threading.RLock()
+
+
+@dataclass(frozen=True)
+class LandCoverSanitizationResult:
+    """Verified outcome of the qualified native land-cover label repair."""
+
+    landcover_hdf_path: Path
+    companion_tiff_paths: tuple[Path, ...]
+    backup_path: Path
+    hecras_version: str
+    schema_version_before: str
+    schema_version_after: str
+    class_ids: tuple[int, ...]
+    classes_before: dict[int, dict[str, Any]]
+    classes_after: dict[int, dict[str, Any]]
+    renames: tuple[dict[str, Any], ...]
+    tiff_sha256_before: tuple[str, ...]
+    tiff_sha256_after: tuple[str, ...]
+    rollback_performed: bool = False
 
 
 @contextmanager
@@ -98,6 +118,26 @@ def _sidecar_transaction(sidecar_hdf_path: Path):
             snapshot_path.unlink(missing_ok=True)
             if native_backup_snapshot is not None:
                 native_backup_snapshot.unlink(missing_ok=True)
+
+
+@contextmanager
+def _companion_tiff_transaction(tiff_path: Path):
+    """Restore one exact companion TIFF if a sidecar edit postcondition fails."""
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{tiff_path.stem}.native_sanitize.",
+        suffix=tiff_path.suffix,
+        dir=tiff_path.parent,
+        delete=False,
+    ) as snapshot_file:
+        snapshot_path = Path(snapshot_file.name)
+    shutil.copy2(tiff_path, snapshot_path)
+    try:
+        yield
+    except BaseException:
+        shutil.copy2(snapshot_path, tiff_path)
+        raise
+    finally:
+        snapshot_path.unlink(missing_ok=True)
 
 
 def _major_version(version: str) -> int:
@@ -965,6 +1005,283 @@ def set_landcover_parameters(
         }
     )
     return report
+
+
+def _qualified_sanitize_version(hecras_version: str) -> str:
+    """Return the explicitly qualified native land-cover sanitize version.
+
+    The ``LandCoverLayer.SanitizeClassificationNames`` implementation is a
+    non-public RASMapper method.  It has been qualified here only against the
+    HEC-RAS 6.6 implementation, including its legacy V1-to-V2 save path.
+    """
+    normalized = str(hecras_version).strip()
+    if normalized not in {"6.6", "6.6.0"}:
+        raise NotImplementedError(
+            "Native land-cover classification-name sanitization is qualified "
+            "only for HEC-RAS 6.6 or 6.6.0; received "
+            f"{hecras_version!r}."
+        )
+    return "6.6"
+
+
+def _native_classification_table_snapshot(layer: Any, landcover_layer: Any) -> dict[int, dict[str, Any]]:
+    """Capture native class IDs, labels, and all numeric parameter values."""
+    table = landcover_layer.GetClassificationVariablesAsDataTable(
+        layer.Classification,
+        layer.Parameters,
+    )
+    columns = [
+        str(table.Columns[index].ColumnName)
+        for index in range(table.Columns.Count)
+    ]
+    if "ID" not in columns or "Name" not in columns:
+        raise RuntimeError(
+            "RASMapper did not expose ID and Name columns for the land-cover table."
+        )
+    parameter_columns = [
+        column for column in columns if column not in {"ID", "Name"}
+    ]
+    rows: dict[int, dict[str, Any]] = {}
+    for row in table.Rows:
+        class_id = int(row["ID"])
+        if class_id in rows:
+            raise RuntimeError(
+                f"RASMapper returned duplicate land-cover class ID {class_id}."
+            )
+        values: dict[str, Optional[float]] = {}
+        for column in parameter_columns:
+            if bool(row.IsNull(column)):
+                values[column] = None
+                continue
+            try:
+                values[column] = float(row[column])
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    "RASMapper returned a non-numeric land-cover parameter "
+                    f"{column!r} for class ID {class_id}."
+                ) from exc
+        rows[class_id] = {
+            "name": str(row["Name"]).strip(),
+            "parameters": values,
+        }
+    if not rows:
+        raise RuntimeError(
+            "RASMapper returned an empty land-cover classification table."
+        )
+    return rows
+
+
+def _same_native_parameter_value(
+    before: Optional[float],
+    after: Optional[float],
+) -> bool:
+    """Compare native numeric parameters exactly, including empty cells."""
+    if before is None or after is None:
+        return before is None and after is None
+    return bool(before == after or (math.isnan(before) and math.isnan(after)))
+
+
+def _validate_sanitized_classifications(
+    before: Mapping[int, Mapping[str, Any]],
+    after: Mapping[int, Mapping[str, Any]],
+    landcover_layer: Any,
+) -> list[dict[str, Any]]:
+    """Require a labels-only change by stable native class ID."""
+    before_ids = set(before)
+    after_ids = set(after)
+    if before_ids != after_ids:
+        raise RuntimeError(
+            "Native classification-name sanitization changed class IDs: "
+            f"before={sorted(before_ids)}, after={sorted(after_ids)}."
+        )
+
+    after_names = [str(after[class_id]["name"]) for class_id in sorted(after)]
+    if len(after_names) != len(set(after_names)):
+        raise RuntimeError("Native classification-name sanitization left duplicate names.")
+
+    renames: list[dict[str, Any]] = []
+    for class_id in sorted(before):
+        before_row = before[class_id]
+        after_row = after[class_id]
+        before_parameters = dict(before_row["parameters"])
+        after_parameters = dict(after_row["parameters"])
+        if set(before_parameters) != set(after_parameters):
+            raise RuntimeError(
+                "Native classification-name sanitization changed parameter "
+                f"columns for class ID {class_id}."
+            )
+        changed_parameters = [
+            column
+            for column, value in before_parameters.items()
+            if not _same_native_parameter_value(value, after_parameters[column])
+        ]
+        if changed_parameters:
+            raise RuntimeError(
+                "Native classification-name sanitization changed parameter "
+                f"values for class ID {class_id}: {', '.join(changed_parameters)}."
+            )
+
+        old_name = str(before_row["name"])
+        new_name = str(after_row["name"])
+        if class_id == _NODATA_ID:
+            if new_name != _NODATA_NAME:
+                raise RuntimeError(
+                    "Native classification-name sanitization changed the "
+                    f"reserved ID 0 label from {_NODATA_NAME!r} to {new_name!r}."
+                )
+        elif not bool(landcover_layer.IsValidClassificationName(new_name)):
+            raise RuntimeError(
+                "Native classification-name sanitization left an invalid "
+                f"nonzero class ID {class_id}: {new_name!r}."
+            )
+        if old_name != new_name:
+            renames.append(
+                {
+                    "class_id": class_id,
+                    "old_name": old_name,
+                    "new_name": new_name,
+                }
+            )
+    return renames
+
+
+def _tiff_sha256(tiff_path: Path) -> str:
+    """Hash one companion TIFF as a focused labels-only edit check."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    with tiff_path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sanitize_landcover_classification_names(
+    landcover_hdf_path: Union[str, Path],
+    raster_path: Optional[Union[str, Path]] = None,
+    *,
+    hecras_version: str,
+) -> LandCoverSanitizationResult:
+    """Use HEC-RAS 6.6's native labels-only land-cover sanitizer.
+
+    The native operation is intentionally used instead of reconstructing a
+    layer from its TIFF.  It preserves class IDs and numeric parameters, then
+    saves the sidecar through RASMapper.  A legacy V1 sidecar is consequently
+    migrated to RASMapper's V2 ``Raster Map``/``Variables`` layout.  The
+    companion TIFF must remain byte-identical.
+    """
+    version = _qualified_sanitize_version(hecras_version)
+    landcover_hdf_path = RasUtils.safe_resolve(Path(landcover_hdf_path))
+    if not landcover_hdf_path.exists():
+        raise FileNotFoundError(landcover_hdf_path)
+    install = find_hecras_install(version)
+    load_clr(install)
+    import clr  # type: ignore
+    from RasMapperLib import LandCoverLayer  # type: ignore
+    from System import Array, Object  # type: ignore
+    from System.Reflection import BindingFlags  # type: ignore
+
+    loaded, layer, error = LandCoverLayer.TryLoadLayer(
+        str(landcover_hdf_path),
+        None,
+        "",
+        LandCoverLayer.LandCoverType.LandCover,
+    )
+    if not loaded or layer is None:
+        raise RuntimeError(
+            "RASMapper could not load the land-cover layer for name "
+            f"sanitization: {error or '<no diagnostic>'}"
+        )
+
+    # Use the exact TIFF path RASMapper associated with this sidecar.  Do not
+    # infer raster assets from a directory listing or reconstruct one from the
+    # HDF filename.
+    raw_tiff_path = str(layer.TiffFilename).strip()
+    if not raw_tiff_path:
+        raise RuntimeError(
+            "RASMapper did not expose a companion TIFF for the land-cover sidecar."
+        )
+    native_tiff_path = Path(raw_tiff_path)
+    if not native_tiff_path.is_absolute():
+        native_tiff_path = landcover_hdf_path.parent / native_tiff_path
+    native_tiff_path = RasUtils.safe_resolve(native_tiff_path)
+    if raster_path is None:
+        tiff_path = native_tiff_path
+    else:
+        tiff_path = RasUtils.safe_resolve(Path(raster_path))
+        if tiff_path != native_tiff_path:
+            raise ValueError(
+                "raster_path does not match the TIFF path registered in the "
+                f"native land-cover sidecar: {tiff_path} != {native_tiff_path}."
+            )
+    if not tiff_path.exists():
+        raise FileNotFoundError(
+            "Native land-cover classification-name sanitization requires the "
+            f"RASMapper-associated TIFF: {tiff_path}"
+        )
+
+    method = clr.GetClrType(LandCoverLayer).GetMethod(
+        "SanitizeClassificationNames",
+        BindingFlags.Instance | BindingFlags.NonPublic,
+    )
+    if method is None:
+        raise NotImplementedError(
+            "The installed HEC-RAS 6.6 RasMapperLib does not expose the native "
+            "classification-name sanitizer."
+        )
+
+    before_version = str(LandCoverLayer.GetVersion(str(landcover_hdf_path)))
+    before = _native_classification_table_snapshot(layer, LandCoverLayer)
+    tiff_sha256_before = _tiff_sha256(tiff_path)
+    with _sidecar_transaction(landcover_hdf_path) as backup_path:
+        with _companion_tiff_transaction(tiff_path):
+            # ``False`` suppresses the native summary message box.  The native
+            # method itself saves and reloads the layer.
+            method.Invoke(layer, Array[Object]([False]))
+            loaded, saved_layer, error = LandCoverLayer.TryLoadLayer(
+                str(landcover_hdf_path),
+                None,
+                "",
+                LandCoverLayer.LandCoverType.LandCover,
+            )
+            if not loaded or saved_layer is None:
+                raise RuntimeError(
+                    "RASMapper could not reload the sanitized land-cover "
+                    f"layer: {error or '<no diagnostic>'}"
+                )
+            after = _native_classification_table_snapshot(
+                saved_layer,
+                LandCoverLayer,
+            )
+            renames = _validate_sanitized_classifications(
+                before,
+                after,
+                LandCoverLayer,
+            )
+            tiff_sha256_after = _tiff_sha256(tiff_path)
+            if tiff_sha256_after != tiff_sha256_before:
+                raise RuntimeError(
+                    "Native classification-name sanitization changed the "
+                    "companion TIFF; the labels-only edit was rolled back."
+                )
+            after_version = str(
+                LandCoverLayer.GetVersion(str(landcover_hdf_path))
+            )
+
+    return LandCoverSanitizationResult(
+        landcover_hdf_path=landcover_hdf_path,
+        companion_tiff_paths=(tiff_path,),
+        backup_path=backup_path,
+        hecras_version=version,
+        schema_version_before=before_version,
+        schema_version_after=after_version,
+        class_ids=tuple(sorted(before)),
+        classes_before=before,
+        classes_after=after,
+        renames=tuple(renames),
+        tiff_sha256_before=(tiff_sha256_before,),
+        tiff_sha256_after=(tiff_sha256_after,),
+    )
 
 
 def _set_classification_parameters_native(

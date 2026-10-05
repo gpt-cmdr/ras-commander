@@ -3568,18 +3568,24 @@ notebooks:
   est_runtime: null
   data_project: null
   functions_used:
+  - HdfLandCover.sanitize_classification_names
   - HdfMesh.get_mesh_areas
+  - HdfPlan.get_plan_met_precip_values
   - RasDss.get_catalog
   - RasDss.read_grid
+  - RasMap.list_landcover_layers
   - RasPlan.clone_plan
   - RasPlan.clone_unsteady
+  - RasPreprocess.preprocess_plan
   - RasUnsteady.configure_gridded_dss_precipitation
+  - RasUnsteady.delete_boundary
   - RasUnsteady.get_met_precipitation_config
+  - RasUnsteady.inspect_boundary_blocks
   - ras.plan_df
   hec_refs: []
   learning_paths: []
   excluded: false
-  code_cells: 9
+  code_cells: 10
   executed_cells: 0
 - id: 800_quality_assurance_rascheck
   filename: 800_quality_assurance_rascheck.ipynb

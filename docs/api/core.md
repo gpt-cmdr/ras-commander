@@ -999,6 +999,7 @@ indices = RasUtils.perform_kdtree_query(
         - list_categories
         - list_projects
         - list_sciencebase_models
+        - organize_ebfe_model
         - validate_sciencebase_model
 
 <a id="ras_commander.RasMap"></a>

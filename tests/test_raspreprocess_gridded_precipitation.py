@@ -68,6 +68,21 @@ def _write_artifacts(folder: Path, *, materialized: bool) -> None:
             precipitation = hdf["Event Conditions/Meteorology/Precipitation"]
             precipitation.create_dataset("Values", data=[[0.0, 1.0]])
             precipitation.create_dataset("Timestamp", data=[0.0])
+            geometry = hdf.require_group("Geometry")
+            areas = geometry.require_group("2D Flow Areas")
+            attributes = areas.create_dataset(
+                "Attributes", shape=(1,), dtype=[("Name", "S32")]
+            )
+            attributes["Name"] = [b"Fixture Area"]
+            areas.require_group("Fixture Area")
+            geometry.require_group("GeomPreprocess").create_dataset(
+                "Marker", data=[1]
+            )
+            mapping = precipitation.require_group(
+                "2D Flow Areas/Fixture Area"
+            )
+            for name in RasPreprocess._GRIDDED_PRECIPITATION_INTERPOLATION_DATASETS:
+                mapping.create_dataset(name, data=[1])
     (folder / "fixture.b01").write_bytes(b"ready")
     (folder / "fixture.x03").write_bytes(b"ready")
 
@@ -83,7 +98,9 @@ def _patch_launch(monkeypatch, monitor, process, terminated):
     monkeypatch.setattr(
         RasPreprocess,
         "_terminate_process_tree",
-        staticmethod(lambda child: terminated.append(child)),
+        staticmethod(
+            lambda child: (terminated.append(child), setattr(child, "returncode", 0))
+        ),
     )
 
 
@@ -107,7 +124,7 @@ def test_plan_uses_gridded_precipitation_reads_active_unsteady_text(tmp_path):
     )
 
 
-def test_materialized_precipitation_requires_shallow_values_and_timestamp(tmp_path):
+def test_materialized_precipitation_requires_values_and_interpolation_mappings(tmp_path):
     _write_artifacts(tmp_path, materialized=False)
     ready, detail = RasPreprocess._validate_materialized_gridded_precipitation(
         tmp_path / "fixture.p01.tmp.hdf"
@@ -124,15 +141,273 @@ def test_materialized_precipitation_requires_shallow_values_and_timestamp(tmp_pa
     assert detail == "ready"
 
 
-def test_preprocessing_readiness_waits_for_materialized_precipitation(
+def test_materialized_precipitation_rejects_missing_per_area_mapping(tmp_path):
+    _write_artifacts(tmp_path, materialized=True)
+    with h5py.File(tmp_path / "fixture.p01.tmp.hdf", "a") as hdf:
+        del hdf[
+            "Event Conditions/Meteorology/Precipitation/2D Flow Areas/"
+            "Fixture Area/Face Weights"
+        ]
+
+    ready, detail = RasPreprocess._validate_materialized_gridded_precipitation(
+        tmp_path / "fixture.p01.tmp.hdf"
+    )
+
+    assert ready is False
+    assert "Fixture Area/Face Weights" in detail
+
+
+def test_completed_preprocessing_rejects_incomplete_geometry_tables(tmp_path):
+    _write_artifacts(tmp_path, materialized=True)
+    with h5py.File(tmp_path / "fixture.p01.tmp.hdf", "a") as hdf:
+        hdf[
+            "Geometry/2D Flow Areas/Fixture Area"
+        ].create_dataset("Cells Volume Elevation Values", data=[[float("nan")]])
+
+    ready, detail = RasPreprocess._validate_completed_gridded_preprocessing(
+        tmp_path / "fixture.p01.tmp.hdf"
+    )
+
+    assert ready is False
+    assert (
+        "NaN in Geometry/2D Flow Areas/Fixture Area/Cells Volume Elevation Values"
+        in detail
+    )
+
+
+def test_completed_preprocessing_rejects_hdf_changed_during_validation(
     tmp_path,
     monkeypatch,
 ):
-    _write_artifacts(tmp_path, materialized=False)
+    _write_artifacts(tmp_path, materialized=True)
+    apptainer_module = importlib.import_module("ras_commander.RasApptainer")
+
+    def mutate_during_check(path, *, geom_preprocess):
+        assert geom_preprocess is False
+        with h5py.File(path, "a") as hdf:
+            hdf.attrs["changed during validation"] = 1
+        return []
+
+    monkeypatch.setattr(
+        apptainer_module,
+        "check_solver_ready",
+        mutate_during_check,
+    )
+
+    ready, detail = RasPreprocess._validate_completed_gridded_preprocessing(
+        tmp_path / "fixture.p01.tmp.hdf"
+    )
+
+    assert ready is False
+    assert "changed during solver-readiness validation" in detail
+
+
+def test_unobserved_completepreprocess_never_authorizes_handoff_or_hdf_read(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
+    state = {}
+    monotonic_values = iter((10.0, 12.0, 14.0))
+    monkeypatch.setattr(
+        raspreprocess_module.time,
+        "monotonic",
+        lambda: next(monotonic_values),
+    )
+    args = (
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+        state,
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: ()),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(lambda *_args: (_ for _ in ()).throw(AssertionError("HDF opened"))),
+    )
+
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert "writer_observation" not in state
+
+
+def test_completepreprocess_inventory_requires_exact_launch_owned_hdf(
+    tmp_path,
+    monkeypatch,
+):
+    import psutil
+
+    tmp_hdf = tmp_path / "fixture.p01.tmp.hdf"
+
+    class Candidate:
+        def __init__(self, info):
+            self.info = info
+
+    candidates = [
+        Candidate(
+            {
+                "pid": 101,
+                "name": "RasProcess.exe",
+                "cmdline": ["RasProcess.exe", "CompletePreProcess", str(tmp_hdf)],
+                "create_time": 1001.0,
+            }
+        ),
+        Candidate(
+            {
+                "pid": 102,
+                "name": "RasProcess.exe",
+                "cmdline": ["RasProcess.exe", "CompletePreProcess", tmp_hdf.name],
+                "create_time": 1001.0,
+            }
+        ),
+        Candidate(
+            {
+                "pid": 103,
+                "name": "RasProcess.exe",
+                "cmdline": ["RasProcess.exe", "CompletePreProcess", str(tmp_hdf)],
+                "create_time": 900.0,
+            }
+        ),
+        Candidate(
+            {
+                "pid": 104,
+                "name": "RasProcess.exe",
+                "cmdline": ["RasProcess.exe", "OtherAction", str(tmp_hdf)],
+                "create_time": 1001.0,
+            }
+        ),
+    ]
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: candidates)
+
+    assert RasPreprocess._active_complete_preprocess_writers(
+        tmp_hdf, 1000.0
+    ) == (101,)
+
+
+def test_completepreprocess_handoff_waits_for_seen_writer_exit_and_stat_stability(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
+    state = {}
+    writer_states = iter(((202,), (), (), ()))
+    monotonic_values = iter((10.0, 10.0, 10.0, 10.0))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
+    )
+    monkeypatch.setattr(
+        raspreprocess_module.time,
+        "monotonic",
+        lambda: next(monotonic_values),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_GRIDDED_PRECIPITATION_STABLE_SECONDS",
+        0,
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(lambda *_args: (_ for _ in ()).throw(AssertionError("HDF opened"))),
+    )
+    args = (
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+        state,
+    )
+
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert state["writer_observation"] == "writer_quiescent"
+
+
+def test_handoff_preserves_writer_observation_until_artifacts_arrive(
+    tmp_path,
+    monkeypatch,
+):
+    state = {}
+    writer_states = iter(((202,), (), (), (), ()))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_GRIDDED_PRECIPITATION_STABLE_SECONDS",
+        0,
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(lambda *_args: (_ for _ in ()).throw(AssertionError("HDF opened"))),
+    )
+    args = (
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+        state,
+    )
+
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert state["completepreprocess_seen"] is True
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+
+    _write_artifacts(tmp_path, materialized=True)
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+    assert RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0
+    )
+
+
+def test_preprocessing_readiness_refuses_live_gridded_hdf_inspection(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
     monkeypatch.setattr(
         RasPreprocess,
         "_unsteady_compute_started",
         staticmethod(lambda *_args, **_kwargs: True),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(lambda *_args: (_ for _ in ()).throw(AssertionError("HDF opened"))),
     )
 
     kwargs = {
@@ -146,12 +421,6 @@ def test_preprocessing_readiness_waits_for_materialized_precipitation(
         require_materialized_gridded_precipitation=False,
     )
     assert not RasPreprocess._preprocessing_ready(
-        **kwargs,
-        require_materialized_gridded_precipitation=True,
-    )
-
-    _write_artifacts(tmp_path, materialized=True)
-    assert RasPreprocess._preprocessing_ready(
         **kwargs,
         require_materialized_gridded_precipitation=True,
     )
@@ -171,7 +440,7 @@ def test_bco_readiness_does_not_require_short_lived_solver_process(tmp_path):
     )
 
 
-def test_alternate_signal_accepts_fresh_materialized_precipitation(
+def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
     tmp_path,
     monkeypatch,
 ):
@@ -194,12 +463,37 @@ def test_alternate_signal_accepts_fresh_materialized_precipitation(
 
         def monitor_until_signal(self, _process):
             _write_artifacts(tmp_path, materialized=True)
+            assert self.alternate_signal_condition() is False
+            assert self.alternate_signal_condition() is False
+            assert self.alternate_signal_condition() is False
             detected = self.alternate_signal_condition()
             assert detected is True
             self.signal_source = "alternate"
             return detected
 
     _patch_launch(monkeypatch, Monitor, process, terminated)
+    writer_states = iter(((202,), (), (), ()))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_GRIDDED_PRECIPITATION_STABLE_SECONDS",
+        0,
+    )
+    validate_materialized = RasPreprocess._validate_materialized_gridded_precipitation
+
+    def completed_file_only(path):
+        assert process.poll() is not None
+        return validate_materialized(path)
+
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(completed_file_only),
+    )
 
     result = RasPreprocess.preprocess_plan(
         "01",
@@ -210,11 +504,14 @@ def test_alternate_signal_accepts_fresh_materialized_precipitation(
     )
 
     assert result.success is True
-    assert result.signal_source == "materialized_gridded_precipitation"
+    assert (
+        result.signal_source
+        == "completepreprocess_writer_quiescent"
+    )
     assert terminated == [process]
 
 
-def test_bco_signal_waits_for_materialized_precipitation_before_termination(
+def test_bco_handoff_never_opens_hdf_before_owned_process_termination(
     tmp_path,
     monkeypatch,
 ):
@@ -243,9 +540,20 @@ def test_bco_signal_waits_for_materialized_precipitation_before_termination(
         return True
 
     _patch_launch(monkeypatch, Monitor, process, terminated)
+    validate_materialized = RasPreprocess._validate_materialized_gridded_precipitation
+
+    def completed_file_only(path):
+        assert process.poll() is not None
+        return validate_materialized(path)
+
     monkeypatch.setattr(
         RasPreprocess,
-        "_materialized_gridded_precipitation_ready",
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(completed_file_only),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_completepreprocess_handoff_ready",
         staticmethod(ready),
     )
 
@@ -258,7 +566,10 @@ def test_bco_signal_waits_for_materialized_precipitation_before_termination(
     )
 
     assert result.success is True
-    assert result.signal_source == "bco_materialized_precipitation"
+    assert (
+        result.signal_source
+        == "bco_completepreprocess_writer_quiescent"
+    )
     assert readiness_checks == [True]
     assert terminated == [process]
 
@@ -297,7 +608,10 @@ def test_preprocess_rejects_imported_only_precipitation_payload(
     )
 
     assert result.success is False
-    assert result.signal_source == "materialized_gridded_precipitation"
+    assert (
+        result.signal_source
+        == "completepreprocess_writer_quiescent"
+    )
     assert result.tmp_hdf_path == tmp_path / "fixture.p01.tmp.hdf"
     assert "Imported Raster Data alone is not solver-ready" in result.error
     assert "Precipitation/Values" in result.error
