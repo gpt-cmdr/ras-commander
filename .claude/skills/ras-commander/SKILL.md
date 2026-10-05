@@ -26,7 +26,8 @@ Read [runtime and MCP boundaries](references/runtime-and-mcp.md) before choosing
 | Geometry/QA | Geometry or QA specialist with explicit input-change scope |
 | GIS/archive/map delivery | Shared `cloud-native-gis` skill |
 | HMS or watershed-to-RAS work | Canonical `hms-commander` skill in the HMS repository if available; otherwise identify the missing integration before execution |
-| Repository contribution/writing review | Relevant contribution instructions and requested auditor; do not impose them on user-created work |
+| Suspected Commander or MCP defect, feature gap, or contribution | [RAS Commander contributing](../ras-commander-contributing/SKILL.md); protect the user's task first |
+| Repository writing review | Requested auditor; do not impose repository rules on user-created work |
 
 Use native specialist/subagent mechanisms available in the current harness. Claude roles are adapters; Codex should use these shared instructions and available native workers, not assume Claude's Task syntax exists. Direct Python work is appropriate for a small task; delegate domains when useful. MCP calls always require the bounded subagent flow below.
 

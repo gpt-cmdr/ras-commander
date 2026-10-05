@@ -67,6 +67,16 @@ This file is the canonical shared instruction contract for repository-local codi
   current compatible PyPI releases in authorized managed environments. Preserve user pins and
   report updates/blockers instead of silently changing shared environments.
 
+## Defects And Contributions
+
+- When a task exposes a suspected defect or feature gap in RAS Commander, HMS Commander, or their
+  MCP servers, follow the shared
+  [.claude/skills/ras-commander-contributing/SKILL.md](.claude/skills/ras-commander-contributing/SKILL.md) workflow.
+- Protect the user's task first. Push access to the owning `gpt-cmdr` repository selects the
+  maintainer path: fix in a disposable clone, add a regression test, run the checks, and open a PR
+  without merging. Otherwise draft an issue or fork PR and submit it only with the user's approval.
+- Keep private project data out of issues, PRs, and tests. Unsupported scope is not a defect.
+
 ## RAS Commander First
 
 - Hard rule: RAS Commander rules everything around RAS. Never invoke `Ras.exe` directly from ad hoc shell commands, raw subprocess calls, one-off scripts, manual command-line probes, notebooks, tests, or agent harness glue.

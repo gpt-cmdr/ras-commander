@@ -5,6 +5,8 @@ title: "[Bug] "
 labels: bug
 ---
 
+> Use only public example projects or synthetic data. Remove client names, local paths, coordinates, hostnames, and credentials. Report MCP server defects in `gpt-cmdr/ras-commander-mcp`.
+
 ## Description
 
 <!-- Clear description of the bug -->
@@ -27,7 +29,7 @@ from ras_commander import init_ras_project, RasCmdr
 
 ## Environment
 
-- **ras-commander version**: <!-- pip show ras-commander -->
+- **ras-commander version**: <!-- python -c "import importlib.metadata as m; print(m.version('ras-commander'))" -->
 - **Python version**: <!-- python --version -->
 - **HEC-RAS version**: <!-- e.g., 6.5, 6.6 -->
 - **OS**: <!-- e.g., Windows 11 -->
