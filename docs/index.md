@@ -93,6 +93,7 @@ success = RasCmdr.compute_plan("01")
 - **[Example Notebooks](examples/index.md)**: 100+ working examples covering all major features
 - **[API Reference](api/index.md)**: Complete function and class documentation
 - **[AI-Assisted Development](development/llm-development.md)**: Use [Claude Code](https://claude.ai/code) or [Codex CLI](https://github.com/openai/codex) with built-in `AGENTS.md` and `CLAUDE.md` context
+- **[Agent Plugin and MCPs](agent-plugin.md)**: Install the RAS Commander plugin for local Claude Code or Codex agents, with read-only RAS and HMS text MCP servers
 
 ## About CLB Engineering
 
