@@ -24,6 +24,7 @@ When adding a new component, add it to the appropriate domain group AND the rela
 | `ras-commander` | shared skill | `.claude/skills/ras-commander/SKILL.md` |
 | `ras-api-discovery` | shared skill | `.claude/skills/ras-api-discovery/SKILL.md` |
 | `cloud-native-gis` | shared skill | `.claude/skills/cloud-native-gis/SKILL.md` |
+| `ras-commander-contributing` | shared skill | `.claude/skills/ras-commander-contributing/SKILL.md` |
 | `ras-commander` | Claude adapter | `.claude/agents/ras-commander.md` |
 | `cloud-native-gis` | Claude adapter | `.claude/agents/cloud-native-gis.md` |
 
@@ -265,6 +266,7 @@ use these only when the user explicitly requests the legacy provider-mixed workf
 Claude `ras-commander` → shared `ras-commander` skill.
 Claude `cloud-native-gis` → shared `cloud-native-gis` skill → current ras2cng/hms2cng contracts.
 Project MCP → bounded read-only informational subagent; heavier work → public Python APIs.
+Suspected Commander/MCP defect or feature gap → shared `ras-commander-contributing` skill (maintainer PR or external issue/PR).
 
 ### Technical Writing Domain
 

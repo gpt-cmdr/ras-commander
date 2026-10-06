@@ -33,6 +33,11 @@
 - [ ] Uses logging, not `print()`
 - [ ] Proper error handling with informative messages
 
+### Defect Fixes and Privacy
+
+- [ ] Regression test fails before the fix and passes after it (bug fixes)
+- [ ] No private project data, client names, local paths, or credentials in code, tests, or this description
+
 ### API Changes (if applicable)
 
 - [ ] `ras_object=None` parameter included for multi-project support
