@@ -192,6 +192,7 @@ extra:
 nav:
   - Home: index.md
   - Capabilities by Task: capabilities.md
+  - Agent Plugin and MCPs: agent-plugin.md
   - User Guide:
     - Getting Started:
       - Installation: getting-started/installation.md
