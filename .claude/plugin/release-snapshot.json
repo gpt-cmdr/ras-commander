@@ -1,15 +1,16 @@
 {
   "schema_version": 1,
   "purpose": "Current stable package discovery; not a compatibility qualification record.",
-  "observed_utc": "2026-10-04T00:09:07.964406+00:00",
+  "observed_utc": "2026-10-07T18:02:14.920177+00:00",
   "packages": {
     "ras-commander": {
       "status": "released",
-      "version": "0.103.0",
+      "version": "0.104.0",
       "requires_python": ">=3.10",
       "requires_dist": [
         "Pillow>=9.0; extra == \"all\"",
         "Pillow>=9.0; extra == \"gui\"",
+        "affine; extra == \"dss-native\"",
         "aiohttp; extra == \"all\"",
         "aiohttp; extra == \"notebooks\"",
         "azure-identity>=1.14; extra == \"all\"",
@@ -65,6 +66,7 @@
         "pyarrow>=14.0; extra == \"all\"",
         "pyarrow>=14.0; extra == \"full\"",
         "pyarrow>=14.0; extra == \"geoparquet\"",
+        "pydsstools<4,>=3.1.0; extra == \"dss-native\"",
         "pygeohydro>=0.19.0; extra == \"all\"",
         "pygeohydro>=0.19.0; extra == \"notebooks\"",
         "pygeohydro>=0.19.0; extra == \"precip-huc12\"",
@@ -72,6 +74,7 @@
         "pyjnius; extra == \"dss\"",
         "pyproj; extra == \"all\"",
         "pyproj; extra == \"all\"",
+        "pyproj; extra == \"dss-native\"",
         "pyproj; extra == \"full\"",
         "pyproj; extra == \"notebooks\"",
         "pyproj; extra == \"precip\"",
@@ -120,54 +123,56 @@
       ],
       "archives": [
         {
-          "filename": "ras_commander-0.103.0-py3-none-any.whl",
+          "filename": "ras_commander-0.104.0-py3-none-any.whl",
           "package_type": "bdist_wheel",
-          "sha256": "a93b5e3b5f60f3d343e85023a5d2033a411625f9d0399bf2e9927352ab9a20eb",
-          "url": "https://files.pythonhosted.org/packages/58/0b/ec5debf01fcf5d51aa4430cdf3192145684ebc1b081c7b2f7e6f5aec9d80/ras_commander-0.103.0-py3-none-any.whl",
-          "size_bytes": 2452091,
-          "uploaded_utc": "2026-09-26T16:26:23.269391Z"
+          "sha256": "8ee5d53b413f9c306aa5cd10fdafa41d5534f719829906a94d4f1ace8bcd38e5",
+          "url": "https://files.pythonhosted.org/packages/65/a1/61c1638213bd56ba9bb0db3dd3642eedc4bbc88f1ea9dcd5d39bf054e038/ras_commander-0.104.0-py3-none-any.whl",
+          "size_bytes": 2552012,
+          "uploaded_utc": "2026-10-04T12:51:45.349863Z"
         },
         {
-          "filename": "ras_commander-0.103.0.tar.gz",
+          "filename": "ras_commander-0.104.0.tar.gz",
           "package_type": "sdist",
-          "sha256": "055fd00d30e1217a86fbaf24ed000c3d88526c21cad5518fed60b0b5f2eaa8b5",
-          "url": "https://files.pythonhosted.org/packages/32/66/ea41491e078231cab2a4c37d74e0d28bbf97bea4ac77df1ba8648f4049a8/ras_commander-0.103.0.tar.gz",
-          "size_bytes": 3058979,
-          "uploaded_utc": "2026-09-26T16:26:25.100371Z"
+          "sha256": "7de8d5923e2029b5241b85d9c743b184c3e8333132f51492fbdd30d007bc7aac",
+          "url": "https://files.pythonhosted.org/packages/fc/48/8a47e582b6a2d3ef4c15e6eccb9e777189f8166fb5c84d5d9950c7b9859a/ras_commander-0.104.0.tar.gz",
+          "size_bytes": 3249400,
+          "uploaded_utc": "2026-10-04T12:51:47.003318Z"
         }
       ],
-      "source": "https://pypi.org/pypi/ras-commander/0.103.0/json",
+      "source": "https://pypi.org/pypi/ras-commander/0.104.0/json",
       "qualification": "not_established_by_metadata_check"
     },
     "ras-commander-mcp": {
       "status": "released",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "requires_python": ">=3.10",
       "requires_dist": [
-        "h5py>=3.0.0",
-        "mcp>=1.0.0",
-        "pandas>=1.3.0",
-        "ras-commander>=0.1.0"
+        "build>=1.2; extra == \"dev\"",
+        "mcp<3,>=2.3.0",
+        "packaging>=24",
+        "pytest-timeout>=2.4; extra == \"dev\"",
+        "pytest>=8; extra == \"dev\"",
+        "ras-commander<1,>=0.103.0"
       ],
       "archives": [
         {
-          "filename": "ras_commander_mcp-0.3.2-py3-none-any.whl",
+          "filename": "ras_commander_mcp-0.4.0-py3-none-any.whl",
           "package_type": "bdist_wheel",
-          "sha256": "f3ff4335076f91470e7b45aa4bf5fa3d75348a0a2f663a8573a9e164bb4e348d",
-          "url": "https://files.pythonhosted.org/packages/e0/c9/38b197033dcd5bd4868fe70af52620d71bd81f73e46a36a2e7ffb5ccc5e6/ras_commander_mcp-0.3.2-py3-none-any.whl",
-          "size_bytes": 142125,
-          "uploaded_utc": "2025-07-18T04:28:41.661693Z"
+          "sha256": "c965483c551da44c26ac1eabc1646353c30ab2e34f93c122804f50e52f24e3e6",
+          "url": "https://files.pythonhosted.org/packages/97/6d/6634ad8f50778c17a377fc131b5c3897c82fc77cba398e22ef07d80695e3/ras_commander_mcp-0.4.0-py3-none-any.whl",
+          "size_bytes": 16100,
+          "uploaded_utc": "2026-10-04T12:52:19.393939Z"
         },
         {
-          "filename": "ras_commander_mcp-0.3.2.tar.gz",
+          "filename": "ras_commander_mcp-0.4.0.tar.gz",
           "package_type": "sdist",
-          "sha256": "2ebd2b227661358ae161d0e62b1dd94a3e4bb3843869c5d0d6924fb4ee92f4ce",
-          "url": "https://files.pythonhosted.org/packages/7f/7e/96861be066138974a284fd7cf0c69d27b53b9cf4e76088555591a3f2c720/ras_commander_mcp-0.3.2.tar.gz",
-          "size_bytes": 122992,
-          "uploaded_utc": "2025-07-18T04:28:42.558760Z"
+          "sha256": "07a9f6d32b6dbd2b9f3db938f1fb1db146e4ec064cc9a263a5bdb95a8c17849e",
+          "url": "https://files.pythonhosted.org/packages/a8/f1/8e2e4f72dbb9256e35065dffd708be0f4fc398e18120bd597e9a7093c2f5/ras_commander_mcp-0.4.0.tar.gz",
+          "size_bytes": 31116,
+          "uploaded_utc": "2026-10-04T12:52:20.349245Z"
         }
       ],
-      "source": "https://pypi.org/pypi/ras-commander-mcp/0.3.2/json",
+      "source": "https://pypi.org/pypi/ras-commander-mcp/0.4.0/json",
       "qualification": "not_established_by_metadata_check"
     },
     "ras2cng": {
