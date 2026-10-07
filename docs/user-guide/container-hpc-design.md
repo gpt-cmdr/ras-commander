@@ -1,8 +1,16 @@
 # Container implementation comparison and TACC design
 
-This is a source review and proposed HPC integration, checked September 11,
-2026. The Docker API changes are described in [container execution](container-execution.md).
-Our images have not yet been qualified on TACC or under Apptainer.
+The implementation comparison was checked September 11, 2026. This page
+retains the proposed TACC/PyLauncher integration, with implementation status
+updated October 7, 2026. [RasApptainer](slurm-apptainer-execution.md) now
+implements one prepared native unsteady plan per Slurm allocation;
+[RasSlurm](slurm-portable-execution.md) implements portable request pools.
+Their contracts differ from the proposed worker integration below.
+
+The [Docker image pairs](container-images.md) have Docker qualification.
+The canonical SIF profile has not been qualified by a live `RasApptainer`
+run, and these images have not been qualified on TACC. Earlier CLB runs with
+another SIF do not qualify these image payloads.
 
 ## Useful patterns from public implementations
 
@@ -53,10 +61,12 @@ flowchart TD
     R --> O["Validated final HDF, logs and receipt on host storage"]
 ```
 
-The host `RasDocker` class currently constructs Docker commands. An
-Apptainer adapter should invoke the same native Python worker, preserving
-its request, receipt and validation behavior. No Docker daemon or MPI pool
-is needed inside the solver container.
+The host `RasDocker` class constructs Docker commands. The proposed TACC
+worker adapter would invoke the same native Python worker and preserve its
+request, receipt, and validation behavior. That adapter is distinct from the
+implemented `RasApptainer` API, which stages solver-ready artifacts and invokes
+the native engine, and `RasSlurm`, which uses the portable Python executor.
+No Docker daemon or MPI pool is needed inside the solver container.
 
 Configure PyLauncher with `cores=2` per command and verify CPU binding on
 the target system. Its documentation says that Slurm `-n` and

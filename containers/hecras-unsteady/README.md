@@ -13,6 +13,16 @@ require Wine or a host HEC-RAS installation.
 
 ## Image status
 
+The [public container catalog](https://rascommander.info/ras/user-guide/container-images/)
+provides Docker Hub links, immutable digests, and qualification scope for all
+six matching images. The [backend comparison](https://rascommander.info/ras/user-guide/execution-backends/)
+explains which runtime contracts each API requires. For prepared native plans,
+see [Slurm + Apptainer](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/);
+Docker qualification does not qualify a SIF through that API.
+
+Maintainers can use the [Docker Hub description packet](../DOCKERHUB.md) to
+link all six listings to the published guides after documentation deployment.
+
 Use the matching preprocessing and compute image pair for the selected HEC-RAS
 version. Image qualification and publication evidence are maintained separately
 from this source tree.

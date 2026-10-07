@@ -18,6 +18,23 @@ This library was initially conceptualized in the Australian Water School course 
 
 **March 2026 Update:** RAS Commander now supports a fully agentic engineering experience using CLI coding agents and agent SDK's to extend library functions and assist H&H engineers with common modeling tasks such as importing external data, performing QAQC reviews, validating project file paths, AEP and historic storm modeling, or any of the other functionality supported by, or imminently extendable from existing functions, in composable long form agentic workflows. Agents are instructed to work with humans in the loop: demonstrating their steps, maintaining modeling logs, and creating reproducible deliverables that can be externally verified directly in the HEC-RAS GUI. Long term memory is arranged in a hierarchical knowledge structure with progressive disclosure. Agents, skills, rules and cognitive memory systems are included to assist the user with solidifying LLM-written code into deterministic workflows in a continual learning loop, along with a file-based memory system to assist with long term task planning and execution across many conversations and subagents.
 
+## Docker, Slurm, and Apptainer
+
+Use `RasDocker` for Wine preprocessing and native Linux unsteady computation
+on Windows or Linux, `RasApptainer` for one prepared native unsteady plan per
+Slurm allocation, or `RasSlurm` for portable execution request pools. The
+worker-factory `SlurmWorker` remains a stub.
+
+- [Choose an execution backend](https://rascommander.info/ras/user-guide/execution-backends/)
+- [Docker setup and two-stage workflow](https://rascommander.info/ras/user-guide/container-execution/)
+- [Docker Hub images, digests, and qualification](https://rascommander.info/ras/user-guide/container-images/)
+- [Slurm + Apptainer tutorial](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/)
+- [Portable Slurm execution](https://rascommander.info/ras/user-guide/slurm-portable-execution/)
+
+Published matching Wine/native image pairs cover HEC-RAS 6.5, 6.6, and 7.0.1
+on linux/amd64. Docker qualification and live qualification of a specific
+Slurm/SIF workflow are separate; see each guide's limits.
+
 ## LLM Forward Engineering
 
 <a href="https://clbengineering.com/">
