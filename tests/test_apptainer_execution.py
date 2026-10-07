@@ -599,6 +599,7 @@ def test_receipt_rejects_extra_and_missing_fields():
 @pytest.mark.parametrize("source", [
     r'C:\Users\example\work\a"quoted".dss',
     'line1\nline2\rtab\tend',
+    'controls: \x01\b\v\f\x1b\x1f',
     r'\\server\share\rainfall.dss',
 ])
 def test_receipt_json_escapes_windows_dss_name_and_quotes(source):
