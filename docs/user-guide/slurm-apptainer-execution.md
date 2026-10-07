@@ -211,16 +211,20 @@ qualify the selected SIF and a representative prepared model on your cluster.
 
 ### 1. Install and check prerequisites
 
-The control host needs Python, this API, and OpenSSH/scp. To use source APIs,
+The control host needs Python, this API, and OpenSSH/scp. The primary
+preparation recipe below uses a Windows host with installed HEC-RAS 6.6;
+completed artifacts can later be rendered and submitted from Windows or Linux.
+To use source APIs,
 from a repository checkout in an activated isolated environment:
 
 ```bash
 CI=1 uv pip install -e ".[compute]" h5py
 ```
 
-On Windows, set `CI=1` using your shell's environment syntax before running
-`uv pip install -e ".[compute]" h5py`. Use Docker Engine or Windows Docker
-Desktop in Linux-container mode for the Wine preparation option below. The
+`CI=1` skips the maintainer knowledge-base generation step during installation.
+On Windows, set it using your shell's environment syntax before running
+`uv pip install -e ".[compute]" h5py`. The optional Wine recipe requires Docker
+Engine or Windows Docker Desktop in Linux-container mode. The
 cluster needs Slurm accounting commands, Apptainer, a shared writable staging
 root, and writable node-local scratch. Verify SSH host keys before using the
 transport and populate the profile's `known_hosts_file`.
@@ -240,7 +244,7 @@ plan from its plan table:
 import shutil
 from pathlib import Path
 from uuid import uuid4
-from ras_commander import RasExamples, RasDocker, RasApptainer, init_ras_project
+from ras_commander import RasExamples, RasPreprocess, RasApptainer, init_ras_project
 
 workspace = Path("ras-slurm-example") / uuid4().hex[:12]
 source = RasExamples.extract_project("Muncie", output_path=workspace / "source")
@@ -254,6 +258,35 @@ if plans.empty:
 plan_number = str(plans.iloc[0]).zfill(2)
 project = Path(model.prj_file)
 
+prepared = RasPreprocess.preprocess_plan(
+    plan_number, ras_object=model, max_wait=900, clear_existing=True,
+)
+if not prepared.success:
+    raise RuntimeError(prepared.error)
+print(prepared.tmp_hdf_path)
+```
+
+Keep all referenced terrain, projection, and other dependencies reachable from
+the working project. `clear_existing=True` clears stale preprocessing artifacts
+in the working copy; keep the source and external dependencies unchanged.
+Never stage or inspect an HDF while its writer is active.
+
+#### Optional Wine preparation: unqualified handoff
+
+The [Docker workflow](container-execution.md) is qualified through
+`RasDocker.compute_plan`, but the retained release record does not establish
+that a Wine-prepared Muncie HDF passes `RasApptainer.check_solver_ready`.
+No offline check of that actual handoff is recorded here. Do not treat a
+successful Docker preparation receipt as proof of Apptainer readiness.
+
+To investigate this alternative, replace only the Windows preparation call
+above with the following. Use a Linux container engine and supply read-only
+`mounts={...}` for external terrain/projection dependencies as described in
+[the working-copy layout](container-execution.md#prepare-a-complete-working-copy).
+
+```python
+from ras_commander import RasDocker
+
 prepared = RasDocker.preprocess_plan(
     project, plan_number, version="6.6",
     image="rascommander/hec-ras-wine-precompute_6.6:v4",
@@ -261,16 +294,21 @@ prepared = RasDocker.preprocess_plan(
 )
 if not prepared.success:
     raise RuntimeError(prepared.error or prepared.receipt)
-print(prepared.receipt_path)
 ```
 
-Inspect the selected model's dependency paths before preprocessing. Supply
-`mounts={...}` for terrain/projection dependencies outside the project folder,
-using the [working-copy layout guidance](container-execution.md#prepare-a-complete-working-copy).
-The example above assumes required files are reachable inside the project mount.
-Keep the source copy and any external dependencies unchanged. Preparation can
-replace generated outputs in the working copy. Native Windows preparation with
-`RasPreprocess` is another route; never stage an HDF while its writer is active.
+For **either** preparation route, check the completed local HDF before rendering:
+
+```python
+tmp_hdf = project.parent / f"{project.stem}.p{plan_number}.tmp.hdf"
+problems = RasApptainer.check_solver_ready(tmp_hdf, geom_preprocess=False)
+if problems:
+    raise RuntimeError("Complete Windows preprocessing before staging: " + "; ".join(problems))
+```
+
+If the Wine output lacks `/Geometry/GeomPreprocess`, stop and use the native
+Windows `RasPreprocess` route on a fresh working copy. Do not synthesize the
+missing group or disable input checks. Passing this offline check establishes
+structural readiness only; the canonical SIF still needs live qualification.
 
 ### 3. Configure the site and render
 
@@ -329,14 +367,16 @@ if state.terminal:
     print(result.directory, result.success, result.problems)
     if not result.success:
         raise RuntimeError(result.problems)
-    final_hdf = result.directory / f"{job.project_name}.p{job.plan_number}.hdf"
+    final_hdf = result.directory / "project" / f"{job.project_name}.p{job.plan_number}.hdf"
     print(HdfResultsPlan.get_unsteady_summary(final_hdf))
 else:
     print("Wait for a terminal scheduler state before collecting", state.reason)
 ```
 
-A successful collection contains the final plan HDF, receipt, and available
-engine/scheduler logs under `job_directory/collected/<jobid>`. The collection
+A successful collection is rooted at `job_directory/collected/<jobid>`.
+Its `project/` subfolder contains the final plan HDF and `solver.log`,
+`logs/` contains available engine/scheduler logs, and `receipt.json` is at
+that collection root. The collection
 checks the planned final time, populated unsteady results, receipt identity,
 and every output hash. Inspect water-surface results and diagnostics through
 [HDF modules](../api/hdf.md), then review hydraulic suitability separately.

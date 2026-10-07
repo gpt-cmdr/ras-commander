@@ -73,7 +73,7 @@ site = SlurmSiteConfig(
     apptainer_image_sha256=sif_sha256,
     container_identity=identity,
     slots_per_node=2,
-    memory_per_task="3G",
+    slurm_memory="3G",  # Per-task step limit; allocation reserves this times slots.
     time_limit="02:00:00",
     # Add account, partition, qos, and modules required by your site.
 )
@@ -88,10 +88,15 @@ Rendering creates self-contained `bundles/`, `slurm_batch.json`,
 The destination must be absent or empty. Review the generated allocation
 before staging; rendering makes no scheduler call.
 
-`slots_per_node` bounds concurrent one-core tasks. Unless `slurm_memory` is
-explicit, allocation memory is `memory_per_task × slots_per_node`. Choose the
-wall time for the whole pool, including staging and executor margins; it is
-not automatically checked against each request's timeout.
+`slots_per_node` bounds concurrent one-core tasks. When `slurm_memory` is set,
+the allocation requests `slurm_memory × slots_per_node` and each task step
+uses `slurm_memory` as its memory limit. The example requests `--mem=6G` for
+two slots and `--mem=3G` for each step. When it is omitted, this API emits no
+memory directive; the site's Slurm defaults determine available memory.
+`memory_per_task` is accepted by the configuration but currently does not
+set allocation or step memory. Use `slurm_memory` for an explicit reservation.
+Choose the wall time for the whole pool, including staging and executor
+margins; it is not automatically checked against each request's timeout.
 
 ## Stage and submit
 

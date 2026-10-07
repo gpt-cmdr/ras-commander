@@ -5,6 +5,11 @@ preprocessing under Wine, followed by native Linux unsteady computation.
 Use them through [RasDocker](container-execution.md). The images include their
 runtime; the host does not need a separate HEC-RAS or Wine installation.
 
+Review the applicable HEC-RAS Terms and Conditions for Use before using the
+runtime; the [HEC-RAS 6.6 terms](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/6.6/terms-and-conditions-of-use)
+provide a passive reference for that version. Retain the vendor notices supplied
+with each image.
+
 ## Published images
 
 Registry metadata checked **October 7, 2026**. All six repositories are public
