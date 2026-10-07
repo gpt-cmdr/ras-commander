@@ -20,6 +20,9 @@ explains which runtime contracts each API requires. For prepared native plans,
 see [Slurm + Apptainer](https://rascommander.info/ras/user-guide/slurm-apptainer-execution/);
 Docker qualification does not qualify a SIF through that API.
 
+Maintainers can use the [Docker Hub description packet](../DOCKERHUB.md) to
+link all six listings to the published guides after documentation deployment.
+
 Use the matching preprocessing and compute image pair for the selected HEC-RAS
 version. Image qualification and publication evidence are maintained separately
 from this source tree.
