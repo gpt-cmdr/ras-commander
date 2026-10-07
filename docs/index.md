@@ -48,7 +48,11 @@ or [Installation and runtime requirements](getting-started/installation.md).
 
 - :material-cloud-sync: **[Remote Execution](user-guide/remote-execution.md)**
 
-    Distribute computations across multiple machines using PsExec, Docker, or SSH workers.
+    Distribute computations with local, PsExec, or Docker workers. Use the separate Slurm APIs for cluster execution.
+
+- :material-server: **[Docker and Slurm](user-guide/execution-backends.md)**
+
+    Prepare and compute with published Docker Hub images, or submit prepared native plans and portable requests through Slurm and Apptainer.
 
 - :material-wrench: **[Geometry Repair](api/fixit.md)**
 

@@ -74,6 +74,11 @@ plugins:
         User Guide:
           - user-guide/overview.md
           - user-guide/plan-execution.md
+          - user-guide/execution-backends.md
+          - user-guide/container-execution.md
+          - user-guide/container-images.md
+          - user-guide/slurm-apptainer-execution.md
+          - user-guide/slurm-portable-execution.md
           - user-guide/plan-output-intervals-hdf-compression.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
@@ -96,6 +101,7 @@ plugins:
           - api/terrain.md
           - api/fixit.md
           - api/dss.md
+          - api/containers.md
           - api/remote.md
           - api/model-sources.md
   - mkdocstrings:
@@ -201,8 +207,11 @@ nav:
     - Architecture Overview: user-guide/overview.md
     - Plan Execution: user-guide/plan-execution.md
     - Output Intervals & HDF Compression: user-guide/plan-output-intervals-hdf-compression.md
+    - Choose an Execution Backend: user-guide/execution-backends.md
     - Container Execution: user-guide/container-execution.md
+    - Docker Hub Images: user-guide/container-images.md
     - Slurm + Apptainer Execution: user-guide/slurm-apptainer-execution.md
+    - Portable Slurm Execution: user-guide/slurm-portable-execution.md
     - Container HPC Design: user-guide/container-hpc-design.md
     - Workflows & Patterns: user-guide/workflows-and-patterns.md
     - Boundary Conditions: user-guide/boundary-conditions.md
@@ -258,6 +267,7 @@ nav:
     - Terrain Modules: api/terrain.md
     - Fixit Module: api/fixit.md
     - DSS Modules: api/dss.md
+    - Docker Container API: api/containers.md
     - Remote Modules: api/remote.md
     - Model Source Utilities: api/model-sources.md
     - DataFrame Reference: reference/dataframe-reference.md

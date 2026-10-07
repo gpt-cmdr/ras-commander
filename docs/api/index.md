@@ -124,6 +124,17 @@ Classes for reading and writing DSS files:
 
 - [`RasDss`](dss.md#rasdss) - DSS file operations
 
+## Containers and Slurm
+
+- [`RasDocker`](containers.md#rasdocker) - Wine preprocessing and native Linux computation
+- [`ContainerResult`](containers.md#containerresult) / [`ContainerBatchResult`](containers.md#containerbatchresult) - Stage and batch outcomes
+- [`RasPortableDocker`](remote.md#rasportabledocker-source-reference) - Portable request execution through Docker
+- [`RasSlurm`](remote.md#rasslurm-source-reference) - Portable request pools on Slurm/Apptainer
+- [`RasApptainer`](remote.md#rasapptainer-source-reference) - Prepared native unsteady plans on Slurm
+
+Compare [execution backends](../user-guide/execution-backends.md) and select a
+compatible image from the [container catalog](../user-guide/container-images.md).
+
 ## Remote Modules
 
 Classes for distributed execution:

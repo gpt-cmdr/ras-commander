@@ -30,6 +30,12 @@ Published native images install library source `604704d440c49a39d6f6e8bae262e223
 
 ## Select matching images
 
+See the [Docker Hub catalog](container-images.md) for direct repository links,
+immutable digests, embedded source revisions, and the retained qualification
+record. Compare [execution backends](execution-backends.md) before using these
+images with a different API. The [rendered RasDocker reference](../api/containers.md)
+documents method parameters and result records.
+
 **Qualification status:** All three matching versions passed the full 266-hour Linux sample and the one-hour Windows Docker Desktop notebook, using two CPUs per container. Linux results contained 267 output times; Windows results contained two, with 6,548 finite water-surface values at every time. Live progress, resume and sequential batch checks passed on both hosts; the six Linux Wine LF/CRLF cases also passed. The images are published on Docker Hub, and anonymous pulls verified all six matching payloads.
 
 | HEC-RAS | Wine preprocessing image | Native unsteady image |

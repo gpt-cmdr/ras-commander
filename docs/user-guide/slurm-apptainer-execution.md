@@ -9,6 +9,10 @@ cluster-agnostic: everything site-specific lives in a JSON site profile.
     The receipt is computational and transfer evidence (exit codes, hashes, timings). It is not a
     statement that the results are acceptable engineering output. Review results as usual.
 
+Choose this API for a prepared native unsteady plan. For portable execution
+requests, use [RasSlurm](slurm-portable-execution.md); the
+[backend comparison](execution-backends.md) explains the different input contracts.
+
 ## Concepts
 
 | Piece | What it does |
@@ -28,8 +32,11 @@ real submission time (the all-zero example placeholder is allowed only for local
 
 ## Site profile
 
-See `examples/site_profiles/clb-slurm.example.json` for the CLB cluster (placeholders only; no
-host names, keys or secrets are committed). Key fields:
+Start with a site-specific JSON profile. The
+[example profile](https://github.com/gpt-cmdr/ras-commander/blob/main/examples/site_profiles/clb-slurm.example.json)
+shows the schema; replace its SSH target, storage paths, account, partition, and
+node selection for your cluster. The credentials and SIF hashes are placeholders.
+Key fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -45,7 +52,9 @@ host names, keys or secrets are committed). Key fields:
 
 ## Canonical image and pulling it once
 
-The default image is `rascommander/hec-ras-linux-unsteady_6.6:v1` (Docker Hub, linux/amd64).
+The default image is `rascommander/hec-ras-linux-unsteady_6.6:v1`
+([Docker Hub](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.6), linux/amd64).
+The [container catalog](container-images.md) lists its registry digest and Docker qualification.
 Its configured layout (`/opt/hecras-runtime/engine`, library directories beneath it, and no
 `RasGeomPreprocess`) is derived from its Dockerfile and registry metadata. It has not yet been
 qualified by a live run through this API. The proven CLB runs used `ras-hecras.sif`, which did ship
@@ -191,3 +200,163 @@ on all job failure paths; `engine.log` exists only after node-scratch staging be
   `sbatch` result must be reconciled before a new render.
 - Offline tests cover rendering, validation, receipts and a mocked transport. Qualify the image and
   solver on your cluster before relying on results.
+
+
+## End-to-end example
+
+This example shows a public example project's path from preprocessing to Slurm
+collection. It is a procedure, not a live qualification of the model, cluster,
+or canonical image. Use HEC-RAS 6.6 throughout. Before relying on a campaign,
+qualify the selected SIF and a representative prepared model on your cluster.
+
+### 1. Install and check prerequisites
+
+The control host needs Python, this API, and OpenSSH/scp. To use source APIs,
+from a repository checkout in an activated isolated environment:
+
+```bash
+CI=1 uv pip install -e ".[compute]" h5py
+```
+
+On Windows, set `CI=1` using your shell's environment syntax before running
+`uv pip install -e ".[compute]" h5py`. Use Docker Engine or Windows Docker
+Desktop in Linux-container mode for the Wine preparation option below. The
+cluster needs Slurm accounting commands, Apptainer, a shared writable staging
+root, and writable node-local scratch. Verify SSH host keys before using the
+transport and populate the profile's `known_hosts_file`.
+
+Pull the 6.6 native image to a shared SIF once using the command above, or pull
+its [immutable registry reference](container-images.md#immutable-registry-identities).
+Record the resulting SIF hash. A registry digest and a SIF hash are different
+identities; jobs verify the actual SIF bytes.
+
+### 2. Make a fresh model copy and preprocess
+
+The [public example library](../examples/example-projects.md) includes Muncie.
+Extract a source copy, then make a separate working copy. Choose an unsteady
+plan from its plan table:
+
+```python
+import shutil
+from pathlib import Path
+from uuid import uuid4
+from ras_commander import RasExamples, RasDocker, RasApptainer, init_ras_project
+
+workspace = Path("ras-slurm-example") / uuid4().hex[:12]
+source = RasExamples.extract_project("Muncie", output_path=workspace / "source")
+working = workspace / "working" / source.name
+shutil.copytree(source, working)
+model = init_ras_project(working, "6.6", load_results_summary=False)
+print(model.plan_df[["plan_number", "flow_type"]])
+plans = model.plan_df.loc[model.plan_df["flow_type"] == "Unsteady", "plan_number"]
+if plans.empty:
+    raise RuntimeError("Select an example with an unsteady plan")
+plan_number = str(plans.iloc[0]).zfill(2)
+project = Path(model.prj_file)
+
+prepared = RasDocker.preprocess_plan(
+    project, plan_number, version="6.6",
+    image="rascommander/hec-ras-wine-precompute_6.6:v4",
+    timeout=900, num_cores=2, replace_generated=True, pull="always",
+)
+if not prepared.success:
+    raise RuntimeError(prepared.error or prepared.receipt)
+print(prepared.receipt_path)
+```
+
+Inspect the selected model's dependency paths before preprocessing. Supply
+`mounts={...}` for terrain/projection dependencies outside the project folder,
+using the [working-copy layout guidance](container-execution.md#prepare-a-complete-working-copy).
+The example above assumes required files are reachable inside the project mount.
+Keep the source copy and any external dependencies unchanged. Preparation can
+replace generated outputs in the working copy. Native Windows preparation with
+`RasPreprocess` is another route; never stage an HDF while its writer is active.
+
+### 3. Configure the site and render
+
+Copy the example profile to `my-site.json` and replace all site settings:
+
+- Use the verified SSH host/user/key and known-hosts file.
+- Set shared `scratch_root`, node-local scratch, and the shared SIF path.
+- Set `apptainer_image_sha256` to the real SIF hash and `container_identity`
+  to `sif:sha256:<that-hash>`.
+- Choose the site's account, partition, memory, wall time, and core count.
+  Remove the example's `nodelist` unless that node exists at your site.
+- Keep `geom_preprocess=false` for the published image, which does not contain
+  `RasGeomPreprocess`. The completed temporary HDF must already contain it.
+
+```python
+profile = RasApptainer.load_profile("my-site.json")
+job_directory = workspace / "jobs" / f"plan-{plan_number}"
+job = RasApptainer.render_job(
+    project_folder=project.parent, project_name=project.stem,
+    plan_number=plan_number, profile=profile, job_directory=job_directory,
+)
+print(job.script_path)
+print(job.remote_directory)
+RasApptainer.submit(job, dry_run=True)
+```
+
+Expect `inputs/`, `engine.sh`, `job.sh`, and `job.json`. Rendering and dry-run
+submission do not contact the cluster. Review the resource directives and input
+manifest. An all-zero image hash is permitted only for this offline step.
+
+### 4. Submit and inspect status
+
+```python
+from ras_commander import SshApptainerTransport
+
+transport = SshApptainerTransport(profile)
+job = RasApptainer.submit(job, transport=transport, profile=profile, dry_run=False)
+print(job.slurm_job_id)
+state = RasApptainer.status(job, transport, profile)
+print(state.state, state.terminal, state.reason)
+```
+
+Real submission uploads this attempt and calls `sbatch`; it consumes the site's
+allocation. Keep the recorded job ID and `job.json`. Query status later rather
+than submitting again because the job is pending.
+
+### 5. Reload, collect, and inspect results
+
+```python
+from ras_commander import HdfResultsPlan
+
+job = RasApptainer.load_job(job_directory)
+state = RasApptainer.status(job, transport, profile)
+if state.terminal:
+    result = RasApptainer.collect(job, transport, profile)
+    print(result.directory, result.success, result.problems)
+    if not result.success:
+        raise RuntimeError(result.problems)
+    final_hdf = result.directory / f"{job.project_name}.p{job.plan_number}.hdf"
+    print(HdfResultsPlan.get_unsteady_summary(final_hdf))
+else:
+    print("Wait for a terminal scheduler state before collecting", state.reason)
+```
+
+A successful collection contains the final plan HDF, receipt, and available
+engine/scheduler logs under `job_directory/collected/<jobid>`. The collection
+checks the planned final time, populated unsteady results, receipt identity,
+and every output hash. Inspect water-surface results and diagnostics through
+[HDF modules](../api/hdf.md), then review hydraulic suitability separately.
+Use a new `destination=` for another collection; an existing destination is
+rejected. To stop the recorded job, call
+`RasApptainer.cancel(job, transport, profile)`.
+
+## Troubleshooting
+
+| Symptom | Meaning and next action |
+| --- | --- |
+| `InputCheckError` before staging | Preparation is incomplete or structurally invalid. Finish preprocessing and inspect listed issues; do not disable checks to bypass missing solver inputs |
+| SIF digest mismatch | The shared image differs from the recorded profile. Preserve the failed evidence and verify the intended image before changing the profile |
+| Pending allocation | Inspect the site's resource/account/partition reason. Pending does not justify another submission |
+| `UNKNOWN` status | Accounting may be delayed or unavailable. Inspect the returned reason and reconcile with the cluster before collecting or submitting again |
+| `STACK_LIMIT_FAILED` | Host or container stack limit could not be raised. Check the site's limits and image environment |
+| Missing geometry preprocessing | Keep `geom_preprocess=false` for the canonical image and provide a completed `/Geometry/GeomPreprocess` group |
+| Submission remains `SUBMITTING` after a transport error | `sbatch` may have accepted it. Reconcile the recorded attempt on the cluster; do not retry blindly |
+| Failed receipt, output hash, or final-time validation | Retain logs and receipt; inspect `result.problems`. A file's existence or scheduler `COMPLETED` alone does not establish a successful solve |
+| Failed-job outputs cannot be downloaded | Inspect the exact remote attempt and retained `logs/`; failure before scratch staging may produce no `engine.log` or output receipt |
+
+The [API reference](../api/remote.md#rasapptainer-source-reference) documents
+profile, transport, job, and collection records.

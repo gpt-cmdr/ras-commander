@@ -11,7 +11,13 @@ The remote execution framework provides:
 - **PsexecWorker**: Windows remote execution via PsExec over network shares
 - **LocalWorker**: Local parallel execution (baseline)
 - **DockerWorker**: Container execution via Docker over SSH
-- **Future**: SshWorker, WinrmWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
+- **Worker stubs**: SshWorker, WinrmWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
+
+The separate [RasSlurm](slurm-portable-execution.md) and
+[RasApptainer](slurm-apptainer-execution.md) APIs implement Slurm execution.
+[RasDocker](container-execution.md) drives the published two-stage container
+workflow. Use [Choose an Execution Backend](execution-backends.md) to compare
+these APIs; they are not worker-factory backends.
 
 ## Architecture
 
@@ -289,24 +295,17 @@ Docker workers provide Linux-based HEC-RAS execution, useful for:
 
 ### Available Docker Images
 
-Pre-built images for multiple HEC-RAS versions:
+`DockerWorker` expects a configured shell runner (default
+`/app/scripts/core_execution/run_ras.sh`), native runtime, and worker input/output
+mounts. Tags such as `hecras:6.6` are locally built image examples, not public
+Docker Hub references. Verify the actual vendor runtime version inside your
+image; a tag alone does not establish it.
 
-| Image Tag | HEC-RAS Version | Size | Notes |
-|-----------|-----------------|------|-------|
-| `hecras:7.0` | 7.0 | ~2.58 GB | Latest, recommended |
-| `hecras:6.6` | 6.6 | ~2.58 GB | |
-| `hecras:6.5` | 6.5 | ~2.95 GB | |
-| `hecras:6.1` | 6.1 | ~2.71 GB | |
-| `hecras:5.0.7` | 5.0.7 | ~2.43 GB | Binary: `rasUnsteady64` |
-
-### HEC-RAS Linux Download URLs
-
-```
-6.6: https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v66.zip
-6.5: https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v65.zip
-6.1: https://www.hec.usace.army.mil/software/hec-ras/downloads/HEC-RAS_610_Linux.zip
-5.0.7: https://www.hec.usace.army.mil/software/hec-ras/downloads/HEC-RAS_507_linux.zip
-```
+The public [Docker Hub catalog](container-images.md) contains matching Wine
+preprocessing and native unsteady images for HEC-RAS 6.5, 6.6, and 7.0.1.
+Use those pairs through [RasDocker](container-execution.md). Their payloads
+have a different worker contract; do not substitute their names into this
+example without implementing and qualifying the required adapter.
 
 ### Docker Worker Configuration
 
@@ -315,15 +314,15 @@ from ras_commander import init_ras_project
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
 # Initialize project
-init_ras_project(r"C:\Projects\MyProject", "7.0")
+init_ras_project(r"C:\Projects\MyProject", "6.6")
 
 # Create Docker worker (remote Docker host via SSH)
 worker = init_ras_worker(
     "docker",
-    docker_image="hecras:7.0",
-    docker_host="ssh://user@192.168.3.8",
-    share_path=r"\\192.168.3.8\RasRemote",
-    remote_staging_path=r"C:\RasRemote",
+    docker_image="hecras:6.6",  # Locally built worker-compatible image
+    docker_host="ssh://user@docker-host.example",
+    remote_host_os="linux",
+    remote_staging_path="/shared/ras-staging",
     use_ssh_client=True,  # Use system SSH instead of paramiko
     cores_total=8,
     cores_per_plan=4
@@ -345,10 +344,10 @@ Docker workers using `ssh://` URLs require key-based authentication:
 ssh-keygen -t ed25519 -f ~/.ssh/docker_worker
 
 # Copy to remote Docker host
-ssh-copy-id -i ~/.ssh/docker_worker user@192.168.3.8
+ssh-copy-id -i ~/.ssh/docker_worker user@docker-host.example
 
 # Test connection
-ssh -i ~/.ssh/docker_worker user@192.168.3.8 "docker info"
+ssh -i ~/.ssh/docker_worker user@docker-host.example "docker info"
 ```
 
 ### Preprocessing Workflow
@@ -361,7 +360,7 @@ Docker workers use a two-step execution:
 The preprocessing monitors the `.bcoXX` file for "Starting Unsteady Flow Computations" signal to terminate early.
 
 !!! note "Dependencies"
-    DockerWorker requires: `pip install ras-commander[remote-ssh]` or `pip install docker paramiko`
+    DockerWorker requires: `pip install "ras-commander[remote-docker]"`; add `paramiko` for native Linux SSH file staging
 
 ---
 
@@ -407,7 +406,7 @@ sc create PSEXESVC binPath= "C:\Windows\PSEXESVC.exe" start= demand
 from ras_commander import init_ras_project
 from ras_commander.remote import init_ras_worker, compute_parallel_remote
 
-init_ras_project(r"C:\Projects\MyProject", "7.0")
+init_ras_project(r"C:\Projects\MyProject", "6.6")
 
 workers = [
     init_ras_worker(

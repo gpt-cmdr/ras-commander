@@ -61,7 +61,11 @@ destination messages, and retains the worker copy if publication fails.
 
 ### DockerWorker
 
-Run plans with a local Docker daemon and an HEC-RAS Linux image:
+Run plans with a local Docker daemon and an image implementing the
+`DockerWorker` shell-runner contract. `hecras:6.6` below is an illustrative
+local image tag, not a public Docker Hub reference. For the published paired
+images, use [RasDocker](containers.md) and the
+[container catalog](../user-guide/container-images.md):
 
 ```python
 from ras_commander.remote import init_ras_worker
@@ -134,6 +138,11 @@ waits for already-started worker tasks before returning so those tasks cannot
 continue mutating copied project outputs after the API call has returned.
 
 ## Portable Plan Execution
+
+Use the [portable Slurm tutorial](../user-guide/slurm-portable-execution.md)
+for site configuration, rendering, staging, submission, and collection.
+The [backend comparison](../user-guide/execution-backends.md) explains how
+this contract differs from `RasDocker`, `DockerWorker`, and `RasApptainer`.
 
 Portable execution runs one prepared steady or unsteady plan per request,
 always with one CPU core, inside a pinned container. Requests and receipts are
