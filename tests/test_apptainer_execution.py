@@ -596,11 +596,16 @@ def test_receipt_rejects_extra_and_missing_fields():
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is unavailable")
-def test_receipt_json_escapes_windows_dss_name_and_quotes():
+@pytest.mark.parametrize("source", [
+    r'C:\Users\example\work\a"quoted".dss',
+    'line1\nline2\rtab\tend',
+    'controls: \x01\b\v\f\x1b\x1f',
+    r'\\server\share\rainfall.dss',
+])
+def test_receipt_json_escapes_windows_dss_name_and_quotes(source):
     start = JOB_SCRIPT_TEMPLATE.index("json_string()")
     end = JOB_SCRIPT_TEMPLATE.index("\n}", start) + 2
     function = JOB_SCRIPT_TEMPLATE[start:end]
-    source = r'C:\Users\mallory\work\a"quoted".dss'
     env = {**os.environ, "JSON_ESCAPE_VALUE": source}
     completed = subprocess.run(
         [BASH, "-c", function + '\njson_string "$JSON_ESCAPE_VALUE"'],
@@ -620,7 +625,8 @@ def test_receipt_hash_for_backslash_name_has_no_gnu_escape_marker():
 dir=$(mktemp -d)
 file="$dir/a\\b.dss"
 printf payload > "$file"
-sha_of "$file"""],
+sha_of "$file"
+"""],
         check=True, capture_output=True, text=True,
     )
     assert completed.stdout.strip() == hashlib.sha256(b"payload").hexdigest()

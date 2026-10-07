@@ -601,7 +601,7 @@ json_string() {  # JSON string without assuming python/jq in the image.
       $'\\n') printf '%s' '\\n' ;;
       $'\\r') printf '%s' '\\r' ;;
       $'\\t') printf '%s' '\\t' ;;
-      *) printf -v char_code '%d' "'$char"; if [ "$char_code" -eq 92 ]; then printf '%s' '\\\\\\\\'; else printf '%s' "$char"; fi ;;
+      *) printf -v char_code '%d' "'$char"; if [ "$char_code" -eq 92 ]; then printf '%s' '\\\\'; elif [ "$char_code" -lt 32 ]; then printf '\\\\u%04x' "$char_code"; else printf '%s' "$char"; fi ;;
     esac
   done
   printf '"'
