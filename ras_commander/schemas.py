@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.21"
+SCHEMA_VERSION = "1.22"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,24 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "refinement_region_clip_report": {
+        "description": "One disposition row per source refinement region clipped to a child perimeter.",
+        "accessor": "GeomMesh.clip_refinement_regions(geom_number, perimeter, ...)[1]",
+        "source": "GeomMesh.clip_refinement_regions()",
+        "extra_columns": False,
+        "dynamic": False,
+        "columns": [
+            {"name": "source_fid", "dtype": "int64", "description": "Zero-based source refinement-region FID, matching its native Attributes row."},
+            {"name": "name", "dtype": "str", "description": "Source region name; duplicate names are permitted."},
+            {"name": "status", "dtype": "str", "description": "kept for an unchanged region, clipped for retained intersections, or dropped when no output region remains."},
+            {"name": "reason", "dtype": "str", "description": "Disposition reason: inside_child_perimeter, child_perimeter_intersection, intersection_fragments_below_min_area, no_polygon_overlap, below_min_area, invalid_source_geometry, or unsupported_interior_rings."},
+            {"name": "source_area", "dtype": "float64", "description": "Source polygon area in squared project length units."},
+            {"name": "retained_area", "dtype": "float64", "description": "Sum of retained fragment areas in squared project length units; zero for dropped regions."},
+            {"name": "output_fids", "dtype": "list[int]", "description": "Zero-based indices into the returned regions list; one per retained fragment, or an empty list for dropped regions."},
+            {"name": "touches_perimeter", "dtype": "bool", "description": "Whether any retained fragment intersects the child perimeter boundary; False for dropped regions."},
+            {"name": "below_one_cell_area", "dtype": "bool", "description": "Whether any retained fragment area is below source spacing_dx * spacing_dy; False for dropped regions. This does not assert that a grid point will be generated."},
+        ],
+    },
     "frequency_storm_ddf": {
         "description": "Duration-dependent frequency storm with a zero start row and interval-end depths.",
         "accessor": "FrequencyStormDdf.generate_hyetograph(depths_inches, durations_minutes)",

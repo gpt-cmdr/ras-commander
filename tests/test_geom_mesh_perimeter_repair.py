@@ -106,7 +106,7 @@ def repair_project(tmp_path, monkeypatch):
     monkeypatch.setattr(
         module,
         "_generate_seeds_via_net",
-        lambda *args, **kwargs: SimpleNamespace(Count=2),
+        lambda *args, **kwargs: _repair_seeds(),
     )
     monkeypatch.setattr(
         module, "_remove_short_perimeter_segments", lambda perim, *args: perim
@@ -126,6 +126,13 @@ def repair_project(tmp_path, monkeypatch):
         ),
     )
     return path, hdf_path, ras, calls
+
+
+def _repair_seeds():
+    points = MockPointMs()
+    for x, y in [(25.0, 25.0), (75.0, 75.0)]:
+        points.Add(MockPointM(x, y))
+    return points
 
 
 @pytest.mark.parametrize("repair_kind", ["dp", "vertex_removal"])
@@ -236,8 +243,8 @@ def test_failed_handoff_or_retry_raises_original_reason(
     if failure == "containment":
         audit = module._audit_domain_containment_hdf
 
-        def containment(*args):
-            return audit(*args) if count == 0 else False
+        def containment(*args, **kwargs):
+            return audit(*args, **kwargs) if count == 0 else False
 
         monkeypatch.setattr(module, "_audit_domain_containment_hdf", containment)
     with pytest.raises(RuntimeError, match="Mesh repair/retry failed") as error:

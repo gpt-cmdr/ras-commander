@@ -355,7 +355,7 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     monkeypatch.setattr(
         geom_mesh_module,
         "_audit_domain_containment_hdf",
-        lambda hdf_path, mesh_name, base_cell_spacing: (
+        lambda hdf_path, mesh_name, base_cell_spacing, **kwargs: (
             geom_mesh_module.DomainContainmentResult(
                 mesh_name=mesh_name,
                 geom_hdf_path=str(hdf_path),
@@ -413,7 +413,7 @@ def _mock_generate_success(monkeypatch, geom_text_path: Path, *, has_breaklines:
     monkeypatch.setattr(
         geom_mesh_module,
         "_build_breaklines",
-        lambda d2fa, ns: "mock_breaklines" if has_breaklines else None,
+        lambda d2fa, ns, **kwargs: "mock_breaklines" if has_breaklines else None,
     )
     monkeypatch.setattr(
         geom_mesh_module,
@@ -1080,6 +1080,7 @@ class TestDomainContainmentAudit:
         result = GeomMesh.audit_domain_containment(
             geom_text,
             mesh_name="MainArea",
+            strict_refinement_containment=True,
         )
 
         assert result.base_cell_spacing == 100.0
@@ -1810,7 +1811,10 @@ class TestGenerate:
 
         def fake_generate_seeds_via_net(hdf_path, ns, fid=0):
             seed_calls.append(fid)
-            return FakePointCollection()
+            points = MockPointMs()
+            points.Add(MockPointM(225.0, 25.0))
+            points.Add(MockPointM(275.0, 75.0))
+            return points
 
         monkeypatch.setattr(
             geom_mesh_module,
