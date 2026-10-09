@@ -24,13 +24,16 @@ Production Workflow (generate)
 2. **Existing HDF validation** — Require a current .g##.hdf compiled by
    HEC-RAS/Ras.exe before any mesh-generation work begins.
 3. **Containment gate** — Erode the exact compiled 2D perimeter inward by one
-   base-cell spacing. Require every associated breakline, refinement region,
-   and structure to be wholly covered by that admissible polygon. Boundary
+   base-cell spacing. Require every associated breakline and structure to be
+   wholly covered by that admissible polygon. Valid refinement regions can
+   touch or extend beyond the perimeter; the generator filters their points.
+   The old region margin gate is available explicitly. Boundary
    condition lines are checked separately because they belong on the perimeter.
 4. **Text → HDF sync** — Sync per-breakline spacing from text into the HDF so
    RegenerateMeshPoints (which reads HDF, not text) uses correct values.
 5. **Load .NET geometry** — RASGeometry(hdf_path) → D2FlowArea → perimeter,
-   breaklines (merged BreakLines + Regions + Structures via _build_breaklines).
+   breaklines and structures via _build_breaklines. Region edges are included
+   only in the explicit RAS Mapper compatibility mode.
 6. **Generate seeds** — Primary: RegenerateMeshPoints (private .NET method via
    reflection) produces breakline- and refinement-region-aware seeds.
    Fallback: PointGenerator.GeneratePoints(perim, cell_size) for base-grid seeds.
@@ -381,8 +384,13 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
                 logger.warning(f"Failed to remove temp breakline FID {rm_fid}")
 
 
-def _build_breaklines(d2fa, ns: dict):
-    """Merge BreakLines + MeshRegions + Structures into multipart Polyline."""
+def _build_breaklines(d2fa, ns: dict, refinement_region_constraints: bool = False):
+    """Collect saved-point compile constraints, or the RAS Mapper constraint set.
+
+    Region boundaries influence RegenerateMeshPoints in either mode. The
+    saved-point text compiler does not receive the HDF region polygons.
+    RAS Mapper also constrains their edges when constructing its mesh.
+    """
     Polyline = ns["Polyline"]
     PolylineFeatureLayer = ns["PolylineFeatureLayer"]
 
@@ -395,13 +403,14 @@ def _build_breaklines(d2fa, ns: dict):
                 n += 1
     except Exception:
         pass
-    try:
-        for rgn in d2fa.Geometry.MeshRegions.Polygons():
-            if Polyline.IsValidPolyline(rgn):
-                combined.AddFeature(rgn)
-                n += 1
-    except Exception:
-        pass
+    if refinement_region_constraints:
+        try:
+            for rgn in d2fa.Geometry.MeshRegions.Polygons():
+                if Polyline.IsValidPolyline(rgn):
+                    combined.AddFeature(rgn)
+                    n += 1
+        except Exception:
+            pass
     try:
         for struc in d2fa.Geometry.Structures.Polylines():
             if Polyline.IsValidPolyline(struc):
@@ -2274,6 +2283,7 @@ def _audit_domain_containment_hdf(
     hdf_path: Path,
     mesh_name: str,
     base_cell_spacing: float,
+    strict_refinement_containment: bool = False,
 ) -> DomainContainmentResult:
     """Audit mesh-owned features against a one-cell inward domain buffer."""
     import h5py
@@ -2334,7 +2344,10 @@ def _audit_domain_containment_hdf(
             if geometry is not None and not reason:
                 if geometry.is_empty or not geometry.is_valid:
                     reason = "invalid_or_empty_geometry"
-                elif not admissible.covers(geometry):
+                elif (
+                    (feature_type != "refinement_region" or strict_refinement_containment)
+                    and not admissible.covers(geometry)
+                ):
                     reason = "outside_one_cell_inward_buffer"
             if not reason:
                 continue
@@ -2957,12 +2970,12 @@ def _refinement_region_attribute_rows(regions: Sequence[Mapping[str, Any]]):
                 str(region["name"]).encode("utf-8"),
                 np.float32(region["spacing_dx"]),
                 np.float32(region["spacing_dy"]),
-                np.float32(np.nan),
-                np.float32(np.nan),
-                np.float32(np.nan),
-                np.int32(0),
-                np.float32(np.nan),
-                np.uint8(0),
+                np.float32(region.get("shift_dx", np.nan)),
+                np.float32(region.get("shift_dy", np.nan)),
+                np.float32(region.get("perimeter_spacing", np.nan)),
+                np.int32(region.get("near_repeats", 0)),
+                np.float32(region.get("far_spacing", np.nan)),
+                np.uint8(region.get("protection_radius", 0)),
             )
             for region in regions
         ],
@@ -3185,15 +3198,21 @@ class GeomMesh:
         cell_size: Optional[float] = None,
         ras_object=None,
         recompile_via_rasexe: bool = False,
+        strict_refinement_containment: bool = False,
     ) -> DomainContainmentResult:
-        """Verify mesh-owned features stay one base cell inside the 2D perimeter.
+        """Audit mesh features before point generation.
 
         The admissible geometry is the exact compiled 2D perimeter buffered
-        *inward* by one base mesh-cell spacing. Every breakline, refinement
-        region, and structure associated with the selected 2D area must be
+        *inward* by one base mesh-cell spacing. Every breakline and
+        structure associated with the selected 2D area must be
         wholly covered by that eroded polygon. Boundary-condition lines are
         intentionally excluded because external BC lines are authored at the
         perimeter and require a separate association audit.
+
+        Valid refinement regions may touch or extend beyond the perimeter;
+        RAS Mapper restricts their generated points to the 2D area. Set
+        ``strict_refinement_containment=True`` to apply the earlier one-cell
+        inward margin to regions as well.
 
         This read-only check is cross-platform and does not load RasMapperLib.
         A missing, stale, malformed, or ambiguous geometry HDF fails closed.
@@ -3243,6 +3262,7 @@ class GeomMesh:
             hdf_path,
             mesh_name,
             cell_size,
+            strict_refinement_containment=strict_refinement_containment,
         )
 
     @staticmethod
@@ -4746,6 +4766,8 @@ class GeomMesh:
         ras_object=None,
         recompile_via_rasexe: bool = False,
         _require_current_hdf: bool = True,
+        refinement_region_constraints: bool = False,
+        strict_refinement_containment: bool = False,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -4801,6 +4823,14 @@ class GeomMesh:
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
                 The geometry must be referenced by a plan in *ras_object*.
+            refinement_region_constraints: If False (default), evaluate and
+                repair the saved-point mesh with breakline/structure constraints.
+                Regions still shape point generation. True retains the earlier
+                RAS Mapper mesh with region-edge constraints. A cached Mapper
+                mesh may differ from a fresh text-point compile.
+            strict_refinement_containment: If True, retain the earlier one-cell
+                inward margin for regions. False permits valid region extents
+                across or outside the perimeter, as RAS Mapper does.
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
@@ -4884,14 +4914,15 @@ class GeomMesh:
                     )
 
             # ── Step 1b: Fail-closed mesh-feature containment gate ───
-            # Breaklines, refinement regions, and SA/2D structures must
-            # remain one full base cell inside the exact new perimeter.
+            # Breaklines and SA/2D structures retain the one-cell margin.
+            # Refinement regions use native extent handling by default.
             # External boundary-condition lines are audited separately.
             domain_containment = _audit_domain_containment_hdf(
                 hdf_path,
                 mesh_name
                 or list(_read_mesh_metadata_from_hdf(hdf_path))[mesh_index],
                 float(cell_size),
+                strict_refinement_containment=strict_refinement_containment,
             )
             result.domain_containment = domain_containment
             result.mesh_name = domain_containment.mesh_name
@@ -4969,7 +5000,9 @@ class GeomMesh:
                 f"[{mesh_name}] {perim.Count}-point perimeter from .NET"
             )
 
-            breaklines = _build_breaklines(d2fa, ns)
+            breaklines = _build_breaklines(
+                d2fa, ns, refinement_region_constraints=refinement_region_constraints
+            )
 
             # ── Step 4: Generate seeds via .NET ──────────────────────────
             # Always try RegenerateMeshPoints first — it uses the correct
@@ -5027,7 +5060,10 @@ class GeomMesh:
                 )
                 evidence["reason"] = reason
                 result.perimeter_repairs.append(evidence)
-                containment = _audit_domain_containment_hdf(hdf_path, mesh_name, float(cell_size))
+                containment = _audit_domain_containment_hdf(
+                    hdf_path, mesh_name, float(cell_size),
+                    strict_refinement_containment=strict_refinement_containment,
+                )
                 result.domain_containment = containment
                 if not containment:
                     raise RuntimeError("Repaired perimeter failed mesh-feature containment")
@@ -5041,7 +5077,9 @@ class GeomMesh:
                 current_perim = d2fa.Geometry.MeshPerimeters.Polygon(fid)
                 if current_perim is None or current_perim.Count < 3:
                     raise RuntimeError("Recompiled HDF has an empty repaired perimeter")
-                breaklines = _build_breaklines(d2fa, ns)
+                breaklines = _build_breaklines(
+                    d2fa, ns, refinement_region_constraints=refinement_region_constraints
+                )
                 current_seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
 
             # Tier 0: Pre-simplify short perimeter segments
@@ -5386,6 +5424,8 @@ class GeomMesh:
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object: Optional['RasPrj'] = None,
         recompile_via_rasexe: bool = False,
+        refinement_region_constraints: bool = False,
+        strict_refinement_containment: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -5409,6 +5449,10 @@ class GeomMesh:
             ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
+            refinement_region_constraints: Include region edges in mesh
+                constraints (RAS Mapper compatibility); defaults to False.
+            strict_refinement_containment: Apply the old inward region margin;
+                defaults to False.
 
         Returns:
             List of MeshResult, one per 2D flow area.
@@ -5443,6 +5487,8 @@ class GeomMesh:
                 hecras_dir=hecras_dir,
                 ras_object=ras_object,
                 recompile_via_rasexe=recompile_via_rasexe,
+                refinement_region_constraints=refinement_region_constraints,
+                strict_refinement_containment=strict_refinement_containment,
                 _require_current_hdf=False,
             )
             results.append(r)
