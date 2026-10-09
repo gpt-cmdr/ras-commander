@@ -9,6 +9,24 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Refinement-region constraints and child areas**
+
+`GeomMesh.generate()` and `generate_all()` now default to saved-point compile
+constraints: breaklines and structures, with refinement regions shaping point
+generation. Pass `refinement_region_constraints=True` for the earlier RAS
+Mapper mesh with constrained region edges. Point writes refresh the native
+mesh timestamp; successful generation persists the effective face-length ratio.
+Valid regions may extend beyond the 2D perimeter, and generated outside/boundary
+points are removed. `strict_refinement_containment=True` retains the earlier
+one-cell inward region margin.
+
+`clip_refinement_regions()` prepares delivered regions for a child perimeter
+and reports each source region's disposition. `replace_refinement_regions()`
+now preserves optional native transition and protection properties. Clipping
+can change grid origins and perimeter transitions; spacing preservation does
+not reproduce the original point pattern exactly. See the
+[meshing guide](../api/meshing.md#carry-refinement-regions-into-a-child-area).
+
 ### v0.104.0 (October 2026)
 
 **Read-only text metadata API**

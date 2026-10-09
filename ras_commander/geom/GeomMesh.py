@@ -103,6 +103,7 @@ from .GeomMeshDataclasses import (
 
 if TYPE_CHECKING:
     import numpy
+    import pandas
     from RasMapperLib import PointMs
     from ..RasPrj import RasPrj
 
@@ -531,17 +532,20 @@ def _remove_seed_indexes(seeds_pm, indexes: set[int], ns: dict):
 
 
 
-def _seed_indexes_outside_perimeter(seeds_pm, perimeter) -> set[int]:
+def _seed_indexes_outside_perimeter(
+    seeds_pm, perimeter, strictly_inside: bool = False
+) -> set[int]:
     """Return seed indexes outside an exact .NET perimeter polygon."""
     from shapely.geometry import Point
 
     polygon = _perimeter_shapely_polygon(perimeter)
     if polygon is None:
         return set()
+    contains = polygon.contains if strictly_inside else polygon.covers
     return {
         index
         for index in range(seeds_pm.Count)
-        if not polygon.covers(
+        if not contains(
             Point(float(seeds_pm[index].X), float(seeds_pm[index].Y))
         )
     }
@@ -1826,7 +1830,49 @@ def _patch_text_seeds(
         )
 
     _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
+    _refresh_points_perimeter_time(geom_text_path, mesh_name)
     logger.debug(f"Text seeds patched → {n} points in {geom_text_path.name}")
+
+
+def _refresh_points_perimeter_time(geom_text_path: Path, mesh_name: str | None) -> None:
+    """Invalidate the native mesh cache after writing computation points."""
+    from datetime import datetime, timedelta
+
+    from .GeomStorage import GeomStorage
+
+    lines = geom_text_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    areas_with_time = set()
+    area = None
+    for line in lines:
+        if line.startswith("Storage Area="):
+            area = line.split("=", 1)[1].split(",", 1)[0].strip()
+        elif line.startswith("Storage Area 2D PointsPerimeterTime="):
+            areas_with_time.add(area)
+    current_area = None
+    found_time = False
+    stamp = GeomStorage._current_timestamp()
+    modified = []
+    for line in lines:
+        if line.startswith("Storage Area="):
+            current_area = line.split("=", 1)[1].split(",", 1)[0].strip()
+            found_time = False
+        target = mesh_name is None or current_area == mesh_name
+        if target and line.startswith("Storage Area 2D PointsPerimeterTime="):
+            old_stamp = line.split("=", 1)[1].strip()
+            if stamp == old_stamp:
+                stamp = (datetime.strptime(stamp, "%d%b%Y %H:%M:%S") + timedelta(seconds=1)).strftime(
+                    "%d%b%Y %H:%M:%S"
+                )
+            line = f"Storage Area 2D PointsPerimeterTime={stamp}\n"
+            found_time = True
+        elif (
+            target and not found_time and current_area not in areas_with_time
+            and line.startswith("Storage Area 2D Points=")
+        ):
+            modified.append(f"Storage Area 2D PointsPerimeterTime={stamp}\n")
+            found_time = True
+        modified.append(line)
+    _write_ras_text(geom_text_path, "".join(modified), encoding="utf-8")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -3210,7 +3256,7 @@ class GeomMesh:
         perimeter and require a separate association audit.
 
         Valid refinement regions may touch or extend beyond the perimeter;
-        RAS Mapper restricts their generated points to the 2D area. Set
+        ``generate()`` removes native points outside the 2D area. Set
         ``strict_refinement_containment=True`` to apply the earlier one-cell
         inward margin to regions as well.
 
@@ -3756,6 +3802,139 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def clip_refinement_regions(
+        geom_number: str | Number | Path,
+        perimeter,
+        *,
+        min_area: float = 0.0,
+        invalid_regions: str = "raise",
+        hecras_dir: str | Path | None = None,
+        ras_object=None,
+    ) -> tuple[list[dict[str, Any]], pandas.DataFrame]:
+        """Prepare delivered refinement regions for a smaller 2D perimeter.
+
+        Read the source HDF without modifying it. Intersect each region with
+        *perimeter*, retain its native spacing properties, and return mappings
+        for ``replace_refinement_regions()`` plus a per-source-region DataFrame.
+        Disconnected intersections become separate output regions in source
+        order, with the same name and properties. Duplicate names are permitted.
+
+        Args:
+            geom_number: Source geometry number or .g## text path.
+            perimeter: Child Shapely Polygon or (N, 2) XY coordinates in the
+                source geometry's CRS and project length units. Holes are not
+                supported by the replacement writer.
+            min_area: Optional fragment area cutoff in squared project units.
+                Default zero retains every positive-area fragment, including
+                regions smaller than one spacing_dx * spacing_dy cell. Such
+                regions do not necessarily produce an interior grid point.
+            invalid_regions: "raise" (default) rejects invalid polygons or
+                unsupported holes; "drop" records them as dropped and continues.
+            hecras_dir: Optional HEC-RAS installation for source HDF validation.
+            ras_object: Optional source RasPrj context.
+
+        Returns:
+            (regions, report). Regions preserve X/Y spacing, shifts, perimeter
+            spacing, near repeats, far spacing and protection radius. Report
+            columns are source_fid, name, status (kept/clipped/dropped), reason,
+            source_area, retained_area, output_fids, touches_perimeter and
+            below_one_cell_area. Areas use squared project units.
+
+        Raises:
+            ValueError: Invalid perimeter, area cutoff, source polygon or
+                unsupported interior rings. No files are written.
+
+        Notes:
+            Clipping changes the region extent used as the grid origin and
+            creates new perimeter transitions. Retaining spacing and shifts
+            does not reproduce the full region's original points or transitions.
+        """
+        import h5py
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Polygon
+
+        from ..hdf.HdfBndry import HdfBndry
+
+        child = perimeter if isinstance(perimeter, Polygon) else Polygon(
+            _normalise_polygon_coords(perimeter)
+        )
+        if child.is_empty or not child.is_valid or child.area <= 0 or child.interiors:
+            raise ValueError("perimeter must be a valid positive-area Polygon without holes")
+        min_area = float(min_area)
+        if not math.isfinite(min_area) or min_area < 0:
+            raise ValueError("min_area must be finite and non-negative")
+        if invalid_regions not in ("raise", "drop"):
+            raise ValueError("invalid_regions must be 'raise' or 'drop'")
+        source_path = _resolve_geom_text_path(geom_number, ras_object)
+        hdf_path = _ensure_hdf(
+            source_path, hecras_dir=hecras_dir, ras_object=ras_object,
+            ignore_seed_count=True,
+        )
+        source = HdfBndry.get_refinement_regions(hdf_path)
+        properties = {
+            "Spacing dx": "spacing_dx", "Spacing dy": "spacing_dy",
+            "Shift dx": "shift_dx", "Shift dy": "shift_dy",
+            "Perimeter Spacing": "perimeter_spacing",
+            "Near Spacing Repeats": "near_repeats", "Far Spacing": "far_spacing",
+            "Protection Radius": "protection_radius",
+        }
+        with h5py.File(hdf_path, "r") as hdf:
+            key = "Geometry/2D Flow Area Refinement Regions/Attributes"
+            attributes = _coerce_refinement_region_attributes(hdf[key][()]) if key in hdf else []
+        output: list[dict[str, Any]] = []
+        rows = []
+        for fid, row in source.iterrows():
+            region = row.geometry
+            parts = list(_iter_polygon_geometries(region))
+            if region.is_empty or not region.is_valid or not parts or any(p.interiors for p in parts):
+                if invalid_regions == "raise":
+                    raise ValueError(f"Source region FID {fid} is invalid or has unsupported interior rings")
+                reason = "unsupported_interior_rings" if any(p.interiors for p in parts) else "invalid_source_geometry"
+                rows.append({
+                    "source_fid": int(fid), "name": row["Name"], "status": "dropped",
+                    "reason": reason, "source_area": float(region.area),
+                    "retained_area": 0.0, "output_fids": [], "touches_perimeter": False,
+                    "below_one_cell_area": False,
+                })
+                continue
+            native = {target: attributes[fid][field].item() for field, target in properties.items()}
+            dx, dy = float(native["spacing_dx"]), float(native["spacing_dy"])
+            if not np.isfinite([dx, dy]).all() or min(dx, dy) <= 0:
+                raise ValueError(f"Source region FID {fid} has invalid X/Y spacing")
+            intersection = region.intersection(child)
+            fragments = [p for p in _iter_polygon_geometries(intersection) if p.area > 0]
+            kept = [p for p in fragments if p.area >= min_area]
+            if any(p.interiors for p in kept):
+                raise ValueError(f"Clipped region FID {fid} has unsupported interior rings")
+            output_fids = []
+            for part in kept:
+                output_fids.append(len(output))
+                output.append({"name": row["Name"], "polygon": part, **native})
+            retained = sum(p.area for p in kept)
+            if not fragments:
+                status, reason = "dropped", "no_polygon_overlap"
+            elif not kept:
+                status, reason = "dropped", "below_min_area"
+            elif region.equals(intersection) and len(kept) == len(fragments):
+                status, reason = "kept", "inside_child_perimeter"
+            else:
+                status, reason = "clipped", "child_perimeter_intersection"
+                if len(kept) != len(fragments):
+                    reason = "intersection_fragments_below_min_area"
+            rows.append({
+                "source_fid": int(fid), "name": row["Name"], "status": status,
+                "reason": reason, "source_area": float(region.area),
+                "retained_area": float(retained), "output_fids": output_fids,
+                "touches_perimeter": any(p.intersects(child.boundary) for p in kept),
+                "below_one_cell_area": any(p.area < dx * dy for p in kept),
+            })
+        columns = ["source_fid", "name", "status", "reason", "source_area",
+                   "retained_area", "output_fids", "touches_perimeter", "below_one_cell_area"]
+        return output, pd.DataFrame(rows, columns=columns)
+
+    @staticmethod
+    @log_call
     def replace_refinement_regions(
         geom_number: Union[str, Number, Path],
         regions: Sequence[Mapping[str, Any]],
@@ -3771,6 +3950,13 @@ class GeomMesh:
         ``spacing_dx``; ``spacing_dy`` defaults to ``spacing_dx`` and ``name``
         defaults to an empty string. The replacement is built and validated in
         a same-directory temporary HDF before it is promoted over the original.
+
+        Optional native properties are ``shift_dx``, ``shift_dy``,
+        ``perimeter_spacing``, ``near_repeats``, ``far_spacing`` and
+        ``protection_radius``. Missing floating properties default to NaN;
+        missing repeats and protection radius default to zero. Polygon holes
+        are rejected rather than silently filled. Use ``clip_refinement_regions``
+        to prepare a delivered collection for a child perimeter.
 
         ``expected_existing_names`` is an optimistic-concurrency guard. Names
         are compared in HDF/FID order and may contain duplicates or empty
@@ -3821,6 +4007,8 @@ class GeomMesh:
             polygon = raw.get("polygon", raw.get("geometry"))
             if polygon is None:
                 raise ValueError(f"regions[{index}] is missing polygon or geometry")
+            if hasattr(polygon, "interiors") and polygon.interiors:
+                raise ValueError(f"regions[{index}] polygon has unsupported interior rings")
             coords = _normalise_polygon_coords(polygon)
             if len(coords) < 3:
                 raise ValueError(
@@ -3850,6 +4038,20 @@ class GeomMesh:
                     "spacing_dy": spacing_dy,
                 }
             )
+            native = normalized[-1]
+            for key in ("shift_dx", "shift_dy", "perimeter_spacing", "far_spacing"):
+                value = float(raw.get(key, np.nan))
+                if not np.isnan(value) and (
+                    not np.isfinite(value) or abs(value) > np.finfo(np.float32).max
+                    or (key in ("perimeter_spacing", "far_spacing") and value <= 0)
+                ):
+                    raise ValueError(f"regions[{index}] {key} must be valid native spacing/shift or NaN")
+                native[key] = value
+            for key, upper in (("near_repeats", np.iinfo(np.int32).max), ("protection_radius", 1)):
+                value = raw.get(key, 0)
+                if not isinstance(value, (int, np.integer)) or not 0 <= value <= upper:
+                    raise ValueError(f"regions[{index}] {key} must be an integer in [0, {upper}]")
+                native[key] = int(value)
 
         attributes = _refinement_region_attribute_rows(normalized)
         info_rows = []
@@ -5027,6 +5229,20 @@ class GeomMesh:
                     f"PointGenerator.GeneratePoints"
                 )
 
+            if net_seeds_ok:
+                # Native region generation can retain points beyond a smaller
+                # area when the source region extends far outside it. Such
+                # points cannot be serialized for a valid text-point compile.
+                outside = _seed_indexes_outside_perimeter(
+                    seeds_pm, perim, strictly_inside=True
+                )
+                if outside:
+                    seeds_pm, removed = _remove_seed_indexes(seeds_pm, outside, ns)
+                    result.fixes_applied.append(f"removed_{removed}_outside_or_boundary_seeds")
+                if seeds_pm.Count == 0:
+                    result.error_message = "Point generation produced no points inside the 2D perimeter"
+                    return result
+
             # ── Fix loop setup (same tier structure as RASDecomp) ────────
             ratios = [r for r in _RATIO_LADDER if r >= min_face_length_ratio]
             if not ratios:
@@ -5081,6 +5297,16 @@ class GeomMesh:
                     d2fa, ns, refinement_region_constraints=refinement_region_constraints
                 )
                 current_seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+                outside = _seed_indexes_outside_perimeter(
+                    current_seeds_pm, current_perim, strictly_inside=True
+                )
+                if outside:
+                    current_seeds_pm, removed = _remove_seed_indexes(
+                        current_seeds_pm, outside, ns
+                    )
+                    result.fixes_applied.append(f"removed_{removed}_outside_or_boundary_seeds")
+                if current_seeds_pm.Count == 0:
+                    raise RuntimeError("Repaired area has no computation points inside its perimeter")
 
             # Tier 0: Pre-simplify short perimeter segments
             pre_n = current_perim.Count
@@ -5170,6 +5396,21 @@ class GeomMesh:
                         return result
 
                     # Fast path: geom.Save() → h5py bulk read
+                    # Use the same face-collapse tolerance in the saved geometry
+                    # as in the mesh that the repair loop just evaluated.
+                    from .GeomStorage import GeomStorage
+
+                    settings = GeomStorage.get_2d_flow_area_settings(text_path)
+                    selected = settings.loc[settings["name"] == mesh_name, "min_face_length_ratio"]
+                    text_ratio = selected.iloc[0] if len(selected) else None
+                    if text_ratio is None or not math.isfinite(float(text_ratio)):
+                        text_ratio = 0.05
+                    if not math.isclose(float(text_ratio), ratio, rel_tol=0, abs_tol=1e-8):
+                        GeomStorage.set_2d_flow_area_settings(
+                            text_path, mesh_name, min_face_length_ratio=ratio
+                        )
+                    if hasattr(d2fa, "SetMinFaceLengthRatio"):
+                        d2fa.SetMinFaceLengthRatio(fid, float(ratio))
                     _new_seeds = None
                     try:
                         _save_mesh(geom, d2fa, fid, mesh, ns)

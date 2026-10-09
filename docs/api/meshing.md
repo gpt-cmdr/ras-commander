@@ -37,7 +37,7 @@ RASMapper completion of an existing HDF is not text-to-HDF compilation.
 |---|---|---|
 | Missing mesh arrays or older HDF layout | `HdfMesh.diagnose_mesh_layout()` | Inspect capability status and source paths; preprocess a copy when topology is absent. A recovered perimeter does not supply face connectivity. |
 | Omitted or ambiguous cell polygons | `HdfMesh.diagnose_mesh_cell_polygons()`; `get_mesh_cell_polygons(strict=True)` | Review native cell/face IDs. The reader does not repair topology or substitute a convex hull. |
-| Breakline, refinement, or structure outside the domain | `GeomMesh.audit_domain_containment()` | Correct the source controls or perimeter and recompile through ras-commander before regeneration. |
+| Breakline or structure outside the domain; invalid refinement polygon | `GeomMesh.audit_domain_containment()` | Correct the source controls or perimeter and recompile through ras-commander before regeneration. |
 | BC lines near the same perimeter face | `GeomMesh.detect_bc_conflicts()`; `fix_bc_conflicts(dry_run=True)` | Review candidate overlaps; supported repair trims BC endpoints in the copied HDF. |
 | Native generation fails | `GeomMesh.generate()` result or raised exception | Review the bounded retry/repair evidence below; persisted perimeter changes have a separate failure contract. |
 | Extreme areas, aspect ratios, or face velocities | `RasCheck.check_mesh_quality(plan_hdf, geom_hdf)` | Inspect messages and source outputs; these checks do not select an acceptable mesh resolution. |
@@ -152,9 +152,11 @@ can also change text and HDF: work on a disposable project copy and inspect
 `MeshResult.perimeter_repairs`, backups, displacement and area changes.
 See the [repair contract](#repair-persistence-and-failure-contract) for failure semantics.
 
-The domain gate checks mesh-owned breaklines, refinements and structures against
-the exact perimeter buffered inward by one base-cell spacing. BC lines are
-excluded from that gate and need their separate association/overlap checks.
+The domain gate checks breaklines and structures against the exact perimeter
+buffered inward by one base-cell spacing. Valid refinement regions can touch
+or extend beyond the perimeter. `strict_refinement_containment=True` applies
+the earlier inward margin to regions too. BC lines need separate association
+and overlap checks.
 Property-table success does not prove that intended land-cover assignments were
 used: validate associations and inspect final cell properties.
 
@@ -176,8 +178,8 @@ they do not qualify every geometry, release or hydraulic configuration.
 
 ## Repair persistence and failure contract
 
-- `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` - Fail closed unless every breakline, refinement region, and structure associated with the selected 2D area is wholly covered by the exact compiled perimeter buffered **inward** by one base mesh-cell spacing. BC lines are intentionally excluded because they are authored on the perimeter and require a separate association/overlap audit.
-- `generate(geom_number, mesh_name=..., ras_object=...)` - Regenerate the mesh and automatically run the same inward one-cell containment gate before loading native RAS Mapper dependencies.
+- `audit_domain_containment(geom_number, mesh_name=..., cell_size=..., ras_object=...)` checks the breakline/structure margin and region validity. `strict_refinement_containment=True` also checks region extents against the inward margin. BC lines require a separate audit.
+- `generate(geom_number, mesh_name=..., ras_object=...)` runs that gate before loading native RAS Mapper dependencies.
 
 When the existing automatic-repair loop removes perimeter vertices or applies
 Douglas–Peucker simplification, `generate()` writes the repaired perimeter through
@@ -202,6 +204,7 @@ Failed repair handoffs and retries raise `RuntimeError` chained to the original
 mesh repair reason, including iteration exhaustion. Ordinary failures before any
 repair retain the existing `MeshResult` behavior. These records describe geometry
 changes; they do not establish hydraulic acceptance.
+
 - `compute_property_tables(geom_number, mesh_name=..., ras_object=...)` - Compute face profiles, Manning's n assignments, face hydraulic tables, and cell properties against the restored geometry associations. A missing or broken land-cover link emits a non-fatal warning because HEC-RAS may still return success while populating every cell with the 2D area's scalar default.
 
 Before property-table generation, use
@@ -211,6 +214,78 @@ land-cover paths needed by the workflow. Registration in `.rasmap` does not
 prove that a geometry HDF is associated. After preprocessing, validate the
 temporary plan HDF; after computation, repeat the check on the final plan HDF
 with `HdfLandCover.audit_final_mannings_n()` and explicit cell-center criteria.
+
+## Saved-point compilation and RAS Mapper constraints
+
+`generate()` and `generate_all()` default to
+`refinement_region_constraints=False`. Breaklines and structures remain
+constraints. Refinement regions shape computation-point generation through
+native RAS Mapper, including interior spacing, perimeter spacing, near repeats,
+far spacing and protection radius. Region edges are excluded from the mesh
+used to classify and repair the saved computation points. Set
+`refinement_region_constraints=True` to retain the earlier RAS Mapper mesh
+with region-edge constraints.
+
+Qualification with HEC-RAS 6.6 distinguishes a cached RAS Mapper mesh from
+a fresh geometry-text point compile. Mapper can retain region-edge constraints
+in a compiled HDF; a text-point rebuild can produce different face counts.
+An unchanged cache is therefore insufficient evidence of compile agreement.
+Point writes refresh `Storage Area 2D PointsPerimeterTime`, and successful
+generation persists the face-length ratio used by the repair loop. Native
+region generation can also return points outside a smaller flow area;
+`generate()` removes outside and boundary points before meshing and records
+the removal in `fixes_applied`.
+
+The trimmed 26-point regression has a nine-face cell with breakline constraints
+and a seven-face cell with region-edge constraints. The latter reports
+`Complete`; the saved-point mesh reports `MaxFacesPerCellExceeded`. This
+qualification concerns mesh classification in 6.6. Inspect fresh compiled HDF
+face counts and native data errors after preprocessing, particularly with
+other releases or internal structures.
+
+HEC's [HEC-RAS 6.6 Mapper manual, 2D Flow Areas](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/geometry-data/2d-flow-areas)
+describes the point-generation controls and Mapper's enforcement workflow.
+The saved-point/cache distinction above comes from RAS Commander qualification.
+
+## Carry refinement regions into a child area
+
+Prepare the collection from a content-current source HDF, then replace the
+collection in a disposable child geometry:
+
+```python
+regions, report = GeomMesh.clip_refinement_regions(
+    source_geom,
+    child_perimeter,
+    min_area=0.0,
+)
+GeomMesh.replace_refinement_regions(child_geom, regions)
+```
+
+Coordinates must use the source CRS and project units. The source remains
+unchanged. `replace_refinement_regions()` stages the child HDF update
+atomically and makes a backup by default. It retains X/Y spacing, shifts,
+perimeter spacing, near repeats, far spacing and protection radius from the
+returned mappings. Regenerate points and preprocess the child afterward.
+
+The report has one row per source region: `source_fid`, `name`, `status`,
+`reason`, `source_area`, `retained_area`, `output_fids`, `touches_perimeter`
+and `below_one_cell_area`. Disconnected intersections become separate regions
+with the source name and properties. A line-only intersection is dropped as
+`no_polygon_overlap`. Every positive-area fragment is retained by default;
+small regions need not generate an interior grid point. A caller-selected
+`min_area` drops smaller fragments with a recorded reason. Areas use squared
+project units.
+
+Invalid source polygons and interior rings raise by default. To retain a
+reviewable report while omitting unsupported source regions, pass
+`invalid_regions="drop"` and inspect every dropped row. The replacement writer
+rejects holes rather than filling them.
+
+Clipping changes the region extent used as the interior grid origin and adds
+new perimeter transitions. Preserving spacing and shift fields does not
+reproduce the full region's original points or transitions exactly. A region
+that surrounds the child can therefore produce different points when clipped
+to the child boundary.
 
 ## HEC-RAS Version Support for Headless Mesh Generation
 
@@ -336,6 +411,7 @@ and the [6.6 Mapper manual](https://www.hec.usace.army.mil/confluence/rasdocs/rm
         - get_refinement_regions
         - set_refinement_region_spacing
         - replace_refinement_regions
+        - clip_refinement_regions
         - add_refinement_region
         - add_flowline_refinement_regions
         - compile_geometry
