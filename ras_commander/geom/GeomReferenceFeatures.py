@@ -41,12 +41,15 @@ _REFERENCE_LINE_HEADER_PREFIXES = (
 )
 
 
-def _validate_reference_line_field(value: Any, field_name: str, max_bytes: int) -> str:
+def _validate_reference_line_field(
+    value: Any, field_name: str, max_bytes: int, *, allow_commas: bool = False
+) -> str:
     """Normalize a fixed-width reference-line field without truncating it."""
     normalized = str(value).strip()
     if not normalized:
         raise ValueError(f"{field_name} must be non-empty")
-    invalid = {char for char in normalized if char in ",=\r\n" or ord(char) < 32}
+    forbidden = "=\r\n" if allow_commas else ",=\r\n"
+    invalid = {char for char in normalized if char in forbidden or ord(char) < 32}
     if invalid:
         raise ValueError(
             f"{field_name} contains invalid characters {invalid!r}: {normalized!r}"
@@ -136,7 +139,10 @@ def _reference_line_blocks(file_lines: List[str]) -> List[dict]:
             header_values.append(current.split("=", 1)[1].strip())
 
         name = _validate_reference_line_field(
-            header_values[0], "reference line name", _REFERENCE_LINE_NAME_BYTES
+            header_values[0],
+            "reference line name",
+            _REFERENCE_LINE_NAME_BYTES,
+            allow_commas=True,
         )
         storage_area = _validate_reference_line_field(
             header_values[1],
@@ -1084,6 +1090,12 @@ class GeomReferenceFeatures:
         optionally clip the survivors before replacing them. Reference lines
         belonging to other 2D areas are preserved byte-for-byte.
 
+        Names may contain commas, parentheses and spaces. Unchanged named
+        lines retain their original records, including padding, positions and
+        coordinate precision. Changed collections are written with CRLF.
+        An unchanged ordered collection is not rewritten, preserving all bytes
+        and its placement in the file.
+
         ``expected_existing_names`` is an optional ordered optimistic-
         concurrency guard. An empty ``reference_lines`` sequence removes all
         reference lines associated with ``storage_area``. Returns the backup
@@ -1107,6 +1119,7 @@ class GeomReferenceFeatures:
                 item.get("name", ""),
                 f"reference_lines[{index}] name",
                 _REFERENCE_LINE_NAME_BYTES,
+                allow_commas=True,
             )
             name_key = name.casefold()
             if name_key in seen:
@@ -1152,19 +1165,29 @@ class GeomReferenceFeatures:
                     f"{expected_existing!r}, observed {existing_names!r}"
                 )
 
-        for block in sorted(target_blocks, key=lambda value: value["start"], reverse=True):
-            del file_lines[int(block["start"]):int(block["end"])]
-
-        insert_idx = _reference_line_insert_index(file_lines)
         line_ending = "\r\n" if any(
             line.endswith("\r\n") for line in file_lines
         ) else "\n"
-        replacement_lines = [
-            block_line + line_ending
-            for _, block in prepared
-            for block_line in block
-        ]
-        file_lines[insert_idx:insert_idx] = replacement_lines
+        replacement_lines: list[str] = []
+        unchanged_names: list[str] = []
+        for (name, new_block), item in zip(prepared, reference_lines):
+            matches = [block for block in target_blocks if block["name"] == name]
+            if len(matches) == 1 and np.array_equal(
+                matches[0]["coordinates"], item["coordinates"]
+            ):
+                block = matches[0]
+                replacement_lines.extend(
+                    original_file_lines[int(block["start"]):int(block["end"])]
+                )
+                unchanged_names.append(name)
+            else:
+                replacement_lines.extend(line + line_ending for line in new_block)
+
+        if unchanged_names != existing_names or len(unchanged_names) != len(prepared):
+            for block in sorted(target_blocks, key=lambda value: value["start"], reverse=True):
+                del file_lines[int(block["start"]):int(block["end"])]
+            insert_idx = _reference_line_insert_index(file_lines)
+            file_lines[insert_idx:insert_idx] = replacement_lines
 
         written_blocks = _reference_line_blocks(file_lines)
         written_names = [
@@ -1201,11 +1224,14 @@ class GeomReferenceFeatures:
         if written_other_blocks != original_other_blocks:
             raise RuntimeError("Reference-line replacement changed another 2D area's data")
 
-        backup_path = GeomParser.safe_write_geometry(
-            geom_path,
-            file_lines,
-            create_backup=create_backup,
-        )
+        if file_lines == original_file_lines:
+            backup_path = GeomParser.create_backup(geom_path) if create_backup else None
+        else:
+            backup_path = GeomParser.safe_write_geometry(
+                geom_path,
+                file_lines,
+                create_backup=create_backup,
+            )
         logger.info(
             "Replaced %d reference line(s) with %d for %s in %s",
             len(existing_names),

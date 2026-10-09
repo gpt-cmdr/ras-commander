@@ -9,3 +9,5 @@ tests/fixtures/ineffective_flow/*.g01 -text -diff
 tests/fixtures/plan_output_intervals/UPGU1.p01 -text -diff
 # HEC-RAS example BaldEagleDamBrk.u02 (gate openings); byte-exact CRLF for fixed-width round-trip tests.
 tests/fixtures/rasunsteady_fixed_width/*.u02 -text -diff
+# Reference-line regression retains CRLF, padding, and native coordinate precision.
+tests/fixtures/reference_lines/*.g01 -text -diff

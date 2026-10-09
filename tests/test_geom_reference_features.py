@@ -400,7 +400,7 @@ def test_replace_reference_lines_rejects_arc_coordinate_mismatch(tmp_path):
 
 @pytest.mark.parametrize(
     "bad_name",
-    ["A" * 41, "é" * 21, "Bad,Name", "Bad\nName"],
+    ["A" * 41, "é" * 21, "Bad=Name", "Bad\nName"],
 )
 def test_replace_reference_lines_rejects_invalid_fixed_width_names(
     tmp_path,
