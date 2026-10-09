@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from pandas.api.types import is_string_dtype
 from shapely.geometry import Polygon, box
 from test_geom_mesh import (
     MockPointM,
@@ -16,6 +17,8 @@ from test_geom_mesh import (
     _mock_generate_success,
     _write_containment_fixture,
 )
+
+from ras_commander.schemas import DATAFRAME_SCHEMAS
 
 gm = import_module("ras_commander.geom.GeomMesh")
 PATCH = Path(__file__).parent / "fixtures/refinement_constraints/local_patch.json"
@@ -110,6 +113,47 @@ def test_clip_splits_disconnected_intersection_and_preserves_empty_schema(tmp_pa
     gm.GeomMesh.replace_refinement_regions(path, [])
     regions, report = gm.GeomMesh.clip_refinement_regions(path, box(0, 0, 100, 100))
     assert regions == [] and report.empty and "reason" in report.columns
+
+
+@pytest.mark.parametrize("populated", [False, True])
+def test_clip_report_matches_public_dataframe_schema(tmp_path, populated):
+    path, _ = _write_containment_fixture(tmp_path)
+    source = [
+        {"name": "kept", "polygon": box(10, 10, 20, 20), "spacing_dx": 10},
+        {"name": "clipped", "polygon": box(-10, -10, 20, 20), "spacing_dx": 10},
+        {"name": "dropped", "polygon": box(110, 110, 120, 120), "spacing_dx": 10},
+    ]
+    gm.GeomMesh.replace_refinement_regions(path, source if populated else [])
+    regions, report = gm.GeomMesh.clip_refinement_regions(path, box(0, 0, 100, 100))
+    schema = DATAFRAME_SCHEMAS["refinement_region_clip_report"]
+    assert not schema["dynamic"] and not schema["extra_columns"]
+    assert list(report.columns) == [column["name"] for column in schema["columns"]]
+    for column in schema["columns"]:
+        name, dtype = column["name"], column["dtype"]
+        if dtype == "str":
+            assert is_string_dtype(report[name].dtype)
+            assert all(isinstance(value, str) for value in report[name])
+        elif dtype == "list[int]":
+            assert report[name].dtype == object
+            assert all(
+                isinstance(value, list) and all(isinstance(fid, int) for fid in value)
+                for value in report[name]
+            )
+        else:
+            assert str(report[name].dtype) == dtype
+    if populated:
+        assert report.status.tolist() == ["kept", "clipped", "dropped"]
+        assert report.reason.tolist() == [
+            "inside_child_perimeter",
+            "child_perimeter_intersection",
+            "no_polygon_overlap",
+        ]
+        assert report.source_area.tolist() == [100.0, 900.0, 100.0]
+        assert report.retained_area.tolist() == [100.0, 400.0, 0.0]
+        assert report.output_fids.tolist() == [[0], [1], []]
+        assert len(regions) == 2
+    else:
+        assert not regions and report.empty
 
 
 def test_native_extent_gate_allows_large_and_touching_regions(tmp_path):

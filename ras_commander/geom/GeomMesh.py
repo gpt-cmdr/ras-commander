@@ -3821,7 +3821,8 @@ class GeomMesh:
 
         Args:
             geom_number: Source geometry number or .g## text path.
-            perimeter: Child Shapely Polygon or (N, 2) XY coordinates in the
+            perimeter (shapely.geometry.Polygon | Sequence[Sequence[float]]):
+                Child polygon or (N, 2) XY coordinates in the
                 source geometry's CRS and project length units. Holes are not
                 supported by the replacement writer.
             min_area: Optional fragment area cutoff in squared project units.
@@ -3831,7 +3832,7 @@ class GeomMesh:
             invalid_regions: "raise" (default) rejects invalid polygons or
                 unsupported holes; "drop" records them as dropped and continues.
             hecras_dir: Optional HEC-RAS installation for source HDF validation.
-            ras_object: Optional source RasPrj context.
+            ras_object (RasPrj | None): Optional source RasPrj context.
 
         Returns:
             (regions, report). Regions preserve X/Y spacing, shifts, perimeter
@@ -3931,7 +3932,12 @@ class GeomMesh:
             })
         columns = ["source_fid", "name", "status", "reason", "source_area",
                    "retained_area", "output_fids", "touches_perimeter", "below_one_cell_area"]
-        return output, pd.DataFrame(rows, columns=columns)
+        report = pd.DataFrame(rows, columns=columns).astype({
+            "source_fid": "int64", "source_area": "float64",
+            "retained_area": "float64", "touches_perimeter": "bool",
+            "below_one_cell_area": "bool",
+        })
+        return output, report
 
     @staticmethod
     @log_call
