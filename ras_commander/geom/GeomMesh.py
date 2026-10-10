@@ -627,12 +627,15 @@ def _autofix_max_faces(
     ``PERIMETER_MIDPOINT_INSET_RATIO`` of its face length. RasMapperLib accepts
     a seed on the perimeter, but HEC-RAS geometry preprocessing rejects the
     mesh ("1 point(s) detected outside the perimeter of the 2D-area").
-    If ``stats`` is a dict, ``stats["inset"]`` receives the number moved.
+    Midpoints that remain on or outside a valid perimeter are discarded.
+    If ``stats`` is a dict, ``stats["inset"]`` receives the number moved and
+    ``stats["discarded"]`` records rejected midpoints when nonzero.
 
     Returns (combined_seeds, n_added, new_midpoints_only).
     """
     polygon = _perimeter_shapely_polygon(perimeter) if perimeter is not None else None
     n_inset = 0
+    n_discarded = 0
     new_pts = list(seeds_as_list)
     midpoints_only = []
     seen = set()
@@ -672,6 +675,12 @@ def _autofix_max_faces(
                     mid, moved = _inset_perimeter_midpoint(
                         mid, face_key(fidx), polygon, ns
                     )
+                    from shapely.geometry import Point
+
+                    if not polygon.contains(Point(float(mid.X), float(mid.Y))):
+                        n_discarded += 1
+                        seen.add(fidx)
+                        continue
                     n_inset += int(moved)
                 new_pts.append(mid)
                 midpoints_only.append(mid)
@@ -685,8 +694,12 @@ def _autofix_max_faces(
         logger.debug(
             f"MaxFaces midpoints moved inside the perimeter: {n_inset} of {n_added}"
         )
+    if n_discarded:
+        logger.debug(f"MaxFaces midpoints discarded outside the perimeter: {n_discarded}")
     if stats is not None:
         stats["inset"] = n_inset
+        if n_discarded:
+            stats["discarded"] = n_discarded
     return new_pts, n_added, midpoints_only
 
 
@@ -5017,7 +5030,12 @@ class GeomMesh:
                 None preserves existing values from the .g01 text.
             protection_radius: Enable 1-cell protection radius (0 or 1).
                 None preserves existing values from the .g01 text.
-            min_face_length_ratio: Initial ratio (0.05-0.25).
+            min_face_length_ratio: Positive, finite initial face-length ratio.
+                The first attempt uses this value exactly; ratio escalation uses
+                larger values from 0.05, 0.10, 0.15 and 0.25. Before HEC-RAS
+                6.6, the mesh constructor does not accept a ratio. On success the used
+                ratio is written to geometry text and the Mapper workspace.
+                Native geometry preprocessing remains the validation step.
             max_iterations: Maximum fix-and-retry attempts.
             hecras_dir: HEC-RAS installation whose RasMapperLib to load
                 (6.0 or later). Defaults to the newest installed release
@@ -5051,6 +5069,7 @@ class GeomMesh:
             supply an initialized project with a referencing plan.
 
         Raises:
+            ValueError: The face-length ratio is not positive and finite.
             RuntimeError: A perimeter repair handoff or subsequent mesh retry
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
@@ -5063,6 +5082,11 @@ class GeomMesh:
             geom_text_path=str(geom_path),
         )
 
+        min_face_length_ratio = _normalize_positive_value(
+            min_face_length_ratio, "min_face_length_ratio"
+        )
+        if not math.isfinite(min_face_length_ratio):
+            raise ValueError("min_face_length_ratio must be finite")
         cell_size_provided = cell_size is not None
         if cell_size_provided:
             cell_size = _normalize_positive_value(cell_size, "cell_size")
@@ -5250,9 +5274,9 @@ class GeomMesh:
                     return result
 
             # ── Fix loop setup (same tier structure as RASDecomp) ────────
-            ratios = [r for r in _RATIO_LADDER if r >= min_face_length_ratio]
-            if not ratios:
-                ratios = _RATIO_LADDER[:]
+            ratios = [min_face_length_ratio] + [
+                r for r in _RATIO_LADDER if r > min_face_length_ratio
+            ]
             if not _meshfv2d_takes_min_face_ratio(ns):
                 # Before HEC-RAS 6.6 MeshFV2D has no minFaceLengthRatio, so
                 # ratio escalation cannot change the mesh.
@@ -5360,7 +5384,7 @@ class GeomMesh:
                 ratio = ratios[min(ratio_idx, len(ratios) - 1)]
                 logger.debug(
                     f"[{mesh_name}] Iteration {iteration + 1}: "
-                    f"{current_seeds_pm.Count} seeds, ratio={ratio:.2f}"
+                    f"{current_seeds_pm.Count} seeds, ratio={ratio:g}"
                 )
 
                 mesh = _compute_mesh(
@@ -5594,7 +5618,7 @@ class GeomMesh:
                 if ratio_idx < len(ratios) - 1:
                     old_r = ratios[ratio_idx]
                     ratio_idx += 1
-                    fix_msg = f"Ratio:{old_r:.2f}->{ratios[ratio_idx]:.2f}"
+                    fix_msg = f"Ratio:{old_r:g}->{ratios[ratio_idx]:g}"
                     result.fixes_applied.append(fix_msg)
                     logger.debug(f"[{mesh_name}] Fix applied: {fix_msg}")
                     continue

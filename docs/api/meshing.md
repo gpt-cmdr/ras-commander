@@ -4,6 +4,18 @@
 engine. Import it from `ras_commander.geom` (also exported at package root).
 Use `HdfMesh` to inspect meshes; use `RasCmdr` to compute hydraulic plans.
 
+For HEC-RAS 6.6 and later, `generate(min_face_length_ratio=...)` starts at the
+requested positive, finite ratio, then escalates to larger values in the repair
+ladder if needed. A successful generation persists the used ratio in geometry
+text and the RASMapper workspace. Before 6.6, the mesh constructor does not
+accept this ratio.
+
+`MeshResult.ok` reports mesh authoring success. Validate the saved geometry with
+native preprocessing through `GeomPreprocessor.run_geometry_preprocessor()` or
+`RasCmdr.compute_plan(force_geompre=True)` before accepting it for computation.
+Passing an in-memory mesh check at one or several ratios does not establish
+native preprocessing success.
+
 | Stage | API | Input → output |
 |---|---|---|
 | Bootstrap points | `generate_computation_points` | Authored perimeter text and spacing -> regular-grid computation points in text; no existing HDF required |
