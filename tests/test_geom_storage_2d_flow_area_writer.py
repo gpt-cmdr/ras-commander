@@ -511,6 +511,38 @@ def test_replace_breaklines_guard_failure_preserves_original(tmp_path):
     assert not geom_file.with_suffix(".g01.bak").exists()
 
 
+@pytest.mark.parametrize("flag", [-1, 0, 1])
+def test_replace_breaklines_preserves_native_boolean_text_encoding(tmp_path, flag):
+    from ras_commander.geom.GeomMesh import GeomMesh
+
+    geom_file = _breakline_replacement_fixture(tmp_path)
+    GeomStorage.replace_breaklines(
+        geom_file,
+        "Mesh",
+        [{"name": "Native", "coords": [(10, 10), (90, 90)], "protection_radius": flag}],
+    )
+    assert GeomMesh.get_breakline_spacing(geom_file)[0][-1] == flag
+    assert f"BreakLine Protection Radius={flag}" in geom_file.read_text()
+
+
+@pytest.mark.parametrize("flag", [-2, 2, 0.5])
+def test_replace_breaklines_rejects_non_boolean_protection_without_mutation(
+    tmp_path, flag
+):
+    geom_file = _breakline_replacement_fixture(tmp_path)
+    original = geom_file.read_bytes()
+    with pytest.raises(ValueError, match="protection_radius"):
+        GeomStorage.replace_breaklines(
+            geom_file,
+            "Mesh",
+            [
+                {"name": "Invalid", "coords": [(10, 10), (90, 90)], "protection_radius": flag}
+            ],
+        )
+    assert geom_file.read_bytes() == original
+    assert not geom_file.with_suffix(".g01.bak").exists()
+
+
 def test_replace_breaklines_rejects_duplicate_names_before_write(tmp_path):
     geom_file = _breakline_replacement_fixture(tmp_path)
     original = geom_file.read_bytes()

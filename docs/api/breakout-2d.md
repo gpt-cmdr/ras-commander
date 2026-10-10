@@ -61,6 +61,23 @@ keep, clip, or drop against a one-base-cell inward trim plus a small numeric
 round-trip guard. Existing geometry BC lines and unsteady boundary records are
 classified as `preserve`.
 
+For a child that straddles adjacent parents, declare each additional parent's
+geometry HDF in `Breakout2DSpec(contributing_geometry_hdfs=("Adjacent.g01.hdf",))`.
+The default is `()`; relative paths resolve from the caller's current directory.
+Preflight reads their complete native perimeters and checks containment against
+their union with the owner. Each contributor must have exactly one 2D flow area,
+a valid nonempty polygon and the owner's CRS. Contributor paths must end in
+`.gNN.hdf`; `.pNN.hdf` paths are rejected before reading. The manifest records
+each contributor path and SHA-256 captured while reading its perimeter.
+
+This changes only `child_within_parent` to `child_within_parent_union` for that
+preflight. All other checks, owner base spacing, feature actions and perimeter
+segment classification retain their single-parent behavior. The clone still
+contains one 2D flow area. The caller must independently qualify every contributor
+and import its terrain, roughness, features and forcing before remeshing or
+accepting a union child. Passing union containment alone qualifies no combined
+hydraulic model.
+
 ## Clone associations and prepare geometry
 
 Initialize a separate, disposable project copy before calling the mutation

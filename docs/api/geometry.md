@@ -560,6 +560,11 @@ A runnable example is `scripts/sa2d_connection_roundtrip.py`.
 
 ### Explicit physical authoring and clipping
 
+`GeomStorage.replace_breaklines()` preserves the supplied native protection
+flag in geometry text: `-1` and `1` enable one-cell protection; `0` disables it.
+Other integer values and fractional flags are rejected before mutation. Native
+HEC-RAS HDF/readback uses Boolean `True`/`1` for the delivered text value `-1`.
+
 `set_connection(..., weir_width=..., weir_coef=..., crest_profile=...)` requires
 explicit physical inputs. `crest_profile` is a DataFrame with `Station` and
 `Elevation`. Supply both exact existing area names and finite line coordinates.
