@@ -546,14 +546,15 @@ class GeomStorage:
                 f"{v:.{GeomStorage._max_precision_for_field(v, GeomStorage.SURFACE_LINE_COLUMN)}f}"
                 for v in point
             )
-        kept, removed = [], []
+        kept, kept_indexes, removed = [], [], []
         for index, point in enumerate(coords[:-1]):
             if kept and key(point) == key(kept[-1]):
                 removed.append(index)
             else:
                 kept.append(point)
+                kept_indexes.append(index)
         if len(kept) > 1 and key(kept[-1]) == key(kept[0]):
-            removed.append(len(coords) - 2)
+            removed.append(kept_indexes.pop())
             kept.pop()
         if len({key(p) for p in kept}) < 3:
             raise ValueError("2D flow area perimeter needs three distinct serialized vertices")
@@ -561,7 +562,7 @@ class GeomStorage:
             'coordinates': kept + [kept[0]],
             'source_vertex_count': len(coords) - 1,
             'authored_vertex_count': len(kept),
-            'removed_adjacent_vertex_indexes': removed,
+            'removed_adjacent_vertex_indexes': sorted(removed),
             'serialization': 'adaptive_precision_16_character_xy_fields',
             'reason_code': 'ADJACENT_SERIALIZED_PERIMETER_DUPLICATE' if removed else None,
         }

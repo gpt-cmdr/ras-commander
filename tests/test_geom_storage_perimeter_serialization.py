@@ -33,3 +33,11 @@ def test_serialized_closing_duplicate_is_removed_and_ring_closed():
 def test_collapsed_ring_fails_closed():
     with pytest.raises(ValueError, match='distinct serialized'):
         GeomStorage.plan_2d_flow_area_perimeter(coordinates=[(2e6, 14e6), (2e6 + 2e-9, 14e6), (2e6, 14e6 + 2e-9)])
+
+
+def test_repeated_closure_duplicates_keep_original_source_indexes():
+    points = [(2e6, 14e6), (2e6 + 100, 14e6), (2e6, 14e6 + 100),
+              (2e6 + 2e-10, 14e6), (2e6 + 4e-10, 14e6)]
+    plan = GeomStorage.plan_2d_flow_area_perimeter(coordinates=points)
+    assert plan['removed_adjacent_vertex_indexes'] == [3, 4]
+    assert plan['coordinates'] == points[:3] + [points[0]]
