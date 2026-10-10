@@ -14,6 +14,7 @@ List of Functions:
 - repair_viewing_rectangle_from_2d_areas() - Explicitly repair pathological
   2D-only viewing/global extents from authored perimeters
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
+- plan_2d_flow_area_perimeter() - Inspect serialization and adjacent duplicate removal
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
 - get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
@@ -526,6 +527,44 @@ class GeomStorage:
 
         area = twice_area / 2.0
         return centroid_x / (6.0 * area), centroid_y / (6.0 * area)
+
+    @staticmethod
+    def plan_2d_flow_area_perimeter(
+        coordinates: Optional[Sequence[Sequence[float]]] = None, geometry=None
+    ) -> dict:
+        """Plan a closed native ring without mutation, in source horizontal units.
+
+        Removes only adjacent vertices whose XY pairs serialize identically in
+        the native 16-character adaptive-precision fields. Other close vertices
+        remain. Returns coordinates and removed source indexes for recorded
+        authoring; at least three distinct serialized vertices are required.
+        No CRS conversion or topological simplification is performed.
+        """
+        coords = GeomStorage._normalize_perimeter_coords(coordinates, geometry)
+        def key(point):
+            return tuple(
+                f"{v:.{GeomStorage._max_precision_for_field(v, GeomStorage.SURFACE_LINE_COLUMN)}f}"
+                for v in point
+            )
+        kept, removed = [], []
+        for index, point in enumerate(coords[:-1]):
+            if kept and key(point) == key(kept[-1]):
+                removed.append(index)
+            else:
+                kept.append(point)
+        if len(kept) > 1 and key(kept[-1]) == key(kept[0]):
+            removed.append(len(coords) - 2)
+            kept.pop()
+        if len({key(p) for p in kept}) < 3:
+            raise ValueError("2D flow area perimeter needs three distinct serialized vertices")
+        return {
+            'coordinates': kept + [kept[0]],
+            'source_vertex_count': len(coords) - 1,
+            'authored_vertex_count': len(kept),
+            'removed_adjacent_vertex_indexes': removed,
+            'serialization': 'adaptive_precision_16_character_xy_fields',
+            'reason_code': 'ADJACENT_SERIALIZED_PERIMETER_DUPLICATE' if removed else None,
+        }
 
     @staticmethod
     def _format_scalar_value(value) -> str:
@@ -1535,10 +1574,16 @@ class GeomStorage:
 
         GeomStorage._validate_flow_area_name(flow_area_name)
 
-        coords = GeomStorage._normalize_perimeter_coords(
+        plan = GeomStorage.plan_2d_flow_area_perimeter(
             coordinates=coordinates,
             geometry=geometry,
         )
+        coords = plan['coordinates']
+        if plan['removed_adjacent_vertex_indexes']:
+            logger.info(
+                "Removed %d adjacent serialized perimeter duplicates for %s",
+                len(plan['removed_adjacent_vertex_indexes']), flow_area_name,
+            )
         centroid_x, centroid_y = GeomStorage._polygon_centroid(coords)
         normalized_point_generation_data = GeomStorage._normalize_point_generation_data(
             point_generation_data
