@@ -1167,16 +1167,26 @@ class RasMap:
                 directly linked group owned by the supplied HDF.
             FileNotFoundError: The supplied HDF does not exist.
             KeyError: The HDF has no /Geometry object.
-            OSError: Reading, staging, editing, or replacing the HDF fails.
-            RuntimeError: Infiltration attributes remain after staged editing.
+            OSError: Reading, backing up, editing, validating, or cleanup of
+                the HDF fails.
+            RuntimeError: Infiltration attributes remain after editing, or
+                byte restoration fails (the error identifies the backup).
 
         Notes:
             Mutates only infiltration filename, layer name and date attributes.
             Terrain, roughness, CRS and units are unchanged. Rebuild native
             property tables afterward; existing infiltration tables are stale.
-            Edits are validated on a temporary sibling copy before atomic
-            replacement. A staging or validation failure preserves the original
-            bytes. An absent association leaves the file byte-identical.
+            A byte-exact sibling backup is flushed before editing in place.
+            Deletion or validation failures restore and flush the original
+            bytes into the same file object. ACLs, owner, mode, hard links and
+            file identity are preserved; the file is never replaced or renamed.
+            An absent association leaves the file byte-identical. The directory
+            must allow backup creation and removal. Use exclusive access.
+            A process crash between editing and restoration leaves a sibling
+            named .<stem>-infiltration-backup-*.hdf.bak for recovery. Restore
+            its bytes into the original file without replacing that file.
+            If restoration itself fails, the backup is retained and its path
+            is reported. This is exception rollback, not crash atomicity.
             Never call on a delivered source geometry.
         """
         from ._geometry_association import clear_geometry_infiltration
