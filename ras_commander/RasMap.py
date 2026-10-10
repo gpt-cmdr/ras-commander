@@ -1153,6 +1153,30 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def clear_geometry_infiltration(geometry_hdf: Union[str, Path]) -> Path:
+        """Clear infiltration association metadata on a cloned .gNN.hdf.
+
+        Args:
+            geometry_hdf: Compiled clone geometry path, as str or Path.
+
+        Returns:
+            Path: Resolved edited geometry path. An absent link is a no-op.
+
+        Raises:
+            ValueError: The filename is not .gNN.hdf.
+
+        Notes:
+            Mutates only infiltration filename, layer name and date attributes.
+            Terrain, roughness, CRS and units are unchanged. Rebuild native
+            property tables afterward; existing infiltration tables are stale.
+            Never call on a delivered source geometry.
+        """
+        from ._geometry_association import clear_geometry_infiltration
+
+        return clear_geometry_infiltration(geometry_hdf)
+
+    @staticmethod
+    @log_call
     def get_geometry_association(
         geom_number: Union[str, Number, Path],
         hecras_dir: Optional[Union[str, Path]] = None,

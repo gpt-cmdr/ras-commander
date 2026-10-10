@@ -733,3 +733,29 @@ def _paths_equivalent(first: PathLike, second: PathLike) -> bool:
         return safe_resolve_path(first) == safe_resolve_path(second)
     except (OSError, RuntimeError, TypeError, ValueError):
         return os.path.normcase(str(first)) == os.path.normcase(str(second))
+
+def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
+    """Remove infiltration association from an attempt-owned geometry HDF.
+
+    Mutates only the supplied .gNN.hdf; rejects plan/result HDFs. Removes the
+    native infiltration filename, layer name and date attributes. Existing
+    property tables remain stale until the caller rebuilds them. Terrain and
+    roughness associations, coordinates, CRS and units are unchanged.
+    Returns the edited geometry path; an absent association is a no-op.
+    """
+    import h5py
+
+    path = safe_resolve_path(hdf_path)
+    if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
+        raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
+    with h5py.File(path, "r+") as handle:
+        attrs = handle["Geometry"].attrs
+        field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
+        for key in ("filename_attr", "layer_attr", "date_attr"):
+            if field[key] in attrs:
+                del attrs[field[key]]
+    observed = read_geometry_association(path)
+    if observed.get("infiltration_hdf_path"):
+        raise RuntimeError("infiltration association remained after clearing")
+    return path
+

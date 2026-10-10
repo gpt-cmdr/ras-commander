@@ -1102,6 +1102,16 @@ RasMap.associate_geometry_layers(
     HEC-RAS. It does not compile plain-text `.g##` geometry into HDF or create
     missing geometry datasets.
 
+To exclude infiltration from a derived child, call
+`RasMap.clear_geometry_infiltration("Child.g02.hdf")` on a cloned geometry.
+It removes only the compiled geometry's infiltration filename, layer name,
+and file-date attributes, verifies the association is absent, and returns the
+resolved `Path`. It accepts `str` or `Path`, is idempotent, and rejects filenames
+other than `.gNN.hdf` before opening them. Terrain, land-cover, and other
+attributes are preserved. Existing infiltration property tables remain stale;
+rebuild native geometry/property tables before using the child. The method
+mutates the supplied HDF in place and does not edit a RAS Mapper file or plan.
+
 <a id="ras_commander.RasProcess"></a>
 
 ### RasProcess
