@@ -385,7 +385,8 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
                 logger.warning(f"Failed to remove temp breakline FID {rm_fid}")
 
 
-def _build_breaklines(d2fa, ns: dict, refinement_region_constraints: bool = False):
+def _build_breaklines(d2fa, ns: dict, refinement_region_constraints: bool = False,
+                      *, strict: bool = False):
     """Collect saved-point compile constraints, or the RAS Mapper constraint set.
 
     Region boundaries influence RegenerateMeshPoints in either mode. The
@@ -397,32 +398,110 @@ def _build_breaklines(d2fa, ns: dict, refinement_region_constraints: bool = Fals
 
     combined = PolylineFeatureLayer("bl")
     n = 0
-    try:
-        for bl in d2fa.Geometry.BreakLines.Polylines():
-            if Polyline.IsValidPolyline(bl):
-                combined.AddFeature(bl)
-                n += 1
-    except Exception:
-        pass
+    layers = [("BreakLines", "Polylines")]
     if refinement_region_constraints:
+        layers.append(("MeshRegions", "Polygons"))
+    layers.append(("Structures", "Polylines"))
+    for layer_name, accessor in layers:
         try:
-            for rgn in d2fa.Geometry.MeshRegions.Polygons():
-                if Polyline.IsValidPolyline(rgn):
-                    combined.AddFeature(rgn)
-                    n += 1
-        except Exception:
-            pass
-    try:
-        for struc in d2fa.Geometry.Structures.Polylines():
-            if Polyline.IsValidPolyline(struc):
-                combined.AddFeature(struc)
+            layer = getattr(d2fa.Geometry, layer_name)
+            for feature in getattr(layer, accessor)():
+                if not Polyline.IsValidPolyline(feature):
+                    if strict:
+                        raise ValueError(f"Invalid {layer_name} constraint")
+                    continue
+                combined.AddFeature(feature)
                 n += 1
-    except Exception:
-        pass
+        except Exception:
+            if strict:
+                raise
+    return combined.CopyToMultiPartPolyline() if n else None
 
-    if n == 0:
-        return None
-    return combined.CopyToMultiPartPolyline()
+
+def _screen_mesh_robustness(perim, seeds, d2fa, ratio, requested_ratio, ns,
+                            max_iterations, region_constraints, inset, report):
+    """Screen native mesh variants; serialize only the constrained production mesh."""
+    from time import monotonic
+    from shapely.geometry import Point
+
+    if not _meshfv2d_takes_min_face_ratio(ns):
+        raise ValueError("Robustness screening requires the HEC-RAS 6.6+ mesh constructor")
+    if d2fa.FeatureCount() != 1:
+        raise ValueError("Robustness screening currently supports one 2D flow area")
+    constraints = {
+        "saved_points": _build_breaklines(d2fa, ns, False, strict=True),
+        "mapper_regions": _build_breaklines(d2fa, ns, True, strict=True),
+        "unconstrained_stress": None,
+    }
+    ratios = list(dict.fromkeys([requested_ratio, ratio, 0.05, 0.1]))
+    points = [(float(seeds[i].X), float(seeds[i].Y)) for i in range(seeds.Count)]
+    initial_count = len(points)
+    interior = _perimeter_shapely_polygon(perim).buffer(-inset)
+    production_mode = "mapper_regions" if region_constraints else "saved_points"
+    start = monotonic()
+    report.update(initial_seed_count=initial_count, rounds=[], converged=False)
+    try:
+        for iteration in range(max_iterations + 1):
+            existing = {tuple(round(v, 6) for v in p) for p in points}
+            additions = {}
+            checks = []
+            report["rounds"].append(dict(round=iteration, seeds=len(points), checks=checks))
+            production_mesh = None
+            for mode, lines in constraints.items():
+                for test_ratio in ratios:
+                    candidate = ns["PointMs"]()
+                    for x, y in points:
+                        candidate.Add(ns["PointM"](x, y))
+                    mesh = _compute_mesh(perim, candidate, lines, test_ratio, ns)
+                    state = str(mesh.MeshCompletionState)
+                    count = _safe_non_virtual_cell_count(mesh)
+                    if state not in ("Complete", "MaxFacesPerCellExceeded") or count != len(points):
+                        raise RuntimeError(f"Robustness screening: {mode}/{test_ratio}: "
+                                           f"unexpected state/count {state}/{count}")
+                    faces = [int(mesh.CellFacesCount(i)) for i in range(count)]
+                    bad = sum(n > MAX_FACES_PER_CELL for n in faces)
+                    checks.append(dict(mode=mode, ratio=test_ratio, state=state,
+                                       cells=count, max_faces=max(faces, default=0), bad_cells=bad))
+                    if mode == production_mode and test_ratio == ratio:
+                        production_mesh = mesh
+                    if bad:
+                        _, _, mids = _autofix_max_faces(
+                            mesh, [candidate[i] for i in range(candidate.Count)], ns, perimeter=perim)
+                        for point in mids:
+                            xy = (float(point.X), float(point.Y))
+                            key = tuple(round(v, 6) for v in xy)
+                            if key not in existing and interior.contains(Point(*xy)):
+                                additions[key] = xy
+            report["rounds"][-1]["proposed_additions"] = len(additions)
+            if all(c["state"] == "Complete" and not c["bad_cells"] for c in checks):
+                report.update(converged=True, final_seed_count=len(points))
+                return production_mesh
+            if iteration == max_iterations:
+                raise RuntimeError("Robustness screening exhausted its repair budget")
+            if not additions:
+                raise RuntimeError("Robustness screening found no safe new midpoint")
+            if len(points) + len(additions) > 1.5 * initial_count:
+                raise RuntimeError("Robustness screening exceeded 50% seed growth")
+            points.extend(additions.values())
+    except Exception as exc:
+        report["error"] = str(exc)
+        raise
+    finally:
+        report["elapsed_seconds"] = monotonic() - start
+
+
+def _screening_inset(hdf_path):
+    """Return a half-foot inset expressed in geometry length units."""
+    import h5py
+    with h5py.File(hdf_path, "r") as hf:
+        units = hf.attrs.get("Units System", "")
+    if isinstance(units, bytes):
+        units = units.decode("utf-8")
+    if str(units) == "US Customary":
+        return 0.5
+    if str(units) in ("SI", "Metric"):
+        return 0.1524
+    raise ValueError(f"Robustness screening requires known geometry units: {units!r}")
 
 
 def _meshfv2d_takes_min_face_ratio(ns: dict) -> bool:
@@ -4989,6 +5068,7 @@ class GeomMesh:
         _require_current_hdf: bool = True,
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
+        robustness_screening: bool = False,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -5057,6 +5137,14 @@ class GeomMesh:
             strict_refinement_containment: If True, retain the earlier one-cell
                 inward margin for regions. False permits valid region extents
                 across or outside the perimeter, as RAS Mapper does.
+            robustness_screening: Opt-in ras-commander optimization (default False).
+                Screen requested/accepted ratios, 0.05 and 0.1 with saved-point,
+                region-edge and unconstrained variants. Retain region seeds and
+                structure constraints in production. Requires one 2D area and a
+                ratio-aware native constructor (HEC-RAS 6.6+). Adds up to
+                max_iterations repair rounds and 50% more seeds; failure prevents
+                saving the screened mesh. Native preprocessing is still required.
+                Diagnostics are returned in MeshResult.robustness_screening.
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
@@ -5253,6 +5341,11 @@ class GeomMesh:
                 )
 
             if not net_seeds_ok:
+                if robustness_screening:
+                    raise RuntimeError(
+                        "Robustness screening requires RegenerateMeshPoints; "
+                        "fallback points do not preserve refinement-region generation"
+                    )
                 seeds_pm = _generate_seeds_safe(perim, cell_size, ns)
                 logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
@@ -5401,6 +5494,13 @@ class GeomMesh:
                 )
 
                 if state_val == complete_val:
+                    if robustness_screening:
+                        mesh = _screen_mesh_robustness(
+                            current_perim, current_seeds_pm, d2fa, ratio,
+                            min_face_length_ratio, ns, max_iterations,
+                            refinement_region_constraints, _screening_inset(hdf_path),
+                            result.robustness_screening,
+                        )
                     # ── Success: extract cell centers → patch .g01 text ──
                     # The .g01 text is the sole deliverable. HEC-RAS
                     # preprocessing reads "Storage Area 2D Points= N"
@@ -5697,6 +5797,7 @@ class GeomMesh:
         recompile_via_rasexe: bool = False,
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
+        robustness_screening: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -5724,6 +5825,8 @@ class GeomMesh:
                 constraints (RAS Mapper compatibility); defaults to False.
             strict_refinement_containment: Apply the old inward region margin;
                 defaults to False.
+            robustness_screening: Forward the opt-in screening described by
+                generate(). Currently requires a single 2D flow area.
 
         Returns:
             List of MeshResult, one per 2D flow area.
@@ -5760,6 +5863,7 @@ class GeomMesh:
                 recompile_via_rasexe=recompile_via_rasexe,
                 refinement_region_constraints=refinement_region_constraints,
                 strict_refinement_containment=strict_refinement_containment,
+                robustness_screening=robustness_screening,
                 _require_current_hdf=False,
             )
             results.append(r)

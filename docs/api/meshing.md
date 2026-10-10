@@ -259,6 +259,68 @@ HEC's [HEC-RAS 6.6 Mapper manual, 2D Flow Areas](https://www.hec.usace.army.mil/
 describes the point-generation controls and Mapper's enforcement workflow.
 The saved-point/cache distinction above comes from RAS Commander qualification.
 
+## Optional multi-configuration screening
+
+Enable `robustness_screening=True` in `GeomMesh.generate()` or
+`generate_all()` to run an additional RAS Commander optimization:
+
+```python
+result = GeomMesh.generate(
+    "02", cell_size=125, min_face_length_ratio=0.0025,
+    robustness_screening=True, ras_object=ras, hecras_dir=hecras_dir,
+)
+if not result.ok:
+    raise RuntimeError(result.error_message)
+print(result.robustness_screening)
+```
+
+The default is `False`, with no extra mesh builds. The option requires a single
+2D flow area, known HDF length units and the ratio-aware native constructor
+introduced in HEC-RAS 6.6. Screening checks native `MeshFV2D.CellFacesCount`
+at the requested ratio, the successful generation ratio, 0.05 and 0.1
+(duplicates removed). Each ratio is checked with:
+
+- breakline and structure constraints;
+- breakline, structure and refinement-region boundary constraints;
+- no constraints, as a stress case only.
+
+Refinement-generated points remain in all three cases. The unconstrained mesh
+is never saved as the production mesh. The saved mesh uses the successful
+generation ratio and the caller's `refinement_region_constraints` setting.
+This retains the structure constraints while testing the influence of region
+edges separately.
+
+Each round checks the same points in every configuration. Cells with more than
+eight faces propose midpoint additions; additions must be distinct and strictly
+inside a 0.5 ft (0.1524 m) inward perimeter buffer. All configurations are
+rechecked after additions. Screening permits at most `max_iterations` repair
+rounds plus a final check, and at most 50% seed growth. Unsupported states,
+unreadable constraints, failed native point generation, unavailable counts or
+exhausted budgets fail the
+operation before the screened mesh is saved. Ordinary generation may already
+have updated spacing or repaired a perimeter; use a project copy as described
+above. `MeshResult.robustness_screening` records checks, counts, additions,
+convergence and elapsed time. It is empty when screening is disabled.
+
+This is an independent RAS Commander optimization, not a HEC-RAS preprocessor
+replica or an HEC-endorsed method. It deliberately has no fallback that reports
+successful screening after an unresolved check. Run the native preprocessor
+and inspect its data errors and fresh topology before accepting the mesh.
+
+Qualification used HEC-RAS 6.6 and the public `BaldEagleCrkMulti2D` geometry 02:
+seven breaklines, internal structures `Dam` and `Upper Levee`, and an added
+500 ft square refinement region with 25 ft spacing. Tests included 100 ft base
+spacing and 125 ft base spacing with 12.5 ft near-breakline spacing. Both
+structures retained verified attachments and the region retained 400 interior
+points after native preprocessing and a one-minute connectivity solve.
+A controlled nine-face cell in the finer mesh failed native preprocessing;
+midpoint repair cleared all nine screening configurations and passed native
+preprocessing. This tests the repair path, not a naturally occurring defect
+that appears only at another ratio, and does not establish flood-simulation
+accuracy or support for every structure type. Experimental screening added
+about 23–33 seconds for clean meshes and 51 seconds for the two-round repair
+on two CPU cores; runtime varies with model and hardware.
+
 ## Carry refinement regions into a child area
 
 Prepare the collection from a content-current source HDF, then replace the
