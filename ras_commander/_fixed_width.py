@@ -22,7 +22,7 @@ def _format_fixed_width_value(
     if width < 1:
         raise ValueError("width must be positive")
     if isinstance(value, (str, bytes)):
-        raise ValueError(f"HEC-RAS inline-table value must be numeric, got {value!r}")
+        raise ValueError(f"HEC-RAS inline-table value must be numeric, got {value!r}")  # noqa: TRY004 - PR #488 contract
     try:
         numeric_value = float(value)
     except (TypeError, ValueError) as exc:

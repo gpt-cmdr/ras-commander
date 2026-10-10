@@ -126,6 +126,7 @@ class GeomParser:
         return values
 
     @staticmethod
+    @log_call
     def format_fixed_width(values: List[float],
                           column_width: int = 8,
                           values_per_line: int = 10,

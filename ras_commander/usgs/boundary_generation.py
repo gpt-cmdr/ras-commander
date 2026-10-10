@@ -35,6 +35,7 @@ class BoundaryGenerator:
     """
 
     @staticmethod
+    @log_call
     def format_fixed_width_values(
         values: Union[List[float], np.ndarray, pd.Series],
         width: int = 8,
