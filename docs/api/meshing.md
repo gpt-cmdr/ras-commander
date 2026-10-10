@@ -317,9 +317,9 @@ A controlled nine-face cell in the finer mesh failed native preprocessing;
 midpoint repair cleared all nine screening configurations and passed native
 preprocessing. This tests the repair path, not a naturally occurring defect
 that appears only at another ratio, and does not establish flood-simulation
-accuracy or support for every structure type. Experimental screening added
-about 23–33 seconds for clean meshes and 51 seconds for the two-round repair
-on two CPU cores; runtime varies with model and hardware.
+accuracy or support for every structure type. The library screening run on the 125 ft case added about 41 seconds for the
+clean mesh and 89 seconds for the two-round repair on two CPU cores. These
+are single-run timings, not a benchmark; runtime varies with model and hardware.
 
 ## Carry refinement regions into a child area
 
