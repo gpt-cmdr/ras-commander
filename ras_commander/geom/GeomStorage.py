@@ -1888,21 +1888,23 @@ class GeomStorage:
                     )
                 cell_sizes[field_name] = value
 
-            def bounded_integer(field_name: str, maximum: int) -> int:
+            def bounded_integer(field_name: str, maximum: int, minimum: int = 0) -> int:
                 raw_value = raw.get(field_name, 0)
                 value = int(raw_value)
                 if isinstance(raw_value, float) and not raw_value.is_integer():
                     raise ValueError(
                         f"Breakline {name!r} {field_name} must be an integer"
                     )
-                if value < 0 or value > maximum:
+                if value < minimum or value > maximum:
                     raise ValueError(
-                        f"Breakline {name!r} {field_name} must be between 0 and {maximum}"
+                        f"Breakline {name!r} {field_name} must be between {minimum} and {maximum}"
                     )
                 return value
 
             near_repeats = bounded_integer("near_repeats", 255)
-            protection_radius = bounded_integer("protection_radius", 1)
+            # Delivered HEC-RAS text uses -1 for enabled Boolean controls;
+            # native HDF stores the same enabled flag as 1. Preserve text bytes.
+            protection_radius = bounded_integer("protection_radius", 1, -1)
 
             normalized.append(
                 {
@@ -1936,6 +1938,8 @@ class GeomStorage:
         ``expected_existing_names`` is an optimistic-concurrency guard. When
         supplied, the existing names and order must match before any write.
         Passing an empty ``breaklines`` sequence removes the collection.
+        ``protection_radius`` accepts the native Boolean text encodings -1
+        (enabled), 0 (disabled), and 1 (enabled), preserving the supplied value.
         """
         geom_file = Path(geom_file)
         if not geom_file.exists():
