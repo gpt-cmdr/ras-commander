@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -817,6 +818,33 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     # Retain a handle to the original object for byte restoration; neither
     # success nor rollback renames, replaces, or changes its security metadata.
     with path.open("r+b") as original:
+        original_stat = os.fstat(original.fileno())
+        original_mode = stat.S_IMODE(original_stat.st_mode)
+        if os.name != "nt" and os.geteuid() != 0:
+            # POSIX writes can clear set-ID bits. Refuse before writing if this
+            # user cannot reapply those bits to the existing file object.
+            if original_mode & (stat.S_ISUID | stat.S_ISGID) and (
+                original_stat.st_uid != os.geteuid()
+                or (
+                    original_mode & stat.S_ISGID
+                    and original_stat.st_gid not in {*os.getgroups(), os.getegid()}
+                )
+            ):
+                raise PermissionError(
+                    "geometry set-ID mode cannot be preserved by this user"
+                )
+
+        def flush_original():
+            original.flush()
+            if (
+                os.name != "nt"
+                and stat.S_IMODE(os.fstat(original.fileno()).st_mode) != original_mode
+            ):
+                os.fchmod(original.fileno(), original_mode)
+                if stat.S_IMODE(os.fstat(original.fileno()).st_mode) != original_mode:
+                    raise PermissionError("geometry mode could not be restored")
+            os.fsync(original.fileno())
+
         descriptor, backup_name = tempfile.mkstemp(
             prefix=f".{path.stem}-infiltration-backup-",
             suffix=".hdf.bak",
@@ -847,8 +875,7 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
                 observed = read_geometry_association(path)
                 if observed.get("infiltration_hdf_path"):
                     raise RuntimeError("infiltration association remained after clearing")
-                original.flush()
-                os.fsync(original.fileno())
+                flush_original()
             backup_path.unlink()
         except BaseException:
             if mutated:
@@ -857,8 +884,7 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
                         original.seek(0)
                         original.truncate(0)
                         shutil.copyfileobj(backup, original)
-                        original.flush()
-                        os.fsync(original.fileno())
+                        flush_original()
                 except BaseException as restore_error:
                     retain_backup = True
                     raise RuntimeError(

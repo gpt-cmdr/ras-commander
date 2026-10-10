@@ -273,13 +273,14 @@ def test_clear_geometry_infiltration_preserves_hard_link_identity(
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX ownership and mode contract")
 @pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize("mode", [0o600, 0o640, 0o750, 0o6750])
 def test_clear_geometry_infiltration_preserves_posix_mode_owner(
-    tmp_path, monkeypatch, fail
+    tmp_path, monkeypatch, fail, mode
 ):
     path = _geometry_file(tmp_path / "child.g02.hdf")
-    path.chmod(0o640)
     if os.geteuid() == 0:
         os.chown(path, 12345, 12346)
+    path.chmod(mode)
     before_stat = path.stat()
     before = path.read_bytes()
     if fail:
@@ -300,6 +301,21 @@ def test_clear_geometry_infiltration_preserves_posix_mode_owner(
         before_stat.st_gid,
     )
     assert after_stat.st_ino == before_stat.st_ino
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX set-ID mode preflight")
+def test_unrestorable_posix_setid_mode_is_refused(tmp_path, monkeypatch):
+    path = _geometry_file(tmp_path / "child.g02.hdf")
+    path.chmod(0o6750)
+    before = path.read_bytes()
+    before_stat = path.stat()
+    # Model a writer who does not own the file and cannot restore its set-ID bits.
+    monkeypatch.setattr(association.os, "geteuid", lambda: before_stat.st_uid + 1)
+    with pytest.raises(PermissionError, match="set-ID mode cannot be preserved"):
+        RasMap.clear_geometry_infiltration(path)
+    assert path.read_bytes() == before
+    assert path.stat().st_mode == before_stat.st_mode
     assert list(tmp_path.iterdir()) == [path]
 
 

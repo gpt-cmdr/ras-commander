@@ -1166,6 +1166,8 @@ class RasMap:
             ValueError: The filename is not .gNN.hdf, or /Geometry is not a
                 directly linked group owned by the supplied HDF.
             FileNotFoundError: The supplied HDF does not exist.
+            PermissionError: The supplied HDF is not writable, or the current
+                POSIX user cannot preserve its set-ID mode.
             KeyError: The HDF has no /Geometry object.
             OSError: Reading, backing up, editing, validating, or cleanup of
                 the HDF fails.

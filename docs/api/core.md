@@ -1124,6 +1124,9 @@ leaves the file byte-identical. The directory must allow backup creation and
 removal; the original must be writable. Windows backups receive the source
 access-control entries before content is copied, without additional inherited
 grants; POSIX backups are restricted to the current user.
+On POSIX, writes can clear set-ID mode bits; the method reapplies them to the
+original object before its final flush. It refuses before mutation if the
+current user cannot restore the original set-ID mode.
 
 Use exclusive access while calling this method. Other readers can observe the
 in-place edit before validation or rollback; concurrent writers are unsupported.
