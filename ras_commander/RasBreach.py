@@ -54,10 +54,12 @@ Date: 2025
 """
 
 from typing import Dict, List, Union, Optional, Tuple, Literal
+import math
 from pathlib import Path
 import warnings
 from dataclasses import dataclass
 
+from ._fixed_width import _format_fixed_width_value
 from .Decorators import log_call
 from .LoggingConfig import get_logger
 from .RasPrj import ras, read_file_with_fallback_encoding
@@ -1497,11 +1499,14 @@ class RasBreach:
             text = f"{numeric:.3e}"
         else:
             text = f"{numeric:.6g}"
-        if len(text) > width:
-            text = f"{numeric:.6e}"
-        if len(text) > width:
-            text = text[:width]
-        return text.rjust(width)
+        # Preserve already-fitting legacy text, as PR #488's general-value
+        # formatter does. Never introduce or truncate an exponent on overflow.
+        if len(text) <= width and math.isfinite(numeric):
+            return text.rjust(width)
+        return _format_fixed_width_value(
+            numeric, width=width, max_decimals=6, trim_trailing_zeros=True,
+            normalize_negative_zero=False,
+        )
 
     @staticmethod
     def _format_csv(values: List) -> str:

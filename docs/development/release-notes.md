@@ -9,6 +9,41 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Remaining fixed-width table writers reject overflow**
+
+The USGS flow/stage table generator, central geometry formatter (including
+storage elevation-volume, cross-section station/elevation, bridge, culvert,
+lateral connection, and pump tables), Manning's n triplets, blocked-obstruction
+writers, and breach table writer now share PR #488's field-fitting loop. They
+retain requested decimals where they fit, reduce one decimal at a time, and
+raise `ValueError` if even an integer cannot fit. Overflow never introduces
+scientific notation or truncates a numeric field. For example, an 8-character
+field writes `108765.38` as `108765.4` and `163148.07725` as `163148.1`.
+
+Already-fitting finite fields keep their previous bytes, including signed
+zero in geometry/USGS tables and already-fitting legacy breach notation.
+Geometry, USGS, and private fixit formatters preserve `Decimal` rounding;
+for example, `Decimal('1.015')` writes `    1.02` at the default precision
+with the default decimal context.
+PR #488's unsteady formatter and the steady-flow formatter keep their existing
+behavior. Non-finite values raise `ValueError`.
+
+The remaining defects are present in the inspected release tags v0.99.1
+through v0.104.0: geometry and USGS writers could silently shift adjacent
+fields, obstruction writers emitted `********`, and breach writers could
+truncate scientific notation into a different value. Earlier versions were
+not surveyed. PR #488 fixed unsteady overflow after v0.104.0 was tagged; a
+release containing both fixes is needed. Re-author affected tables from
+their original numeric inputs; these fixes do not recover corrupted files.
+
+Opt-in HEC-RAS 6.6 read-back tests in
+`tests/test_remaining_fixed_width_native.py` compile disposable public Bald
+Eagle and Muncie examples through `RasPreprocess`. Enable them with
+`RAS_COMMANDER_RUN_HECRAS_INTEGRATION=1`. They check compiled storage volumes
+and a USGS-generated flow hydrograph with ordinates above 100,000, using a
+0.02-unit tolerance for the engine's float32 representation. These are
+format-interpretation checks, not hydraulic acceptance.
+
 **Refinement-region constraints and child areas**
 
 `GeomMesh.generate()` and `generate_all()` now default to saved-point compile
