@@ -505,6 +505,9 @@ class RasBreakout2D:
                 geometry="geometry",
                 crs=parent_boundary.crs,
             )
+        feature_actions["gate_group_count"] = feature_actions.get(
+            "gate_group_count", pd.Series(0, index=feature_actions.index)
+        ).fillna(0).astype(int)
         contributing_geometry_identities = []
         containment_parent = _contributing_parent_union(
             spec, parent_boundary, identities=contributing_geometry_identities
@@ -1649,6 +1652,7 @@ def _classify_outside_connections(
             footprint if action == "keep" else None,
         )
         record["geometry"] = footprint
+        record["gate_group_count"] = int(row.get("gate_group_count", 0))
         records.append(record)
     return records
 
@@ -1741,7 +1745,10 @@ def _build_checks(
         and connection_actions["name"].is_unique
     )
     other_structures_absent = all(
-        count == 0
+        count == (
+            int(connection_actions.get("gate_group_count", pd.Series(dtype=int)).sum())
+            if column == "num_gates" and outside_connections_verified else 0
+        )
         for column, count in unsupported.items()
         if column != "num_sa_2d_connections"
     )

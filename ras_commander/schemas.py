@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.22"
+SCHEMA_VERSION = "1.23"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,42 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "connection_gate_lines": {
+        "description": "Explicit native gate opening GIS lines in source coordinates, without an inferred CRS.",
+        "accessor": "GeomLateral.get_connection_gate_lines(geom_file, connection_name)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.get_connection_gate_lines()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "opening_index", "dtype": "int", "description": "Unique consecutive one-based opening index."},
+            {"name": "opening_name", "dtype": "str", "description": "Delivered opening name."},
+            {"name": "geometry", "dtype": "geometry", "description": "Complete valid opening LineString in model units."},
+        ],
+    },
+    "connection_area_remap": {
+        "description": "Read-only endpoint-name mapping with all other native connection records preserved.",
+        "accessor": "GeomLateral.remap_connection_areas(geom_file, area_name_map)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.remap_connection_areas()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "Name", "dtype": "str", "description": "Source connection identity."},
+            {"name": "RawBlock", "dtype": "str", "description": "Authoritative native record with only recognized endpoint names replaced."},
+        ],
+    },
+    "connection_classification": {
+        "description": "Fail-closed complete-support decisions against a child in source CRS and units.",
+        "accessor": "GeomLateral.classify_connections(geom_file, child_boundary)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.classify_connections()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": "str", "description": description}
+            for name, description in (("Name", "Connection identity"), ("From", "Upstream area"),
+                                      ("To", "Downstream area"), ("action", "keep, drop or block"),
+                                      ("reason", "Stable decision reason code"))
+        ] + [
+            {"name": "gate_group_count", "dtype": "int", "description": "Number of verified gate GIS groups regardless of overall action; other unknown support still blocks."},
+            {"name": "geometry", "dtype": "geometry | None", "description": "Conservative complete support in source model units when available."},
+        ],
+    },
     "refinement_region_clip_report": {
         "description": "One disposition row per source refinement region clipped to a child perimeter.",
         "accessor": "GeomMesh.clip_refinement_regions(geom_number, perimeter, ...)[1]",
@@ -590,6 +626,7 @@ DATAFRAME_SCHEMAS = {
             {"name": "source_measure", "dtype": "float64", "description": "Source area or length in project units."},
             {"name": "retained_measure", "dtype": "float64", "description": "Retained area or length after the proposed action."},
             {"name": "retained_fraction", "dtype": "float64", "description": "Retained measure divided by source measure."},
+            {"name": "gate_group_count", "dtype": "int", "description": "Verified gate GIS groups for connections; zero for other features. Overall connection support must also pass."},
             {"name": "geometry", "dtype": "geometry | None", "description": "Retained geometry when the feature has a spatial representation."},
         ],
     },
