@@ -1110,7 +1110,14 @@ resolved `Path`. It accepts `str` or `Path`, is idempotent, and rejects filename
 other than `.gNN.hdf` before opening them. Terrain, land-cover, and other
 attributes are preserved. Existing infiltration property tables remain stale;
 rebuild native geometry/property tables before using the child. The method
-mutates the supplied HDF in place and does not edit a RAS Mapper file or plan.
+requires a directly linked `/Geometry` group owned by the supplied HDF;
+external links, soft links, and non-group objects are rejected before writable
+access. It edits a temporary copy in the same directory, verifies all three
+attributes are absent, and atomically replaces the supplied HDF only after
+validation. Staging, deletion, validation, or replacement failures preserve
+the original bytes. An absent association leaves the file byte-identical.
+The directory must allow temporary-file creation and replacement. The method
+does not edit a RAS Mapper file or plan.
 
 <a id="ras_commander.RasProcess"></a>
 

@@ -1153,7 +1153,7 @@ class RasMap:
 
     @staticmethod
     @log_call
-    def clear_geometry_infiltration(geometry_hdf: Union[str, Path]) -> Path:
+    def clear_geometry_infiltration(geometry_hdf: str | Path) -> Path:
         """Clear infiltration association metadata on a cloned .gNN.hdf.
 
         Args:
@@ -1163,12 +1163,20 @@ class RasMap:
             Path: Resolved edited geometry path. An absent link is a no-op.
 
         Raises:
-            ValueError: The filename is not .gNN.hdf.
+            ValueError: The filename is not .gNN.hdf, or /Geometry is not a
+                directly linked group owned by the supplied HDF.
+            FileNotFoundError: The supplied HDF does not exist.
+            KeyError: The HDF has no /Geometry object.
+            OSError: Reading, staging, editing, or replacing the HDF fails.
+            RuntimeError: Infiltration attributes remain after staged editing.
 
         Notes:
             Mutates only infiltration filename, layer name and date attributes.
             Terrain, roughness, CRS and units are unchanged. Rebuild native
             property tables afterward; existing infiltration tables are stale.
+            Edits are validated on a temporary sibling copy before atomic
+            replacement. A staging or validation failure preserves the original
+            bytes. An absent association leaves the file byte-identical.
             Never call on a delivered source geometry.
         """
         from ._geometry_association import clear_geometry_infiltration

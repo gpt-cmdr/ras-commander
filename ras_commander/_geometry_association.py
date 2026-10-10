@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
@@ -734,6 +736,7 @@ def _paths_equivalent(first: PathLike, second: PathLike) -> bool:
     except (OSError, RuntimeError, TypeError, ValueError):
         return os.path.normcase(str(first)) == os.path.normcase(str(second))
 
+
 def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """Remove infiltration association from an attempt-owned geometry HDF.
 
@@ -741,20 +744,60 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     native infiltration filename, layer name and date attributes. Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
-    Returns the edited geometry path; an absent association is a no-op.
+    Requires a directly linked /Geometry group owned by the supplied HDF.
+    Stages edits in a sibling copy and replaces the original only after
+    validation. Returns the edited geometry path; an absent association is
+    a byte-preserving no-op.
     """
     import h5py
 
     path = safe_resolve_path(hdf_path)
     if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
         raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
-    with h5py.File(path, "r+") as handle:
-        attrs = handle["Geometry"].attrs
-        field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
-        for key in ("filename_attr", "layer_attr", "date_attr"):
-            if field[key] in attrs:
-                del attrs[field[key]]
-    observed = read_geometry_association(path)
-    if observed.get("infiltration_hdf_path"):
-        raise RuntimeError("infiltration association remained after clearing")
+
+    def owned_geometry(handle):
+        # Inspect the link before dereferencing: an external target can be
+        # opened writable even when the containing HDF is just a staged copy.
+        link = handle.get("Geometry", getlink=True)
+        if link is None:
+            raise KeyError("Geometry")
+        if (
+            not isinstance(link, h5py.HardLink)
+            or handle.get("Geometry", getclass=True) is not h5py.Group
+        ):
+            raise ValueError("/Geometry must be a directly linked, file-owned HDF group")
+        geometry = handle["Geometry"]
+        if geometry.file.id != handle.id:
+            raise ValueError("/Geometry must be a directly linked, file-owned HDF group")
+        return geometry
+
+    field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
+    attr_names = tuple(field[key] for key in ("filename_attr", "layer_attr", "date_attr"))
+    with h5py.File(path, "r") as handle:
+        attrs = owned_geometry(handle).attrs
+        if not any(name in attrs for name in attr_names):
+            return path
+
+    descriptor, staged_name = tempfile.mkstemp(
+        prefix=f".{path.stem}-", suffix=".hdf", dir=path.parent
+    )
+    staged_path = Path(staged_name)
+    try:
+        os.close(descriptor)
+        shutil.copy2(path, staged_path)
+        with h5py.File(staged_path, "r+") as handle:
+            attrs = owned_geometry(handle).attrs
+            for name in attr_names:
+                if name in attrs:
+                    del attrs[name]
+        with h5py.File(staged_path, "r") as handle:
+            attrs = owned_geometry(handle).attrs
+            if any(name in attrs for name in attr_names):
+                raise RuntimeError("infiltration association remained after clearing")
+        observed = read_geometry_association(staged_path)
+        if observed.get("infiltration_hdf_path"):
+            raise RuntimeError("infiltration association remained after clearing")
+        os.replace(staged_path, path)
+    finally:
+        staged_path.unlink(missing_ok=True)
     return path
