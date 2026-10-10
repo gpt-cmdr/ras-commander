@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 from datetime import datetime
 
+from .._fixed_width import _format_fixed_width_value
 from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -146,6 +147,9 @@ class GeomParser:
         Returns:
             List[str]: Lines with fixed-width formatted values (with newlines)
 
+        Raises:
+            ValueError: A value is non-finite or cannot fit the column.
+
         Example:
             >>> values = [0.0, 963.04, 27.2, 963.04]
             >>> lines = GeomParser.format_fixed_width(values, 8, 10, 2)
@@ -160,7 +164,8 @@ class GeomParser:
 
         Notes:
             - Based on RasUnsteady.write_table_to_file() pattern
-            - Values are formatted as f'{value:{column_width}.{precision}f}'
+            - Requested decimals are retained where they fit, then reduced one
+              at a time; values that cannot fit raise ValueError
             - Right-aligned within column, left-padded with spaces
             - Last line may have fewer than values_per_line values
         """
@@ -169,7 +174,13 @@ class GeomParser:
         for i in range(0, len(values), values_per_line):
             row_values = values[i:i+values_per_line]
             # Format each value with specified width and precision
-            formatted_row = ''.join(f'{value:{column_width}.{precision}f}' for value in row_values)
+            formatted_row = ''.join(
+                _format_fixed_width_value(
+                    value, width=column_width, max_decimals=precision,
+                    normalize_negative_zero=False,
+                )
+                for value in row_values
+            )
             lines.append(formatted_row + '\n')
 
         return lines

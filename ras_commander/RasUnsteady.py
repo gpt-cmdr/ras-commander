@@ -121,6 +121,7 @@ import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from ._fixed_width import _format_fixed_width_value
 from .RasPrj import ras
 from .LoggingConfig import get_logger
 from .Decorators import log_call
@@ -12311,41 +12312,12 @@ class RasUnsteady:
         (never ``-0.00``).  ``zero_as_blank`` must only be used for tables
         whose reader treats a blank field as ``0.0``.
         """
-        if isinstance(value, (str, bytes)):
-            raise ValueError(
-                f"HEC-RAS inline-table value must be numeric, got {value!r}"
-            )
-        try:
-            numeric_value = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"HEC-RAS inline-table value must be numeric, got {value!r}"
-            ) from exc
-        if not math.isfinite(numeric_value):
-            raise ValueError(
-                f"HEC-RAS inline-table value must be finite, got {value!r}"
-            )
-        if min_decimals < 0 or max_decimals < min_decimals:
-            raise ValueError(
-                "max_decimals must be greater than or equal to non-negative "
-                "min_decimals"
-            )
-        if zero_as_blank and numeric_value == 0:
-            return " " * 8
-
-        for decimals in range(max_decimals, min_decimals - 1, -1):
-            text = f"{numeric_value:.{decimals}f}"
-            if float(text) == 0:
-                # Never emit negative zero ("-0.00", "-0") for tiny negatives.
-                text = f"{0.0:.{decimals}f}"
-            if trim_trailing_zeros and "." in text:
-                text = text.rstrip("0").rstrip(".")
-            if len(text) <= 8:
-                return text.rjust(8)
-
-        raise ValueError(
-            "HEC-RAS inline-table value cannot be represented in an "
-            f"8-character field without overflow: {numeric_value!r}"
+        return _format_fixed_width_value(
+            value,
+            max_decimals=max_decimals,
+            min_decimals=min_decimals,
+            trim_trailing_zeros=trim_trailing_zeros,
+            zero_as_blank=zero_as_blank,
         )
 
     @staticmethod

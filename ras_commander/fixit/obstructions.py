@@ -17,6 +17,8 @@ flow restrictions in overlap zones.
 from dataclasses import dataclass
 from typing import List, Tuple
 
+from .._fixed_width import _format_fixed_width_value
+
 
 # Algorithm constants
 GAP_SIZE = 0.02           # HEC-RAS adjacency gap requirement (must be >= 0.02)
@@ -217,9 +219,8 @@ def format_obstructions(obstructions: List[BlockedObstruction]) -> List[str]:
     Returns:
         List of formatted lines for HEC-RAS geometry file.
 
-    Note:
-        Values that exceed 8 characters are replaced with asterisks ('********')
-        following FORTRAN overflow convention.
+    Raises:
+        ValueError: A value is non-finite or cannot fit after reducing decimals.
     """
     from ..geom.GeomCrossSection import GeomCrossSection
     return [
@@ -232,8 +233,7 @@ def _format_value(value: float, width: int) -> str:
     """
     Format a float into a fixed-width string.
 
-    Handles overflow gracefully by returning asterisks, which is the
-    standard for FORTRAN-style formats.
+    Retain two decimals where they fit, reduce precision, or raise ValueError.
 
     Args:
         value: Float value to format.
@@ -242,16 +242,9 @@ def _format_value(value: float, width: int) -> str:
     Returns:
         Right-justified string of exactly 'width' characters.
     """
-    # Format the number to a string with 2 decimal places
-    s = f"{value:.2f}"
-
-    # Check for overflow
-    if len(s) > width:
-        # Indicate overflow with asterisks
-        return "*" * width
-
-    # Right-justify the string with leading spaces to fill the width
-    return s.rjust(width)
+    return _format_fixed_width_value(
+        value, width=width, normalize_negative_zero=False,
+    )
 
 
 def has_overlaps(obstructions: List[BlockedObstruction]) -> bool:

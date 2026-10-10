@@ -62,6 +62,7 @@ import pandas as pd
 import numpy as np
 import math
 
+from .._fixed_width import _format_fixed_width_value
 from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -609,10 +610,10 @@ class GeomCrossSection:
     @staticmethod
     def _format_blocked_obstruction_value(value: float) -> str:
         """Format one blocked-obstruction scalar into an 8-character field."""
-        text = f"{float(value):.2f}"
-        if len(text) > GeomCrossSection.FIXED_WIDTH_COLUMN:
-            return "*" * GeomCrossSection.FIXED_WIDTH_COLUMN
-        return text.rjust(GeomCrossSection.FIXED_WIDTH_COLUMN)
+        return _format_fixed_width_value(
+            float(value), width=GeomCrossSection.FIXED_WIDTH_COLUMN,
+            normalize_negative_zero=False,
+        )
 
     @staticmethod
     def _normalize_blocked_obstructions(obstructions: Any) -> List[Any]:
@@ -911,7 +912,8 @@ class GeomCrossSection:
         """
         Format Manning's n triplets using HEC-RAS-compatible 3-triplet wrapping.
 
-        Station fields keep two decimals, n-values keep three decimals, and the
+        Station fields request two decimals and n-values three, reducing precision
+        only when needed to fit. Unrepresentable values raise ValueError. The
         per-triplet change flag is written as zero unless a ChangeFlag column is
         supplied.
         """
@@ -920,9 +922,9 @@ class GeomCrossSection:
         for _, row in mann_df.iterrows():
             change = row["ChangeFlag"] if "ChangeFlag" in mann_df.columns else 0.0
             fields.extend([
-                f"{float(row['Station']):8.2f}",
-                f"{float(row['n_value']):8.3f}",
-                f"{float(change):8.0f}",
+                _format_fixed_width_value(float(row['Station']), normalize_negative_zero=False),
+                _format_fixed_width_value(float(row['n_value']), max_decimals=3, normalize_negative_zero=False),
+                _format_fixed_width_value(float(change), max_decimals=0, normalize_negative_zero=False),
             ])
 
         for idx in range(0, len(fields), GeomCrossSection.MANNINGS_VALUES_PER_LINE):

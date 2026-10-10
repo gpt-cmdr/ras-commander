@@ -17,6 +17,7 @@ from typing import Union, List, Optional, Any
 import numpy as np
 import pandas as pd
 
+from .._fixed_width import _format_fixed_width_value
 from .._ras_text import _write_ras_text
 from ..LoggingConfig import get_logger
 from ..Decorators import log_call
@@ -45,7 +46,7 @@ class BoundaryGenerator:
 
         HEC-RAS uses a fixed-width format for boundary condition tables:
         - Each value occupies exactly 8 characters
-        - Values are right-justified with 2 decimal places
+        - Values retain 2 decimal places where they fit, then reduce precision
         - 10 values per line (80 characters total)
 
         Parameters
@@ -63,6 +64,11 @@ class BoundaryGenerator:
         -------
         str
             Formatted string with newlines, ready to write to file
+
+        Raises
+        ------
+        ValueError
+            A value is non-finite or cannot fit after reducing decimals.
 
         Examples
         --------
@@ -86,7 +92,13 @@ class BoundaryGenerator:
         for i in range(0, len(values), values_per_line):
             chunk = values[i:i+values_per_line]
             # Format each value: right-justified, fixed width, fixed decimals
-            line = ''.join(f'{v:>{width}.{decimals}f}' for v in chunk)
+            line = ''.join(
+                _format_fixed_width_value(
+                    v, width=width, max_decimals=decimals,
+                    normalize_negative_zero=False,
+                )
+                for v in chunk
+            )
             lines.append(line)
 
         return '\n'.join(lines)
