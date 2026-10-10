@@ -758,4 +758,3 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     if observed.get("infiltration_hdf_path"):
         raise RuntimeError("infiltration association remained after clearing")
     return path
-
