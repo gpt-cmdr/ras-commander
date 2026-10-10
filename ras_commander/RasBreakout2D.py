@@ -1472,10 +1472,15 @@ def _prepare_geometry_text(
             preflight.spec.source_2d_area,
             geometry=child,
         )
-        source_breakline_names = _source_names(
-            preflight.source_features.get("breakline"),
-            "Name",
-        )
+        # Guard the text collection with the source text inventory. The spatial
+        # HDF reader omits degenerate polylines and is not a complete text
+        # inventory; comparing its names with text produces false drift errors.
+        source_breakline_names = [
+            name
+            for _fid, name, *_spacing in GeomMesh.get_breakline_spacing(
+                preflight.source_geometry_path
+            )
+        ]
         GeomStorage.replace_breaklines(
             staged_geometry,
             preflight.spec.source_2d_area,
