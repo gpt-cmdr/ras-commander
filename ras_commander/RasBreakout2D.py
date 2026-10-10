@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -109,7 +110,14 @@ _UNSUPPORTED_STRUCTURE_COLUMNS = (
 
 @dataclass(frozen=True)
 class Breakout2DSpec:
-    """Inputs for a contained pure-2D breakout preparation."""
+    """Inputs for pure-2D preparation in an owner or contributing-parent union.
+
+    ``contributing_geometry_hdfs`` adds geometry-only parent perimeters to the
+    containment check, in the owner's CRS and horizontal units. It does not
+    import their features, terrain, roughness or boundary conditions. The
+    caller must qualify those inputs separately before using a union child.
+    Preflight reads these HDFs without modifying them.
+    """
 
     source_plan: Union[str, int]
     source_2d_area: str
@@ -120,8 +128,16 @@ class Breakout2DSpec:
     boundary_match_tolerance: Optional[float] = None
     allow_multipart: bool = False
     allow_holes: bool = False
+    contributing_geometry_hdfs: tuple[str | Path, ...] = ()
 
     def __post_init__(self) -> None:
+        if isinstance(self.contributing_geometry_hdfs, (str, Path)):
+            raise TypeError("contributing_geometry_hdfs must be a sequence of paths")
+        object.__setattr__(
+            self,
+            "contributing_geometry_hdfs",
+            tuple(Path(path) for path in self.contributing_geometry_hdfs),
+        )
         object.__setattr__(
             self,
             "source_plan",
@@ -161,6 +177,7 @@ class Breakout2DPreflight:
     checks: pd.DataFrame
     source_features: dict[str, gpd.GeoDataFrame]
     connection_data: pd.DataFrame = field(default_factory=pd.DataFrame)
+    contributing_geometry_identities: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def is_ready(self) -> bool:
@@ -192,7 +209,7 @@ class Breakout2DPreflight:
             .to_dict(orient="records")
         )
         child = self.child_boundary.geometry.iloc[0]
-        return {
+        manifest = {
             "schema": "ras-commander/breakout-2d-preflight/1.0",
             "breakout_id": self.spec.breakout_id,
             "ready": self.is_ready,
@@ -216,6 +233,11 @@ class Breakout2DPreflight:
             "feature_action_summary": actions,
             "existing_boundary_count": int(len(self.existing_boundaries)),
         }
+        if self.spec.contributing_geometry_hdfs:
+            manifest["contributing_geometry_hdfs"] = [
+                dict(item) for item in self.contributing_geometry_identities
+            ]
+        return manifest
 
 
 @dataclass(frozen=True)
@@ -482,6 +504,10 @@ class RasBreakout2D:
                 geometry="geometry",
                 crs=parent_boundary.crs,
             )
+        contributing_geometry_identities = []
+        containment_parent = _contributing_parent_union(
+            spec, parent_boundary, identities=contributing_geometry_identities
+        )
         checks = _build_checks(
             spec,
             plan,
@@ -491,6 +517,7 @@ class RasBreakout2D:
             boundary_segments,
             feature_actions,
             mesh_area_count=len(mesh_areas),
+            containment_parent=containment_parent,
         )
         result = Breakout2DPreflight(
             spec=spec,
@@ -503,6 +530,7 @@ class RasBreakout2D:
             source_unsteady_path=source_unsteady_path,
             base_cell_size=base_cell_size,
             parent_boundary=parent_boundary,
+            contributing_geometry_identities=contributing_geometry_identities,
             child_boundary=child_boundary,
             boundary_segments=boundary_segments,
             feature_actions=feature_actions,
@@ -541,6 +569,7 @@ class RasBreakout2D:
                 "Breakout preflight failed: " + "; ".join(preflight.blocking_issues)
             )
         ras_object.check_initialized()
+        _verify_contributing_geometry_snapshots(preflight)
         _verify_working_source_snapshot(preflight, ras_object)
         source_unsteady_hash = _sha256_file(preflight.source_unsteady_path)
 
@@ -668,6 +697,7 @@ class RasBreakout2D:
             raise ValueError("refresh_method must be 'rasmapper' or 'rasexe'")
         if not preflight.is_ready:
             raise ValueError("preflight must pass before geometry preparation")
+        _verify_contributing_geometry_snapshots(preflight)
         if not clone.boundaries_unchanged:
             raise ValueError("clone does not prove byte-identical unsteady inputs")
         if _sha256_file(clone.unsteady_path) != clone.cloned_unsteady_sha256:
@@ -1506,6 +1536,69 @@ def _classify_outside_connections(
     return records
 
 
+def _contributing_parent_union(
+    spec: Breakout2DSpec,
+    parent_boundary: gpd.GeoDataFrame,
+    *,
+    identities: list[dict[str, str]] | None = None,
+) -> BaseGeometry | None:
+    """Read complete contributor perimeters; never substitute a requested extent."""
+    if not spec.contributing_geometry_hdfs:
+        return None
+    if parent_boundary.crs is None:
+        raise ValueError("Owner geometry must declare a CRS for union containment")
+    perimeters = [parent_boundary.geometry.iloc[0]]
+    seen = set()
+    for value in spec.contributing_geometry_hdfs:
+        path = Path(value)
+        if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
+            raise ValueError(
+                "Contributors must be geometry .gNN.hdf files, never plan results"
+            )
+        resolved = path.resolve()
+        if resolved in seen:
+            raise ValueError("Contributing geometry HDF paths must be unique")
+        seen.add(resolved)
+        before = _sha256_file(path) if identities is not None else None
+        areas = HdfMesh.get_mesh_areas(path)
+        if len(areas) != 1:
+            raise ValueError(
+                "Each contributing geometry must have exactly one 2D flow area"
+            )
+        if areas.crs != parent_boundary.crs:
+            raise ValueError(
+                "Contributing geometry CRS must equal the owner geometry CRS"
+            )
+        perimeter = areas.geometry.iloc[0]
+        if (
+            perimeter.is_empty
+            or not perimeter.is_valid
+            or perimeter.geom_type not in ("Polygon", "MultiPolygon")
+        ):
+            raise ValueError(
+                "Contributing 2D perimeter must be a valid nonempty polygon"
+            )
+        perimeters.append(perimeter)
+        if identities is not None:
+            if _sha256_file(path) != before:
+                raise RuntimeError("Contributing geometry changed during preflight")
+            identities.append({"path": str(path), "sha256": before})
+    return unary_union(perimeters)
+
+
+def _verify_contributing_geometry_snapshots(preflight: Breakout2DPreflight) -> None:
+    """Refuse mutation when the geometry that supplied containment has changed."""
+    if not getattr(preflight.spec, "contributing_geometry_hdfs", ()):
+        return
+    if len(preflight.contributing_geometry_identities) != len(
+        preflight.spec.contributing_geometry_hdfs
+    ):
+        raise ValueError("Union preflight lacks contributing geometry identities")
+    for identity in preflight.contributing_geometry_identities:
+        if _sha256_file(Path(identity["path"])) != identity["sha256"]:
+            raise ValueError("Contributing geometry changed since preflight")
+
+
 def _build_checks(
     spec: Breakout2DSpec,
     plan: pd.Series,
@@ -1516,6 +1609,7 @@ def _build_checks(
     feature_actions: gpd.GeoDataFrame,
     *,
     mesh_area_count: int,
+    containment_parent: BaseGeometry | None = None,
 ) -> pd.DataFrame:
     unsupported = {
         column: _int_or_zero(geometry.get(column))
@@ -1539,7 +1633,8 @@ def _build_checks(
         and plan.get("plan_type") == "unsteady_2d"
         and _bool_value(plan.get("plan_classification_valid"))
     )
-    buffered_parent = parent.buffer(float(spec.containment_tolerance))
+    containment = parent if containment_parent is None else containment_parent
+    buffered_parent = containment.buffer(float(spec.containment_tolerance))
     partition_length = float(
         boundary_segments.get("length", pd.Series(dtype=float)).sum()
     )
@@ -1575,12 +1670,25 @@ def _build_checks(
             },
         ),
         _check(
-            "child_within_parent",
+            "child_within_parent"
+            if containment_parent is None
+            else "child_within_parent_union",
             bool(buffered_parent.covers(child)),
-            "Child boundary must be contained by the parent 2D area",
+            "Child boundary must be contained by the parent 2D area"
+            if containment_parent is None
+            else "Child boundary must be contained by the contributing parent union",
             details={
                 "outside_parent_area": float(child.difference(parent).area),
                 "tolerance": float(spec.containment_tolerance),
+                **(
+                    {
+                        "outside_parent_union_area": float(
+                            child.difference(containment).area
+                        )
+                    }
+                    if containment_parent is not None
+                    else {}
+                ),
             },
         ),
         _check(
