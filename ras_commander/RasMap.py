@@ -715,6 +715,29 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def remove_terrain_layers(rasmap_path: str | Path) -> list[str]:
+        """Remove all terrain registrations from a cloned Mapper file.
+
+        Mutates only the supplied XML; never deletes HDF/TIFF files or changes
+        geometry-HDF associations. The caller must register its replacement
+        terrain and explicitly associate every geometry before native execution.
+        No units or coordinates are converted.
+
+        Args:
+            rasmap_path: Explicit Mapper XML in a versioned child clone.
+
+        Returns:
+            Names of removed terrain registrations, in document order.
+
+        Raises:
+            xml.etree.ElementTree.ParseError: Malformed Mapper XML.
+        """
+        from ._terrain_registration import remove_terrain_layers
+
+        return remove_terrain_layers(rasmap_path)
+
+    @staticmethod
+    @log_call
     def list_terrain_layers(
         ras_project_path: Union[str, Path],
         ras_object=None,
