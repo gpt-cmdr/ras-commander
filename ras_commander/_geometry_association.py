@@ -820,19 +820,23 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     with path.open("r+b") as original:
         original_stat = os.fstat(original.fileno())
         original_mode = stat.S_IMODE(original_stat.st_mode)
-        if os.name != "nt" and os.geteuid() != 0:
-            # POSIX writes can clear set-ID bits. Refuse before writing if this
-            # user cannot reapply those bits to the existing file object.
-            if original_mode & (stat.S_ISUID | stat.S_ISGID) and (
+        # POSIX writes can clear set-ID bits. Refuse before writing if this
+        # user cannot reapply those bits to the existing file object.
+        if (
+            os.name != "nt"
+            and os.geteuid() != 0
+            and original_mode & (stat.S_ISUID | stat.S_ISGID)
+            and (
                 original_stat.st_uid != os.geteuid()
                 or (
                     original_mode & stat.S_ISGID
                     and original_stat.st_gid not in {*os.getgroups(), os.getegid()}
                 )
-            ):
-                raise PermissionError(
-                    "geometry set-ID mode cannot be preserved by this user"
-                )
+            )
+        ):
+            raise PermissionError(
+                "geometry set-ID mode cannot be preserved by this user"
+            )
 
         def flush_original():
             original.flush()
