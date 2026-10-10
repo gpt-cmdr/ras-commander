@@ -15,6 +15,7 @@ List of Functions:
   2D-only viewing/global extents from authored perimeters
 - set_2d_flow_area_perimeter() - Create/update 2D flow area perimeter geometry
 - get_2d_flow_area_settings() - Read 2D flow area cell/face property settings
+- get_2d_flow_area_cell_spacing() - Read persisted base mesh spacing
 - set_2d_flow_area_settings() - Write 2D flow area cell/face property settings
 - set_breaklines() - Write breakline blocks into a 2D flow area geometry file
 - replace_breaklines() - Atomically replace the geometry-wide breakline collection
@@ -1473,6 +1474,32 @@ class GeomStorage:
         df = pd.DataFrame(records, columns=columns)
         logger.debug(f"Found {len(df)} 2D flow area settings in {geom_file.name}")
         return df
+
+    @staticmethod
+    def get_2d_flow_area_cell_spacing(
+        geom_file: Union[str, Path], flow_area_name: str
+    ) -> tuple[float, float]:
+        """Return persisted base ``(dx, dy)`` in the geometry's horizontal units.
+
+        Reads the named storage-area-backed 2D area without mutation or output
+        artifacts. CRS and units remain those of the source project. Missing,
+        duplicate, malformed, nonfinite or nonpositive spacing fails closed.
+        """
+        settings = GeomStorage.get_2d_flow_area_settings(geom_file)
+        selected = settings.loc[settings['name'].astype(str).eq(str(flow_area_name))]
+        if len(selected) != 1:
+            raise ValueError(f"Base cell spacing is unavailable for {flow_area_name!r}")
+        raw = selected.iloc[0]['point_generation_data']
+        parts = str(raw).split(',')
+        try:
+            if len(parts) != 4:
+                raise ValueError('expected four point-generation values')
+            dx, dy = float(parts[2]), float(parts[3])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Malformed base cell spacing for {flow_area_name!r}: {raw!r}") from exc
+        if not all(math.isfinite(v) and v > 0 for v in (dx, dy)):
+            raise ValueError(f"Base cell spacing must be finite and positive for {flow_area_name!r}")
+        return dx, dy
 
     @staticmethod
     def _coords_match(coords_a: List[tuple[float, float]], coords_b: List[tuple[float, float]]) -> bool:
