@@ -3834,10 +3834,13 @@ class GeomMesh:
 
         Args:
             geom_number: Source geometry number or .g## text path.
-            perimeter (shapely.geometry.Polygon | Sequence[Sequence[float]]):
-                Child polygon or (N, 2) XY coordinates in the
+            perimeter (shapely.geometry.Polygon | MultiPolygon | Sequence[Sequence[float]]):
+                Clipping mask or (N, 2) XY coordinates in the
                 source geometry's CRS and project length units. Holes are not
-                supported by the replacement writer.
+                supported by the replacement writer. A disconnected inward
+                buffer may be a MultiPolygon; every positive-area intersection
+                fragment is retained by default. This mask does not author the
+                computational-domain perimeter.
             min_area: Optional fragment area cutoff in squared project units.
                 Default zero retains every positive-area fragment, including
                 regions smaller than one spacing_dx * spacing_dy cell. Such
@@ -3866,15 +3869,16 @@ class GeomMesh:
         import h5py
         import numpy as np
         import pandas as pd
-        from shapely.geometry import Polygon
+        from shapely.geometry import MultiPolygon, Polygon
 
         from ..hdf.HdfBndry import HdfBndry
 
-        child = perimeter if isinstance(perimeter, Polygon) else Polygon(
+        child = perimeter if isinstance(perimeter, (Polygon, MultiPolygon)) else Polygon(
             _normalise_polygon_coords(perimeter)
         )
-        if child.is_empty or not child.is_valid or child.area <= 0 or child.interiors:
-            raise ValueError("perimeter must be a valid positive-area Polygon without holes")
+        parts = list(_iter_polygon_geometries(child))
+        if child.is_empty or not child.is_valid or child.area <= 0 or not parts or any(p.interiors for p in parts):
+            raise ValueError("perimeter must be a valid positive-area Polygon or MultiPolygon without holes")
         min_area = float(min_area)
         if not math.isfinite(min_area) or min_area < 0:
             raise ValueError("min_area must be finite and non-negative")

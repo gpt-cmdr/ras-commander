@@ -156,6 +156,51 @@ def test_clip_report_matches_public_dataframe_schema(tmp_path, populated):
         assert not regions and report.empty
 
 
+def test_disconnected_clip_mask_retains_all_fragments_and_native_controls(tmp_path):
+    from shapely.geometry import MultiPolygon
+
+    path, hdf = _write_containment_fixture(tmp_path)
+    controls = {
+        "spacing_dx": 20,
+        "spacing_dy": 15,
+        "shift_dx": 3,
+        "shift_dy": 4,
+        "perimeter_spacing": 12,
+        "near_repeats": 2,
+        "far_spacing": 40,
+        "protection_radius": 1,
+    }
+    gm.GeomMesh.replace_refinement_regions(
+        path, [{"name": "whole", "polygon": box(0, 0, 100, 100), **controls}]
+    )
+    before = hdf.read_bytes()
+    mask = MultiPolygon([box(10, 10, 20, 20), box(60, 60, 70, 70)])
+    regions, report = gm.GeomMesh.clip_refinement_regions(path, mask)
+    assert hdf.read_bytes() == before
+    assert len(regions) == 2
+    assert report.status.tolist() == ["clipped"]
+    assert report.output_fids.tolist() == [[0, 1]]
+    assert report.retained_area.tolist() == [200]
+    assert report.below_one_cell_area.tolist() == [True]
+    for region in regions:
+        assert region["polygon"].area == 100
+        assert all(region[key] == value for key, value in controls.items())
+
+
+def test_disconnected_clip_mask_with_hole_fails_without_mutation(tmp_path):
+    from shapely.geometry import MultiPolygon
+
+    path, hdf = _write_containment_fixture(tmp_path)
+    before = hdf.read_bytes()
+    holed = Polygon(
+        box(10, 10, 40, 40).exterior.coords, [box(20, 20, 30, 30).exterior.coords]
+    )
+    mask = MultiPolygon([holed, box(60, 60, 70, 70)])
+    with pytest.raises(ValueError, match="without holes"):
+        gm.GeomMesh.clip_refinement_regions(path, mask)
+    assert hdf.read_bytes() == before
+
+
 def test_native_extent_gate_allows_large_and_touching_regions(tmp_path):
     path, _ = _write_containment_fixture(
         tmp_path,

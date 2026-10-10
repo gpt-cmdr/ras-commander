@@ -42,6 +42,7 @@ Example Usage:
     ... )
 """
 
+import hashlib
 import math
 import tempfile
 from datetime import datetime
@@ -529,42 +530,78 @@ class GeomStorage:
         return centroid_x / (6.0 * area), centroid_y / (6.0 * area)
 
     @staticmethod
+    @log_call
     def plan_2d_flow_area_perimeter(
         coordinates: Optional[Sequence[Sequence[float]]] = None, geometry=None
     ) -> dict:
         """Plan a closed native ring without mutation, in source horizontal units.
 
-        Removes only adjacent vertices whose XY pairs serialize identically in
-        the native 16-character adaptive-precision fields. Other close vertices
-        remain. Returns coordinates and removed source indexes for recorded
-        authoring; at least three distinct serialized vertices are required.
-        No CRS conversion or topological simplification is performed.
+        Removes adjacent vertices whose serialized XY pairs are identical or
+        within the existing native near-duplicate tolerance (1e-6 horizontal
+        units). Comparison uses the last retained vertex, preventing chained
+        removal from accumulating displacement. Other close vertices remain.
+        Returns coordinates, original removed indexes, ring hashes, tolerance,
+        boundary displacement and area change for recorded authoring. Records
+        source validity; requires a valid authored polygon and at least three
+        retained vertices. A numeric closing overlap can itself be repaired.
+        No CRS conversion or general simplification is performed.
         """
+        from shapely.geometry import Polygon
+        from .GeomMesh import PERIMETER_NEAR_DUPLICATE_TOL
+
         coords = GeomStorage._normalize_perimeter_coords(coordinates, geometry)
         def key(point):
             return tuple(
                 f"{v:.{GeomStorage._max_precision_for_field(v, GeomStorage.SURFACE_LINE_COLUMN)}f}"
                 for v in point
             )
+        def serialized(point):
+            return tuple(float(value) for value in key(point))
+
+        def near(a, b):
+            return math.dist(serialized(a), serialized(b)) <= PERIMETER_NEAR_DUPLICATE_TOL
+
         kept, kept_indexes, removed = [], [], []
+        near_removed = False
         for index, point in enumerate(coords[:-1]):
-            if kept and key(point) == key(kept[-1]):
+            if kept and near(point, kept[-1]):
+                near_removed |= key(point) != key(kept[-1])
                 removed.append(index)
             else:
                 kept.append(point)
                 kept_indexes.append(index)
-        if len(kept) > 1 and key(kept[-1]) == key(kept[0]):
+        while len(kept) > 1 and near(kept[-1], kept[0]):
+            near_removed |= key(kept[-1]) != key(kept[0])
             removed.append(kept_indexes.pop())
             kept.pop()
         if len({key(p) for p in kept}) < 3:
             raise ValueError("2D flow area perimeter needs three distinct serialized vertices")
+        source = Polygon(coords)
+        authored = Polygon([serialized(point) for point in kept])
+        if not authored.is_valid or source.is_empty or authored.is_empty:
+            raise ValueError("2D flow area perimeter normalization requires valid polygons")
+        displacement = source.boundary.hausdorff_distance(authored.boundary)
+        # Field rounding is measured separately from adjacent-vertex removal;
+        # no chain may turn this numerical repair into general simplification.
+        removal = source.boundary.hausdorff_distance(Polygon(kept).boundary)
+        if removal > PERIMETER_NEAR_DUPLICATE_TOL:
+            raise ValueError("2D flow area perimeter repair exceeds near-duplicate tolerance")
         return {
             'coordinates': kept + [kept[0]],
             'source_vertex_count': len(coords) - 1,
             'authored_vertex_count': len(kept),
             'removed_adjacent_vertex_indexes': sorted(removed),
             'serialization': 'adaptive_precision_16_character_xy_fields',
-            'reason_code': 'ADJACENT_SERIALIZED_PERIMETER_DUPLICATE' if removed else None,
+            'reason_code': ('ADJACENT_NEAR_DUPLICATE_PERIMETER' if near_removed else
+                            'ADJACENT_SERIALIZED_PERIMETER_DUPLICATE' if removed else None),
+            'near_duplicate_tolerance': PERIMETER_NEAR_DUPLICATE_TOL,
+            'source_ring_wkb_sha256': hashlib.sha256(source.wkb).hexdigest(),
+            'authored_ring_wkb_sha256': hashlib.sha256(authored.wkb).hexdigest(),
+            'boundary_displacement': displacement,
+            'removal_boundary_displacement': removal,
+            'area_change': authored.area - source.area,
+            'source_valid': bool(source.is_valid),
+            'authored_valid': True,
         }
 
     @staticmethod

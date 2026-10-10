@@ -282,6 +282,7 @@ class Breakout2DPreparationResult:
             columns=HdfStruc.CONNECTION_ATTACHMENT_COLUMNS
         )
     )
+    breakline_containment_repairs: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def boundaries_unchanged(self) -> bool:
@@ -669,6 +670,15 @@ class RasBreakout2D:
         computation cells through
         :class:`GeomMesh`; no option launches a hydraulic simulation.
 
+        If native containment fails only for breaklines, a single recorded
+        retry may clip numerical endpoint deficits against the exact compiled
+        one-cell inward buffer. Each line must remain one positive LineString
+        and move at most 0.01 source horizontal units. Identities and mesh
+        controls remain fixed. The cloned geometry carries a planned/applied/
+        validated repair JSON sidecar; successful results also return the
+        records in ``breakline_containment_repairs``. Larger deficits, dropped
+        or split lines, and structure violations remain blocking.
+
         Args:
             preflight: A passing :meth:`preflight` result.
             clone: The :meth:`clone_plan_components` result for that preflight.
@@ -839,6 +849,7 @@ class RasBreakout2D:
 
         containment_result = None
         mesh_result = None
+        breakline_containment_repairs = []
         if remesh:
             mesh_result = GeomMesh.generate(
                 clone.geometry_number,
@@ -846,6 +857,106 @@ class RasBreakout2D:
                 ras_object=ras_object,
                 max_iterations=max_mesh_iterations,
             )
+            violations = getattr(
+                getattr(mesh_result, "domain_containment", None), "violations", []
+            )
+            if (
+                not mesh_result.ok
+                and violations
+                and all(
+                    item.feature_type == "breakline"
+                    and item.reason == "outside_one_cell_inward_buffer"
+                    for item in violations
+                )
+            ):
+                # Bootstrap can reverse the ring and round line endpoints. GEOS
+                # erosion at nearly collinear corners is orientation-sensitive.
+                # Repair only measured numeric endpoint deficits, never waive
+                # the exact compiled-perimeter containment requirement.
+                from .geom.GeomMesh import _hdf_flow_area_perimeter
+                from .geom.GeomPreprocessor import GeomPreprocessor
+                from .geom.GeomStorage import GeomStorage
+
+                perimeter = Polygon(
+                    _hdf_flow_area_perimeter(
+                        clone.geometry_hdf, preflight.spec.source_2d_area
+                    )
+                )
+                repaired_specs, repair = _plan_numeric_breakline_containment(
+                    perimeter,
+                    breakline_specs,
+                    {item.feature_name for item in violations},
+                    preflight.base_cell_size,
+                )
+                text_before = _sha256_file(clone.geometry_path)
+                hdf_before = _sha256_file(clone.geometry_hdf)
+                repair.update(
+                    status="planned",
+                    geometry_text_sha256_before=text_before,
+                    geometry_hdf_sha256_before=hdf_before,
+                )
+                repair_path = clone.geometry_path.with_name(
+                    clone.geometry_path.name + ".breakline_containment_repair.json"
+                )
+                repair_path.write_text(
+                    json.dumps(repair, indent=2) + "\n", encoding="utf-8"
+                )
+                if text_before != _sha256_file(
+                    clone.geometry_path
+                ) or hdf_before != _sha256_file(clone.geometry_hdf):
+                    raise RuntimeError(
+                        "Geometry changed after numeric breakline repair planning"
+                    )
+                GeomStorage.replace_breaklines(
+                    clone.geometry_path,
+                    preflight.spec.source_2d_area,
+                    repaired_specs,
+                    expected_existing_names=[item["name"] for item in breakline_specs],
+                )
+                points = GeomMesh.generate_computation_points(
+                    clone.geometry_number,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                )
+                if points.status != "success" or not points.cell_count:
+                    raise RuntimeError(
+                        "Numeric breakline repair could not regenerate computation points"
+                    )
+                retry = GeomPreprocessor.run_geometry_preprocessor(
+                    clone.plan_number,
+                    ras_object=ras_object,
+                    max_wait=timeout,
+                    force=True,
+                    clear_geompre=True,
+                    geometry_only=True,
+                )
+                repair.update(
+                    status="applied", native_preprocess_success=bool(retry.success)
+                )
+                repair_path.write_text(
+                    json.dumps(repair, indent=2) + "\n", encoding="utf-8"
+                )
+                if not retry.success:
+                    raise RuntimeError(
+                        "Numeric breakline repair failed native preprocessing"
+                    )
+                mesh_result = GeomMesh.generate(
+                    clone.geometry_number,
+                    mesh_name=preflight.spec.source_2d_area,
+                    ras_object=ras_object,
+                    max_iterations=max_mesh_iterations,
+                )
+                repair.update(
+                    status="validated" if mesh_result.ok else "failed",
+                    native_mesh_success=bool(mesh_result.ok),
+                    geometry_text_sha256_after=_sha256_file(clone.geometry_path),
+                    geometry_hdf_sha256_after=_sha256_file(clone.geometry_hdf),
+                )
+                repair_path.write_text(
+                    json.dumps(repair, indent=2) + "\n", encoding="utf-8"
+                )
+                breakline_containment_repairs.append(repair)
+                breakline_specs = repaired_specs
             if not mesh_result.ok:
                 raise RuntimeError(
                     f"2D mesh regeneration failed: {mesh_result.error_message}"
@@ -918,6 +1029,7 @@ class RasBreakout2D:
             retained_reference_line_count=len(reference_line_specs),
             retained_refinement_region_count=len(refinement_specs),
             unsteady_sha256_after=final_unsteady_hash,
+            breakline_containment_repairs=breakline_containment_repairs,
         )
 
     @staticmethod
@@ -1799,6 +1911,79 @@ def _deduplicate_ras_name(candidate: str, used: set[str]) -> str:
             used.add(revised.casefold())
             return revised
         sequence += 1
+
+
+def _plan_numeric_breakline_containment(
+    perimeter: BaseGeometry,
+    specs: list[dict[str, Any]],
+    failed_names: set[str],
+    cell_size: float,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Plan bounded endpoint clipping against the exact compiled ring, without mutation."""
+    if not math.isfinite(cell_size) or cell_size <= 0:
+        raise ValueError(
+            "Numeric breakline repair requires positive finite cell spacing"
+        )
+    limit = 0.01  # source horizontal units; independent of the strict containment gate
+    margin = max(1e-6, cell_size * 1e-8)
+    admissible = perimeter.buffer(-cell_size)
+    guarded = perimeter.buffer(-(cell_size + margin)).intersection(admissible)
+    if guarded.is_empty or not guarded.is_valid:
+        raise ValueError("Numeric breakline repair requires a valid inward buffer")
+    if len({item["name"] for item in specs}) != len(specs) or not failed_names.issubset(
+        {item["name"] for item in specs}
+    ):
+        raise ValueError("Numeric breakline repair identities are ambiguous")
+    output, repairs = [], []
+    for fid, item in enumerate(specs):
+        revised = dict(item)
+        if item["name"] in failed_names:
+            source = LineString(item["coords"])
+            clipped = source.intersection(guarded)
+            displacement = source.hausdorff_distance(clipped)
+            if (
+                clipped.geom_type != "LineString"
+                or clipped.is_empty
+                or not clipped.is_valid
+                or clipped.length <= 0
+            ):
+                raise ValueError(
+                    "Numeric breakline repair cannot drop or split a retained line"
+                )
+            if (
+                not math.isfinite(displacement)
+                or displacement > limit
+                or not admissible.covers(clipped)
+            ):
+                raise ValueError(
+                    "Breakline containment deficit exceeds numeric repair bounds"
+                )
+            revised["coords"] = list(clipped.coords)
+            repairs.append(
+                {
+                    "child_fid": fid,
+                    "name": item["name"],
+                    "before_wkb_sha256": _geometry_hash(source),
+                    "after_wkb_sha256": _geometry_hash(clipped),
+                    "before_length": source.length,
+                    "after_length": clipped.length,
+                    "removed_length": source.length - clipped.length,
+                    "geometry_displacement": displacement,
+                }
+            )
+        output.append(revised)
+    return output, {
+        "schema": "ras-numeric-breakline-containment-repair/v1",
+        "reason_code": "NUMERIC_BREAKLINE_CONTAINMENT_CLIP",
+        "horizontal_units": "source_horizontal_units",
+        "maximum_geometry_displacement": limit,
+        "one_cell_inward_distance": cell_size,
+        "additional_inward_margin": margin,
+        "compiled_perimeter_wkb_sha256": _geometry_hash(perimeter),
+        "perimeter_unchanged": True,
+        "native_controls_unchanged": True,
+        "repairs": repairs,
+    }
 
 
 def _retained_breakline_specs(preflight: Breakout2DPreflight) -> list[dict[str, Any]]:

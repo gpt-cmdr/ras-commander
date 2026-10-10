@@ -619,7 +619,15 @@ Storage area and 2D flow area geometry parsing and writing.
 - `get_2d_flow_area_settings(geom_file)` - Read 2D flow area computation settings
 - `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
 - `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
+- `plan_2d_flow_area_perimeter(coordinates=..., geometry=...)` - Plan native serialization without mutation. Removes only adjacent serialized XY pairs within the existing `GeomMesh.PERIMETER_NEAR_DUPLICATE_TOL` of 1e-6 source horizontal units, including closure. Uses the last retained point to bound chained removal; preserves distinct 0.003-unit edges. Returns original removed indexes, source/authored WKB hashes, tolerance, validity, boundary displacement and signed area change in source units (square units for area). The authored polygon must be valid, and removal-only displacement must stay within the near-duplicate tolerance. `set_2d_flow_area_perimeter()` uses this plan; callers retain their own final geometry/feature acceptance checks and canonical input artifacts.
 - `replace_breaklines(geom_file, flow_area_name, breaklines, expected_existing_names=..., ...)` - Atomically replace the geometry-global breakline collection while preserving supplied near/far spacing, near-repeat, and protection-radius values.
+
+`GeomMesh.clip_refinement_regions()` accepts a valid, positive-area Polygon or
+MultiPolygon mask without holes. An inward buffer can split a narrow-necked
+child polygon into disconnected pieces; clipping retains every positive-area
+intersection fragment by default and preserves all native refinement controls.
+The read-only clip report retains its existing schema. This internal mask does
+not change the requirement to author one computational-domain polygon.
 
 ## MeshRegenerationWorkflow
 
@@ -1139,3 +1147,26 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       show_source: false
       members:
         - apply
+
+### Numeric breakline containment retry
+
+`RasBreakout2D.prepare_cloned_geometry` permits one automatic retry only when
+native containment violations exclusively identify breaklines outside the
+one-cell inward buffer. The planner clips each identified line against the
+exact compiled collection perimeter eroded by cell spacing plus
+`max(1e-6, cell_spacing * 1e-8)` source horizontal units, intersected with the
+strict buffer. A repair must preserve one valid positive LineString, its name,
+child FID and all native spacing/repeat/protection controls, with Hausdorff
+movement at most 0.01 source horizontal units. No source file is changed.
+
+A cloned geometry sidecar `<geometry>.breakline_containment_repair.json`
+(`ras-numeric-breakline-containment-repair/v1`) is written before mutation.
+It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP`, horizontal units,
+maximum movement, one-cell spacing, additional margin, compiled perimeter WKB
+SHA256, perimeter/control preservation flags, and per-line before/after WKB
+hashes, lengths, removed length and movement. The plan binds the current text
+and HDF SHA256. Status advances from `planned` to `applied` (with preprocessing
+success) to `validated` or `failed` (with native mesh success and final hashes).
+Exceptions preserve the last sidecar. The result's default-empty
+`breakline_containment_repairs` list returns completed retry records. Native
+compilation and the original strict containment audit still must pass.
