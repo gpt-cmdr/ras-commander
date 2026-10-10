@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import stat
+import tempfile
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path, PureWindowsPath
@@ -733,3 +736,166 @@ def _paths_equivalent(first: PathLike, second: PathLike) -> bool:
         return safe_resolve_path(first) == safe_resolve_path(second)
     except (OSError, RuntimeError, TypeError, ValueError):
         return os.path.normcase(str(first)) == os.path.normcase(str(second))
+
+
+def _protect_windows_backup_acl(source: Path, backup: Path) -> None:
+    """Apply the source DACL before writing backup contents on Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    api = ctypes.WinDLL("advapi32", use_last_error=True)
+    api.GetFileSecurityW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    api.GetFileSecurityW.restype = wintypes.BOOL
+    api.SetFileSecurityW.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    )
+    api.SetFileSecurityW.restype = wintypes.BOOL
+    needed = wintypes.DWORD()
+    api.GetFileSecurityW(str(source), 4, None, 0, ctypes.byref(needed))
+    if not needed.value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    descriptor = ctypes.create_string_buffer(needed.value)
+    if not api.GetFileSecurityW(
+        str(source), 4, descriptor, len(descriptor), ctypes.byref(needed)
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    # DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION:
+    # keep the source entries without adding the sibling directory's grants.
+    if not api.SetFileSecurityW(str(backup), 0x80000004, descriptor):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
+def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
+    """Remove infiltration association from an attempt-owned geometry HDF.
+
+    Mutates only the supplied .gNN.hdf; rejects plan/result HDFs. Removes the
+    native infiltration filename, layer name and date attributes. Existing
+    property tables remain stale until the caller rebuilds them. Terrain and
+    roughness associations, coordinates, CRS and units are unchanged.
+    Requires a directly linked /Geometry group owned by the supplied HDF.
+    Backs up the original bytes, edits and validates in place, and restores
+    those bytes on failure without replacing the original file object.
+    Returns the edited geometry path; an absent association is a byte-preserving
+    no-op. A process crash leaves .<stem>-infiltration-backup-*.hdf.bak beside
+    the geometry for recovery. Exclusive access by the caller is required.
+    """
+    import h5py
+
+    path = safe_resolve_path(hdf_path)
+    if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
+        raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
+
+    def owned_geometry(handle):
+        # Inspect the link before dereferencing an external writable target.
+        link = handle.get("Geometry", getlink=True)
+        if link is None:
+            raise KeyError("Geometry")
+        if (
+            not isinstance(link, h5py.HardLink)
+            or handle.get("Geometry", getclass=True) is not h5py.Group
+        ):
+            raise ValueError("/Geometry must be a directly linked, file-owned HDF group")
+        geometry = handle["Geometry"]
+        if geometry.file.id != handle.id:
+            raise ValueError("/Geometry must be a directly linked, file-owned HDF group")
+        return geometry
+
+    field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
+    attr_names = tuple(field[key] for key in ("filename_attr", "layer_attr", "date_attr"))
+    with h5py.File(path, "r") as handle:
+        attrs = owned_geometry(handle).attrs
+        if not any(name in attrs for name in attr_names):
+            return path
+
+    # Retain a handle to the original object for byte restoration; neither
+    # success nor rollback renames, replaces, or changes its security metadata.
+    with path.open("r+b") as original:
+        original_stat = os.fstat(original.fileno())
+        original_mode = stat.S_IMODE(original_stat.st_mode)
+        # POSIX writes can clear set-ID bits. Refuse before writing if this
+        # user cannot reapply those bits to the existing file object.
+        if (
+            os.name != "nt"
+            and os.geteuid() != 0
+            and original_mode & (stat.S_ISUID | stat.S_ISGID)
+            and (
+                original_stat.st_uid != os.geteuid()
+                or (
+                    original_mode & stat.S_ISGID
+                    and original_stat.st_gid not in {*os.getgroups(), os.getegid()}
+                )
+            )
+        ):
+            raise PermissionError(
+                "geometry set-ID mode cannot be preserved by this user"
+            )
+
+        def flush_original():
+            original.flush()
+            if (
+                os.name != "nt"
+                and stat.S_IMODE(os.fstat(original.fileno()).st_mode) != original_mode
+            ):
+                os.fchmod(original.fileno(), original_mode)
+                if stat.S_IMODE(os.fstat(original.fileno()).st_mode) != original_mode:
+                    raise PermissionError("geometry mode could not be restored")
+            os.fsync(original.fileno())
+
+        descriptor, backup_name = tempfile.mkstemp(
+            prefix=f".{path.stem}-infiltration-backup-",
+            suffix=".hdf.bak",
+            dir=path.parent,
+        )
+        backup_path = Path(backup_name)
+        mutated = False
+        retain_backup = False
+        try:
+            with os.fdopen(descriptor, "w+b") as backup:
+                if os.name == "nt":
+                    _protect_windows_backup_acl(path, backup_path)
+                # mkstemp restricts POSIX backups to the current user. Do not
+                # copy mode/read-only flags onto the owned temporary sibling.
+                shutil.copyfileobj(original, backup)
+                backup.flush()
+                os.fsync(backup.fileno())
+                mutated = True  # Opening r+ can itself change HDF bytes.
+                with h5py.File(path, "r+") as handle:
+                    attrs = owned_geometry(handle).attrs
+                    for name in attr_names:
+                        if name in attrs:
+                            del attrs[name]
+                with h5py.File(path, "r") as handle:
+                    attrs = owned_geometry(handle).attrs
+                    if any(name in attrs for name in attr_names):
+                        raise RuntimeError("infiltration association remained after clearing")
+                observed = read_geometry_association(path)
+                if observed.get("infiltration_hdf_path"):
+                    raise RuntimeError("infiltration association remained after clearing")
+                flush_original()
+            backup_path.unlink()
+        except BaseException:
+            if mutated:
+                try:
+                    with backup_path.open("rb") as backup:
+                        original.seek(0)
+                        original.truncate(0)
+                        shutil.copyfileobj(backup, original)
+                        flush_original()
+                except BaseException as restore_error:
+                    retain_backup = True
+                    raise RuntimeError(
+                        f"geometry byte restoration failed; recovery backup: {backup_path}"
+                    ) from restore_error
+            raise
+        finally:
+            if not retain_backup:
+                backup_path.unlink(missing_ok=True)
+    return path
