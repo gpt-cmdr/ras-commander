@@ -2992,3 +2992,108 @@ def test_inset_perimeter_midpoint_uses_segment_length_when_face_length_unknown()
 
     # Nearest perimeter segment is 20 long -> 1% = 0.2 inward.
     assert was_moved and (moved.X, moved.Y) == pytest.approx((10.0, 0.2))
+
+
+@pytest.mark.parametrize("scale", [1.0, 0.3048])
+def test_autofix_discards_midpoint_when_inset_crosses_narrow_perimeter(scale):
+    """A 1% inset can overshoot a narrow neck; never append that seed."""
+    from shapely.geometry import Point
+
+    perimeter = MockPolygon([
+        (0, 0), (20 * scale, 0), (20 * scale, .1 * scale), (0, .1 * scale)
+    ])
+    mesh = _NineSidedCellMesh()
+    mesh._faces = [
+        ((0, 0), (20 * scale, 0)),
+        ((2 * scale, .05 * scale), (8 * scale, .05 * scale)),
+        ((12 * scale, .05 * scale), (18 * scale, .05 * scale)),
+    ] + [((scale, .04 * scale), (1.1 * scale, .04 * scale))] * 6
+    stats = {}
+    original = MockPointM(scale, .05 * scale)
+    points, added, mids = geom_mesh_module._autofix_max_faces(
+        mesh, [original], {"PointM": MockPointM}, perimeter=perimeter, stats=stats
+    )
+    polygon = geom_mesh_module._perimeter_shapely_polygon(perimeter)
+    assert stats["discarded"] == 1
+    assert added == 2  # Continue to the next eligible faces after rejecting one.
+    assert points[0] is original
+    assert all(polygon.contains(Point(p.X, p.Y)) for p in mids)
+
+
+@pytest.mark.parametrize("requested", [.0025, .075, .25, .3])
+def test_generate_uses_and_persists_exact_requested_ratio(
+    monkeypatch, breakline_geom_text, requested
+):
+    from ras_commander.geom.GeomStorage import GeomStorage
+
+    breakline_geom_text.write_text(
+        breakline_geom_text.read_text().replace(
+            "Storage Area=MainArea\n", "Storage Area=MainArea\nStorage Area Is2D=-1\n"
+        )
+    )
+    captured = _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    ratios = []
+
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        return FakeMesh()
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert result.ok
+    assert ratios == [requested]
+    settings = GeomStorage.get_2d_flow_area_settings(breakline_geom_text)
+    assert settings.loc[settings.name == "MainArea", "min_face_length_ratio"].iloc[0] == requested
+    captured["geom"].D2FlowArea.SetMinFaceLengthRatio.assert_called_once_with(0, requested)
+
+
+@pytest.mark.parametrize("requested", [0, -1, float("nan"), float("inf")])
+def test_generate_rejects_invalid_ratio_before_mutation(breakline_geom_text, requested):
+    original = breakline_geom_text.read_bytes()
+    with pytest.raises(ValueError, match="min_face_length_ratio"):
+        GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert breakline_geom_text.read_bytes() == original
+
+
+def test_generate_filters_native_outside_and_boundary_seeds(
+    monkeypatch, breakline_geom_text
+):
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    seeds = MockPointMs()
+    for xy in [(0, 10), (-1, 10), (10, 10), (20, 20)]:
+        seeds.Add(MockPointM(*xy))
+    monkeypatch.setattr(geom_mesh_module, "_generate_seeds_via_net", lambda *a, **k: seeds)
+    received = []
+
+    def compute(perimeter, points, breaklines, ratio, ns):
+        received.extend((points[i].X, points[i].Y) for i in range(points.Count))
+        return FakeMesh()
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text)
+    assert result.ok
+    assert received == [(10, 10), (20, 20)]
+    assert "removed_2_outside_or_boundary_seeds" in result.fixes_applied
+
+
+@pytest.mark.parametrize("requested, expected", [(.0025, [.0025, .05]), (.075, [.075, .1])])
+def test_generate_escalates_from_requested_ratio(monkeypatch, breakline_geom_text, requested, expected):
+    breakline_geom_text.write_text(breakline_geom_text.read_text().replace(
+        "Storage Area=MainArea\n", "Storage Area=MainArea\nStorage Area Is2D=-1\n"
+    ))
+    _mock_generate_success(monkeypatch, breakline_geom_text, has_breaklines=True)
+    monkeypatch.setattr(geom_mesh_module, "_meshfv2d_takes_min_face_ratio", lambda ns: True)
+    ratios = []
+
+    def compute(perimeter, seeds, breaklines, ratio, ns):
+        ratios.append(ratio)
+        mesh = FakeMesh()
+        if len(ratios) == 1:
+            mesh.MeshCompletionState = FakeMeshState(99, "Retry")
+        return mesh
+
+    monkeypatch.setattr(geom_mesh_module, "_compute_mesh", compute)
+    result = GeomMesh.generate(breakline_geom_text, min_face_length_ratio=requested)
+    assert result.ok
+    assert ratios == expected
+    assert f"Ratio:{expected[0]:g}->{expected[1]:g}" in result.fixes_applied

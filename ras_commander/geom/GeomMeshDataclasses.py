@@ -89,6 +89,9 @@ class MeshResult:
     domain_containment: Optional[DomainContainmentResult] = None
     perimeter_repairs: list[dict[str, Any]] = field(default_factory=list)
 
+    # Empty when disabled; otherwise records rounds, convergence, timing and errors.
+    robustness_screening: Dict[str, Any] = field(default_factory=dict)
+
     @property
     def ok(self) -> bool:
         return self.status == "complete"
