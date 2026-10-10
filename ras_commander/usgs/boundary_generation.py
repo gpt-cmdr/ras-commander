@@ -97,6 +97,7 @@ class BoundaryGenerator:
                 _format_fixed_width_value(
                     v, width=width, max_decimals=decimals,
                     normalize_negative_zero=False,
+                    preserve_decimal=True,
                 )
                 for v in chunk
             )

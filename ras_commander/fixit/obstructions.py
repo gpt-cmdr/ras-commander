@@ -243,7 +243,7 @@ def _format_value(value: float, width: int) -> str:
         Right-justified string of exactly 'width' characters.
     """
     return _format_fixed_width_value(
-        value, width=width, normalize_negative_zero=False,
+        value, width=width, normalize_negative_zero=False, preserve_decimal=True,
     )
 
 

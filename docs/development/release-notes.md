@@ -22,6 +22,9 @@ field writes `108765.38` as `108765.4` and `163148.07725` as `163148.1`.
 
 Already-fitting finite fields keep their previous bytes, including signed
 zero in geometry/USGS tables and already-fitting legacy breach notation.
+Geometry, USGS, and private fixit formatters preserve `Decimal` rounding;
+for example, `Decimal('1.015')` writes `    1.02` at the default precision
+with the default decimal context.
 PR #488's unsteady formatter and the steady-flow formatter keep their existing
 behavior. Non-finite values raise `ValueError`.
 

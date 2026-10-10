@@ -179,6 +179,7 @@ class GeomParser:
                 _format_fixed_width_value(
                     value, width=column_width, max_decimals=precision,
                     normalize_negative_zero=False,
+                    preserve_decimal=True,
                 )
                 for value in row_values
             )
