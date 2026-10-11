@@ -60,6 +60,7 @@ def _seed_project(tmp_path: Path, *, gridded: bool = True) -> _FakeRas:
 def _write_artifacts(folder: Path, *, materialized: bool) -> None:
     tmp_hdf = folder / "fixture.p01.tmp.hdf"
     with h5py.File(tmp_hdf, "w") as hdf:
+        hdf.require_group("Event Conditions").attrs["Completed Successfully"] = True
         imported = hdf.require_group(
             "Event Conditions/Meteorology/Precipitation/Imported Raster Data"
         )

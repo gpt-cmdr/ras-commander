@@ -432,7 +432,9 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
     """Return the problems that would crash the Linux solver; an empty list means ready.
 
     Opens the LOCAL, completed file read-only with HDF5 locking disabled. Never call this
-    on a tmp.hdf that HEC-RAS is still writing. Checks: (1) when gridded precipitation is
+    on a tmp.hdf that HEC-RAS is still writing. Event Conditions must report
+    Completed Successfully=True; point and gridded rainfall require non-empty
+    two-dimensional Values. Additional checks: (1) when gridded precipitation is
     present, every 2D area has the
     ``.../Precipitation/2D Flow Areas/<area>/`` interpolation datasets, non-empty; (2) the 2D
     property tables contain no NaN; and (3) unless ``geom_preprocess=True`` (for an image that
@@ -448,6 +450,9 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
     except (OSError, TypeError) as exc:
         return [f"cannot open as HDF5: {exc}"]
     with hdf:
+        from ._preprocess_validation import _event_condition_errors
+
+        problems.extend(_event_condition_errors(hdf))
         areas = _area_names(hdf)
         if not geom_preprocess:
             geompre = hdf.get("Geometry/GeomPreprocess")

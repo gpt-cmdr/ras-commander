@@ -61,6 +61,7 @@ def _make_solver_ready(path):
     import numpy as np
 
     with h5py.File(path, "r+") as hdf:
+        hdf.require_group("Event Conditions").attrs["Completed Successfully"] = True
         hdf.require_group("Geometry/GeomPreprocess").create_dataset("Complete", data=[1])
         area = hdf["Geometry/2D Flow Areas/Area1"]
         for name in ("Faces Area Elevation Values", "Faces Area Elevation Info",
