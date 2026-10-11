@@ -2,6 +2,55 @@
 
 Classes for parsing and modifying HEC-RAS geometry files.
 
+## Native property tables and regional mapping recovery
+
+Use `RasMap.recompute_property_tables(project, geometry, hecras_version="6.6")`
+on a disposable model copy. For modern HEC-RAS versions, the computation runs
+in a separate Python process that loads HEC-RAS's bundled HDF5 DLLs before
+pythonnet. It verifies the managed binding's version and thread-safety flag
+before computation, keeping h5py's same-name DLLs out of that computation.
+The call raises on a native process failure or a 1,800-second timeout, then
+checks the existing complete-geometry and nonempty table-pair postconditions.
+It preserves the geometry's source CRS and units and does not establish
+hydraulic acceptance. The HEC-RAS 5.x route is unchanged.
+The isolated worker requires Windows Python, either on Windows or under Wine,
+and the `mesh` extra (`pythonnet>=3.0.5`). Native run qualification here covers
+HEC-RAS 6.6; other modern releases require their own qualification.
+
+A compiled child with regional roughness polygons but no calibration table
+can fail in the native land-cover resampler. Recover a missing regional
+mapping from a same-source geometry whose native region attributes and polygon
+datasets are byte-identical:
+
+```python
+from ras_commander import GeomLandCover, RasMap
+
+recovery = GeomLandCover.restore_mannings_region_mappings(
+    "reference.g02.hdf", "child.g02.hdf", hecras_version="6.6"
+)
+RasMap.recompute_property_tables("study.prj", "child.g02", hecras_version="6.6")
+```
+
+The recovery is qualified with HEC-RAS 6.6. The caller must use geometries from
+the same source CRS and unit system; the method performs no coordinate or unit
+conversion. It refuses an existing target calibration table, changed region
+identities, duplicate class names, or finite base-table overrides.
+The method accepts only float32 numeric calibration columns. HEC-RAS
+writes the original regional mappings through its native mapping methods;
+the method verifies class names and float32 value bytes afterward. Native
+string storage widths may differ, so the returned source/target table hashes
+need not match. The receipt dictionary records those hashes, the backup path,
+class count, identity checks, and `recompute_required=True`.
+Native writing may also resize region-name storage and add an empty `2D Area
+Name` attribute. Existing attribute values and all polygon datasets must
+remain unchanged; other attribute additions fail verification and roll back.
+
+The source remains read-only. The target is backed up and restored if recovery
+fails. No cell or face hydraulic dataset is copied, and recovery does not mark
+an incomplete geometry complete. Run native geometry/property computation and
+normal QA before accepting the child. These operations do not repair a changed
+mesh or establish equivalence between full and cropped terrains.
+
 ## Unified Cross-Section Points
 
 `RasCrossSections.get_points(project, geometry)` exports the same stable point

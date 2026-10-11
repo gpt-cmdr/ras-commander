@@ -1119,3 +1119,48 @@ class GeomLandCover:
             "GeomLandCover.set_region_mannings_n(), then let HEC-RAS rebuild "
             "the property tables."
         )
+
+    @staticmethod
+    @log_call
+    def restore_mannings_region_mappings(
+        source_geom_hdf_path: Union[str, Path],
+        target_geom_hdf_path: Union[str, Path],
+        hecras_version: str = "6.6",
+    ) -> dict:
+        """Recover a missing native calibration table in a disposable child HDF.
+
+        Source and target must have byte-identical native region attributes and
+        polygon coordinates in the same source CRS/units. Only regional
+        dimensionless Manning's n overrides are recovered; finite base-table
+        overrides are rejected. HEC-RAS writes the recovered mappings in an
+        isolated native process. No cell/face hydraulic output is copied.
+
+        Backs up the target and restores it on failure. Returns source/target
+        table hashes, mapping identity, class count and backup path. Native
+        table storage widths may differ; class names and float32 value bytes
+        must match. The original remains read-only. Native region-name storage
+        may resize and an empty 2D Area Name attribute may be added; existing
+        values and polygons must be unchanged. Run native geometry and
+        property-table computation and normal QA after recovery; this method
+        does not mark an incomplete geometry complete.
+
+        Args:
+            source_geom_hdf_path: Read-only reference geometry HDF with the
+                original regional calibration mappings.
+            target_geom_hdf_path: Disposable geometry HDF with matching native
+                regions and a missing calibration table; mutated in place.
+            hecras_version: Installed native version. Qualified with 6.6.
+
+        Returns:
+            Recovery provenance including source/target hashes, backup path,
+            class count, identity checks and required recomputation.
+
+        Raises:
+            ValueError: Input regions or calibration schema are unsupported.
+            RuntimeError: Native writing or postwrite verification fails.
+        """
+        from ._mannings_region_recovery import restore_region_mappings
+
+        return restore_region_mappings(
+            Path(source_geom_hdf_path), Path(target_geom_hdf_path), hecras_version
+        )
