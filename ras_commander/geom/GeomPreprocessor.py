@@ -40,8 +40,8 @@ from typing import Any, List, Optional, Union
 
 from .._ras_text import _write_ras_text
 from ..ComputeResults import GeometryPreprocessResult
-from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from ..RasBco import BcoMonitor
 from ..RasPlan import RasPlan
 from ..RasPrj import ras
@@ -895,6 +895,7 @@ class GeomPreprocessor:
     def _watch_preprocess_child(child: Any, deadline: float) -> dict:
         """Begin an owned-process wait while the native exit handle is available."""
         import threading
+
         import psutil
 
         record = {
@@ -917,8 +918,9 @@ class GeomPreprocessor:
     @staticmethod
     def _ras_processes_using_path(path: Path) -> List[int]:
         """Find exact-path native preprocessing processes; unknown inspection fails."""
-        import psutil
         import ntpath
+
+        import psutil
 
         def normalize(value):
             return ntpath.normcase(ntpath.normpath(str(value).strip('"')))
