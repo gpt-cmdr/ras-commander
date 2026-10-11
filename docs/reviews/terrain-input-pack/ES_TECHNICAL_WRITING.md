@@ -44,3 +44,13 @@ physical dataset layout; it states the nonempty chunked layout and empty-table
 fallback explicitly. It does not claim native identity from unit tests. Thirty
 affected subset, registration, and result-map tests pass in each required Python
 environment. Native qualification is reported separately by the ES investigation.
+
+## Relocatable terrain registration review
+
+Editorial disposition: **pass** for the new `relative_paths` argument documentation
+and the cloned-bundle paragraph. The text describes the unchanged default,
+same-drive sibling references, different-drive absolute fallback, and separate
+geometry association operation. The rename regression confirms the described
+terrain and projection resolution. All 31 direct regressions pass in COMMON and
+Python 3.11. This editorial review does not infer hydraulic acceptance from path
+portability or unit tests.

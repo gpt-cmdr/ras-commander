@@ -5617,6 +5617,7 @@ class RasMap:
         layer_name: str = "Terrain",
         projection_prj: Optional[Union[str, Path]] = None,
         ras_object=None,
+        relative_paths: bool = False,
     ) -> None:
         """
         Add terrain layer to RASMapper configuration.
@@ -5632,6 +5633,10 @@ class RasMap:
             projection_prj: Path to ESRI PRJ file. If provided, updates
                 RASProjectionFilename element. Default: None (keeps existing).
             ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
+            relative_paths: Include sibling and parent folders in relative terrain
+                and projection references on the same drive. Default False keeps
+                the existing descendant-only behavior. Different drives retain
+                absolute references. Use True for relocatable cloned bundles.
 
         Returns:
             None
@@ -5704,7 +5709,11 @@ class RasMap:
 
         try:
             # Calculate relative path
-            rel_path = terrain_hdf_resolved.relative_to(rasmap_dir)
+            rel_path = (
+                Path(os.path.relpath(terrain_hdf_resolved, rasmap_dir))
+                if relative_paths
+                else terrain_hdf_resolved.relative_to(rasmap_dir)
+            )
             # Format as Windows-style relative path with .\ prefix
             rel_path_str = ".\\" + str(rel_path).replace("/", "\\")
         except ValueError:
@@ -5758,8 +5767,11 @@ class RasMap:
         # Update projection reference if provided
         if projection_prj is not None:
             try:
-                prj_rel_path = RasUtils.safe_resolve(projection_prj).relative_to(
-                    rasmap_dir
+                projection_resolved = RasUtils.safe_resolve(projection_prj)
+                prj_rel_path = (
+                    Path(os.path.relpath(projection_resolved, rasmap_dir))
+                    if relative_paths
+                    else projection_resolved.relative_to(rasmap_dir)
                 )
                 prj_rel_path_str = ".\\" + str(prj_rel_path).replace("/", "\\")
             except ValueError:

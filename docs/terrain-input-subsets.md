@@ -90,3 +90,11 @@ Native single-vertex polyline records return Point support geometry for conserva
 selection, preserving the complete original native record. They are not repaired
 or promoted to valid channel lines; native execution may still reject a retained
 record. Mixed multipart lines containing isolated single vertices are unsupported.
+
+
+For a cloned bundle whose terrain is beside the project folder, register it with
+`RasMap.add_terrain_layer(..., relative_paths=True)`. This keeps same-drive terrain
+and projection references relative, including sibling folders, so renaming the
+run's temporary folder does not invalidate its Mapper. Different-drive assets
+keep absolute references. This option does not change geometry associations;
+set those separately and verify the finalized bundle.
