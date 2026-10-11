@@ -276,7 +276,9 @@ class GeomLateral:
         return result
 
     @staticmethod
-    def _empty_connection_record_indices(block: list[str]) -> set[int]:
+    def _empty_connection_record_indices(
+        block: list[str], *, allow_extended_support: bool = False,
+    ) -> set[int]:
         """Recognize explicit zero counts, never missing or undecoded support."""
         empty = set()
         profile_keys = {
@@ -329,8 +331,10 @@ class GeomLateral:
                 fields = [v.strip() for v in value.split(",")]
                 if fields not in (
                     ["-1", "0", "-1", "-1", "0"],
-                    ["-1", "0", "-1", "-1", "0", "0.3", "0.5"],
                     ["0", "0", "0", "0", "0", "0.3", "0.5"],
+                ) and not (
+                    allow_extended_support
+                    and fields == ["-1", "0", "-1", "-1", "0", "0.3", "0.5"]
                 ):
                     return empty
             elif position == 9:
@@ -484,8 +488,8 @@ class GeomLateral:
     @staticmethod
     @log_call
     def remap_connection_areas(
-        geom_file: Union[str, Path],
-        area_name_map: Dict[str, str],
+        geom_file: str | Path,
+        area_name_map: dict[str, str],
     ) -> pd.DataFrame:
         """Return connection records with explicit endpoint-name replacements.
 
@@ -544,12 +548,12 @@ class GeomLateral:
         *,
         retained_area_names: Optional[Sequence[str]] = None,
         tolerance: float = 0,
+        allow_extended_support: bool = False,
     ) -> "GeoDataFrame":
         """Classify full physical support as keep/drop/block, without mutation.
 
         geometry is the union of the width-buffered crest and width-buffered
-        explicit culvert barrels and explicit gate opening GIS lines. Gates
-        without complete opening lines, populated bridges and breaches
+        explicit culvert barrels. Gates, undecoded records, bridges and breaches
         have unverified support and fail closed. Positive tolerance supplies an
         external separation guard: disjoint support near the child blocks with
         CONNECTION_NEAR_CHILD_BOUNDARY. Containment remains exact; tolerance
@@ -562,11 +566,19 @@ class GeomLateral:
                 source areas. Both named endpoints must remain.
             tolerance: Finite nonnegative external separation guard in model
                 units; never expands the child's containment boundary.
+            allow_extended_support: Explicitly accept complete gate opening GIS
+                support, cell-size metadata and the additional verified empty
+                bridge template. Defaults to False, preserving existing decisions
+                and the six-column return shape. Other unknown support blocks.
 
         Returns:
             GeoDataFrame with Name, From, To, action, reason and geometry.
             Unverified extent produces block; verified disjoint support drop;
             complete containment with retained endpoints keep.
+            With allow_extended_support=True, gate_group_count is added before
+            geometry and counts verified gate groups. Gate GIS lines are buffered
+            by half their positive finite opening widths; dimensions and opening
+            counts/stations must be complete. No native attachment is established.
 
         Raises:
             FileNotFoundError: Geometry file does not exist.
@@ -653,7 +665,7 @@ class GeomLateral:
                                 reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
                     support = unary_union(footprints)
             gates_verified = False
-            if data["HasGate"] and support is not None:
+            if allow_extended_support and data["HasGate"] and support is not None:
                 try:
                     gate_lines = GeomLateral.get_connection_gate_lines(
                         geom_file, data["Name"]
@@ -682,10 +694,18 @@ class GeomLateral:
                         )],
                     ])
                     gates_verified = True
-                except (ValueError, IOError):
+                except (ValueError, OSError):
                     reason = "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
             # Culvert records are decoded above; bridge/gate/breach/unknown
             # extent cannot be inferred merely from the connection centerline.
+            extended_empty = set()
+            if allow_extended_support:
+                block = data["RawBlock"].splitlines(keepends=True)
+                extended_empty = {
+                    block[i] for i in GeomLateral._empty_connection_record_indices(
+                        block, allow_extended_support=True
+                    )
+                }
             unknown = [
                 r
                 for r in data["UnknownRecords"]
@@ -695,8 +715,12 @@ class GeomLateral:
                         "Conn Culvert Barrel=",
                         "Conn Culv Bottom n=",
                         "Conn Culv HTab",
-                        "Conn CellSize Min=",
-                        "Conn CellSize Max=",
+                    )
+                )
+                and not (
+                    allow_extended_support and (
+                        r.startswith(("Conn CellSize Min=", "Conn CellSize Max="))
+                        or r in extended_empty
                     )
                 )
                 and not (
@@ -745,19 +769,23 @@ class GeomLateral:
                     "action": action,
                     "reason": reason,
                     "geometry": support,
-                    "gate_group_count": len(data["Gates"]) if gates_verified else 0,
                 }
             )
+            if allow_extended_support:
+                rows[-1]["gate_group_count"] = len(data["Gates"]) if gates_verified else 0
+        columns = ["Name", "From", "To", "action", "reason", "geometry"]
+        if allow_extended_support:
+            columns.insert(-1, "gate_group_count")
         return gpd.GeoDataFrame(
             rows,
-            columns=["Name", "From", "To", "action", "reason", "geometry", "gate_group_count"],
+            columns=columns,
             geometry="geometry",
         )
 
     @staticmethod
     @log_call
     def get_connection_gate_lines(
-        geom_file: Union[str, Path], connection_name: str,
+        geom_file: str | Path, connection_name: str,
     ) -> "GeoDataFrame":
         """Read complete explicit gate opening GIS polylines without mutation.
 
@@ -800,7 +828,7 @@ class GeomLateral:
             geometry = LineString(list(zip(values[::2], values[1::2], strict=True)))
             if not geometry.is_valid or geometry.length <= 0:
                 raise ValueError("Invalid gate opening GIS line")
-            records.append(dict(opening_index=index, opening_name=fields[1], geometry=geometry))
+            records.append({"opening_index": index, "opening_name": fields[1], "geometry": geometry})
         indexes = [r["opening_index"] for r in records]
         if sorted(indexes) != list(range(1, len(records) + 1)):
             raise ValueError("Gate opening GIS indexes must be unique and consecutive")

@@ -362,11 +362,12 @@ def test_extended_empty_bridge_flags_require_an_empty_complete_template(geometry
     lines[0] = "Conn BR: Bridge=-1,0,-1,-1,0,0.3,0.5\n"
     records = "".join(lines)
     row = _append_connection_records(geometry, records)
-    assert row["UnknownRecords"] == []
-    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0].action == "keep"
+    assert row["UnknownRecords"]
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0].action == "block"
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10), allow_extended_support=True).iloc[0].action == "keep"
     text = geometry.read_text().replace("BR SE=1,0", "BR SE=1,1")
     geometry.write_text(text)
-    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0].action == "block"
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10), allow_extended_support=True).iloc[0].action == "block"
 
 
 @pytest.mark.parametrize(

@@ -577,10 +577,17 @@ Callers supplying the former implicit defaults must opt in or provide measured
 parameters. Use culvert, gate, bridge and profile setters for specialized edits.
 
 `classify_connections(geom_file, child_boundary, retained_area_names=None,
-tolerance=0)` returns a GeoDataFrame with `Name`, `From`, `To`, `action`, `reason`,
-`gate_group_count` and support `geometry`. The child geometry must use the source horizontal CRS
-and model units. Width-expanded line support and explicit culvert barrel
-coordinates are considered. Gate support requires explicit opening GIS lines,
+tolerance=0, allow_extended_support=False)` returns a GeoDataFrame with `Name`,
+`From`, `To`, `action`, `reason` and support `geometry`. The default preserves
+the existing acceptance policy: gates and undecoded records block classification.
+The child geometry must use the source horizontal CRS and model units.
+Width-expanded line support and explicit culvert barrel coordinates are considered.
+
+Pass `allow_extended_support=True` to include verified gate GIS support and
+accept cell-size metadata and the additional verified empty native bridge template.
+This adds `gate_group_count` before `geometry` in the return frame. The choice
+applies only to that read-only call; `GeomStorage.clip_2d_flow_area()` continues
+to use the default acceptance policy. Gate support requires explicit opening GIS lines,
 positive finite opening widths/heights and consistent opening counts/stations.
 The support includes each GIS line buffered by half its delivered gate width.
 `gate_group_count` counts verified native gate groups; unknown gate/bridge/breach
@@ -613,7 +620,7 @@ containment_tolerance=0, create_backup=True)` stages all changes, retains intern
 records exactly and explicitly reports fully external removals. Partial or
 unknown affected support raises a reason-bearing error before changing the
 original. Unrelated areas and connections are retained. Its return value uses
-the same decision columns; `attrs['backup_path']` identifies the backup and
+the six default decision columns; `attrs['backup_path']` identifies the backup and
 `attrs['attachment_status']` remains `CONNECTION_ATTACHMENT_UNVERIFIED`.
 It accepts a contained Polygon; hole-aware/multipart perimeter authoring remains
 outside this API. Existing `set_2d_flow_area_perimeter()` stays compatible and

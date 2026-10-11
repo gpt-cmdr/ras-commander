@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.23"
+SCHEMA_VERSION = "1.24"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -84,6 +84,20 @@ DATAFRAME_SCHEMAS = {
     "connection_classification": {
         "description": "Fail-closed complete-support decisions against a child in source CRS and units.",
         "accessor": "GeomLateral.classify_connections(geom_file, child_boundary)",
+        "source": "ras_commander.geom.GeomLateral.GeomLateral.classify_connections()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": name, "dtype": "str", "description": description}
+            for name, description in (("Name", "Connection identity"), ("From", "Upstream area"),
+                                      ("To", "Downstream area"), ("action", "keep, drop or block"),
+                                      ("reason", "Stable decision reason code"))
+        ] + [
+            {"name": "geometry", "dtype": "geometry | None", "description": "Conservative complete support in source model units when available."},
+        ],
+    },
+    "connection_classification_extended": {
+        "description": "Explicit opt-in complete-support decisions including verified gate GIS support.",
+        "accessor": "GeomLateral.classify_connections(geom_file, child_boundary, allow_extended_support=True)",
         "source": "ras_commander.geom.GeomLateral.GeomLateral.classify_connections()",
         "extra_columns": False, "dynamic": False,
         "columns": [

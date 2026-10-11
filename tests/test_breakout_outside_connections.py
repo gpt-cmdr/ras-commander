@@ -141,7 +141,7 @@ def test_gate_counts_require_verified_inventory_agreement(count, groups, expecte
     actions = gpd.GeoDataFrame([{"feature_type": "sa_2d_connection", "action": "keep",
                                  "name": "gate", "gate_group_count": groups, "geometry": None}], crs=3857)
     checks = mod._build_checks(
-        mod.Breakout2DSpec('01', 'Area', child, 'test'),
+        mod.Breakout2DSpec('01', 'Area', child, 'test', allow_extended_connection_support=True),
         pd.Series({'geometry_type': '2D', 'plan_type': 'unsteady_2d', 'plan_classification_valid': True}),
         pd.Series({'num_sa_2d_connections': 1, 'num_gates': count}),
         box(-10, -10, 30, 30), child, pd.DataFrame({'length': [40.]}), actions, mesh_area_count=1,

@@ -78,6 +78,7 @@ FEATURE_ACTION_COLUMNS = [
     "source_measure",
     "retained_measure",
     "retained_fraction",
+    "gate_group_count",
     "geometry",
 ]
 
@@ -117,6 +118,11 @@ class Breakout2DSpec:
     import their features, terrain, roughness or boundary conditions. The
     caller must qualify those inputs separately before using a union child.
     Preflight reads these HDFs without modifying them.
+
+    ``allow_extended_connection_support=True`` explicitly enables complete gate
+    GIS support and the additional recognized metadata/template records during
+    preflight and clone rechecks. It defaults to False. Native attachments still
+    require separate evidence after preprocessing.
     """
 
     source_plan: Union[str, int]
@@ -129,6 +135,7 @@ class Breakout2DSpec:
     allow_multipart: bool = False
     allow_holes: bool = False
     contributing_geometry_hdfs: tuple[str | Path, ...] = ()
+    allow_extended_connection_support: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.contributing_geometry_hdfs, (str, Path)):
@@ -237,6 +244,8 @@ class Breakout2DPreflight:
             manifest["contributing_geometry_hdfs"] = [
                 dict(item) for item in self.contributing_geometry_identities
             ]
+        if self.spec.allow_extended_connection_support:
+            manifest["allow_extended_connection_support"] = True
         return manifest
 
 
@@ -494,7 +503,8 @@ class RasBreakout2D:
             mesh_trim_boundary,
         )
         connection_actions = _classify_outside_connections(
-            source_geometry_path, child, float(spec.containment_tolerance)
+            source_geometry_path, child, float(spec.containment_tolerance),
+            spec.allow_extended_connection_support,
         )
         if connection_actions:
             feature_actions = gpd.GeoDataFrame(
@@ -508,6 +518,7 @@ class RasBreakout2D:
         feature_actions["gate_group_count"] = feature_actions.get(
             "gate_group_count", pd.Series(0, index=feature_actions.index)
         ).fillna(0).astype(int)
+        feature_actions = feature_actions[FEATURE_ACTION_COLUMNS]
         contributing_geometry_identities = []
         containment_parent = _contributing_parent_union(
             spec, parent_boundary, identities=contributing_geometry_identities
@@ -736,7 +747,8 @@ class RasBreakout2D:
                     "Connection retention/removal requires exact native HDF refresh"
                 )
             current_connections = _classify_outside_connections(
-                clone.geometry_path, child, float(preflight.spec.containment_tolerance)
+                clone.geometry_path, child, float(preflight.spec.containment_tolerance),
+                getattr(preflight.spec, "allow_extended_connection_support", False),
             )
             approved_names = set(approved_connections["name"])
             if (
@@ -1631,11 +1643,13 @@ def _classify_outside_connections(
     geometry_path: Path,
     child: BaseGeometry,
     tolerance: float,
+    allow_extended_support: bool = False,
 ) -> list[dict[str, Any]]:
     """Report complete-footprint keep/drop/block decisions for every control."""
     records = []
     decisions = GeomLateral.classify_connections(
-        geometry_path, child, tolerance=tolerance
+        geometry_path, child, tolerance=tolerance,
+        allow_extended_support=allow_extended_support,
     )
     for index, row in decisions.iterrows():
         footprint = row["geometry"]
@@ -1747,7 +1761,11 @@ def _build_checks(
     other_structures_absent = all(
         count == (
             int(connection_actions.get("gate_group_count", pd.Series(dtype=int)).sum())
-            if column == "num_gates" and outside_connections_verified else 0
+            if (
+                column == "num_gates"
+                and spec.allow_extended_connection_support
+                and outside_connections_verified
+            ) else 0
         )
         for column, count in unsupported.items()
         if column != "num_sa_2d_connections"

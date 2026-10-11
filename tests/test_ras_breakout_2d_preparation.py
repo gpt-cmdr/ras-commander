@@ -309,6 +309,43 @@ def test_preflight_preserves_boundary_scope_and_trims_mesh_features(
     assert breakline["action"] == "clip"
     assert breakline.geometry.bounds == pytest.approx((3.0, 10.0, 17.0, 10.0))
     assert result.is_ready
+    assert result.feature_actions.columns.tolist() == breakout_module.FEATURE_ACTION_COLUMNS
+    assert result.feature_actions.gate_group_count.tolist() == [0] * len(result.feature_actions)
+
+
+@pytest.mark.parametrize("opt_in,action", [(False, "block"), (True, "drop")])
+def test_preflight_forwards_expanded_connection_choice(tmp_path, monkeypatch, opt_in, action):
+    geometry = tmp_path / "Model.g01"
+    geometry.write_bytes((Path(__file__).parent / "data" / "gate_clip_compatibility.g01").read_bytes())
+    hdf = tmp_path / "Model.g01.hdf"
+    hdf.write_bytes(b"perimeter supplied by HDF reader below")
+    unsteady = tmp_path / "Model.u01"
+    unsteady.write_bytes(b"Flow Title=Gate test\n")
+    plan = pd.DataFrame([{
+        "plan_number": "01", "geometry_number": "01", "unsteady_number": "01",
+        "full_path": str(tmp_path / "Model.p01"), "geometry_type": "2D",
+        "plan_type": "unsteady_2d", "plan_classification_valid": True,
+    }])
+    geometries = pd.DataFrame([{
+        "geom_number": "01", "full_path": str(geometry), "hdf_path": str(hdf),
+        "num_sa_2d_connections": 1, "num_gates": 1,
+    }])
+    monkeypatch.setattr(breakout_module.RasPlan, "get_unsteady_path", lambda *a, **k: unsteady)
+    monkeypatch.setattr(breakout_module.HdfMesh, "get_mesh_areas", lambda *a: gpd.GeoDataFrame(
+        {"mesh_name": ["Area"]}, geometry=[Polygon([(0, 0), (40, 0), (40, 40), (0, 40)])], crs=3857))
+    monkeypatch.setattr(breakout_module, "_read_spatial_features", lambda *a: _empty_features())
+    monkeypatch.setattr(breakout_module, "_base_cell_size", lambda *a: 1.0)
+    before = geometry.read_bytes()
+    result = RasBreakout2D.preflight(Breakout2DSpec(
+        "01", "Area", Polygon([(20, 20), (30, 20), (30, 30), (20, 30)]), "gate",
+        child_boundary_crs=3857, allow_extended_connection_support=opt_in,
+    ), ras_object=_FakeRas(plan, geometries))
+    connection = result.feature_actions.query("feature_type == 'sa_2d_connection'").iloc[0]
+    assert connection.action == action
+    assert connection.gate_group_count == int(opt_in)
+    assert result.is_ready is opt_in
+    assert result.feature_actions.columns.tolist() == breakout_module.FEATURE_ACTION_COLUMNS
+    assert geometry.read_bytes() == before
 
 
 def test_clone_plan_components_keeps_unsteady_file_byte_identical(

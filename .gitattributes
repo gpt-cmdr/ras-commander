@@ -11,3 +11,5 @@ tests/fixtures/plan_output_intervals/UPGU1.p01 -text -diff
 tests/fixtures/rasunsteady_fixed_width/*.u02 -text -diff
 # Reference-line regression retains CRLF, padding, and native coordinate precision.
 tests/fixtures/reference_lines/*.g01 -text -diff
+# Synthetic gate-clipping compatibility input retains its exact hash and native padding.
+tests/data/gate_clip_compatibility.g01 -text -diff
