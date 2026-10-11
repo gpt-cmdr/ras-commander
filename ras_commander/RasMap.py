@@ -1502,6 +1502,12 @@ class RasMap:
 
         Set ``audit_mannings=True`` to require materially diverse, associated
         final Manning values after the native command.
+
+        Modern native computation runs in an isolated process using the
+        selected HEC-RAS installation's bundled HDF5 DLLs, with a 1,800-second
+        timeout. Mutates the supplied geometry HDF in its existing CRS/units;
+        use a disposable model copy. Process success does not replace the
+        complete-geometry/table-pair checks or hydraulic QA.
         """
         ras_project_path = Path(ras_project_path)
         geom_file = Path(geom_file)
