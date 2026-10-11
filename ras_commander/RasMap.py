@@ -738,6 +738,33 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def reassign_result_map_terrains(
+        rasmap_path: str | Path, terrain_names: Dict[str, str]
+    ) -> List[Dict[str, str]]:
+        """Replace named terrain references in a caller-owned Mapper clone.
+
+        Updates result-map ``MapParameters.Terrain`` and calculated-layer
+        ``Terrain.Name`` references using an explicit old-to-new name mapping.
+        Every destination name must already be registered. Other result-map
+        settings, geometry associations, terrain registrations and native HDFs
+        are unchanged. No CRS, units or elevations are transformed.
+
+        Args:
+            rasmap_path: Writable cloned .rasmap file; never pass a source project.
+            terrain_names: Exact, case-sensitive old-to-new terrain names.
+
+        Returns:
+            Change records with plan_name, element, attribute, old_terrain_name
+            and new_terrain_name. Empty when no references need replacement.
+            Writes only the supplied Mapper file, atomically after validation.
+            Use set_geometry_association separately for geometry HDF terrain links.
+        """
+        from ._terrain_registration import reassign_result_map_terrains
+
+        return reassign_result_map_terrains(rasmap_path, terrain_names)
+
+    @staticmethod
+    @log_call
     def list_terrain_layers(
         ras_project_path: Union[str, Path],
         ras_object=None,

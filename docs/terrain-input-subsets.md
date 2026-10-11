@@ -30,6 +30,9 @@ RasTerrainModWriter.copy_modification_features(
     new_bundle_dir / "modifications.hdf", child_hdf,
     new_bundle_dir / "modifications.rasmap", child_mapper, local_indexes
 )
+RasMap.reassign_result_map_terrains(
+    child_mapper, {"Source": "Child", "Source.Modified": "Child"}
+)
 for child_geometry in child_geometry_hdfs:
     RasMap.set_geometry_association(child_geometry, terrain_hdf_path=child_hdf)
 ```
@@ -59,6 +62,17 @@ XML and returns removed names. It leaves geometry/plan registrations and all ass
 files intact. It does not update geometry HDFs. The caller explicitly registers
 the replacement and reassigns every geometry referenced by plans, then verifies
 native readback. These methods never convert elevations or units.
+
+`reassign_result_map_terrains(rasmap_path, terrain_names)` replaces exact terrain
+names in result-map `MapParameters.Terrain` attributes and calculated-layer
+`Terrain.Name` attributes. Supply an explicit old-to-new dictionary; every new
+name must already be registered. Other map parameters, formulas, result/plan
+filenames and geometry associations remain unchanged. The helper validates the
+complete mapping before mutation, atomically writes the Mapper clone only when
+references change, and returns records containing `plan_name`, `element`,
+`attribute`, `old_terrain_name` and `new_terrain_name`. Repeating the same mapping
+returns an empty list and preserves the file bytes. Geometry HDF associations
+still require `set_geometry_association`; this helper never opens plan-result HDFs.
 
 Source Mapper lookup prefers exactly one resolved path. If none matches, a single
 basename registration may support a caller-verified stale delivered layout; its
