@@ -305,3 +305,52 @@ def test_child_cleanup_denial_is_retained(tmp_path, monkeypatch):
     assert result["timed_out"]
     assert "owned child cleanup failed" in result["errors"][0]
     assert calls == ["kill"]
+
+
+def test_child_wait_thread_timeout_is_reported_as_timeout(tmp_path, monkeypatch):
+    import threading
+
+    import psutil
+
+    class ImmediateThread:
+        def __init__(self, *, target, daemon):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    def expired(**kwargs):
+        raise psutil.TimeoutExpired(kwargs["timeout"], pid=54321)
+
+    child = SimpleNamespace(
+        pid=54321,
+        create_time=lambda: 1.0,
+        wait=expired,
+        is_running=lambda: False,
+    )
+    monkeypatch.setattr(threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(GP, "_ras_processes_using_path", lambda path: [])
+    record = GP._watch_preprocess_child(child, time.monotonic())
+    result = GP._wait_for_preprocess_child(
+        tmp_path / "Synthetic.p01.tmp.hdf", time.time(), 60, (record,)
+    )
+    assert result["timed_out"]
+    assert "timed out" in result["errors"][0]
+
+
+def test_inaccessible_process_name_fails_exact_path_scan(tmp_path, monkeypatch):
+    import psutil
+
+    def denied():
+        raise psutil.AccessDenied(54321)
+
+    monkeypatch.setattr(psutil, "process_iter", lambda: [SimpleNamespace(name=denied)])
+    with pytest.raises(RuntimeError, match="GEOMETRY_PROCESS_INSPECTION_FAILED"):
+        GP._ras_processes_using_path(tmp_path / "Synthetic.p01.tmp.hdf")
+
+
+def test_plan_restoration_failure_is_explicit(tmp_path, monkeypatch):
+    path = tmp_path / "Synthetic.p01"
+    path.mkdir()
+    with pytest.raises(RuntimeError, match="GEOMETRY_PLAN_RESTORE_FAILED"):
+        GP._restore_plan_file(path, b"original")

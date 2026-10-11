@@ -123,7 +123,8 @@ class GeomPreprocessor:
         Args:
             plan_number: Plan number or path to a plan file.
             ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses the global ras.
-            max_wait: Maximum seconds to wait for preprocessing.
+            max_wait: Positive time budget in seconds, including setup and all
+                observed native children. Expiry returns a failed result.
             force: If True, set ``Run HTab=-1`` and
                 ``UNET Use Existing IB Tables=-1`` before running.
             clear_messages: Delete stale compute-message files before running.
@@ -136,6 +137,7 @@ class GeomPreprocessor:
                 related run flag values after the run.
             flow_start_signals: Optional diagnostic message strings. Detection
                 does not shorten the normal-exit wait.
+            dialog_watchdog: Monitor and dismiss recognized native dialogs.
 
         Returns:
             GeometryPreprocessResult: Bool-compatible validation result.
@@ -829,6 +831,7 @@ class GeomPreprocessor:
                         continue
                     code = record["exit_code"]
                     exit_codes[identity] = code
+                    timed_out = timed_out or record.get("timed_out", False)
                     if record["error"]:
                         errors.append(record["error"])
                     elif code != 0:
@@ -865,11 +868,14 @@ class GeomPreprocessor:
 
         record = {
             "identity": (child.pid, child.create_time()), "process": child,
-            "finished": False, "exit_code": None, "error": None,
+            "finished": False, "exit_code": None, "error": None, "timed_out": False,
         }
         def wait():
             try:
                 record["exit_code"] = child.wait(timeout=max(0, deadline - time.monotonic()))
+            except psutil.TimeoutExpired as exc:
+                record["timed_out"] = True
+                record["error"] = "preprocessing child timed out: " + str(exc)
             except psutil.Error as exc:
                 record["error"] = "preprocessing child wait failed: " + str(exc)
             finally:
@@ -888,9 +894,9 @@ class GeomPreprocessor:
 
         target = normalize(path)
         pids = []
-        for process in psutil.process_iter(["pid", "name"]):
+        for process in psutil.process_iter():
             try:
-                name = str(process.info.get("name") or "").casefold()
+                name = process.name().casefold()
                 if name not in ("rasprocess.exe", "rasgeompreprocess.exe"):
                     continue
                 tokens = process.cmdline()
