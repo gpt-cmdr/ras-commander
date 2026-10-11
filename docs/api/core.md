@@ -738,7 +738,17 @@ boundary-only child without inherited gridded or point meteorological sources.
 It removes met station/source records and resets the sidecar meteorology groups
 to disabled. Boundary hydrographs, boundary DSS links, and infiltration remain
 unchanged. The returned evidence includes flow-text hashes before/after and
-boundary-record integrity. The default preserves inactive sidecar sources.
+raw boundary-byte integrity, including line endings and legacy DSS filename
+bytes. The default preserves inactive sidecar sources. `removed_source_keys`
+includes primary precipitation sources removed from the original text.
+
+The method validates all inputs, plans text changes in memory, and edits staged
+HDF copies before replacing the owned files. Invalid input or a caught apply
+failure leaves the original set unchanged. Callers must exclusively own these
+files; replacement of multiple files is not crash-atomic. Valid empty unsteady
+sidecars are initialized with disabled meteorology groups. Compiled `*.tmp.hdf`
+targets must already contain a genuine `Event Conditions` group; malformed
+containers are rejected before mutation. Executed result files remain excluded.
 
 <a id="ras_commander.RasUnsteady"></a>
 
