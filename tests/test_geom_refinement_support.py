@@ -2,8 +2,9 @@
 
 import numpy as np
 import pytest
-from ras_commander.geom.GeomMeshRepair import GeomMeshRepair
 from shapely.geometry import Point, box
+
+from ras_commander.geom.GeomMeshRepair import GeomMeshRepair
 
 plan_refinement_support = GeomMeshRepair.plan_refinement_support
 
@@ -54,8 +55,12 @@ def test_invalid_crossing_refinement_is_repaired_before_preflight_intersection()
     module = import_module("ras_commander.RasBreakout2D")
     source = Polygon([(1, 1), (9, 9), (1, 9), (9, 1)])
     child = box(0, 0, 5, 10)
-    parent = gpd.GeoDataFrame({"mesh_name": ["A"]}, geometry=[box(0, 0, 10, 10)], crs=2277)
-    regions = gpd.GeoDataFrame({"rr_id": [121], "Name": ["invalid"]}, geometry=[source], crs=2277)
+    parent = gpd.GeoDataFrame(
+        {"mesh_name": ["A"]}, geometry=[box(0, 0, 10, 10)], crs=2277
+    )
+    regions = gpd.GeoDataFrame(
+        {"rr_id": [121], "Name": ["invalid"]}, geometry=[source], crs=2277
+    )
     before = source.wkb
     actions = module._build_feature_actions(
         parent, child, {"refinement_region": regions}, pd.DataFrame(), child
@@ -85,7 +90,9 @@ def test_native_seed_removal_requires_identical_indexed_cell_point():
         Cell=lambda i: SimpleNamespace(Point=seeds[0]),
     )
     result = plan_native_seed_removal(mesh, seeds)
-    assert result["removed_points"] == [{"generated_point_index": 0, "x": 1.0, "y": 2.0}]
+    assert result["removed_points"] == [
+        {"generated_point_index": 0, "x": 1.0, "y": 2.0}
+    ]
     assert not result["perimeter_changed"]
     mesh.MeshCompletionState = "UnknownError"
     assert not plan_native_seed_removal(mesh, seeds)["removed_points"]
@@ -95,7 +102,9 @@ def test_sliver_support_includes_interior_grid_and_preserves_inputs():
     perimeter, region = box(0, 0, 100, 100), box(30, 30, 31, 32)
     existing = np.array([[20.0, 20.0], [40.0, 40.0]])
     before = existing.copy(), region.wkb
-    controls = [{"name": "sliver", "geometry": region, "spacing_dx": 10, "spacing_dy": 10}]
+    controls = [
+        {"name": "sliver", "geometry": region, "spacing_dx": 10, "spacing_dy": 10}
+    ]
     result = plan_refinement_support(perimeter, controls, existing)
     assert any(region.contains(Point(p)) for p in result["added_points"])
     assert all(perimeter.contains(Point(p)) for p in result["added_points"])
@@ -134,7 +143,71 @@ def test_retry_is_bounded_and_deterministic():
     points = np.empty((0, 2))
     first = plan_refinement_support(box(0, 0, 20, 20), controls, points)
     retry = plan_refinement_support(box(0, 0, 20, 20), controls, points, attempt=1)
-    assert retry["regions"][0]["support_spacing"] == first["regions"][0]["support_spacing"] / 2
-    assert retry == plan_refinement_support(box(0, 0, 20, 20), controls, points, attempt=1)
+    assert (
+        retry["regions"][0]["support_spacing"]
+        == first["regions"][0]["support_spacing"] / 2
+    )
+    assert retry == plan_refinement_support(
+        box(0, 0, 20, 20), controls, points, attempt=1
+    )
     with pytest.raises(ValueError, match="bounded"):
         plan_refinement_support(box(0, 0, 20, 20), controls, points, attempt=3)
+
+
+def test_rotated_support_uses_bounded_sites_on_the_identical_lattice():
+    import math
+
+    from shapely.affinity import rotate
+
+    region = rotate(box(30, 30, 60, 31), 45)
+    controls = [
+        {"name": "rotated", "geometry": region, "spacing_dx": 10, "spacing_dy": 10}
+    ]
+    original = np.array([[20.0, 20.0]])
+    before = original.copy(), region.wkb
+    perimeter = box(0, 0, 100, 100)
+    result = plan_refinement_support(perimeter, controls, original)
+    assert result["candidate_count"] > 8192
+    assert result["candidate_generation"] == "bounded_support_column_intersections"
+    assert len(result["added_points"]) <= result["examined_candidate_count"] <= 8192
+    assert result == plan_refinement_support(perimeter, controls, original)
+    anchor = region.representative_point()
+    spacing = result["regions"][0]["support_spacing"]
+    support = region.buffer(spacing).intersection(perimeter)
+    left, bottom, right, top = support.bounds
+    expected = [
+        [anchor.x + ix * spacing, anchor.y + iy * spacing]
+        for ix in range(
+            math.floor((left - anchor.x) / spacing),
+            math.ceil((right - anchor.x) / spacing) + 1,
+        )
+        for iy in range(
+            math.floor((bottom - anchor.y) / spacing),
+            math.ceil((top - anchor.y) / spacing) + 1,
+        )
+        if support.contains(Point(anchor.x + ix * spacing, anchor.y + iy * spacing))
+        and perimeter.contains(Point(anchor.x + ix * spacing, anchor.y + iy * spacing))
+    ]
+    assert result["added_points"] == expected
+    assert result["regions"][0]["source_spacing"] == [10, 10]
+    assert not result["perimeter_changed"] and not result["features_changed"]
+    assert not result["source_spacing_changed"]
+    np.testing.assert_array_equal(original, before[0])
+    assert region.wkb == before[1]
+
+
+def test_column_support_budget_accumulates_across_regions():
+    from shapely.affinity import rotate
+
+    region = rotate(box(30, 30, 60, 31), 45)
+    record = {"name": "rotated", "geometry": region, "spacing_dx": 10, "spacing_dy": 10}
+    original = np.array([[20.0, 20.0]])
+    one = plan_refinement_support(box(0, 0, 100, 100), [record], original)
+    with pytest.raises(ValueError, match="budget"):
+        plan_refinement_support(
+            box(0, 0, 100, 100),
+            [record, {**record, "name": "second"}],
+            original,
+            max_points=one["examined_candidate_count"],
+        )
+    np.testing.assert_array_equal(original, [[20.0, 20.0]])

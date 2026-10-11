@@ -39,11 +39,14 @@ class GeomMeshRepair:
         interval and remains strictly inside the computational perimeter. Existing
         seeds are preserved. Return added XY coordinates and per-region evidence.
         Fail before mutation if the deterministic candidate budget is exceeded.
+        For oversized bounding boxes, intersect grid columns with the support
+        polygon and bound the examined sites instead. Record both counts; spacing,
+        grid ordering and strictly interior candidate selection are unchanged.
         Native recompilation and engineering QA remain the caller's responsibility.
         """
         import numpy as np
         from scipy.spatial import cKDTree
-        from shapely.geometry import Point
+        from shapely.geometry import LineString, Point
 
         if (
             perimeter.geom_type != "Polygon"
@@ -63,6 +66,8 @@ class GeomMeshRepair:
         added: list[tuple[float, float]] = []
         evidence = []
         candidate_count = 0
+        examined_count = 0
+        used_column_intersections = False
         for record in regions:
             polygon = record["geometry"]
             dx, dy = float(record["spacing_dx"]), float(record["spacing_dy"])
@@ -97,19 +102,58 @@ class GeomMeshRepair:
             )
             count = (ix1 - ix0 + 1) * (iy1 - iy0 + 1)
             candidate_count += count
-            if candidate_count > max_points:
-                raise ValueError("bounded refinement candidate budget exceeded")
-            candidates = [
-                (anchor.x + ix * spacing, anchor.y + iy * spacing)
-                for ix in range(ix0, ix1 + 1)
-                for iy in range(iy0, iy1 + 1)
-                if support.contains(
-                    Point(anchor.x + ix * spacing, anchor.y + iy * spacing)
+            candidates = []
+            if examined_count + count <= max_points:
+                examined_count += count
+                sites = (
+                    (ix, iy) for ix in range(ix0, ix1 + 1) for iy in range(iy0, iy1 + 1)
                 )
-                and perimeter.contains(
-                    Point(anchor.x + ix * spacing, anchor.y + iy * spacing)
-                )
-            ]
+            else:
+                used_column_intersections = True
+                if ix1 - ix0 + 1 > max_points:
+                    raise ValueError("bounded refinement candidate budget exceeded")
+                bounded_sites = []
+                for ix in range(ix0, ix1 + 1):
+                    x = anchor.x + ix * spacing
+                    section = support.intersection(
+                        LineString([(x, bottom - spacing), (x, top + spacing)])
+                    )
+                    pieces = [section]
+                    intervals = []
+                    while pieces:
+                        piece = pieces.pop()
+                        if piece.is_empty:
+                            continue
+                        if hasattr(piece, "geoms"):
+                            pieces.extend(piece.geoms)
+                            continue
+                        _, low, _, high = piece.bounds
+                        # Include neighbors to avoid losing a site through
+                        # roundoff at a column intersection endpoint.
+                        intervals.append(
+                            (
+                                max(iy0, math.floor((low - anchor.y) / spacing) - 1),
+                                min(iy1, math.ceil((high - anchor.y) / spacing) + 1),
+                            )
+                        )
+                    last = iy0 - 1
+                    for low, high in sorted(intervals):
+                        low = max(low, last + 1)
+                        if high < low:
+                            continue
+                        examined_count += high - low + 1
+                        if examined_count > max_points:
+                            raise ValueError(
+                                "bounded refinement candidate budget exceeded"
+                            )
+                        bounded_sites.extend((ix, iy) for iy in range(low, high + 1))
+                        last = high
+                sites = iter(bounded_sites)
+            for ix, iy in sites:
+                xy = (anchor.x + ix * spacing, anchor.y + iy * spacing)
+                point = Point(xy)
+                if support.contains(point) and perimeter.contains(point):
+                    candidates.append(xy)
             before = len(added)
             combined = np.vstack([original, np.asarray(added).reshape(-1, 2)])
             if len(combined):
@@ -131,7 +175,7 @@ class GeomMeshRepair:
                     "added_point_count": len(added) - before,
                 }
             )
-        return {
+        result = {
             "method": "interior_anchored_refinement_support_grid",
             "attempt": attempt,
             "max_points": max_points,
@@ -143,6 +187,12 @@ class GeomMeshRepair:
             "source_spacing_changed": False,
             "existing_points_removed": 0,
         }
+        if used_column_intersections:
+            result.update(
+                candidate_generation="bounded_support_column_intersections",
+                examined_candidate_count=examined_count,
+            )
+        return result
 
     @staticmethod
     @log_call

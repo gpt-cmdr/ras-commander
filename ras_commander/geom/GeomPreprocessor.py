@@ -39,8 +39,8 @@ from typing import Any, List, Optional, Union
 
 from .._ras_text import _write_ras_text
 from ..ComputeResults import GeometryPreprocessResult
-from ..LoggingConfig import get_logger
 from ..Decorators import log_call
+from ..LoggingConfig import get_logger
 from ..RasBco import BcoMonitor
 from ..RasPlan import RasPlan
 from ..RasPrj import ras
@@ -147,7 +147,9 @@ class GeomPreprocessor:
                 flags where those plan settings exist. This keeps validation
                 focused on geometry preprocessing.
                 Completion requires a freshly written, semantically populated
-                geometry HDF; a fresh sidecar with an inherited HDF is insufficient.
+                geometry HDF that matches available 2D perimeter, spacing, cell
+                count and breakline count metadata in the current geometry text;
+                a fresh sidecar or rewritten inherited HDF header is insufficient.
                 This requirement also applies with ``force=False``; that setting
                 preserves plan flags rather than accepting inherited output.
             restore_plan_settings: Restore original ``Run HTab`` and
@@ -227,9 +229,7 @@ class GeomPreprocessor:
                 GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
 
             original_plan_text = (
-                plan_path.read_bytes()
-                if restore_plan_settings
-                else None
+                plan_path.read_bytes() if restore_plan_settings else None
             )
 
             process = None
@@ -256,15 +256,14 @@ class GeomPreprocessor:
                         GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
                     )
 
-                command_text = (
-                    f'"{ras_exe_path}" -c "{prj_file}" "{plan_path}"'
-                )
+                command_text = f'"{ras_exe_path}" -c "{prj_file}" "{plan_path}"'
                 logger.debug("Running HEC-RAS geometry preprocessor validation:")
                 logger.debug(command_text)
 
                 _watchdog = None
                 if dialog_watchdog:
                     from ..RasDialogWatchdog import DialogWatchdog
+
                     _watchdog = DialogWatchdog()
                     _watchdog.start()
 
@@ -311,7 +310,9 @@ class GeomPreprocessor:
                     )
                     GeomPreprocessor._terminate_process_tree(process)
                 elif timed_out and process.poll() is None:
-                    logger.error("Geometry preprocessing timed out; terminating HEC-RAS.")
+                    logger.error(
+                        "Geometry preprocessing timed out; terminating HEC-RAS."
+                    )
                     GeomPreprocessor._terminate_process_tree(process)
                 else:
                     child_monitor = GeomPreprocessor._wait_for_preprocess_child(
@@ -345,12 +346,10 @@ class GeomPreprocessor:
             if stderr:
                 logger.debug(stderr.decode("utf-8", errors="replace"))
 
-            existing_message_paths, messages = (
-                GeomPreprocessor._read_compute_messages(
-                    message_paths,
-                    hdf_message_path=hdf_message_path,
-                    modified_after=start_time,
-                )
+            existing_message_paths, messages = GeomPreprocessor._read_compute_messages(
+                message_paths,
+                hdf_message_path=hdf_message_path,
+                modified_after=start_time,
             )
             artifact_paths = GeomPreprocessor._preprocessor_artifacts(
                 project_folder,
@@ -374,7 +373,9 @@ class GeomPreprocessor:
             if process.returncode not in (0, None) and not signal_detected:
                 errors.append(f"HEC-RAS exited with code {process.returncode}")
             if parsed["has_errors"]:
-                errors.append(parsed["first_error_line"] or "Compute messages contain errors")
+                errors.append(
+                    parsed["first_error_line"] or "Compute messages contain errors"
+                )
             if blocking_lines:
                 errors.append(blocking_lines[0])
             if not artifact_paths:
@@ -390,8 +391,7 @@ class GeomPreprocessor:
             )
             if geometry_only and not geometry_hdf_ready:
                 errors.append(
-                    "Geometry HDF is not semantically ready: "
-                    f"{geometry_hdf_reason}"
+                    f"Geometry HDF is not semantically ready: {geometry_hdf_reason}"
                 )
             if geometry_only and geometry_hdf_path not in artifact_paths:
                 errors.append("Geometry HDF was not freshly written by preprocessing")
@@ -454,7 +454,10 @@ class GeomPreprocessor:
     def _resolve_geometry_number(plan_path: Path, plan_num: str, ras_obj) -> str:
         """Resolve the geometry number used by a plan."""
         try:
-            if getattr(ras_obj, "plan_df", None) is not None and not ras_obj.plan_df.empty:
+            if (
+                getattr(ras_obj, "plan_df", None) is not None
+                and not ras_obj.plan_df.empty
+            ):
                 matching = ras_obj.plan_df[
                     ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
                     == plan_num
@@ -627,7 +630,10 @@ class GeomPreprocessor:
                         if geometry_hdf_path is not None:
                             if geometry_only_artifacts is not None:
                                 try:
-                                    if geometry_hdf_path.stat().st_mtime < start_time - 1:
+                                    if (
+                                        geometry_hdf_path.stat().st_mtime
+                                        < start_time - 1
+                                    ):
                                         continue
                                 except OSError:
                                     continue
@@ -666,9 +672,7 @@ class GeomPreprocessor:
                 # A fresh .c/.x sidecar can precede the geometry import. An
                 # inherited, populated HDF is not evidence that this import
                 # finished; stopping here can terminate it before replacement.
-                if fresh and (
-                    geometry_hdf_path is None or geometry_hdf_path in fresh
-                ):
+                if fresh and (geometry_hdf_path is None or geometry_hdf_path in fresh):
                     try:
                         latest_mtime = max(a.stat().st_mtime for a in fresh)
                         hdf_ready = True
@@ -679,10 +683,7 @@ class GeomPreprocessor:
                                     flow_type=flow_type,
                                 )
                             )
-                        if (
-                            hdf_ready
-                            and time.time() - latest_mtime >= _ARTIFACT_STABLE
-                        ):
+                        if hdf_ready and time.time() - latest_mtime >= _ARTIFACT_STABLE:
                             signal_detected = (
                                 "Geometry preprocessing artifacts semantically "
                                 "ready and stable "
@@ -714,7 +715,10 @@ class GeomPreprocessor:
         existence, non-zero size, and a quiet modification time therefore do
         not prove preprocessing is complete.
 
-        For a classified 2D plan, require at least one flow area with non-empty
+        Compare available geometry text with the compiled 2D perimeter, spacing,
+        cell count and breakline count before accepting readiness. Rewritten
+        parent metadata remains unready until the current text import finishes.
+        For a classified or stored 2D plan, require a flow area with non-empty
         cell and face topology.  For other plan types, require a recognized,
         non-empty geometry feature collection.  The check is read-only and
         returns a diagnostic instead of raising while HEC-RAS still owns the
@@ -732,6 +736,14 @@ class GeomPreprocessor:
         try:
             import h5py
 
+            geometry_text = path.with_suffix("")
+            if geometry_text.is_file():
+                from .GeomMesh import _mesh_hdf_consistency_issues
+
+                issues = _mesh_hdf_consistency_issues(geometry_text, path)
+                if issues:
+                    return False, "geometry text/HDF mismatch: " + "; ".join(issues)
+
             with h5py.File(path, "r") as hdf:
                 if not hdf.attrs.get("File Type"):
                     return False, "root File Type attribute is absent"
@@ -739,7 +751,9 @@ class GeomPreprocessor:
                     return False, "/Geometry group is absent"
 
                 normalized_flow_type = str(flow_type or "").casefold()
-                if "2d" in normalized_flow_type:
+                stored_areas = hdf.get("Geometry/2D Flow Areas/Attributes")
+                has_stored_2d = stored_areas is not None and stored_areas.shape[0] > 0
+                if "2d" in normalized_flow_type or has_stored_2d:
                     collection_path = "Geometry/2D Flow Areas"
                     if collection_path not in hdf:
                         return False, "/Geometry/2D Flow Areas is absent"
@@ -779,7 +793,10 @@ class GeomPreprocessor:
                     if dataset is not None and getattr(dataset, "shape", (0,))[0] > 0:
                         populated.append(collection_path)
                 if not populated:
-                    return False, "no recognized geometry feature collection is populated"
+                    return (
+                        False,
+                        "no recognized geometry feature collection is populated",
+                    )
                 return True, f"geometry ready: {', '.join(populated)}"
         except Exception as exc:
             return False, f"could not inspect geometry HDF: {type(exc).__name__}: {exc}"
@@ -981,7 +998,10 @@ class GeomPreprocessor:
             stripped = line.strip()
             if not stripped:
                 continue
-            if any(pattern.search(stripped) for pattern in GEOMETRY_PREPROCESSOR_BLOCKING_PATTERNS):
+            if any(
+                pattern.search(stripped)
+                for pattern in GEOMETRY_PREPROCESSOR_BLOCKING_PATTERNS
+            ):
                 # Avoid common non-blocking metric text.
                 if re.search(r"volume\s+accounting\s+error", stripped, re.IGNORECASE):
                     continue
@@ -1069,17 +1089,13 @@ class GeomPreprocessor:
         """Validate the known HEC-RAS 5/6 geometry-HDF recovery schema."""
         import h5py
 
-        if not GeomPreprocessor._LEGACY_GEOMETRY_HDF_PATTERN.search(
-            geom_hdf_path.name
-        ):
+        if not GeomPreprocessor._LEGACY_GEOMETRY_HDF_PATTERN.search(geom_hdf_path.name):
             raise ValueError(
                 "Legacy recovery accepts only geometry HDF filenames matching "
                 "'*.g##.hdf'."
             )
 
-        file_type = GeomPreprocessor._decode_hdf_attribute(
-            hdf.attrs.get("File Type")
-        )
+        file_type = GeomPreprocessor._decode_hdf_attribute(hdf.attrs.get("File Type"))
         file_version = GeomPreprocessor._decode_hdf_attribute(
             hdf.attrs.get("File Version")
         )
@@ -1118,17 +1134,16 @@ class GeomPreprocessor:
             for area_name, area in areas.items():
                 if not isinstance(area, h5py.Group):
                     continue
-                for left, right in (
-                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS
-                ):
+                for (
+                    left,
+                    right,
+                ) in GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS:
                     if (left in area) != (right in area):
                         raise ValueError(
                             f"Mesh {area_name!r} has an incomplete legacy "
                             f"property-table pair: {left!r}/{right!r}."
                         )
-                for dataset_name in (
-                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASETS
-                ):
+                for dataset_name in GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASETS:
                     if dataset_name not in area:
                         continue
                     if not isinstance(area[dataset_name], h5py.Dataset):
@@ -1136,9 +1151,7 @@ class GeomPreprocessor:
                             f"Expected dataset at {areas_path}/{area_name}/"
                             f"{dataset_name}."
                         )
-                    targets.append(
-                        f"{areas_path}/{area_name}/{dataset_name}"
-                    )
+                    targets.append(f"{areas_path}/{area_name}/{dataset_name}")
         return targets
 
     @staticmethod
@@ -1242,8 +1255,7 @@ class GeomPreprocessor:
             ) from exc
 
         logger.warning(
-            "Legacy recovery removed %d solver-owned path(s) from %s; "
-            "backup=%s",
+            "Legacy recovery removed %d solver-owned path(s) from %s; backup=%s",
             len(targets),
             geom_hdf_path.name,
             resolved_backup,
@@ -1294,8 +1306,7 @@ class GeomPreprocessor:
     @staticmethod
     @log_call
     def clear_geompre_files(
-        plan_files: Union[str, Path, List[Union[str, Path]]] = None,
-        ras_object=None
+        plan_files: Union[str, Path, List[Union[str, Path]]] = None, ras_object=None
     ) -> None:
         """
         Clear HEC-RAS geometry preprocessor files for specified plan files.
@@ -1340,7 +1351,11 @@ class GeomPreprocessor:
             """Resolve likely .c## files from plan metadata, then fall back to plan suffix."""
             candidates = []
             plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
-            plan_number = RasUtils.normalize_ras_number(plan_match.group(1)) if plan_match else None
+            plan_number = (
+                RasUtils.normalize_ras_number(plan_match.group(1))
+                if plan_match
+                else None
+            )
 
             if (
                 plan_number is not None
@@ -1349,14 +1364,20 @@ class GeomPreprocessor:
                 and "plan_number" in ras_obj.plan_df.columns
                 and "geometry_number" in ras_obj.plan_df.columns
             ):
-                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
+                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(
+                    RasUtils.normalize_ras_number
+                )
                 matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
                 if not matching.empty:
-                    geom_number = RasUtils.normalize_ras_number(matching.iloc[0]["geometry_number"])
+                    geom_number = RasUtils.normalize_ras_number(
+                        matching.iloc[0]["geometry_number"]
+                    )
                     if geom_number is not None:
                         candidates.append(plan_path.with_suffix(f".c{geom_number}"))
 
-            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
+            geom_preprocessor_suffix = (
+                ".c" + "".join(plan_path.suffixes[1:]) if plan_path.suffixes else ".c"
+            )
             candidates.append(plan_path.with_suffix(geom_preprocessor_suffix))
 
             unique_candidates = []
@@ -1371,34 +1392,53 @@ class GeomPreprocessor:
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
             cleared_any = False
-            for geom_preprocessor_file in _resolve_geompre_candidates(plan_path, ras_obj):
+            for geom_preprocessor_file in _resolve_geompre_candidates(
+                plan_path, ras_obj
+            ):
                 if not geom_preprocessor_file.exists():
                     continue
                 try:
                     geom_preprocessor_file.unlink()
-                    logger.debug(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
+                    logger.debug(
+                        f"Deleted geometry preprocessor file: {geom_preprocessor_file}"
+                    )
                     cleared_any = True
                     break
                 except PermissionError:
-                    logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
-                    raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
+                    logger.error(
+                        f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}"
+                    )
+                    raise PermissionError(
+                        f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied."
+                    )
                 except OSError as e:
-                    logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
-                    raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+                    logger.error(
+                        f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}"
+                    )
+                    raise OSError(
+                        f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}"
+                    )
 
             if not cleared_any:
-                logger.debug("No geometry preprocessor artifacts found for plan: %s", plan_path.name)
+                logger.debug(
+                    "No geometry preprocessor artifacts found for plan: %s",
+                    plan_path.name,
+                )
 
         if plan_files is None:
-            logger.info("Clearing all geometry preprocessor files in the project directory.")
-            plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
+            logger.info(
+                "Clearing all geometry preprocessor files in the project directory."
+            )
+            plan_files_to_clear = list(ras_obj.project_folder.glob(r"*.p*"))
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
             logger.debug(
                 "Clearing geometry preprocessor file for single plan: %s",
                 Path(plan_files).name,
             )
-            logger.debug(f"Clearing geometry preprocessor file for single plan path: {plan_files}")
+            logger.debug(
+                f"Clearing geometry preprocessor file for single plan path: {plan_files}"
+            )
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
             plan_file_names = [Path(plan_file).name for plan_file in plan_files]
@@ -1406,10 +1446,14 @@ class GeomPreprocessor:
                 "Clearing geometry preprocessor files for multiple plans: %s",
                 plan_file_names,
             )
-            logger.debug(f"Clearing geometry preprocessor files for multiple plan paths: {plan_files}")
+            logger.debug(
+                f"Clearing geometry preprocessor files for multiple plan paths: {plan_files}"
+            )
         else:
             logger.error("Invalid input type for plan_files.")
-            raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
+            raise ValueError(
+                "Invalid input. Please provide a string, Path, list of paths, or None."
+            )
 
         for plan_file in plan_files_to_clear:
             clear_single_file(plan_file, ras_obj)

@@ -1217,6 +1217,16 @@ requirement. With `force=False`, the API preserves the plan's preprocessor flags
 it still rejects inherited HDF output as completion evidence. Run against a
 disposable project copy and inspect the returned result and compiled geometry.
 
+When geometry text is available, readiness also checks the available 2D perimeter,
+spacing, declared cell count and breakline count against the compiled HDF. A
+rewritten HDF header can retain parent geometry while the current text import is
+unfinished. Such mismatches prevent an early readiness signal; preprocessing
+continues until the process exits or the existing deadline expires. The final
+completion check still rejects mismatching metadata. Stored 2D flow-area attributes require
+nonempty cell and face topology even when the plan's flow type is `Unsteady`.
+Missing optional text metadata retains the existing readiness checks. These
+metadata checks do not establish hydraulic acceptance.
+
 
 ## Recorded refinement and generated-point repairs
 
@@ -1236,6 +1246,12 @@ region whose final cells fail local-resolution QA. Coordinates and dx/dy share
 the source projected CRS and project length units. Plans preserve source region
 coverage and spacing controls, retain existing points, record each added XY
 coordinate, and fail before mutation if the candidate budget is exceeded.
+When the bounding box exceeds the remaining budget, the planner intersects grid
+columns with the support polygon. It bounds each fallback region's column count
+and the total examined grid sites by `max_points`, preserving the original lattice, ordering
+and strict containment checks. `candidate_count` still records the bounding-box
+count. Such plans also record `candidate_generation` and
+`examined_candidate_count`; ordinary plans keep their existing evidence shape.
 `GeomMeshRepair.apply_refinement_support` requires a hash-guarded child geometry,
 an exact serialized-seed match and strictly interior additions. It changes only
 the selected child's point block. Use attempt-owned copies and then refresh
