@@ -1195,7 +1195,9 @@ movement at most 0.01 source horizontal units. No source file is changed.
 
 A cloned geometry sidecar `<geometry>.breakline_containment_repair.json`
 (`ras-numeric-breakline-containment-repair/v1`) is written before mutation.
-It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP`, horizontal units,
+It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP` or
+`NUMERIC_BREAKLINE_CONTAINMENT_VERTEX_REPAIR`, with each line's `method` set to
+`endpoint_clip` or `bounded_vertex_projection`, horizontal units,
 maximum movement, one-cell spacing, additional margin, compiled perimeter WKB
 SHA256, perimeter/control preservation flags, and per-line before/after WKB
 hashes, lengths, removed length and movement. The plan binds the current text
@@ -1242,3 +1244,18 @@ length ratio for the preview. The option defaults to `False`.
 These repair plans support native meshing; they do not establish hydraulic
 acceptance. Successful native recompilation and the caller's spatial and
 hydraulic review remain required.
+
+Numeric breakline containment repairs keep their maximum geometry displacement
+of 0.01 in project horizontal units and the exact one-cell inward containment
+gate. The usual endpoint clip is unchanged. At an acute intersection, clipping
+can remove a long endpoint despite a microscopic normal deficit; a bounded
+fallback projects exterior vertices into the guarded polygon. It must retain
+one valid line, satisfy the original displacement cap and exact containment,
+and preserve controls and the perimeter. Material deficits and disconnected
+fragments still fail closed. Each record identifies `endpoint_clip` or
+`bounded_vertex_projection` in `repairs[].method`; projection uses reason
+`NUMERIC_BREAKLINE_CONTAINMENT_VERTEX_REPAIR`, while endpoint clipping keeps
+`NUMERIC_BREAKLINE_CONTAINMENT_CLIP`. Coordinates remain in the same CRS.
+
+`removed_length` is the signed original length minus repaired length in project
+units; bounded vertex projection can make this diagnostic negative.

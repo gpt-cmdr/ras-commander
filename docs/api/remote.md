@@ -535,3 +535,13 @@ pip install ras-commander[remote-all]
       show_root_heading: false
       heading_level: 3
       show_source: false
+
+### Wine request path translation
+
+On POSIX hosts, the portable CLI checks the copied task-private prefix's `Z:`
+symlink. When it resolves to the POSIX root, an absolute request path without
+parent traversal or Windows drive/separator syntax in a POSIX component is translated directly to the equivalent `Z:` path. This
+avoids a separate cold Wine startup just to translate a path. Prefixes with
+other drive mappings or incompatible component names retain `winepath` conversion and its error handling.
+Delegated Windows Python execution, request validation, execution deadlines,
+source immutability and task-private wineserver shutdown stay unchanged.

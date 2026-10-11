@@ -1,10 +1,11 @@
-from pathlib import Path
+import os
 import subprocess
+from pathlib import Path
 
-from ras_commander.remote.ExecutionContract import RasExecutionRequest
-from ras_commander.remote import PortableExecution
+import pytest
 import ras_commander.remote.execute_request as execute_request_cli
-
+from ras_commander.remote import PortableExecution
+from ras_commander.remote.ExecutionContract import RasExecutionRequest
 
 OCI = "registry.example/hecras/steady@sha256:" + "a" * 64
 WINDOWS_RAS = r"C:\Program Files (x86)\HEC\HEC-RAS\6.6\Ras.exe"
@@ -73,7 +74,9 @@ def test_linux_windows_request_uses_private_wine_prefix(tmp_path, monkeypatch):
     assert copy_calls[0][0] == seed.resolve()
     assert copy_calls[0][2] is True
     assert not copy_calls[0][1].parent.exists()
-    assert copy_calls[0][1].parent.parent == request_path.parent / "output" / "sample-001"
+    assert (
+        copy_calls[0][1].parent.parent == request_path.parent / "output" / "sample-001"
+    )
     assert commands[1] == [
         "/usr/bin/xvfb-run",
         "-a",
@@ -184,5 +187,59 @@ def test_portable_execute_function_is_reachable_beside_cli_submodule():
     import ras_commander.remote as remote_package
 
     assert callable(PortableExecution.execute_request)
-    assert execute_request_cli._execute_portable_request is PortableExecution.execute_request
+    assert (
+        execute_request_cli._execute_portable_request
+        is PortableExecution.execute_request
+    )
     assert "execute_request" not in remote_package.__all__
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Wine drive mapping is a POSIX contract")
+@pytest.mark.parametrize(
+    "root_mapping,folder",
+    [
+        (True, "with spaces"),
+        (False, "with spaces"),
+        (True, "C:\\other"),
+        (True, "back\\slash"),
+    ],
+)
+def test_verified_root_drive_avoids_cold_winepath_startup(
+    tmp_path, monkeypatch, root_mapping, folder
+):
+    request_path = _request(tmp_path / folder)
+    fast_path = root_mapping and not any(c in folder for c in "\\:")
+    seed = tmp_path / "seed"
+    (seed / "dosdevices").mkdir(parents=True)
+    mapping = Path("/") if root_mapping else tmp_path
+    (seed / "dosdevices" / "z:").symlink_to(mapping, target_is_directory=True)
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PREFIX_SEED", str(seed))
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PYTHON", WINDOWS_PYTHON)
+    monkeypatch.setattr(execute_request_cli, "_is_linux", lambda: True)
+    monkeypatch.setattr(
+        execute_request_cli.shutil, "which", lambda name: "/usr/bin/" + name
+    )
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[0].endswith("winepath"):
+            assert not fast_path
+            return subprocess.CompletedProcess(
+                command, 0, stdout=r"Z:\job\request.json", stderr=""
+            )
+        if command[0].endswith("xvfb-run") and fast_path:
+            from pathlib import PureWindowsPath
+
+            expected = str(
+                PureWindowsPath("Z:/") / request_path.relative_to("/").as_posix()
+            )
+            assert command[-1] == expected
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(execute_request_cli.subprocess, "run", run)
+    before = request_path.read_bytes()
+    assert execute_request_cli.main(["execute-request", str(request_path)]) == 0
+    assert sum(c[0].endswith("winepath") for c in calls) == (0 if fast_path else 1)
+    assert request_path.read_bytes() == before
+    assert (seed / "dosdevices" / "z:").resolve() == mapping

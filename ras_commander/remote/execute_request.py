@@ -63,7 +63,9 @@ def _wine_environment(request: RasExecutionRequest) -> tuple[Path, str, str]:
     if not seed.is_absolute() or seed.is_symlink() or not seed.is_dir():
         raise ValueError(f"{_WINE_PREFIX_SEED} must be an absolute regular directory")
     if not _is_absolute_windows_executable(python_value):
-        raise ValueError(f"{_WINE_PYTHON} must be a conservative absolute Windows .exe path")
+        raise ValueError(
+            f"{_WINE_PYTHON} must be a conservative absolute Windows .exe path"
+        )
     if not _is_absolute_windows_executable(request.ras_executable):
         raise ValueError("Wine execution requires an absolute Windows ras_executable")
     arch = os.environ.get(_WINE_ARCH, "win64")
@@ -137,21 +139,39 @@ def _execute_with_wine(
     try:
         shutil.copytree(seed, prefix, symlinks=True)
         wine_invoked = True
-        converted = subprocess.run(
-            [tools["winepath"], "-w", str(request_path)],
-            capture_output=True,
-            check=False,
-            shell=False,
-            text=True,
-            env=environment,
-            timeout=30,
-        )
-        windows_request = converted.stdout.strip()
-        if converted.returncode != 0 or not windows_request:
-            detail = converted.stderr.strip()
-            raise RuntimeError(
-                f"winepath failed to convert request path: {detail or converted.returncode}"
+        # The image seed normally maps Z: to the POSIX root. Verify the copied
+        # mapping before using it, avoiding a separate cold Wine startup merely
+        # to translate a path. Other drive mappings keep winepath behavior.
+        root_drive = prefix / "dosdevices" / "z:"
+        if (
+            os.name == "posix"
+            and root_drive.is_symlink()
+            and root_drive.resolve() == Path("/")
+            and request_path.is_absolute()
+            and ".." not in request_path.parts
+            and all(not any(c in part for c in "\\:") for part in request_path.parts)
+        ):
+            windows_request = str(
+                PureWindowsPath("Z:/") / request_path.relative_to("/").as_posix()
             )
+            if PureWindowsPath(windows_request).drive.casefold() != "z:":
+                raise ValueError("verified root mapping changed request drive")
+        else:
+            converted = subprocess.run(
+                [tools["winepath"], "-w", str(request_path)],
+                capture_output=True,
+                check=False,
+                shell=False,
+                text=True,
+                env=environment,
+                timeout=30,
+            )
+            windows_request = converted.stdout.strip()
+            if converted.returncode != 0 or not windows_request:
+                detail = converted.stderr.strip()
+                raise RuntimeError(
+                    f"winepath failed to convert request path: {detail or converted.returncode}"
+                )
         request_windows_path = PureWindowsPath(windows_request)
         if (
             not request_windows_path.is_absolute()
@@ -215,7 +235,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 return _execute_with_wine(request_path, request, output)
             receipt = _execute_portable_request(request_path)
         except Exception as exc:
-            print(f"ras-commander execute-request: {type(exc).__name__}: {exc}", file=sys.stderr)
+            print(
+                f"ras-commander execute-request: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
             return 2
         print(output / "execution_receipt.json")
         return 0 if receipt.success else 1
