@@ -733,6 +733,13 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
 
 ### RasUnsteady
 
+`disable_meteorology(..., remove_source_references=True)` prepares an owned
+boundary-only child without inherited gridded or point meteorological sources.
+It removes met station/source records and resets the sidecar meteorology groups
+to disabled. Boundary hydrographs, boundary DSS links, and infiltration remain
+unchanged. The returned evidence includes flow-text hashes before/after and
+boundary-record integrity. The default preserves inactive sidecar sources.
+
 <a id="ras_commander.RasUnsteady"></a>
 
 ::: ras_commander.RasUnsteady.RasUnsteady

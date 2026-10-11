@@ -186,6 +186,8 @@ class RasUnsteady:
         ("Rule Operation=", "Rule Operation"),
     )
     _GLOBAL_TRAILER_PREFIXES = (
+        "Met Station=",
+        "Meteorological Station=",
         "Met Point Raster Parameters=",
         "Met Station Name=",
         "Met Station Gauge Height=",
@@ -3795,6 +3797,7 @@ class RasUnsteady:
         unsteady_file: Union[str, Path],
         *,
         compiled_plan_hdf: Optional[Union[str, Path]] = None,
+        remove_source_references: bool = False,
         ras_object: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """Disable inherited meteorological forcing in an unsteady-flow clone.
@@ -3804,7 +3807,9 @@ class RasUnsteady:
         wind, or evapotranspiration record.  A cloned breakout plan can then
         fail in-band while reading an enabled HDF variable whose ``Values``
         dataset is absent.  This method makes the disabled state explicit in
-        the text file and unsteady sidecar without deleting sidecar data.  For
+        the text file and unsteady sidecar, retaining inactive sidecar data by
+        default. With ``remove_source_references=True``, it resets the owned
+        sidecar meteorology group and removes text source/station records.  For
         an owned compiled ``*.tmp.hdf``, it removes the meteorology group to
         match HEC-RAS's canonical no-meteorology execution state.
 
@@ -3822,6 +3827,10 @@ class RasUnsteady:
             Owned ``*.tmp.hdf`` whose ``/Event Conditions/Meteorology`` groups
             should also be disabled.  The file must already exist and contain
             ``/Event Conditions``.
+        remove_source_references : bool, default False
+            Remove meteorological source records and station metadata from the
+            owned text and reset its sidecar meteorology to disabled groups.
+            Boundary hydrographs, their DSS links, and infiltration are unchanged.
         ras_object : optional
             Project object used to resolve an unsteady-flow number.
 
@@ -3832,6 +3841,8 @@ class RasUnsteady:
             whose ``Enabled`` attribute was set to zero, and any compiled-plan
             meteorology groups removed.
         """
+        import hashlib
+
         import h5py
 
         unsteady_path = RasUnsteady._resolve_unsteady_file_path(
@@ -3839,6 +3850,14 @@ class RasUnsteady:
             ras_object=ras_object,
         )
         sidecar_hdf = Path(str(unsteady_path) + ".hdf")
+        if not isinstance(remove_source_references, bool):
+            raise TypeError("remove_source_references must be a bool")
+        text_before = unsteady_path.read_bytes()
+        boundary_lines_before = text_before.decode("utf-8", errors="replace").splitlines(keepends=True)
+        boundary_blocks_before = [
+            boundary_lines_before[b["start_idx"]:b["end_idx"]]
+            for b in RasUnsteady._find_boundary_blocks(boundary_lines_before)
+        ]
         compiled_path: Optional[Path] = None
         if compiled_plan_hdf is not None:
             compiled_path = Path(compiled_plan_hdf)
@@ -3883,6 +3902,22 @@ class RasUnsteady:
         had_terminal_newline = bool(
             lines and lines[-1].endswith(("\r\n", "\n", "\r"))
         )
+        removed_source_keys = []
+        if remove_source_references:
+            retained = []
+            for line in lines:
+                key = line.rstrip("\r\n").split("=", 1)[0]
+                is_met_source = line.startswith((
+                    "Met Station", "Meteorological Station=", "Met Point Raster Parameters=",
+                ))
+                if line.startswith("Met BC="):
+                    key = line.rstrip("\r\n").rsplit("=", 1)[0]
+                    is_met_source = not key.endswith(("|Mode", "|Expanded View"))
+                if is_met_source:
+                    removed_source_keys.append(key)
+                else:
+                    retained.append(line)
+            lines = retained
         managed_prefixes = (
             "Wind Mode=",
             "Met BC=Evapotranspiration|Mode=",
@@ -3957,11 +3992,15 @@ class RasUnsteady:
 
             disabled_groups = []
             with h5py.File(hdf_path, "r+") as hdf_file:
+                if remove_source_references and "Event Conditions/Meteorology" in hdf_file:
+                    del hdf_file["Event Conditions/Meteorology"]
                 meteorology = hdf_file.require_group(
                     "Event Conditions/Meteorology"
                 )
                 meteorology.require_group("Precipitation")
                 meteorology.require_group("Evapotranspiration")
+                if remove_source_references:
+                    meteorology.require_group("Wind Speed")
                 for variable_name, item in meteorology.items():
                     if not isinstance(item, h5py.Group):
                         continue
@@ -3997,8 +4036,21 @@ class RasUnsteady:
             unsteady_path.name,
             len(hdf_evidence),
         )
+        text_after = unsteady_path.read_bytes()
+        boundary_lines_after = text_after.decode("utf-8", errors="replace").splitlines(keepends=True)
+        boundary_blocks_after = [
+            boundary_lines_after[b["start_idx"]:b["end_idx"]]
+            for b in RasUnsteady._find_boundary_blocks(boundary_lines_after)
+        ]
+        if boundary_blocks_before != boundary_blocks_after:
+            raise RuntimeError("Disabling meteorology changed boundary condition records")
         return {
             "unsteady_file": str(unsteady_path),
+            "unsteady_sha256_before": hashlib.sha256(text_before).hexdigest(),
+            "unsteady_sha256_after": hashlib.sha256(text_after).hexdigest(),
+            "boundary_conditions_unchanged": True,
+            "source_references_removed": remove_source_references,
+            "removed_source_keys": sorted(set(removed_source_keys)),
             "text_state": {
                 "precipitation_mode": "Disable",
                 "precipitation_met_mode": "None",
