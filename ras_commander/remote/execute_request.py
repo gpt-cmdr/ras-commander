@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path, PureWindowsPath
 import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path, PureWindowsPath
 from typing import Optional, Sequence
 
 from .ExecutionContract import RasExecutionRequest
 from .PortableExecution import execute_request as _execute_portable_request
-
 
 _WINE_PREFIX_SEED = "RAS_COMMANDER_WINE_PREFIX_SEED"
 _WINE_PYTHON = "RAS_COMMANDER_WINE_PYTHON"
@@ -118,9 +117,22 @@ def _execute_with_wine(
     if output.exists() and any(output.iterdir()):
         raise ValueError("Wine request output directory must be absent or empty")
     output.mkdir(parents=True, exist_ok=True)
+    # Runtime support files are temporary, not execution artifacts. Fleet
+    # callers bind TMPDIR to node-local scratch rather than a shared output.
+    runtime_parent = Path(tempfile.gettempdir())
+    if (
+        not runtime_parent.is_absolute()
+        or runtime_parent.is_symlink()
+        or not runtime_parent.is_dir()
+        or runtime_parent.resolve().is_relative_to(request_path.parent.resolve())
+        or runtime_parent.resolve().is_relative_to(seed)
+    ):
+        raise ValueError(
+            "Wine temporary runtime parent must be an absolute regular directory outside the request bundle and seed"
+        )
     task_root = Path(
         tempfile.mkdtemp(
-            prefix=f".ras-wine-runtime-{request.execution_id}-", dir=output
+            prefix=f".ras-wine-runtime-{request.execution_id}-", dir=runtime_parent
         )
     )
     prefix = task_root / "prefix"
@@ -137,28 +149,35 @@ def _execute_with_wine(
     )
     wine_invoked = False
     try:
+        print("ras-commander Wine runtime: copying task-private prefix", flush=True)
         shutil.copytree(seed, prefix, symlinks=True)
+        print("ras-commander Wine runtime: task-private prefix ready", flush=True)
         wine_invoked = True
         # The image seed normally maps Z: to the POSIX root. Verify the copied
         # mapping before using it, avoiding a separate cold Wine startup merely
         # to translate a path. Other drive mappings keep winepath behavior.
         root_drive = prefix / "dosdevices" / "z:"
-        if (
+        root_mapping_verified = (
             os.name == "posix"
             and root_drive.is_symlink()
             and root_drive.resolve() == Path("/")
-            and request_path.is_absolute()
-            and ".." not in request_path.parts
-            and all(not any(c in part for c in "\\:") for part in request_path.parts)
-        ):
-            windows_request = str(
-                PureWindowsPath("Z:/") / request_path.relative_to("/").as_posix()
-            )
-            if PureWindowsPath(windows_request).drive.casefold() != "z:":
-                raise ValueError("verified root mapping changed request drive")
-        else:
+        )
+
+        def windows_path(path: Path) -> str:
+            if (
+                root_mapping_verified
+                and path.is_absolute()
+                and ".." not in path.parts
+                and all(not any(c in part for c in "\\:") for part in path.parts)
+            ):
+                converted_path = str(
+                    PureWindowsPath("Z:/") / path.relative_to("/").as_posix()
+                )
+                if PureWindowsPath(converted_path).drive.casefold() != "z:":
+                    raise ValueError("verified root mapping changed runtime drive")
+                return converted_path
             converted = subprocess.run(
-                [tools["winepath"], "-w", str(request_path)],
+                [tools["winepath"], "-w", str(path)],
                 capture_output=True,
                 check=False,
                 shell=False,
@@ -166,12 +185,15 @@ def _execute_with_wine(
                 env=environment,
                 timeout=30,
             )
-            windows_request = converted.stdout.strip()
-            if converted.returncode != 0 or not windows_request:
+            converted_path = converted.stdout.strip()
+            if converted.returncode != 0 or not converted_path:
                 detail = converted.stderr.strip()
                 raise RuntimeError(
-                    f"winepath failed to convert request path: {detail or converted.returncode}"
+                    f"winepath failed to convert path: {detail or converted.returncode}"
                 )
+            return converted_path
+
+        windows_request = windows_path(request_path)
         request_windows_path = PureWindowsPath(windows_request)
         if (
             not request_windows_path.is_absolute()
@@ -179,13 +201,16 @@ def _execute_with_wine(
             or ".." in request_windows_path.parts
         ):
             raise ValueError("winepath returned an unsafe request path")
-        output_windows_path = (
-            request_windows_path.parent
-            / PureWindowsPath(request.output_directory)
-            / task_root.name
-            / prefix.name
-        )
-        environment[_WINE_PREFIX_WINDOWS] = str(output_windows_path)
+        prefix_windows_path = PureWindowsPath(windows_path(prefix))
+        if (
+            not prefix_windows_path.is_absolute()
+            or ".." in prefix_windows_path.parts
+            or prefix_windows_path.name != prefix.name
+            or prefix_windows_path.parent.name != task_root.name
+        ):
+            raise ValueError("winepath returned an unsafe private prefix path")
+        environment[_WINE_PREFIX_WINDOWS] = str(prefix_windows_path)
+        print("ras-commander Wine runtime: starting delegated execution", flush=True)
         completed = subprocess.run(
             [
                 tools["xvfb-run"],

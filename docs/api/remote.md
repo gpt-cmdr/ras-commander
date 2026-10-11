@@ -194,7 +194,15 @@ docker_result = RasPortableDocker.execute_request(request_path)
   Linux, a Windows `ras_executable` is run through Windows Python under Wine.
   This needs the image variables `RAS_COMMANDER_WINE_PREFIX_SEED` and
   `RAS_COMMANDER_WINE_PYTHON`, plus `RAS_COMMANDER_WINE_ARCH` (optional,
-  default `win64`). Each request gets its own copy of the Wine prefix.
+  default `win64`). Each request gets its own copy of the Wine prefix in
+  Python's temporary directory, selected through the process `TMPDIR` where
+  applicable. Fleet runners should bind that directory to writable node-local
+  scratch. The temporary parent must be an absolute regular directory outside
+  the request bundle and image seed. The executor maps the actual copied prefix
+  into Windows, removes it after the attempt, and keeps project results and
+  receipts in the declared output directory. Runtime staging messages identify
+  prefix-copy start, completion, and delegated execution start. Solver deadlines
+  and the requirement for an absent or empty output directory remain unchanged.
 - `RasPortableDocker.execute_request()` and `execute_pool(max_concurrent=8)`
   mount the bundle read-only and only the output directory writable.
 - `RasSlurm.render_submission()`, `stage()`, `submit()`, `status()`,
