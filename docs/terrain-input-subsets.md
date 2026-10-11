@@ -139,3 +139,11 @@ least one geometry and checks each terrain association resolves to a registered
 native terrain HDF. Missing, wrong-but-existing, absolute, or unresolved material
 paths hold; result-map names must also be registered. This read-only audit does
 not qualify elevations or hydraulic acceptance.
+# Terrain import dependencies
+
+Terrain creation, modification inspection and replay do not load the USGS
+downloader. `Usgs3depAws` and `TerrainBuildError` remain public class exports and
+load their downloader module on first access. That module requires `requests`;
+an absent HTTP dependency produces an actionable import error when the downloader
+is requested, without blocking local terrain operations.
+
