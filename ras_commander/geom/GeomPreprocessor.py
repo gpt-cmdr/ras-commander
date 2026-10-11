@@ -645,11 +645,12 @@ class GeomPreprocessor:
                         # Desktop, console and plot-display helpers may remain
                         # alive under Wine after all geometry writers exit.
                         # Unknown children still require a confirmed exit.
-                        if GeomPreprocessor._is_wine_display_child(child):
-                            continue
                         if not child.is_running():
                             continue
                         identity = (child.pid, child.create_time())
+                        if GeomPreprocessor._is_wine_display_child(child):
+                            children.pop(identity, None)
+                            continue
                         if identity not in children:
                             children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
                     except psutil.NoSuchProcess:
@@ -686,10 +687,17 @@ class GeomPreprocessor:
 
         if not _is_wine_helper_runtime():
             return False
-        name = child.name().casefold()
-        if name not in {"explorer.exe", "conhost.exe", "rasplotdriver.exe"}:
-            return False
-        arguments = child.cmdline()[1:]
+        try:
+            name = child.name().casefold()
+            if name not in {"explorer.exe", "conhost.exe", "rasplotdriver.exe"}:
+                return False
+            arguments = child.cmdline()[1:]
+        except OSError as exc:
+            # Wine can report invalid handles during a short-lived child's
+            # optional role query. An unknown role remains supervised.
+            if getattr(exc, "winerror", None) == 6:
+                return False
+            raise
         if name == "explorer.exe":
             return arguments == ["/desktop"]
         if name == "rasplotdriver.exe":
@@ -854,10 +862,20 @@ class GeomPreprocessor:
                     except psutil.NoSuchProcess:
                         continue
                 active = []
-                for identity, record in children.items():
+                for identity, record in tuple(children.items()):
                     if identity in exit_codes:
                         continue
                     if not record["finished"]:
+                        child = record["process"]
+                        try:
+                            if (child.is_running() and child.create_time() == identity[1]
+                                    and GeomPreprocessor._is_wine_display_child(child)):
+                                # A transient role-query failure on the last launcher
+                                # poll must not retain a now-confirmed display helper.
+                                del children[identity]
+                                continue
+                        except psutil.NoSuchProcess:
+                            pass  # The retained wait still establishes its exit status.
                         active.append(record["process"])
                         continue
                     code = record["exit_code"]
@@ -873,7 +891,7 @@ class GeomPreprocessor:
                     timed_out = True
                     break
                 time.sleep(0.5)
-        except (psutil.Error, RuntimeError) as exc:
+        except (psutil.Error, RuntimeError, OSError) as exc:
             errors.append(str(exc))
         if timed_out or errors:
             for identity, record in children.items():

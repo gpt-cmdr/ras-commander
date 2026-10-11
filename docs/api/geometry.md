@@ -836,7 +836,9 @@ incoming HDF object and attribute name. Native recomputation may change values
 and add objects. A quiet file or flow-start message does not end the wait.
 Recognized Wine desktop, console and plot-display invocations may outlive the
 geometry writers and are excluded from writer completion; unknown children
-still require a confirmed exit.
+still require a confirmed exit. A transient Wine invalid-handle error while
+querying a child's role leaves it supervised. The role query is retried while
+that same process identity remains active, including after the launcher exits.
 `geometry_only=False` also waits for all enabled plan work, so its runtime can
 include hydraulic computation.
 

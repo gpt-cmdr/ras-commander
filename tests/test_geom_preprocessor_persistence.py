@@ -223,6 +223,12 @@ def child_record(*, finished=False, exit_code=None, reused=False, kill_error=Fal
         pid=54321,
         create_time=lambda: 2.0 if reused else 1.0,
         is_running=lambda: not finished,
+        name=lambda: "RasProcess.exe",
+        cmdline=lambda: [
+            "RasProcess.exe",
+            "CompletePreProcess",
+            "Synthetic.p01.tmp.hdf",
+        ],
         kill=kill,
         wait=lambda **kwargs: calls.append("reap"),
     )
@@ -422,3 +428,98 @@ def test_display_named_worker_with_file_argument_is_not_exempt(monkeypatch):
     monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: False)
     child.cmdline = lambda: ["RasPlotDriver.exe", "65670"]
     assert not GP._is_wine_display_child(child)
+
+
+def test_wine_invalid_name_handle_remains_an_unknown_worker(monkeypatch):
+    from ras_commander import _native_helper
+
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: True)
+    error = OSError("invalid handle")
+    error.winerror = 6
+
+    def unavailable():
+        raise error
+
+    child = SimpleNamespace(name=unavailable)
+    assert not GP._is_wine_display_child(child)
+    error.winerror = 5
+    with pytest.raises(OSError, match="invalid handle"):
+        GP._is_wine_display_child(child)
+
+
+def test_monitor_reclassifies_initially_unknown_wine_display_child(monkeypatch):
+    import psutil
+
+    child = SimpleNamespace(pid=432, is_running=lambda: True, create_time=lambda: 1.0)
+    monkeypatch.setattr(
+        psutil, "Process", lambda pid: SimpleNamespace(children=lambda **kw: [child])
+    )
+    roles = iter((False, True))
+    monkeypatch.setattr(GP, "_is_wine_display_child", lambda child: next(roles))
+    watched = []
+
+    def watch(child, deadline):
+        watched.append(child.pid)
+        return {"identity": (child.pid, 1.0)}
+
+    monkeypatch.setattr(GP, "_watch_preprocess_child", watch)
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    states = iter((None, None, 0))
+    result = GP._monitor_compute_messages(
+        SimpleNamespace(pid=123, poll=lambda: next(states)), [], time.time(), 60, []
+    )
+    assert watched == [432]
+    assert result["children"] == ()
+    assert not result["errors"]
+
+
+def test_last_launcher_poll_unknown_display_role_is_retried(tmp_path, monkeypatch):
+    import psutil
+
+    record, calls = child_record()
+    child = record["process"]
+    monkeypatch.setattr(
+        psutil, "Process", lambda pid: SimpleNamespace(children=lambda **kw: [child])
+    )
+    roles = iter((False, True))
+    monkeypatch.setattr(GP, "_is_wine_display_child", lambda child: next(roles))
+    monkeypatch.setattr(GP, "_watch_preprocess_child", lambda *args: record)
+    monkeypatch.setattr(GP, "_ras_processes_using_path", lambda path: [])
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    states = iter((None, 0))
+    monitored = GP._monitor_compute_messages(
+        SimpleNamespace(pid=123, poll=lambda: next(states)), [], time.time(), 60, []
+    )
+    assert monitored["children"] == (record,)
+    result = GP._wait_for_preprocess_child(
+        tmp_path / "Synthetic.p01.tmp.hdf", time.time(), 60, monitored["children"]
+    )
+    assert not result["timed_out"] and not result["errors"]
+    assert not result["saw_child"] and calls == []
+
+
+def test_child_wait_does_not_classify_reused_pid_as_display(tmp_path, monkeypatch):
+    record, calls = child_record(reused=True)
+    monkeypatch.setattr(GP, "_ras_processes_using_path", lambda path: [])
+    monkeypatch.setattr(
+        GP, "_is_wine_display_child", lambda child: pytest.fail("queried reused pid")
+    )
+    result = GP._wait_for_preprocess_child(
+        tmp_path / "Synthetic.p01.tmp.hdf", time.time(), 0, (record,)
+    )
+    assert result["timed_out"] and calls == []
+
+
+def test_child_wait_role_query_failure_is_retained(tmp_path, monkeypatch):
+    record, calls = child_record()
+    monkeypatch.setattr(GP, "_ras_processes_using_path", lambda path: [])
+
+    def denied(child):
+        raise OSError("role query failed")
+
+    monkeypatch.setattr(GP, "_is_wine_display_child", denied)
+    result = GP._wait_for_preprocess_child(
+        tmp_path / "Synthetic.p01.tmp.hdf", time.time(), 60, (record,)
+    )
+    assert result["errors"] == ["role query failed"]
+    assert calls == ["kill", "reap"]
