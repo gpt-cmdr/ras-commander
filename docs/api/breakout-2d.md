@@ -48,6 +48,15 @@ Fully external controls are individually reported before removal. Partial or
 unknown physical support still blocks preparation. The single-area breakout
 scope remains unchanged; this is not a multi-area seam authoring workflow.
 
+The default blocks gates and undecoded support records. Set
+`Breakout2DSpec(allow_extended_connection_support=True, ...)` to opt in to
+verified gate opening GIS support, cell-size metadata and the additional empty
+bridge template recognized by `GeomLateral.classify_connections()`. Preflight
+and clone rechecks use the same choice; unrelated callers retain their defaults.
+`feature_actions.gate_group_count` records verified gate groups and is zero for
+other features. This opt-in does not establish native attachment or hydraulic
+acceptance.
+
 Preparation rechecks the approved decisions against the clone, requires fresh
 native HDF refresh for connection edits, and compares the exact retained records
 before and after geometry preparation. `prepared.connection_attachments` reports

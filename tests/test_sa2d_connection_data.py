@@ -64,6 +64,38 @@ def test_unknown_records_mixed_newlines_are_preserved(geometry):
     assert classified.iloc[0]["reason"] == "CONNECTION_SPATIAL_EXTENT_UNVERIFIED"
 
 
+@pytest.mark.parametrize("header", ["Reference Line Name=review", "IC Point Name=review"])
+def test_reference_features_are_not_connection_records(geometry, header):
+    raw = geometry.read_bytes()
+    boundary = raw.index(b"BC Line Name=outlet")
+    suffix = (header + "\r\nUnrelated Feature Coordinate=20,30\r\n").encode()
+    geometry.write_bytes(raw[:boundary] + suffix)
+    inventory = GeomLateral.get_connection_data(geometry)
+    assert header not in inventory.RawBlock.iloc[0]
+    assert inventory.UnknownRecords.iloc[0] == []
+    GeomLateral.write_connection_data(geometry, inventory, create_backup=False)
+    assert geometry.read_bytes() == raw[:boundary] + suffix
+    GeomLateral.write_connection_data(geometry, inventory.iloc[:0], create_backup=False)
+    assert geometry.read_bytes().endswith(suffix)
+
+
+def test_bc_removal_preserves_connection_decisions_and_reference_features(geometry):
+    from ras_commander.geom.GeomBcLines import GeomBcLines
+    raw = geometry.read_bytes()
+    boundary = raw.index(b"BC Line Name=outlet")
+    bc = (b"BC Line Name=outlet\r\nBC Line Storage Area=A\r\n"
+          b"BC Line Text Position=0,0\r\n")
+    reference = b"Reference Line Name=review\r\nReference Line Storage Area=A\r\n"
+    geometry.write_bytes(raw[:boundary] + bc + reference)
+    before = GeomLateral.get_connection_data(geometry)
+    decision = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10))
+    GeomBcLines.delete_bc_line(geometry, "outlet")
+    after = GeomLateral.get_connection_data(geometry)
+    assert after.RawBlock.tolist() == before.RawBlock.tolist()
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).action.tolist() == decision.action.tolist()
+    assert geometry.read_bytes().endswith(reference)
+
+
 def test_authoring_requires_explicit_physics_and_records_defaults(geometry):
     before = geometry.read_bytes()
     with pytest.raises(ValueError, match="weir_width"):
@@ -323,6 +355,19 @@ def test_delivered_salt_draw_empty_bridge_variant_is_retained(geometry):
     assert row["ParseIssues"] == []
     result = GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0]
     assert result["action"] == "keep"
+
+
+def test_extended_empty_bridge_flags_require_an_empty_complete_template(geometry):
+    lines = GeomLateral._build_empty_bridge_skeleton()
+    lines[0] = "Conn BR: Bridge=-1,0,-1,-1,0,0.3,0.5\n"
+    records = "".join(lines)
+    row = _append_connection_records(geometry, records)
+    assert row["UnknownRecords"]
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10)).iloc[0].action == "block"
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10), allow_extended_support=True).iloc[0].action == "keep"
+    text = geometry.read_text().replace("BR SE=1,0", "BR SE=1,1")
+    geometry.write_text(text)
+    assert GeomLateral.classify_connections(geometry, box(0, 0, 10, 10), allow_extended_support=True).iloc[0].action == "block"
 
 
 @pytest.mark.parametrize(
