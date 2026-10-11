@@ -3862,7 +3862,7 @@ class RasUnsteady:
             compares boundary bytes with only CR/LF separators normalized;
             ``boundary_conditions_byte_identical`` also compares separators.
             ``removed_source_keys`` includes managed precipitation source
-            keys removed from the original text when removal is requested.
+            keys removed from the original text in both modes.
 
         Raises
         ------
@@ -3905,15 +3905,12 @@ class RasUnsteady:
         lines = text_before.decode("utf-8", errors="surrogateescape").splitlines(True)
         boundary_blocks_before = RasUnsteady._meteorology_boundary_bytes(text_before)
         removed_source_keys = []
-        if remove_source_references:
-            for line in lines:
-                if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
-                    parts = line.rstrip("\r\n").split("=", 2)
-                    key = (
-                        "=".join(parts[:2]) if line.startswith("Met BC=") else parts[0]
-                    )
-                    if key not in {"Precipitation Mode", "Met BC=Precipitation|Mode"}:
-                        removed_source_keys.append(key)
+        for line in lines:
+            if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
+                parts = line.rstrip("\r\n").split("=", 2)
+                key = "=".join(parts[:2]) if line.startswith("Met BC=") else parts[0]
+                if key not in {"Precipitation Mode", "Met BC=Precipitation|Mode"}:
+                    removed_source_keys.append(key)
         compiled_path: Optional[Path] = None
         if compiled_plan_hdf is not None:
             compiled_path = Path(compiled_plan_hdf)
@@ -4127,6 +4124,8 @@ class RasUnsteady:
             for hdf_path in hdf_targets:
                 staged_path = staged[hdf_path]
                 with h5py.File(staged_path, "r") as hdf_file:
+                    if hdf_path == compiled_path and "Results" in hdf_file:
+                        raise ValueError("compiled_plan_hdf must be results-free")
                     if "Event Conditions" not in hdf_file:
                         if hdf_path == compiled_path or len(hdf_file):
                             raise ValueError(
@@ -4156,7 +4155,7 @@ class RasUnsteady:
                                     "/Event Conditions/Meteorology must be an HDF group"
                                 )
                             if any(
-                                name != "Attributes"
+                                name not in {"Attributes", "Meteorology Stations"}
                                 and not isinstance(item, h5py.Group)
                                 for name, item in met.items()
                             ):
@@ -4172,6 +4171,16 @@ class RasUnsteady:
                                 raise ValueError(
                                     "Meteorology variables must be owned by the HDF target"
                                 )
+                            for item in met.values():
+                                if not isinstance(item, h5py.Group):
+                                    continue
+                                enabled = item.attrs.get("Enabled")
+                                if enabled is not None:
+                                    if np.asarray(enabled).ndim != 0:
+                                        raise ValueError(
+                                            "Meteorology Enabled must be scalar"
+                                        )
+                                    int(enabled)
                 if compiled_path is not None and hdf_path == compiled_path:
                     with h5py.File(staged_path, "r+") as hdf_file:
                         met_path = "Event Conditions/Meteorology"
