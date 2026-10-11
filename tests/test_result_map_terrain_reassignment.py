@@ -3,6 +3,7 @@
 import xml.etree.ElementTree as ET
 
 import pytest
+
 from ras_commander import RasMap
 
 
@@ -30,14 +31,19 @@ def test_reassign_references_and_preserve_other_settings(tmp_path):
         "ProfileIndex": "7",
         "Terrain": "Packed",
     }
-    assert [e.get("Name") for e in after.findall(".//Results//Terrain")] == ["Packed", "Other"]
+    assert [e.get("Name") for e in after.findall(".//Results//Terrain")] == [
+        "Packed",
+        "Other",
+    ]
     # Reverse only the declared replacements; all other structure/data must match.
     after.find(".//MapParameters").set("Terrain", "Terrain.Hydroenforced")
     after.find(".//Results//Terrain").set("Name", "Terrain")
     assert ET.tostring(after.getroot()) == ET.tostring(before.getroot())
 
 
-@pytest.mark.parametrize("mapping", [{"Terrain": "Absent"}, {"": "Packed"}, {"Terrain": None}, []])
+@pytest.mark.parametrize(
+    "mapping", [{"Terrain": "Absent"}, {"": "Packed"}, {"Terrain": None}, []]
+)
 def test_validation_precedes_mutation(tmp_path, mapping):
     path = mapper(tmp_path)
     before = path.read_bytes()

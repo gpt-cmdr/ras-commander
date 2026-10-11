@@ -28,7 +28,9 @@ def reassign_result_map_terrains(rasmap_path, terrain_names):
         not isinstance(old, str) or not old or not isinstance(new, str) or not new
         for old, new in terrain_names.items()
     ):
-        raise ValueError("Terrain names must map nonempty old names to nonempty new names")
+        raise ValueError(
+            "Terrain names must map nonempty old names to nonempty new names"
+        )
     if set(terrain_names.values()) - registered:
         raise ValueError("Every destination terrain name must be registered in Mapper")
     changes = []
@@ -48,16 +50,18 @@ def reassign_result_map_terrains(rasmap_path, terrain_names):
             new = terrain_names[old]
             element.set(attribute, new)
             changes.append(
-                dict(
-                    plan_name=plan.get("Name", ""),
-                    element=element.tag,
-                    attribute=attribute,
-                    old_terrain_name=old,
-                    new_terrain_name=new,
-                )
+                {
+                    "plan_name": plan.get("Name", ""),
+                    "element": element.tag,
+                    "attribute": attribute,
+                    "old_terrain_name": old,
+                    "new_terrain_name": new,
+                }
             )
     if changes:
-        descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{path.name}.", dir=path.parent
+        )
         os.close(descriptor)
         try:
             tree.write(temporary, encoding="utf-8", xml_declaration=True)
