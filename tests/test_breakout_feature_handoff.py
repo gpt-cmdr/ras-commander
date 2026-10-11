@@ -303,16 +303,27 @@ def _patch_points(monkeypatch, callback):
     monkeypatch.setattr(GeomMesh, "generate_computation_points", staticmethod(callback))
 
 
+@pytest.mark.parametrize("empty_sidecar", [False, True])
 def test_boundary_only_disables_met_before_refresh_without_changing_source(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, empty_sidecar
 ):
     preflight, clone, ras = _fixture(tmp_path)
     original = preflight.source_unsteady_path.read_bytes()
     original_clone = clone.unsteady_path.read_bytes()
+    sidecar = Path(str(clone.unsteady_path) + ".hdf")
+    if empty_sidecar:
+        with h5py.File(sidecar, "w"):
+            pass
 
     def refresh(*args, **kwargs):
         assert b"Precipitation Mode=Disable" in clone.unsteady_path.read_bytes()
         assert b"Met BC=Precipitation|Mode=None" in clone.unsteady_path.read_bytes()
+        if empty_sidecar:
+            with h5py.File(sidecar, "r") as hdf:
+                assert all(
+                    int(group.attrs["Enabled"]) == 0
+                    for group in hdf["Event Conditions/Meteorology"].values()
+                )
         _sync_native_hdf(clone.geometry_path)
         return SimpleNamespace(success=True, error=None, first_error_line=None)
 

@@ -3481,13 +3481,27 @@ class RasUnsteady:
         ) as file:
             lines = file.readlines()
 
-        newline = RasUnsteady._detect_line_ending(lines)
-        had_terminal_newline = bool(
-            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
+        updated_lines, completed_modes = RasUnsteady._render_met_precipitation_keys(
+            lines, desired_entries
         )
-        desired_lines = [
-            f"{key}={value}{newline}" for key, value in desired_entries
-        ]
+        RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
+        if completed_modes:
+            logger.info(
+                "Completed required gridded meteorology modes in %s: %s",
+                unsteady_path.name,
+                ", ".join(completed_modes),
+            )
+
+    @staticmethod
+    def _render_met_precipitation_keys(
+        lines: list[str],
+        desired_entries: list[tuple[str, str]],
+    ) -> tuple[list[str], tuple[str, ...]]:
+        """Plan managed precipitation records without writing or decoding files."""
+
+        newline = RasUnsteady._detect_line_ending(lines)
+        had_terminal_newline = bool(lines and lines[-1].endswith(("\r\n", "\n", "\r")))
+        desired_lines = [f"{key}={value}{newline}" for key, value in desired_entries]
 
         insert_index: Optional[int] = None
         for i, line in enumerate(lines):
@@ -3497,7 +3511,7 @@ class RasUnsteady:
         if insert_index is None:
             insert_index = RasUnsteady._get_default_met_insert_index(lines)
 
-        filtered_lines: List[str] = []
+        filtered_lines: list[str] = []
         removed_before_insert = 0
         for i, line in enumerate(lines):
             if line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES):
@@ -3514,14 +3528,14 @@ class RasUnsteady:
         ):
             filtered_lines[-1] = f"{filtered_lines[-1]}{newline}"
         if insert_index == len(filtered_lines) and not had_terminal_newline:
-            desired_lines[-1] = desired_lines[-1][:-len(newline)]
+            desired_lines[-1] = desired_lines[-1][: -len(newline)]
 
         updated_lines = (
             filtered_lines[:insert_index]
             + desired_lines
             + filtered_lines[insert_index:]
         )
-        completed_modes: Tuple[str, ...] = ()
+        completed_modes: tuple[str, ...] = ()
         if any(
             key == "Met BC=Precipitation|Mode"
             and str(value).strip().casefold() == "gridded"
@@ -3530,13 +3544,7 @@ class RasUnsteady:
             updated_lines, completed_modes = (
                 RasUnsteady._complete_gridded_meteorology_block(updated_lines)
             )
-        RasUnsteady._atomic_write_lines(unsteady_path, updated_lines)
-        if completed_modes:
-            logger.info(
-                "Completed required gridded meteorology modes in %s: %s",
-                unsteady_path.name,
-                ", ".join(completed_modes),
-            )
+        return updated_lines, completed_modes
 
     @staticmethod
     def _normalize_met_precipitation_mode(mode: Optional[str]) -> str:
@@ -3819,29 +3827,42 @@ class RasUnsteady:
         caller must align that owned task-local artifact before native Linux
         execution.  Result ``*.hdf`` files are rejected.
 
-        Parameters
-        ----------
-        unsteady_file : str or Path
-            Unsteady-flow number or owned ``.u##`` path.
-        compiled_plan_hdf : str or Path, optional
-            Owned ``*.tmp.hdf`` whose ``/Event Conditions/Meteorology`` groups
-            should also be disabled.  The file must already exist and contain
-            ``/Event Conditions``.
-        remove_source_references : bool, default False
-            Remove meteorological source records and station metadata from the
-            owned text and reset its sidecar meteorology to disabled groups.
-            Boundary hydrographs, their DSS links, and infiltration are unchanged.
-        ras_object : optional
-            Project object used to resolve an unsteady-flow number.
+        The method plans text changes in memory and stages HDF copies before
+        replacing any owned input. Boundary blocks retain their exact bytes,
+        including LF/CRLF/CR separators and non-UTF-8 DSS filenames. ASCII keys
+        are interpreted through a byte-preserving Latin-1 transport; no payload
+        encoding conversion is performed. Invalid inputs and caught apply
+        failures leave the input set unchanged. Multi-file replacement is not
+        crash-atomic and requires exclusive ownership of the input set.
+        Empty unsteady sidecars are initialized with disabled groups; compiled
+        execution HDFs must already contain a genuine Event Conditions group.
 
-        Returns
-        -------
-        dict
-            Mutation evidence including the updated text keys, sidecar groups
-            whose ``Enabled`` attribute was set to zero, and any compiled-plan
-            meteorology groups removed.
+        Args:
+            unsteady_file: Unsteady-flow number or owned ``.u##`` path.
+            compiled_plan_hdf: Optional owned, results-free ``*.tmp.hdf`` with
+                an existing ``/Event Conditions`` group.
+            remove_source_references: Remove meteorological source/station
+                records and reset sidecar meteorology to disabled groups.
+                Defaults to False; boundary hydrographs, their DSS links and
+                infiltration are unchanged.
+            ras_object: Project object used to resolve an unsteady-flow number.
+
+        Returns:
+            dict: Text modes, before/after hashes, raw boundary-byte integrity,
+            disabled sidecar groups and removed compiled meteorology groups.
+            ``removed_source_keys`` includes primary precipitation source keys
+            removed from the original input.
+
+        Raises:
+            TypeError: ``remove_source_references`` is not a bool.
+            ValueError: Text or HDF structure is invalid, or a target is not an
+                owned regular file or results-free compiled ``*.tmp.hdf``.
+            OSError: Reading, staging or replacing an owned file fails.
+            RuntimeError: Planned text changes would alter boundary bytes.
         """
         import hashlib
+        import shutil
+        from contextlib import ExitStack
 
         import h5py
 
@@ -3852,10 +3873,29 @@ class RasUnsteady:
         sidecar_hdf = Path(str(unsteady_path) + ".hdf")
         if not isinstance(remove_source_references, bool):
             raise TypeError("remove_source_references must be a bool")
+        if unsteady_path.is_symlink():
+            raise ValueError("Meteorology edits require owned regular files")
         text_before = unsteady_path.read_bytes()
-        boundary_lines_before = text_before.decode("utf-8", errors="replace").splitlines(keepends=True)
+        # Latin-1 is a byte-preserving transport, not an encoding guess. Only
+        # ASCII record keys are interpreted; all untouched payload bytes survive.
+        boundary_lines_before = re.findall(
+            r"[^\r\n]*(?:\r\n|\r|\n|$)", text_before.decode("latin-1")
+        )
+        if boundary_lines_before and not boundary_lines_before[-1]:
+            boundary_lines_before.pop()
+        if not any(
+            line.startswith("Flow Title=") for line in boundary_lines_before
+        ) or any(
+            "\x00" in line and not line.startswith("Boundary Location=")
+            for line in boundary_lines_before
+        ):
+            # Some official legacy examples use NUL-filled unused boundary
+            # location fields. Preserve those bytes; reject arbitrary binary text.
+            raise ValueError(
+                "Malformed unsteady flow text or binary data outside boundary locations"
+            )
         boundary_blocks_before = [
-            boundary_lines_before[b["start_idx"]:b["end_idx"]]
+            boundary_lines_before[b["start_idx"] : b["end_idx"]]
             for b in RasUnsteady._find_boundary_blocks(boundary_lines_before)
         ]
         compiled_path: Optional[Path] = None
@@ -3866,56 +3906,101 @@ class RasUnsteady:
                     "compiled_plan_hdf must be an owned results-free '*.tmp.hdf' file"
                 )
             if not compiled_path.is_file():
-                raise FileNotFoundError(
-                    f"Compiled plan HDF not found: {compiled_path}"
-                )
+                raise FileNotFoundError(f"Compiled plan HDF not found: {compiled_path}")
 
         hdf_targets = [
             path
             for path in (sidecar_hdf, compiled_path)
             if path is not None and path.exists()
         ]
+        if sidecar_hdf.is_symlink():
+            raise ValueError("Meteorology edits require owned regular files")
         for hdf_path in hdf_targets:
+            if hdf_path.is_symlink() or not hdf_path.is_file():
+                raise ValueError("Meteorology edits require owned regular files")
             with h5py.File(hdf_path, "r") as hdf_file:
+                if hdf_path == compiled_path and "Results" in hdf_file:
+                    raise ValueError("compiled_plan_hdf must be results-free")
                 if "Event Conditions" not in hdf_file:
+                    if hdf_path == sidecar_hdf and len(hdf_file) == 0:
+                        # HEC-RAS distributes empty unsteady sidecars. They are
+                        # valid authoring inputs, unlike a compiled execution HDF.
+                        continue
                     raise ValueError(
                         f"Meteorology target lacks /Event Conditions: {hdf_path.name}"
                     )
+                event = hdf_file["Event Conditions"]
+                if not isinstance(event, h5py.Group):
+                    raise ValueError(  # noqa: TRY004 - invalid HDF content, not an argument type
+                        "Meteorology target /Event Conditions must be a group"
+                    )
+                if "Meteorology" in event:
+                    met = event["Meteorology"]
+                    if not isinstance(met, h5py.Group):
+                        raise ValueError(
+                            "Meteorology target Meteorology must be a group"
+                        )
+                    for name, item in met.items():
+                        if name in (
+                            "Attributes",
+                            "Meteorology Stations",
+                        ) and isinstance(item, h5py.Dataset):
+                            continue
+                        if not isinstance(item, h5py.Group):
+                            raise ValueError(  # noqa: TRY004 - invalid HDF content
+                                "Meteorology target variable must be a group"
+                            )
+                        enabled = item.attrs.get("Enabled")
+                        if enabled is not None:
+                            if np.asarray(enabled).ndim != 0:
+                                raise ValueError("Meteorology Enabled must be scalar")
+                            int(enabled)
 
-        RasUnsteady._replace_met_precipitation_keys(
-            unsteady_path,
+        removed_source_keys = []
+        for line in boundary_lines_before:
+            key = line.rstrip("\r\n").split("=", 1)[0]
+            is_met_source = line.startswith(
+                (
+                    "Met Station",
+                    "Meteorological Station=",
+                    "Met Point Raster Parameters=",
+                )
+            )
+            if line.startswith("Met BC="):
+                key = "=".join(line.rstrip("\r\n").split("=", 2)[:2])
+                is_met_source = not key.endswith(("|Mode", "|Expanded View"))
+            # Managed precipitation source keys are removed in both modes.
+            if is_met_source and (
+                remove_source_references
+                or line.startswith(RasUnsteady._MET_PRECIP_MANAGED_PREFIXES)
+            ):
+                removed_source_keys.append(key)
+
+        lines, _ = RasUnsteady._render_met_precipitation_keys(
+            boundary_lines_before,
             [
                 ("Precipitation Mode", "Disable"),
                 ("Met BC=Precipitation|Mode", "None"),
             ],
         )
 
-        with open(
-            unsteady_path,
-            "r",
-            encoding="utf-8",
-            errors="replace",
-            newline="",
-        ) as file:
-            lines = file.readlines()
         newline = RasUnsteady._detect_line_ending(lines)
-        had_terminal_newline = bool(
-            lines and lines[-1].endswith(("\r\n", "\n", "\r"))
-        )
-        removed_source_keys = []
+        had_terminal_newline = bool(lines and lines[-1].endswith(("\r\n", "\n", "\r")))
         if remove_source_references:
             retained = []
             for line in lines:
                 key = line.rstrip("\r\n").split("=", 1)[0]
-                is_met_source = line.startswith((
-                    "Met Station", "Meteorological Station=", "Met Point Raster Parameters=",
-                ))
+                is_met_source = line.startswith(
+                    (
+                        "Met Station",
+                        "Meteorological Station=",
+                        "Met Point Raster Parameters=",
+                    )
+                )
                 if line.startswith("Met BC="):
-                    key = line.rstrip("\r\n").rsplit("=", 1)[0]
+                    key = "=".join(line.rstrip("\r\n").split("=", 2)[:2])
                     is_met_source = not key.endswith(("|Mode", "|Expanded View"))
-                if is_met_source:
-                    removed_source_keys.append(key)
-                else:
+                if not is_met_source:
                     retained.append(line)
             lines = retained
         managed_prefixes = (
@@ -3962,67 +4047,108 @@ class RasUnsteady:
         ):
             filtered_lines[-1] = f"{filtered_lines[-1]}{newline}"
         if insert_index == len(filtered_lines) and not had_terminal_newline:
-            desired_lines[-1] = desired_lines[-1][:-len(newline)]
-        RasUnsteady._atomic_write_lines(
-            unsteady_path,
+            desired_lines[-1] = desired_lines[-1][: -len(newline)]
+        boundary_lines_after = (
             filtered_lines[:insert_index]
             + desired_lines
-            + filtered_lines[insert_index:],
+            + filtered_lines[insert_index:]
         )
+        text_after = "".join(boundary_lines_after).encode("latin-1")
+        boundary_blocks_after = [
+            boundary_lines_after[b["start_idx"] : b["end_idx"]]
+            for b in RasUnsteady._find_boundary_blocks(boundary_lines_after)
+        ]
+        if boundary_blocks_before != boundary_blocks_after:
+            raise RuntimeError(
+                "Disabling meteorology would change boundary condition bytes"
+            )
 
         hdf_evidence = []
-        for hdf_path in hdf_targets:
-            if compiled_path is not None and hdf_path == compiled_path:
-                with h5py.File(hdf_path, "r+") as hdf_file:
-                    met_path = "Event Conditions/Meteorology"
-                    removed_groups = []
-                    if met_path in hdf_file:
-                        removed_groups = list(hdf_file[met_path].keys())
-                        del hdf_file[met_path]
-                    hdf_file.flush()
-                hdf_evidence.append(
-                    {
-                        "path": str(hdf_path),
-                        "representation": "compiled_plan",
-                        "meteorology_group_removed": bool(removed_groups),
-                        "removed_groups": removed_groups,
-                    }
-                )
-                continue
-
-            disabled_groups = []
-            with h5py.File(hdf_path, "r+") as hdf_file:
-                if remove_source_references and "Event Conditions/Meteorology" in hdf_file:
-                    del hdf_file["Event Conditions/Meteorology"]
-                meteorology = hdf_file.require_group(
-                    "Event Conditions/Meteorology"
-                )
-                meteorology.require_group("Precipitation")
-                meteorology.require_group("Evapotranspiration")
-                if remove_source_references:
-                    meteorology.require_group("Wind Speed")
-                for variable_name, item in meteorology.items():
-                    if not isinstance(item, h5py.Group):
-                        continue
-                    prior_value = item.attrs.get("Enabled")
-                    item.attrs["Enabled"] = np.uint8(0)
-                    disabled_groups.append(
-                        {
-                            "variable": variable_name,
-                            "enabled_before": (
-                                int(prior_value) if prior_value is not None else None
-                            ),
-                            "enabled_after": int(item.attrs["Enabled"]),
-                        }
+        # Stage every output before replacing any input. Same-volume backups
+        # allow rollback of completed replacements if a later apply step fails.
+        with ExitStack() as stack:
+            staged = []
+            for target in [unsteady_path, *hdf_targets]:
+                directory = Path(
+                    stack.enter_context(
+                        tempfile.TemporaryDirectory(
+                            prefix=f".{target.name}.meteorology-",
+                            dir=target.parent,
+                        )
                     )
-                hdf_file.flush()
-            hdf_evidence.append(
-                {
-                    "path": str(hdf_path),
-                    "representation": "unsteady_sidecar",
-                    "disabled_groups": disabled_groups,
-                }
-            )
+                )
+                backup, planned = directory / "original", directory / "planned"
+                shutil.copy2(target, backup)
+                shutil.copy2(target, planned)
+                if target == unsteady_path:
+                    with planned.open("wb") as handle:
+                        handle.write(text_after)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                else:
+                    with h5py.File(planned, "r+") as hdf_file:
+                        met_path = "Event Conditions/Meteorology"
+                        if target == compiled_path:
+                            removed_groups = []
+                            met_present = met_path in hdf_file
+                            if met_present:
+                                removed_groups = list(hdf_file[met_path].keys())
+                                del hdf_file[met_path]
+                            hdf_evidence.append(
+                                {
+                                    "path": str(target),
+                                    "representation": "compiled_plan",
+                                    "meteorology_group_removed": met_present,
+                                    "removed_groups": removed_groups,
+                                }
+                            )
+                        else:
+                            if remove_source_references and met_path in hdf_file:
+                                del hdf_file[met_path]
+                            meteorology = hdf_file.require_group(met_path)
+                            meteorology.require_group("Precipitation")
+                            meteorology.require_group("Evapotranspiration")
+                            if remove_source_references:
+                                meteorology.require_group("Wind Speed")
+                            disabled_groups = []
+                            for variable_name, item in meteorology.items():
+                                if not isinstance(item, h5py.Group):
+                                    continue
+                                prior_value = item.attrs.get("Enabled")
+                                item.attrs["Enabled"] = np.uint8(0)
+                                disabled_groups.append(
+                                    {
+                                        "variable": variable_name,
+                                        "enabled_before": int(prior_value)
+                                        if prior_value is not None
+                                        else None,
+                                        "enabled_after": 0,
+                                    }
+                                )
+                            hdf_evidence.append(
+                                {
+                                    "path": str(target),
+                                    "representation": "unsteady_sidecar",
+                                    "disabled_groups": disabled_groups,
+                                }
+                            )
+                        hdf_file.flush()
+                staged.append((target, backup, planned))
+
+            applied = []
+            try:
+                for target, backup, planned in staged:
+                    os.replace(planned, target)
+                    applied.append((target, backup))
+            except Exception:
+                for target, backup in reversed(applied):
+                    try:
+                        os.replace(backup, target)
+                    except OSError:
+                        # A persistent replace denial must not strand an already
+                        # applied file; restore its bytes via the retained copy.
+                        shutil.copy2(backup, target)
+                raise
 
         ras_obj = ras_object or ras
         if ras_obj is not None and hasattr(ras_obj, "get_unsteady_entries"):
@@ -4036,14 +4162,6 @@ class RasUnsteady:
             unsteady_path.name,
             len(hdf_evidence),
         )
-        text_after = unsteady_path.read_bytes()
-        boundary_lines_after = text_after.decode("utf-8", errors="replace").splitlines(keepends=True)
-        boundary_blocks_after = [
-            boundary_lines_after[b["start_idx"]:b["end_idx"]]
-            for b in RasUnsteady._find_boundary_blocks(boundary_lines_after)
-        ]
-        if boundary_blocks_before != boundary_blocks_after:
-            raise RuntimeError("Disabling meteorology changed boundary condition records")
         return {
             "unsteady_file": str(unsteady_path),
             "unsteady_sha256_before": hashlib.sha256(text_before).hexdigest(),
