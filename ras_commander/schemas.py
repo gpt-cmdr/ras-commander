@@ -29,7 +29,7 @@ Each entry of :data:`DATAFRAME_SCHEMAS`:
 """
 
 # Schema contract version -- bump when the documented column surface changes meaningfully.
-SCHEMA_VERSION = "1.24"
+SCHEMA_VERSION = "1.25"
 
 _GEOMETRY_ASSOCIATION_COLUMNS = [
     {"name": "geom_number", "dtype": "str", "description": "Normalized geometry identifier."},
@@ -60,6 +60,19 @@ _GEOMETRY_ASSOCIATION_COLUMNS = [
 ]
 
 DATAFRAME_SCHEMAS = {
+    "mesh_geometry_inventory": {
+        "description": "Read-only exact identities of native 2D geometry datasets; no hydraulic acceptance.",
+        "accessor": "HdfMesh.get_mesh_geometry_inventory(hdf_path, dataset_paths=None)",
+        "source": "ras_commander.hdf.HdfMesh.HdfMesh.get_mesh_geometry_inventory()",
+        "extra_columns": False, "dynamic": False,
+        "columns": [
+            {"name": "dataset_path", "dtype": "str", "description": "Exact unique native path below Geometry/2D Flow Areas."},
+            {"name": "dtype", "dtype": "str", "description": "Canonical JSON of fixed-width native dtype descriptors and metadata."},
+            {"name": "shape", "dtype": "tuple[int, ...]", "description": "Native array shape; empty tuple for a scalar."},
+            {"name": "bytes", "dtype": "int", "description": "Uncompressed logical array byte count."},
+            {"name": "sha256", "dtype": "str", "description": "SHA-256 of exact native C-order array bytes."},
+        ],
+    },
     "connection_gate_lines": {
         "description": "Explicit native gate opening GIS lines in source coordinates, without an inferred CRS.",
         "accessor": "GeomLateral.get_connection_gate_lines(geom_file, connection_name)",
