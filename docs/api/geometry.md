@@ -6,9 +6,14 @@ Classes for parsing and modifying HEC-RAS geometry files.
 
 Use `RasMap.recompute_property_tables(project, geometry, hecras_version="6.6")`
 on a disposable model copy. For modern HEC-RAS versions, the computation runs
-in a separate Python process that loads HEC-RAS's bundled HDF5 DLLs before
-pythonnet. It verifies the managed binding's version and thread-safety flag
-before computation, keeping h5py's same-name DLLs out of that computation.
+in a separate Python process launched with `-I` to ignore `PYTHONPATH` and
+user-site startup hooks. It rejects preloaded foreign HDF5 DLLs, loads the
+selected installation's `bin64` DLLs by absolute path, and checks their module
+handles and filenames. A native object probe verifies that managed HDF calls
+share reference-count changes with that exact DLL; version and thread-safety
+checks also run before computation. Installation, geometry, and recovery-source
+paths become absolute in the caller before the worker changes directories;
+mapped drive letters are preserved.
 The call raises on a native process failure or a 1,800-second timeout, then
 checks the existing complete-geometry and nonempty table-pair postconditions.
 It preserves the geometry's source CRS and units and does not establish
@@ -44,6 +49,8 @@ class count, identity checks, and `recompute_required=True`.
 Native writing may also resize region-name storage and add an empty `2D Area
 Name` attribute. Existing attribute values and all polygon datasets must
 remain unchanged; other attribute additions fail verification and roll back.
+Postwrite verification also preserves `Complete Geometry`, permits only the
+new calibration dataset, and compares every unrelated dataset with the backup.
 
 The source remains read-only. The target is backed up and restored if recovery
 fails. No cell or face hydraulic dataset is copied, and recovery does not mark

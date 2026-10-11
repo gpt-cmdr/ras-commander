@@ -15,6 +15,76 @@ TABLE = GROUP + "/Calibration Table"
 REGIONS = ("Attributes", "Polygon Info", "Polygon Parts", "Polygon Points")
 
 
+def _verify_preserved_geometry(backup: Path, child):
+    """Check completion and every unrelated dataset against the whole-file backup."""
+    with h5py.File(backup, "r") as before:
+        old_complete = before.attrs.get("Complete Geometry")
+        new_complete = child.attrs.get("Complete Geometry")
+        if old_complete is None or new_complete is None:
+            equal = old_complete is new_complete
+        else:
+            old_value, new_value = np.asarray(old_complete), np.asarray(new_complete)
+            equal = (
+                old_value.dtype == new_value.dtype
+                and old_value.shape == new_value.shape
+                and old_value.tobytes() == new_value.tobytes()
+            )
+        if not equal:
+            raise RuntimeError("Native recovery changed Complete Geometry.")
+        old_datasets, new_datasets = {}, {}
+        before.visititems(
+            lambda name, obj: (
+                old_datasets.update({name: obj})
+                if isinstance(obj, h5py.Dataset)
+                else None
+            )
+        )
+        child.visititems(
+            lambda name, obj: (
+                new_datasets.update({name: obj})
+                if isinstance(obj, h5py.Dataset)
+                else None
+            )
+        )
+        if set(new_datasets) != set(old_datasets) | {TABLE}:
+            raise RuntimeError(
+                "Native recovery changed the geometry dataset inventory."
+            )
+        for name, old in old_datasets.items():
+            if name == GROUP + "/Attributes":
+                continue  # Checked separately for permitted native string normalization.
+            new = new_datasets[name]
+            if old.shape != new.shape or old.dtype != new.dtype:
+                raise RuntimeError(
+                    f"Native recovery changed an unrelated dataset: {name}"
+                )
+            if old.shape is None:
+                continue
+            # Bound reads to roughly 1 MiB of rows, including contiguous datasets.
+            row_bytes = max(1, old.dtype.itemsize * int(np.prod(old.shape[1:])))
+            step = max(1, 1048576 // row_bytes)
+            selections = (
+                [()]
+                if not old.shape
+                else (
+                    slice(start, start + step) for start in range(0, old.shape[0], step)
+                )
+            )
+            for selection in selections:
+                left, right = np.asarray(old[selection]), np.asarray(new[selection])
+                if old.dtype.hasobject:
+                    try:
+                        np.testing.assert_array_equal(left, right)
+                    except AssertionError as exc:
+                        raise RuntimeError(
+                            f"Native recovery changed an unrelated dataset: {name}"
+                        ) from exc
+                elif left.tobytes() != right.tobytes():
+                    raise RuntimeError(
+                        f"Native recovery changed an unrelated dataset: {name}"
+                    )
+
+
 def _mapping_signature(hdf):
     data = hdf[TABLE][:]
     if not data.dtype.names or any(
@@ -115,6 +185,7 @@ def restore_region_mappings(source: Path, target: Path, version: str) -> dict:
             find_hecras_install(version), target, calibration_source=source
         )
         with h5py.File(target, "r") as child:
+            _verify_preserved_geometry(backup, child)
             _verify_region_write(regions_before, child)
             if (
                 TABLE not in child

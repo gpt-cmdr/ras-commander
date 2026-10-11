@@ -14,6 +14,14 @@ def fixture(tmp_path):
     source, target = [tmp_path / name for name in ("source.g01.hdf", "target.g02.hdf")]
     for path in (source, target):
         with h5py.File(path, "w") as h:
+            h.attrs["Complete Geometry"] = False
+            h.create_dataset(
+                "Geometry/2D Flow Areas/Test/Cells Minimum Elevation",
+                data=np.array([1.0, np.nan], dtype="f4"),
+            )
+            h.create_dataset(
+                "Unrelated Text", data=["preserved"], dtype=h5py.string_dtype()
+            )
             group = h.create_group(GROUP)
             group.create_dataset(
                 "Attributes", data=np.array([(b"Region",)], dtype=[("Name", "S32")])
@@ -59,7 +67,18 @@ def test_finite_base_override_refuses_without_mutation(tmp_path):
 
 @pytest.mark.parametrize(
     "failure",
-    ["exception", "wrong_value", "duplicate", "float64", "polygon", "attribute"],
+    [
+        "exception",
+        "wrong_value",
+        "duplicate",
+        "float64",
+        "polygon",
+        "attribute",
+        "completion",
+        "hydraulics",
+        "inventory",
+        "text",
+    ],
 )
 def test_native_failure_rolls_back_exact_target_bytes(tmp_path, monkeypatch, failure):
     source, target = fixture(tmp_path)
@@ -78,13 +97,28 @@ def test_native_failure_rolls_back_exact_target_bytes(tmp_path, monkeypatch, fai
                         for index, name in enumerate(data.dtype.names)
                     ]
                 )
-            elif failure not in ("polygon", "attribute"):
+            elif failure not in (
+                "polygon",
+                "attribute",
+                "completion",
+                "hydraulics",
+                "inventory",
+                "text",
+            ):
                 data["Region"] = 0.9
             child.create_dataset(TABLE, data=data)
             if failure == "polygon":
                 child[GROUP + "/Polygon Points"][0, 0] = 3
             if failure == "attribute":
                 child[GROUP + "/Attributes"][0] = (b"Changed",)
+            if failure == "completion":
+                child.attrs["Complete Geometry"] = True
+            if failure == "hydraulics":
+                child["Geometry/2D Flow Areas/Test/Cells Minimum Elevation"][0] = 99
+            if failure == "inventory":
+                child.create_dataset("Unexpected", data=[1])
+            if failure == "text":
+                child["Unrelated Text"][0] = "changed"
         if failure == "exception":
             raise RuntimeError("native failure")
 

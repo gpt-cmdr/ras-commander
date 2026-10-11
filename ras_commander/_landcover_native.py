@@ -1584,11 +1584,15 @@ def _run_property_tables_worker(
     """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs."""
     from ._gdal_runtime import configure_rasmapper_gdal_bridge
 
+    # Normalize in the caller's cwd before the subprocess changes directory.
+    # absolute() preserves mapped drives, unlike resolve() on Windows.
+    install = Path(install).absolute()
+    geometry_hdf_path = Path(geometry_hdf_path).absolute()
     configure_rasmapper_gdal_bridge(install)
-    worker = Path(__file__).with_name("_property_tables_worker.py")
-    command = [sys.executable, str(worker), str(install), str(geometry_hdf_path)]
+    worker = Path(__file__).absolute().with_name("_property_tables_worker.py")
+    command = [sys.executable, "-I", str(worker), str(install), str(geometry_hdf_path)]
     if calibration_source is not None:
-        command.append(str(calibration_source))
+        command.append(str(Path(calibration_source).absolute()))
     try:
         result = subprocess.run(
             command,
