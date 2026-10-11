@@ -77,6 +77,9 @@ mismatch. Do not pull per job.
 `render_job` first runs `ras_commander.RasApptainer.check_solver_ready` on the local, completed tmp.hdf, read-only with HDF5 locking off.
 It raises `InputCheckError` (exported from `ras_commander`) listing every problem, before anything is staged, when:
 
+- `Event Conditions` does not report `Completed Successfully=True` (including a missing attribute),
+- point or gridded precipitation lacks a non-empty two-dimensional
+  `Event Conditions/Meteorology/Precipitation/Values` dataset,
 - gridded precipitation is present but `Event Conditions/Meteorology/Precipitation/2D Flow Areas/<area>/`
   lacks `Cell/Face Indexes/Info/Weights` (solver: "2D Flow Areas folder not found"), or
 - any floating 2D property table contains NaN (including face minimum elevation, face area/elevation,
