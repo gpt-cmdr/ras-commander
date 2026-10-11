@@ -270,6 +270,10 @@ class GeomPreprocessor:
                     _watchdog = DialogWatchdog()
                     _watchdog.start()
 
+                if GeomPreprocessor._resolve_geometry_number(plan_path, plan_num, ras_obj) != geometry_number:
+                    raise RuntimeError(
+                        "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
+                    )
                 process = subprocess.Popen(
                     command_text,
                     cwd=str(project_folder),
@@ -483,31 +487,14 @@ class GeomPreprocessor:
 
     @staticmethod
     def _resolve_geometry_number(plan_path: Path, plan_num: str, ras_obj) -> str:
-        """Resolve the geometry number used by a plan."""
-        try:
-            if getattr(ras_obj, "plan_df", None) is not None and not ras_obj.plan_df.empty:
-                matching = ras_obj.plan_df[
-                    ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                    == plan_num
-                ]
-                if not matching.empty:
-                    for column_name in ("geometry_number", "Geom File"):
-                        value = matching.iloc[0].get(column_name)
-                        if value is None:
-                            continue
-                        digits = "".join(ch for ch in str(value) if ch.isdigit())
-                        if digits:
-                            return RasUtils.normalize_ras_number(digits)
-        except Exception:
-            pass
-
-        content = plan_path.read_text(encoding="utf-8", errors="ignore")
-        for line in content.splitlines():
-            if line.strip().startswith("Geom File="):
-                digits = "".join(ch for ch in line.split("=", 1)[1] if ch.isdigit())
-                if digits:
-                    return RasUtils.normalize_ras_number(digits)
-        raise ValueError(f"Could not determine geometry number for {plan_path}")
+        """Resolve the exact on-disk plan reference, never a cached geometry."""
+        reference = RasPlan.get_plan_value(plan_path, "Geom File", ras_object=ras_obj)
+        match = re.fullmatch(r"g(\d{1,2})", str(reference or "").strip(), re.IGNORECASE)
+        if not match:
+            raise ValueError(
+                f"GEOMETRY_PLAN_REFERENCE_INVALID: {plan_path} has Geom File={reference!r}"
+            )
+        return RasUtils.normalize_ras_number(match.group(1))
 
     @staticmethod
     def _resolve_flow_type(plan_num: str, ras_obj) -> str:
@@ -1436,36 +1423,12 @@ class GeomPreprocessor:
         ras_obj.check_initialized()
 
         def _resolve_geompre_candidates(plan_path: Path, ras_obj) -> List[Path]:
-            """Resolve likely .c## files from plan metadata, then fall back to plan suffix."""
-            candidates = []
-            plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
-            plan_number = RasUtils.normalize_ras_number(plan_match.group(1)) if plan_match else None
-
-            if (
-                plan_number is not None
-                and getattr(ras_obj, "plan_df", None) is not None
-                and not ras_obj.plan_df.empty
-                and "plan_number" in ras_obj.plan_df.columns
-                and "geometry_number" in ras_obj.plan_df.columns
-            ):
-                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
-                if not matching.empty:
-                    geom_number = RasUtils.normalize_ras_number(matching.iloc[0]["geometry_number"])
-                    if geom_number is not None:
-                        candidates.append(plan_path.with_suffix(f".c{geom_number}"))
-
-            geom_preprocessor_suffix = '.c' + ''.join(plan_path.suffixes[1:]) if plan_path.suffixes else '.c'
-            candidates.append(plan_path.with_suffix(geom_preprocessor_suffix))
-
-            unique_candidates = []
-            seen = set()
-            for candidate in candidates:
-                candidate_str = str(candidate)
-                if candidate_str not in seen:
-                    unique_candidates.append(candidate)
-                    seen.add(candidate_str)
-            return unique_candidates
+            """Resolve only the .c## belonging to the exact on-disk plan geometry."""
+            plan_number = GeomPreprocessor._extract_plan_number(plan_path)
+            geometry_number = GeomPreprocessor._resolve_geometry_number(
+                plan_path, plan_number, ras_obj
+            )
+            return [plan_path.with_suffix(f".c{geometry_number}")]
 
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
@@ -1490,7 +1453,10 @@ class GeomPreprocessor:
 
         if plan_files is None:
             logger.info("Clearing all geometry preprocessor files in the project directory.")
-            plan_files_to_clear = list(ras_obj.project_folder.glob(r'*.p*'))
+            plan_files_to_clear = [
+                path for path in ras_obj.project_folder.glob(r'*.p*')
+                if re.fullmatch(r"\.p\d{1,2}", path.suffix, re.IGNORECASE)
+            ]
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
             logger.debug(

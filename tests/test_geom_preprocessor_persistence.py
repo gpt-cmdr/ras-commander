@@ -7,9 +7,52 @@ from types import SimpleNamespace
 
 import h5py
 import numpy as np
+import pandas as pd
 import pytest
 
 from ras_commander.geom.GeomPreprocessor import GeomPreprocessor as GP
+
+
+def test_geometry_reference_uses_disk_instead_of_stale_plan_cache(tmp_path):
+    plan = tmp_path / "Synthetic.p08"
+    plan.write_text("Geom File=g02\n")
+    obj = SimpleNamespace(
+        check_initialized=lambda: None,
+        plan_df=pd.DataFrame([{"plan_number": "08", "geometry_number": "01"}]),
+    )
+    assert GP._resolve_geometry_number(plan, "08", obj) == "02"
+
+
+@pytest.mark.parametrize("reference", [None, "", "bad02", "g02.hdf", "g02extra"])
+def test_missing_or_invalid_disk_geometry_never_uses_stale_cache(tmp_path, reference):
+    plan = tmp_path / "Synthetic.p08"
+    plan.write_text(
+        "Plan Title=Synthetic\n"
+        + (f"Geom File={reference}\n" if reference is not None else "")
+    )
+    obj = SimpleNamespace(
+        check_initialized=lambda: None,
+        plan_df=pd.DataFrame([{"plan_number": "08", "geometry_number": "01"}]),
+    )
+    with pytest.raises(ValueError, match="GEOMETRY_PLAN_REFERENCE_INVALID"):
+        GP._resolve_geometry_number(plan, "08", obj)
+
+
+def test_clear_geompre_targets_disk_geometry_and_ignores_plan_sidecars(tmp_path):
+    plan = tmp_path / "Synthetic.p08"
+    plan.write_text("Geom File=g02\n")
+    (tmp_path / "Synthetic.p08.hdf").write_bytes(b"not a plan")
+    paths = [tmp_path / f"Synthetic.c{n}" for n in ["01", "02", "08"]]
+    for path in paths:
+        path.write_bytes(b"cache")
+    obj = SimpleNamespace(
+        check_initialized=lambda: None,
+        project_folder=tmp_path,
+        plan_df=pd.DataFrame([{"plan_number": "08", "geometry_number": "01"}]),
+        get_geom_entries=lambda: pd.DataFrame(),
+    )
+    GP.clear_geompre_files(ras_object=obj)
+    assert paths[0].exists() and not paths[1].exists() and paths[2].exists()
 
 
 def geometry(path):
@@ -118,7 +161,15 @@ def test_monitor_timeout_is_not_readiness_success(tmp_path):
     }
 
 
-def project_run(tmp_path, monkeypatch, *, exit_code=0, remove=False, timeout=False):
+def project_run(
+    tmp_path,
+    monkeypatch,
+    *,
+    exit_code=0,
+    remove=False,
+    timeout=False,
+    changed_reference=False,
+):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     folder = tmp_path
     path = geometry(folder / "Synthetic.g01.hdf")
@@ -137,7 +188,8 @@ def project_run(tmp_path, monkeypatch, *, exit_code=0, remove=False, timeout=Fal
         check_initialized=lambda: None,
     )
     monkeypatch.setattr(GP, "_resolve_plan_path", lambda *args: plan)
-    monkeypatch.setattr(GP, "_resolve_geometry_number", lambda *args: "01")
+    references = iter(("01", "02" if changed_reference else "01"))
+    monkeypatch.setattr(GP, "_resolve_geometry_number", lambda *args: next(references))
     monkeypatch.setattr(GP, "_resolve_flow_type", lambda *args: "unsteady_2d")
     monkeypatch.setattr(
         module.BcoMonitor, "enable_detailed_logging", lambda *args: None
@@ -184,6 +236,13 @@ def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch)
     assert result.success and result.return_code == 0
     assert result.missing_geometry_inventory == []
+    assert killed == []
+
+
+def test_plan_reference_changed_during_setup_fails_before_launch(tmp_path, monkeypatch):
+    result, killed = project_run(tmp_path, monkeypatch, changed_reference=True)
+    assert not result.success and result.return_code is None
+    assert "GEOMETRY_PLAN_REFERENCE_CHANGED" in result.error
     assert killed == []
 
 

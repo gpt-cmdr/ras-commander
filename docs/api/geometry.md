@@ -839,6 +839,9 @@ geometry writers and are excluded from writer completion; unknown children
 still require a confirmed exit. A transient Wine invalid-handle error while
 querying a child's role leaves it supervised. The role query is retried while
 that same process identity remains active, including after the launcher exits.
+The geometry reference is read from the selected on-disk plan; a stale project
+DataFrame cannot redirect inventory validation or `.c##` cleanup to another
+geometry. Missing or malformed geometry references fail before engine launch.
 `geometry_only=False` also waits for all enabled plan work, so its runtime can
 include hydraulic computation.
 
