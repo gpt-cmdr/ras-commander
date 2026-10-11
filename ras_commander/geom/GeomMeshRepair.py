@@ -54,7 +54,11 @@ class GeomMeshRepair:
         ):
             raise ValueError("valid perimeter and bounded repair settings required")
         original = np.asarray(existing_points, dtype=float)
-        if original.ndim != 2 or original.shape[1] != 2 or not np.isfinite(original).all():
+        if (
+            original.ndim != 2
+            or original.shape[1] != 2
+            or not np.isfinite(original).all()
+        ):
             raise ValueError("finite existing XY points required")
         added: list[tuple[float, float]] = []
         evidence = []
@@ -71,12 +75,16 @@ class GeomMeshRepair:
                 or not math.isfinite(dx * dy)
                 or min(dx, dy) <= 0
             ):
-                raise ValueError("valid contained refinement and positive source spacing required")
+                raise ValueError(
+                    "valid contained refinement and positive source spacing required"
+                )
             anchor = polygon.representative_point()
             clearance = anchor.distance(polygon.boundary)
             spacing = min(dx, dy, clearance / 3) / (2**attempt)
             if not math.isfinite(spacing) or spacing <= 1e-4:
-                raise ValueError("refinement support spacing is below serialization resolution")
+                raise ValueError(
+                    "refinement support spacing is below serialization resolution"
+                )
             support = polygon.buffer(spacing).intersection(perimeter)
             left, bottom, right, top = support.bounds
             ix0, ix1 = (
@@ -95,8 +103,12 @@ class GeomMeshRepair:
                 (anchor.x + ix * spacing, anchor.y + iy * spacing)
                 for ix in range(ix0, ix1 + 1)
                 for iy in range(iy0, iy1 + 1)
-                if support.contains(Point(anchor.x + ix * spacing, anchor.y + iy * spacing))
-                and perimeter.contains(Point(anchor.x + ix * spacing, anchor.y + iy * spacing))
+                if support.contains(
+                    Point(anchor.x + ix * spacing, anchor.y + iy * spacing)
+                )
+                and perimeter.contains(
+                    Point(anchor.x + ix * spacing, anchor.y + iy * spacing)
+                )
             ]
             before = len(added)
             combined = np.vstack([original, np.asarray(added).reshape(-1, 2)])
@@ -181,10 +193,16 @@ class GeomMeshRepair:
         ]
         serialized = np.asarray(values, dtype=float).reshape(-1, 2)
         if count != len(serialized) or not np.array_equal(original, serialized):
-            raise ValueError("support plan existing points differ from serialized geometry")
+            raise ValueError(
+                "support plan existing points differ from serialized geometry"
+            )
         perimeter = Polygon(GeomStorage._parse_surface_line_coords(block[2], info))
-        if not perimeter.is_valid or not all(perimeter.contains(Point(p)) for p in added):
-            raise ValueError("support points must be strictly inside serialized perimeter")
+        if not perimeter.is_valid or not all(
+            perimeter.contains(Point(p)) for p in added
+        ):
+            raise ValueError(
+                "support points must be strictly inside serialized perimeter"
+            )
         combined = np.vstack([original, added])
         if (
             not len(added)
@@ -198,6 +216,109 @@ class GeomMeshRepair:
             "geometry_before_sha256": before,
             "geometry_after_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "added_point_count": len(added),
+        }
+
+    @staticmethod
+    @log_call
+    def plan_compiled_polygon_seed_removal(
+        existing_points: Any,
+        compiled_centers: Any,
+        diagnostics: list[dict[str, Any]],
+        *,
+        max_removals: int = 32,
+    ) -> dict[str, Any]:
+        """Plan removal of seeds whose compiled physical cells lack one polygon.
+
+        Inputs are native-index-ordered physical centers and serialized XY seeds
+        in one projected CRS/project unit system, plus public HdfMesh polygon
+        diagnostics. Require equal counts and every indexed coordinate within
+        1e-6 units. Only no_polygon/multiple_polygons authorize a bounded removal;
+        ghost cells and unrelated diagnostics never do. Return complete evidence,
+        mutate nothing. Native recompilation, exhaustive polygon reconstruction,
+        feature checks and engineering review remain required.
+        """
+        import numpy as np
+
+        original = np.asarray(existing_points, dtype=float)
+        compiled = np.asarray(compiled_centers, dtype=float)
+        if (
+            original.ndim != 2
+            or original.shape[1] != 2
+            or original.shape != compiled.shape
+            or not len(original)
+            or not np.isfinite(original).all()
+            or not np.isfinite(compiled).all()
+            or isinstance(max_removals, bool)
+            or max_removals not in range(1, 33)
+        ):
+            raise ValueError(
+                "finite equal-count physical/serialized XY arrays required"
+            )
+        error = float(np.linalg.norm(original - compiled, axis=1).max())
+        if error > 1e-6:
+            raise ValueError(
+                "compiled physical centers differ from indexed serialized seeds"
+            )
+        selected = {}
+        for row in diagnostics:
+            index = row.get("cell_id")
+            if index is None or row.get("reason_code") not in {
+                "no_polygon",
+                "multiple_polygons",
+            }:
+                continue
+            if (
+                isinstance(index, bool)
+                or not math.isfinite(float(index))
+                or int(index) != index
+            ):
+                raise ValueError("native polygon diagnostic cell ID must be integral")
+            index = int(index)
+            if not 0 <= index < len(original):
+                continue
+            faces, polygons = row.get("face_count"), row.get("polygon_count")
+            if (
+                faces is None
+                or polygons is None
+                or not math.isfinite(float(faces))
+                or int(faces) != faces
+                or faces < 3
+                or not math.isfinite(float(polygons))
+                or int(polygons) != polygons
+                or (
+                    row["reason_code"] == "no_polygon"
+                    and (polygons != 0 or row.get("status") != "omitted")
+                )
+                or (
+                    row["reason_code"] == "multiple_polygons"
+                    and (polygons < 2 or row.get("status") != "ambiguous")
+                )
+            ):
+                raise ValueError("compiled physical polygon diagnostic is inconsistent")
+            if index in selected:
+                raise ValueError("native polygon diagnostic cell ID is duplicated")
+            selected[index] = {**row, "cell_id": index}
+        if len(selected) > max_removals or len(selected) == len(original):
+            raise ValueError(
+                "compiled polygon repair exceeds bounded seed-removal budget"
+            )
+        return {
+            "schema": "ras-compiled-polygon-seed-repair/v1",
+            "method": "compiled_polygon_omission_seed_removal",
+            "max_removals": max_removals,
+            "physical_cell_count": len(original),
+            "maximum_index_matched_displacement": error,
+            "removed_points": [
+                {
+                    "generated_point_index": i,
+                    "x": float(original[i, 0]),
+                    "y": float(original[i, 1]),
+                    "polygon_diagnostic": selected[i],
+                }
+                for i in sorted(selected)
+            ],
+            "perimeter_changed": False,
+            "features_changed": False,
         }
 
     @staticmethod
@@ -219,7 +340,9 @@ class GeomMeshRepair:
             candidates = _bad_seed_indexes(mesh, seeds.Count)
         elif state == "CellMinFaceError":
             candidates = {
-                i for i in range(int(mesh.NonVirtualCellCount)) if mesh.CellFacesCount(i) < 3
+                i
+                for i in range(int(mesh.NonVirtualCellCount))
+                if mesh.CellFacesCount(i) < 3
             }
         else:
             candidates = set()
@@ -228,7 +351,12 @@ class GeomMeshRepair:
             if not 0 <= index < seeds.Count:
                 continue
             point, seed = mesh.Cell(index).Point, seeds[index]
-            if math.hypot(float(point.X) - float(seed.X), float(point.Y) - float(seed.Y)) <= 1e-6:
+            if (
+                math.hypot(
+                    float(point.X) - float(seed.X), float(point.Y) - float(seed.Y)
+                )
+                <= 1e-6
+            ):
                 removals.append(
                     {
                         "generated_point_index": index,

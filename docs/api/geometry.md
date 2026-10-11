@@ -1259,3 +1259,15 @@ fragments still fail closed. Each record identifies `endpoint_clip` or
 
 `removed_length` is the signed original length minus repaired length in project
 units; bounded vertex projection can make this diagnostic negative.
+
+`GeomMeshRepair.plan_compiled_polygon_seed_removal` accepts serialized XY seeds,
+native-index-ordered physical centers and public HDF polygon diagnostics in one
+projected CRS/project unit system. Both complete center arrays must have the
+same count and agree by index within 1e-6 units. Only consistent `no_polygon`
+and `multiple_polygons` records for physical cells authorize a plan; ghost IDs
+and unrelated diagnostics do not. Duplicate/inconsistent diagnostics fail.
+The caller may lower the removal budget from its hard maximum of 32; removing
+every seed is prohibited. The method returns `ras-compiled-polygon-seed-repair/v1`
+with diagnostic and coordinate evidence, and changes nothing. Hash-guarded
+application to disposable geometry, native rebuilding, exhaustive physical
+polygon reconstruction and all feature/hydraulic gates remain caller duties.
