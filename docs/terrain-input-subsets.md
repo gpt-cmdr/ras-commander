@@ -155,7 +155,11 @@ Float64 `(n, 2)` coordinate batches using the public native
 `TerrainLayer.ComputePointElevations(PointM[], Boolean, Double)` overload.
 The selected registered terrain is loaded once. Each PointM's X/Y values are
 checked against the supplied binary64 bytes before sampling. Returned Float32
-arrays preserve batch order and cardinality. Missing, nonfinite, specified
+arrays preserve caller batch order and cardinality. Each caller batch is evaluated
+in serial native calls of at most 4096 points. Every internal call must return
+all its values before the caller batch is assembled; a failed call raises
+without yielding a partial caller batch. Coordinates, native resolution and
+modification parameters remain unchanged. Missing, nonfinite, specified
 nodata and Single endpoint sentinel values raise; no profile interpolation or
 source-value replacement occurs.
 Points outside the selected native terrain extent are rejected before native

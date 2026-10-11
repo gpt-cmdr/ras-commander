@@ -28,19 +28,32 @@ def _point_elevation_batches(
         if not len(coordinates) or not np.isfinite(coordinates).all():
             raise ValueError("Point batches must contain finite coordinates")
         coordinates = coordinates.copy()
-        values = evaluate(coordinates)
-        if values is None or len(values) != len(coordinates):
-            raise RuntimeError(
-                "Native point sampling returned missing or incomplete values"
-            )
-        elevations = np.asarray(values, dtype=np.float32)
-        if elevations.shape != (len(coordinates),):
-            raise RuntimeError("Native point sampling changed output cardinality")
-        if not np.isfinite(elevations).all() or np.isin(elevations, sentinels).any():
-            raise RuntimeError(
-                "Native point sampling returned invalid or nodata elevations"
-            )
-        yield elevations
+        parts = []
+        for offset in range(0, len(coordinates), 4096):
+            subset = coordinates[offset : offset + 4096]
+            parts.append(_checked_native_values(subset, evaluate, sentinels))
+        yield np.concatenate(parts)
+
+
+def _checked_native_values(
+    coordinates: np.ndarray,
+    evaluate: Callable[[np.ndarray], Sequence[float] | None],
+    sentinels: np.ndarray,
+) -> np.ndarray:
+    """Reject an incomplete or invalid native call before assembling its batch."""
+    values = evaluate(coordinates)
+    if values is None or len(values) != len(coordinates):
+        raise RuntimeError(
+            "Native point sampling returned missing or incomplete values"
+        )
+    elevations = np.asarray(values, dtype=np.float32)
+    if elevations.shape != (len(coordinates),):
+        raise RuntimeError("Native point sampling changed output cardinality")
+    if not np.isfinite(elevations).all() or np.isin(elevations, sentinels).any():
+        raise RuntimeError(
+            "Native point sampling returned invalid or nodata elevations"
+        )
+    return elevations
 
 
 def _load_native_point_reader(
@@ -128,7 +141,7 @@ def iter_point_elevations(
     use_obstructions: bool,
     nodata_values: Sequence[float],
 ) -> Iterator[np.ndarray]:
-    """Initialize one native layer for a serial sequence of supplied batches."""
+    """Load one native layer; preserve batches with serial native calls of <=4096."""
     if not mapper.is_file():
         raise FileNotFoundError(mapper)
     if not terrain_name or not isinstance(use_obstructions, bool):

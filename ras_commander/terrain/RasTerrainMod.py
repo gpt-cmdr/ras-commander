@@ -124,7 +124,9 @@ class RasTerrainMod:
 
         Coordinates are bounded ``(n, 2)`` Float64 batches in the selected
         registered terrain's horizontal CRS. Returned Float32 arrays preserve
-        point order and cardinality, in its vertical units/datum. No coordinate
+        point order and cardinality, in its vertical units/datum. Each caller
+        batch uses serial native calls of at most 4096 points; every internal
+        result is validated before yielding the complete caller batch. No coordinate
         transform, profile interpolation or source-value fallback is performed.
         ``cell_size`` is passed to the native evaluator in horizontal CRS units;
         ``use_obstructions`` selects native modification/obstruction application.
