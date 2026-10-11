@@ -1260,7 +1260,16 @@ native mesh metadata, recompile and recheck all engineering gates.
 `GeomMeshRepair.plan_native_seed_removal` reads specific native topology errors.
 It requires native error indexes or fewer-than-three-face cells, and proves
 each cell point matches the corresponding generated seed within 1e-6 project
-units. It never changes perimeter vertices. Optional
+units. It never changes perimeter vertices.
+`DuplicatePoints` repairs use native `BadIndexes` referring to input seeds,
+because this state may have no physical cell collection. Every index must be
+integral and within the supplied finite XY seed array. The plan records the
+index basis, native index count, seed count, selected coordinates and removal
+budget (`max_removals`, default 8192). Missing indexes, indexes outside the input
+array, removing every seed, or exceeding the budget hold before mutation.
+Remaining seed order and all perimeter and feature controls are preserved.
+Successful native recompilation and all final spacing checks remain required.
+Optional
 `generate_computation_points(..., repair_generated_points=True)` applies at most
 five such bootstrap repairs and emits each plan to `evidence_callback` before
 writing geometry text. Observer errors abort generation and appear in the

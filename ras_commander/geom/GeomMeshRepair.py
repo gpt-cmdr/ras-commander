@@ -373,17 +373,88 @@ class GeomMeshRepair:
 
     @staticmethod
     @log_call
-    def plan_native_seed_removal(mesh: Any, seeds: Any) -> dict[str, Any]:
+    def plan_native_seed_removal(
+        mesh: Any, seeds: Any, *, max_removals: int = 8192
+    ) -> dict[str, Any]:
         """Identify generated seeds implicated by specific native topology errors.
 
         Read only native MeshFV2D and PointMs in their projected project units.
         For FacePerimeterConnectionError require native BadIndexes; for
         CellMinFaceError require fewer than three faces. In either case, prove
         that each cell's native point matches the same indexed serialized seed
-        within 1e-6 project units. Return an explicit removal plan; change nothing.
+        within 1e-6 project units. DuplicatePoints has no cell collection: use
+        native BadIndexes referring directly to the supplied input seeds, as in
+        GeomMesh.generate. Reject nonintegral or out-of-range indexes rather than
+        silently filtering them. Require finite seed coordinates and at most
+        max_removals (default 8192); never remove every seed. Return an explicit
+        removal plan; change nothing. Preserve the remaining seed order on apply.
         Perimeter vertices and unrelated native errors never authorize removals.
         """
+        import numpy as np
+
+        if (
+            isinstance(max_removals, bool)
+            or not isinstance(max_removals, int)
+            or not 1 <= max_removals <= 8192
+        ):
+            raise ValueError(
+                "native seed-removal budget must be an integer from 1 to 8192"
+            )
         state = str(mesh.MeshCompletionState)
+        if state == "DuplicatePoints":
+            try:
+                bad = mesh.BadIndexes
+                count = int(bad.Count) if hasattr(bad, "Count") else len(bad)
+                raw = [bad[i] for i in range(count)]
+            except Exception as exc:
+                raise ValueError(
+                    "native DuplicatePoints input-seed indexes are unavailable"
+                ) from exc
+            candidates = set()
+            for value in raw:
+                try:
+                    numeric, index = float(value), int(value)
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise ValueError(
+                        "native DuplicatePoints index must be integral"
+                    ) from exc
+                if (
+                    isinstance(value, (bool, np.bool_))
+                    or not math.isfinite(numeric)
+                    or index != value
+                    or not 0 <= index < seeds.Count
+                ):
+                    raise ValueError(
+                        "native DuplicatePoints index is not a supplied input seed"
+                    )
+                candidates.add(index)
+            if (
+                not candidates
+                or len(candidates) > max_removals
+                or len(candidates) >= seeds.Count
+            ):
+                raise ValueError(
+                    "native DuplicatePoints removal exceeds bounded seed budget"
+                )
+            xy = [(float(seeds[i].X), float(seeds[i].Y)) for i in range(seeds.Count)]
+            if not all(math.isfinite(x) and math.isfinite(y) for x, y in xy):
+                raise ValueError(
+                    "native DuplicatePoints requires finite input-seed coordinates"
+                )
+            return {
+                "method": "native_identified_generated_seed_removal",
+                "native_state": state,
+                "index_basis": "native_duplicate_points_input_seed",
+                "native_bad_index_count": count,
+                "serialized_point_count": int(seeds.Count),
+                "max_removals": max_removals,
+                "removed_points": [
+                    {"generated_point_index": i, "x": xy[i][0], "y": xy[i][1]}
+                    for i in sorted(candidates)
+                ],
+                "perimeter_changed": False,
+                "features_changed": False,
+            }
         if state == "FacePerimeterConnectionError":
             from ras_commander.geom.GeomMesh import _bad_seed_indexes
 
@@ -414,6 +485,10 @@ class GeomMeshRepair:
                         "y": float(seed.Y),
                     }
                 )
+        if len(removals) > max_removals or (removals and len(removals) >= seeds.Count):
+            raise ValueError(
+                "native topology repair exceeds bounded seed-removal budget"
+            )
         return {
             "method": "native_identified_generated_seed_removal",
             "native_state": state,
