@@ -1123,8 +1123,8 @@ class GeomLandCover:
     @staticmethod
     @log_call
     def restore_mannings_region_mappings(
-        source_geom_hdf_path: Union[str, Path],
-        target_geom_hdf_path: Union[str, Path],
+        source_geom_hdf_path: str | Path,
+        target_geom_hdf_path: str | Path,
         hecras_version: str = "6.6",
     ) -> dict:
         """Recover a missing native calibration table in a disposable child HDF.
