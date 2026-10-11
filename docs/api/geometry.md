@@ -834,6 +834,9 @@ Completion requires normal engine and preprocessing-child exit within
 `max_wait` (seconds), usable compiled geometry, and preservation of every
 incoming HDF object and attribute name. Native recomputation may change values
 and add objects. A quiet file or flow-start message does not end the wait.
+Recognized Wine desktop, console and plot-display invocations may outlive the
+geometry writers and are excluded from writer completion; unknown children
+still require a confirmed exit.
 `geometry_only=False` also waits for all enabled plan work, so its runtime can
 include hydraulic computation.
 

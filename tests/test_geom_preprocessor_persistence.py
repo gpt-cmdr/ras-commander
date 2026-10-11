@@ -354,3 +354,71 @@ def test_plan_restoration_failure_is_explicit(tmp_path, monkeypatch):
     path.mkdir()
     with pytest.raises(RuntimeError, match="GEOMETRY_PLAN_RESTORE_FAILED"):
         GP._restore_plan_file(path, b"original")
+
+
+def test_monitor_retains_geometry_writers_without_waiting_for_display_helpers(
+    tmp_path, monkeypatch
+):
+    import psutil
+
+    from ras_commander import _native_helper
+
+    names = (
+        "explorer.exe",
+        "conhost.exe",
+        "RasPlotDriver.exe",
+        "RasProcess.exe",
+        "PipeServer.exe",
+        "UnknownWorker.exe",
+    )
+    arguments = (
+        ["/desktop"],
+        ["--server", "0x30", "--headless"],
+        ["65670"],
+        [],
+        [],
+        [],
+    )
+    children = [
+        SimpleNamespace(
+            pid=pid,
+            name=lambda name=name: name,
+            is_running=lambda: True,
+            create_time=lambda: 1.0,
+            cmdline=lambda name=name, args=args: [name, *args],
+        )
+        for pid, (name, args) in enumerate(zip(names, arguments), 1)
+    ]
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: True)
+    monkeypatch.setattr(
+        psutil,
+        "Process",
+        lambda pid: SimpleNamespace(children=lambda **kwargs: children),
+    )
+    retained = []
+
+    def watch(child, deadline):
+        retained.append(child.name())
+        return {"identity": (child.pid, 1.0)}
+
+    monkeypatch.setattr(GP, "_watch_preprocess_child", watch)
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    states = iter((None, 0))
+    process = SimpleNamespace(pid=123, poll=lambda: next(states))
+    result = GP._monitor_compute_messages(process, [], time.time(), 60, [])
+    assert not result["timed_out"]
+    assert retained == ["RasProcess.exe", "PipeServer.exe", "UnknownWorker.exe"]
+
+
+def test_display_named_worker_with_file_argument_is_not_exempt(monkeypatch):
+    from ras_commander import _native_helper
+
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: True)
+    child = SimpleNamespace(
+        name=lambda: "RasPlotDriver.exe",
+        cmdline=lambda: ["RasPlotDriver.exe", "Synthetic.p01.tmp.hdf"],
+    )
+    assert not GP._is_wine_display_child(child)
+    monkeypatch.setattr(_native_helper, "_is_wine_helper_runtime", lambda: False)
+    child.cmdline = lambda: ["RasPlotDriver.exe", "65670"]
+    assert not GP._is_wine_display_child(child)

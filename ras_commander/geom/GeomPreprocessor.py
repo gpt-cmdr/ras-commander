@@ -641,9 +641,19 @@ class GeomPreprocessor:
                         "children": tuple(children.values()), "errors": []}
             try:
                 for child in parent.children(recursive=True):
-                    identity = (child.pid, child.create_time())
-                    if identity not in children:
-                        children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
+                    try:
+                        # Desktop, console and plot-display helpers may remain
+                        # alive under Wine after all geometry writers exit.
+                        # Unknown children still require a confirmed exit.
+                        if GeomPreprocessor._is_wine_display_child(child):
+                            continue
+                        if not child.is_running():
+                            continue
+                        identity = (child.pid, child.create_time())
+                        if identity not in children:
+                            children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
+                    except psutil.NoSuchProcess:
+                        continue
             except psutil.NoSuchProcess:
                 if process.poll() is None:
                     return {"signal_detected": signal_detected, "timed_out": False,
@@ -668,6 +678,27 @@ class GeomPreprocessor:
             time.sleep(0.5)
         return {"signal_detected": signal_detected, "timed_out": False,
                 "children": tuple(children.values()), "errors": []}
+
+    @staticmethod
+    def _is_wine_display_child(child: Any) -> bool:
+        """Identify Wine display processes by their exact non-file invocation."""
+        from .._native_helper import _is_wine_helper_runtime
+
+        if not _is_wine_helper_runtime():
+            return False
+        name = child.name().casefold()
+        if name not in {"explorer.exe", "conhost.exe", "rasplotdriver.exe"}:
+            return False
+        arguments = child.cmdline()[1:]
+        if name == "explorer.exe":
+            return arguments == ["/desktop"]
+        if name == "rasplotdriver.exe":
+            return len(arguments) == 1 and arguments[0].isdigit()
+        return (
+            len(arguments) == 3 and arguments[0] == "--server"
+            and re.fullmatch(r"0x[0-9a-fA-F]+", arguments[1]) is not None
+            and arguments[2:] == ["--headless"]
+        )
 
     @staticmethod
     def _require_closed_geometry_hdf(path: Path) -> None:
