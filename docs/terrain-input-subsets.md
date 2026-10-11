@@ -48,7 +48,11 @@ Export creates a new folder with `modifications.hdf` and `modifications.rasmap`.
 The HDF contains source root metadata and complete selected native modification
 records, without terrain grid/index data. This is a method-native boundary input,
 not an executable terrain. Copy preserves native feature order, structured
-attributes, coordinates, profiles, priorities, enabled flags and dataset metadata.
+attributes, coordinates, profiles, priorities, enabled flags, dataset values,
+dtypes and HDF attributes. Nonempty native tables are recreated with the shared
+writer's H5Assist-compatible chunked storage; empty tables use its existing
+fallback. Physical storage layout is not preserved. These storage checks do not
+establish native terrain identity.
 It rewrites compact feature-level point/part/profile offsets and Mapper filenames
 only. Polyline Parts offsets remain feature-local and byte-preserved. Caller
 indexes must be unique integers; unknown groups and invalid offsets fail.

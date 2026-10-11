@@ -100,6 +100,20 @@ def test_copy_preserves_parameters_coordinates_profiles_and_mapper(terrains):
     )
 
 
+def test_native_replay_tables_use_h5assist_chunked_layout(terrains, tmp_path):
+    """Readable NumPy values alone do not establish native-reader compatibility."""
+    RasTerrainModWriter.copy_modification_features(*terrains, {"Channels": [1]})
+    bundle = tmp_path / "bundle"
+    RasTerrainModWriter.export_modification_features(
+        terrains[0], terrains[2], bundle, {"Channels": [1]}
+    )
+    for path in [terrains[1], bundle / "modifications.hdf"]:
+        with h5py.File(path) as file:
+            for dataset in file["Modifications/Channels"].values():
+                assert dataset.chunks == dataset.shape
+                assert dataset.id.get_create_plist().get_layout() == h5py.h5d.CHUNKED
+
+
 @pytest.mark.parametrize(
     "selection",
     [

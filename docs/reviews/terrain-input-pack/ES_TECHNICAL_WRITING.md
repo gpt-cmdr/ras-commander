@@ -33,3 +33,14 @@ Protected API identifiers and XML attribute names remain literal. No generated
 pages, saved native results, numerical values, or external documents were edited.
 The strict MkDocs build completed successfully. Native qualification remains
 the separate ES task and must not be inferred from this editorial disposition.
+
+## Chunked replay storage review
+
+Editorial disposition: **pass** for the additional physical-storage paragraph in
+`docs/terrain-input-subsets.md`. Inspection covered the subset copier, the existing
+`RasTerrainModWriter._create_hdf_dataset` factory, and the new chunk-layout regression
+case. The paragraph distinguishes record values, dtypes, and HDF attributes from
+physical dataset layout; it states the nonempty chunked layout and empty-table
+fallback explicitly. It does not claim native identity from unit tests. Thirty
+affected subset, registration, and result-map tests pass in each required Python
+environment. Native qualification is reported separately by the ES investigation.

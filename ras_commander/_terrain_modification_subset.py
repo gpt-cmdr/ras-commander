@@ -190,6 +190,8 @@ def copy_features(
     destination_rasmap,
     feature_indexes,
 ):
+    from .terrain.RasTerrainModWriter import RasTerrainModWriter
+
     source_hdf, destination_hdf = Path(source_hdf), Path(destination_hdf)
     source_rasmap, destination_rasmap = Path(source_rasmap), Path(destination_rasmap)
     if (
@@ -299,7 +301,9 @@ def copy_features(
                     group = mods.create_group(name)
                     group.attrs.update(source["Modifications"][name].attrs)
                     for table, data in arrays.items():
-                        result = group.create_dataset(table, data=data)
+                        result = RasTerrainModWriter._create_hdf_dataset(
+                            group, table, data
+                        )
                         result.attrs.update(source["Modifications"][name][table].attrs)
         destination_tree.write(staged_xml, encoding="utf-8", xml_declaration=True)
         old_xml = destination_rasmap.read_bytes()
