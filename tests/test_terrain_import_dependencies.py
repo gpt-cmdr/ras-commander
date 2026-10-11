@@ -26,7 +26,9 @@ except ImportError as exc:
 else:
     raise AssertionError('downloader unexpectedly loaded without requests')
 """
-    result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -38,5 +40,7 @@ assert isinstance(Usgs3depAws, type)
 assert issubclass(TerrainBuildError, RuntimeError)
 assert again is Usgs3depAws
 """
-    result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True)
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0, result.stdout + result.stderr
