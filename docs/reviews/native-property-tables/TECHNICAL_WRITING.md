@@ -37,3 +37,26 @@ verdict is ready with no open fixes: static namespace, decorators, flexible
 paths, drive-preserving handling, explicit result provenance, upstream native
 execution, and reusable recovery scope. No DataFrame or FIM stage schema is
 changed. The existing method export remains the `GeomLandCover` namespace.
+
+## Binding identity and path regression revision
+
+Disposition: **pass** for this revision's authored prose in
+`docs/api/geometry.md`, the worker and recovery helper comments/docstrings,
+and their exception messages. The reviewed audience is Python API users and
+maintainers; generated pages, retained model output, and unrelated prose are
+excluded. No public signature or DataFrame schema changes in this revision.
+
+The prior description of version and thread-safety checks was insufficient to
+describe DLL identity. The revised API page states the isolated startup mode,
+loaded-module inspection, and shared object/reference-count probe. Evidence:
+same-version/thread-safe two-DLL probes on Windows and Wine, caller-path
+regressions, and native HEC-RAS 6.6 recovery/computation on a disposable Windows
+model. Recovery verification now checks completion, dataset inventory, and
+unrelated dataset contents against the backup, with rollback regressions.
+
+The revision makes implementation claims, introduces no new hydraulic-method
+claims or HEC citations, and preserves identifiers, qualified version scope,
+units, mutation/rollback behavior, and the distinction between completion and
+hydraulic acceptance. The existing 1,800-second timeout remains explicit. No
+material editorial findings remain for this scope; no whole-library writing
+or hydraulic approval is implied.

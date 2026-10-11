@@ -18,19 +18,22 @@ REGIONS = ("Attributes", "Polygon Info", "Polygon Parts", "Polygon Points")
 def _verify_preserved_geometry(backup: Path, child):
     """Check completion and every unrelated dataset against the whole-file backup."""
     with h5py.File(backup, "r") as before:
-        old_complete = before.attrs.get("Complete Geometry")
-        new_complete = child.attrs.get("Complete Geometry")
-        if old_complete is None or new_complete is None:
-            equal = old_complete is new_complete
-        else:
-            old_value, new_value = np.asarray(old_complete), np.asarray(new_complete)
-            equal = (
-                old_value.dtype == new_value.dtype
-                and old_value.shape == new_value.shape
-                and old_value.tobytes() == new_value.tobytes()
-            )
-        if not equal:
-            raise RuntimeError("Native recovery changed Complete Geometry.")
+        for location in ("/", "Geometry"):
+            if location not in before:
+                continue
+            old_complete = before[location].attrs.get("Complete Geometry")
+            new_complete = child[location].attrs.get("Complete Geometry")
+            if old_complete is None or new_complete is None:
+                equal = old_complete is new_complete
+            else:
+                old_value, new_value = np.asarray(old_complete), np.asarray(new_complete)
+                equal = (
+                    old_value.dtype == new_value.dtype
+                    and old_value.shape == new_value.shape
+                    and old_value.tobytes() == new_value.tobytes()
+                )
+            if not equal:
+                raise RuntimeError("Native recovery changed Complete Geometry.")
         old_datasets, new_datasets = {}, {}
         before.visititems(
             lambda name, obj: (

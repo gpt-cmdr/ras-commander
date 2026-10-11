@@ -14,11 +14,11 @@ def fixture(tmp_path):
     source, target = [tmp_path / name for name in ("source.g01.hdf", "target.g02.hdf")]
     for path in (source, target):
         with h5py.File(path, "w") as h:
-            h.attrs["Complete Geometry"] = False
             h.create_dataset(
                 "Geometry/2D Flow Areas/Test/Cells Minimum Elevation",
                 data=np.array([1.0, np.nan], dtype="f4"),
             )
+            h["Geometry"].attrs["Complete Geometry"] = False
             h.create_dataset(
                 "Unrelated Text", data=["preserved"], dtype=h5py.string_dtype()
             )
@@ -112,7 +112,7 @@ def test_native_failure_rolls_back_exact_target_bytes(tmp_path, monkeypatch, fai
             if failure == "attribute":
                 child[GROUP + "/Attributes"][0] = (b"Changed",)
             if failure == "completion":
-                child.attrs["Complete Geometry"] = True
+                child["Geometry"].attrs["Complete Geometry"] = True
             if failure == "hydraulics":
                 child["Geometry/2D Flow Areas/Test/Cells Minimum Elevation"][0] = 99
             if failure == "inventory":
