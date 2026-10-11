@@ -292,6 +292,7 @@ class Breakout2DPreparationResult:
         )
     )
     breakline_containment_repairs: list[dict[str, Any]] = field(default_factory=list)
+    meteorology: dict[str, Any] = field(default_factory=dict)
 
     @property
     def boundaries_unchanged(self) -> bool:
@@ -663,11 +664,16 @@ class RasBreakout2D:
         compute_property_tables: bool = False,
         timeout: int = 600,
         max_mesh_iterations: int = 8,
+        disable_meteorology: bool = False,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
-        Geometry BC lines and the cloned unsteady file are intentionally not
-        edited. Planned refinement regions are applied to the cloned HDF
+        Geometry BC lines are not edited. The cloned unsteady file is preserved
+        unless ``disable_meteorology=True``: after verifying the clone, inherited
+        meteorology and its source references are removed before native refresh.
+        Boundary hydrographs and infiltration remain unchanged. Mutation evidence
+        is returned in ``meteorology``; ``boundaries_unchanged`` still reports
+        whole-file byte equality and is False when meteorology text changes. Planned refinement regions are applied to the cloned HDF
         before perimeter and breakline text edits, while the inherited text
         and HDF still match. ``refresh_hdf`` performs the exact text-to-HDF
         import. With ``refresh_method="rasmapper"`` (default) it runs through the
@@ -707,6 +713,9 @@ class RasBreakout2D:
                 Requires a terrain association on the geometry.
             timeout: Seconds allowed for the text-to-HDF import.
             max_mesh_iterations: Mesh auto-fix iterations.
+            disable_meteorology: Disable and remove inherited meteorological
+                sources for an owned boundary-only child before preprocessing.
+                Defaults to False for existing precipitation-driven workflows.
 
         Returns:
             Breakout2DPreparationResult: Evidence for each preparation step.
@@ -726,6 +735,8 @@ class RasBreakout2D:
             raise ValueError("clone does not prove byte-identical unsteady inputs")
         if _sha256_file(clone.unsteady_path) != clone.cloned_unsteady_sha256:
             raise RuntimeError("Cloned unsteady file changed before preparation")
+        if not isinstance(disable_meteorology, bool):
+            raise TypeError("disable_meteorology must be a bool")
 
         unsupported_points = preflight.feature_actions[
             (preflight.feature_actions["feature_type"] == "reference_point")
@@ -737,6 +748,16 @@ class RasBreakout2D:
                 "relocate those features in a separate reviewed change"
             )
 
+        meteorology = {}
+        if disable_meteorology:
+            from .RasUnsteady import RasUnsteady
+
+            meteorology = RasUnsteady.disable_meteorology(
+                clone.unsteady_path,
+                remove_source_references=True,
+                ras_object=ras_object,
+            )
+        prepared_unsteady_hash = _sha256_file(clone.unsteady_path)
         child = preflight.child_boundary.geometry.iloc[0]
         approved_connections = preflight.feature_actions[
             preflight.feature_actions["feature_type"] == "sa_2d_connection"
@@ -998,7 +1019,7 @@ class RasBreakout2D:
                 raise RuntimeError("2D property-table computation returned False")
 
         final_unsteady_hash = _sha256_file(clone.unsteady_path)
-        if final_unsteady_hash != clone.cloned_unsteady_sha256:
+        if final_unsteady_hash != prepared_unsteady_hash:
             raise RuntimeError("Geometry preparation modified the cloned unsteady file")
         retained_connections = GeomLateral.get_connection_data(clone.geometry_path)
         expected_connections = (
@@ -1045,6 +1066,7 @@ class RasBreakout2D:
             retained_refinement_region_count=len(refinement_specs),
             unsteady_sha256_after=final_unsteady_hash,
             breakline_containment_repairs=breakline_containment_repairs,
+            meteorology=meteorology,
         )
 
     @staticmethod
