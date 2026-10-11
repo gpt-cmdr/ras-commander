@@ -853,7 +853,14 @@ paths and `path@attribute` names (empty by default); loss returns
 returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Stdout is returned
 in the result. A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
 inspection or an unconfirmed child exit returns
-`GEOMETRY_PROCESS_COMPLETION_UNVERIFIED`. These completion checks do not
+`GEOMETRY_PROCESS_COMPLETION_UNVERIFIED`. Unexpected monitoring or process-query
+errors also attempt bounded cancellation of retained owned writers before
+restoring the plan, even if the launcher has already exited. Launcher ownership
+is captured immediately after launch, before optional monitoring hooks. Cleanup
+preserves PID/create-time identities,
+continues after individual OS errors, and bounds each cleanup phase to a shared
+ten-second wait budget. Cleanup errors remain in the failed result; uncertain
+completion never triggers a postrun HDF read. These completion checks do not
 constitute hydraulic acceptance.
 
 ::: ras_commander.geom.GeomPreprocessor.GeomPreprocessor

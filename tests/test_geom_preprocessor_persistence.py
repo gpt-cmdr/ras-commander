@@ -169,8 +169,23 @@ def project_run(
     remove=False,
     timeout=False,
     changed_reference=False,
+    monitor_hook=None,
+    use_watchdog=False,
+    owned_children=(),
+    real_cleanup=False,
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
+    import psutil
+
+    monkeypatch.setattr(
+        psutil,
+        "Process",
+        lambda pid: SimpleNamespace(
+            create_time=lambda: 1.0,
+            is_running=lambda: True,
+            children=lambda **kwargs: list(owned_children),
+        ),
+    )
     folder = tmp_path
     path = geometry(folder / "Synthetic.g01.hdf")
     plan = folder / "Synthetic.p01"
@@ -205,7 +220,8 @@ def project_run(
     monkeypatch.setattr(
         GP,
         "_monitor_compute_messages",
-        lambda **kwargs: {"timed_out": timeout, "signal_detected": "Diagnostic"},
+        monitor_hook
+        or (lambda **kwargs: {"timed_out": timeout, "signal_detected": "Diagnostic"}),
     )
     killed = []
 
@@ -221,13 +237,19 @@ def project_run(
             returncode=exit_code,
             poll=lambda: exit_code,
             wait=lambda *args, **kwargs: exit_code,
+            kill=lambda: killed.append(12345),
         )
 
     monkeypatch.setattr(module.subprocess, "Popen", launch)
-    monkeypatch.setattr(
-        GP, "_terminate_process_tree", lambda process: killed.append(process.pid)
+    if not real_cleanup:
+        monkeypatch.setattr(
+            GP,
+            "_terminate_process_tree",
+            lambda process, **kwargs: killed.append(process.pid),
+        )
+    result = GP.run_geometry_preprocessor(
+        "01", ras_object=obj, dialog_watchdog=use_watchdog
     )
-    result = GP.run_geometry_preprocessor("01", ras_object=obj, dialog_watchdog=False)
     assert plan.read_bytes() == original
     return result, killed
 
@@ -266,6 +288,147 @@ def test_timeout_fails_without_opening_postrun_hdf(tmp_path, monkeypatch):
     assert not result.success and result.timed_out
     assert "GEOMETRY_PREPROCESS_TIMEOUT" in result.error
     assert killed == [12345]
+
+
+def test_monitor_exception_cleans_retained_orphan_before_restoring_plan(
+    tmp_path, monkeypatch
+):
+    record, calls = child_record()
+    original_kill = record["process"].kill
+
+    def kill():
+        assert "RunUNet=0" in (tmp_path / "Synthetic.p01").read_text().replace(" ", "")
+        original_kill()
+
+    record["process"].kill = kill
+    inventory_calls = []
+    inventory = GP._geometry_hdf_inventory
+
+    def inspect(path):
+        inventory_calls.append(path)
+        return inventory(path)
+
+    def monitor(**kwargs):
+        assert kwargs["owned_registry"]["parent_identity"] == (12345, 1.0)
+        kwargs["owned_registry"]["children"][record["identity"]] = record
+        assert kwargs["process"].poll() == 0
+        raise OSError(22, "diagnostic callback failed")
+
+    monkeypatch.setattr(GP, "_geometry_hdf_inventory", inspect)
+    result, killed = project_run(tmp_path, monkeypatch, monitor_hook=monitor)
+    assert not result.success and result.return_code == 0
+    assert result.plan_number == "01" and result.geometry_number == "01"
+    assert result.command and result.flow_type == "unsteady_2d"
+    assert "GEOMETRY_PROCESS_COMPLETION_UNVERIFIED" in result.error
+    assert "diagnostic callback failed" in result.error
+    assert killed == [12345] and calls == ["kill", "reap"]
+    assert len(inventory_calls) == 1  # No postrun HDF read after uncertain completion.
+
+
+def test_raw_cleanup_error_does_not_skip_remaining_owned_children():
+    first, first_calls = child_record()
+    second, second_calls = child_record()
+
+    def broken():
+        first_calls.append("kill")
+        raise OSError(22, "invalid process handle")
+
+    first["process"].kill = broken
+    errors = GP._terminate_tracked_children((first, second))
+    assert "invalid process handle" in errors[0]
+    assert first_calls == ["kill"] and second_calls == ["kill", "reap"]
+
+
+def test_tree_inspection_and_poll_errors_still_cancel_launcher(monkeypatch):
+    import psutil
+
+    def broken():
+        raise OSError(22, "invalid process handle")
+
+    parent = SimpleNamespace(
+        is_running=lambda: True,
+        create_time=lambda: 1.0,
+        children=lambda **kwargs: broken(),
+    )
+    monkeypatch.setattr(psutil, "Process", lambda pid: parent)
+    calls = []
+    process = SimpleNamespace(
+        pid=12345,
+        poll=broken,
+        kill=lambda: calls.append("kill"),
+        wait=lambda **kwargs: calls.append("reap"),
+    )
+    errors = GP._terminate_process_tree(process, parent_identity=(12345, 1.0))
+    assert calls == ["kill", "reap"]
+    assert any("tree inspection" in error for error in errors)
+    assert any("launcher inspection" in error for error in errors)
+
+
+def test_reused_launcher_pid_does_not_enumerate_another_tree(monkeypatch):
+    import psutil
+
+    def unrelated_tree(**kwargs):
+        pytest.fail("enumerated a reused launcher PID")
+
+    parent = SimpleNamespace(
+        is_running=lambda: True,
+        create_time=lambda: 2.0,
+        children=unrelated_tree,
+    )
+    monkeypatch.setattr(psutil, "Process", lambda pid: parent)
+    process = SimpleNamespace(pid=12345, poll=lambda: 0, wait=lambda **kwargs: 0)
+    assert GP._terminate_process_tree(process, (12345, 1.0)) == []
+
+
+def test_missing_launcher_identity_is_explicit_cleanup_uncertainty():
+    calls = []
+    process = SimpleNamespace(
+        pid=12345,
+        poll=lambda: None,
+        kill=lambda: calls.append("kill"),
+        wait=lambda **kwargs: calls.append("reap"),
+    )
+    errors = GP._terminate_process_tree(process)
+    assert calls == ["kill", "reap"]
+    assert "launcher identity unavailable" in errors[0]
+
+
+def test_watchdog_registration_error_keeps_launcher_identity(tmp_path, monkeypatch):
+    module = importlib.import_module("ras_commander.RasDialogWatchdog")
+    actions = []
+
+    class BrokenWatchdog:
+        def start(self):
+            actions.append("start")
+
+        def add_pid(self, pid):
+            raise OSError(22, "watchdog registration failed")
+
+        def stop(self):
+            actions.append("stop")
+
+    monkeypatch.setattr(module, "DialogWatchdog", BrokenWatchdog)
+    record, child_calls = child_record()
+    original_kill = record["process"].kill
+
+    def kill_child():
+        assert "RunUNet=0" in (tmp_path / "Synthetic.p01").read_text().replace(" ", "")
+        original_kill()
+
+    record["process"].kill = kill_child
+    result, killed = project_run(
+        tmp_path,
+        monkeypatch,
+        use_watchdog=True,
+        exit_code=None,
+        owned_children=(record["process"],),
+        real_cleanup=True,
+    )
+    assert not result.success and result.return_code is None
+    assert "GEOMETRY_PROCESS_COMPLETION_UNVERIFIED" in result.error
+    assert "watchdog registration failed" in result.error
+    assert killed == [12345] and actions == ["start", "stop"]
+    assert child_calls == ["kill", "reap"]
 
 
 def child_record(*, finished=False, exit_code=None, reused=False, kill_error=False):
@@ -403,6 +566,68 @@ def test_child_wait_thread_timeout_is_reported_as_timeout(tmp_path, monkeypatch)
     assert "timed out" in result["errors"][0]
 
 
+def test_child_wait_raw_os_error_is_retained(monkeypatch):
+    import threading
+
+    class ImmediateThread:
+        def __init__(self, *, target, daemon):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    def broken(**kwargs):
+        raise OSError(22, "invalid wait handle")
+
+    child = SimpleNamespace(pid=123, create_time=lambda: 1.0, wait=broken)
+    monkeypatch.setattr(threading, "Thread", ImmediateThread)
+    record = GP._watch_preprocess_child(child, time.monotonic() + 60)
+    assert record["finished"] and record["exit_code"] is None
+    assert "invalid wait handle" in record["error"]
+
+
+def test_monitor_role_os_error_retains_child_for_failure_cleanup(monkeypatch):
+    import psutil
+
+    record, calls = child_record()
+    child = record["process"]
+    parent = SimpleNamespace(create_time=lambda: 1.0, children=lambda **kwargs: [child])
+
+    def broken(child):
+        raise OSError(22, "invalid role-query handle")
+
+    monkeypatch.setattr(psutil, "Process", lambda pid: parent)
+    monkeypatch.setattr(GP, "_is_wine_display_child", broken)
+    registry = {"children": {}, "parent_identity": None}
+    result = GP._monitor_compute_messages(
+        SimpleNamespace(pid=123, poll=lambda: None),
+        [],
+        time.time(),
+        60,
+        [],
+        owned_registry=registry,
+    )
+    assert "invalid role-query handle" in result["errors"][0]
+    assert registry["parent_identity"] == (123, 1.0)
+    assert result["children"][0]["identity"] == record["identity"]
+    assert GP._terminate_tracked_children(tuple(registry["children"].values())) == []
+    assert calls == ["kill", "reap"]
+
+
+def test_exact_path_query_os_error_cleans_retained_children(tmp_path, monkeypatch):
+    record, calls = child_record()
+
+    def broken(path):
+        raise OSError(22, "invalid path-query handle")
+
+    monkeypatch.setattr(GP, "_ras_processes_using_path", broken)
+    result = GP._wait_for_preprocess_child(
+        tmp_path / "Synthetic.p01.tmp.hdf", time.time(), 60, (record,)
+    )
+    assert "invalid path-query handle" in result["errors"][0]
+    assert calls == ["kill", "reap"]
+
+
 def test_inaccessible_process_name_fails_exact_path_scan(tmp_path, monkeypatch):
     import psutil
 
@@ -458,7 +683,9 @@ def test_monitor_retains_geometry_writers_without_waiting_for_display_helpers(
     monkeypatch.setattr(
         psutil,
         "Process",
-        lambda pid: SimpleNamespace(children=lambda **kwargs: children),
+        lambda pid: SimpleNamespace(
+            create_time=lambda: 1.0, children=lambda **kwargs: children
+        ),
     )
     retained = []
 
@@ -511,7 +738,11 @@ def test_monitor_reclassifies_initially_unknown_wine_display_child(monkeypatch):
 
     child = SimpleNamespace(pid=432, is_running=lambda: True, create_time=lambda: 1.0)
     monkeypatch.setattr(
-        psutil, "Process", lambda pid: SimpleNamespace(children=lambda **kw: [child])
+        psutil,
+        "Process",
+        lambda pid: SimpleNamespace(
+            create_time=lambda: 1.0, children=lambda **kw: [child]
+        ),
     )
     roles = iter((False, True))
     monkeypatch.setattr(GP, "_is_wine_display_child", lambda child: next(roles))
@@ -538,7 +769,11 @@ def test_last_launcher_poll_unknown_display_role_is_retried(tmp_path, monkeypatc
     record, calls = child_record()
     child = record["process"]
     monkeypatch.setattr(
-        psutil, "Process", lambda pid: SimpleNamespace(children=lambda **kw: [child])
+        psutil,
+        "Process",
+        lambda pid: SimpleNamespace(
+            create_time=lambda: 1.0, children=lambda **kw: [child]
+        ),
     )
     roles = iter((False, True))
     monkeypatch.setattr(GP, "_is_wine_display_child", lambda child: next(roles))

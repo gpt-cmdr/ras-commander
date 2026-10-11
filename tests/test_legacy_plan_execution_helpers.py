@@ -124,9 +124,7 @@ def test_discover_ras_versions_scans_future_and_current_7x_folders(
     monkeypatch, version
 ):
     monkeypatch.setitem(sys.modules, "winreg", None)
-    fake_exe = Path(
-        rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe"
-    )
+    fake_exe = Path(rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe")
 
     def fake_exists(self):
         normalized = str(self).replace("\\", "/")

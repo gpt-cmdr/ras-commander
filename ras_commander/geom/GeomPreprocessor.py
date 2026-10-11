@@ -145,6 +145,12 @@ class GeomPreprocessor:
         start_time = time.time()
         ras_obj = ras_object or ras
         stdio = None
+        process = None
+        plan_num = ""
+        geometry_number = None
+        flow_type = "Unknown"
+        command_text = ""
+        owned_registry = {"children": {}, "parent_identity": None}
         if max_wait <= 0:
             return GeometryPreprocessResult(
                 success=False,
@@ -282,6 +288,12 @@ class GeomPreprocessor:
                     stdout=stdio,
                     stderr=subprocess.STDOUT,
                 )
+                import psutil
+
+                # Capture ownership before watchdogs or monitoring hooks can raise.
+                owned_registry["parent_identity"] = (
+                    process.pid, psutil.Process(process.pid).create_time()
+                )
                 if _watchdog:
                     _watchdog.add_pid(process.pid)
 
@@ -292,6 +304,7 @@ class GeomPreprocessor:
                     max_wait=max_wait,
                     signals=flow_start_signals
                     or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
+                    owned_registry=owned_registry,
                 )
 
                 timed_out = monitor_result["timed_out"]
@@ -300,12 +313,15 @@ class GeomPreprocessor:
                 lifecycle_errors = monitor_result.get("errors", [])
                 if timed_out or lifecycle_errors:
                     logger.error("Geometry preprocessing timed out; terminating HEC-RAS.")
-                    lifecycle_errors.extend(GeomPreprocessor._terminate_process_tree(process) or [])
+                    lifecycle_errors.extend(GeomPreprocessor._terminate_process_tree(
+                        process, parent_identity=owned_registry["parent_identity"]
+                    ) or [])
                     child_monitor = GeomPreprocessor._wait_for_preprocess_child(
                         tmp_hdf_path=tmp_hdf_path,
                         start_time=start_time,
                         max_wait=0,
                         tracked_children=monitor_result.get("children", ()),
+                        owned_registry=owned_registry,
                     )
                 else:
                     process.wait()
@@ -314,10 +330,22 @@ class GeomPreprocessor:
                         start_time=start_time,
                         max_wait=max_wait,
                         tracked_children=monitor_result.get("children", ()),
+                        owned_registry=owned_registry,
                     )
-            except BaseException:
-                if process is not None and process.poll() is None:
-                    GeomPreprocessor._terminate_process_tree(process)
+            except BaseException as exc:
+                cleanup_errors = []
+                if process is not None:
+                    cleanup_errors.extend(GeomPreprocessor._terminate_process_tree(
+                        process, parent_identity=owned_registry["parent_identity"]
+                    ) or [])
+                    cleanup_errors.extend(GeomPreprocessor._terminate_tracked_children(
+                        tuple(owned_registry["children"].values())
+                    ))
+                if isinstance(exc, Exception) and process is not None:
+                    raise RuntimeError(
+                        "GEOMETRY_PROCESS_COMPLETION_UNVERIFIED: " + str(exc)
+                        + ("; " + "; ".join(cleanup_errors) if cleanup_errors else "")
+                    ) from exc
                 raise
             finally:
                 try:
@@ -453,6 +481,11 @@ class GeomPreprocessor:
             logger.exception("Geometry preprocessor validation failed")
             return GeometryPreprocessResult(
                 success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                flow_type=flow_type,
+                command=command_text,
+                return_code=getattr(process, "returncode", None),
                 error=str(exc),
                 elapsed_seconds=time.time() - start_time,
             )
@@ -604,6 +637,7 @@ class GeomPreprocessor:
         start_time: float,
         max_wait: int,
         signals: List[str],
+        owned_registry: Optional[dict] = None,
     ) -> dict:
         """Wait for normal exit, retaining message signals as diagnostics.
 
@@ -613,11 +647,18 @@ class GeomPreprocessor:
         positions = {path: 0 for path in message_paths}
         signal_detected = None
         deadline = time.monotonic() + max(0, max_wait - (time.time() - start_time))
-        children = {}
+        owned_registry = owned_registry if owned_registry is not None else {"children": {}}
+        children = owned_registry["children"]
         import psutil
 
         try:
             parent = psutil.Process(process.pid)
+            identity = (process.pid, parent.create_time())
+            if owned_registry.get("parent_identity") not in (None, identity):
+                return {"signal_detected": None, "timed_out": False,
+                        "children": tuple(children.values()),
+                        "errors": ["launcher identity changed before monitoring"]}
+            owned_registry["parent_identity"] = identity
         except psutil.NoSuchProcess:
             return {"signal_detected": None, "timed_out": False, "children": (),
                     "errors": [] if process.poll() is not None else
@@ -635,10 +676,17 @@ class GeomPreprocessor:
                         if not child.is_running():
                             continue
                         identity = (child.pid, child.create_time())
+                        if identity not in children:
+                            # Retain ownership before optional role queries can fail.
+                            children[identity] = {
+                                "identity": identity, "process": child,
+                                "finished": False, "exit_code": None, "error": None,
+                                "timed_out": False, "unwatched": True,
+                            }
                         if GeomPreprocessor._is_wine_display_child(child):
                             children.pop(identity, None)
                             continue
-                        if identity not in children:
+                        if children[identity].get("unwatched"):
                             children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
                     except psutil.NoSuchProcess:
                         continue
@@ -647,7 +695,7 @@ class GeomPreprocessor:
                     return {"signal_detected": signal_detected, "timed_out": False,
                             "children": tuple(children.values()),
                             "errors": ["launcher disappeared before its exit was observed"]}
-            except psutil.Error as exc:
+            except (psutil.Error, OSError) as exc:
                 return {"signal_detected": signal_detected, "timed_out": False,
                         "children": tuple(children.values()), "errors": [str(exc)]}
             for path in message_paths:
@@ -829,12 +877,14 @@ class GeomPreprocessor:
         start_time: float,
         max_wait: int,
         tracked_children: tuple = (),
+        owned_registry: Optional[dict] = None,
     ) -> dict[str, Any]:
         """Wait for tracked and exact-path preprocessing children; never infer file quietness."""
         import psutil
 
         deadline = time.monotonic() + max(0, max_wait - (time.time() - start_time))
-        children = {tuple(record["identity"]): record for record in tracked_children}
+        children = owned_registry["children"] if owned_registry is not None else {}
+        children.update({tuple(record["identity"]): record for record in tracked_children})
         errors = []
         timed_out = False
         exit_codes = {}
@@ -881,16 +931,7 @@ class GeomPreprocessor:
         except (psutil.Error, RuntimeError, OSError) as exc:
             errors.append(str(exc))
         if timed_out or errors:
-            for identity, record in children.items():
-                child = record["process"]
-                try:
-                    if child.is_running() and child.create_time() == identity[1]:
-                        child.kill()
-                        child.wait(timeout=10)
-                except psutil.NoSuchProcess:
-                    pass
-                except psutil.Error as exc:
-                    errors.append(f"owned child cleanup failed: {exc}")
+            errors.extend(GeomPreprocessor._terminate_tracked_children(tuple(children.values())))
         return {
             "saw_child": bool(children), "timed_out": timed_out,
             "tmp_hdf_path": tmp_hdf_path, "errors": errors,
@@ -913,7 +954,7 @@ class GeomPreprocessor:
             except psutil.TimeoutExpired as exc:
                 record["timed_out"] = True
                 record["error"] = "preprocessing child timed out: " + str(exc)
-            except psutil.Error as exc:
+            except (psutil.Error, OSError) as exc:
                 record["error"] = "preprocessing child wait failed: " + str(exc)
             finally:
                 record["finished"] = True
@@ -947,37 +988,76 @@ class GeomPreprocessor:
         return pids
 
     @staticmethod
-    def _terminate_process_tree(process: subprocess.Popen) -> list[str]:
+    def _terminate_tracked_children(records: tuple) -> list[str]:
+        """Cancel retained identities after failure within one cleanup wait budget."""
+        import psutil
+
+        errors = []
+        deadline = time.monotonic() + 10
+        killed = []
+        for record in records:
+            child = record["process"]
+            try:
+                if child.is_running() and child.create_time() == record["identity"][1]:
+                    child.kill()
+                    killed.append(child)
+            except psutil.NoSuchProcess:
+                pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child cleanup failed: {exc}")
+        for child in killed:
+            try:
+                child.wait(timeout=max(0, deadline - time.monotonic()))
+            except psutil.NoSuchProcess:
+                pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child reap failed: {exc}")
+        return errors
+
+    @staticmethod
+    def _terminate_process_tree(
+        process: subprocess.Popen, parent_identity: Optional[tuple] = None,
+    ) -> list[str]:
         """Cancel owned work after failure, retaining inspection and cleanup errors."""
         import psutil
         errors = []
+        deadline = time.monotonic() + 10
         children = []
+        if parent_identity is None:
+            errors.append("owned tree cleanup unverified: launcher identity unavailable")
         try:
-            parent = psutil.Process(process.pid)
-            children = parent.children(recursive=True)
+            if parent_identity is not None:
+                parent = psutil.Process(process.pid)
+                if parent.is_running() and parent.create_time() == parent_identity[1]:
+                    children = parent.children(recursive=True)
         except psutil.NoSuchProcess:
             pass
-        except psutil.Error as exc:
+        except (psutil.Error, OSError) as exc:
             errors.append(f"owned tree inspection failed: {exc}")
         for child in children:
             try:
                 child.kill()
             except psutil.NoSuchProcess:
                 pass
-            except psutil.Error as exc:
+            except (psutil.Error, OSError) as exc:
                 errors.append(f"owned child cleanup failed: {exc}")
         try:
-            if process.poll() is None:
+            try:
+                active = process.poll() is None
+            except OSError as exc:
+                errors.append(f"owned launcher inspection failed: {exc}")
+                active = True  # Popen's retained native handle still owns the launcher.
+            if active:
                 process.kill()
-            process.wait(timeout=10)
+            process.wait(timeout=max(0, deadline - time.monotonic()))
         except (OSError, subprocess.TimeoutExpired) as exc:
             errors.append(f"owned launcher cleanup failed: {exc}")
         for child in children:
             try:
-                child.wait(timeout=10)
+                child.wait(timeout=max(0, deadline - time.monotonic()))
             except psutil.NoSuchProcess:
                 pass
-            except psutil.Error as exc:
+            except (psutil.Error, OSError) as exc:
                 errors.append(f"owned child reap failed: {exc}")
         return errors
 
