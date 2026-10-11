@@ -448,9 +448,11 @@ permanently remove a valid legacy result.
 This automatic normalization belongs to full plan-calculation APIs.
 `RasPreprocess.preprocess_plan()` and
 `GeomPreprocessor.run_geometry_preprocessor()` are preflight/preprocessing
-operations that attempt to stop before hydraulic computation; they do not
-delete either family of final results and must not be used to normalize an
-ambiguous project.
+operations. `GeomPreprocessor.run_geometry_preprocessor()` disables hydraulic
+run flags by default and waits for normal process completion; diagnostic
+messages never authorize early termination. With `geometry_only=False`, it
+waits for all enabled plan work. See its [completion contract](../api/geometry.md#geompreprocessor-source-reference).
+Neither operation normalizes an ambiguous final-result family.
 
 To resolve an existing project manually, explicitly select the family to
 remove:

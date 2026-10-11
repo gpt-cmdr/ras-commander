@@ -824,6 +824,30 @@ prerequisites and return contracts take precedence over abbreviated summaries.
 
 ### GeomPreprocessor source reference
 
+Run `GeomPreprocessor.run_geometry_preprocessor(plan_number, ras_object=project)`
+on a writable project copy. Close any h5py handles to that geometry HDF first.
+The method temporarily changes plan flags and restores them by default; native
+geometry and preprocessing artifacts remain in the copy. It preserves the
+project's CRS and units.
+
+Completion requires normal engine and preprocessing-child exit within
+`max_wait` (seconds), usable compiled geometry, and preservation of every
+incoming HDF object and attribute name. Native recomputation may change values
+and add objects. A quiet file or flow-start message does not end the wait.
+`geometry_only=False` also waits for all enabled plan work, so its runtime can
+include hydraulic computation.
+
+`GeometryPreprocessResult` remains bool-compatible. `return_code` records the
+actual launcher exit; a nonzero exit always fails. `timed_out=True` fails even
+if geometry topology exists. `missing_geometry_inventory` lists lost object
+paths and `path@attribute` names (empty by default); loss returns
+`GEOMETRY_INVENTORY_LOST` in `error`. A target open in the caller's h5py runtime
+returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Stdout is returned
+in the result. A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
+inspection or an unconfirmed child exit returns
+`GEOMETRY_PROCESS_COMPLETION_UNVERIFIED`. These completion checks do not
+constitute hydraulic acceptance.
+
 ::: ras_commander.geom.GeomPreprocessor.GeomPreprocessor
     options:
       show_root_heading: false
