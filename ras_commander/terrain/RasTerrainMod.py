@@ -58,6 +58,7 @@ Example:
 import platform
 import threading
 import warnings
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -108,6 +109,44 @@ class RasTerrainMod:
     _ras_path = None
     _initialized = False
     _lock = threading.Lock()
+
+    @staticmethod
+    @log_call
+    def iter_terrain_point_elevations(
+        rasmap_path: str | Path,
+        terrain_name: str,
+        point_batches: Iterable[np.ndarray],
+        cell_size: float,
+        use_obstructions: bool = True,
+        nodata_values: Sequence[float] = (-9999.0,),
+    ) -> Iterator[np.ndarray]:
+        """Read native elevations at explicitly supplied binary64 coordinates.
+
+        Coordinates are bounded ``(n, 2)`` Float64 batches in the selected
+        registered terrain's horizontal CRS. Returned Float32 arrays preserve
+        point order and cardinality, in its vertical units/datum. No coordinate
+        transform, profile interpolation or source-value fallback is performed.
+        ``cell_size`` is passed to the native evaluator in horizontal CRS units;
+        ``use_obstructions`` selects native modification/obstruction application.
+        Missing, nonfinite, caller-specified nodata and Single endpoint sentinel
+        values raise. Sources are read-only and no artifact is written.
+
+        Requires the qualified public PointM-array overload in an isolated
+        HEC-RAS 6.6 Windows runtime (also callable in an owned Wine worker).
+        The layer is loaded once per iterator. Exhaust it serially; native
+        SharedData is process-global and this API is not thread-safe. This is
+        point readback, not a replacement registered-terrain consolidation API.
+        """
+        from .._terrain_point_sampling import iter_point_elevations
+
+        return iter_point_elevations(
+            Path(rasmap_path),
+            terrain_name,
+            point_batches,
+            cell_size,
+            use_obstructions,
+            nodata_values,
+        )
 
     @staticmethod
     def _find_hecras_path() -> Path:

@@ -213,6 +213,7 @@ Terrain profile and volume comparison with modifications applied. Uses RasMapper
 
 - `get_terrain_extent(rasmap_path, geom_hdf_path, ras_object=None)` - Get terrain bounding box with modifications applied
 - `get_terrain_profile(rasmap_path, geom_hdf_path, x_coords, y_coords, filter_tolerance=0.01, ras_object=None)` - Sample terrain elevation along polyline
+- `iter_terrain_point_elevations(rasmap_path, terrain_name, point_batches, cell_size, use_obstructions=True, nodata_values=(-9999.0,))` - Read bounded original-coordinate Float64 batches as native Float32 elevations; isolated HEC-RAS 6.6, serial iteration, no interpolation/fallback.
 - `get_terrain_volume_elevation(rasmap_path, geom_hdf_path, x_coords, y_coords, ...)` - Compute elevation-volume curve for polygon
 
 ### Comparison Methods
@@ -462,6 +463,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - compute_modified_terrain_raster
         - get_terrain_extent
         - get_terrain_profile
+        - iter_terrain_point_elevations
         - get_terrain_volume_elevation
         - setup_gdal_bridge
 

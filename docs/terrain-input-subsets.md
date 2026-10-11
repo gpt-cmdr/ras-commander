@@ -146,3 +146,33 @@ downloader. `Usgs3depAws` and `TerrainBuildError` remain public class exports an
 load their downloader module on first access. That module requires `requests`;
 an absent HTTP dependency produces an actionable import error when the downloader
 is requested, without blocking local terrain operations.
+
+## Explicit original-coordinate native readback
+
+`RasTerrainMod.iter_terrain_point_elevations(mapper, terrain_name, point_batches,
+cell_size, use_obstructions=True, nodata_values=(-9999.0,))` evaluates supplied
+Float64 `(n, 2)` coordinate batches using the public native
+`TerrainLayer.ComputePointElevations(PointM[], Boolean, Double)` overload.
+The selected registered terrain is loaded once. Each PointM's X/Y values are
+checked against the supplied binary64 bytes before sampling. Returned Float32
+arrays preserve batch order and cardinality. Missing, nonfinite, specified
+nodata and Single endpoint sentinel values raise; no profile interpolation or
+source-value replacement occurs.
+Points outside the selected native terrain extent are rejected before native
+evaluation; this does not fill missing data inside its envelope.
+
+Coordinates and `cell_size` use the selected terrain's horizontal CRS units;
+elevations retain its vertical units/datum. `cell_size` is the explicit native
+evaluation resolution, not a coordinate rounding or output-grid operation.
+`use_obstructions` is the qualified native switch for applying modifications/
+obstructions. Sources remain read-only; callers own output artifacts and the
+support-footprint/CRS/provenance checks. Iterate serially in an isolated HEC-RAS
+6.6 Windows or owned Wine worker; SharedData is process-global.
+
+Bounded native control 8840 retained 46 original UPGU3 grid centres. All input
+coordinate bytes survived PointM construction, all parent/child values matched
+exactly, 17-point/whole batches and reverse order agreed, and both native
+modified terrains lowered the same 38 centres relative to their unmodified
+readback. This supports the native overload and switch at those coordinates;
+it does not establish complete-support or corpus acceptance. The production
+wrapper still requires frozen-runtime qualification and every-centre evidence.
