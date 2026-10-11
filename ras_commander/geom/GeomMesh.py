@@ -3003,6 +3003,53 @@ def _ensure_line_geometry(geometry, source_index):
     return MultiLineString(parts)
 
 
+def _hole_free_refinement_parts(parts):
+    """Partition valid polygon holes without adding or removing positive area."""
+    from shapely.ops import triangulate, unary_union
+
+    output = []
+    for part in parts:
+        if not part.interiors:
+            output.append(part)
+            continue
+        pieces = [
+            p for triangle in triangulate(part)
+            for p in _iter_polygon_geometries(triangle.intersection(part))
+            if p.area > 0
+        ]
+        if any(p.interiors for p in pieces) or not unary_union(pieces).equals(part):
+            raise ValueError("Refinement hole partition did not preserve its exact footprint")
+        output.extend(pieces)
+    return output
+
+
+def _repair_refinement_polygon(region):
+    """Return GEOS-valid polygon coverage and explicit source-condition evidence."""
+    import hashlib
+    from shapely import make_valid
+    from shapely.geometry import GeometryCollection
+    from shapely.ops import unary_union
+    from shapely.validation import explain_validity
+
+    valid = make_valid(region) if not region.is_valid else region
+    parts = list(_iter_polygon_geometries(valid))
+    coverage = unary_union(parts) if parts else GeometryCollection()
+    hole_free = _hole_free_refinement_parts(parts)
+    result = unary_union(hole_free) if hole_free else GeometryCollection()
+    if not result.equals(coverage):
+        raise ValueError("Refinement repair changed GEOS-valid polygon coverage")
+    return result, {
+        "method": "geos_make_valid_polygon_coverage",
+        "source_validity": explain_validity(region),
+        "source_wkb_sha256": hashlib.sha256(region.wkb).hexdigest(),
+        "repaired_wkb_sha256": hashlib.sha256(result.wkb).hexdigest(),
+        "source_area": float(region.area),
+        "repaired_area": float(result.area),
+        "nonpolygon_remnants": valid.difference(coverage).wkt,
+        "positive_area_preserved": True,
+    }
+
+
 def _iter_polygon_geometries(geometry):
     if geometry is None or getattr(geometry, "is_empty", False):
         return
@@ -3926,6 +3973,9 @@ class GeomMesh:
                 regions do not necessarily produce an interior grid point.
             invalid_regions: "raise" (default) rejects invalid polygons or
                 unsupported holes; "drop" records them as dropped and continues.
+                "repair" uses GEOS make_valid and partitions holes without
+                filling them. Zero-area remnants are recorded. Repair hashes
+                and areas are returned in report.attrs["repairs"].
             hecras_dir: Optional HEC-RAS installation for source HDF validation.
             ras_object (RasPrj | None): Optional source RasPrj context.
 
@@ -3961,8 +4011,8 @@ class GeomMesh:
         min_area = float(min_area)
         if not math.isfinite(min_area) or min_area < 0:
             raise ValueError("min_area must be finite and non-negative")
-        if invalid_regions not in ("raise", "drop"):
-            raise ValueError("invalid_regions must be 'raise' or 'drop'")
+        if invalid_regions not in ("raise", "drop", "repair"):
+            raise ValueError("invalid_regions must be 'raise', 'drop' or 'repair'")
         source_path = _resolve_geom_text_path(geom_number, ras_object)
         hdf_path = _ensure_hdf(
             source_path, hecras_dir=hecras_dir, ras_object=ras_object,
@@ -3981,10 +4031,29 @@ class GeomMesh:
             attributes = _coerce_refinement_region_attributes(hdf[key][()]) if key in hdf else []
         output: list[dict[str, Any]] = []
         rows = []
+        repairs = []
         for fid, row in source.iterrows():
             region = row.geometry
             parts = list(_iter_polygon_geometries(region))
-            if region.is_empty or not region.is_valid or not parts or any(p.interiors for p in parts):
+            repaired = False
+            if invalid_regions == "repair" and (
+                region.is_empty or not region.is_valid or not parts or any(p.interiors for p in parts)
+            ):
+                region, evidence = _repair_refinement_polygon(region)
+                repairs.append({"source_fid": int(fid), "name": row["Name"], **evidence})
+                parts = list(_iter_polygon_geometries(region))
+                repaired = True
+                if not parts:
+                    rows.append({
+                        "source_fid": int(fid), "name": row["Name"], "status": "dropped",
+                        "reason": "degenerate_source_no_positive_area", "source_area": float(row.geometry.area),
+                        "retained_area": 0.0, "output_fids": [], "touches_perimeter": False,
+                        "below_one_cell_area": False,
+                    })
+                    continue
+            if region.is_empty or not region.is_valid or not parts or (
+                invalid_regions != "repair" and any(p.interiors for p in parts)
+            ):
                 if invalid_regions == "raise":
                     raise ValueError(f"Source region FID {fid} is invalid or has unsupported interior rings")
                 reason = "unsupported_interior_rings" if any(p.interiors for p in parts) else "invalid_source_geometry"
@@ -4003,7 +4072,9 @@ class GeomMesh:
             fragments = [p for p in _iter_polygon_geometries(intersection) if p.area > 0]
             kept = [p for p in fragments if p.area >= min_area]
             if any(p.interiors for p in kept):
-                raise ValueError(f"Clipped region FID {fid} has unsupported interior rings")
+                if invalid_regions != "repair":
+                    raise ValueError(f"Clipped region FID {fid} has unsupported interior rings")
+                kept = _hole_free_refinement_parts(kept)
             output_fids = []
             for part in kept:
                 output_fids.append(len(output))
@@ -4021,7 +4092,7 @@ class GeomMesh:
                     reason = "intersection_fragments_below_min_area"
             rows.append({
                 "source_fid": int(fid), "name": row["Name"], "status": status,
-                "reason": reason, "source_area": float(region.area),
+                "reason": ("repaired_source_geometry:" + reason) if repaired else reason, "source_area": float(region.area),
                 "retained_area": float(retained), "output_fids": output_fids,
                 "touches_perimeter": any(p.intersects(child.boundary) for p in kept),
                 "below_one_cell_area": any(p.area < dx * dy for p in kept),
@@ -4033,6 +4104,7 @@ class GeomMesh:
             "retained_area": "float64", "touches_perimeter": "bool",
             "below_one_cell_area": "bool",
         })
+        report.attrs["repairs"] = repairs
         return output, report
 
     @staticmethod
@@ -4930,6 +5002,9 @@ class GeomMesh:
         cell_size: Optional[float] = None,
         hecras_dir: Optional[Union[str, Path]] = None,
         ras_object=None,
+        repair_generated_points: bool = False,
+        min_face_length_ratio: float = 0.05,
+        evidence_callback: Optional[Callable[[str, Any], None]] = None,
     ) -> "MeshResult":
         """
         Generate initial 2D computation points for a 2D flow area directly from
@@ -4958,6 +5033,16 @@ class GeomMesh:
                 is read from ``Storage Area Point Generation Data`` in the text.
             hecras_dir: Override HEC-RAS installation directory (for RasMapperLib).
             ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
+            repair_generated_points: Inspect native bootstrap topology and remove
+                only recorded, index-matched seeds implicated by perimeter or
+                fewer-than-three-face errors, with at most five repairs. The
+                authored perimeter is never changed. Default preserves legacy
+                point generation. Final Ras.exe compile and QA remain required.
+            min_face_length_ratio: Dimensionless native preview setting; supply
+                the persisted geometry setting when enabling repairs.
+            evidence_callback: Observer receiving each bootstrap_seed_repair
+                plan before any text mutation. Observer errors abort generation
+                and are reported in the returned MeshResult error message.
 
         Returns:
             MeshResult with status, mesh_name, cell_count (= number of generated
@@ -5022,6 +5107,19 @@ class GeomMesh:
 
             # ── Generate computation points (float32-safe GeneratePoints) ──
             seeds = _generate_seeds_safe(perim, cell_size, ns)
+            if repair_generated_points:
+                from .GeomMeshRepair import GeomMeshRepair
+                for repair_attempt in range(5):
+                    preview = _compute_mesh(perim, seeds, None, min_face_length_ratio, ns)
+                    repair = GeomMeshRepair.plan_native_seed_removal(preview, seeds)
+                    indexes = {p["generated_point_index"] for p in repair["removed_points"]}
+                    if not indexes:
+                        break
+                    repair["attempt"] = repair_attempt
+                    if evidence_callback is not None:
+                        evidence_callback("bootstrap_seed_repair", repair)
+                    seeds, removed = _remove_seed_indexes(seeds, indexes, ns)
+                    result.fixes_applied.append(f"Bootstrap:native-generated-seed-removal(-{removed}pts)")
             n_pts = int(seeds.Count)
             if n_pts <= 0:
                 result.status = "exception"

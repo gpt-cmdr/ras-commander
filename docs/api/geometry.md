@@ -1204,3 +1204,41 @@ success) to `validated` or `failed` (with native mesh success and final hashes).
 Exceptions preserve the last sidecar. The result's default-empty
 `breakline_containment_repairs` list returns completed retry records. Native
 compilation and the original strict containment audit still must pass.
+
+
+## Recorded refinement and generated-point repairs
+
+`GeomMesh.clip_refinement_regions(..., invalid_regions="repair")` reads delivered
+geometry without changing the source HDF. GEOS `make_valid` supplies valid
+polygon coverage; every positive-area component survives before clipping.
+Holes are partitioned into hole-free pieces without filling them. Zero-area
+remnants are recorded explicitly. The returned DataFrame keeps its existing
+columns and stores source repair records in `report.attrs["repairs"]`, including
+validity, source/repaired WKB hashes and areas, nonpolygon remnants and the
+positive-area preservation check. Default `invalid_regions="raise"` is unchanged.
+Breakout preflight normalizes invalid source refinements before intersection,
+and marks the corresponding feature-action reason.
+
+`GeomMeshRepair.plan_refinement_support` plans a bounded grid for a retained
+region whose final cells fail local-resolution QA. Coordinates and dx/dy share
+the source projected CRS and project length units. Plans preserve source region
+coverage and spacing controls, retain existing points, record each added XY
+coordinate, and fail before mutation if the candidate budget is exceeded.
+`GeomMeshRepair.apply_refinement_support` requires a hash-guarded child geometry,
+an exact serialized-seed match and strictly interior additions. It changes only
+the selected child's point block. Use attempt-owned copies and then refresh
+native mesh metadata, recompile and recheck all engineering gates.
+
+`GeomMeshRepair.plan_native_seed_removal` reads specific native topology errors.
+It requires native error indexes or fewer-than-three-face cells, and proves
+each cell point matches the corresponding generated seed within 1e-6 project
+units. It never changes perimeter vertices. Optional
+`generate_computation_points(..., repair_generated_points=True)` applies at most
+five such bootstrap repairs and emits each plan to `evidence_callback` before
+writing geometry text. Observer errors abort generation and appear in the
+returned `MeshResult` error. Supply the persisted dimensionless minimum face
+length ratio for the preview. The option defaults to `False`.
+
+These repair plans support native meshing; they do not establish hydraulic
+acceptance. Successful native recompilation and the caller's spatial and
+hydraulic review remain required.

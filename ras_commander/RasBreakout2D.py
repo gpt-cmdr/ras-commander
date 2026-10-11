@@ -1468,6 +1468,11 @@ def _build_feature_actions(
             frame = frame.to_crs(parent_boundary.crs)
         for index, row in frame.iterrows():
             geometry = row.geometry
+            repaired_refinement = False
+            if feature_type == "refinement_region" and geometry is not None and not geometry.is_valid:
+                from .geom.GeomMeshRepair import GeomMeshRepair
+                geometry, _repair = GeomMeshRepair.repair_refinement_polygon(geometry)
+                repaired_refinement = True
             feature_id = str(row.get(id_columns[feature_type], index))
             name = str(row.get("Name", f"{feature_type}_{feature_id}"))
             if feature_type == "bc_line":
@@ -1483,6 +1488,8 @@ def _build_feature_actions(
                 )
                 if action == "clip":
                     reason = "trimmed_to_one_cell_inward_buffer"
+                if repaired_refinement:
+                    reason = "repaired_source_refinement_geometry:" + reason
             else:
                 retained, action, reason = _clip_action(geometry, child)
             records.append(
