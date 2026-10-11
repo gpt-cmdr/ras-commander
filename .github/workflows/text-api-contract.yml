@@ -25,5 +25,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install public library and focused test runner
         run: python -m pip install -e . pytest
-      - name: Check read-only text API contract
-        run: python -m pytest tests/ras_text_read_only_test.py -q
+      - name: Check text API and geometry infiltration write safety
+        run: python -m pytest tests/ras_text_read_only_test.py tests/test_clear_geometry_infiltration.py tests/test_geometry_association_inventory.py -q

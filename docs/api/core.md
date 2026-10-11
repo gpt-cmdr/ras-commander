@@ -1102,6 +1102,43 @@ RasMap.associate_geometry_layers(
     HEC-RAS. It does not compile plain-text `.g##` geometry into HDF or create
     missing geometry datasets.
 
+To exclude infiltration from a derived child, call
+`RasMap.clear_geometry_infiltration("Child.g02.hdf")` on a cloned geometry.
+It removes only the compiled geometry's infiltration filename, layer name,
+and file-date attributes, verifies the association is absent, and returns the
+resolved `Path`. It accepts `str` or `Path`, is idempotent, and rejects filenames
+other than `.gNN.hdf` before opening them. Terrain, land-cover, and other
+attributes are preserved. Existing infiltration property tables remain stale;
+rebuild native geometry/property tables before using the child. The method
+requires a directly linked `/Geometry` group owned by the supplied HDF;
+external links, soft links, and non-group objects are rejected before writable
+access. It writes a byte-exact backup in the same directory and flushes it
+before editing the original in place. It verifies all three attributes are
+absent and validates the association reader's result. On deletion, validation,
+or final-flush failure, it truncates and writes the backup bytes into the same
+original file, then flushes and synchronizes that file before removing the
+backup. Success also removes the backup. The original file object is never
+replaced or renamed: its ACL/security descriptor, owner, mode, hard-link count,
+and identity are preserved on success and rollback. An absent association
+leaves the file byte-identical. The directory must allow backup creation and
+removal; the original must be writable. Windows backups receive the source
+access-control entries before content is copied, without additional inherited
+grants; POSIX backups are restricted to the current user.
+On POSIX, writes can clear set-ID mode bits; the method reapplies them to the
+original object before its final flush. It refuses before mutation if the
+current user cannot restore the original set-ID mode.
+
+Use exclusive access while calling this method. Other readers can observe the
+in-place edit before validation or rollback; concurrent writers are unsupported.
+This guarantee covers exceptions when restoration I/O succeeds, not process
+crashes or power loss. A crash between editing and restoration leaves
+`.<stem>-infiltration-backup-<random>.hdf.bak` beside the geometry, for example
+`.Child.g02-infiltration-backup-<random>.hdf.bak`. For recovery, close HDF users
+and truncate and copy the backup bytes into the original file, then flush and
+synchronize it; do not replace or rename over the original. If restoration
+itself fails, the method retains the backup and reports its path in a
+`RuntimeError`. The method does not edit a RAS Mapper file or plan.
+
 <a id="ras_commander.RasProcess"></a>
 
 ### RasProcess

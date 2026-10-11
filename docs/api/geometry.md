@@ -528,7 +528,9 @@ The existing `get_connections()` metadata interface is unchanged. The complete
 reader adds `LineCoordinates`, `CrestProfile`, `TerrainProfile`, `Culverts` and
 `Gates` as nested DataFrames; `WeirWidth` and `WeirCoefficient` as model-unit
 scalars; `Breach`, `UnknownRecords`, `ParseIssues` and `DefaultsUsed` as lists;
-and exact `RawBlock` text. Profiles use `Station`/`Elevation`, coordinates use
+and exact `RawBlock` text. Reference-line and IC-point headers terminate a
+connection block; replacing external BC lines preserves those independent
+features and the connection inventory. Profiles use `Station`/`Elevation`, coordinates use
 `X`/`Y`. Unknown/version-specific records are preserved in raw form, not claimed
 to be decoded hydraulic parameters. An absent terrain profile is empty; no
 terrain is silently sampled. CRS, elevation units and vertical datum inherit
@@ -575,20 +577,50 @@ Callers supplying the former implicit defaults must opt in or provide measured
 parameters. Use culvert, gate, bridge and profile setters for specialized edits.
 
 `classify_connections(geom_file, child_boundary, retained_area_names=None,
-tolerance=0)` returns a GeoDataFrame with `Name`, `From`, `To`, `action`, `reason`
-and support `geometry`. The child geometry must use the source horizontal CRS
-and model units. Width-expanded line support and explicit culvert barrel
-coordinates are considered; unknown gate/bridge/breach support blocks the edit.
+tolerance=0, allow_extended_support=False)` returns a GeoDataFrame with `Name`,
+`From`, `To`, `action`, `reason` and support `geometry`. The default preserves
+the existing acceptance policy: gates and undecoded records block classification.
+The child geometry must use the source horizontal CRS and model units.
+Width-expanded line support and explicit culvert barrel coordinates are considered.
+
+Pass `allow_extended_support=True` to include verified gate GIS support and
+accept cell-size metadata and the additional verified empty native bridge template.
+This adds `gate_group_count` before `geometry` in the return frame. The choice
+applies only to that read-only call; `GeomStorage.clip_2d_flow_area()` continues
+to use the default acceptance policy. Gate support requires explicit opening GIS lines,
+positive finite opening widths/heights and consistent opening counts/stations.
+The support includes each GIS line buffered by half its delivered gate width.
+`gate_group_count` counts verified native gate groups; unknown gate/bridge/breach
+support still blocks the edit. Empty native bridge templates do not establish
+physical bridge support. The expanded weir line is a conservative spatial screen;
+the delivered weir width is a schematic field, not a surveyed embankment footprint.
 Actions are `keep`, `drop`, `block`. Every decision has a stable reason code.
 Positive tolerance guards external separation; it does not excuse a physical
 footprint crossing the child perimeter. Named endpoints must remain present.
+
+`get_connection_gate_lines(geom_file, connection_name)` reads only explicitly
+stored opening GIS lines and returns `opening_index`, `opening_name`, `geometry`
+in source model coordinates without an inferred CRS. Missing, incomplete,
+duplicated or nonconsecutive indexes and invalid coordinates raise `ValueError`;
+no gate GIS records return an empty frame. Station-derived substitute lines are
+not inferred. The [HEC-RAS 6.6 User's Manual, Storage Area and 2D Flow Area
+Connections](https://www.hec.usace.army.mil/confluence/rasdocs/rasum/6.6/entering-and-editing-geometric-data/storage-area-and-2d-flow-area-connections)
+describes individual hydraulic-outlet GIS lines, including gates, and the
+schematic use of weir width. This parser's supported format is tested separately.
+
+`remap_connection_areas(geom_file, area_name_map)` returns source-ordered `Name`
+and authoritative `RawBlock` pairs without changing the source. Only recognized
+endpoint area-name records change; physical and control records remain exact.
+Filter the returned frame and pass it to `write_connection_data` on a clone.
+Ambiguous endpoint records or invalid mapping names raise `ValueError`. Mapping
+names does not establish native attachment or hydraulic equivalence.
 
 `GeomStorage.clip_2d_flow_area(geom_file, flow_area_name, geometry,
 containment_tolerance=0, create_backup=True)` stages all changes, retains internal
 records exactly and explicitly reports fully external removals. Partial or
 unknown affected support raises a reason-bearing error before changing the
 original. Unrelated areas and connections are retained. Its return value uses
-the same decision columns; `attrs['backup_path']` identifies the backup and
+the six default decision columns; `attrs['backup_path']` identifies the backup and
 `attrs['attachment_status']` remains `CONNECTION_ATTACHMENT_UNVERIFIED`.
 It accepts a contained Polygon; hole-aware/multipart perimeter authoring remains
 outside this API. Existing `set_2d_flow_area_perimeter()` stays compatible and
@@ -619,7 +651,15 @@ Storage area and 2D flow area geometry parsing and writing.
 - `get_2d_flow_area_settings(geom_file)` - Read 2D flow area computation settings
 - `set_2d_flow_area_settings(geom_file, area_name, **settings)` - Write 2D flow area settings (subgrid sampling, composite classification)
 - `write_2d_flow_area_perimeter(geom_file, area_name, coordinates, ...)` - Write 2D flow area perimeter
+- `plan_2d_flow_area_perimeter(coordinates=..., geometry=...)` - Plan native serialization without mutation. Removes only adjacent serialized XY pairs within the existing `GeomMesh.PERIMETER_NEAR_DUPLICATE_TOL` of 1e-6 source horizontal units, including closure. Uses the last retained point to bound chained removal; preserves distinct 0.003-unit edges. Returns original removed indexes, source/authored WKB hashes, tolerance, validity, boundary displacement and signed area change in source units (square units for area). The authored polygon must be valid, and removal-only displacement must stay within the near-duplicate tolerance. `set_2d_flow_area_perimeter()` uses this plan; callers retain their own final geometry/feature acceptance checks and canonical input artifacts.
 - `replace_breaklines(geom_file, flow_area_name, breaklines, expected_existing_names=..., ...)` - Atomically replace the geometry-global breakline collection while preserving supplied near/far spacing, near-repeat, and protection-radius values.
+
+`GeomMesh.clip_refinement_regions()` accepts a valid, positive-area Polygon or
+MultiPolygon mask without holes. An inward buffer can split a narrow-necked
+child polygon into disconnected pieces; clipping retains every positive-area
+intersection fragment by default and preserves all native refinement controls.
+The read-only clip report retains its existing schema. This internal mask does
+not change the requirement to author one computational-domain polygon.
 
 ## MeshRegenerationWorkflow
 
@@ -883,6 +923,8 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       show_source: false
       members:
         - classify_connections
+        - get_connection_gate_lines
+        - remap_connection_areas
         - delete_connection
         - get_bridge_approach_xs
         - get_bridge_data
@@ -1139,3 +1181,26 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       show_source: false
       members:
         - apply
+
+### Numeric breakline containment retry
+
+`RasBreakout2D.prepare_cloned_geometry` permits one automatic retry only when
+native containment violations exclusively identify breaklines outside the
+one-cell inward buffer. The planner clips each identified line against the
+exact compiled collection perimeter eroded by cell spacing plus
+`max(1e-6, cell_spacing * 1e-8)` source horizontal units, intersected with the
+strict buffer. A repair must preserve one valid positive LineString, its name,
+child FID and all native spacing/repeat/protection controls, with Hausdorff
+movement at most 0.01 source horizontal units. No source file is changed.
+
+A cloned geometry sidecar `<geometry>.breakline_containment_repair.json`
+(`ras-numeric-breakline-containment-repair/v1`) is written before mutation.
+It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP`, horizontal units,
+maximum movement, one-cell spacing, additional margin, compiled perimeter WKB
+SHA256, perimeter/control preservation flags, and per-line before/after WKB
+hashes, lengths, removed length and movement. The plan binds the current text
+and HDF SHA256. Status advances from `planned` to `applied` (with preprocessing
+success) to `validated` or `failed` (with native mesh success and final hashes).
+Exceptions preserve the last sidecar. The result's default-empty
+`breakline_containment_repairs` list returns completed retry records. Native
+compilation and the original strict containment audit still must pass.

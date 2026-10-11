@@ -1,0 +1,45 @@
+Geom Title=Gate
+Storage Area=Area,0,0
+Storage Area Surface Line= 5
+40.00000000000000.00000000000000
+40.000000000000040.0000000000000
+0.0000000000000040.0000000000000
+0.000000000000000.00000000000000
+40.00000000000000.00000000000000
+Storage Area Type= 0
+Storage Area Area=
+Storage Area Min Elev=
+Storage Area Is2D=-1
+Storage Area Point Generation Data=,,,
+Storage Area 2D Points= 0
+Storage Area 2D PointsPerimeterTime=10Oct2026 21:22:32
+Storage Area Mannings=0.04
+2D Cell Volume Filter Tolerance=0.01
+2D Cell Minimum Area Fraction=0.01
+2D Face Profile Filter Tolerance=0.01
+2D Face Area Elevation Profile Filter Tolerance=0.01
+2D Face Area Elevation Conveyance Ratio=0.02
+2D Face Area Laminar Depth=0.2
+
+Connection=gate            ,5.0,5.0
+Connection Desc=ras-commander DefaultsUsed:
+Connection Line=2
+2.000000000000005.000000000000008.000000000000005.00000000000000
+Connection Up SA=Area            
+Connection Dn SA=Area            
+Conn Routing Type= 1 
+Conn Use RC Family=False
+Conn OverFlow Method 2D=True
+Conn Weir WD=2
+Conn Weir Coef=3
+Conn Weir SE= 2 
+   0.000  10.000   6.000  10.000
+Conn Gate Name Wd,H,Inv,GCoef,Exp_T,Exp_O,Exp_H,Type,WCoef,Is_Ogee,SpillHt,DesHd,#Openings
+group,2,3,5,0.6,0,1,0.5, 0 ,3, 0 ,,, 1 ,0,0.8, 0 ,0.6,,0,0,0, 0 
+       3
+Conn Gate Opening=1,opening,2
+      5.00000000      3.00000000      5.00000000      7.00000000
+
+
+Conn Outlet Rating Curve= 0 ,False,,
+BC Line Name=outlet

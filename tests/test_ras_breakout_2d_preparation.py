@@ -1,5 +1,6 @@
-from pathlib import Path
 from importlib import import_module
+from pathlib import Path
+from types import SimpleNamespace
 
 import geopandas as gpd
 import pandas as pd
@@ -13,8 +14,68 @@ from ras_commander import (
 )
 from ras_commander.schemas import DATAFRAME_SCHEMAS
 
-
 breakout_module = import_module("ras_commander.RasBreakout2D")
+
+
+@pytest.mark.parametrize("drift", [False, True])
+def test_text_breakline_guard_includes_hdf_omitted_one_point_block(
+    tmp_path, monkeypatch, drift
+):
+    preflight = _preflight(tmp_path / "source")
+    source = preflight.source_geometry_path
+    source.write_text(
+        "Geom Title=Source\nProgram Version=6.60\n"
+        "Storage Area=Area,5,5\nStorage Area Surface Line= 5\n"
+        "               0               0              10               0\n"
+        "              10              10               0              10\n"
+        "               0               0\nStorage Area Is2D=-1\n"
+        "Storage Area Point Generation Data=,,1,1\nStorage Area 2D Points= 0\n"
+        "BreakLine Name=Degenerate\nBreakLine Polyline= 1\n"
+        "               2               2\n"
+        "BreakLine Name=Valid\nBreakLine Polyline= 2\n"
+        "               2               3               4               3\n",
+        encoding="utf-8",
+    )
+    # Model the spatial HDF reader: the one-point source block has no line.
+    preflight.source_features["breakline"] = gpd.GeoDataFrame(
+        {"Name": ["Valid"]},
+        geometry=[LineString([(2, 3), (4, 3)])],
+        index=[1],
+        crs="EPSG:3857",
+    )
+    clone_path = tmp_path / "Model.g02"
+    original = source.read_bytes()
+    clone_path.write_bytes(
+        original.replace(b"Degenerate", b"Changed") if drift else original
+    )
+    monkeypatch.setattr(
+        breakout_module.GeomLateral,
+        "get_connection_data",
+        lambda *a: pd.DataFrame(columns=["Name", "RawBlock"]),
+    )
+    monkeypatch.setattr(
+        breakout_module.GeomLateral, "write_connection_data", lambda *a, **k: None
+    )
+    specs = [{"name": "Valid", "coords": [(2, 3), (4, 3)]}]
+    args = (
+        preflight,
+        SimpleNamespace(geometry_path=clone_path),
+        preflight.child_boundary.geometry.iloc[0],
+        pd.DataFrame(columns=["action", "name"]),
+        specs,
+        [],
+    )
+    if drift:
+        before = clone_path.read_bytes()
+        with pytest.raises(ValueError, match="collection changed"):
+            breakout_module._prepare_geometry_text(*args)
+        assert clone_path.read_bytes() == before
+    else:
+        breakout_module._prepare_geometry_text(*args)
+        assert [
+            row[1] for row in breakout_module.GeomMesh.get_breakline_spacing(clone_path)
+        ] == ["Valid"]
+    assert source.read_bytes() == original
 
 
 class _FakeRas:
@@ -170,7 +231,10 @@ def test_preflight_preserves_boundary_scope_and_trims_mesh_features(
                 "geom_number": "01",
                 "full_path": str(geom_path),
                 "hdf_path": str(geom_hdf),
-                **{column: 0 for column in breakout_module._UNSUPPORTED_STRUCTURE_COLUMNS},
+                **{
+                    column: 0
+                    for column in breakout_module._UNSUPPORTED_STRUCTURE_COLUMNS
+                },
             }
         ]
     )
@@ -236,9 +300,7 @@ def test_preflight_preserves_boundary_scope_and_trims_mesh_features(
     )
 
     bc_actions = result.feature_actions[
-        result.feature_actions["feature_type"].isin(
-            ["bc_line", "unsteady_boundary"]
-        )
+        result.feature_actions["feature_type"].isin(["bc_line", "unsteady_boundary"])
     ]
     assert set(bc_actions["action"]) == {"preserve"}
     breakline = result.feature_actions[
@@ -247,6 +309,43 @@ def test_preflight_preserves_boundary_scope_and_trims_mesh_features(
     assert breakline["action"] == "clip"
     assert breakline.geometry.bounds == pytest.approx((3.0, 10.0, 17.0, 10.0))
     assert result.is_ready
+    assert result.feature_actions.columns.tolist() == breakout_module.FEATURE_ACTION_COLUMNS
+    assert result.feature_actions.gate_group_count.tolist() == [0] * len(result.feature_actions)
+
+
+@pytest.mark.parametrize("opt_in,action", [(False, "block"), (True, "drop")])
+def test_preflight_forwards_expanded_connection_choice(tmp_path, monkeypatch, opt_in, action):
+    geometry = tmp_path / "Model.g01"
+    geometry.write_bytes((Path(__file__).parent / "data" / "gate_clip_compatibility.g01").read_bytes())
+    hdf = tmp_path / "Model.g01.hdf"
+    hdf.write_bytes(b"perimeter supplied by HDF reader below")
+    unsteady = tmp_path / "Model.u01"
+    unsteady.write_bytes(b"Flow Title=Gate test\n")
+    plan = pd.DataFrame([{
+        "plan_number": "01", "geometry_number": "01", "unsteady_number": "01",
+        "full_path": str(tmp_path / "Model.p01"), "geometry_type": "2D",
+        "plan_type": "unsteady_2d", "plan_classification_valid": True,
+    }])
+    geometries = pd.DataFrame([{
+        "geom_number": "01", "full_path": str(geometry), "hdf_path": str(hdf),
+        "num_sa_2d_connections": 1, "num_gates": 1,
+    }])
+    monkeypatch.setattr(breakout_module.RasPlan, "get_unsteady_path", lambda *a, **k: unsteady)
+    monkeypatch.setattr(breakout_module.HdfMesh, "get_mesh_areas", lambda *a: gpd.GeoDataFrame(
+        {"mesh_name": ["Area"]}, geometry=[Polygon([(0, 0), (40, 0), (40, 40), (0, 40)])], crs=3857))
+    monkeypatch.setattr(breakout_module, "_read_spatial_features", lambda *a: _empty_features())
+    monkeypatch.setattr(breakout_module, "_base_cell_size", lambda *a: 1.0)
+    before = geometry.read_bytes()
+    result = RasBreakout2D.preflight(Breakout2DSpec(
+        "01", "Area", Polygon([(20, 20), (30, 20), (30, 30), (20, 30)]), "gate",
+        child_boundary_crs=3857, allow_extended_connection_support=opt_in,
+    ), ras_object=_FakeRas(plan, geometries))
+    connection = result.feature_actions.query("feature_type == 'sa_2d_connection'").iloc[0]
+    assert connection.action == action
+    assert connection.gate_group_count == int(opt_in)
+    assert result.is_ready is opt_in
+    assert result.feature_actions.columns.tolist() == breakout_module.FEATURE_ACTION_COLUMNS
+    assert geometry.read_bytes() == before
 
 
 def test_clone_plan_components_keeps_unsteady_file_byte_identical(
@@ -413,9 +512,7 @@ def test_breakout_public_dataframes_have_declared_schemas():
     assert expected <= set(DATAFRAME_SCHEMAS)
     feature_columns = [
         item["name"]
-        for item in DATAFRAME_SCHEMAS["ras_breakout_2d_feature_actions"][
-            "columns"
-        ]
+        for item in DATAFRAME_SCHEMAS["ras_breakout_2d_feature_actions"]["columns"]
     ]
     assert feature_columns == breakout_module.FEATURE_ACTION_COLUMNS
 

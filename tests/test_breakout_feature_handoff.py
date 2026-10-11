@@ -397,6 +397,68 @@ def test_refresh_exception_keeps_original_cause(tmp_path, monkeypatch, method):
     assert caught.value.__cause__ is original
 
 
+def test_numeric_containment_retry_uses_real_violation_identity(tmp_path, monkeypatch):
+    import json
+    from ras_commander.geom import MeshResult
+
+    preflight, clone, ras = _fixture(tmp_path)
+    source_before = preflight.source_geometry_path.read_bytes()
+    unsteady_before = clone.unsteady_path.read_bytes()
+    index = preflight.feature_actions.query(
+        "feature_type == 'breakline' and name == 'Crossing'"
+    ).index[0]
+    preflight.feature_actions.at[index, "geometry"] = LineString(
+        [(10.999, 50), (89, 50)]
+    )
+    calls = []
+
+    def refresh(*args, **kwargs):
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    def mesh(*args, **kwargs):
+        audit = GeomMesh.audit_domain_containment(
+            "02", mesh_name="Area", ras_object=ras
+        )
+        calls.append(audit)
+        return MeshResult(
+            "Area", "complete" if audit.ok else "error", domain_containment=audit
+        )
+
+    _patch_points(
+        monkeypatch, lambda *a, **kw: SimpleNamespace(status="success", cell_count=10)
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
+    )
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(mesh))
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight, clone, ras_object=ras, refresh_method="rasexe"
+    )
+    assert len(calls) == 2 and calls[0].violations[0].feature_name == "Crossing"
+    assert not calls[0].ok and calls[1].ok and result.containment_result.ok
+    record = result.breakline_containment_repairs[0]
+    assert record["status"] == "validated" and record["native_mesh_success"]
+    assert record["repairs"][0]["name"] == "Crossing"
+    assert record["repairs"][0]["geometry_displacement"] < 0.01
+    assert (
+        json.loads(
+            clone.geometry_path.with_name(
+                clone.geometry_path.name + ".breakline_containment_repair.json"
+            ).read_text()
+        )
+        == record
+    )
+    assert GeomMesh.get_breakline_spacing(clone.geometry_path)[0][2:] == (
+        2.0,
+        4.0,
+        1,
+        0,
+    )
+    assert preflight.source_geometry_path.read_bytes() == source_before
+    assert clone.unsteady_path.read_bytes() == unsteady_before
+
+
 def test_gui_failure_result_keeps_exception_cause(tmp_path, monkeypatch):
     preflight, clone, ras = _fixture(tmp_path)
     original = OSError("native returned failure")

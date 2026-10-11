@@ -132,7 +132,8 @@ def test_breakout_text_preparation_retains_mixed_newline_control(tmp_path):
     geom_file.write_bytes(raw)
     before = GeomLateral.get_connection_data(geom_file).set_index("Name")
     preflight = SimpleNamespace(
-        spec=SimpleNamespace(source_2d_area="Area"), source_features={}
+        spec=SimpleNamespace(source_2d_area="Area"), source_features={},
+        source_geometry_path=geom_file,
     )
     clone = SimpleNamespace(geometry_path=geom_file)
     decisions = pd.DataFrame(
