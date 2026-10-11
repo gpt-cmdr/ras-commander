@@ -128,6 +128,13 @@ class RasPreprocess:
         started and all three prerequisite files are non-empty. The process-tree
         fallback supports releases that create an empty ``.bco`` file.
 
+        After owned writers stop, success also requires Event Conditions to
+        report ``Completed Successfully=True``. Enabled point or gridded rain
+        requires a non-empty two-dimensional precipitation ``Values`` dataset.
+        Missing completion evidence is rejected, including when copying a fresh
+        final HDF. Failure retains artifact paths and readiness-signal details;
+        it does not automatically retry or repair native precipitation processing.
+
         With HEC-RAS before 6.3, fails without launching HEC-RAS when the plan's
         geometry HDF references a land-cover, infiltration, or sediment file that
         does not exist. Those releases would otherwise skip the geometry and
@@ -207,13 +214,14 @@ class RasPreprocess:
         x_file = project_folder / f"{project_name}.x{geometry_number}"
         plan_file = project_folder / f"{project_name}.p{plan_num}"
         prj_file = project_folder / f"{project_name}.prj"
-        requires_gridded_precipitation = (
-            RasPreprocess._plan_uses_gridded_precipitation(
+        precipitation_mode = (
+            RasPreprocess._plan_precipitation_mode(
                 plan_file,
                 project_folder,
                 project_name,
             )
         )
+        requires_gridded_precipitation = precipitation_mode == "gridded"
 
         hdf_state_before = None
         if hdf_file.is_file():
@@ -625,6 +633,30 @@ class RasPreprocess:
                     ),
                     elapsed_seconds=time.time() - start_time,
                 )
+
+        # Read only after owned writers have stopped, including natural exits.
+        # Non-empty prerequisite files alone do not prove completed event data.
+        try:
+            import h5py
+            from ._preprocess_validation import _event_condition_errors
+
+            with h5py.File(tmp_hdf, "r") as hdf:
+                event_errors = _event_condition_errors(hdf, precipitation_mode)
+        except Exception as exc:
+            event_errors = [f"could not validate Event Conditions: {exc}"]
+        if event_errors:
+            return PreprocessResult(
+                success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                tmp_hdf_path=tmp_hdf,
+                b_file_path=b_file,
+                x_file_path=x_file,
+                signal_source=signal_source,
+                full_result_copied=full_result_copied,
+                error="Preprocessing is incomplete: " + "; ".join(event_errors),
+                elapsed_seconds=time.time() - start_time,
+            )
 
         # Fix line endings on .x file for Linux compatibility
         if fix_line_endings:
@@ -1263,7 +1295,18 @@ class RasPreprocess:
         project_folder: Path,
         project_name: str,
     ) -> bool:
-        """Return whether a plan's active unsteady file enables gridded rain.
+        """Return whether a plan's active unsteady file enables gridded rain."""
+        return RasPreprocess._plan_precipitation_mode(
+            plan_file, project_folder, project_name
+        ) == "gridded"
+
+    @staticmethod
+    def _plan_precipitation_mode(
+        plan_file: Path,
+        project_folder: Path,
+        project_name: str,
+    ) -> Optional[str]:
+        """Read enabled rainfall mode, 'none' when disabled, or None if unavailable.
 
         This is intentionally read from the text inputs that HEC-RAS consumes,
         rather than inferred from an existing sidecar or temporary HDF. A stale
@@ -1280,14 +1323,14 @@ class RasPreprocess:
                 flags=re.MULTILINE,
             )
             if match is None:
-                return False
+                return None
             unsteady_number = match.group(1).zfill(2)
             unsteady_file = (
                 Path(project_folder)
                 / f"{project_name}.u{unsteady_number}"
             )
             if not unsteady_file.is_file():
-                return False
+                return None
 
             precipitation_mode = ""
             met_mode = ""
@@ -1302,17 +1345,16 @@ class RasPreprocess:
                         precipitation_mode = stripped.split("=", 1)[1].strip()
                     elif stripped.startswith("Met BC=Precipitation|Mode="):
                         met_mode = stripped.split("=", 2)[-1].strip()
-            return (
-                precipitation_mode.casefold() == "enable"
-                and met_mode.casefold() == "gridded"
-            )
+            if precipitation_mode.casefold() == "enable":
+                return met_mode.casefold() or None
+            return "none" if precipitation_mode else None
         except OSError as exc:
             logger.debug(
-                "Could not inspect gridded precipitation readiness for %s: %s",
+                "Could not inspect precipitation mode for %s: %s",
                 Path(plan_file).name,
                 exc,
             )
-            return False
+            return None
 
     @staticmethod
     def _validate_materialized_gridded_precipitation(
