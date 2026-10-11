@@ -50,7 +50,8 @@ def _seed_project(tmp_path: Path) -> _FakeRas:
 
 
 def _write_preprocess_outputs(folder: Path):
-    (folder / "fixture.p01.tmp.hdf").write_bytes(b"ready")
+    with h5py.File(folder / "fixture.p01.tmp.hdf", "w") as hdf:
+        hdf.create_group("Event Conditions").attrs["Completed Successfully"] = True
     (folder / "fixture.b01").write_bytes(b"ready")
     (folder / "fixture.x03").write_bytes(b"ready")
 
