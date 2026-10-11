@@ -2,7 +2,7 @@
 
 Date: 2026-10-10. Agent: Codex API consistency auditor (`/root/api_consistency_auditor`). Review of the public upstream working diff from ras-commander main commit `8359f17fe9dc8aae78cc870c8b4ee5c641f99e58`. Source code was not edited by this reviewer.
 
-Scope: `GeomLateral.get_connection_gate_lines`, `classify_connections`, `remap_connection_areas`, RasBreakout2D gate-group inventory equality, public DataFrame schemas, API documentation, and focused regression tests. Criteria: canonical root/library/geometry/docs AGENTS guidance and the repository auditor's static namespace, logging, naming and path conventions.
+Scope: `GeomLateral.get_connection_gate_lines`, `classify_connections`, `remap_connection_areas`, connection record delimitation, RasBreakout2D gate-group inventory equality, public DataFrame schemas, API documentation, and focused regression tests. Includes the follow-up working diff after commit `a63cfd4c9` that corrects reference-feature block boundaries. Criteria: canonical root/library/geometry/docs AGENTS guidance and the repository auditor's static namespace, logging, naming and path conventions.
 
 | ID | Severity | Where | Finding | Disposition |
 |---|---|---|---|---|
@@ -13,6 +13,7 @@ Scope: `GeomLateral.get_connection_gate_lines`, `classify_connections`, `remap_c
 | UP-05 | note | `remap_connection_areas` | An explicit old-to-new area-name map produces source-ordered `Name`/authoritative `RawBlock` pairs without changing the source. Only recognized upstream/downstream endpoint names change, preserving all other native records. Invalid names and ambiguous endpoint records raise. Callers write only to clones and must separately verify preprocessing, native attachments and hydraulic equivalence. | Small public primitive; no duplicate parser or hidden project state. |
 | UP-06 | note | Documentation / schemas | Geometry API docs list and expose new methods, units/CRS, mutation boundaries, supported GIS evidence and mapping limitations. New DataFrame surfaces have canonical schemas; existing classification gains the additive gate-group field. | Public interfaces are discoverable and consistent with implementation. |
 | UP-07 | note | Native qualification | Focused tests exercise real parser/writer APIs on synthetic geometry. The retained Austin real-source test is skipped unless its explicit project/boundary environment inputs are available. No HEC-RAS preprocessing or compute was run in this audit. | Native compile, production-model format coverage, and hydraulic equivalence remain separate evidence requirements. |
+| UP-08 | note | Connection block boundaries | `Reference Line Name=` and `IC Point Name=` are recognized as top-level terminators by the shared connection-block iterator. Readers no longer absorb these unrelated features into authoritative `RawBlock` or unknown connection records when a neighboring BC is removed. Writers use the same boundaries and preserve the following feature bytes when connections are round-tripped or removed. | Follow-up interface defect resolved. Public signatures, columns and stable reason meanings are unchanged; no new schema version is needed for corrected block ownership. Adoption requires a runtime containing the follow-up upstream commit. |
 
 ## Verification
 
@@ -22,6 +23,8 @@ Executed from the fresh upstream clone with its root explicitly assigned to `PYT
 - AST inspection confirms `remap_connection_areas`, `classify_connections`, and `get_connection_gate_lines` each carry `@staticmethod`, `@log_call`, and annotated returns.
 - Inspected public schema declarations, feature-action count normalization, full-payload coordinate validation, unchanged source bytes and RawBlock round-trip tests, endpoint ambiguity rejection, gate-inventory mismatch tests, and docs diff.
 - `git diff --check`: passed during review.
+- Follow-up boundary-fix recheck using the same Python 3.11 interpreter and explicit clone `PYTHONPATH`: `-m pytest -q tests/test_sa2d_connection_data.py tests/test_gate_connection_support.py tests/test_breakout_outside_connections.py -p no:cacheprovider`: **120 passed, 1 skipped**. The three new cases cover independent reference-line/IC-point exclusion with byte-preserving connection round-trip/removal, and unchanged connection decisions/native blocks after external BC deletion. The Austin test remains the sole skip. `git diff --check` passed; only an unrelated report line-ending normalization notice was emitted.
+- Inspected the shared iterator and writer's exact-one-block validation and outside-block byte preservation after the terminator change. No source project, native runtime, or FIM source was changed by this audit.
 
 This report does not claim the upstream full suite, all supported Python versions, docs strict build, native 6.6 compile, or hydraulic acceptance. Those checks belong to the implementing task's retained evidence.
 

@@ -88,6 +88,8 @@ class GeomLateral:
         "Weir Embankment=",
         "Pump Station=",
         "BC Line Name=",
+        "Reference Line Name=",
+        "IC Point Name=",
         "LCMann Time=",
         "Chan Stop Cuts=",
         "Observed WS=",

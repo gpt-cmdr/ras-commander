@@ -30,3 +30,10 @@ remain in this scope. Types, schema columns, units, read-only behavior, native
 attachment limits and failure conditions agree with the implementation and
 synthetic tests. Native compilation and hydraulic equivalence require their own
 evidence; no engineering approval is claimed by this editorial assessment.
+
+The boundary-fix addition describes independent reference-line and IC-point
+records. Three synthetic regressions verify lossless inventory/writeback and
+preservation after external BC removal. Fleet readback identified reference
+records absorbed after BC replacement; this is a workflow-triggered parser
+defect, not evidence of invalid delivered structure geometry. The fix still
+requires native requalification in a separately identified image.

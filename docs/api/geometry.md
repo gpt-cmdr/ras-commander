@@ -528,7 +528,9 @@ The existing `get_connections()` metadata interface is unchanged. The complete
 reader adds `LineCoordinates`, `CrestProfile`, `TerrainProfile`, `Culverts` and
 `Gates` as nested DataFrames; `WeirWidth` and `WeirCoefficient` as model-unit
 scalars; `Breach`, `UnknownRecords`, `ParseIssues` and `DefaultsUsed` as lists;
-and exact `RawBlock` text. Profiles use `Station`/`Elevation`, coordinates use
+and exact `RawBlock` text. Reference-line and IC-point headers terminate a
+connection block; replacing external BC lines preserves those independent
+features and the connection inventory. Profiles use `Station`/`Elevation`, coordinates use
 `X`/`Y`. Unknown/version-specific records are preserved in raw form, not claimed
 to be decoded hydraulic parameters. An absent terrain profile is empty; no
 terrain is silently sampled. CRS, elevation units and vertical datum inherit
