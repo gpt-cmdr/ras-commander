@@ -737,6 +737,48 @@ class RasMap:
         return remove_terrain_layers(rasmap_path)
 
     @staticmethod
+    def create_terrain_sampling_map(
+        source_mapper: str | Path, terrain_hdf: str | Path,
+        projection_prj: str | Path, output_mapper: str | Path,
+        geometry_hdf: str | Path | None = None,
+    ) -> str:
+        """Create a new export-only Mapper with one unchanged native terrain layer.
+
+        Resolves a unique terrain basename from source registrations, including
+        stale delivered directory spellings. Reads source files without mutation;
+        writes only the new Mapper. Returns its native terrain name. Grid, CRS,
+        vertical units and modification enable flags remain unchanged.
+        Optional geometry_hdf registers a caller-owned geometry copy for native
+        profile sampling; it defaults to no geometry registration.
+        """
+        from ._terrain_registration import create_terrain_sampling_map
+        return create_terrain_sampling_map(source_mapper, terrain_hdf, projection_prj, output_mapper, geometry_hdf)
+
+    @staticmethod
+    def relocate_rasmap_assets(rasmap_path: str | Path, assets: list[Path]) -> list[dict]:
+        """Rebind uniquely named copied assets relatively in a caller-owned Mapper.
+
+        Mutates only the supplied clone's Filename attributes. Duplicate asset
+        basenames are rejected before writing. Does not alter grids, CRS, native
+        terrain names, result-map parameters or vertical units.
+        """
+        from ._terrain_registration import relocate_rasmap_assets
+        return relocate_rasmap_assets(rasmap_path, assets)
+
+    @staticmethod
+    def audit_terrain_associations(rasmap_path: str | Path, geometry_hdfs: list[Path]) -> dict:
+        """Read terrain, classification, projection and geometry links after relocation.
+
+        Returns pass/hold with every material path, its existence/relative state,
+        and stale result-map terrain names. No files, grids, CRS or units change.
+        Requires a nonempty geometry list; every geometry terrain association
+        must resolve to one registered native terrain HDF.
+        Unrelated display layers and omitted parent result files are outside scope.
+        """
+        from ._terrain_registration import audit_terrain_associations
+        return audit_terrain_associations(rasmap_path, geometry_hdfs)
+
+    @staticmethod
     @log_call
     def reassign_result_map_terrains(
         rasmap_path: str | Path, terrain_names: Dict[str, str]

@@ -1,5 +1,37 @@
 # Lossless native terrain modification subsets
 
+## Portable native verification helpers
+
+`RasMap.create_terrain_sampling_map(source_mapper, terrain_hdf, projection_prj,
+output_mapper)` writes a new export-only Mapper containing one unchanged native
+terrain registration. It matches one unique terrain basename, repairs stale
+source directory spellings in the sampling copy, and preserves modification
+enable flags. The source Mapper/terrain remain read-only. Grid, CRS, units and
+native modification records are unchanged. The output must not exist.
+
+`RasMap.relocate_rasmap_assets(rasmap_path, assets)` updates only Filename
+attributes in a caller-owned clone. Supplied asset basenames must be unique and
+files must exist; duplicate names are rejected before mutation. Paths become
+relative to the clone Mapper. Result-map profile and other parameters retain
+their semantics. The return value lists changed elements and filenames.
+
+`RasMap.audit_terrain_associations(rasmap_path, geometry_hdfs)` reads the final
+material terrain/classification/projection references and native geometry
+association attributes. It returns `status: pass|hold`, registered terrain
+names, every material path's existence and relative state, problems, and stale
+result-map terrain names. It changes no files or coordinates. Unrelated display
+layers and missing parent result files are outside this terrain-specific audit.
+A pass after the complete bundle is renamed verifies portability of the
+relative material links; it is not hydraulic approval.
+
+FIM's exact native verification uses the existing public
+`RasTerrain.export_rasmapper_terrain` for parent/child/base exports and
+`RasTerrainMod.get_terrain_profile` for retained complete modification profiles.
+Source-derived crops require their original 256-pixel tile phase and the
+H5Assist-compatible chunked modification writer. No polygon record is truncated
+or dropped to make a subset succeed. Polygon/native singleton-profile cases
+remain explicit qualification holds.
+
 These experimental boundary APIs support native polyline/profile modification
 records. Polygon and unknown layouts raise `ValueError`; they are never silently
 omitted. Native replay and engineering acceptance require project qualification.
@@ -98,3 +130,12 @@ and projection references relative, including sibling folders, so renaming the
 run's temporary folder does not invalidate its Mapper. Different-drive assets
 keep absolute references. This option does not change geometry associations;
 set those separately and verify the finalized bundle.
+
+`RasMap.create_terrain_sampling_map(..., geometry_hdf=None)` creates a new
+isolated Mapper without geometry by default. Supplying an existing caller-owned
+geometry copy registers it for native profile sampling; source files are never
+changed. `RasMap.audit_terrain_associations(mapper, geometry_hdfs)` requires at
+least one geometry and checks each terrain association resolves to a registered
+native terrain HDF. Missing, wrong-but-existing, absolute, or unresolved material
+paths hold; result-map names must also be registered. This read-only audit does
+not qualify elevations or hydraulic acceptance.
