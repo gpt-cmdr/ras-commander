@@ -26,7 +26,10 @@ def _verify_preserved_geometry(backup: Path, child):
             if old_complete is None or new_complete is None:
                 equal = old_complete is new_complete
             else:
-                old_value, new_value = np.asarray(old_complete), np.asarray(new_complete)
+                old_value, new_value = (
+                    np.asarray(old_complete),
+                    np.asarray(new_complete),
+                )
                 equal = (
                     old_value.dtype == new_value.dtype
                     and old_value.shape == new_value.shape
