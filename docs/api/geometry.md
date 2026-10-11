@@ -1207,6 +1207,16 @@ Exceptions preserve the last sidecar. The result's default-empty
 `breakline_containment_repairs` list returns completed retry records. Native
 compilation and the original strict containment audit still must pass.
 
+### Fresh geometry preprocessor evidence
+
+`GeomPreprocessor.run_geometry_preprocessor(..., geometry_only=True)` requires a
+freshly written, semantically populated geometry HDF before it reports success.
+A fresh `.c##` or `.x##` sidecar with an inherited geometry HDF does not establish
+completion. Both message-based and artifact-based readiness checks preserve this
+requirement. With `force=False`, the API preserves the plan's preprocessor flags;
+it still rejects inherited HDF output as completion evidence. Run against a
+disposable project copy and inspect the returned result and compiled geometry.
+
 
 ## Recorded refinement and generated-point repairs
 

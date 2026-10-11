@@ -146,6 +146,10 @@ class GeomPreprocessor:
                 post-processing, RAS Mapper, sediment, and water-quality run
                 flags where those plan settings exist. This keeps validation
                 focused on geometry preprocessing.
+                Completion requires a freshly written, semantically populated
+                geometry HDF; a fresh sidecar with an inherited HDF is insufficient.
+                This requirement also applies with ``force=False``; that setting
+                preserves plan flags rather than accepting inherited output.
             restore_plan_settings: Restore original ``Run HTab`` and
                 related run flag values after the run.
             flow_start_signals: Optional message strings that indicate geometry
@@ -389,6 +393,8 @@ class GeomPreprocessor:
                     "Geometry HDF is not semantically ready: "
                     f"{geometry_hdf_reason}"
                 )
+            if geometry_only and geometry_hdf_path not in artifact_paths:
+                errors.append("Geometry HDF was not freshly written by preprocessing")
             if not existing_message_paths and not (geometry_only and artifact_paths):
                 errors.append("No compute messages were produced")
 
@@ -619,6 +625,12 @@ class GeomPreprocessor:
                 for signal, lower_signal in signal_patterns:
                     if lower_signal in lower_chunk:
                         if geometry_hdf_path is not None:
+                            if geometry_only_artifacts is not None:
+                                try:
+                                    if geometry_hdf_path.stat().st_mtime < start_time - 1:
+                                        continue
+                                except OSError:
+                                    continue
                             ready, reason = GeomPreprocessor._geometry_hdf_readiness(
                                 geometry_hdf_path,
                                 flow_type=flow_type,
@@ -651,7 +663,12 @@ class GeomPreprocessor:
                             fresh.append(artifact)
                     except OSError:
                         pass
-                if fresh:
+                # A fresh .c/.x sidecar can precede the geometry import. An
+                # inherited, populated HDF is not evidence that this import
+                # finished; stopping here can terminate it before replacement.
+                if fresh and (
+                    geometry_hdf_path is None or geometry_hdf_path in fresh
+                ):
                     try:
                         latest_mtime = max(a.stat().st_mtime for a in fresh)
                         hdf_ready = True
