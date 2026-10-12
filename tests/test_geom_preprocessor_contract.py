@@ -201,6 +201,44 @@ def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_pat
     )
 
 
+@pytest.mark.parametrize("direction", [-np.inf, np.inf])
+def test_current_native_seed_mirror_allows_one_ulp_decimal_parsing(tmp_path, direction):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        current = hdf[f"{AREA}/Cell Points"][()]
+        current[0, 0] = np.nextafter(current[0, 0], direction)
+        hdf[f"{AREA}/Cell Points"][...] = current
+        hdf[f"{AREA}/Synthetic/Cells Center Coordinate"][:2] = current
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf, 1_000_000.0, "two_ulps"])
+def test_current_native_seed_and_center_displacement_is_not_waived(tmp_path, value):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        current = hdf[f"{AREA}/Cell Points"][()]
+        current[0, 0] = (
+            np.nextafter(np.nextafter(current[0, 0], np.inf), np.inf)
+            if value == "two_ulps"
+            else value
+        )
+        hdf[f"{AREA}/Cell Points"][...] = current
+        hdf[f"{AREA}/Synthetic/Cells Center Coordinate"][:2] = current
+    changed, _, evidence = validate(text, path, expected, time.time() - 1)
+    assert any("authored computation points changed" in issue for issue in changed)
+    assert not evidence["inputs_preserved"]
+
+
+def test_regenerated_seed_mirror_replaces_stale_parent_coordinates(tmp_path):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Cell Points"][...] = [[99.0, 99.0], [98.0, 98.0]]
+    expected = snapshot(text, path)
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Cell Points"][...] = [[0.2, 0.2], [0.6, 0.6]]
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+
+
 def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
     from ras_commander.geom._preprocess_contract import _mesh_binding_issues
 

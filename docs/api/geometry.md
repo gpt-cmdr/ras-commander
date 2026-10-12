@@ -864,8 +864,11 @@ reciprocal cell/point membership, and trailing `-1` cell-point padding.
 Face coordinates must be finite, nondegenerate and consistent with native
 normals and lengths at float32 storage precision. Fresh child regeneration
 can replace stale parent topology; no parent indexes are restored.
-The leading interior center rows must exactly equal the current text's computation
-points in the qualified float64 native schema. Remaining rows are two-vertex
+The leading interior center rows must exactly equal the current regenerated
+`2D Flow Areas/Cell Points` mirror in the qualified float64 native schema. That
+mirror must match the current authored text within one float64 ULP per coordinate,
+the native decimal-parsing precision; it must be finite and have the exact shape.
+No incoming parent seed mirror is used for this binding. Remaining rows are two-vertex
 ghost cells and are not compared to authored seeds. All face points must lie
 on or inside the current authored perimeter; the boundary tolerance is eight
 float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.

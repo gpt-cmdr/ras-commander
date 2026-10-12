@@ -705,7 +705,10 @@ def _mesh_binding_issues(
 ) -> list[str]:
     """Bind native float64 coordinates to current text in its CRS and units.
 
-    Interior rows match computation points exactly. Remaining rows are native
+    Interior rows match current native computation points exactly. The caller
+    validates that regenerated seed mirror against current text at one float64
+    ULP for native decimal parsing; no incoming parent mirror is used.
+    Remaining rows are native
     two-vertex ghost cells; their centers are not authored seeds. Face points
     must be covered by the current perimeter, allowing eight float64 ULPs for
     native segment arithmetic. No optional spatial dependency is needed.
@@ -917,6 +920,7 @@ def validate(
                 )
                 continue
             path = f"{AREA}/{name}"
+            current_seeds = expected["seed_points"][name]
             collection = hdf.get(AREA)
             if collection is None or any(
                 key not in collection
@@ -936,10 +940,22 @@ def validate(
                     start, count = (int(v) for v in collection["Cell Info"][index, :2])
                     actual = collection["Cell Points"][start : start + count]
                     authored = expected["seed_points"][name]
-                    if actual.shape != authored.shape or not np.allclose(
-                        actual, authored, rtol=0, atol=1e-6
+                    # Native decimal parsing can differ from Python by one ULP.
+                    # Bind only the regenerated mirror proven to represent the
+                    # current text; never retain an incoming parent seed array.
+                    if (
+                        actual.shape != authored.shape
+                        or actual.dtype.kind != "f"
+                        or actual.dtype.itemsize != 8
+                        or not np.all(np.isfinite(actual))
+                        or not np.all(np.isfinite(authored))
+                        or not np.all(
+                            np.abs(actual - authored) <= np.abs(np.spacing(authored))
+                        )
                     ):
                         changed.append(f"{path}: authored computation points changed")
+                    else:
+                        current_seeds = actual
             centers = require(f"{path}/Cells Center Coordinate", columns=2)
             faces = require(f"{path}/Faces FacePoint Indexes", columns=2)
             points = require(f"{path}/FacePoints Coordinate", columns=2)
@@ -983,7 +999,7 @@ def validate(
                 f"{path}/{issue}"
                 for issue in _mesh_binding_issues(
                     hdf[path],
-                    expected["seed_points"][name],
+                    current_seeds,
                     expected["perimeters"][name],
                 )
             )
