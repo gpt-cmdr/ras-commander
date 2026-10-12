@@ -249,3 +249,36 @@ and filter_tolerance finite/nonnegative, in source horizontal/vertical units.
 Native TerrainProfile results are unchanged; no elevation interpolation occurs
 in this reader. Empty native profiles remain empty for caller QA. Fully exhaust
 or close the iterator. A partially consumed session cannot establish completion.
+
+## Register an unrounded raster
+
+Use `RasTerrain.create_terrain_hdf_lossless(input_raster, output_hdf,
+projection_prj, units="Feet", hecras_version="6.6")` when a derived Float32 DEM
+must preserve every stored input value. The source must have square north-up
+pixels, nodata=-9999 without an explicit validity mask, and the same projected
+foot CRS as the PRJ. Provide a new
+output prefix. Input elevations must already be in feet; no vertical datum or
+unit conversion is performed.
+
+The isolated native creator uses `TerrainComputable` with `RoundTo.None`,
+256-pixel tiles and no warp, stitch or tile arithmetic. It creates the raster,
+overviews and dependent native HDF metadata together. Exact stored pixel bits,
+grid, CRS and nodata are checked after creation; native centre and hydraulic
+qualification remain separate checks. The original input file hash must stay
+unchanged. This method requires Windows/Wine Python, pythonnet, rasterio,
+NumPy, h5py and HEC-RAS 6.6. Other runtimes, metre units and multi-raster registration
+are outside this method's scope.
+
+The method emits `.creation.json` and `.creation.log` beside the HDF. The receipt
+schema is `ras-commander-lossless-terrain-creation/v1`: status, input grid and
+file hash, native runtime/rounding controls, equal source/created pixel hashes,
+pixel count, native HDF structure and relative HDF/VRT bindings to the generated
+TIFF. Failed attempts retain a failed receipt;
+successful process exit alone does not establish preservation. A timeout cleans
+only the launched process tree. The existing `create_terrain_hdf` API and its
+defaults remain unchanged.
+
+HEC documents terrain rounding at 1/32 of a map unit by default, which can change
+a value by as much as 0.015625 map units (feet in a foot CRS). A TIFF can therefore
+use lossless compression
+while storing rounded elevations. See the [HEC-RAS 6.6 Terrain Layer manual](https://www.hec.usace.army.mil/confluence/rasdocs/rmum/6.6/terrain-layer).
