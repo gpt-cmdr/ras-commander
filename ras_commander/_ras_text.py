@@ -1,7 +1,24 @@
 """Internal serialization for line-oriented HEC-RAS model files."""
 
+import re
 from io import BytesIO, StringIO
 from pathlib import Path
+
+
+def _split_ras_records(
+    text: str | bytes, *, keepends: bool = True
+) -> list[str] | list[bytes]:
+    """Split only on CRLF, CR or LF, retaining all other record content."""
+    pattern = (
+        rb"[^\r\n]*(?:\r\n|[\r\n]|$)"
+        if isinstance(text, bytes)
+        else r"[^\r\n]*(?:\r\n|[\r\n]|$)"
+    )
+    records = [record for record in re.findall(pattern, text) if record]
+    if keepends:
+        return records
+    endings = b"\r\n" if isinstance(text, bytes) else "\r\n"
+    return [record.rstrip(endings) for record in records]
 
 
 def _normalize_ras_newlines(text: str | bytes) -> str | bytes:
