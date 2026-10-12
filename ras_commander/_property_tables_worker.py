@@ -124,7 +124,8 @@ def _verify_hdf5_metadata(library, managed) -> None:
 
 def _initialize_runtime(install: Path) -> tuple[list, list]:
     """Load and verify the native-only runtime; retain DLL loader handles."""
-    if importlib.util.find_spec("clr") is None:
+    # pythonnet's loaded clr module has no __spec__; find_spec would raise on reentry.
+    if "clr" not in sys.modules and importlib.util.find_spec("clr") is None:
         raise ImportError(
             "Native RASMapper requires pythonnet>=3.0.5. "
             "Install ras-commander[mesh] in this Windows Python environment."

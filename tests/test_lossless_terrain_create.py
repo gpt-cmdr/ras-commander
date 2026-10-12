@@ -1,8 +1,11 @@
 """Contracts for unrounded native creation; native qualification is separate."""
 
+import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -12,6 +15,26 @@ from rasterio.transform import from_origin
 
 from ras_commander.terrain import RasTerrain
 from ras_commander.terrain import _lossless_create as lossless
+
+
+def test_runtime_reverification_does_not_rescan_loaded_pythonnet(tmp_path, monkeypatch):
+    from ras_commander import _property_tables_worker as worker
+
+    monkeypatch.setitem(sys.modules, "clr", SimpleNamespace(__spec__=None))
+    monkeypatch.setattr(
+        importlib.util, "find_spec", lambda name: pytest.fail("rescanned loaded clr")
+    )
+    with pytest.raises(FileNotFoundError, match="native HDF5 runtime"):
+        worker._initialize_runtime(tmp_path)
+
+
+def test_runtime_still_requires_pythonnet_when_unloaded(tmp_path, monkeypatch):
+    from ras_commander import _property_tables_worker as worker
+
+    monkeypatch.delitem(sys.modules, "clr", raising=False)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    with pytest.raises(ImportError, match="pythonnet"):
+        worker._initialize_runtime(tmp_path)
 
 
 def raster(path, values, *, transform=None, crs="EPSG:2278", nodata=-9999):
