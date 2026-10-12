@@ -261,10 +261,21 @@ def copy_features(
     source_rasmap,
     destination_rasmap,
     feature_indexes,
+    *,
+    group_prefix="",
+    append=False,
 ):
     from .terrain.RasTerrainModWriter import RasTerrainModWriter
 
     source_hdf, destination_hdf = Path(source_hdf), Path(destination_hdf)
+    if (
+        not isinstance(append, bool)
+        or not isinstance(group_prefix, str)
+        or any(c in group_prefix for c in ("/", "\\", "\x00"))
+    ):
+        raise ValueError(
+            "append must be Boolean and group_prefix must be a native group-name prefix"
+        )
     source_rasmap, destination_rasmap = Path(source_rasmap), Path(destination_rasmap)
     if (
         (destination_hdf.exists() and os.path.samefile(source_hdf, destination_hdf))
@@ -286,7 +297,10 @@ def copy_features(
     destination_layer, _ = _resolve_layer(
         destination_tree.getroot(), destination_rasmap, destination_hdf, source=False
     )
-    if any(
+    existing_registration = destination_layer.findall(
+        "Layer[@Type='ElevationModificationGroup']"
+    )
+    if not append and any(
         x.get("Type") == "ElevationModificationGroup"
         for x in destination_layer.findall("Layer")
     ):
@@ -297,11 +311,32 @@ def copy_features(
         h5py.File(source_hdf, "r") as source,
         h5py.File(destination_hdf, "r") as destination,
     ):
-        if "Modifications" in destination:
+        if "Modifications" in destination and not append:
             raise ValueError(
                 "Destination terrain already contains terrain modifications"
             )
         groups = source.get("Modifications", {})
+        existing_names = set(destination.get("Modifications", {}))
+        if append:
+            if existing_names and len(existing_registration) != 1:
+                raise ValueError("Append requires one existing modification collection")
+            existing_layers = [
+                child
+                for group in existing_registration
+                for child in group
+                if child.tag == "Layer"
+            ]
+            mapper_names = [child.get("Name") for child in existing_layers]
+            if set(mapper_names) != existing_names or len(mapper_names) != len(
+                set(mapper_names)
+            ):
+                raise ValueError("Existing HDF and Mapper modification names differ")
+            if any(
+                child.tag != "Layer"
+                for group in existing_registration
+                for child in group
+            ):
+                raise ValueError("Append of collection-level controls is unsupported")
         if set(feature_indexes) - set(groups):
             raise ValueError("A selected modification group is absent from the source")
         for name, requested in feature_indexes.items():
@@ -319,11 +354,17 @@ def copy_features(
                     "Modification feature indexes are duplicate or out of range"
                 )
             if indexes:
+                target_name = group_prefix + name
+                if target_name in existing_names:
+                    raise ValueError(
+                        "Destination modification group name already exists"
+                    )
                 selected[name] = _subset_arrays(arrays, indexes)
             summaries.append(
                 {
                     "group_name": name,
                     "geometry_type": _prefix(arrays),
+                    "destination_group_name": group_prefix + name,
                     "source_features": len(arrays["Attributes"]),
                     "source_registration_basis": source_basis,
                     "source_registration_name": source_layer.get("Name", ""),
@@ -341,6 +382,7 @@ def copy_features(
                         derivative.remove(child)
                     else:
                         registered.append(child.get("Name"))
+                        child.set("Name", group_prefix + child.get("Name"))
             if any(child.tag == "Layer" for child in derivative):
                 filename = os.path.relpath(
                     destination_hdf, destination_rasmap.parent
@@ -348,7 +390,31 @@ def copy_features(
                 for element in derivative.iter():
                     if "Filename" in element.attrib:
                         element.set("Filename", filename)
-                destination_layer.append(derivative)
+                if append and existing_registration:
+                    if len(existing_registration) != 1:
+                        raise ValueError(
+                            "Append requires one existing modification collection"
+                        )
+                    previous = existing_registration[0]
+                    # Collection settings apply to all children. Preserve the
+                    # source settings exactly or reject before changing either file.
+                    filtered = lambda element: {
+                        k: v
+                        for k, v in element.attrib.items()
+                        if k not in {"Name", "Filename", "Expanded"}
+                    }
+                    if filtered(previous) != filtered(derivative):
+                        raise ValueError(
+                            "Parent modification collection settings differ"
+                        )
+                    for item in list(derivative):
+                        if item.tag != "Layer":
+                            raise ValueError(
+                                "Append of collection-level controls is unsupported"
+                            )
+                        previous.append(item)
+                else:
+                    destination_layer.append(derivative)
         if set(registered) != set(selected) or len(registered) != len(set(registered)):
             raise ValueError(
                 "Selected modifications have no unique source Mapper registration"
@@ -368,10 +434,24 @@ def copy_features(
             h5py.File(staged_hdf, "r+") as destination,
         ):
             if selected:
-                mods = destination.create_group("Modifications")
-                mods.attrs.update(source["Modifications"].attrs)
+                existing_modifications = "Modifications" in destination
+                mods = destination.require_group("Modifications")
+                original_attrs = source["Modifications"].attrs
+                if (
+                    append
+                    and existing_modifications
+                    and (
+                        set(mods.attrs) != set(original_attrs)
+                        or any(
+                            not np.array_equal(mods.attrs[k], original_attrs[k])
+                            for k in mods.attrs
+                        )
+                    )
+                ):
+                    raise ValueError("Parent modification root attributes differ")
+                mods.attrs.update(original_attrs)
                 for name, arrays in selected.items():
-                    group = mods.create_group(name)
+                    group = mods.create_group(group_prefix + name)
                     group.attrs.update(source["Modifications"][name].attrs)
                     for table, data in arrays.items():
                         result = RasTerrainModWriter._create_hdf_dataset(

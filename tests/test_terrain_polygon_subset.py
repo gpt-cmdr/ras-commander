@@ -112,3 +112,73 @@ def test_unsupported_polygon_is_atomic(polygons, invalid):
     with pytest.raises(ValueError):
         RasTerrainModWriter.copy_modification_features(*polygons, {"Polygons": [0]})
     assert before == (polygons[1].read_bytes(), polygons[3].read_bytes())
+
+
+def test_namespaced_append_preserves_records_priorities_and_mapper_order(polygons):
+    RasTerrainModWriter.copy_modification_features(
+        *polygons, {"Polygons": [0]}, group_prefix="owner_"
+    )
+    RasTerrainModWriter.copy_modification_features(
+        *polygons, {"Polygons": [1]}, group_prefix="contributor_", append=True
+    )
+    with h5py.File(polygons[0]) as original, h5py.File(polygons[1]) as copied:
+        for prefix, index in (("owner_", 0), ("contributor_", 1)):
+            group = copied["Modifications/" + prefix + "Polygons"]
+            assert (
+                group["Attributes"][:].tobytes()
+                == original["Modifications/Polygons/Attributes"][
+                    index : index + 1
+                ].tobytes()
+            )
+            assert dict(group.attrs) == dict(original["Modifications/Polygons"].attrs)
+            assert all(dataset.chunks is not None for dataset in group.values())
+    group = ET.parse(polygons[3]).find('.//Layer[@Type="ElevationModificationGroup"]')
+    assert [layer.get("Name") for layer in group.findall("Layer")] == [
+        "owner_Polygons",
+        "contributor_Polygons",
+    ]
+    before = polygons[1].read_bytes(), polygons[3].read_bytes()
+    with pytest.raises(ValueError, match="already exists"):
+        RasTerrainModWriter.copy_modification_features(
+            *polygons, {"Polygons": [0]}, group_prefix="owner_", append=True
+        )
+    assert before == (polygons[1].read_bytes(), polygons[3].read_bytes())
+
+
+def test_incompatible_collection_append_is_atomic(polygons):
+    RasTerrainModWriter.copy_modification_features(
+        *polygons, {"Polygons": [0]}, group_prefix="owner_"
+    )
+    tree = ET.parse(polygons[2])
+    tree.find('.//Layer[@Type="ElevationModificationGroup"]').set("Checked", "False")
+    tree.write(polygons[2])
+    before = polygons[1].read_bytes(), polygons[3].read_bytes()
+    with pytest.raises(ValueError, match="settings differ"):
+        RasTerrainModWriter.copy_modification_features(
+            *polygons, {"Polygons": [1]}, group_prefix="contributor_", append=True
+        )
+    assert before == (polygons[1].read_bytes(), polygons[3].read_bytes())
+
+
+@pytest.mark.parametrize(
+    "change", ["control", "mapper_collision", "missing_collection"]
+)
+def test_append_rejects_incompatible_existing_pair_atomically(polygons, change):
+    RasTerrainModWriter.copy_modification_features(
+        *polygons, {"Polygons": [0]}, group_prefix="owner_"
+    )
+    tree = ET.parse(polygons[3])
+    group = tree.find('.//Layer[@Type="ElevationModificationGroup"]')
+    if change == "control":
+        ET.SubElement(group, "DefaultModificationType", Value="SetIfHigher")
+    elif change == "mapper_collision":
+        ET.SubElement(group, "Layer", Name="contributor_Polygons")
+    else:
+        tree.find('.//Layer[@Type="TerrainLayer"]').remove(group)
+    tree.write(polygons[3])
+    before = polygons[1].read_bytes(), polygons[3].read_bytes()
+    with pytest.raises(ValueError):
+        RasTerrainModWriter.copy_modification_features(
+            *polygons, {"Polygons": [1]}, group_prefix="contributor_", append=True
+        )
+    assert before == (polygons[1].read_bytes(), polygons[3].read_bytes())

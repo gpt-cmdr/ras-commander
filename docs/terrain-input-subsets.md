@@ -104,6 +104,15 @@ Export creates a new folder with `modifications.hdf` and `modifications.rasmap`.
 Copy/export return one summary per requested group with `geometry_type`:
 `Polygon` or `Polyline` names the native table layout; a singleton record
 retains `Polyline` storage even though its support geometry is a Point.
+`copy_modification_features(..., group_prefix="owner_")` optionally namespaces
+destination groups and Mapper layer names, recording `destination_group_name`
+in each summary. Attributes, coordinates and source group priorities are unchanged.
+`append=True` adds unique groups after existing Mapper layers while retaining
+source order within the added collection. Duplicate target names, different
+collection enable settings, collection-level controls when merging an existing collection and incompatible root
+attributes fail before either destination file changes. The default remains
+refusal of existing modifications. These options preserve records and order;
+they do not provide spatial partition masks or qualify a multi-parent terrain.
 The HDF contains source root metadata and complete selected native modification
 records, without terrain grid/index data. This is a method-native boundary input,
 not an executable terrain. Copy preserves native feature order, structured
@@ -115,7 +124,8 @@ establish native terrain identity.
 It rewrites compact feature-level point/part/profile offsets and Mapper filenames
 only. Polyline Parts offsets remain feature-local and byte-preserved. Caller
 indexes must be unique integers; unknown groups and invalid offsets fail.
-Existing output folders and destination modifications are refused. Failed copies
+Existing output folders are refused; destination modifications are refused
+unless copy explicitly sets append=True. Failed copies
 restore the destination pair; completed export uses an atomic folder rename.
 This is single-writer mutation, not a concurrent transaction or crash-recovery
 protocol. The caller must isolate and claim its destination.
