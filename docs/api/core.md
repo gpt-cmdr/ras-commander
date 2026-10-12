@@ -742,7 +742,10 @@ unsteady sidecar is initialized with disabled meteorology groups; an owned
 compiled `*.tmp.hdf` still requires an existing Event Conditions group.
 
 The operation retains the existing CRLF text serialization and preserves
-legacy filename bytes. `boundary_conditions_unchanged` compares boundary bytes
+legacy filename bytes.
+Records split only on CRLF, CR or LF. Unicode separators, form feeds and
+vertical tabs remain part of filenames and other record content.
+`boundary_conditions_unchanged` compares boundary bytes
 with only CR/LF record separators normalized. `boundary_conditions_byte_identical`
 also compares separators. Returned evidence includes flow-text hashes and all
 removed meteorological source keys, including primary precipitation keys.

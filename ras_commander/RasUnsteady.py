@@ -129,7 +129,7 @@ import pandas as pd
 import numpy as np
 import re
 from typing import TYPE_CHECKING, Union, Optional, Any, Tuple, Dict, List, Sequence
-from ._ras_text import _normalize_ras_newlines, _write_ras_text
+from ._ras_text import _normalize_ras_newlines, _split_ras_records, _write_ras_text
 
 if TYPE_CHECKING:
     from .ComputeResults import PrecipRasterImportResult
@@ -3850,6 +3850,8 @@ class RasUnsteady:
             Boundary hydrographs, their DSS links, and infiltration are retained.
             Text uses the existing CRLF serialization. Legacy non-UTF-8 bytes
             are preserved with a reversible UTF-8 surrogateescape policy.
+            Records split only on CRLF, CR or LF; Unicode separators, form
+            feeds and vertical tabs remain part of the record content.
         ras_object : optional
             Project object used to resolve an unsteady-flow number.
 
@@ -3895,14 +3897,16 @@ class RasUnsteady:
                 and b"\x00"
                 not in b",".join(line.split(b",")[:3] + line.split(b",")[4:])
             )
-            for line in text_before.splitlines()
+            for line in _split_ras_records(text_before, keepends=False)
         )
         if invalid_nul or not text_before.startswith(b"Flow Title="):
             raise ValueError(
                 "Invalid unsteady-flow text: expected Flow Title and no unexpected NUL bytes"
             )
         # surrogateescape round-trips legacy filename bytes without guessing an encoding.
-        lines = text_before.decode("utf-8", errors="surrogateescape").splitlines(True)
+        lines = _split_ras_records(
+            text_before.decode("utf-8", errors="surrogateescape")
+        )
         boundary_blocks_before = RasUnsteady._meteorology_boundary_bytes(text_before)
         removed_source_keys = []
         for line in lines:
@@ -3934,7 +3938,7 @@ class RasUnsteady:
             ],
         )
         # Keep the existing two-pass CRLF serialization and insertion order.
-        lines = _normalize_ras_newlines("".join(lines)).splitlines(True)
+        lines = _split_ras_records(_normalize_ras_newlines("".join(lines)))
         newline = RasUnsteady._detect_line_ending(lines)
         had_terminal_newline = bool(lines and lines[-1].endswith(("\r\n", "\n", "\r")))
         if remove_source_references:
@@ -4008,9 +4012,11 @@ class RasUnsteady:
                 + filtered_lines[insert_index:]
             )
         ).encode("utf-8", errors="surrogateescape")
-        if boundary_blocks_before != RasUnsteady._meteorology_boundary_bytes(
-            text_after
-        ):
+        boundary_blocks_after = RasUnsteady._meteorology_boundary_bytes(text_after)
+        boundary_conditions_unchanged = (
+            boundary_blocks_before == boundary_blocks_after
+        )
+        if not boundary_conditions_unchanged:
             raise RuntimeError(
                 "Disabling meteorology changed boundary condition records"
             )
@@ -4039,7 +4045,7 @@ class RasUnsteady:
             "unsteady_file": str(unsteady_path),
             "unsteady_sha256_before": hashlib.sha256(text_before).hexdigest(),
             "unsteady_sha256_after": hashlib.sha256(text_after).hexdigest(),
-            "boundary_conditions_unchanged": True,
+            "boundary_conditions_unchanged": boundary_conditions_unchanged,
             "boundary_comparison": "bytes_normalized_crlf",
             "boundary_conditions_byte_identical": (
                 RasUnsteady._meteorology_boundary_bytes(text_before, normalize=False)
@@ -4061,11 +4067,12 @@ class RasUnsteady:
         raw: bytes, *, normalize: bool = True
     ) -> list[bytes]:
         """Compare boundary bytes with only CR/LF record separators normalized."""
-        lines = raw.decode("utf-8", errors="surrogateescape").splitlines(True)
+        records = _split_ras_records(raw)
+        lines = [
+            record.decode("utf-8", errors="surrogateescape") for record in records
+        ]
         blocks = [
-            "".join(lines[b["start_idx"] : b["end_idx"]]).encode(
-                "utf-8", errors="surrogateescape"
-            )
+            b"".join(records[b["start_idx"] : b["end_idx"]])
             for b in RasUnsteady._find_boundary_blocks(lines)
         ]
         return (

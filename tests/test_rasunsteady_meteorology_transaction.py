@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import random
 from pathlib import Path
 
 import h5py
@@ -9,7 +10,7 @@ import numpy as np
 import pytest
 
 from ras_commander import RasUnsteady
-from ras_commander._ras_text import _normalize_ras_newlines
+from ras_commander._ras_text import _normalize_ras_newlines, _split_ras_records
 
 PUBLIC_FLOW = (
     Path(__file__).parents[1]
@@ -46,6 +47,164 @@ def _sidecar(flow):
         rain.create_dataset("Values", data=[1.0, 2.0])
         hdf.create_dataset("Event Conditions/Boundary/Values", data=[3.0, 4.0])
     return path
+
+
+@pytest.mark.parametrize("separator", [b"\xc2\x85", b"\xe2\x80\xa8"])
+@pytest.mark.parametrize("remove", [False, True])
+def test_unicode_separator_in_boundary_filename_gate(tmp_path, separator, remove):
+    # GB reproduction: the apparent Wind Mode is inside the last physical record.
+    filename = b"caf" + separator + b"Wind Mode=rain.dss"
+    (tmp_path / filename.decode("utf-8")).touch()
+    boundary = b"Boundary Location=,,,,,Area,,Inlet,\r\nDSS File=" + filename + b"\r\n"
+    flow = tmp_path / "Model.u01"
+    flow.write_bytes(
+        b"Flow Title=Clone\r\nProgram Version=6.60\r\n"
+        + boundary
+        + b"Precipitation Mode=Enable\r\nMet BC=Precipitation|Mode=Gridded\r\n"
+    )
+    result = RasUnsteady.disable_meteorology(flow, remove_source_references=remove)
+    # Independent byte slice, with no calls to the implementation's boundary parser.
+    after = flow.read_bytes()
+    start = after.index(b"Boundary Location=")
+    assert after[start : start + len(boundary)] == boundary
+    assert result["boundary_conditions_unchanged"]
+    assert result["boundary_conditions_byte_identical"]
+
+
+def test_record_tokenizer_fuzz_round_trips_arbitrary_bytes():
+    rng = random.Random(51403)
+    cases = [b"", bytes(range(256)), b"\r\n\r\n\n\r", b"last\r", b"no newline"]
+    cases += [rng.randbytes(rng.randrange(512)) for _ in range(256)]
+    for raw in cases:
+        # bytes.splitlines also recognizes VT/FF; scan CR/LF independently.
+        expected = []
+        start = index = 0
+        while index < len(raw):
+            if raw[index] in (10, 13):
+                index += 2 if raw[index : index + 2] == b"\r\n" else 1
+                expected.append(raw[start:index])
+                start = index
+            else:
+                index += 1
+        if start < len(raw):
+            expected.append(raw[start:])
+        assert _split_ras_records(raw) == expected
+        assert b"".join(_split_ras_records(raw)) == raw
+        assert _split_ras_records(raw, keepends=False) == [
+            record.rstrip(b"\r\n") for record in expected
+        ]
+        decoded = raw.decode("utf-8", "surrogateescape")
+        assert _split_ras_records(decoded) == [
+            record.decode("utf-8", "surrogateescape") for record in expected
+        ]
+        assert (
+            "".join(_split_ras_records(decoded)).encode("utf-8", "surrogateescape")
+            == raw
+        )
+
+
+@pytest.mark.parametrize("newline", [b"\r\n", b"\n", b"\r"])
+@pytest.mark.parametrize("remove", [False, True])
+def test_boundary_record_fuzz_preserves_bytes_and_reports_exact_flags(
+    tmp_path, newline, remove
+):
+    rng = random.Random(51403)
+    separators = [
+        b"\xc2\x85",
+        b"\xe2\x80\xa8",
+        b"\xe2\x80\xa9",
+        b"\x85",
+        b"\x0c",
+        b"\x0b",
+        b"\x1c",
+        b"\x1d",
+        b"\x1e",
+        b"\xff",
+    ]
+    apparent_keys = [
+        b"Wind Mode=rain.dss",
+        b"Met Station=rain.dss",
+        b"Met BC=Precipitation|Gridded DSS Filename=rain.dss",
+    ]
+    for index in range(64):
+        # NUL is rejected by the flow API; test transport of NUL in the tokenizer test.
+        payload = rng.randbytes(rng.randrange(256)).translate(None, b"\x00\r\n")
+        payload += (
+            separators[index % len(separators)]
+            + apparent_keys[index % len(apparent_keys)]
+        )
+        terminal = newline if index % 2 else b""
+        records = [
+            b"Boundary Location=,,,,,Area,,Inlet,",
+            b"DSS File=" + payload,
+            b"DSS Path=/A/B/FLOW//1HOUR/F/",
+            b"Use DSS=True",
+        ]
+        boundary = newline.join(records) + terminal
+        # Independent expected byte slice; normalize physical separators only.
+        expected = b"\r\n".join(records) + (b"\r\n" if terminal else b"")
+        flow = tmp_path / "Model.u01"
+        flow.write_bytes(
+            newline.join(
+                [
+                    b"Flow Title=Clone",
+                    b"Program Version=6.60",
+                    b"Precipitation Mode=Enable",
+                    b"Met BC=Precipitation|Mode=Gridded",
+                    b"Met BC=Precipitation|Gridded DSS Filename=rain.dss",
+                    b"",
+                ]
+            )
+            + boundary
+        )
+        before = flow.read_bytes()
+        result = RasUnsteady.disable_meteorology(flow, remove_source_references=remove)
+        after = flow.read_bytes()
+        actual = after[after.index(b"Boundary Location=") :]
+        assert actual == expected
+        assert result["boundary_conditions_unchanged"] == (actual == expected)
+        assert result["boundary_conditions_byte_identical"] == (actual == boundary)
+        assert result["unsteady_sha256_before"] == hashlib.sha256(before).hexdigest()
+        assert result["unsteady_sha256_after"] == hashlib.sha256(after).hexdigest()
+        assert result["removed_source_keys"] == [
+            "Met BC=Precipitation|Gridded DSS Filename"
+        ]
+        assert RasUnsteady._meteorology_boundary_bytes(before, normalize=False) == [
+            boundary
+        ]
+        assert RasUnsteady._meteorology_boundary_bytes(after, normalize=False) == [
+            actual
+        ]
+        assert RasUnsteady._meteorology_boundary_bytes(before) == [expected]
+
+
+@pytest.mark.parametrize("remove", [False, True])
+def test_boundary_fuzz_corruption_never_returns_unchanged(
+    tmp_path, monkeypatch, remove
+):
+    rng = random.Random(51403)
+    update = RasUnsteady._updated_met_precipitation_lines
+    for index in range(16):
+        payload = (
+            rng.randbytes(64).translate(None, b"\x00\r\n")
+            + b"\xc2\x85Wind Mode=rain.dss"
+        )
+        flow = _flow(tmp_path / "Model.u01", filename=payload)
+        before = flow.read_bytes()
+
+        def corrupt(lines, entries, case_index=index):
+            lines, completed = update(lines, entries)
+            return [
+                line.replace("Wind Mode=rain.dss", f"Wind Mode=changed{case_index}.dss")
+                for line in lines
+            ], completed
+
+        monkeypatch.setattr(
+            RasUnsteady, "_updated_met_precipitation_lines", staticmethod(corrupt)
+        )
+        with pytest.raises(RuntimeError, match="changed boundary condition records"):
+            RasUnsteady.disable_meteorology(flow, remove_source_references=remove)
+        assert flow.read_bytes() == before
 
 
 @pytest.mark.parametrize("newline", [b"\n", b"\r", b"\r\n"])
