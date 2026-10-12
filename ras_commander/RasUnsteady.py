@@ -78,6 +78,7 @@ DSS Boundary Condition Functions:
 - update_dss_run_identifier() - Update DSS path F-part for new scenarios
 - set_boundary_dss_link() - Convert inline BC to DSS-linked (complete state transition)
 - set_boundary_inline_hydrograph() - Write inline hydrograph, convert DSS to inline
+- set_stage_hydrograph_initial_stage() - Set one exact 2D stage boundary's initial-stage flag
 - set_flow_hydrograph_slope() - Add or update `Flow Hydrograph Slope=` (EG slope) for a Flow Hydrograph BC
 - set_normal_depth_boundary() - Add or update Normal Depth (Friction Slope=) for a 1D river or 2D BC line boundary
 - get_unique_dss_subbasins() - Get unique HMS subbasin names from DSS paths
@@ -9768,10 +9769,13 @@ class RasUnsteady:
         use_dss_idx = None
         old_data_start = None
         old_data_end = None
-        block_end = len(lines)
+        block_end = next(
+            block['end_idx'] for block in RasUnsteady._find_boundary_blocks(lines)
+            if block['start_idx'] == target_boundary_idx
+        )
 
         i = block_start
-        while i < len(lines) and i < target_boundary_idx + 500:
+        while i < block_end:
             line = lines[i]
 
             if line.startswith('Boundary Location='):
@@ -9877,13 +9881,11 @@ class RasUnsteady:
         if use_dss_idx is not None:
             lines[use_dss_idx] = f'Use DSS=False{newline}'
         else:
+            # Recompute after table insertion: the final boundary ends before
+            # global meteorology/non-Newtonian settings, not at end of file.
             block_end = next(
-                (
-                    index
-                    for index in range(target_boundary_idx + 1, len(lines))
-                    if lines[index].startswith('Boundary Location=')
-                ),
-                len(lines),
+                block['end_idx'] for block in RasUnsteady._find_boundary_blocks(lines)
+                if block['start_idx'] == target_boundary_idx
             )
             lines.insert(block_end, f'Use DSS=False{newline}')
         if dss_file_idx is not None:
@@ -11128,6 +11130,83 @@ class RasUnsteady:
             'boundaries_df_refreshed': boundaries_df_refreshed,
             'block_before': block_before,
             'block_after': block_after,
+        }
+
+    @staticmethod
+    @log_call
+    def set_stage_hydrograph_initial_stage(
+        unsteady_file: Union[str, Path],
+        use_initial_stage: bool,
+        *,
+        area_2d: str,
+        bc_line: str,
+        ras_object: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Set the initial-stage flag on one exact 2D stage hydrograph.
+
+        Writes ``Stage Hydrograph Use Initial Stage=0/1`` in the selected
+        unsteady file. This controls initialization from the prescribed stage;
+        it does not change stage ordinates, flow forcing, geometry or units.
+        Supply an owned child copy. Other boundary bytes and line endings are
+        preserved. Returns the selected location and before/after flag values.
+        Missing, ambiguous or non-stage boundaries raise before any write.
+        ``unsteady_file`` accepts a path or a project-bound unsteady number.
+        No engine is run and no hydraulic acceptance is inferred.
+        """
+        if not isinstance(use_initial_stage, bool):
+            raise TypeError("use_initial_stage must be bool")
+        if any(
+            not isinstance(value, str) or not value.strip()
+            or any(c in value for c in ",\r\n")
+            for value in (area_2d, bc_line)
+        ):
+            raise ValueError("area_2d and bc_line require nonempty exact names")
+        path = RasUnsteady._resolve_unsteady_file_path(unsteady_file, ras_object)
+        original = path.read_bytes()
+        # Latin-1 is reversible for every byte. Only the ASCII flag is edited.
+        lines = original.decode("latin-1").splitlines(keepends=True)
+        blocks = [
+            b for b in RasUnsteady._find_boundary_blocks(lines)
+            if RasUnsteady._boundary_block_matches(
+                b, None, None, None, area_2d.strip(), bc_line.strip()
+            )
+        ]
+        if len(blocks) != 1 or blocks[0]["bc_type"] != "Stage Hydrograph":
+            raise ValueError("exactly one matching Stage Hydrograph boundary required")
+        block = blocks[0]
+        keyword = "Stage Hydrograph Use Initial Stage="
+        matches = [
+            i for i in range(block["start_idx"] + 1, block["end_idx"])
+            if lines[i].startswith(keyword)
+        ]
+        if len(matches) > 1:
+            raise ValueError("duplicate initial-stage flags in selected boundary")
+        previous = None
+        newline = RasUnsteady._detect_line_ending(lines)
+        replacement = keyword + str(int(use_initial_stage)) + newline
+        if matches:
+            index = matches[0]
+            previous = lines[index][len(keyword):].strip()
+            if previous not in {"0", "1"}:
+                raise ValueError("initial-stage flag must be 0 or 1")
+            ending = lines[index][len(lines[index].rstrip("\r\n")):]
+            lines[index] = keyword + str(int(use_initial_stage)) + ending
+        else:
+            index = next(
+                (i for i in range(block["start_idx"] + 1, block["end_idx"])
+                 if lines[i].startswith(("DSS Path=", "DSS File=", "Use DSS="))),
+                block["end_idx"],
+            )
+            if index > 0 and not lines[index - 1].endswith(("\r", "\n")):
+                raise ValueError("selected boundary lacks a terminating newline")
+            lines.insert(index, replacement)
+        path.write_bytes("".join(lines).encode("latin-1"))
+        return {
+            "unsteady_file": str(path),
+            "matched_location": block["location"],
+            "previous_use_initial_stage": None if previous is None else previous == "1",
+            "use_initial_stage": use_initial_stage,
+            "updated_in_place": bool(matches),
         }
 
     @staticmethod

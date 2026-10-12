@@ -837,6 +837,7 @@ a restoration error reports these paths.
         - set_restart_settings
         - set_rules_bc
         - set_stage_flow_hydrograph
+        - set_stage_hydrograph_initial_stage
         - set_stage_hydrograph_tw_check
         - set_uniform_lateral_inflow_hydrograph
         - update_boundary_dss_paths
