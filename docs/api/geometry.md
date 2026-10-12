@@ -889,6 +889,12 @@ vectorized, prepared geometry predicates in bounded batches. Concavities and
 keyhole-encoded holes are honored; a bent boundary face is never replaced by its
 endpoint chord. The boundary tolerance is eight
 float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.
+The predicate subtracts the first perimeter vertex uniformly from perimeter,
+face endpoints and intermediate vertices before geometric operations, retaining
+the tolerance computed in original coordinates. This avoids numerical false
+exclusions at large projected offsets without editing arrays, scaling, snapping
+or expanding the permitted boundary allowance. Interior-center binding remains
+an exact comparison in original coordinates.
 Coherent translations of either coordinate array fail completion.
 Reference-line terrain profiles are checked when authored. Manning polygon
 names and coordinates are checked against the geometry text; attachment families
