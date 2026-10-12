@@ -1662,7 +1662,7 @@ DATAFRAME_SCHEMAS["mesh_perimeter_faces_report"] = {
 
 
 DATAFRAME_SCHEMAS["terrain_modification_features"] = {
-    "description": "Complete native polyline terrain modification feature identities and support distances.",
+    "description": "Complete native polyline and SetValue polygon terrain modification identities and support distances.",
     "accessor": "RasTerrainModWriter.get_modification_features(terrain_hdf_path, crs)",
     "source": "ras_commander._terrain_modification_subset.read_features()",
     "extra_columns": False,
@@ -1670,8 +1670,8 @@ DATAFRAME_SCHEMAS["terrain_modification_features"] = {
     "columns": [
         {"name": "group_name", "dtype": "str", "description": "Native modification group name."},
         {"name": "feature_index", "dtype": "int64", "description": "Zero-based native Attributes row within the group."},
-        {"name": "support_distance", "dtype": "float64", "description": "Native Max Reach/Max Extent in terrain horizontal CRS units; no conversion."},
-        {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
+        {"name": "support_distance", "dtype": "float64", "description": "Native Max Reach/Max Extent in terrain horizontal CRS units; zero for complete SetValue polygons; no conversion."},
+        {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, Polygon, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
     ],
     "note": "Read-only. Unknown layouts or unavailable support fail. No terrain grid is loaded or CRS inferred. Empty frames retain the same columns and explicit CRS.",
 }

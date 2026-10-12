@@ -632,7 +632,7 @@ class RasTerrainModWriter:
         output_dir: str | Path,
         feature_indexes: dict[str, list[int]],
     ) -> list[dict[str, object]]:
-        """Export complete selected native polyline records without terrain grids.
+        """Export complete selected native line/polygon records without terrain grids.
 
         Source registration prefers a unique resolved path; a unique basename
         fallback permits caller-verified stale delivered layouts. Ambiguity fails.
@@ -650,7 +650,8 @@ class RasTerrainModWriter:
             feature_indexes: Group names mapped to unique zero-based native rows.
 
         Returns:
-            Retained row identities, counts and registration matching decisions.
+            Retained row identities, counts and registration matching decisions,
+            plus geometry_type (Polygon or Polyline native storage layout).
 
         Raises:
             ValueError: Unsupported records, invalid selection or existing output.
@@ -665,13 +666,17 @@ class RasTerrainModWriter:
     def get_modification_features(
         terrain_hdf_path: str | Path, crs: Any
     ) -> "gpd.GeoDataFrame":
-        """Read complete native polyline modification geometries without mutation.
+        """Read complete native line or SetValue polygon edits without mutation.
 
         Returns a GeoDataFrame in the caller-declared terrain CRS with group_name,
         feature_index, support_distance (horizontal CRS units), and geometry.
         Native single-vertex polyline records return Point support geometry without
         repairing the native record. Retained degenerate records still require
-        native execution qualification. Supports polyline/profile tables. Unknown
+        native execution qualification. Supports polyline/profile tables and native
+        constant-elevation Polygon Info/Parts/Points records with closed valid rings.
+        Polygon support_distance is zero: the complete polygon is its footprint.
+        Boundary-generated, shape-Z and multipoint polygon methods are unsupported.
+        Unknown
         layouts or missing support distances raise before a subset is planned.
         No terrain grid is loaded, no elevations are changed, and no files are
         written. CRS must match the source terrain; this method does not reproject.
@@ -698,6 +703,9 @@ class RasTerrainModWriter:
         source_rasmap_path: str | Path,
         destination_rasmap_path: str | Path,
         feature_indexes: dict[str, list[int]],
+        *,
+        group_prefix: str = "",
+        append: bool = False,
     ) -> list[dict[str, object]]:
         """Copy complete selected native modifications to a new native terrain.
 
@@ -708,13 +716,18 @@ class RasTerrainModWriter:
         it only rewrites offsets needed by the subset. It does not clip or rasterize
         modifications. Each mapping key is a source group and each value is unique
         zero-based feature indexes. Empty selections omit that group. Returns the
-        retained source indexes/counts and registration matching basis. Source
+        retained source indexes/counts, destination_group_name and registration basis. Source
         matching prefers one exact path, then one caller-verified stale basename;
         destination matching requires one exact path. Ambiguity fails. No
         independent artifact is written.
-        Unsupported layouts, invalid indexes and existing destination modifications
-        fail before mutation. The caller must verify full terrain support for every
+        Unsupported layouts and invalid indexes fail before mutation. Existing
+        destination modifications fail when append=False. The caller must verify full terrain support for every
         selected feature and native effective-elevation/property-table equivalence.
+        group_prefix namespaces destination groups without changing record values
+        or group priority. append=True retains existing groups and appends the
+        incoming Mapper layers in source order; duplicate names and incompatible
+        collection settings/root attributes are rejected. This records ordering,
+        not a qualified partition-aware multi-parent terrain composition.
 
         Args:
             source_terrain_hdf_path: Verified immutable native source HDF.
@@ -722,9 +735,12 @@ class RasTerrainModWriter:
             source_rasmap_path: Source Mapper with complete group settings.
             destination_rasmap_path: Child Mapper registering the destination exactly.
             feature_indexes: Group names mapped to unique zero-based source rows.
+            group_prefix: Optional destination-only native group-name prefix.
+            append: False by default; opt in to adding new unique groups.
 
         Returns:
-            Retained row identities, counts and registration matching decisions.
+            Retained row identities, counts and registration matching decisions,
+            plus geometry_type (Polygon or Polyline native storage layout).
 
         Raises:
             ValueError: Invalid layouts/selection, ambiguous registration or an
@@ -732,7 +748,8 @@ class RasTerrainModWriter:
         """
         from .._terrain_modification_subset import copy_features
         return copy_features(source_terrain_hdf_path, destination_terrain_hdf_path,
-                             source_rasmap_path, destination_rasmap_path, feature_indexes)
+                             source_rasmap_path, destination_rasmap_path, feature_indexes,
+                             group_prefix=group_prefix, append=append)
 
     @staticmethod
     @log_call

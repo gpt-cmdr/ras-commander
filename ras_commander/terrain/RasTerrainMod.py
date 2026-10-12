@@ -120,26 +120,48 @@ class RasTerrainMod:
         cell_size: float,
         use_obstructions: bool = True,
         nodata_values: Sequence[float] = (-9999.0,),
+        *,
+        isolated: bool = False,
+        timeout_seconds: float = 7200,
+        runtime_record: str | Path | None = None,
     ) -> Iterator[np.ndarray]:
         """Read native elevations at explicitly supplied binary64 coordinates.
 
         Coordinates are bounded ``(n, 2)`` Float64 batches in the selected
         registered terrain's horizontal CRS. Returned Float32 arrays preserve
         point order and cardinality, in its vertical units/datum. Each caller
-        batch uses serial native calls of at most 4096 points; every internal
+        batch uses serial native calls of at most 65536 points; every internal
         result is validated before yielding the complete caller batch. No coordinate
         transform, profile interpolation or source-value fallback is performed.
         ``cell_size`` is passed to the native evaluator in horizontal CRS units;
         ``use_obstructions`` selects native modification/obstruction application.
         Missing, nonfinite, caller-specified nodata and Single endpoint sentinel
-        values raise. Sources are read-only and no artifact is written.
+        values raise. Sources are read-only; only an optional runtime_record is written.
 
         Requires the qualified public PointM-array overload in an isolated
         HEC-RAS 6.6 Windows runtime (also callable in an owned Wine worker).
         The layer is loaded once per iterator. Exhaust it serially; native
         SharedData is process-global and this API is not thread-safe. This is
         point readback, not a replacement registered-terrain consolidation API.
+        With isolated=True, native evaluation runs in a native-only child process
+        that verifies the bundled thread-safe HDF5 DLL before opening the layer.
+        timeout_seconds bounds native worker lifetime and charges caller batch
+        production time, but cannot preempt the caller's Python iterator itself.
+        runtime_record writes a new loader/control JSON record; completed status requires
+        verified restoration and exit zero, while failures retain initialized status;
+        it is runtime identity evidence, not a query-completion or hydraulic receipt.
         """
+        if not isinstance(isolated, bool):
+            raise ValueError("isolated must be Boolean")
+        if isolated:
+            from .._terrain_query import iter_isolated_points
+
+            return iter_isolated_points(
+                rasmap_path, terrain_name, point_batches, cell_size,
+                use_obstructions, nodata_values, timeout_seconds, runtime_record,
+            )
+        if runtime_record is not None:
+            raise ValueError("runtime_record requires isolated=True")
         from .._terrain_point_sampling import iter_point_elevations
 
         return iter_point_elevations(
@@ -356,7 +378,11 @@ class RasTerrainMod:
         x_coords: List[float],
         y_coords: List[float],
         filter_tolerance: float = 0.01,
-        ras_object=None
+        ras_object=None,
+        *,
+        isolated: bool = False,
+        timeout_seconds: float = 7200,
+        runtime_record: str | Path | None = None,
     ) -> pd.DataFrame:
         """
         Sample terrain elevation along a polyline with modifications applied.
@@ -371,6 +397,9 @@ class RasTerrainMod:
             x_coords: X coordinates defining the profile polyline
             y_coords: Y coordinates defining the profile polyline
             filter_tolerance: Douglas-Peucker vertical filter tolerance (default 0.01)
+            isolated: Use a native-only HEC-RAS 6.6 process with verified bundled HDF5.
+            timeout_seconds: Positive session limit for isolated queries, in seconds.
+            runtime_record: Optional new loader/control JSON record; completed requires restoration and exit zero.
 
         Returns:
             DataFrame with columns:
@@ -387,6 +416,22 @@ class RasTerrainMod:
         """
         rasmap_path, geom_hdf_path = RasTerrainMod._validate_paths(rasmap_path, geom_hdf_path)
         RasTerrainMod._validate_coords(x_coords, y_coords)
+        if not isinstance(isolated, bool):
+            raise ValueError("isolated must be Boolean")
+        if isolated:
+            if len(x_coords) < 2:
+                raise ValueError("Need at least 2 points to define a profile line")
+            from .._terrain_query import isolated_profile
+
+            result = isolated_profile(
+                rasmap_path, geom_hdf_path, x_coords, y_coords, filter_tolerance,
+                timeout_seconds, runtime_record,
+            )
+            if result["warning"]:
+                logger.warning("TerrainProfile warning: %s", result["warning"])
+            return pd.DataFrame({"station": result["station"], "elevation": result["elevation"]})
+        if runtime_record is not None:
+            raise ValueError("runtime_record requires isolated=True")
         com = RasTerrainMod._get_com()
 
         from System import Array, Double, Single
@@ -433,6 +478,60 @@ class RasTerrainMod:
             'station': [float(sta_out[i]) for i in range(prof_count)],
             'elevation': [float(elev_out[i]) for i in range(prof_count)],
         })
+
+    @staticmethod
+    def iter_terrain_profiles(
+        rasmap_path: str | Path,
+        geom_hdf_path: str | Path,
+        profiles: Iterable[Sequence[Sequence[float]]],
+        filter_tolerance: float = 0.01,
+        *,
+        timeout_seconds: float = 7200,
+        runtime_record: str | Path | None = None,
+    ) -> Iterator[pd.DataFrame]:
+        """Read complete line profiles in order through one native-only 6.6 session.
+
+        Each supplied profile contains at least two finite XY coordinates in the
+        model CRS units. Native station/elevation values retain model units and
+        the existing TerrainProfile algorithm/filter. No coordinates or elevations
+        are interpolated here. Returns one station/elevation DataFrame per line;
+        attrs.warning retains the native warning. Empty native profiles remain
+        empty for caller QA. Source files are read-only; an optional new runtime
+        record describes loader identity and completed control restoration/exit.
+        The session deadline charges startup, caller production and evaluation time.
+        Its watchdog stops the native child but cannot preempt arbitrary caller code.
+        Fully exhaust or close the iterator; partial consumption is not completion.
+        """
+        mapper, geometry = RasTerrainMod._validate_paths(rasmap_path, geom_hdf_path)
+        if not np.isfinite(filter_tolerance) or filter_tolerance < 0:
+            raise ValueError("filter_tolerance must be finite and nonnegative")
+        from .._terrain_query import iter_isolated_profiles
+
+        def coordinates():
+            for line in profiles:
+                points = np.asarray(line, dtype=np.float64)
+                if (
+                    points.ndim != 2
+                    or points.shape[1] != 2
+                    or len(points) < 2
+                    or not np.isfinite(points).all()
+                ):
+                    raise ValueError("Each profile requires at least two finite XY coordinates")
+                yield points.tolist()
+
+        for result in iter_isolated_profiles(
+            mapper,
+            geometry,
+            coordinates(),
+            filter_tolerance,
+            timeout_seconds,
+            runtime_record,
+        ):
+            frame = pd.DataFrame({"station": result["station"], "elevation": result["elevation"]})
+            frame.attrs["warning"] = result["warning"]
+            if result["warning"]:
+                logger.warning("TerrainProfile warning: %s", result["warning"])
+            yield frame
 
     @staticmethod
     @log_call
