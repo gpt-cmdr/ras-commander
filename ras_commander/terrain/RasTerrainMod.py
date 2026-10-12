@@ -185,6 +185,9 @@ class RasTerrainMod:
         artifacts; exhaust all native iterators inside it. Public affinity and
         ThreadPool controls prevent nested native parallel HDF reads. They are
         verified before sampling and restored/read back on return or exception.
+        A default-scheduler managed Task waits for worker entry and complete
+        delegate return before restoration, preventing caller inlining and early
+        interpreter shutdown while Python.NET finishes the callback.
         Unsupported controls fail closed. No HEC private cache or hydraulic
         parameter changes. Returns the callback result and execution evidence;
         this function writes no files. Concurrent/nested calls are rejected.

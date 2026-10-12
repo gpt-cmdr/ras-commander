@@ -229,6 +229,12 @@ remain unchanged. The single worker, process-affinity selection and restoration
 must be read back successfully. Fresh source-parent first-profile controls pass
 under this execution mode; complete-support and corpus checks remain necessary.
 
+The worker runs on the explicit default CLR Task scheduler. The caller first
+waits for worker entry, then for the managed delegate to return completely before
+restoring controls or exiting. A Python-body completion event alone does not
+cover Python.NET's delegate conversion and return; the managed Task barrier
+prevents that completion gap without changing coordinates or native parameters.
+
 
 The isolated query reader also applies the public serial sampling controls in its
 native-only process. The ready message records entry on the sole CLR pool worker;

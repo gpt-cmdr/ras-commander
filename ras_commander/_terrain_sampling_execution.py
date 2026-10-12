@@ -17,18 +17,20 @@ def _load_controls(*, initialized: bool = False) -> dict[str, Any]:
         from .terrain import RasTerrainMod
 
         RasTerrainMod._ensure_initialized()
-    from System import Environment, IntPtr
+    from System import Action, Environment, IntPtr
     from System.Diagnostics import Process
-    from System.Threading import ManualResetEvent, Thread, ThreadPool, WaitCallback
+    from System.Threading import CancellationToken, ManualResetEvent, Thread, ThreadPool
+    from System.Threading.Tasks import Task, TaskCreationOptions, TaskScheduler
 
     process = Process.GetCurrentProcess()
 
     def invoke(operation: Callable[[], _T]) -> _T:
         results = []
         errors = []
-        finished = ManualResetEvent(False)
+        started = ManualResetEvent(False)
 
-        def call(state: Any) -> None:
+        def call() -> None:
+            started.Set()
             try:
                 if not Thread.CurrentThread.IsThreadPoolThread:
                     raise RuntimeError(
@@ -37,16 +39,23 @@ def _load_controls(*, initialized: bool = False) -> dict[str, Any]:
                 results.append(operation())
             except BaseException as exc:  # noqa: BLE001 - preserve failure and restore runtime
                 errors.append(exc)
-            finally:
-                finished.Set()
 
         try:
-            if not ThreadPool.QueueUserWorkItem(WaitCallback(call)):
-                raise RuntimeError("CLR pool rejected the native sampling callback")
-            # An event wait cannot inline the callback on the waiting Python thread.
-            finished.WaitOne()
+            task = Task.Factory.StartNew(
+                Action(call),
+                getattr(CancellationToken, "None"),
+                TaskCreationOptions.DenyChildAttach,
+                TaskScheduler.Default,
+            )
+            # Enter the worker before waiting on its Task, preventing wait-time
+            # inlining on the caller. Task completion follows the managed delegate
+            # return, including Python.NET conversion after the Python body exits.
+            started.WaitOne()
+            task.Wait()
+            if not task.IsCompleted:
+                raise RuntimeError("native sampling callback has not completed")
         finally:
-            finished.Dispose()
+            started.Dispose()
         if errors:
             raise errors[0]
         if len(results) != 1:
@@ -76,7 +85,8 @@ def run_serial_sampling(
     work. Uses public process-affinity and CLR ThreadPool APIs, never HEC private
     caches or sampling parameters. Units, CRS, source mutation and artifacts are
     those of the callback. Returns its result plus execution/restoration evidence.
-    Unsupported limits fail before invoking the callback. Concurrent or nested
+    A managed Task barrier completes the delegate return before restoration or
+    interpreter shutdown. Unsupported limits fail before invoking the callback. Concurrent or nested
     calls are rejected; a callback must not await separately queued CLR work.
     """
     if not callable(operation):

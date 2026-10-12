@@ -6,6 +6,95 @@ from ras_commander import _terrain_sampling_execution as sampling
 from ras_commander.terrain import RasTerrainMod
 
 
+@pytest.mark.parametrize("fails", [False, True])
+def test_managed_delegate_tail_finishes_before_result_or_error(monkeypatch, fails):
+    """A Python-body signal must not allow shutdown while its delegate returns."""
+    import sys
+    import threading
+    from types import ModuleType, SimpleNamespace
+
+    state = {"waited": False, "tail_complete": False}
+    tail = threading.Event()
+    error = ValueError("callback failure")
+
+    class Event:
+        def __init__(self, _):
+            self.event = threading.Event()
+
+        def Set(self):
+            self.event.set()
+
+        def WaitOne(self):
+            assert self.event.wait(5)
+
+        def Dispose(self):
+            assert state["tail_complete"]
+
+    class PoolThreadDescriptor:
+        def __get__(self, instance, owner):
+            return SimpleNamespace(
+                IsThreadPoolThread=threading.current_thread()
+                is not threading.main_thread()
+            )
+
+    class Thread:
+        CurrentThread = PoolThreadDescriptor()
+
+    class ManagedTask:
+        def __init__(self, callback, cancellation, options, scheduler):
+            assert (cancellation, options, scheduler) == ("none", "deny", "default")
+            self.IsCompleted = False
+
+            def run():
+                callback()
+                assert tail.wait(5)
+                state["tail_complete"] = True
+                self.IsCompleted = True
+
+            self.worker = threading.Thread(target=run)
+            self.worker.start()
+
+        def Wait(self):
+            state["waited"] = True
+            tail.set()
+            self.worker.join(5)
+            assert not self.worker.is_alive()
+
+    system = ModuleType("System")
+    system.Action = lambda callback: callback
+    system.Environment = SimpleNamespace(ProcessorCount=2)
+    system.IntPtr = lambda value: value
+    diagnostics = ModuleType("System.Diagnostics")
+    diagnostics.Process = SimpleNamespace(GetCurrentProcess=lambda: object())
+    threads = ModuleType("System.Threading")
+    threads.CancellationToken = SimpleNamespace(**{"None": "none"})
+    threads.ManualResetEvent, threads.Thread = Event, Thread
+    threads.ThreadPool = SimpleNamespace(
+        SetMinThreads=lambda *args: True,
+        SetMaxThreads=lambda *args: True,
+    )
+    tasks = ModuleType("System.Threading.Tasks")
+    tasks.Task = SimpleNamespace(Factory=SimpleNamespace(StartNew=ManagedTask))
+    tasks.TaskCreationOptions = SimpleNamespace(DenyChildAttach="deny")
+    tasks.TaskScheduler = SimpleNamespace(Default="default", Current="custom")
+    for module in (system, diagnostics, threads, tasks):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+
+    def operation():
+        if fails:
+            raise error
+        return 42
+
+    invoke = sampling._load_controls(initialized=True)["invoke"]
+    if fails:
+        with pytest.raises(ValueError) as caught:
+            invoke(operation)
+        assert caught.value is error
+    else:
+        assert invoke(operation) == 42
+    assert state == {"waited": True, "tail_complete": True}
+
+
 @pytest.fixture
 def runtime(monkeypatch):
     state = {"affinity": 12, "min": (2, 2), "max": (32, 16), "invocations": 0}
@@ -197,17 +286,34 @@ def test_native_dispatch_queues_pool_work_without_inlining(
         def Dispose(self):
             calls.append("dispose")
 
-    def queue(callback):
+    def queue(callback, cancellation, options, scheduler):
+        assert (cancellation, options, scheduler) == ("none", "deny", "default")
         calls.append("queue")
-        if queue_ok:
-            callback(None)
-        return queue_ok
+        if not queue_ok:
+            raise RuntimeError("CLR pool rejected task")
+        callback()
+        return SimpleNamespace(
+            IsCompleted=True, Wait=lambda: calls.append("task_complete")
+        )
 
     monkeypatch.setattr(RasTerrainMod, "_ensure_initialized", lambda: None)
     monkeypatch.setitem(
         sys.modules,
         "System",
-        SimpleNamespace(Environment=SimpleNamespace(ProcessorCount=8), IntPtr=int),
+        SimpleNamespace(
+            Action=lambda callback: callback,
+            Environment=SimpleNamespace(ProcessorCount=8),
+            IntPtr=int,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "System.Threading.Tasks",
+        SimpleNamespace(
+            Task=SimpleNamespace(Factory=SimpleNamespace(StartNew=queue)),
+            TaskCreationOptions=SimpleNamespace(DenyChildAttach="deny"),
+            TaskScheduler=SimpleNamespace(Default="default", Current="custom"),
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -225,6 +331,7 @@ def test_native_dispatch_queues_pool_work_without_inlining(
         sys.modules,
         "System.Threading",
         SimpleNamespace(
+            CancellationToken=SimpleNamespace(**{"None": "none"}),
             ManualResetEvent=Event,
             ThreadPool=pool,
             WaitCallback=lambda callback: callback,
@@ -238,7 +345,7 @@ def test_native_dispatch_queues_pool_work_without_inlining(
     if queue_ok and on_pool:
         assert invoke(lambda: invoked.append("sample") or 7) == 7
         assert invoked == ["sample"]
-        assert calls == ["queue", "signal", "wait", "dispose"]
+        assert calls == ["queue", "signal", "wait", "task_complete", "dispose"]
     else:
         with pytest.raises(RuntimeError, match="pool"):
             invoke(lambda: invoked.append("must not sample"))
