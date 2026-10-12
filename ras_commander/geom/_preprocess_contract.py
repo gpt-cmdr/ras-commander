@@ -230,7 +230,8 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         "infiltration_methods": {},
     }
     result["features"]["Geometry/Structures"] += sum(
-        line.startswith("SA/2D Area Conn=") for line in lines
+        line.startswith(("SA/2D Area Conn=", "Bridge Culvert-", "IW Pilot Flow=", "Lat Struct="))
+        for line in lines
     )
     # Metadata helper includes storage areas; only authored Is2D=-1 blocks belong
     # in the required mesh contract, including an invalid empty seed block.

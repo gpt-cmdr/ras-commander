@@ -121,11 +121,12 @@ def test_control_products_include_interior_and_ghost_cells(tmp_path, monkeypatch
     }
 
 
-def test_authored_structure_unknown_product_schema_fails_before_mutation(tmp_path):
+@pytest.mark.parametrize("marker", ["Connection=Bridge,0,0", "SA/2D Area Conn=Bridge", "Bridge Culvert-", "IW Pilot Flow=0", "Lat Struct=Lateral"])
+def test_authored_structure_unknown_product_schema_fails_before_mutation(tmp_path, marker):
     text, path, _ = fixture(tmp_path)
     original = path.read_bytes()
     with text.open("a") as stream:
-        stream.write("Connection=Bridge,0,0\n")
+        stream.write(marker + "\n")
     with pytest.raises(
         NotImplementedError, match="GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED"
     ):
