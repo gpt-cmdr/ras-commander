@@ -733,6 +733,30 @@ The `get_comp_msgs()` method attempts to read computation messages from multiple
 
 ### RasUnsteady
 
+`disable_meteorology(..., remove_source_references=True)` prepares an owned
+boundary-only child without inherited gridded or point meteorological sources.
+It removes met station/source records and resets the sidecar meteorology groups
+to disabled. Boundary hydrographs, boundary DSS links, and infiltration are
+retained. The default preserves inactive sidecar sources. A valid empty
+unsteady sidecar is initialized with disabled meteorology groups; an owned
+compiled `*.tmp.hdf` still requires an existing Event Conditions group.
+
+The operation retains the existing CRLF text serialization and preserves
+legacy filename bytes.
+Records split only on CRLF, CR or LF. Unicode separators, form feeds and
+vertical tabs remain part of filenames and other record content.
+`boundary_conditions_unchanged` compares boundary bytes
+with only CR/LF record separators normalized. `boundary_conditions_byte_identical`
+also compares separators. Returned evidence includes flow-text hashes and all
+removed meteorological source keys, including primary precipitation keys.
+
+Changes are staged and validated before application. Original file objects,
+ACLs, ownership, permissions and hard links are retained, and an application
+exception restores original bytes. Use exclusive access. This is exception
+rollback, not crash atomicity. A crash or failed restoration leaves each
+original in the sibling `.<filename>.meteorology-*/original` recovery file;
+a restoration error reports these paths.
+
 <a id="ras_commander.RasUnsteady"></a>
 
 ::: ras_commander.RasUnsteady.RasUnsteady
