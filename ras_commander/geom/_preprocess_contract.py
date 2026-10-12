@@ -162,7 +162,9 @@ def _text_features(lines: list[str], prefix: str, arc: str) -> list[dict]:
     return features
 
 
-def _feature_issues(hdf, path: str, features: list[dict]) -> list[str]:
+def _feature_issues(
+    hdf, path: str, features: list[dict], family="Polyline"
+) -> list[str]:
     """Compare each serialized feature's identity and coordinates, in FID order."""
     issues = []
     if not features:
@@ -173,13 +175,14 @@ def _feature_issues(hdf, path: str, features: list[dict]) -> list[str]:
         return [path]
     group = hdf[path]
     if any(
-        name not in group for name in ("Attributes", "Polyline Info", "Polyline Points")
+        name not in group
+        for name in ("Attributes", f"{family} Info", f"{family} Points")
     ):
         return [f"{path}: missing authored feature geometry"]
     attrs, info, points = (
         group["Attributes"],
-        group["Polyline Info"],
-        group["Polyline Points"],
+        group[f"{family} Info"],
+        group[f"{family} Points"],
     )
     if (
         len(attrs) != len(features)
@@ -246,9 +249,7 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                 lines, "Reference Line Name=", "Reference Line Arc="
             ),
         },
-        "manning_region_count": sum(
-            line.startswith("LCMann Region Name=") for line in lines
-        ),
+        "manning_regions": [],
         "infiltration_methods": {},
         "projections": {},
     }
@@ -310,6 +311,44 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                 f"GEOMETRY_INPUT_INVALID: malformed computation points for {name}"
             )
         result["seed_points"][name] = np.asarray(values).reshape(int(count), 2)
+    from .GeomLandCover import GeomLandCover
+    from shapely.geometry import Polygon
+
+    for block in GeomLandCover._find_region_blocks(lines):
+        if block["polygon_idx"] is None:
+            continue  # A calibration table name alone is not a polygon override.
+        features = _text_features(
+            lines[block["start_idx"] : block["end_idx"]],
+            "LCMann Region Name=",
+            "LCMann Region Polygon=",
+        )
+        result["manning_regions"].extend(features)
+    result["manning_region_interactions"] = []
+    if result["manning_regions"]:
+        areas = GeomStorage.get_storage_area_polygons(geometry_path, exclude_2d=False)
+        for feature in result["manning_regions"]:
+            polygon = Polygon(feature["coordinates"])
+            if not polygon.is_valid or polygon.is_empty:
+                raise NotImplementedError(
+                    "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: invalid or multipart Manning region requires a qualified interaction contract"
+                )
+            intersected = []
+            for _, area in areas.iterrows():
+                if area["Name"] not in result["areas"]:
+                    continue
+                if not area.geometry.is_valid or area.geometry.is_empty:
+                    raise ValueError("GEOMETRY_INPUT_INVALID: invalid 2D perimeter")
+                if not polygon.disjoint(area.geometry):
+                    intersected.append(area["Name"])
+            result["manning_region_interactions"].append(
+                {
+                    "name": feature["name"],
+                    "areas": intersected,
+                    "reason": "intersects_current_mesh"
+                    if intersected
+                    else "outside_current_mesh",
+                }
+            )
     if not hdf_path.exists():
         return result
     current = not _mesh_hdf_consistency_issues(geometry_path, hdf_path)
@@ -513,7 +552,12 @@ def validate(
             ):
                 missing.append(f"{path}/{family}: invalid packed ranges")
 
-        def attachments(path, table, count, identity, index_field):
+        def attachments(path, table, count, identity, index_field, required_ids=None):
+            required_ids = (
+                set(range(count)) if required_ids is None else set(required_ids)
+            )
+            if not required_ids and f"{path}/{table}" not in hdf:
+                return
             obj = require(f"{path}/{table}")
             if obj is None:
                 return
@@ -526,7 +570,7 @@ def validate(
             if (
                 np.any(identifiers < 0)
                 or np.any(identifiers >= count)
-                or not set(range(count)).issubset(set(identifiers))
+                or not required_ids.issubset(set(identifiers))
             ):
                 missing.append(
                     f"{path}/{table}: invalid or missing feature attachments"
@@ -761,16 +805,22 @@ def validate(
                     hdf[f"{path}/Property Tables"]
                 ):
                     missing.append(f"{path}/Property Tables")
-        if expected["manning_region_count"]:
+        if expected["manning_regions"]:
             path = "Geometry/Land Cover (Manning's n)"
-            count = expected["manning_region_count"]
+            changed.extend(
+                _feature_issues(hdf, path, expected["manning_regions"], "Polygon")
+            )
+            count = len(expected["manning_regions"])
             require(f"{path}/Attributes", count)
+            interactions = expected["manning_region_interactions"]
+            evidence["manning_region_interactions"] = interactions
+            active = [i for i, region in enumerate(interactions) if region["areas"]]
             for table, field in (
                 ("External Faces", "Face Index"),
                 ("Internal Faces", "Face Index"),
                 ("Internal Cells", "Cell Index"),
             ):
-                attachments(path, table, count, "Region ID", field)
+                attachments(path, table, count, "Region ID", field, active)
     if expected["areas"]:
         changed.extend(_mesh_hdf_consistency_issues(geometry_path, hdf_path))
     evidence.update(inputs_preserved=not changed, products_complete=not missing)

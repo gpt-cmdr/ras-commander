@@ -22,7 +22,7 @@ def fixture(tmp_path):
     text = tmp_path / "Synthetic.g01"
     text.write_text(
         "Geom Title=Synthetic\nStorage Area=Synthetic,0,0\nStorage Area Surface Line= 4\n"
-        + "".join(f"{x:16.6f}{y:16.6f}" for x, y in [(0, 0), (1, 0), (1, 1), (0, 0)])
+        + "\n".join(f"{x:16.6f}{y:16.6f}" for x, y in [(0, 0), (1, 0), (1, 1), (0, 0)])
         + "\nStorage Area Is2D=-1\nStorage Area 2D Points= 2\n"
         + f"{0.2:16.6f}{0.2:16.6f}{0.6:16.6f}{0.6:16.6f}\n"
     )
@@ -96,6 +96,95 @@ def products(path):
         area.create_dataset("Infiltration/Abstraction Ratio", data=[0.2, 0.2])
         area.create_dataset("Infiltration/Minimum Infiltration Rate", data=[0.0, 0.0])
         area.create_dataset("Infiltration/Properties", data=[1])
+
+
+def manning_region(text, path, outside=True):
+    origin = 2.0 if outside else 0.1
+    coordinates = np.array(
+        [
+            (origin, origin),
+            (origin + 0.2, origin),
+            (origin + 0.2, origin + 0.1),
+            (origin, origin),
+        ]
+    )
+    with text.open("a") as stream:
+        stream.write(
+            "LCMann Region Name=Override\nLCMann Region Table=1\nOpen Water,0.04\nLCMann Region Polygon=4\n"
+        )
+        stream.write("".join(f"{x:16.6f}{y:16.6f}" for x, y in coordinates) + "\n")
+    group = "Geometry/Land Cover (Manning's n)"
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(
+            group + "/Attributes",
+            data=np.array(
+                [(b"Override", b"" if outside else b"Synthetic")],
+                dtype=[("Name", "S16"), ("2D Area Name", "S16")],
+            ),
+        )
+        hdf.create_dataset(group + "/Polygon Info", data=[[0, 4, 0, 1]])
+        hdf.create_dataset(group + "/Polygon Parts", data=[[0, 4]])
+        hdf.create_dataset(group + "/Polygon Points", data=coordinates)
+    return snapshot(text, path)
+
+
+def test_disjoint_manning_polygon_preserved_without_inapplicable_mappings(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path)
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert changed == missing == []
+    assert evidence["manning_region_interactions"] == [
+        {"name": "Override", "areas": [], "reason": "outside_current_mesh"}
+    ]
+
+
+def test_intersecting_manning_polygon_still_requires_mappings(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path, outside=False)
+    changed, missing, _ = validate(text, path, expected, time.time() - 1)
+    assert changed == []
+    assert all(
+        any(name in issue for issue in missing)
+        for name in ["External Faces", "Internal Faces", "Internal Cells"]
+    )
+
+
+def test_disjoint_manning_polygon_change_is_not_waived(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path)
+    with h5py.File(path, "r+") as hdf:
+        hdf["Geometry/Land Cover (Manning's n)/Polygon Points"][0, 0] += 0.01
+    assert any(
+        "authored identity or coordinates changed" in issue
+        for issue in validate(text, path, expected, time.time() - 1)[0]
+    )
+
+
+def test_disjoint_region_does_not_accept_stale_attachment_indexes(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset(
+            "Geometry/Land Cover (Manning's n)/Internal Cells",
+            data=np.array(
+                [(0, 999)], dtype=[("Region ID", "i4"), ("Cell Index", "i4")]
+            ),
+        )
+    assert any(
+        "indexes outside current mesh" in issue
+        for issue in validate(text, path, expected, time.time() - 1)[1]
+    )
+
+
+def test_table_name_without_polygon_has_no_attachment_requirement(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    with text.open("a") as stream:
+        stream.write(
+            "LCMann Region Name=TableOnly\nLCMann Region Table=1\nOpen Water,0.04\n"
+        )
+    expected = snapshot(text, path)
+    assert expected["manning_regions"] == []
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
 @pytest.mark.parametrize(

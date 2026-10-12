@@ -854,8 +854,14 @@ and does not restore obsolete products. Completion requires a freshly written
 tables sized for the current topology, BC/reference attachments and associated
 infiltration tables. Infiltration uses interior-cell counts; volume tables
 also include ghost cells, whose zero-length entries are permitted.
-Reference-line terrain profiles and Manning-region attachments are checked
-when authored. The dimensioned product contract covers structure-free HEC-RAS
+Reference-line terrain profiles are checked when authored. Manning polygon
+names and coordinates are checked against the geometry text; attachment families
+are required for regions intersecting a current 2D perimeter. A valid disjoint
+polygon remains an authored input, with `outside_current_mesh` evidence, and
+does not require absent cell/face mappings. Present mappings still require valid
+region IDs and current mesh indexes. A calibration table name alone does not
+establish a polygon interaction. Invalid or multipart polygon interaction schemas
+fail before mutation. The dimensioned product contract covers structure-free HEC-RAS
 5/6 geometry with authored 2D areas; it does not qualify pure 1D completion.
 Authored structures in 2D or mixed 1D/2D geometries fail before cache invalidation with
 `GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`: the structure-property schema has not
