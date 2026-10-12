@@ -137,8 +137,9 @@ def _repair_seeds():
 
 @pytest.mark.parametrize("repair_kind", ["dp", "vertex_removal"])
 @pytest.mark.parametrize("cell_size", [50.0, 80.0])
+@pytest.mark.parametrize("strict", [False, True])
 def test_generate_persists_reloads_and_retries(
-    repair_project, monkeypatch, repair_kind, cell_size
+    repair_project, monkeypatch, repair_kind, cell_size, strict
 ):
     path, hdf, ras, calls = repair_project
     before = path.read_bytes()
@@ -163,7 +164,13 @@ def test_generate_persists_reloads_and_retries(
         ras_object=ras,
         max_iterations=2,
         cell_size=cell_size,
+        require_complete_products=strict,
     )
+    assert [
+        kwargs["require_complete_products"]
+        for name, kwargs in calls
+        if name == "preprocess"
+    ] == [strict]
     assert result.ok
     assert result.iterations == 2
     assert module._read_cell_size_from_hdf(hdf, "MainArea") == cell_size

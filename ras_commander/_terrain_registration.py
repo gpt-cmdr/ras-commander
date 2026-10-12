@@ -29,7 +29,9 @@ def reassign_result_map_terrains(rasmap_path, terrain_names):
         not isinstance(old, str) or not old or not isinstance(new, str) or not new
         for old, new in terrain_names.items()
     ):
-        raise ValueError("Terrain names must map nonempty old names to nonempty new names")
+        raise ValueError(
+            "Terrain names must map nonempty old names to nonempty new names"
+        )
     if set(terrain_names.values()) - registered:
         raise ValueError("Every destination terrain name must be registered in Mapper")
     changes = []
@@ -58,7 +60,9 @@ def reassign_result_map_terrains(rasmap_path, terrain_names):
                 }
             )
     if changes:
-        descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{path.name}.", dir=path.parent
+        )
         os.close(descriptor)
         try:
             tree.write(temporary, encoding="utf-8", xml_declaration=True)
@@ -83,7 +87,9 @@ def create_terrain_sampling_map(
         == terrain.name.casefold()
     ]
     if len(matches) != 1:
-        raise ValueError("Sampling terrain must match exactly one source registration by basename")
+        raise ValueError(
+            "Sampling terrain must match exactly one source registration by basename"
+        )
     if not terrain.is_file() or not projection.is_file() or output.exists():
         raise ValueError("Sampling inputs must exist and output Mapper must be new")
     if geometry_hdf is not None and not Path(geometry_hdf).is_file():
@@ -133,7 +139,9 @@ def relocate_rasmap_assets(rasmap_path, assets):
         if key in by_name:
             relative = os.path.relpath(by_name[key], mapper.parent).replace("/", "\\")
             element.set("Filename", relative)
-            changes.append({"element": element.tag, "old_filename": filename, "filename": relative})
+            changes.append(
+                {"element": element.tag, "old_filename": filename, "filename": relative}
+            )
     tree.write(mapper, encoding="utf-8", xml_declaration=True)
     return changes
 
@@ -147,7 +155,9 @@ def audit_terrain_associations(rasmap_path, geometry_hdfs):
     registrations = root.findall("./Terrains/Layer")
     names = {layer.get("Name", "") for layer in registrations}
     registered_paths = {
-        (mapper.parent / Path(layer.get("Filename", "").replace("\\", os.sep))).resolve()
+        (
+            mapper.parent / Path(layer.get("Filename", "").replace("\\", os.sep))
+        ).resolve()
         for layer in registrations
     }
     paths, problems = [], []
@@ -184,7 +194,9 @@ def audit_terrain_associations(rasmap_path, geometry_hdfs):
                 stale.append({"plan_name": plan.get("Name", ""), "terrain_name": name})
     geometry = []
     if not geometry_hdfs:
-        problems.append({"association": "terrain_hdf_path", "message": "No geometry supplied"})
+        problems.append(
+            {"association": "terrain_hdf_path", "message": "No geometry supplied"}
+        )
     for item in geometry_hdfs:
         hdf = Path(item)
         association = GeomMesh.get_geometry_association(hdf, resolve_paths=False)
@@ -211,8 +223,12 @@ def audit_terrain_associations(rasmap_path, geometry_hdfs):
             geometry.append(row)
             if not row["relative"] or not row["exists"]:
                 problems.append(row)
-            elif key == "terrain_hdf_path" and resolved.resolve() not in registered_paths:
-                problems.append({**row, "message": "Terrain is not registered in Mapper"})
+            elif (
+                key == "terrain_hdf_path" and resolved.resolve() not in registered_paths
+            ):
+                problems.append(
+                    {**row, "message": "Terrain is not registered in Mapper"}
+                )
     return {
         "status": "pass" if registrations and not problems and not stale else "hold",
         "terrain_names": sorted(names),

@@ -141,6 +141,12 @@ geometry import, but the hydraulic solver is never invoked. Install the
 declared `gui` and `mesh` optional dependency groups when enabling the exact
 refresh and remesh steps.
 
+For headless refresh, set `refresh_method="rasexe"` and
+`require_complete_products=True` to require qualified geometry completion.
+The latter defaults to False for upstream compatibility and propagates to the
+initial preprocessor call, numeric-repair retry, and mesh-repair preprocessing.
+These completion checks do not establish hydraulic acceptance.
+
 ## Review parent-face flux locations
 
 ```python
