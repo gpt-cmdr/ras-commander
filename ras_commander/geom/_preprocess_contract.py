@@ -311,8 +311,9 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                 f"GEOMETRY_INPUT_INVALID: malformed computation points for {name}"
             )
         result["seed_points"][name] = np.asarray(values).reshape(int(count), 2)
-    from .GeomLandCover import GeomLandCover
     from shapely.geometry import Polygon
+
+    from .GeomLandCover import GeomLandCover
 
     for block in GeomLandCover._find_region_blocks(lines):
         if block["polygon_idx"] is None:
