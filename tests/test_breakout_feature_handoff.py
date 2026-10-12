@@ -303,6 +303,67 @@ def _patch_points(monkeypatch, callback):
     monkeypatch.setattr(GeomMesh, "generate_computation_points", staticmethod(callback))
 
 
+@pytest.mark.parametrize("empty_sidecar", [False, True])
+def test_boundary_only_disables_met_before_refresh_without_changing_source(
+    tmp_path, monkeypatch, empty_sidecar
+):
+    preflight, clone, ras = _fixture(tmp_path)
+    original = preflight.source_unsteady_path.read_bytes()
+    original_clone = clone.unsteady_path.read_bytes()
+    if empty_sidecar:
+        for path in [preflight.source_unsteady_path, clone.unsteady_path]:
+            with h5py.File(Path(str(path) + ".hdf"), "w"):
+                pass
+        original_sidecar = Path(
+            str(preflight.source_unsteady_path) + ".hdf"
+        ).read_bytes()
+
+    def refresh(*args, **kwargs):
+        assert b"Precipitation Mode=Disable" in clone.unsteady_path.read_bytes()
+        assert b"Met BC=Precipitation|Mode=None" in clone.unsteady_path.read_bytes()
+        if empty_sidecar:
+            with h5py.File(Path(str(clone.unsteady_path) + ".hdf"), "r") as hdf:
+                assert (
+                    hdf["Event Conditions/Meteorology/Precipitation"].attrs["Enabled"]
+                    == 0
+                )
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    _patch_points(
+        monkeypatch,
+        lambda *a, **k: SimpleNamespace(
+            status="success", cell_count=10, error_message=None
+        ),
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
+    )
+    monkeypatch.setattr(
+        GeomMesh,
+        "generate",
+        staticmethod(lambda *a, **k: SimpleNamespace(ok=True, error_message=None)),
+    )
+    result = RasBreakout2D.prepare_cloned_geometry(
+        preflight,
+        clone,
+        ras_object=ras,
+        refresh_method="rasexe",
+        disable_meteorology=True,
+    )
+    assert preflight.source_unsteady_path.read_bytes() == original
+    assert all(
+        line in clone.unsteady_path.read_bytes() for line in original_clone.splitlines()
+    )
+    assert not result.boundaries_unchanged
+    assert result.meteorology["source_references_removed"]
+    if empty_sidecar:
+        assert (
+            Path(str(preflight.source_unsteady_path) + ".hdf").read_bytes()
+            == original_sidecar
+        )
+
+
 @pytest.mark.parametrize("method", ["rasexe", "rasmapper"])
 @pytest.mark.parametrize(
     "all_dropped", [False, True], ids=["clip_keep_drop", "all_refinements_dropped"]
