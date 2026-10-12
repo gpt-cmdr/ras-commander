@@ -235,6 +235,16 @@ restoring controls or exiting. A Python-body completion event alone does not
 cover Python.NET's delegate conversion and return; the managed Task barrier
 prevents that completion gap without changing coordinates or native parameters.
 
+The corrected implementation is also qualified in a separately frozen installed
+runtime. Paired parent, child and unmodified-child reads complete at all 1,024
+delivered-parent centres with zero difference or nodata and three lowered centres.
+An independent Linux check confirms the original affine, foot CRS and exact
+readback. Installed module hashes and completed native execution records bind
+the result; the earlier source-overlay diagnostics are separate. This small
+control qualifies the callback completion path. Every derived terrain still
+requires its own complete spatial, profile and association gates, and none of
+these checks constitutes hydraulic approval.
+
 
 The isolated query reader also applies the public serial sampling controls in its
 native-only process. The ready message records entry on the sole CLR pool worker;
