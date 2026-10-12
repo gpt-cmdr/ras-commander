@@ -838,8 +838,11 @@ breaklines, BC/reference lines and structure records. It must remain
 byte-identical. Compiled area/feature mirrors are checked against that text;
 an incoming HDF can still describe a parent and does not define child features.
 HDF-only refinement regions, Projection, terrain/classification associations
-and Manning calibration are preserved semantically, allowing native fixed-string
-width changes without changing values.
+and Manning calibration are preserved semantically. Projection definitions are
+compared with axis-aware `pyproj.CRS.equals`: equivalent WKT serialization,
+including native standard-parallel ordering and numeric formatting, is allowed;
+a different CRS or axis order fails. Other retained values are unchanged,
+allowing native fixed-string widths to differ.
 
 For authored 2D areas, the method retains a unique sibling HDF backup and removes
 recognized native product tables before launch, including `.c##` caches even when

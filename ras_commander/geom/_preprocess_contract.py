@@ -94,6 +94,28 @@ def _digest(value) -> str:
     return hashlib.sha256(repr(_semantic(value)).encode("utf-8")).hexdigest()
 
 
+def _projection_equal(before, after) -> bool:
+    """Compare CRS definitions, including native equivalent WKT serialization."""
+    from .GeomPreprocessor import GeomPreprocessor
+
+    left = GeomPreprocessor._decode_hdf_attribute(before)
+    right = GeomPreprocessor._decode_hdf_attribute(after)
+    if left == right:
+        return True
+    try:
+        from pyproj import CRS
+        from pyproj.exceptions import CRSError
+    except ImportError:
+        return False
+
+    try:
+        return CRS.from_user_input(left).equals(
+            CRS.from_user_input(right), ignore_axis_order=False
+        )
+    except (ValueError, TypeError, CRSError):
+        return False
+
+
 def _text_features(lines: list[str], prefix: str, arc: str) -> list[dict]:
     from .GeomParser import GeomParser
 
@@ -228,9 +250,12 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
             line.startswith("LCMann Region Name=") for line in lines
         ),
         "infiltration_methods": {},
+        "projections": {},
     }
     result["features"]["Geometry/Structures"] += sum(
-        line.startswith(("SA/2D Area Conn=", "Bridge Culvert-", "IW Pilot Flow=", "Lat Struct="))
+        line.startswith(
+            ("SA/2D Area Conn=", "Bridge Culvert-", "IW Pilot Flow=", "Lat Struct=")
+        )
         for line in lines
     )
     # A malformed structure block can lack its normal feature marker. Only
@@ -238,8 +263,12 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     from .GeomParser import GeomParser
 
     unsupported_sections = any(
-        GeomParser.extract_keyword_value(line, "Type RM Length L Ch R").split(",", 1)[0].strip() != "1"
-        for line in lines if line.startswith("Type RM Length L Ch R =")
+        GeomParser.extract_keyword_value(line, "Type RM Length L Ch R")
+        .split(",", 1)[0]
+        .strip()
+        != "1"
+        for line in lines
+        if line.startswith("Type RM Length L Ch R =")
     )
     # Metadata helper includes storage areas; only authored Is2D=-1 blocks belong
     # in the required mesh contract, including an invalid empty seed block.
@@ -254,7 +283,9 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     result["areas"] = {
         name: value for name, value in result["areas"].items() if name in two_d
     }
-    if result["areas"] and (result["features"]["Geometry/Structures"] or unsupported_sections):
+    if result["areas"] and (
+        result["features"]["Geometry/Structures"] or unsupported_sections
+    ):
         raise NotImplementedError(
             "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: authored 2D structures require a qualified native structure-product contract"
         )
@@ -288,12 +319,16 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                 continue
             for name in (*ASSOCIATIONS, "Projection", "Units System"):
                 if name in hdf[path].attrs:
+                    if name == "Projection":
+                        result["projections"][f"{path}@{name}"] = hdf[path].attrs[name]
                     result["attributes"][f"{path}@{name}"] = _digest(
                         hdf[path].attrs[name]
                     )
         for path in ("Projection", CALIBRATION):
             if path in hdf:
                 result["inputs"][path] = _digest(hdf[path][()])
+                if path == "Projection":
+                    result["projections"][path] = hdf[path][()]
         # Refinement regions are HDF-only authored input, including when the
         # cached parent topology has not yet been refreshed from child text.
         if REFINEMENT in hdf:
@@ -424,14 +459,25 @@ def validate(
         missing.append("geometry HDF not freshly written")
     with h5py.File(hdf_path, "r") as hdf:
         for path, digest in expected["inputs"].items():
-            if path not in hdf or _digest(hdf[path][()]) != digest:
+            same = path in hdf and (
+                _projection_equal(expected["projections"][path], hdf[path][()])
+                if path in expected.get("projections", {})
+                else _digest(hdf[path][()]) == digest
+            )
+            if not same:
                 changed.append(path)
         for key, digest in expected["attributes"].items():
             path, name = key.rsplit("@", 1)
             if (
                 path not in hdf
                 or name not in hdf[path].attrs
-                or _digest(hdf[path].attrs[name]) != digest
+                or not (
+                    _projection_equal(
+                        expected["projections"][key], hdf[path].attrs[name]
+                    )
+                    if key in expected.get("projections", {})
+                    else _digest(hdf[path].attrs[name]) == digest
+                )
             ):
                 changed.append(key)
         for path, features in expected["feature_geometry"].items():

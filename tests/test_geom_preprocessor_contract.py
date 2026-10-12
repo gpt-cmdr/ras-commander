@@ -11,6 +11,7 @@ from ras_commander.geom._preprocess_contract import (
     AREA,
     CELL_PRODUCTS,
     FACE_PRODUCTS,
+    _projection_equal,
     invalidate_products,
     snapshot,
     validate,
@@ -208,6 +209,49 @@ def test_authored_projection_value_change_fails(tmp_path, monkeypatch):
         del hdf["Projection"]
         hdf.create_dataset("Projection", data=np.bytes_("different CRS"))
     assert validate(text, path, expected, time.time() - 1)[0] == ["Projection"]
+
+
+def test_projection_accepts_equivalent_native_wkt_encoding(tmp_path):
+    from pyproj import CRS
+
+    text, path, _ = fixture(tmp_path)
+    source = CRS.from_epsg(2278)
+    before = source.to_wkt(version="WKT1_ESRI")
+    after = source.to_wkt(version="WKT2_2019")
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["Projection"] = np.bytes_(before)
+    expected = snapshot(text, path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.attrs["Projection"] = after
+    assert validate(text, path, expected, time.time() - 1)[0] == []
+
+
+@pytest.mark.parametrize("different", ["EPSG:2277", "OGC:CRS84"])
+def test_real_projection_or_axis_change_is_rejected(different):
+    reference = "EPSG:2278" if different == "EPSG:2277" else "EPSG:4326"
+    assert not _projection_equal(reference, different)
+
+
+def test_native_esri_projection_rounding_and_parallel_order_are_equivalent():
+    from pyproj import CRS
+
+    after = CRS.from_epsg(2278).to_wkt(version="WKT1_ESRI")
+    before = (
+        after.replace(
+            'PARAMETER["False_Northing",13123333.333]',
+            'PARAMETER["False_Northing",13123333.33333333]',
+        )
+        .replace(
+            'PARAMETER["Standard_Parallel_1",30.2833333333333]',
+            'PARAMETER["Standard_Parallel_1",28.38333333333333]',
+        )
+        .replace(
+            'PARAMETER["Standard_Parallel_2",28.3833333333333]',
+            'PARAMETER["Standard_Parallel_2",30.28333333333333]',
+        )
+    )
+    assert before != after
+    assert _projection_equal(before, after)
 
 
 def test_unchanged_text_does_not_hide_missing_authored_bc(tmp_path, monkeypatch):
