@@ -110,10 +110,26 @@ def _session(config: dict, timeout_seconds: float, runtime_record: str | Path | 
 
         yield query
         process.stdin.close()
+        execution = response()["finished"]
+        maximum = execution.get("sampling_max_threads")
+        if not (
+            execution.get("mode") == "single-clr-pool-worker-v1"
+            and execution.get("called_on_pool_worker") is True
+            and execution.get("runtime_restored") is True
+            and isinstance(maximum, (list, tuple))
+            and len(maximum) == 2
+            and all(type(v) is int and v == 1 for v in maximum)
+        ):
+            raise RuntimeError("Isolated native sampling execution failed")
         process.wait(timeout=max(0.01, deadline - time.monotonic()))
         if process.returncode != 0:
             raise RuntimeError(
                 "Isolated native terrain worker returned a nonzero exit code"
+            )
+        if target is not None:
+            ready.update(status="completed", sampling_execution=execution)
+            target.write_text(
+                json.dumps(ready, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
     finally:
         watchdog.cancel()
@@ -180,3 +196,18 @@ def isolated_profile(
                 "filter_tolerance": float(tolerance),
             }
         )
+
+
+def iter_isolated_profiles(
+    mapper, geometry, profiles, tolerance, timeout_seconds, runtime_record
+):
+    config = {
+        "mode": "profile",
+        "mapper": str(Path(mapper).absolute()),
+        "geometry": str(Path(geometry).absolute()),
+    }
+    with _session(config, timeout_seconds, runtime_record) as query:
+        for coordinates in profiles:
+            yield query(
+                {"coordinates": coordinates, "filter_tolerance": float(tolerance)}
+            )

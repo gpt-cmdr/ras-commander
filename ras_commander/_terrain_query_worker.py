@@ -100,10 +100,16 @@ def _point_reader(mapper: str, name: str, modifications: bool, cell_size: float)
         if not 1 <= len(coordinates) <= 4096:
             raise ValueError("A native query requires 1 to 4096 points")
         extent = terrain.Extent
+        minimum_x, maximum_x, minimum_y, maximum_y = (
+            float(extent.MinX),
+            float(extent.MaxX),
+            float(extent.MinY),
+            float(extent.MaxY),
+        )
         points = []
         for x, y in coordinates:
             if not (math.isfinite(x) and math.isfinite(y)) or not (
-                extent.MinX <= x <= extent.MaxX and extent.MinY <= y <= extent.MaxY
+                minimum_x <= x <= maximum_x and minimum_y <= y <= maximum_y
             ):
                 raise ValueError(
                     "Supplied points lie outside the selected native terrain extent"
@@ -162,28 +168,52 @@ def main() -> None:
     from System import Console
 
     Console.SetOut(Console.Error)
-    evaluator = (
-        _point_reader(
-            config["mapper"],
-            config["terrain_name"],
-            config["use_obstructions"],
-            config["cell_size"],
-        )
-        if config["mode"] == "points"
-        else _profile_reader(config["mapper"], config["geometry"])
-    )
-    _check_python_imports()
-    print(json.dumps({"ready": runtime}, allow_nan=False), flush=True)
-    for line in sys.stdin:
-        try:
-            request = json.loads(line)
-            result = evaluator(
-                request["coordinates"] if config["mode"] == "points" else request
+
+    def serve():
+        evaluator = (
+            _point_reader(
+                config["mapper"],
+                config["terrain_name"],
+                config["use_obstructions"],
+                config["cell_size"],
             )
-            print(json.dumps({"result": result}, allow_nan=False), flush=True)
-        except Exception as exc:  # noqa: BLE001 - preserve CLR failures at the process boundary
-            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}), flush=True)
-            return 1
+            if config["mode"] == "points"
+            else _profile_reader(config["mapper"], config["geometry"])
+        )
+        _check_python_imports()
+        from System.Threading import Thread, ThreadPool
+
+        runtime["sampling_mode"] = "single-clr-pool-worker-v1"
+        runtime["called_on_pool_worker"] = bool(Thread.CurrentThread.IsThreadPoolThread)
+        runtime["sampling_max_threads"] = list(ThreadPool.GetMaxThreads())
+        if not runtime["called_on_pool_worker"] or runtime["sampling_max_threads"] != [
+            1,
+            1,
+        ]:
+            raise RuntimeError("Native query did not enter the sole CLR pool worker")
+        print(json.dumps({"ready": runtime}, allow_nan=False), flush=True)
+        for line in sys.stdin:
+            try:
+                request = json.loads(line)
+                result = evaluator(
+                    request["coordinates"] if config["mode"] == "points" else request
+                )
+                print(json.dumps({"result": result}, allow_nan=False), flush=True)
+            except Exception as exc:  # noqa: BLE001 - preserve CLR failures at the process boundary
+                print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}), flush=True)
+                return 1
+        return 0
+
+    spec = importlib.util.spec_from_file_location(
+        "native_serial_sampling",
+        Path(__file__).with_name("_terrain_sampling_execution.py"),
+    )
+    serial = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(serial)
+    result, execution = serial.run_serial_sampling(serve, _initialized=True)
+    if result:
+        return result
+    print(json.dumps({"finished": execution}, allow_nan=False), flush=True)
     # Keep both DLL and directory handles alive through every query.
     del libraries, handles
 

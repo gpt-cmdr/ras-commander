@@ -147,7 +147,8 @@ class RasTerrainMod:
         that verifies the bundled thread-safe HDF5 DLL before opening the layer.
         timeout_seconds bounds native worker lifetime and charges caller batch
         production time, but cannot preempt the caller's Python iterator itself.
-        runtime_record optionally writes a new initialized-runtime JSON record;
+        runtime_record writes a new loader/control JSON record; completed status requires
+        verified restoration and exit zero, while failures retain initialized status;
         it is runtime identity evidence, not a query-completion or hydraulic receipt.
         """
         if not isinstance(isolated, bool):
@@ -398,7 +399,7 @@ class RasTerrainMod:
             filter_tolerance: Douglas-Peucker vertical filter tolerance (default 0.01)
             isolated: Use a native-only HEC-RAS 6.6 process with verified bundled HDF5.
             timeout_seconds: Positive session limit for isolated queries, in seconds.
-            runtime_record: Optional new initialized-runtime JSON identity record.
+            runtime_record: Optional new loader/control JSON record; completed requires restoration and exit zero.
 
         Returns:
             DataFrame with columns:
@@ -477,6 +478,60 @@ class RasTerrainMod:
             'station': [float(sta_out[i]) for i in range(prof_count)],
             'elevation': [float(elev_out[i]) for i in range(prof_count)],
         })
+
+    @staticmethod
+    def iter_terrain_profiles(
+        rasmap_path: str | Path,
+        geom_hdf_path: str | Path,
+        profiles: Iterable[Sequence[Sequence[float]]],
+        filter_tolerance: float = 0.01,
+        *,
+        timeout_seconds: float = 7200,
+        runtime_record: str | Path | None = None,
+    ) -> Iterator[pd.DataFrame]:
+        """Read complete line profiles in order through one native-only 6.6 session.
+
+        Each supplied profile contains at least two finite XY coordinates in the
+        model CRS units. Native station/elevation values retain model units and
+        the existing TerrainProfile algorithm/filter. No coordinates or elevations
+        are interpolated here. Returns one station/elevation DataFrame per line;
+        attrs.warning retains the native warning. Empty native profiles remain
+        empty for caller QA. Source files are read-only; an optional new runtime
+        record describes loader identity and completed control restoration/exit.
+        The session deadline charges startup, caller production and evaluation time.
+        Its watchdog stops the native child but cannot preempt arbitrary caller code.
+        Fully exhaust or close the iterator; partial consumption is not completion.
+        """
+        mapper, geometry = RasTerrainMod._validate_paths(rasmap_path, geom_hdf_path)
+        if not np.isfinite(filter_tolerance) or filter_tolerance < 0:
+            raise ValueError("filter_tolerance must be finite and nonnegative")
+        from .._terrain_query import iter_isolated_profiles
+
+        def coordinates():
+            for line in profiles:
+                points = np.asarray(line, dtype=np.float64)
+                if (
+                    points.ndim != 2
+                    or points.shape[1] != 2
+                    or len(points) < 2
+                    or not np.isfinite(points).all()
+                ):
+                    raise ValueError("Each profile requires at least two finite XY coordinates")
+                yield points.tolist()
+
+        for result in iter_isolated_profiles(
+            mapper,
+            geometry,
+            coordinates(),
+            filter_tolerance,
+            timeout_seconds,
+            runtime_record,
+        ):
+            frame = pd.DataFrame({"station": result["station"], "elevation": result["elevation"]})
+            frame.attrs["warning"] = result["warning"]
+            if result["warning"]:
+                logger.warning("TerrainProfile warning: %s", result["warning"])
+            yield frame
 
     @staticmethod
     @log_call

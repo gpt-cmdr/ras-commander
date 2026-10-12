@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from logging import getLogger
 from threading import Lock
 from typing import Any, TypeVar
 
-from .LoggingConfig import get_logger
-
 _T = TypeVar("_T")
 _sampling_lock = Lock()
-logger = get_logger(__name__)
+logger = getLogger(__name__)
 
 
-def _load_controls() -> dict[str, Any]:
-    from .terrain import RasTerrainMod
+def _load_controls(*, initialized: bool = False) -> dict[str, Any]:
+    if not initialized:
+        from .terrain import RasTerrainMod
 
-    RasTerrainMod._ensure_initialized()
+        RasTerrainMod._ensure_initialized()
     from System import Environment, IntPtr
     from System.Diagnostics import Process
     from System.Threading import ManualResetEvent, Thread, ThreadPool, WaitCallback
@@ -35,7 +35,7 @@ def _load_controls() -> dict[str, Any]:
                         "native sampling did not enter a CLR pool worker"
                     )
                 results.append(operation())
-            except BaseException as exc:  # noqa: BLE001 - re-raised on the waiting Python thread
+            except BaseException as exc:  # noqa: BLE001 - preserve failure and restore runtime
                 errors.append(exc)
             finally:
                 finished.Set()
@@ -67,7 +67,9 @@ def _load_controls() -> dict[str, Any]:
     }
 
 
-def run_serial_sampling(operation: Callable[[], _T]) -> tuple[_T, dict[str, Any]]:
+def run_serial_sampling(
+    operation: Callable[[], _T], *, _initialized: bool = False
+) -> tuple[_T, dict[str, Any]]:
     """Run a blocking callback on the sole CLR pool worker; restore runtime controls.
 
     Requires a caller-owned isolated Windows/Wine process with no other native
@@ -82,7 +84,9 @@ def run_serial_sampling(operation: Callable[[], _T]) -> tuple[_T, dict[str, Any]
     if not _sampling_lock.acquire(blocking=False):
         raise RuntimeError("serial native sampling is already active in this process")
     try:
-        controls = _load_controls()
+        controls = (
+            _load_controls(initialized=True) if _initialized else _load_controls()
+        )
         original_affinity = controls["get_affinity"]()
         original_min = controls["get_min"]()
         original_max = controls["get_max"]()
@@ -137,7 +141,7 @@ def run_serial_sampling(operation: Callable[[], _T]) -> tuple[_T, dict[str, Any]
                 try:
                     if controls[name](*args) is False:
                         failures.append(name + " rejected restoration")
-                except BaseException as exc:  # noqa: BLE001 - attempt every restoration action
+                except BaseException as exc:  # noqa: BLE001 - preserve failure and restore runtime
                     failures.append(name + ": " + str(exc))
             try:
                 evidence["runtime_restored"] = (
@@ -145,7 +149,7 @@ def run_serial_sampling(operation: Callable[[], _T]) -> tuple[_T, dict[str, Any]
                     and controls["get_min"]() == original_min
                     and controls["get_max"]() == original_max
                 )
-            except BaseException as exc:  # noqa: BLE001 - preserve primary sampling failure
+            except BaseException as exc:  # noqa: BLE001 - preserve failure and restore runtime
                 failures.append("restoration readback: " + str(exc))
             if failures or not evidence["runtime_restored"]:
                 message = "native sampling runtime restoration failed: " + "; ".join(

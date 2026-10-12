@@ -228,3 +228,24 @@ point batch. Stored records, order, coordinates and native hydraulic parameters
 remain unchanged. The single worker, process-affinity selection and restoration
 must be read back successfully. Fresh source-parent first-profile controls pass
 under this execution mode; complete-support and corpus checks remain necessary.
+
+
+The isolated query reader also applies the public serial sampling controls in its
+native-only process. The ready message records entry on the sole CLR pool worker;
+the finish message records control restoration. A runtime_record starts with
+status=initialized and becomes status=completed only after a valid finish message and successful process exit.
+Failed or interrupted queries retain initialized diagnostics. A completed query
+record is not paired-elevation QA or hydraulic acceptance. The direct-file helper
+path skips package initialization only after its native loader has established
+bundled HDF5 object identity; no Python GIS/HDF modules enter that process.
+
+
+RasTerrainMod.iter_terrain_profiles(mapper, geometry_hdf, profiles,
+filter_tolerance=0.01, *, timeout_seconds=7200, runtime_record=None) evaluates
+complete XY lines through one native-only session. It returns one ordered
+station/elevation DataFrame per input line, with attrs.warning preserving the
+native message. Coordinates must be finite N-by-2 arrays with N at least two,
+and filter_tolerance finite/nonnegative, in source horizontal/vertical units.
+Native TerrainProfile results are unchanged; no elevation interpolation occurs
+in this reader. Empty native profiles remain empty for caller QA. Fully exhaust
+or close the iterator. A partially consumed session cannot establish completion.
