@@ -484,6 +484,16 @@ solver-process fallback. Treat a failed `PreprocessResult` as a failed
 precompute; do not launch
 the native solver with an incomplete temporary HDF.
 
+Point precipitation can be missing because HEC-RAS's own
+`RasProcess.exe CompletePreProcess` intermittently writes none ("No valid
+precipitation time-series data found for this time-window") while Ras.exe
+exits 0. `preprocess_plan()` then re-runs only that step on the same
+temporary HDF, from the project folder, up to `precipitation_repair_attempts`
+times (default 6; 0 disables) and re-validates after each attempt.
+`PreprocessResult.precipitation_repair_attempts` records each attempt, and a
+repaired result reports `signal_source="completepreprocess_repair"`. See
+[point precipitation repair](../user-guide/slurm-apptainer-execution.md#point-precipitation-repair).
+
 `run_ras_geom_preprocess()` performs the matching vendor geometry-preprocessor
 step with a bounded timeout, executable hash, before/after HDF hashes,
 compute-message parsing, and HDF readability/`Geometry`-group validation.

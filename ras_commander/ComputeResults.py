@@ -792,14 +792,23 @@ class PreprocessResult:
         x_file_path: Path to the generated .x## file, or None on failure.
         elapsed_seconds: Wall-clock time for preprocessing.
         signal_source: ``bco``, ``owned_process_artifacts``,
-            ``materialized_gridded_precipitation``,
-            ``bco_materialized_precipitation``, ``natural_completion``,
-            ``full_result_copy``, ``timeout``, or a blocking-condition
-            identifier.
+            ``completepreprocess_writer_quiescent``,
+            ``bco_completepreprocess_writer_quiescent``, ``natural_completion``,
+            ``full_result_copy``, ``completepreprocess_repair``, ``timeout``,
+            or a blocking-condition identifier.
         full_result_copied: Whether a naturally completed ``p##.hdf`` supplied
             the temporary HDF fallback.
         timed_out: Whether preprocessing exceeded its bounded wait.
         error: Error message if preprocessing failed, None on success.
+        precipitation_repair_attempts: One dictionary per
+            ``RasProcess.exe CompletePreProcess`` re-run made to complete
+            point precipitation in the temporary HDF, in order. Keys:
+            ``attempt``, ``return_code``, ``elapsed_seconds``,
+            ``no_valid_precipitation`` (HEC-RAS printed "No valid
+            precipitation"), ``validation_errors`` (Event Conditions problems
+            after the attempt; empty when complete), ``timed_out`` and
+            ``error`` (launch, legal-dialog or cleanup failure). Empty when
+            no repair was attempted.
 
     Examples:
         # Simple usage (bool-compatible):
@@ -825,6 +834,7 @@ class PreprocessResult:
     full_result_copied: bool = False
     timed_out: bool = False
     error: Optional[str] = None
+    precipitation_repair_attempts: List[Dict[str, Any]] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return self.success

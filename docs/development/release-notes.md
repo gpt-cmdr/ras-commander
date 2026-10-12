@@ -9,6 +9,22 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Point-precipitation preprocessing repairs HEC-RAS's intermittent failure**
+
+HEC-RAS's own `RasProcess.exe CompletePreProcess` intermittently writes no
+point precipitation for identical inputs ("No valid precipitation time-series
+data found for this time-window") while Ras.exe exits 0. #511 rejects that
+temporary HDF. #510 suspected the early-stop logic as one cause; the failure
+originates in HEC-RAS.
+`RasPreprocess.preprocess_plan()` now re-runs only `CompletePreProcess` on the
+same temporary HDF, from the project folder, and re-validates after each
+attempt. `precipitation_repair_attempts` (default 6; 0 disables) and
+`precipitation_repair_timeout` (default `max_wait`) bound the repair.
+`PreprocessResult.precipitation_repair_attempts` records each attempt, and a
+repaired result reports `signal_source="completepreprocess_repair"`. Gridded
+precipitation is unchanged. See
+[point precipitation repair](../user-guide/slurm-apptainer-execution.md#point-precipitation-repair).
+
 **Remaining fixed-width table writers reject overflow**
 
 The USGS flow/stage table generator, central geometry formatter (including

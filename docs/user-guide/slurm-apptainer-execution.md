@@ -123,6 +123,44 @@ the structural and full solver-ready checks. Missing geometry preprocessing,
 precipitation mappings, or non-finite property-table values remain terminal
 input failures; they are never repaired by the staging path.
 
+#### Point precipitation repair
+
+A temporary HDF without completed point precipitation is produced by HEC-RAS
+itself, not by the early stop. HEC-RAS's event-condition writer,
+`RasProcess.exe CompletePreProcess`, intermittently writes no point
+precipitation for identical inputs. It reports only:
+
+```
+Processing Precipitation data...
+No valid precipitation time-series data found for this time-window: (...) -> (...)
+Error processing Precipitation data, exiting...
+```
+
+Ras.exe then exits 0 before the unsteady computation, so the run ends with
+`signal_source="natural_completion"`, `Completed Successfully=False` and no
+`Precipitation/Values`. With HEC-RAS 6.6 under Wine 11.0, 8 of 47
+`CompletePreProcess` processes on one fixed temporary HDF failed this way
+(17%, two nodes); HEC-RAS 6.4.1 behaved the same. The gauge DSS series read
+without error in every case. Native Windows has not been checked.
+
+When a point-precipitation plan fails Event Conditions validation and the
+temporary HDF, `.b##` and `.x##` are all present, `preprocess_plan()` re-runs
+only `RasProcess.exe CompletePreProcess <project>.rasmap <plan>.tmp.hdf` on
+the same temporary HDF and validates it again after each attempt. Each
+attempt runs from the project folder, because gauge DSS paths in the HDF are
+relative (`.\Hydrology\<file>.dss`); from any other folder every gauge reports
+that its file does not exist. On a 794,234-cell mesh one attempt took about a
+minute, against about 20 minutes for full preprocessing, and the repaired
+file matched a first-try success.
+
+`precipitation_repair_attempts` (default 6; 0 disables) bounds the attempts,
+and `precipitation_repair_timeout` (default `max_wait`) bounds each one.
+`PreprocessResult.precipitation_repair_attempts` records every attempt's exit
+code, elapsed time, whether "No valid precipitation" appeared and the
+remaining validation errors. A repaired result reports
+`signal_source="completepreprocess_repair"`. Gridded precipitation is not
+repaired this way.
+
 ## Usage
 
 ```python
