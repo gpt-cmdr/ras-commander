@@ -837,6 +837,10 @@ The selected geometry text defines area perimeters and computation points,
 breaklines, BC/reference lines and structure records. It must remain
 byte-identical. Compiled area/feature mirrors are checked against that text;
 an incoming HDF can still describe a parent and does not define child features.
+Existing valid native BC types are retained when their compiled names and
+coordinates match the authored lines. A subsequent type change fails input
+preservation. Unrelated parent BC mirrors do not establish a child type; explicit
+type intent can be authored with `GeomBcLines.set_bc_line_types` before recomputation.
 HDF-only refinement regions, Projection, terrain/classification associations
 and Manning calibration are preserved semantically. Projection definitions are
 compared with axis-aware `pyproj.CRS.equals`: equivalent WKT serialization,

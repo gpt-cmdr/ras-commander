@@ -230,6 +230,11 @@ def _feature_issues(
                 != feature["storage_area"]
             ):
                 issues.append(f"{path}/{index}: authored area association changed")
+        if "bc_type" in feature and (
+            "Type" not in (attrs.dtype.names or ())
+            or _semantic(attrs["Type"][index]) != feature["bc_type"]
+        ):
+            issues.append(f"{path}/{index}: authored BC Type changed")
         for field, value in feature.get("controls", {}).items():
             if field not in attrs.dtype.names or float(attrs[field][index]) != float(
                 np.asarray(value, dtype=attrs.dtype[field])
@@ -377,6 +382,17 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         return result
     current = not _mesh_hdf_consistency_issues(geometry_path, hdf_path)
     with h5py.File(hdf_path, "r") as hdf:
+        bc_path = "Geometry/Boundary Condition Lines"
+        bc_features = result["feature_geometry"][bc_path]
+        # A current feature mirror can contain explicitly authored native types.
+        # Do not bind unrelated parent BC attributes to newly authored child lines.
+        if bc_features and not _feature_issues(hdf, bc_path, bc_features):
+            attrs = hdf[bc_path]["Attributes"]
+            if "Type" in (attrs.dtype.names or ()):
+                for index, feature in enumerate(bc_features):
+                    value = _semantic(attrs["Type"][index])
+                    if value in (b"Internal", b"External", "Internal", "External"):
+                        feature["bc_type"] = value
         for path in ("/", "Geometry", *(f"{AREA}/{name}" for name in result["areas"])):
             if path not in hdf:
                 continue

@@ -229,6 +229,52 @@ def test_polygon_part_topology_is_preserved(tmp_path):
     )
 
 
+def test_current_explicit_bc_type_survives_reclassification(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    points = np.array([[0.0, 0.0], [0.2, 0.2]])
+    with text.open("a") as stream:
+        stream.write(
+            "BC Line Name=Outlet\nBC Line Arc=2\n"
+            + "".join(f"{x:16.6f}{y:16.6f}" for x, y in points)
+            + "\n"
+        )
+    with h5py.File(path, "r+") as hdf:
+        group = hdf.create_group("Geometry/Boundary Condition Lines")
+        group.create_dataset(
+            "Attributes",
+            data=np.array(
+                [(b"Outlet", b"Synthetic", b"External")],
+                dtype=[("Name", "S16"), ("SA-2D", "S16"), ("Type", "S16")],
+            ),
+        )
+        group.create_dataset("Polyline Info", data=[[0, 2, 0, 1]])
+        group.create_dataset("Polyline Points", data=points)
+    expected = snapshot(text, path)
+    assert (
+        expected["feature_geometry"]["Geometry/Boundary Condition Lines"][0]["bc_type"]
+        == b"External"
+    )
+    with h5py.File(path, "r+") as hdf:
+        attrs = hdf["Geometry/Boundary Condition Lines/Attributes"][()]
+        attrs["Type"] = b"Internal"
+        hdf["Geometry/Boundary Condition Lines/Attributes"][:] = attrs
+    assert any(
+        "authored BC Type changed" in issue
+        for issue in validate(text, path, expected, time.time() - 1)[0]
+    )
+    with h5py.File(path, "r+") as hdf:
+        attrs = hdf["Geometry/Boundary Condition Lines/Attributes"][()]
+        attrs["Name"] = b"ParentOnly"
+        hdf["Geometry/Boundary Condition Lines/Attributes"][:] = attrs
+    fresh_expected = snapshot(text, path)
+    assert (
+        "bc_type"
+        not in fresh_expected["feature_geometry"]["Geometry/Boundary Condition Lines"][
+            0
+        ]
+    )
+
+
 @pytest.mark.parametrize(
     "name",
     ["Curve Number", "Abstraction Ratio", "Minimum Infiltration Rate", "Properties"],
