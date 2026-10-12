@@ -122,15 +122,13 @@ def _verify_hdf5_metadata(library, managed) -> None:
         raise RuntimeError("RASMapper requires the thread-safe HEC-RAS HDF5 runtime.")
 
 
-def main() -> None:
-    """Compute native tables in the caller's disposable geometry HDF."""
+def _initialize_runtime(install: Path) -> tuple[list, list]:
+    """Load and verify the native-only runtime; retain DLL loader handles."""
     if importlib.util.find_spec("clr") is None:
         raise ImportError(
             "Native RASMapper requires pythonnet>=3.0.5. "
             "Install ras-commander[mesh] in this Windows Python environment."
         )
-    install = Path(sys.argv[1]).absolute()
-    geometry = Path(sys.argv[2]).absolute()
     runtime = install / "bin64"
     if not (runtime / "hdf5.dll").is_file():
         raise FileNotFoundError(f"HEC-RAS native HDF5 runtime not found: {runtime}")
@@ -172,6 +170,19 @@ def main() -> None:
         f"(module {libraries[0]._handle:#x}; shared object/reference state)",
         flush=True,
     )
+    return handles, libraries
+
+
+def main() -> None:
+    """Compute native tables in the caller's disposable geometry HDF."""
+    if importlib.util.find_spec("clr") is None:
+        raise ImportError(
+            "Native RASMapper requires pythonnet>=3.0.5. "
+            "Install ras-commander[mesh] in this Windows Python environment."
+        )
+    install = Path(sys.argv[1]).absolute()
+    geometry = Path(sys.argv[2]).absolute()
+    handles, libraries = _initialize_runtime(install)
     if len(sys.argv) == 4:
         from RasMapperLib import RASGeometry
 

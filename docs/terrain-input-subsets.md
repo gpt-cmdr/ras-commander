@@ -33,6 +33,25 @@ or dropped to make a subset succeed. Complete original-grid point evaluation
 can verify polygon interiors and native singleton support; these records do
 not have a line-profile qualification claim.
 
+`RasTerrainMod.iter_terrain_point_elevations(..., isolated=True)` and
+`get_terrain_profile(..., isolated=True)` run native queries in a separate
+HEC-RAS 6.6 process without importing h5py or Python GIS libraries there.
+The process reuses the property-computation DLL identity checks: managed and
+explicitly loaded HDF5 calls must share object/reference state, match the bundled
+version and use its thread-safe runtime. Point queries load one terrain per
+iterator and use serial native calls of at most 4096 coordinates, preserving
+binary64 coordinates, order and complete caller-batch cardinality.
+`timeout_seconds` defaults to 7200 and bounds native worker lifetime with an
+independent watchdog, including blocked pipe writes. Caller batch production
+time is charged to the deadline; the caller's Python iterator cannot be preempted.
+An optional new `runtime_record` writes initialized-loader JSON
+(`ras-commander-native-terrain-runtime/v1`); it is not completion evidence.
+Its fields are `schema`, `status: initialized`, `managed_hdf5_version`,
+`managed_hdf5_threadsafe`, `dll_identity_verified`, `loaded_hdf5_modules` and
+`python_gis_hdf_imported: false`. Source CRS/vertical units and elevations are
+unchanged; only temporary process state is created. The default remains the
+in-process route; a runtime_record requires isolated=True.
+
 These experimental boundary APIs support native polyline/profile modification
 records and constant-elevation `SetValue` polygon records. The latter have
 Attributes and Polygon Info/Parts/Points tables, valid closed rings, unchanged
