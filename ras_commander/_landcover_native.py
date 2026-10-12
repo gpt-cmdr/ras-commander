@@ -1584,6 +1584,7 @@ def _run_property_tables_worker(
 ) -> None:
     """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs."""
     from ._gdal_runtime import configure_rasmapper_gdal_bridge
+    from ._native_worker_environment import worker_environment
 
     # Normalize in the caller's cwd before the subprocess changes directory.
     # absolute() preserves mapped drives, unlike resolve() on Windows.
@@ -1608,6 +1609,7 @@ def _run_property_tables_worker(
             errors="replace",
             timeout=1800,
             check=False,
+            env=worker_environment(1),
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(

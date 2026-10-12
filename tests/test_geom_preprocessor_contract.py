@@ -26,11 +26,14 @@ def fixture(tmp_path):
         + f"{0.2:16.6f}{0.2:16.6f}{0.6:16.6f}{0.6:16.6f}\n"
     )
     path = text.with_suffix(".g01.hdf")
+    with h5py.File(tmp_path / "Soils.hdf", "w") as soils:
+        soils.attrs["LC Type"] = np.bytes_("InfiltrationSCSCurveNumber")
     with h5py.File(path, "w") as hdf:
         hdf.attrs["File Type"] = np.bytes_("HEC-RAS Geometry")
         hdf.attrs["File Version"] = np.bytes_("HEC-RAS 6.6")
         hdf.create_dataset("Projection", data=np.bytes_("synthetic projected CRS"))
         hdf.create_group("Geometry")
+        hdf["Geometry"].attrs["Infiltration Filename"] = np.bytes_("Soils.hdf")
         hdf.create_dataset(
             f"{AREA}/Attributes",
             data=np.array(
@@ -61,6 +64,20 @@ def products(path):
         area.create_dataset("FacePoints Coordinate", data=np.zeros((4, 2)))
         area.create_dataset("Faces FacePoint Indexes", data=[[0, 1], [1, 2]])
         area.create_dataset("Faces Cell Indexes", data=[[0, 1], [1, 2]])
+        for name, shape in (
+            ("Cells Face and Orientation Info", (3, 2)),
+            ("Cells Face and Orientation Values", (4, 2)),
+            ("Cells FacePoint Indexes", (3, 4)),
+            ("Faces NormalUnitVector and Length", (2, 3)),
+            ("Faces Perimeter Info", (2, 2)),
+            ("Faces Perimeter Values", (2, 2)),
+            ("FacePoints Cell Info", (4, 2)),
+            ("FacePoints Cell Index Values", (4,)),
+            ("FacePoints Face and Orientation Info", (4, 2)),
+            ("FacePoints Face and Orientation Values", (4, 2)),
+            ("FacePoints Is Perimeter", (4,)),
+        ):
+            area.create_dataset(name, data=np.zeros(shape, dtype=int))
         for name in CELL_PRODUCTS[:3]:
             area.create_dataset(name, data=np.ones(3))
         for name in FACE_PRODUCTS[2:]:
@@ -75,6 +92,22 @@ def products(path):
         area.create_dataset("Infiltration/Cell Center Classifications", data=[1, 1])
         area.create_dataset("Infiltration/Face Center Classifications", data=[1, 1])
         area.create_dataset("Infiltration/Curve Number", data=[75.0, 75.0])
+        area.create_dataset("Infiltration/Abstraction Ratio", data=[0.2, 0.2])
+        area.create_dataset("Infiltration/Minimum Infiltration Rate", data=[0.0, 0.0])
+        area.create_dataset("Infiltration/Properties", data=[1])
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["Curve Number", "Abstraction Ratio", "Minimum Infiltration Rate", "Properties"],
+)
+def test_associated_method_requires_every_infiltration_product(tmp_path, name):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        del hdf[f"{AREA}/Synthetic/Infiltration/{name}"]
+    assert any(
+        name in error for error in validate(text, path, expected, time.time() - 1)[1]
+    )
 
 
 def test_control_products_include_interior_and_ghost_cells(tmp_path, monkeypatch):
@@ -86,6 +119,31 @@ def test_control_products_include_interior_and_ghost_cells(tmp_path, monkeypatch
         "total_cells": 3,
         "faces": 2,
     }
+
+
+def test_authored_structure_unknown_product_schema_fails_before_mutation(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    original = path.read_bytes()
+    with text.open("a") as stream:
+        stream.write("Connection=Bridge,0,0\n")
+    with pytest.raises(
+        NotImplementedError, match="GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED"
+    ):
+        snapshot(text, path)
+    assert path.read_bytes() == original
+
+
+def test_hdf_only_infiltration_override_loss_is_rejected(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf.create_dataset("Geometry/Infiltration/Base Overrides", data=[75.0])
+    expected = snapshot(text, path)
+    with h5py.File(path, "r+") as hdf:
+        del hdf["Geometry/Infiltration/Base Overrides"]
+    assert (
+        "Geometry/Infiltration/Base Overrides"
+        in validate(text, path, expected, time.time() - 1)[0]
+    )
 
 
 @pytest.mark.parametrize("name", [*CELL_PRODUCTS, *FACE_PRODUCTS])

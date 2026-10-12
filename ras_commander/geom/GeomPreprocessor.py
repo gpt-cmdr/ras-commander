@@ -102,6 +102,7 @@ class GeomPreprocessor:
         restore_plan_settings: bool = True,
         flow_start_signals: Optional[List[str]] = None,
         dialog_watchdog: bool = True,
+        native_worker_threads: Optional[int] = 1,
     ) -> GeometryPreprocessResult:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
@@ -140,6 +141,11 @@ class GeomPreprocessor:
             flow_start_signals: Optional diagnostic message strings. Detection
                 does not shorten the normal-exit wait.
             dialog_watchdog: Monitor and dismiss recognized native dialogs.
+            native_worker_threads: Managed preprocessing worker-pool limit.
+                Defaults to one for reproducible geometry-only native writes.
+                Positive integers are allowed; None retains the inherited pool
+                settings. Hydraulic solver core settings are unchanged. The
+                override applies only when geometry_only=True.
 
         Returns:
             GeometryPreprocessResult: Bool-compatible validation result.
@@ -152,12 +158,19 @@ class GeomPreprocessor:
         geometry_number = None
         flow_type = "Unknown"
         command_text = ""
+        completion_contract = {}
         owned_registry = {"children": {}, "parent_identity": None}
         if max_wait <= 0:
             return GeometryPreprocessResult(
                 success=False,
                 error="GEOMETRY_PREPROCESS_INVALID_TIMEOUT: max_wait must be positive",
             )
+        if native_worker_threads is not None and (
+            isinstance(native_worker_threads, bool)
+            or not isinstance(native_worker_threads, int)
+            or native_worker_threads < 1
+        ):
+            return GeometryPreprocessResult(success=False, error="GEOMETRY_PREPROCESS_INVALID_WORKERS: native_worker_threads must be positive or None")
 
         try:
             ras_obj.check_initialized()
@@ -241,6 +254,15 @@ class GeomPreprocessor:
 
             geometry_text_path = geometry_hdf_path.with_suffix("")
             expected_contract = snapshot(geometry_text_path, geometry_hdf_path)
+            completion_contract = {
+                "schema": "ras-geometry-completion/v1",
+                "text_sha256": expected_contract["text_sha256"],
+                "inputs_preserved": None,
+                "products_complete": False,
+                "invalidated_products": [],
+                "geometry_backup_path": None,
+                "native_worker_threads": native_worker_threads if geometry_only else None,
+            }
             invalidated_products = []
             geometry_backup_path = None
             process = None
@@ -297,7 +319,9 @@ class GeomPreprocessor:
                             geometry_hdf_path.name + f".preprocess-{uuid.uuid4().hex}.bak"
                         )
                         shutil.copy2(geometry_hdf_path, geometry_backup_path)
+                        completion_contract["geometry_backup_path"] = str(geometry_backup_path)
                     invalidated_products = invalidate_products(geometry_hdf_path)
+                    completion_contract["invalidated_products"] = invalidated_products
                     GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
                 process = subprocess.Popen(
                     command_text,
@@ -306,6 +330,9 @@ class GeomPreprocessor:
                     shell=False,
                     stdout=stdio,
                     stderr=subprocess.STDOUT,
+                    env=GeomPreprocessor._native_worker_environment(
+                        native_worker_threads if geometry_only else None
+                    ),
                 )
                 import psutil
 
@@ -394,6 +421,7 @@ class GeomPreprocessor:
                     return_code=process.returncode,
                     timed_out=True,
                     stdout=stdout,
+                    completion_contract=completion_contract,
                     signal_detected=signal_detected,
                     error=f"GEOMETRY_PREPROCESS_TIMEOUT: timed out after {max_wait} seconds"
                     + ("; " + "; ".join(lifecycle_errors + child_monitor.get("errors", []))
@@ -411,6 +439,7 @@ class GeomPreprocessor:
                     return_code=process.returncode,
                     error="GEOMETRY_PROCESS_COMPLETION_UNVERIFIED: "
                     + "; ".join(lifecycle_errors + child_monitor.get("errors", [])),
+                    completion_contract=completion_contract,
                 )
 
             existing_message_paths, messages = (
@@ -452,7 +481,6 @@ class GeomPreprocessor:
                 )
             missing_inventory = []
             missing_products = []
-            completion_contract = {}
             if not timed_out and not child_monitor["timed_out"]:
                 missing_inventory, missing_products, completion_contract = validate(
                     geometry_text_path, geometry_hdf_path, expected_contract, start_time
@@ -461,6 +489,7 @@ class GeomPreprocessor:
                 completion_contract["geometry_backup_path"] = (
                     str(geometry_backup_path) if geometry_backup_path is not None else None
                 )
+                completion_contract["native_worker_threads"] = native_worker_threads if geometry_only else None
                 if missing_inventory:
                     errors.append("GEOMETRY_INPUT_CHANGED: " + "; ".join(missing_inventory))
                 if missing_products:
@@ -514,10 +543,18 @@ class GeomPreprocessor:
                 return_code=getattr(process, "returncode", None),
                 error=str(exc),
                 elapsed_seconds=time.time() - start_time,
+                completion_contract=completion_contract,
             )
         finally:
             if stdio is not None:
                 stdio.close()
+
+    @staticmethod
+    def _native_worker_environment(worker_threads: Optional[int]) -> dict:
+        """Bound the managed worker pool without changing caller environment."""
+        from .._native_worker_environment import worker_environment
+
+        return worker_environment(worker_threads)
 
     @staticmethod
     def _resolve_plan_path(

@@ -282,6 +282,37 @@ def test_native_precipitation_error_with_zero_launcher_exit_fails(
     assert not killed
 
 
+def test_native_worker_override_is_local_and_hex_encoded(monkeypatch):
+    monkeypatch.setenv("COMPlus_ThreadPool_ForceMaxWorkerThreads", "40")
+    environment = GP._native_worker_environment(16)
+    assert environment["COMPlus_ThreadPool_ForceMaxWorkerThreads"] == "10"
+    assert environment["COMPlus_ThreadPool_ForceMinWorkerThreads"] == "10"
+    assert os.environ["COMPlus_ThreadPool_ForceMaxWorkerThreads"] == "40"
+    inherited = GP._native_worker_environment(None)
+    assert (
+        next(
+            value
+            for key, value in inherited.items()
+            if key.casefold() == "complus_threadpool_forcemaxworkerthreads"
+        )
+        == "40"
+    )
+    assert (
+        sum(
+            key.casefold() == "complus_threadpool_forcemaxworkerthreads"
+            for key in environment
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("workers", [0, -1, True, 1.5, "1"])
+def test_invalid_native_worker_limit_fails_before_project_setup(workers):
+    result = GP.run_geometry_preprocessor("01", native_worker_threads=workers)
+    assert not result.success
+    assert "GEOMETRY_PREPROCESS_INVALID_WORKERS" in result.error
+
+
 def test_missing_geompreprocess_products_with_normal_exit_fails(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, write_products=False)
     assert not result.success and result.return_code == 0

@@ -49,6 +49,26 @@ ASSOCIATIONS = (
 )
 
 
+INFILTRATION_PRODUCTS = {
+    "infiltration_scs": (
+        "Curve Number",
+        "Abstraction Ratio",
+        "Minimum Infiltration Rate",
+    ),
+    "infiltration_deficit_constant": (
+        "Maximum Deficit",
+        "Initial Deficit",
+        "Potential Percolation Rate",
+    ),
+    "infiltration_green_ampt": (
+        "Wetting Front Suction",
+        "Saturated Hydraulic Conductivity",
+        "Initial Soil Water Content",
+        "Saturated Soil Water Content",
+    ),
+}
+
+
 def _semantic(value):
     """Preserve values while ignoring fixed-string width and compound padding."""
     if isinstance(value, np.ndarray):
@@ -207,6 +227,7 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         "manning_region_count": sum(
             line.startswith("LCMann Region Name=") for line in lines
         ),
+        "infiltration_methods": {},
     }
     result["features"]["Geometry/Structures"] += sum(
         line.startswith("SA/2D Area Conn=") for line in lines
@@ -224,6 +245,10 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     result["areas"] = {
         name: value for name, value in result["areas"].items() if name in two_d
     }
+    if result["areas"] and result["features"]["Geometry/Structures"]:
+        raise NotImplementedError(
+            "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: authored 2D structures require a qualified native structure-product contract"
+        )
     from .GeomParser import GeomParser
 
     result["seed_points"] = {}
@@ -267,11 +292,38 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
             for name, obj in hdf[REFINEMENT].items():
                 if isinstance(obj, h5py.Dataset):
                     result["inputs"][f"{REFINEMENT}/{name}"] = _digest(obj[()])
+        if "Geometry/Infiltration" in hdf:
+
+            def capture_infiltration(name, obj):
+                if isinstance(obj, h5py.Dataset) and name.split("/", 1)[0] not in (
+                    "External Faces",
+                    "Internal Faces",
+                    "Internal Cells",
+                ):
+                    result["inputs"][f"Geometry/Infiltration/{name}"] = _digest(obj[()])
+
+            hdf["Geometry/Infiltration"].visititems(capture_infiltration)
         # Text-backed inputs are compared with their selected text, never with
         # an incoming mirror. Even a same-count HDF can contain unrounded seed
         # coordinates or outdated breakline controls. Native import canonicalizes
         # that mirror; the complete authored text must remain byte-identical.
         result["incoming_mesh_current"] = current
+        from ..hdf.HdfInfiltration import HdfInfiltration
+        from .GeomMesh import _decode_hdf_text
+
+        for name in result["areas"]:
+            area = hdf.get(f"{AREA}/{name}")
+            raw = area.attrs.get("Infiltration Filename") if area is not None else None
+            if raw is None and "Geometry" in hdf:
+                raw = hdf["Geometry"].attrs.get("Infiltration Filename")
+            filename = _decode_hdf_text(raw) if raw is not None else ""
+            if filename:
+                asset = Path(filename.replace("\\", "/"))
+                if not asset.is_absolute():
+                    asset = hdf_path.parent / asset
+                result["infiltration_methods"][name] = (
+                    HdfInfiltration._native_infiltration_layer_type(asset)
+                )
     return result
 
 
@@ -281,15 +333,17 @@ def invalidate_products(hdf_path: Path) -> list[str]:
     if not hdf_path.exists():
         return removed
     with h5py.File(hdf_path, "r+") as hdf:
-        file_type = str(_semantic(hdf.attrs.get("File Type", b"")))
-        version = str(_semantic(hdf.attrs.get("File Version", b"")))
-        geometry_only_copy = "HEC-RAS Results" in file_type and not any(
+        from .GeomPreprocessor import GeomPreprocessor
+
+        file_type = GeomPreprocessor._decode_hdf_attribute(hdf.attrs.get("File Type"))
+        version = GeomPreprocessor._decode_hdf_attribute(hdf.attrs.get("File Version"))
+        geometry_only_copy = file_type == "HEC-RAS Results" and not any(
             key in hdf for key in ("Results", "Event Conditions", "Plan Data")
         )
         if (
-            ("HEC-RAS Geometry" not in file_type and not geometry_only_copy)
+            (file_type != "HEC-RAS Geometry" and not geometry_only_copy)
             or not re.search(r"\.g\d{1,2}\.hdf$", hdf_path.name, re.IGNORECASE)
-            or not any(f"HEC-RAS {major}." in version for major in (5, 6))
+            or re.match(r"^HEC-RAS [56]\.\d+(?:\.\d+)?\b", version) is None
         ):
             raise ValueError(
                 "GEOMETRY_CACHE_SCHEMA_UNSUPPORTED: product invalidation requires a HEC-RAS 5/6 geometry HDF or geometry-only results copy"
@@ -486,6 +540,10 @@ def validate(
             if centers is None or faces is None or points is None:
                 continue
             cells, face_count = len(centers), len(faces)
+            if cells < int(source["seed_count"]):
+                missing.append(
+                    f"{path}: fewer total cells than authored interior cells"
+                )
             if cells == 0 or face_count == 0:
                 missing.append(f"{path}: empty topology")
                 continue
@@ -497,7 +555,23 @@ def validate(
             ):
                 missing.append(f"{path}: invalid face cell indexes")
             for product in CELL_PRODUCTS[:3]:
+                # Complete topology is required even when all hydraulic property
+                # arrays happen to be present and correctly sized.
                 require(f"{path}/{product}", cells)
+            for topology, rows, columns in (
+                ("Cells Face and Orientation Info", cells, 2),
+                ("Cells Face and Orientation Values", None, 2),
+                ("Cells FacePoint Indexes", cells, None),
+                ("Faces NormalUnitVector and Length", face_count, 3),
+                ("Faces Perimeter Info", face_count, 2),
+                ("Faces Perimeter Values", None, 2),
+                ("FacePoints Cell Info", len(points), 2),
+                ("FacePoints Cell Index Values", None, None),
+                ("FacePoints Face and Orientation Info", len(points), 2),
+                ("FacePoints Face and Orientation Values", None, 2),
+                ("FacePoints Is Perimeter", len(points), None),
+            ):
+                require(f"{path}/{topology}", rows, columns)
             for product in FACE_PRODUCTS[2:]:
                 require(f"{path}/{product}", face_count)
             pair(path, "Cells Volume Elevation", cells, 2, int(source["seed_count"]))
@@ -524,6 +598,16 @@ def validate(
                     continue
                 require(f"{path}/{family}/Cell Center Classifications", interior)
                 require(f"{path}/{family}/Face Center Classifications", face_count)
+                if family == "Infiltration":
+                    require(f"{path}/{family}/Properties")
+                    method = expected["infiltration_methods"].get(name)
+                    if method not in INFILTRATION_PRODUCTS:
+                        missing.append(f"{path}/{family}: unverified associated method")
+                    else:
+                        for product in INFILTRATION_PRODUCTS[method]:
+                            require(f"{path}/{family}/{product}", interior)
+                else:
+                    require(f"{path}/{family}/Percent Impervious", interior)
                 for product, obj in group.items():
                     if isinstance(obj, h5py.Dataset) and product not in (
                         "Properties",

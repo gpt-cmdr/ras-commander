@@ -852,8 +852,21 @@ tables sized for the current topology, BC/reference attachments and associated
 infiltration tables. Infiltration uses interior-cell counts; volume tables
 also include ghost cells, whose zero-length entries are permitted.
 Reference-line terrain profiles and Manning-region attachments are checked
-when authored. Structure property tables are required when structures exist.
+when authored. Authored 2D structures currently fail before invalidation with
+`GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`: the structure-property schema has not
+been qualified for this completion contract. A nonempty native group does not
+prove complete structure products. Native infiltration region definitions and
+overrides are preserved as authored HDF-only inputs.
 A quiet file or flow-start message does not end the wait.
+`native_worker_threads=1` bounds the managed preprocessing worker pool by
+default. This controls managed geometry work separately from hydraulic solver
+core settings. Positive integers select another limit; `None` retains inherited
+managed-pool settings. The override is local to the launched process environment
+and applies only to `geometry_only=True`. `completion_contract` records the
+requested limit; it does not claim that every native thread was measured.
+The separate isolated native property/calibration/BC worker also uses a
+one-worker managed pool; the preprocessor's `None` option does not change that
+isolated-worker policy.
 Recognized Wine desktop, console and plot-display invocations may outlive the
 geometry writers and are excluded from writer completion; unknown children
 still require a confirmed exit. A transient Wine invalid-handle error while
