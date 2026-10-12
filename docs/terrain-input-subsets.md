@@ -39,7 +39,7 @@ HEC-RAS 6.6 process without importing h5py or Python GIS libraries there.
 The process reuses the property-computation DLL identity checks: managed and
 explicitly loaded HDF5 calls must share object/reference state, match the bundled
 version and use its thread-safe runtime. Point queries load one terrain per
-iterator and use serial native calls of at most 4096 coordinates, preserving
+iterator and use serial native calls of at most 65536 coordinates, preserving
 binary64 coordinates, order and complete caller-batch cardinality.
 `timeout_seconds` defaults to 7200 and bounds native worker lifetime with an
 independent watchdog, including blocked pipe writes. Caller batch production
@@ -194,7 +194,7 @@ Float64 `(n, 2)` coordinate batches using the public native
 The selected registered terrain is loaded once. Each PointM's X/Y values are
 checked against the supplied binary64 bytes before sampling. Returned Float32
 arrays preserve caller batch order and cardinality. Each caller batch is evaluated
-in serial native calls of at most 4096 points. Every internal call must return
+in serial native calls of at most 65536 points. Every internal call must return
 all its values before the caller batch is assembled; a failed call raises
 without yielding a partial caller batch. Coordinates, native resolution and
 modification parameters remain unchanged. Missing, nonfinite, specified
@@ -223,7 +223,7 @@ wrapper still requires frozen-runtime qualification and every-centre evidence.
 For isolated workers, wrap eager profile and point readback in
 `RasTerrainMod.run_serial_native_sampling(operation)` and retain the returned
 execution evidence. This public execution control addresses nested native
-parallel HDF access; the 4096-point bound still applies inside each supplied
+parallel HDF access; the 65536-point bound still applies inside each supplied
 point batch. Stored records, order, coordinates and native hydraulic parameters
 remain unchanged. The single worker, process-affinity selection and restoration
 must be read back successfully. Fresh source-parent first-profile controls pass

@@ -77,14 +77,14 @@ def test_point_contract_rejects_coercion_empty_or_nonfinite_inputs(points):
 
 
 def test_large_caller_batch_preserves_all_coordinate_bytes_and_output_order():
-    coordinates = np.arange(24578, dtype=np.float64).reshape(-1, 2)[::-1]
+    coordinates = np.arange(262146, dtype=np.float64).reshape(-1, 2)[::-1]
     coordinates[0, 0] = np.nextafter(1.0, 2.0)
     coordinates[0, 1] = -0.0
     original = coordinates.tobytes()
     received = []
 
     def native_reader(subset):
-        assert len(subset) <= 4096
+        assert len(subset) <= 65536
         received.append(subset.tobytes())
         return subset[:, 0]
 
@@ -99,7 +99,7 @@ def test_large_caller_batch_preserves_all_coordinate_bytes_and_output_order():
     "bad_last", [None, [], [np.nan], [-9999.0], [np.finfo(np.float32).max]]
 )
 def test_failed_internal_call_never_yields_a_partial_caller_batch(bad_last):
-    coordinates = np.ones((4097, 2), dtype=np.float64)
+    coordinates = np.ones((65537, 2), dtype=np.float64)
     calls = []
 
     def native_reader(subset):
@@ -109,4 +109,4 @@ def test_failed_internal_call_never_yields_a_partial_caller_batch(bad_last):
     iterator = _point_elevation_batches([coordinates], native_reader, [-9999.0])
     with pytest.raises(RuntimeError):
         next(iterator)
-    assert calls == [4096, 1]
+    assert calls == [65536, 1]

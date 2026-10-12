@@ -122,7 +122,7 @@ def test_isolated_failures_never_yield_partial_batch(
     iterator = RasTerrainMod.iter_terrain_point_elevations(
         mapper,
         "Terrain",
-        [np.full((4096, 2), 1.123456789012345, dtype="float64")],
+        [np.full((65536, 2), 1.123456789012345, dtype="float64")],
         1.0,
         isolated=True,
         timeout_seconds=0.5 if mode in {"hang", "hang_after_ready"} else 10,
@@ -145,7 +145,7 @@ def test_native_worker_does_not_import_commander_or_python_hdf_gis():
         for n in imports
     )
     assert "_initialize_runtime(install)" in worker.read_text()
-    assert "4096" in worker.read_text()
+    assert "65536" in worker.read_text()
 
 
 @pytest.mark.parametrize(
@@ -272,8 +272,8 @@ def test_native_extent_bounds_are_read_once_per_bounded_batch():
         scope,
     )
     assert (
-        scope["evaluate"]([[1.123456789012345, 2.0]] * 4096)
-        == [1.123456789012345 + 2.0] * 4096
+        scope["evaluate"]([[1.123456789012345, 2.0]] * 65536)
+        == [1.123456789012345 + 2.0] * 65536
     )
     assert set(counts.values()) == {1}
     with pytest.raises(ValueError, match="outside"):

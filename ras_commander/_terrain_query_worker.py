@@ -97,8 +97,8 @@ def _point_reader(mapper: str, name: str, modifications: bool, cell_size: float)
     terrain.ResampleMethod = "near"
 
     def evaluate(coordinates: list) -> list:
-        if not 1 <= len(coordinates) <= 4096:
-            raise ValueError("A native query requires 1 to 4096 points")
+        if not 1 <= len(coordinates) <= 65536:
+            raise ValueError("A native query requires 1 to 65536 points")
         extent = terrain.Extent
         minimum_x, maximum_x, minimum_y, maximum_y = (
             float(extent.MinX),

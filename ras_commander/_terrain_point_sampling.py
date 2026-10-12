@@ -29,8 +29,8 @@ def _point_elevation_batches(
             raise ValueError("Point batches must contain finite coordinates")
         coordinates = coordinates.copy()
         parts = []
-        for offset in range(0, len(coordinates), 4096):
-            subset = coordinates[offset : offset + 4096]
+        for offset in range(0, len(coordinates), 65536):
+            subset = coordinates[offset : offset + 65536]
             parts.append(_checked_native_values(subset, evaluate, sentinels))
         yield np.concatenate(parts)
 
@@ -141,7 +141,7 @@ def iter_point_elevations(
     use_obstructions: bool,
     nodata_values: Sequence[float],
 ) -> Iterator[np.ndarray]:
-    """Load one native layer; preserve batches with serial native calls of <=4096."""
+    """Load one native layer; preserve batches with serial native calls of <=65536."""
     if not mapper.is_file():
         raise FileNotFoundError(mapper)
     if not terrain_name or not isinstance(use_obstructions, bool):
