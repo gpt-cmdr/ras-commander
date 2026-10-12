@@ -1,4 +1,4 @@
-"""Lossless subsets of native polyline terrain modifications."""
+"""Lossless subsets of native polyline and constant-elevation polygon edits."""
 
 from __future__ import annotations
 
@@ -22,38 +22,74 @@ TABLES = frozenset(
         "Profile Values",
     }
 )
+POLYGON_TABLES = frozenset(
+    {"Attributes", "Polygon Info", "Polygon Parts", "Polygon Points"}
+)
+
+
+def _prefix(arrays):
+    return "Polygon" if "Polygon Info" in arrays else "Polyline"
 
 
 def _validated_group(group):
-    if set(group.keys()) != TABLES:
+    if set(group.keys()) not in (TABLES, POLYGON_TABLES):
         raise ValueError(f"Unsupported modification layout: {group.name}")
-    arrays = {name: group[name][:] for name in TABLES}
+    arrays = {name: group[name][:] for name in group}
+    prefix = _prefix(arrays)
     count = len(arrays["Attributes"])
-    if arrays["Polyline Info"].shape != (count, 4) or arrays["Profile Info"].shape != (
-        count,
-        2,
+    if arrays[prefix + " Info"].shape != (count, 4) or (
+        prefix == "Polyline" and arrays["Profile Info"].shape != (count, 2)
     ):
         raise ValueError(f"Inconsistent modification feature indexes: {group.name}")
-    if arrays["Polyline Parts"].ndim != 2 or arrays["Polyline Parts"].shape[1] != 2:
+    if arrays[prefix + " Parts"].ndim != 2 or arrays[prefix + " Parts"].shape[1] != 2:
         raise ValueError(f"Invalid modification part indexes: {group.name}")
+    points = arrays[prefix + " Points"]
+    if points.ndim != 2 or points.shape[1] != 2 or not np.isfinite(points).all():
+        raise ValueError(f"Invalid modification points: {group.name}")
+    if prefix == "Polygon":
+        fields = arrays["Attributes"].dtype.names or ()
+        required = {
+            "Elevation Type",
+            "Elevation Value",
+            "Generate Boundary Elevations",
+            "Use ShapeFile Z Elevations",
+        }
+        if not required.issubset(fields):
+            raise ValueError(f"Unsupported polygon parameters: {group.name}")
+        for record in arrays["Attributes"]:
+            kind = record["Elevation Type"]
+            kind = kind.decode() if isinstance(kind, bytes) else str(kind)
+            if (
+                kind != "SetValue"
+                or not np.isfinite(record["Elevation Value"])
+                or record["Generate Boundary Elevations"]
+                or record["Use ShapeFile Z Elevations"]
+            ):
+                raise ValueError(f"Unsupported polygon elevation method: {group.name}")
     for feature in range(count):
-        start, size, part_start, part_size = map(int, arrays["Polyline Info"][feature])
-        profile_start, profile_size = map(int, arrays["Profile Info"][feature])
+        start, size, part_start, part_size = map(int, arrays[prefix + " Info"][feature])
+        profile_start, profile_size = (
+            map(int, arrays["Profile Info"][feature])
+            if prefix == "Polyline"
+            else (0, 0)
+        )
         if (
             start < 0
             or size < 1
-            or start + size > len(arrays["Polyline Points"])
+            or start + size > len(points)
             or part_start < 0
             or part_size < 1
-            or part_start + part_size > len(arrays["Polyline Parts"])
+            or part_start + part_size > len(arrays[prefix + " Parts"])
             or profile_start < 0
             or profile_size < 0
-            or profile_start + profile_size > len(arrays["Profile Values"])
+            or profile_start + profile_size > len(arrays.get("Profile Values", []))
         ):
             raise ValueError(
                 f"Modification indexes leave their tables: {group.name}/{feature}"
             )
-        native_parts = arrays["Polyline Parts"][part_start : part_start + part_size]
+        native_parts = arrays[prefix + " Parts"][part_start : part_start + part_size]
+        if prefix == "Polygon" and any(int(length) < 4 for _, length in native_parts):
+            raise ValueError(f"Invalid polygon ring: {group.name}/{feature}")
         if any(int(length) == 1 for _, length in native_parts) and not (
             size == 1
             and part_size == 1
@@ -68,12 +104,23 @@ def _validated_group(group):
                 raise ValueError(
                     f"Modification part leaves its feature: {group.name}/{feature}"
                 )
+        if prefix == "Polygon":
+            from shapely.geometry import Polygon
+
+            rings = [
+                points[start + int(p) : start + int(p + n)] for p, n in native_parts
+            ]
+            if any(not np.array_equal(ring[0], ring[-1]) for ring in rings):
+                raise ValueError(f"Unclosed polygon ring: {group.name}/{feature}")
+            polygon = Polygon(rings[0], rings[1:])
+            if polygon.is_empty or not polygon.is_valid:
+                raise ValueError(f"Invalid polygon geometry: {group.name}/{feature}")
     return arrays
 
 
 def read_features(terrain_hdf_path, crs):
     import geopandas as gpd
-    from shapely.geometry import LineString, MultiLineString, Point
+    from shapely.geometry import LineString, MultiLineString, Point, Polygon
 
     if crs is None:
         raise ValueError("A modification CRS is required")
@@ -81,10 +128,23 @@ def read_features(terrain_hdf_path, crs):
     with h5py.File(terrain_hdf_path, "r") as file:
         for name, group in file.get("Modifications", {}).items():
             arrays = _validated_group(group)
+            prefix = _prefix(arrays)
             for index, attributes in enumerate(arrays["Attributes"]):
-                point_start, _, start, count = map(int, arrays["Polyline Info"][index])
-                native_parts = arrays["Polyline Parts"][start : start + count]
-                if any(int(n) == 1 for _, n in native_parts):
+                point_start, _, start, count = map(int, arrays[prefix + " Info"][index])
+                native_parts = arrays[prefix + " Parts"][start : start + count]
+                if prefix == "Polygon":
+                    rings = [
+                        arrays["Polygon Points"][
+                            point_start + int(p) : point_start + int(p + n)
+                        ]
+                        for p, n in native_parts
+                    ]
+                    if any(not np.array_equal(ring[0], ring[-1]) for ring in rings):
+                        raise ValueError(f"Unclosed polygon ring: {name}/{index}")
+                    geometry = Polygon(rings[0], rings[1:])
+                    if geometry.is_empty or not geometry.is_valid:
+                        raise ValueError(f"Invalid polygon geometry: {name}/{index}")
+                elif any(int(n) == 1 for _, n in native_parts):
                     if count != 1 or int(native_parts[0, 1]) != 1:
                         raise ValueError(
                             f"Unsupported mixed degenerate parts: {name}/{index}"
@@ -108,7 +168,7 @@ def read_features(terrain_hdf_path, crs):
                         for key in ("Max Reach", "Max Extent")
                         if key in values
                     ),
-                    None,
+                    0.0 if prefix == "Polygon" else None,
                 )
                 if extent is None or not np.isfinite(extent) or extent < 0:
                     raise ValueError(
@@ -132,32 +192,44 @@ def read_features(terrain_hdf_path, crs):
 
 
 def _subset_arrays(arrays, indexes):
+    prefix = _prefix(arrays)
     points, parts, profiles, line_info, profile_info = [], [], [], [], []
     point_offset = part_offset = profile_offset = 0
     for index in indexes:
-        start, count, part_start, part_count = map(int, arrays["Polyline Info"][index])
-        profile_start, profile_count = map(int, arrays["Profile Info"][index])
-        points.append(arrays["Polyline Points"][start : start + count])
-        new_parts = arrays["Polyline Parts"][
+        start, count, part_start, part_count = map(int, arrays[prefix + " Info"][index])
+        profile_start, profile_count = (
+            map(int, arrays["Profile Info"][index]) if prefix == "Polyline" else (0, 0)
+        )
+        points.append(arrays[prefix + " Points"][start : start + count])
+        new_parts = arrays[prefix + " Parts"][
             part_start : part_start + part_count
         ].copy()
         parts.append(new_parts)
-        profiles.append(
-            arrays["Profile Values"][profile_start : profile_start + profile_count]
-        )
+        if prefix == "Polyline":
+            profiles.append(
+                arrays["Profile Values"][profile_start : profile_start + profile_count]
+            )
         line_info.append([point_offset, count, part_offset, part_count])
         profile_info.append([profile_offset, profile_count])
         point_offset += count
         part_offset += part_count
         profile_offset += profile_count
-    return {
+    result = {
         "Attributes": arrays["Attributes"][indexes],
-        "Polyline Points": np.concatenate(points),
-        "Polyline Parts": np.concatenate(parts),
-        "Profile Values": np.concatenate(profiles),
-        "Polyline Info": np.asarray(line_info, dtype=arrays["Polyline Info"].dtype),
-        "Profile Info": np.asarray(profile_info, dtype=arrays["Profile Info"].dtype),
+        prefix + " Points": np.concatenate(points),
+        prefix + " Parts": np.concatenate(parts),
+        prefix + " Info": np.asarray(line_info, dtype=arrays[prefix + " Info"].dtype),
     }
+    if prefix == "Polyline":
+        result.update(
+            {
+                "Profile Values": np.concatenate(profiles),
+                "Profile Info": np.asarray(
+                    profile_info, dtype=arrays["Profile Info"].dtype
+                ),
+            }
+        )
+    return result
 
 
 def _resolve_layer(root, mapper, hdf, *, source):
@@ -251,6 +323,7 @@ def copy_features(
             summaries.append(
                 {
                     "group_name": name,
+                    "geometry_type": _prefix(arrays),
                     "source_features": len(arrays["Attributes"]),
                     "source_registration_basis": source_basis,
                     "source_registration_name": source_layer.get("Name", ""),

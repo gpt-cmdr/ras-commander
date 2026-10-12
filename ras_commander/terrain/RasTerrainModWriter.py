@@ -632,7 +632,7 @@ class RasTerrainModWriter:
         output_dir: str | Path,
         feature_indexes: dict[str, list[int]],
     ) -> list[dict[str, object]]:
-        """Export complete selected native polyline records without terrain grids.
+        """Export complete selected native line/polygon records without terrain grids.
 
         Source registration prefers a unique resolved path; a unique basename
         fallback permits caller-verified stale delivered layouts. Ambiguity fails.
@@ -650,7 +650,8 @@ class RasTerrainModWriter:
             feature_indexes: Group names mapped to unique zero-based native rows.
 
         Returns:
-            Retained row identities, counts and registration matching decisions.
+            Retained row identities, counts and registration matching decisions,
+            plus geometry_type (Polygon or Polyline native storage layout).
 
         Raises:
             ValueError: Unsupported records, invalid selection or existing output.
@@ -665,13 +666,17 @@ class RasTerrainModWriter:
     def get_modification_features(
         terrain_hdf_path: str | Path, crs: Any
     ) -> "gpd.GeoDataFrame":
-        """Read complete native polyline modification geometries without mutation.
+        """Read complete native line or SetValue polygon edits without mutation.
 
         Returns a GeoDataFrame in the caller-declared terrain CRS with group_name,
         feature_index, support_distance (horizontal CRS units), and geometry.
         Native single-vertex polyline records return Point support geometry without
         repairing the native record. Retained degenerate records still require
-        native execution qualification. Supports polyline/profile tables. Unknown
+        native execution qualification. Supports polyline/profile tables and native
+        constant-elevation Polygon Info/Parts/Points records with closed valid rings.
+        Polygon support_distance is zero: the complete polygon is its footprint.
+        Boundary-generated, shape-Z and multipoint polygon methods are unsupported.
+        Unknown
         layouts or missing support distances raise before a subset is planned.
         No terrain grid is loaded, no elevations are changed, and no files are
         written. CRS must match the source terrain; this method does not reproject.
@@ -724,7 +729,8 @@ class RasTerrainModWriter:
             feature_indexes: Group names mapped to unique zero-based source rows.
 
         Returns:
-            Retained row identities, counts and registration matching decisions.
+            Retained row identities, counts and registration matching decisions,
+            plus geometry_type (Polygon or Polyline native storage layout).
 
         Raises:
             ValueError: Invalid layouts/selection, ambiguous registration or an

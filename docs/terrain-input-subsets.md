@@ -29,12 +29,17 @@ FIM's exact native verification uses the existing public
 `RasTerrainMod.get_terrain_profile` for retained complete modification profiles.
 Source-derived crops require their original 256-pixel tile phase and the
 H5Assist-compatible chunked modification writer. No polygon record is truncated
-or dropped to make a subset succeed. Polygon/native singleton-profile cases
-remain explicit qualification holds.
+or dropped to make a subset succeed. Complete original-grid point evaluation
+can verify polygon interiors and native singleton support; these records do
+not have a line-profile qualification claim.
 
 These experimental boundary APIs support native polyline/profile modification
-records. Polygon and unknown layouts raise `ValueError`; they are never silently
-omitted. Native replay and engineering acceptance require project qualification.
+records and constant-elevation `SetValue` polygon records. The latter have
+Attributes and Polygon Info/Parts/Points tables, valid closed rings, unchanged
+elevation parameters, and zero extra native support distance. Their entire
+polygon is the footprint, including its holes. Boundary-generated, shape-Z,
+multipoint and unknown polygon layouts raise `ValueError` before mutation.
+Native replay and engineering acceptance require project qualification.
 Synthetic tests establish record preservation, not native hydraulic equivalence.
 
 ```python
@@ -72,11 +77,14 @@ for child_geometry in child_geometry_hdfs:
 `terrain_modification_features` is registered in `ras_commander.schemas`.
 Its exact columns are `group_name` (native group), `feature_index` (zero-based
 Attributes row), `support_distance` (Max Reach/Max Extent in horizontal CRS units),
-and `geometry` (complete LineString/MultiLineString, or Point for a native
-single-vertex record). The caller supplies the CRS;
+and `geometry` (complete LineString/MultiLineString, Polygon, or Point for a native
+single-vertex record). Polygon support_distance is zero. The caller supplies the CRS;
 there is no reprojection or inference. Empty frames keep their columns and CRS.
 
 Export creates a new folder with `modifications.hdf` and `modifications.rasmap`.
+Copy/export return one summary per requested group with `geometry_type`:
+`Polygon` or `Polyline` names the native table layout; a singleton record
+retains `Polyline` storage even though its support geometry is a Point.
 The HDF contains source root metadata and complete selected native modification
 records, without terrain grid/index data. This is a method-native boundary input,
 not an executable terrain. Copy preserves native feature order, structured
@@ -115,8 +123,9 @@ basename registration may support a caller-verified stale delivered layout; its
 source bytes/provenance must be verified by the caller. Multiple exact or fallback
 matches fail before mutation. Destination lookup requires one exact path.
 Returned decisions record source registration name and matching basis. The reader
-supports exactly the six native Attributes/Polyline Info/Parts/Points/Profile
-Info/Values tables; extra native tables fail pending an explicit supported layout.
+supports the six native Attributes/Polyline Info/Parts/Points/Profile Info/Values
+tables or the four Attributes/Polygon Info/Parts/Points SetValue tables. Extra
+native tables fail pending an explicit supported layout.
 
 Native single-vertex polyline records return Point support geometry for conservative
 selection, preserving the complete original native record. They are not repaired
