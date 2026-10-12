@@ -461,7 +461,7 @@ class GeomPreprocessor:
                 modified_after=start_time,
             )
 
-            native_messages = "\n".join((messages, stdout))
+            native_messages = f"{messages}\n{stdout}"
             parsed = ResultsParser.parse_compute_messages(native_messages)
             blocking_lines = GeomPreprocessor._find_blocking_message_lines(native_messages)
 
