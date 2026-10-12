@@ -99,11 +99,13 @@ def test_restoration_failure_cannot_return_a_success(runtime):
         sampling.run_serial_sampling(lambda: 7)
 
 
-def test_cleanup_failure_does_not_replace_callback_exception(runtime):
+def test_cleanup_failure_does_not_replace_callback_exception(runtime, monkeypatch):
     _, controls = runtime
     original = controls["set_max"]
     controls["set_max"] = lambda *v: False if v == (32, 16) else original(*v)
     error = ValueError("original sampling failure")
+    messages = []
+    monkeypatch.setattr(sampling.logger, "error", messages.append)
 
     def fail():
         raise error
@@ -111,7 +113,31 @@ def test_cleanup_failure_does_not_replace_callback_exception(runtime):
     with pytest.raises(ValueError) as caught:
         sampling.run_serial_sampling(fail)
     assert caught.value is error
-    assert "restoration failed" in error.__notes__[0]
+    if callable(getattr(error, "add_note", None)):
+        assert "restoration failed" in error.__notes__[0]
+    else:
+        assert "restoration failed" in messages[0]
+
+
+def test_cleanup_failure_preserves_legacy_exception_and_logs(runtime, monkeypatch):
+    _, controls = runtime
+    original = controls["set_max"]
+    controls["set_max"] = lambda *v: False if v == (32, 16) else original(*v)
+
+    class LegacyError(Exception):
+        add_note = None
+
+    error = LegacyError("original sampling failure")
+    messages = []
+    monkeypatch.setattr(sampling.logger, "error", messages.append)
+
+    def fail():
+        raise error
+
+    with pytest.raises(LegacyError) as caught:
+        sampling.run_serial_sampling(fail)
+    assert caught.value is error
+    assert "restoration failed" in messages[0]
 
 
 def test_nested_call_is_rejected_without_losing_outer_runtime(runtime):

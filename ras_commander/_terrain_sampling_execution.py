@@ -152,7 +152,11 @@ def run_serial_sampling(operation: Callable[[], _T]) -> tuple[_T, dict[str, Any]
                     failures
                 )
                 if primary is not None:
-                    primary.add_note(message)
+                    note = getattr(primary, "add_note", None)
+                    if callable(note):
+                        note(message)
+                    else:
+                        logger.error(message)
                 else:
                     raise RuntimeError(message)
         return result, evidence
