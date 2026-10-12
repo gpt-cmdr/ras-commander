@@ -574,6 +574,7 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
 - `replace_bc_lines(...)` - Replace all target-area lines and supplied unsteady references
+- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply the exact BC names and types from the authored placement. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns type decisions and before/after hashes. It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
 
 ## GeomLateral
 
@@ -823,6 +824,140 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - validate_river_reach_rs
 
 ### GeomPreprocessor source reference
+
+Run `GeomPreprocessor.run_geometry_preprocessor(plan_number, ras_object=project)`
+on a writable project copy. Close any h5py handles to that geometry HDF first.
+The method temporarily changes plan flags and restores them by default; native
+geometry and preprocessing artifacts remain in the copy. It preserves the
+project's CRS and units.
+
+Completion requires normal engine and preprocessing-child exit within
+`max_wait` (seconds), unchanged authored inputs, and complete native products.
+The selected geometry text defines area perimeters and computation points,
+breaklines, BC/reference lines and structure records. It must remain
+byte-identical. Compiled area/feature mirrors are checked against that text;
+an incoming HDF can still describe a parent and does not define child features.
+Existing valid native BC types are retained when their compiled names and
+coordinates match the authored lines. A subsequent type change fails input
+preservation. Unrelated parent BC mirrors do not establish a child type; explicit
+type intent can be authored with `GeomBcLines.set_bc_line_types` before recomputation.
+HDF-only refinement regions, Projection, terrain/classification associations
+and Manning calibration are preserved semantically. Projection definitions are
+compared with axis-aware `pyproj.CRS.equals`: equivalent WKT serialization,
+including native standard-parallel ordering and numeric formatting, is allowed;
+a different CRS or axis order fails. Other retained values are unchanged,
+allowing native fixed-string widths to differ.
+
+For authored 2D areas, the method retains a unique sibling HDF backup and removes
+recognized native product tables before launch, including `.c##` caches even when
+`clear_geompre=False`. This invalidation is restricted to HEC-RAS 5/6 geometry
+HDFs and geometry-only results copies named `.g##.hdf`; results/time-series
+hierarchies are rejected. Failed native work leaves the backup and diagnostics,
+and does not restore obsolete products. Completion requires a freshly written
+`Geometry/GeomPreprocess`, cell/face property pairs with valid packed ranges,
+tables sized for the current topology, BC/reference attachments and associated
+infiltration tables. Infiltration uses interior-cell counts; volume tables
+also include ghost cells, whose zero-length entries are permitted.
+Topology validation checks integer index domains, contiguous packed ranges,
+reciprocal cell/face and point/face incidence with signed orientation,
+reciprocal cell/point membership, and trailing `-1` cell-point padding.
+Face coordinates must be finite, nondegenerate and consistent with native
+normals and lengths at float32 storage precision. Fresh child regeneration
+can replace stale parent topology; no parent indexes are restored.
+The leading interior center rows must exactly equal the current regenerated
+`2D Flow Areas/Cell Points` mirror in the qualified float64 native schema. That
+mirror must match the current authored text within one float64 ULP per coordinate,
+the native decimal-parsing precision; it must be finite and have the exact shape.
+No incoming parent seed mirror is used for this binding. Remaining rows are two-vertex
+ghost cells and are not compared to authored seeds. Every native face polyline
+(endpoint, indexed `Faces Perimeter Values` intermediate vertices, endpoint)
+must lie on or inside the current authored perimeter, including interior and
+ghost-adjacent boundary faces. Both vertices and segments are checked with
+vectorized, prepared geometry predicates in bounded batches. Concavities and
+keyhole-encoded holes are honored; a bent boundary face is never replaced by its
+endpoint chord. The boundary tolerance is eight
+float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.
+Coherent translations of either coordinate array fail completion.
+Reference-line terrain profiles are checked when authored. Manning polygon
+names and coordinates are checked against the geometry text; attachment families
+are required for regions intersecting a current 2D perimeter. A valid disjoint
+polygon remains an authored input, with `outside_current_mesh` evidence, and
+does not require absent cell/face mappings. Present mappings still require valid
+region IDs and current mesh indexes. A calibration table name alone does not
+establish a polygon interaction. Invalid or multipart polygon interaction schemas
+fail before mutation. The dimensioned product contract covers structure-free HEC-RAS
+5/6 geometry with authored 2D areas; it does not qualify pure 1D completion.
+`require_complete_products=False` is the public default. Structure-bearing 2D
+or mixed geometry runs with normal engine/writer lifecycle, native-error and
+plan-restoration checks, without the unqualified product invalidation/checks.
+Its `completion_contract.status` is `not_qualified_for_structures`, with reason
+`GEOMETRY_COMPLETION_NOT_QUALIFIED_FOR_STRUCTURES`, message "completion contract
+not qualified for structures", `inputs_preserved=None`, and `products_complete=False`.
+Process success therefore does not claim qualified structure products.
+Set `require_complete_products=True` for fail-closed workflows: these geometries
+fail before cache invalidation with `GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`.
+`RasBreakout2D.prepare_cloned_geometry`, `GeomMesh.generate`, `generate_all`,
+and `audit_domain_containment` expose the same option, defaulting to False.
+They forward it to all native recompilation and numeric/perimeter-repair calls.
+In this compatibility path, captured stdout remains diagnostic; blocking errors
+are parsed from native compute-message files, as on the prior default path.
+Structure-free geometries always receive the complete contract checks, including
+blocking-error parsing of captured stdout.
+The structure-property schema has not been qualified. A nonempty native group does not
+prove complete structure products. Native infiltration region definitions and
+overrides are preserved as authored HDF-only inputs.
+A quiet file or flow-start message does not end the wait.
+`native_worker_threads=1` requests a managed preprocessing worker-pool limit of
+one by default. This is separate from hydraulic solver
+core settings and does not guarantee deterministic native products. Positive integers select another limit; `None` retains inherited
+managed-pool settings. The override is local to the launched process environment
+and applies only to `geometry_only=True`. `completion_contract` records the
+requested limit; it does not claim that every native thread was measured.
+The separate isolated native property/calibration/BC worker also uses a
+one-worker managed pool; the preprocessor's `None` option does not change that
+isolated-worker policy.
+Recognized Wine desktop, console and plot-display invocations may outlive the
+geometry writers and are excluded from writer completion; unknown children
+still require a confirmed exit. A transient Wine invalid-handle error while
+querying a child's role leaves it supervised. The role query is retried while
+that same process identity remains active, including after the launcher exits.
+The geometry reference is read from the selected on-disk plan; a stale project
+DataFrame cannot redirect inventory validation or `.c##` cleanup to another
+geometry. Missing or malformed geometry references fail before engine launch.
+`geometry_only=False` also waits for all enabled plan work, so its runtime can
+include hydraulic computation.
+
+`GeometryPreprocessResult` remains bool-compatible. `return_code` records the
+actual launcher exit; a nonzero exit always fails. `timed_out=True` fails even
+if geometry topology exists. `missing_geometry_inventory` now lists changed or
+missing authored inputs, rather than every incoming cache object;
+`GEOMETRY_INPUT_CHANGED` identifies this failure. `missing_geometry_products`
+lists missing or malformed required products; the corresponding reason is
+`GEOMETRY_PRODUCTS_INCOMPLETE`. Both lists default to empty.
+`completion_contract` records the contract version, text hash, area counts,
+preservation/completeness decisions, invalidated tables and backup path.
+It also records `lifecycle_verified` and `plan_restored`, both false until
+normal launcher/writer completion and exact original-plan restoration are
+positively established. Disabling restoration leaves `plan_restored=false`.
+The explicit `clear_geompre=True` path completes the unique geometry backup
+and input preflight before deleting caches, messages, or native products.
+A target open in the caller's h5py runtime
+returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Captured stdout
+and stderr participate in blocking native-error parsing even with complete
+products and launcher exit 0; the merged stream is retained as `stdout`.
+Nonspatial preprocessing does not require Shapely; spatial imports occur only
+when authored Manning polygons require intersection checks.
+A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
+inspection or an unconfirmed child exit returns
+`GEOMETRY_PROCESS_COMPLETION_UNVERIFIED`. Unexpected monitoring or process-query
+errors also attempt bounded cancellation of retained owned writers before
+restoring the plan, even if the launcher has already exited. Launcher ownership
+is captured immediately after launch, before optional monitoring hooks. Cleanup
+preserves PID/create-time identities,
+continues after individual OS errors, and bounds each cleanup phase to a shared
+ten-second wait budget. Cleanup errors remain in the failed result; uncertain
+completion never triggers a postrun HDF read. These completion checks do not
+constitute hydraulic acceptance.
 
 ::: ras_commander.geom.GeomPreprocessor.GeomPreprocessor
     options:
@@ -1142,6 +1277,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - delete_bc_line
         - rename_bc_line
         - replace_bc_lines
+        - set_bc_line_types
 
 ### GeomPipeNetwork source reference
 

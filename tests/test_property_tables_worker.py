@@ -127,6 +127,7 @@ def test_worker_imports_only_stdlib_and_native_interop():
         "__future__",
         "ctypes",
         "importlib",
+        "json",
         "os",
         "sys",
         "pathlib",

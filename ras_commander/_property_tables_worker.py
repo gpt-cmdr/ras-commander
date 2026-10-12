@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ctypes
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -172,6 +173,31 @@ def main() -> None:
         f"(module {libraries[0]._handle:#x}; shared object/reference state)",
         flush=True,
     )
+    if len(sys.argv) == 5 and sys.argv[3] == "--bc-types":
+        from RasMapperLib import RASGeometry
+
+        target = RASGeometry(str(geometry))
+        lines = target.BoundaryConditionLines
+        lines.LoadFeatureTable()
+        requested = json.loads(Path(sys.argv[4]).read_text(encoding="utf-8"))[
+            "line_types"
+        ]
+        changes = []
+        for index in range(lines.FeatureCount()):
+            before = str(lines.GetConnectionType(index))
+            name = str(lines.GetFeatureName(index))
+            after = requested.get(name, before)
+            if before != after:
+                lines.SetConnectionType(index, after)
+            changes.append(
+                {"index": index, "name": name, "before": before, "after": after}
+            )
+        if not lines.SaveFeatureTable():
+            raise RuntimeError("Native BC classification save failed.")
+        Path(sys.argv[4]).write_text(
+            json.dumps({"lines": changes}, indent=2) + "\n", encoding="utf-8"
+        )
+        return
     if len(sys.argv) == 4:
         from RasMapperLib import RASGeometry
 

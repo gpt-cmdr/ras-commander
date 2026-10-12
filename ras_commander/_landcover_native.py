@@ -1579,10 +1579,12 @@ def recompute_property_tables(
 
 
 def _run_property_tables_worker(
-    install: Path, geometry_hdf_path: Path, *, calibration_source: Path | None = None
+    install: Path, geometry_hdf_path: Path, *, calibration_source: Path | None = None,
+    bc_types_receipt: Path | None = None,
 ) -> None:
     """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs."""
     from ._gdal_runtime import configure_rasmapper_gdal_bridge
+    from ._native_worker_environment import worker_environment
 
     # Normalize in the caller's cwd before the subprocess changes directory.
     # absolute() preserves mapped drives, unlike resolve() on Windows.
@@ -1592,7 +1594,11 @@ def _run_property_tables_worker(
     worker = Path(__file__).absolute().with_name("_property_tables_worker.py")
     command = [sys.executable, "-I", str(worker), str(install), str(geometry_hdf_path)]
     if calibration_source is not None:
+        if bc_types_receipt is not None:
+            raise ValueError("Native calibration and BC classification are separate operations.")
         command.append(str(Path(calibration_source).absolute()))
+    if bc_types_receipt is not None:
+        command.extend(("--bc-types", str(Path(bc_types_receipt).absolute())))
     try:
         result = subprocess.run(
             command,
@@ -1603,6 +1609,7 @@ def _run_property_tables_worker(
             errors="replace",
             timeout=1800,
             check=False,
+            env=worker_environment(1),
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(
