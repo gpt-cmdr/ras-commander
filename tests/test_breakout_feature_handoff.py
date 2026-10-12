@@ -458,8 +458,12 @@ def test_refresh_exception_keeps_original_cause(tmp_path, monkeypatch, method):
     assert caught.value.__cause__ is original
 
 
-def test_numeric_containment_retry_uses_real_violation_identity(tmp_path, monkeypatch):
+@pytest.mark.parametrize("strict", [False, True])
+def test_numeric_containment_retry_uses_real_violation_identity(
+    tmp_path, monkeypatch, strict
+):
     import json
+
     from ras_commander.geom import MeshResult
 
     preflight, clone, ras = _fixture(tmp_path)
@@ -472,12 +476,16 @@ def test_numeric_containment_retry_uses_real_violation_identity(tmp_path, monkey
         [(10.999, 50), (89, 50)]
     )
     calls = []
+    preprocess_calls = []
 
     def refresh(*args, **kwargs):
+        assert kwargs["require_complete_products"] is strict
+        preprocess_calls.append(kwargs)
         _sync_native_hdf(clone.geometry_path)
         return SimpleNamespace(success=True, error=None, first_error_line=None)
 
     def mesh(*args, **kwargs):
+        assert kwargs["require_complete_products"] is strict
         audit = GeomMesh.audit_domain_containment(
             "02", mesh_name="Area", ras_object=ras
         )
@@ -494,8 +502,13 @@ def test_numeric_containment_retry_uses_real_violation_identity(tmp_path, monkey
     )
     monkeypatch.setattr(GeomMesh, "generate", staticmethod(mesh))
     result = RasBreakout2D.prepare_cloned_geometry(
-        preflight, clone, ras_object=ras, refresh_method="rasexe"
+        preflight,
+        clone,
+        ras_object=ras,
+        refresh_method="rasexe",
+        require_complete_products=strict,
     )
+    assert len(preprocess_calls) == 2
     assert len(calls) == 2 and calls[0].violations[0].feature_name == "Crossing"
     assert not calls[0].ok and calls[1].ok and result.containment_result.ok
     record = result.breakline_containment_repairs[0]

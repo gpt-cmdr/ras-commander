@@ -665,6 +665,7 @@ class RasBreakout2D:
         timeout: int = 600,
         max_mesh_iterations: int = 8,
         disable_meteorology: bool = False,
+        require_complete_products: bool = False,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -716,6 +717,9 @@ class RasBreakout2D:
             disable_meteorology: Disable and remove inherited meteorological
                 sources for an owned boundary-only child before preprocessing.
                 Defaults to False for existing precipitation-driven workflows.
+            require_complete_products: Require the qualified completion contract
+                for every native refresh, including numeric-repair retries and
+                mesh repairs. Defaults to False for upstream compatibility.
 
         Returns:
             Breakout2DPreparationResult: Evidence for each preparation step.
@@ -843,6 +847,7 @@ class RasBreakout2D:
                     force=True,
                     clear_geompre=True,
                     geometry_only=True,
+                    require_complete_products=require_complete_products,
                 )
             except Exception as exc:
                 raise RuntimeError("Headless geometry HDF refresh failed") from exc
@@ -892,6 +897,7 @@ class RasBreakout2D:
                 mesh_name=preflight.spec.source_2d_area,
                 ras_object=ras_object,
                 max_iterations=max_mesh_iterations,
+                require_complete_products=require_complete_products,
             )
             violations = getattr(
                 getattr(mesh_result, "domain_containment", None), "violations", []
@@ -965,6 +971,7 @@ class RasBreakout2D:
                     force=True,
                     clear_geompre=True,
                     geometry_only=True,
+                    require_complete_products=require_complete_products,
                 )
                 repair.update(
                     status="applied", native_preprocess_success=bool(retry.success)
@@ -981,6 +988,7 @@ class RasBreakout2D:
                     mesh_name=preflight.spec.source_2d_area,
                     ras_object=ras_object,
                     max_iterations=max_mesh_iterations,
+                    require_complete_products=require_complete_products,
                 )
                 repair.update(
                     status="validated" if mesh_result.ok else "failed",

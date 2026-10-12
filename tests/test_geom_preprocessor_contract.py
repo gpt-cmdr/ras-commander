@@ -263,6 +263,83 @@ def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
             )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("bend", [False, True])
+def test_native_concave_face_uses_intermediates_not_endpoint_chord(
+    tmp_path, reverse, bend
+):
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, expected = fixture(tmp_path)
+    ring = np.array([(0, 0), (1, 0), (0.8, 0.5), (1, 1), (0, 1), (0, 0)])
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        if bend:
+            del area["Faces Perimeter Values"]
+            area.create_dataset("Faces Perimeter Values", data=[[0.8, 0.5]])
+            area["Faces Perimeter Info"][...] = [[0, 0], [0, 1]]
+        issues = _mesh_binding_issues(
+            area, expected["seed_points"]["Synthetic"], ring[::-1] if reverse else ring
+        )
+    assert bool(issues) is (not bend)
+    if not bend:
+        assert any("face segments outside" in issue for issue in issues)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("bend", [False, True])
+def test_native_faces_honor_keyhole_ring_and_ghosts(tmp_path, reverse, bend):
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, expected = fixture(tmp_path)
+    ring = np.array(
+        [
+            (0, 0),
+            (1, 0),
+            (1, 1),
+            (0, 1),
+            (0, 0),
+            (0.4, 0.3),
+            (0.4, 0.5),
+            (0.6, 0.5),
+            (0.6, 0.3),
+            (0.4, 0.3),
+            (0, 0),
+        ]
+    )
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        area["FacePoints Coordinate"][...] = [
+            [0.2, 0.4],
+            [0.8, 0.4],
+            [0.8, 0.8],
+            [0.1, 0.1],
+        ]
+        area["Cells Center Coordinate"][2] = [100.0, 100.0]
+        if bend:
+            del area["Faces Perimeter Values"]
+            area.create_dataset("Faces Perimeter Values", data=[[0.4, 0.3], [0.6, 0.3]])
+            area["Faces Perimeter Info"][...] = [[0, 2], [2, 0]]
+        issues = _mesh_binding_issues(
+            area, expected["seed_points"]["Synthetic"], ring[::-1] if reverse else ring
+        )
+    assert bool(issues) is (not bend)
+
+
+def test_exterior_native_intermediate_vertex_fails_complete_contract(tmp_path):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        del area["Faces Perimeter Values"]
+        area.create_dataset("Faces Perimeter Values", data=[[1_000_000.0, 1_000_000.0]])
+        area["Faces Perimeter Info"][...] = [[0, 0], [0, 1]]
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert not changed and any(
+        "Faces Perimeter Values: points outside" in issue for issue in missing
+    )
+    assert not evidence["products_complete"]
+
+
 def manning_region(text, path, outside=True):
     origin = 2.0 if outside else 0.1
     coordinates = np.array(

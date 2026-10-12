@@ -709,9 +709,11 @@ def _mesh_binding_issues(
     validates that regenerated seed mirror against current text at one float64
     ULP for native decimal parsing; no incoming parent mirror is used.
     Remaining rows are native
-    two-vertex ghost cells; their centers are not authored seeds. Face points
-    must be covered by the current perimeter, allowing eight float64 ULPs for
-    native segment arithmetic. No optional spatial dependency is needed.
+    two-vertex ghost cells; their centers are not authored seeds. All native
+    face polylines, including ghost-adjacent faces and packed intermediate
+    vertices, must be covered by the current perimeter. Boundary arithmetic
+    allows eight float64 ULPs in source CRS units. Spatial imports are local
+    so nonspatial preprocessing does not require Shapely.
     """
     issues = []
     centers = area["Cells Center Coordinate"][()]
@@ -739,27 +741,52 @@ def _mesh_binding_issues(
     ):
         return issues + ["FacePoints Coordinate: invalid authored perimeter"]
     tolerance = 8 * np.spacing(max(1.0, float(np.max(np.abs(ring)))))
-    # Ray crossing plus point/segment distance handles concave rings, either
-    # orientation, horizontal edges, explicit closure and boundary roundoff.
-    inside = np.zeros(len(points), dtype=bool)
-    boundary = np.zeros(len(points), dtype=bool)
-    for a, b in zip(ring, np.roll(ring, -1, axis=0)):
-        delta = b - a
-        length2 = float(delta @ delta)
-        if not length2:
-            continue
-        offset = points - a
-        fraction = np.clip(offset @ delta / length2, 0, 1)
-        boundary |= (
-            np.linalg.norm(offset - fraction[:, None] * delta, axis=1) <= tolerance
-        )
-        if delta[1]:
-            crossing = (a[1] > points[:, 1]) != (b[1] > points[:, 1])
-            inside ^= crossing & (
-                points[:, 0] < a[0] + (points[:, 1] - a[1]) * delta[0] / delta[1]
-            )
-    if not np.all(inside | boundary):
+    import shapely
+
+    # Native rings can encode holes with doubled connecting edges. Noding and
+    # build_area recover polygonal interiors without admitting those connector
+    # lines as domain. This also honors reversed rings and nested holes.
+    domain = shapely.build_area(
+        shapely.node(shapely.LineString(np.vstack([ring, ring[0]])))
+    )
+    if domain.is_empty or not domain.is_valid:
+        return issues + ["FacePoints Coordinate: invalid authored perimeter"]
+    domain = domain.buffer(tolerance)
+    shapely.prepare(domain)
+    if not np.all(shapely.covers(domain, shapely.points(points))):
         issues.append("FacePoints Coordinate: points outside authored perimeter")
+    faces = area["Faces FacePoint Indexes"][()]
+    info = area["Faces Perimeter Info"][()]
+    values = area["Faces Perimeter Values"][()]
+    if values.dtype.kind != "f" or values.dtype.itemsize != 8:
+        return issues + [
+            "Faces Perimeter Values: unsupported native coordinate precision"
+        ]
+    if not np.all(shapely.covers(domain, shapely.points(values))):
+        issues.append("Faces Perimeter Values: points outside authored perimeter")
+    # Topology/ranges were checked before this function. Resolve the same
+    # endpoint + indexed intermediates + endpoint sequence as HdfMesh. Never
+    # use an endpoint chord for a bent boundary face. Batches bound GEOS memory;
+    # prepared, vectorized coverage checks every interior/boundary segment.
+    for first in range(0, len(faces), 32768):
+        last = min(first + 32768, len(faces))
+        packed = info[first:last].astype(np.int64)
+        counts = packed[:, 1] + 2
+        starts = np.cumsum(counts) - counts
+        coordinates = np.empty((int(counts.sum()), 2), dtype=np.float64)
+        coordinates[starts] = points[faces[first:last, 0]]
+        coordinates[starts + counts - 1] = points[faces[first:last, 1]]
+        owners = np.repeat(np.arange(last - first), packed[:, 1])
+        offset = int(packed[0, 0])
+        stop = int(packed[-1, 0] + packed[-1, 1])
+        slots = np.arange(offset, stop) - packed[owners, 0] + 1
+        coordinates[starts[owners] + slots] = values[offset:stop]
+        lines = shapely.linestrings(
+            coordinates, indices=np.repeat(np.arange(last - first), counts)
+        )
+        if not np.all(shapely.covers(domain, lines)):
+            issues.append("Faces Perimeter: face segments outside authored perimeter")
+            break
     return issues
 
 
@@ -994,15 +1021,17 @@ def validate(
                 ("FacePoints Is Perimeter", len(points), None),
             ):
                 require(f"{path}/{topology}", rows, columns)
-            missing.extend(f"{path}/{issue}" for issue in _topology_issues(hdf[path]))
-            missing.extend(
-                f"{path}/{issue}"
-                for issue in _mesh_binding_issues(
-                    hdf[path],
-                    current_seeds,
-                    expected["perimeters"][name],
+            topology_issues = _topology_issues(hdf[path])
+            missing.extend(f"{path}/{issue}" for issue in topology_issues)
+            if not topology_issues:
+                missing.extend(
+                    f"{path}/{issue}"
+                    for issue in _mesh_binding_issues(
+                        hdf[path],
+                        current_seeds,
+                        expected["perimeters"][name],
+                    )
                 )
-            )
             for product in FACE_PRODUCTS[2:]:
                 require(f"{path}/{product}", face_count)
             pair(path, "Cells Volume Elevation", cells, 2, int(source["seed_count"]))

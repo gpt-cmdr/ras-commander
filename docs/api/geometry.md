@@ -869,8 +869,13 @@ The leading interior center rows must exactly equal the current regenerated
 mirror must match the current authored text within one float64 ULP per coordinate,
 the native decimal-parsing precision; it must be finite and have the exact shape.
 No incoming parent seed mirror is used for this binding. Remaining rows are two-vertex
-ghost cells and are not compared to authored seeds. All face points must lie
-on or inside the current authored perimeter; the boundary tolerance is eight
+ghost cells and are not compared to authored seeds. Every native face polyline
+(endpoint, indexed `Faces Perimeter Values` intermediate vertices, endpoint)
+must lie on or inside the current authored perimeter, including interior and
+ghost-adjacent boundary faces. Both vertices and segments are checked with
+vectorized, prepared geometry predicates in bounded batches. Concavities and
+keyhole-encoded holes are honored; a bent boundary face is never replaced by its
+endpoint chord. The boundary tolerance is eight
 float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.
 Coherent translations of either coordinate array fail completion.
 Reference-line terrain profiles are checked when authored. Manning polygon
@@ -891,6 +896,9 @@ not qualified for structures", `inputs_preserved=None`, and `products_complete=F
 Process success therefore does not claim qualified structure products.
 Set `require_complete_products=True` for fail-closed workflows: these geometries
 fail before cache invalidation with `GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`.
+`RasBreakout2D.prepare_cloned_geometry`, `GeomMesh.generate`, `generate_all`,
+and `audit_domain_containment` expose the same option, defaulting to False.
+They forward it to all native recompilation and numeric/perimeter-repair calls.
 In this compatibility path, captured stdout remains diagnostic; blocking errors
 are parsed from native compute-message files, as on the prior default path.
 Structure-free geometries always receive the complete contract checks, including
