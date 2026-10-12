@@ -187,6 +187,48 @@ def test_table_name_without_polygon_has_no_attachment_requirement(tmp_path):
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
+def test_disjoint_region_rejects_even_in_bounds_stale_attachment(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path)
+    with h5py.File(path, "r+") as hdf:
+        group = hdf["Geometry/Land Cover (Manning's n)"]
+        attrs = group["Attributes"][()]
+        attrs["2D Area Name"] = b"Synthetic"
+        group["Attributes"][:] = attrs
+        group.create_dataset(
+            "Internal Cells",
+            data=np.array([(0, 0)], dtype=[("Region ID", "i4"), ("Cell Index", "i4")]),
+        )
+    assert any(
+        "outside authored region interaction" in issue
+        for issue in validate(text, path, expected, time.time() - 1)[1]
+    )
+
+
+def test_disjoint_proof_requires_complete_perimeter_inventory(tmp_path, monkeypatch):
+    from ras_commander import GeomStorage
+
+    text, path, _ = fixture(tmp_path)
+    manning_region(text, path)
+    areas = GeomStorage.get_storage_area_polygons(text, exclude_2d=False)
+    monkeypatch.setattr(
+        GeomStorage, "get_storage_area_polygons", lambda *args, **kwargs: areas.iloc[:0]
+    )
+    with pytest.raises(ValueError, match="incomplete current 2D perimeter inventory"):
+        snapshot(text, path)
+
+
+def test_polygon_part_topology_is_preserved(tmp_path):
+    text, path, _ = fixture(tmp_path)
+    expected = manning_region(text, path)
+    with h5py.File(path, "r+") as hdf:
+        hdf["Geometry/Land Cover (Manning's n)/Polygon Parts"][0, 1] = 3
+    assert any(
+        "polygon part ranges" in issue
+        for issue in validate(text, path, expected, time.time() - 1)[0]
+    )
+
+
 @pytest.mark.parametrize(
     "name",
     ["Curve Number", "Abstraction Ratio", "Minimum Infiltration Rate", "Properties"],

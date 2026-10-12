@@ -190,11 +190,26 @@ def _feature_issues(
         or "Name" not in (attrs.dtype.names or ())
     ):
         return [f"{path}: authored feature identities differ"]
+    if family == "Polygon" and (
+        len(info.shape) != 2 or info.shape[1] != 4 or "Polygon Parts" not in group
+    ):
+        return [f"{path}: unsupported polygon part schema"]
     for index, feature in enumerate(features):
         # Native string fields are fixed width; names longer than the field are
         # not accepted as preserved identities by this contract.
         name = bytes(attrs["Name"][index]).rstrip(b"\x00").decode("utf-8").rstrip()
         start, count = (int(v) for v in info[index, :2])
+        if family == "Polygon":
+            part_start, part_count = (int(v) for v in info[index, 2:4])
+            parts = group["Polygon Parts"]
+            if (
+                part_count != 1
+                or part_start < 0
+                or part_start >= len(parts)
+                or parts.shape[1:] != (2,)
+                or not np.array_equal(parts[part_start], [0, count])
+            ):
+                issues.append(f"{path}/{index}: unsupported polygon part ranges")
         coords = points[start : start + count]
         if (
             name != feature["name"]
@@ -327,6 +342,10 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     result["manning_region_interactions"] = []
     if result["manning_regions"]:
         areas = GeomStorage.get_storage_area_polygons(geometry_path, exclude_2d=False)
+        if any(list(areas["Name"]).count(name) != 1 for name in result["areas"]):
+            raise ValueError(
+                "GEOMETRY_INPUT_INVALID: incomplete current 2D perimeter inventory"
+            )
         for feature in result["manning_regions"]:
             polygon = Polygon(feature["coordinates"])
             if not polygon.is_valid or polygon.is_empty:
@@ -341,6 +360,10 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                     raise ValueError("GEOMETRY_INPUT_INVALID: invalid 2D perimeter")
                 if not polygon.disjoint(area.geometry):
                     intersected.append(area["Name"])
+            if len(intersected) > 1:
+                raise NotImplementedError(
+                    "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: multi-area Manning region requires a qualified interaction contract"
+                )
             result["manning_region_interactions"].append(
                 {
                     "name": feature["name"],
@@ -553,7 +576,15 @@ def validate(
             ):
                 missing.append(f"{path}/{family}: invalid packed ranges")
 
-        def attachments(path, table, count, identity, index_field, required_ids=None):
+        def attachments(
+            path,
+            table,
+            count,
+            identity,
+            index_field,
+            required_ids=None,
+            allowed_areas=None,
+        ):
             required_ids = (
                 set(range(count)) if required_ids is None else set(required_ids)
             )
@@ -592,6 +623,10 @@ def validate(
                 area_name = (
                     bytes(attrs[area_field][fid]).rstrip(b"\x00").decode().strip()
                 )
+                if allowed_areas is not None and area_name not in allowed_areas[fid]:
+                    missing.append(
+                        f"{path}/{table}: attachment outside authored region interaction"
+                    )
                 area = evidence["areas"].get(area_name)
                 limit = (
                     None
@@ -821,7 +856,15 @@ def validate(
                 ("Internal Faces", "Face Index"),
                 ("Internal Cells", "Cell Index"),
             ):
-                attachments(path, table, count, "Region ID", field, active)
+                attachments(
+                    path,
+                    table,
+                    count,
+                    "Region ID",
+                    field,
+                    active,
+                    {i: region["areas"] for i, region in enumerate(interactions)},
+                )
     if expected["areas"]:
         changed.extend(_mesh_hdf_consistency_issues(geometry_path, hdf_path))
     evidence.update(inputs_preserved=not changed, products_complete=not missing)

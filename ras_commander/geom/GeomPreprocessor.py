@@ -142,7 +142,8 @@ class GeomPreprocessor:
                 does not shorten the normal-exit wait.
             dialog_watchdog: Monitor and dismiss recognized native dialogs.
             native_worker_threads: Managed preprocessing worker-pool limit.
-                Defaults to one for reproducible geometry-only native writes.
+                Defaults to a requested limit of one for geometry-only work;
+                it does not guarantee deterministic native products.
                 Positive integers are allowed; None retains the inherited pool
                 settings. Hydraulic solver core settings are unchanged. The
                 override applies only when geometry_only=True.

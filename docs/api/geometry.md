@@ -869,9 +869,9 @@ been qualified for this completion contract. A nonempty native group does not
 prove complete structure products. Native infiltration region definitions and
 overrides are preserved as authored HDF-only inputs.
 A quiet file or flow-start message does not end the wait.
-`native_worker_threads=1` bounds the managed preprocessing worker pool by
-default. This controls managed geometry work separately from hydraulic solver
-core settings. Positive integers select another limit; `None` retains inherited
+`native_worker_threads=1` requests a managed preprocessing worker-pool limit of
+one by default. This is separate from hydraulic solver
+core settings and does not guarantee deterministic native products. Positive integers select another limit; `None` retains inherited
 managed-pool settings. The override is local to the launched process environment
 and applies only to `geometry_only=True`. `completion_contract` records the
 requested limit; it does not claim that every native thread was measured.
