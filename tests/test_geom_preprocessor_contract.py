@@ -121,8 +121,21 @@ def test_control_products_include_interior_and_ghost_cells(tmp_path, monkeypatch
     }
 
 
-@pytest.mark.parametrize("marker", ["Connection=Bridge,0,0", "SA/2D Area Conn=Bridge", "Bridge Culvert-", "IW Pilot Flow=0", "Lat Struct=Lateral", "Type RM Length L Ch R = 2,100,0,0,0", "Type RM Length L Ch R = unknown,100"])
-def test_authored_structure_unknown_product_schema_fails_before_mutation(tmp_path, marker):
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "Connection=Bridge,0,0",
+        "SA/2D Area Conn=Bridge",
+        "Bridge Culvert-",
+        "IW Pilot Flow=0",
+        "Lat Struct=Lateral",
+        "Type RM Length L Ch R = 2,100,0,0,0",
+        "Type RM Length L Ch R = unknown,100",
+    ],
+)
+def test_authored_structure_unknown_product_schema_fails_before_mutation(
+    tmp_path, marker
+):
     text, path, _ = fixture(tmp_path)
     original = path.read_bytes()
     with text.open("a") as stream:

@@ -175,6 +175,8 @@ def project_run(
     real_cleanup=False,
     messages="",
     write_products=True,
+    geometry_text="Geom Title=Synthetic\n",
+    clear_geompre=False,
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     import psutil
@@ -190,7 +192,7 @@ def project_run(
     )
     folder = tmp_path
     path = geometry(folder / "Synthetic.g01.hdf")
-    (folder / "Synthetic.g01").write_text("Geom Title=Synthetic\n")
+    (folder / "Synthetic.g01").write_text(geometry_text)
     plan = folder / "Synthetic.p01"
     plan.write_text("Geom File=g01\nRun UNet=-1\nRun HTab=0\n")
     original = plan.read_bytes()
@@ -256,10 +258,30 @@ def project_run(
             lambda process, **kwargs: killed.append(process.pid),
         )
     result = GP.run_geometry_preprocessor(
-        "01", ras_object=obj, dialog_watchdog=use_watchdog
+        "01", ras_object=obj, dialog_watchdog=use_watchdog, clear_geompre=clear_geompre
     )
     assert plan.read_bytes() == original
     return result, killed
+
+
+def test_unqualified_structures_preserve_geometry_cache_before_launch(
+    tmp_path, monkeypatch
+):
+    cache = tmp_path / "Synthetic.c01"
+    cache.write_bytes(b"retained native cache")
+    text = (
+        "Storage Area=Synthetic,0,0\nStorage Area Surface Line= 4\n"
+        + "".join(f"{x:16.6f}{y:16.6f}" for x, y in [(0, 0), (1, 0), (1, 1), (0, 0)])
+        + "\nStorage Area Is2D=-1\nStorage Area 2D Points= 1\n"
+        + f"{0.2:16.6f}{0.2:16.6f}\nConnection=Bridge,0,0\n"
+    )
+    result, killed = project_run(
+        tmp_path, monkeypatch, geometry_text=text, clear_geompre=True
+    )
+    assert not result.success
+    assert "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED" in result.error
+    assert cache.read_bytes() == b"retained native cache"
+    assert killed == []
 
 
 def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):

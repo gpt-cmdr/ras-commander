@@ -37,6 +37,8 @@ def geometry(tmp_path):
 
 
 def test_native_classification_changes_only_type_with_backup(tmp_path, monkeypatch):
+    # Python 3.10 does not provide hashlib.file_digest.
+    monkeypatch.delattr("hashlib.file_digest", raising=False)
     path, hdf = geometry(tmp_path)
     original = hdf.read_bytes()
 

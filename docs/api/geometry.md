@@ -852,7 +852,9 @@ tables sized for the current topology, BC/reference attachments and associated
 infiltration tables. Infiltration uses interior-cell counts; volume tables
 also include ghost cells, whose zero-length entries are permitted.
 Reference-line terrain profiles and Manning-region attachments are checked
-when authored. Authored 2D structures currently fail before invalidation with
+when authored. The dimensioned product contract covers structure-free HEC-RAS
+5/6 geometry with authored 2D areas; it does not qualify pure 1D completion.
+Authored structures in 2D or mixed 1D/2D geometries fail before cache invalidation with
 `GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`: the structure-property schema has not
 been qualified for this completion contract. A nonempty native group does not
 prove complete structure products. Native infiltration region definitions and

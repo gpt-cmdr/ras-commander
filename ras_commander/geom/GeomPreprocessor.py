@@ -102,7 +102,7 @@ class GeomPreprocessor:
         restore_plan_settings: bool = True,
         flow_start_signals: Optional[List[str]] = None,
         dialog_watchdog: bool = True,
-        native_worker_threads: Optional[int] = 1,
+        native_worker_threads: int | None = 1,
     ) -> GeometryPreprocessResult:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
@@ -234,9 +234,6 @@ class GeomPreprocessor:
                 GeomPreprocessor._delete_files(message_paths)
                 GeomPreprocessor._delete_files([tmp_hdf_path])
 
-            if clear_geompre:
-                GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
-
             original_plan_text = (
                 plan_path.read_bytes()
                 if restore_plan_settings
@@ -310,6 +307,8 @@ class GeomPreprocessor:
                     raise RuntimeError(
                         "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
                     )
+                if clear_geompre:
+                    GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
                 if expected_contract["areas"]:
                     import shutil
                     import uuid
@@ -550,7 +549,7 @@ class GeomPreprocessor:
                 stdio.close()
 
     @staticmethod
-    def _native_worker_environment(worker_threads: Optional[int]) -> dict:
+    def _native_worker_environment(worker_threads: int | None) -> dict:
         """Bound the managed worker pool without changing caller environment."""
         from .._native_worker_environment import worker_environment
 

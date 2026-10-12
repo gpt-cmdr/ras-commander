@@ -261,8 +261,14 @@ class GeomBcLines:
         backup = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.bak")
         receipt = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.json")
         shutil.copy2(hdf_path, backup)
-        with backup.open("rb") as stream:
-            before_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+        def file_hash(path):
+            digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+            return digest.hexdigest()
+
+        before_hash = file_hash(backup)
         receipt.write_text(
             json.dumps({"line_types": line_types}, indent=2) + "\n", encoding="utf-8"
         )
@@ -284,8 +290,7 @@ class GeomBcLines:
                 observed = bytes(after["Type"][row["index"]]).rstrip(b"\x00").decode()
                 if observed != row["after"]:
                     raise RuntimeError("Native BC classification was not persisted.")
-        with hdf_path.open("rb") as stream:
-            after_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+        after_hash = file_hash(hdf_path)
         result.update(
             schema="ras-bc-line-types/v1",
             changed=any(row["before"] != row["after"] for row in result["lines"]),
