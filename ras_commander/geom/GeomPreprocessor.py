@@ -32,6 +32,7 @@ Example Usage:
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 import warnings
 from pathlib import Path
@@ -101,43 +102,33 @@ class GeomPreprocessor:
         restore_plan_settings: bool = True,
         flow_start_signals: Optional[List[str]] = None,
         dialog_watchdog: bool = True,
+        native_worker_threads: int | None = 1,
+        require_complete_products: bool = False,
     ) -> GeometryPreprocessResult:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
 
-        .. note::
-           This method is designed for **pre-flight geometry validation**,
-           particularly for Linux/headless execution environments where the
-           HEC-RAS GUI is unavailable.  It launches ``Ras.exe``, monitors
-           compute messages for the start of flow computations, then
-           terminates early — it is **not** a general-purpose geometry
-           preprocessor suitable for notebooks or interactive workflows.
+        Launches the selected engine on the caller's writable project copy and
+        waits for normal launcher and preprocessing-child exit. Compute messages
+        are diagnostic signals, never permission to terminate a successful run.
+        A timeout terminates owned work and returns failure. HDF inspection occurs
+        only before launch and after process completion; all handles opened by
+        this method are closed before engine execution.
 
-           For general-purpose geometry preprocessing (e.g. resampling
-           land-cover overrides), use ``RasCmdr.compute_plan()`` with the
-           plan temporarily configured to force preprocessing
-           (``Run HTab=-1``) and skip unsteady/post-processing/mapping
-           (``Run UNet=0``, ``Run PostProcess=0``, ``Run RASMapper=0``),
-           combined with ``clear_geompre=True``.
-
-        This method uses the ras-commander execution flow rather than invoking
-        the standalone ``RasGeomPreprocess.exe`` directly:
-
-        1. Initialize/validate the ras project and target plan.
-        2. Enable detailed logging in the plan file.
-        3. Optionally force geometry preprocessing via plan flags.
-        4. Launch through ``RasCmdr.compute_plan()`` using the release-specific
-           command layout (project-first for 5.x; explicit project/plan for
-           6.0+).
-        5. Monitor detailed compute messages for the start of hydraulic
-           computations, then terminate early when possible.
-        6. Parse ``.bco##``, detailed compute messages, and
-           ``.data_errors.txt``/``.data_warnings.txt`` for blocking errors.
+        Authored geometry inputs must survive unchanged. Native products must be
+        freshly generated and complete for the current mesh; obsolete incoming
+        parent products may be replaced. Geometry text, HDF-only associations,
+        Projection and Manning calibration define the retained inputs. Known
+        native product tables are invalidated before launch. Completion checking
+        does not establish hydraulic acceptance. This method emits a result and
+        captured stdout, modifies native artifacts in the project copy, and
+        restores temporary plan flags when requested. It changes no CRS or units.
 
         Args:
             plan_number: Plan number or path to a plan file.
             ras_object (RasPrj, optional): Optional RasPrj instance. If None, uses the global ras.
-            max_wait: Maximum seconds to wait for preprocessing.
+            max_wait: Positive time budget in seconds, including setup and all
+                observed native children. Expiry returns a failed result.
             force: If True, set ``Run HTab=-1`` and
                 ``UNET Use Existing IB Tables=-1`` before running.
             clear_messages: Delete stale compute-message files before running.
@@ -146,22 +137,49 @@ class GeomPreprocessor:
                 post-processing, RAS Mapper, sediment, and water-quality run
                 flags where those plan settings exist. This keeps validation
                 focused on geometry preprocessing.
-                Completion requires a freshly written, semantically populated
-                geometry HDF that matches available 2D perimeter, spacing, cell
-                count and breakline count metadata in the current geometry text;
-                a fresh sidecar or rewritten inherited HDF header is insufficient.
-                This requirement also applies with ``force=False``; that setting
-                preserves plan flags rather than accepting inherited output.
             restore_plan_settings: Restore original ``Run HTab`` and
                 related run flag values after the run.
-            flow_start_signals: Optional message strings that indicate geometry
-                preprocessing has finished and flow computation is starting.
+            flow_start_signals: Optional diagnostic message strings. Detection
+                does not shorten the normal-exit wait.
+            dialog_watchdog: Monitor and dismiss recognized native dialogs.
+            native_worker_threads: Managed preprocessing worker-pool limit.
+                Defaults to a requested limit of one for geometry-only work;
+                it does not guarantee deterministic native products.
+                Positive integers are allowed; None retains the inherited pool
+                settings. Hydraulic solver core settings are unchanged. The
+                override applies only when geometry_only=True.
+            require_complete_products: If True, refuse unqualified structure-bearing
+                2D geometry before cache invalidation. Defaults to False for
+                compatibility: structures run with the normal lifecycle checks,
+                but report completion contract not qualified for structures.
+                Structure-free geometry always receives the complete product checks.
 
         Returns:
             GeometryPreprocessResult: Bool-compatible validation result.
         """
         start_time = time.time()
         ras_obj = ras_object or ras
+        stdio = None
+        process = None
+        plan_num = ""
+        geometry_number = None
+        flow_type = "Unknown"
+        command_text = ""
+        completion_contract = {}
+        owned_registry = {"children": {}, "parent_identity": None}
+        if not isinstance(require_complete_products, bool):
+            return GeometryPreprocessResult(success=False, error="GEOMETRY_PREPROCESS_INVALID_CONTRACT: require_complete_products must be boolean")
+        if max_wait <= 0:
+            return GeometryPreprocessResult(
+                success=False,
+                error="GEOMETRY_PREPROCESS_INVALID_TIMEOUT: max_wait must be positive",
+            )
+        if native_worker_threads is not None and (
+            isinstance(native_worker_threads, bool)
+            or not isinstance(native_worker_threads, int)
+            or native_worker_threads < 1
+        ):
+            return GeometryPreprocessResult(success=False, error="GEOMETRY_PREPROCESS_INVALID_WORKERS: native_worker_threads must be positive or None")
 
         try:
             ras_obj.check_initialized()
@@ -221,22 +239,60 @@ class GeomPreprocessor:
             hdf_message_path = project_folder / f"{project_name}.p{plan_num}.hdf"
             tmp_hdf_path = project_folder / f"{project_name}.p{plan_num}.tmp.hdf"
 
+            original_plan_text = (
+                plan_path.read_bytes()
+                if restore_plan_settings
+                else None
+            )
+
+            geometry_hdf_path = (
+                project_folder / f"{project_name}.g{geometry_number}.hdf"
+            )
+            GeomPreprocessor._require_closed_geometry_hdf(geometry_hdf_path)
+            GeomPreprocessor._geometry_hdf_inventory(
+                geometry_hdf_path
+            )
+            from ._preprocess_contract import snapshot, invalidate_products, validate
+
+            geometry_text_path = geometry_hdf_path.with_suffix("")
+            expected_contract = snapshot(
+                geometry_text_path, geometry_hdf_path,
+                require_complete_products=require_complete_products,
+            )
+            qualified_areas = expected_contract["areas"] if expected_contract["contract_qualified"] else {}
+            completion_contract = {
+                "schema": "ras-geometry-completion/v1",
+                "text_sha256": expected_contract["text_sha256"],
+                "inputs_preserved": None,
+                "products_complete": False,
+                "invalidated_products": [],
+                "geometry_backup_path": None,
+                "native_worker_threads": native_worker_threads if geometry_only else None,
+                "lifecycle_verified": False,
+                "plan_restored": False,
+            }
+            invalidated_products = []
+            geometry_backup_path = None
+            if (clear_geompre or qualified_areas) and geometry_hdf_path.exists():
+                import shutil
+                import uuid
+
+                geometry_backup_path = geometry_hdf_path.with_name(
+                    geometry_hdf_path.name + f".preprocess-{uuid.uuid4().hex}.bak"
+                )
+                shutil.copy2(geometry_hdf_path, geometry_backup_path)
+                completion_contract["geometry_backup_path"] = str(geometry_backup_path)
             if clear_messages:
                 GeomPreprocessor._delete_files(message_paths)
                 GeomPreprocessor._delete_files([tmp_hdf_path])
-
-            if clear_geompre:
-                GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
-
-            original_plan_text = (
-                plan_path.read_bytes() if restore_plan_settings else None
-            )
-
             process = None
+            _watchdog = None
+            stdio = tempfile.TemporaryFile()  # noqa: SIM115 - closed by the outer finally
             child_monitor = {
                 "saw_child": False,
                 "timed_out": False,
                 "tmp_hdf_path": None,
+                "errors": [],
             }
 
             try:
@@ -256,37 +312,48 @@ class GeomPreprocessor:
                         GEOMETRY_PREPROCESSOR_GEOMETRY_ONLY_RUN_FLAGS,
                     )
 
-                command_text = f'"{ras_exe_path}" -c "{prj_file}" "{plan_path}"'
+                from ..RasCmdr import RasCmdr
+
+                command_text = RasCmdr._build_compute_command(
+                    ras_obj, prj_file, plan_path
+                )
                 logger.debug("Running HEC-RAS geometry preprocessor validation:")
                 logger.debug(command_text)
 
                 _watchdog = None
                 if dialog_watchdog:
                     from ..RasDialogWatchdog import DialogWatchdog
-
                     _watchdog = DialogWatchdog()
                     _watchdog.start()
 
+                if GeomPreprocessor._resolve_geometry_number(plan_path, plan_num, ras_obj) != geometry_number:
+                    raise RuntimeError(
+                        "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
+                    )
+                if clear_geompre or qualified_areas:
+                    if qualified_areas:
+                        invalidated_products = invalidate_products(geometry_hdf_path)
+                        completion_contract["invalidated_products"] = invalidated_products
+                    GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
                 process = subprocess.Popen(
                     command_text,
                     cwd=str(project_folder),
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    executable=str(ras_exe_path),
+                    shell=False,
+                    stdout=stdio,
+                    stderr=subprocess.STDOUT,
+                    env=GeomPreprocessor._native_worker_environment(
+                        native_worker_threads if geometry_only else None
+                    ),
+                )
+                import psutil
+
+                # Capture ownership before watchdogs or monitoring hooks can raise.
+                owned_registry["parent_identity"] = (
+                    process.pid, psutil.Process(process.pid).create_time()
                 )
                 if _watchdog:
                     _watchdog.add_pid(process.pid)
-
-                geom_only_artifacts = None
-                geometry_hdf_path = (
-                    project_folder / f"{project_name}.g{geometry_number}.hdf"
-                )
-                if geometry_only:
-                    geom_only_artifacts = [
-                        project_folder / f"{project_name}.c{geometry_number}",
-                        geometry_hdf_path,
-                        project_folder / f"{project_name}.x{geometry_number}",
-                    ]
 
                 monitor_result = GeomPreprocessor._monitor_compute_messages(
                     process=process,
@@ -295,61 +362,107 @@ class GeomPreprocessor:
                     max_wait=max_wait,
                     signals=flow_start_signals
                     or GEOMETRY_PREPROCESSOR_FLOW_START_SIGNALS,
-                    geometry_only_artifacts=geom_only_artifacts,
-                    geometry_hdf_path=geometry_hdf_path,
-                    flow_type=flow_type,
+                    owned_registry=owned_registry,
                 )
 
                 timed_out = monitor_result["timed_out"]
                 signal_detected = monitor_result["signal_detected"]
 
-                if signal_detected and process.poll() is None:
-                    logger.debug(
-                        "Geometry preprocessing signal detected; terminating flow "
-                        "computation before full plan execution."
+                lifecycle_errors = monitor_result.get("errors", [])
+                if timed_out or lifecycle_errors:
+                    logger.error("Geometry preprocessing timed out; terminating HEC-RAS.")
+                    lifecycle_errors.extend(GeomPreprocessor._terminate_process_tree(
+                        process, parent_identity=owned_registry["parent_identity"]
+                    ) or [])
+                    child_monitor = GeomPreprocessor._wait_for_preprocess_child(
+                        tmp_hdf_path=tmp_hdf_path,
+                        start_time=start_time,
+                        max_wait=0,
+                        tracked_children=monitor_result.get("children", ()),
+                        owned_registry=owned_registry,
                     )
-                    GeomPreprocessor._terminate_process_tree(process)
-                elif timed_out and process.poll() is None:
-                    logger.error(
-                        "Geometry preprocessing timed out; terminating HEC-RAS."
-                    )
-                    GeomPreprocessor._terminate_process_tree(process)
                 else:
+                    process.wait()
                     child_monitor = GeomPreprocessor._wait_for_preprocess_child(
                         tmp_hdf_path=tmp_hdf_path,
                         start_time=start_time,
                         max_wait=max_wait,
+                        tracked_children=monitor_result.get("children", ()),
+                        owned_registry=owned_registry,
                     )
-                    if child_monitor["timed_out"] and process.poll() is None:
-                        GeomPreprocessor._terminate_process_tree(process)
-
-                    try:
-                        process.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        GeomPreprocessor._terminate_process_tree(process)
+            except BaseException as exc:
+                cleanup_errors = []
+                if process is not None:
+                    cleanup_errors.extend(GeomPreprocessor._terminate_process_tree(
+                        process, parent_identity=owned_registry["parent_identity"]
+                    ) or [])
+                    cleanup_errors.extend(GeomPreprocessor._terminate_tracked_children(
+                        tuple(owned_registry["children"].values())
+                    ))
+                if isinstance(exc, Exception) and process is not None:
+                    raise RuntimeError(
+                        "GEOMETRY_PROCESS_COMPLETION_UNVERIFIED: " + str(exc)
+                        + ("; " + "; ".join(cleanup_errors) if cleanup_errors else "")
+                    ) from exc
+                raise
             finally:
-                if _watchdog:
-                    _watchdog.stop()
-                if restore_plan_settings and original_plan_text is not None:
-                    GeomPreprocessor._restore_plan_file(plan_path, original_plan_text)
+                try:
+                    if _watchdog:
+                        _watchdog.stop()
+                finally:
+                    if restore_plan_settings and original_plan_text is not None:
+                        GeomPreprocessor._restore_plan_file(plan_path, original_plan_text)
+                        completion_contract["plan_restored"] = plan_path.read_bytes() == original_plan_text
+                        if not completion_contract["plan_restored"]:
+                            raise RuntimeError("GEOMETRY_PLAN_RESTORE_FAILED: original plan bytes differ")
 
             if process is None:
                 raise RuntimeError("HEC-RAS process was not started")
 
-            try:
-                stdout, stderr = process.communicate(timeout=2)
-            except Exception:
-                stdout, stderr = b"", b""
-
+            stdio.seek(0)
+            stdout = stdio.read().decode("utf-8", errors="replace")
+            stdio.close()
             if stdout:
-                logger.debug(stdout.decode("utf-8", errors="replace"))
-            if stderr:
-                logger.debug(stderr.decode("utf-8", errors="replace"))
+                logger.debug(stdout)
 
-            existing_message_paths, messages = GeomPreprocessor._read_compute_messages(
-                message_paths,
-                hdf_message_path=hdf_message_path,
-                modified_after=start_time,
+            if timed_out or child_monitor["timed_out"]:
+                return GeometryPreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    flow_type=flow_type,
+                    elapsed_seconds=time.time() - start_time,
+                    command=command_text,
+                    return_code=process.returncode,
+                    timed_out=True,
+                    stdout=stdout,
+                    completion_contract=completion_contract,
+                    signal_detected=signal_detected,
+                    error=f"GEOMETRY_PREPROCESS_TIMEOUT: timed out after {max_wait} seconds"
+                    + ("; " + "; ".join(lifecycle_errors + child_monitor.get("errors", []))
+                       if lifecycle_errors or child_monitor.get("errors") else ""),
+                )
+
+            if lifecycle_errors or child_monitor.get("errors"):
+                return GeometryPreprocessResult(
+                    success=False,
+                    plan_number=plan_num,
+                    geometry_number=geometry_number,
+                    flow_type=flow_type,
+                    elapsed_seconds=time.time() - start_time,
+                    command=command_text,
+                    return_code=process.returncode,
+                    error="GEOMETRY_PROCESS_COMPLETION_UNVERIFIED: "
+                    + "; ".join(lifecycle_errors + child_monitor.get("errors", [])),
+                    completion_contract=completion_contract,
+                )
+
+            existing_message_paths, messages = (
+                GeomPreprocessor._read_compute_messages(
+                    message_paths,
+                    hdf_message_path=hdf_message_path,
+                    modified_after=start_time,
+                )
             )
             artifact_paths = GeomPreprocessor._preprocessor_artifacts(
                 project_folder,
@@ -360,8 +473,12 @@ class GeomPreprocessor:
                 modified_after=start_time,
             )
 
-            parsed = ResultsParser.parse_compute_messages(messages)
-            blocking_lines = GeomPreprocessor._find_blocking_message_lines(messages)
+            native_messages = (
+                f"{messages}\n{stdout}"
+                if expected_contract["contract_qualified"] else messages
+            )
+            parsed = ResultsParser.parse_compute_messages(native_messages)
+            blocking_lines = GeomPreprocessor._find_blocking_message_lines(native_messages)
 
             errors = []
             if timed_out:
@@ -370,12 +487,10 @@ class GeomPreprocessor:
                 errors.append(
                     f"Timed out after {max_wait} seconds waiting for RasProcess.exe"
                 )
-            if process.returncode not in (0, None) and not signal_detected:
+            if process.returncode != 0:
                 errors.append(f"HEC-RAS exited with code {process.returncode}")
             if parsed["has_errors"]:
-                errors.append(
-                    parsed["first_error_line"] or "Compute messages contain errors"
-                )
+                errors.append(parsed["first_error_line"] or "Compute messages contain errors")
             if blocking_lines:
                 errors.append(blocking_lines[0])
             if not artifact_paths:
@@ -383,6 +498,26 @@ class GeomPreprocessor:
                     "No geometry preprocessor artifacts found "
                     f"(.c{geometry_number}, .g{geometry_number}.hdf, .x{geometry_number}, or .b{plan_num})"
                 )
+            missing_inventory = []
+            missing_products = []
+            lifecycle_evidence = {
+                "lifecycle_verified": process.returncode == 0,
+                "plan_restored": completion_contract.get("plan_restored", False),
+            }
+            if not timed_out and not child_monitor["timed_out"]:
+                missing_inventory, missing_products, completion_contract = validate(
+                    geometry_text_path, geometry_hdf_path, expected_contract, start_time
+                )
+                completion_contract["invalidated_products"] = invalidated_products
+                completion_contract["geometry_backup_path"] = (
+                    str(geometry_backup_path) if geometry_backup_path is not None else None
+                )
+                completion_contract["native_worker_threads"] = native_worker_threads if geometry_only else None
+                completion_contract.update(lifecycle_evidence)
+                if missing_inventory:
+                    errors.append("GEOMETRY_INPUT_CHANGED: " + "; ".join(missing_inventory))
+                if missing_products:
+                    errors.append("GEOMETRY_PRODUCTS_INCOMPLETE: " + "; ".join(missing_products))
             geometry_hdf_ready, geometry_hdf_reason = (
                 GeomPreprocessor._geometry_hdf_readiness(
                     geometry_hdf_path,
@@ -391,10 +526,9 @@ class GeomPreprocessor:
             )
             if geometry_only and not geometry_hdf_ready:
                 errors.append(
-                    f"Geometry HDF is not semantically ready: {geometry_hdf_reason}"
+                    "Geometry HDF is not semantically ready: "
+                    f"{geometry_hdf_reason}"
                 )
-            if geometry_only and geometry_hdf_path not in artifact_paths:
-                errors.append("Geometry HDF was not freshly written by preprocessing")
             if not existing_message_paths and not (geometry_only and artifact_paths):
                 errors.append("No compute messages were produced")
 
@@ -407,6 +541,11 @@ class GeomPreprocessor:
                 elapsed_seconds=elapsed,
                 command=command_text,
                 return_code=process.returncode,
+                timed_out=timed_out or child_monitor["timed_out"],
+                stdout=stdout,
+                missing_geometry_inventory=missing_inventory,
+                missing_geometry_products=missing_products,
+                completion_contract=completion_contract,
                 signal_detected=signal_detected,
                 compute_message_paths=existing_message_paths,
                 artifact_paths=artifact_paths,
@@ -421,9 +560,25 @@ class GeomPreprocessor:
             logger.exception("Geometry preprocessor validation failed")
             return GeometryPreprocessResult(
                 success=False,
+                plan_number=plan_num,
+                geometry_number=geometry_number,
+                flow_type=flow_type,
+                command=command_text,
+                return_code=getattr(process, "returncode", None),
                 error=str(exc),
                 elapsed_seconds=time.time() - start_time,
+                completion_contract=completion_contract,
             )
+        finally:
+            if stdio is not None:
+                stdio.close()
+
+    @staticmethod
+    def _native_worker_environment(worker_threads: int | None) -> dict:
+        """Bound the managed worker pool without changing caller environment."""
+        from .._native_worker_environment import worker_environment
+
+        return worker_environment(worker_threads)
 
     @staticmethod
     def _resolve_plan_path(
@@ -452,34 +607,14 @@ class GeomPreprocessor:
 
     @staticmethod
     def _resolve_geometry_number(plan_path: Path, plan_num: str, ras_obj) -> str:
-        """Resolve the geometry number used by a plan."""
-        try:
-            if (
-                getattr(ras_obj, "plan_df", None) is not None
-                and not ras_obj.plan_df.empty
-            ):
-                matching = ras_obj.plan_df[
-                    ras_obj.plan_df["plan_number"].apply(RasUtils.normalize_ras_number)
-                    == plan_num
-                ]
-                if not matching.empty:
-                    for column_name in ("geometry_number", "Geom File"):
-                        value = matching.iloc[0].get(column_name)
-                        if value is None:
-                            continue
-                        digits = "".join(ch for ch in str(value) if ch.isdigit())
-                        if digits:
-                            return RasUtils.normalize_ras_number(digits)
-        except Exception:
-            pass
-
-        content = plan_path.read_text(encoding="utf-8", errors="ignore")
-        for line in content.splitlines():
-            if line.strip().startswith("Geom File="):
-                digits = "".join(ch for ch in line.split("=", 1)[1] if ch.isdigit())
-                if digits:
-                    return RasUtils.normalize_ras_number(digits)
-        raise ValueError(f"Could not determine geometry number for {plan_path}")
+        """Resolve the exact on-disk plan reference, never a cached geometry."""
+        reference = RasPlan.get_plan_value(plan_path, "Geom File", ras_object=ras_obj)
+        match = re.fullmatch(r"g(\d{1,2})", str(reference or "").strip(), re.IGNORECASE)
+        if not match:
+            raise ValueError(
+                f"GEOMETRY_PLAN_REFERENCE_INVALID: {plan_path} has Geom File={reference!r}"
+            )
+        return RasUtils.normalize_ras_number(match.group(1))
 
     @staticmethod
     def _resolve_flow_type(plan_num: str, ras_obj) -> str:
@@ -580,7 +715,7 @@ class GeomPreprocessor:
         try:
             plan_path.write_bytes(original_text)
         except OSError as exc:
-            logger.warning(f"Could not restore plan file {plan_path}: {exc}")
+            raise RuntimeError(f"GEOMETRY_PLAN_RESTORE_FAILED: {exc}") from exc
 
     @staticmethod
     def _monitor_compute_messages(
@@ -589,119 +724,157 @@ class GeomPreprocessor:
         start_time: float,
         max_wait: int,
         signals: List[str],
-        geometry_only_artifacts: Optional[List[Path]] = None,
-        geometry_hdf_path: Optional[Path] = None,
-        flow_type: Optional[str] = None,
+        owned_registry: Optional[dict] = None,
     ) -> dict:
-        """Poll compute-message files until a flow-start signal, exit, or timeout.
+        """Wait for normal exit, retaining message signals as diagnostics.
 
-        When *geometry_only_artifacts* is provided (geometry_only mode), the
-        loop also checks whether preprocessing artifacts have been freshly
-        written, stabilized, and the compiled geometry HDF is semantically
-        populated.  Because ``Run UNet=0`` prevents any flow-start signal
-        from appearing, semantic artifact readiness is the reliable completion
-        indicator in geometry-only mode.  An empty HDF placeholder must never
-        terminate HEC-RAS early.
+        Never inspect the geometry HDF while the engine may own it. Quiet file
+        statistics and nonempty topology cannot establish flush/close completion.
         """
         positions = {path: 0 for path in message_paths}
         signal_detected = None
-        signal_patterns = [(signal, signal.lower()) for signal in signals]
+        deadline = time.monotonic() + max(0, max_wait - (time.time() - start_time))
+        owned_registry = owned_registry if owned_registry is not None else {"children": {}}
+        children = owned_registry["children"]
+        import psutil
 
-        _ARTIFACT_GRACE = 15
-        _ARTIFACT_STABLE = 10
-
-        while time.time() - start_time < max_wait:
+        try:
+            parent = psutil.Process(process.pid)
+            identity = (process.pid, parent.create_time())
+            if owned_registry.get("parent_identity") not in (None, identity):
+                return {"signal_detected": None, "timed_out": False,
+                        "children": tuple(children.values()),
+                        "errors": ["launcher identity changed before monitoring"]}
+            owned_registry["parent_identity"] = identity
+        except psutil.NoSuchProcess:
+            return {"signal_detected": None, "timed_out": False, "children": (),
+                    "errors": [] if process.poll() is not None else
+                    ["launcher disappeared before its exit was observed"]}
+        while process.poll() is None:
+            if time.monotonic() >= deadline:
+                return {"signal_detected": signal_detected, "timed_out": True,
+                        "children": tuple(children.values()), "errors": []}
+            try:
+                for child in parent.children(recursive=True):
+                    try:
+                        # Desktop, console and plot-display helpers may remain
+                        # alive under Wine after all geometry writers exit.
+                        # Unknown children still require a confirmed exit.
+                        if not child.is_running():
+                            continue
+                        identity = (child.pid, child.create_time())
+                        if identity not in children:
+                            # Retain ownership before optional role queries can fail.
+                            children[identity] = {
+                                "identity": identity, "process": child,
+                                "finished": False, "exit_code": None, "error": None,
+                                "timed_out": False, "unwatched": True,
+                            }
+                        if GeomPreprocessor._is_wine_display_child(child):
+                            children.pop(identity, None)
+                            continue
+                        if children[identity].get("unwatched"):
+                            children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
+                    except psutil.NoSuchProcess:
+                        continue
+            except psutil.NoSuchProcess:
+                if process.poll() is None:
+                    return {"signal_detected": signal_detected, "timed_out": False,
+                            "children": tuple(children.values()),
+                            "errors": ["launcher disappeared before its exit was observed"]}
+            except (psutil.Error, OSError) as exc:
+                return {"signal_detected": signal_detected, "timed_out": False,
+                        "children": tuple(children.values()), "errors": [str(exc)]}
             for path in message_paths:
-                if not path.exists():
-                    continue
                 try:
                     if path.stat().st_mtime < start_time - 1:
                         continue
-                    with open(path, "r", encoding="utf-8", errors="ignore") as handle:
-                        handle.seek(positions.get(path, 0))
+                    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+                        handle.seek(positions[path])
                         chunk = handle.read()
                         positions[path] = handle.tell()
+                    for signal in signals:
+                        if signal.lower() in chunk.lower():
+                            signal_detected = signal
                 except OSError:
                     continue
-
-                lower_chunk = chunk.lower()
-                for signal, lower_signal in signal_patterns:
-                    if lower_signal in lower_chunk:
-                        if geometry_hdf_path is not None:
-                            if geometry_only_artifacts is not None:
-                                try:
-                                    if (
-                                        geometry_hdf_path.stat().st_mtime
-                                        < start_time - 1
-                                    ):
-                                        continue
-                                except OSError:
-                                    continue
-                            ready, reason = GeomPreprocessor._geometry_hdf_readiness(
-                                geometry_hdf_path,
-                                flow_type=flow_type,
-                            )
-                            if not ready:
-                                logger.debug(
-                                    "Ignoring flow-start signal until geometry "
-                                    "HDF is ready: %s",
-                                    reason,
-                                )
-                                continue
-                        signal_detected = signal
-                        return {
-                            "signal_detected": signal_detected,
-                            "timed_out": False,
-                        }
-
-            if (
-                geometry_only_artifacts is not None
-                and (time.time() - start_time) > _ARTIFACT_GRACE
-            ):
-                fresh = []
-                for artifact in geometry_only_artifacts:
-                    try:
-                        if (
-                            artifact.exists()
-                            and artifact.stat().st_size > 0
-                            and artifact.stat().st_mtime >= start_time - 1
-                        ):
-                            fresh.append(artifact)
-                    except OSError:
-                        pass
-                # A fresh .c/.x sidecar can precede the geometry import. An
-                # inherited, populated HDF is not evidence that this import
-                # finished; stopping here can terminate it before replacement.
-                if fresh and (geometry_hdf_path is None or geometry_hdf_path in fresh):
-                    try:
-                        latest_mtime = max(a.stat().st_mtime for a in fresh)
-                        hdf_ready = True
-                        if geometry_hdf_path is not None:
-                            hdf_ready, _reason = (
-                                GeomPreprocessor._geometry_hdf_readiness(
-                                    geometry_hdf_path,
-                                    flow_type=flow_type,
-                                )
-                            )
-                        if hdf_ready and time.time() - latest_mtime >= _ARTIFACT_STABLE:
-                            signal_detected = (
-                                "Geometry preprocessing artifacts semantically "
-                                "ready and stable "
-                                "(geometry_only mode)"
-                            )
-                            return {
-                                "signal_detected": signal_detected,
-                                "timed_out": False,
-                            }
-                    except OSError:
-                        pass
-
-            if process.poll() is not None:
-                return {"signal_detected": signal_detected, "timed_out": False}
-
             time.sleep(0.5)
+        return {"signal_detected": signal_detected, "timed_out": False,
+                "children": tuple(children.values()), "errors": []}
 
-        return {"signal_detected": signal_detected, "timed_out": True}
+    @staticmethod
+    def _is_wine_display_child(child: Any) -> bool:
+        """Identify Wine display processes by their exact non-file invocation."""
+        from .._native_helper import _is_wine_helper_runtime
+
+        if not _is_wine_helper_runtime():
+            return False
+        try:
+            name = child.name().casefold()
+            if name not in {"explorer.exe", "conhost.exe", "rasplotdriver.exe"}:
+                return False
+            arguments = child.cmdline()[1:]
+        except OSError as exc:
+            # Wine can report invalid handles during a short-lived child's
+            # optional role query. An unknown role remains supervised.
+            if getattr(exc, "winerror", None) == 6:
+                return False
+            raise
+        if name == "explorer.exe":
+            return arguments == ["/desktop"]
+        if name == "rasplotdriver.exe":
+            return len(arguments) == 1 and arguments[0].isdigit()
+        return (
+            len(arguments) == 3 and arguments[0] == "--server"
+            and re.fullmatch(r"0x[0-9a-fA-F]+", arguments[1]) is not None
+            and arguments[2:] == ["--headless"]
+        )
+
+    @staticmethod
+    def _require_closed_geometry_hdf(path: Path) -> None:
+        """Reject caller-owned h5py file handles rather than closing them silently."""
+        import h5py
+
+        resolved = path.resolve()
+        for file_id in h5py.h5f.get_obj_ids(types=h5py.h5f.OBJ_FILE):
+            filename = h5py.h5f.get_name(file_id).decode("utf-8")
+            if Path(filename).resolve() == resolved:
+                raise RuntimeError(
+                    "GEOMETRY_HDF_OPEN: close the geometry HDF handle before preprocessing"
+                )
+
+    @staticmethod
+    def _geometry_hdf_inventory(path: Path) -> dict:
+        """Snapshot object kinds and attribute names, closing the file on return."""
+        import h5py
+
+        if not path.exists():
+            return {}
+        result = {}
+        with h5py.File(path, "r") as handle:
+            def capture(name, obj):
+                result[name] = {
+                    "kind": "dataset" if isinstance(obj, h5py.Dataset) else "group",
+                    "attributes": tuple(sorted(obj.attrs)),
+                }
+            capture("/", handle)
+            handle.visititems(capture)
+        return result
+
+    @staticmethod
+    def _missing_geometry_inventory(expected: dict, actual: dict) -> list[str]:
+        """List missing objects, changed kinds, and lost attribute names."""
+        missing = []
+        for name, spec in expected.items():
+            if name not in actual or spec["kind"] != actual[name]["kind"]:
+                missing.append(name)
+                continue
+            missing.extend(
+                f"{name}@{attribute}"
+                for attribute in spec["attributes"]
+                if attribute not in actual[name]["attributes"]
+            )
+        return sorted(missing)
 
     @staticmethod
     def _geometry_hdf_readiness(
@@ -715,10 +888,7 @@ class GeomPreprocessor:
         existence, non-zero size, and a quiet modification time therefore do
         not prove preprocessing is complete.
 
-        Compare available geometry text with the compiled 2D perimeter, spacing,
-        cell count and breakline count before accepting readiness. Rewritten
-        parent metadata remains unready until the current text import finishes.
-        For a classified or stored 2D plan, require a flow area with non-empty
+        For a classified 2D plan, require at least one flow area with non-empty
         cell and face topology.  For other plan types, require a recognized,
         non-empty geometry feature collection.  The check is read-only and
         returns a diagnostic instead of raising while HEC-RAS still owns the
@@ -736,14 +906,6 @@ class GeomPreprocessor:
         try:
             import h5py
 
-            geometry_text = path.with_suffix("")
-            if geometry_text.is_file():
-                from .GeomMesh import _mesh_hdf_consistency_issues
-
-                issues = _mesh_hdf_consistency_issues(geometry_text, path)
-                if issues:
-                    return False, "geometry text/HDF mismatch: " + "; ".join(issues)
-
             with h5py.File(path, "r") as hdf:
                 if not hdf.attrs.get("File Type"):
                     return False, "root File Type attribute is absent"
@@ -751,9 +913,7 @@ class GeomPreprocessor:
                     return False, "/Geometry group is absent"
 
                 normalized_flow_type = str(flow_type or "").casefold()
-                stored_areas = hdf.get("Geometry/2D Flow Areas/Attributes")
-                has_stored_2d = stored_areas is not None and stored_areas.shape[0] > 0
-                if "2d" in normalized_flow_type or has_stored_2d:
+                if "2d" in normalized_flow_type:
                     collection_path = "Geometry/2D Flow Areas"
                     if collection_path not in hdf:
                         return False, "/Geometry/2D Flow Areas is absent"
@@ -793,10 +953,7 @@ class GeomPreprocessor:
                     if dataset is not None and getattr(dataset, "shape", (0,))[0] > 0:
                         populated.append(collection_path)
                 if not populated:
-                    return (
-                        False,
-                        "no recognized geometry feature collection is populated",
-                    )
+                    return False, "no recognized geometry feature collection is populated"
                 return True, f"geometry ready: {', '.join(populated)}"
         except Exception as exc:
             return False, f"could not inspect geometry HDF: {type(exc).__name__}: {exc}"
@@ -806,111 +963,190 @@ class GeomPreprocessor:
         tmp_hdf_path: Path,
         start_time: float,
         max_wait: int,
+        tracked_children: tuple = (),
+        owned_registry: Optional[dict] = None,
     ) -> dict[str, Any]:
-        """
-        Wait for orphaned RasProcess.exe CompletePreProcess work to finish.
+        """Wait for tracked and exact-path preprocessing children; never infer file quietness."""
+        import psutil
 
-        Some HEC-RAS versions return from ``Ras.exe -c`` before the spawned
-        ``RasProcess.exe CompletePreProcess`` process finishes writing the
-        plan ``*.tmp.hdf``. Without this guard, validation can report failure
-        while the geometry preprocessor is still actively running.
-        """
-        deadline = start_time + max_wait
-        saw_child = False
-        last_size = None
-        stable_since = None
-        grace_deadline = min(deadline, time.time() + 5)
-
-        while time.time() < deadline:
-            child_pids = GeomPreprocessor._ras_processes_using_path(tmp_hdf_path)
-            if child_pids:
-                saw_child = True
-
-            tmp_is_fresh = GeomPreprocessor._path_is_fresh(tmp_hdf_path, start_time)
-            if not child_pids:
-                if not tmp_is_fresh:
-                    if not saw_child and time.time() < grace_deadline:
-                        time.sleep(1)
+        deadline = time.monotonic() + max(0, max_wait - (time.time() - start_time))
+        children = owned_registry["children"] if owned_registry is not None else {}
+        children.update({tuple(record["identity"]): record for record in tracked_children})
+        errors = []
+        timed_out = False
+        exit_codes = {}
+        try:
+            while True:
+                for pid in GeomPreprocessor._ras_processes_using_path(tmp_hdf_path):
+                    try:
+                        child = psutil.Process(pid)
+                        identity = (pid, child.create_time())
+                        if identity not in children:
+                            children[identity] = GeomPreprocessor._watch_preprocess_child(child, deadline)
+                    except psutil.NoSuchProcess:
                         continue
+                active = []
+                for identity, record in tuple(children.items()):
+                    if identity in exit_codes:
+                        continue
+                    if not record["finished"]:
+                        child = record["process"]
+                        try:
+                            if (child.is_running() and child.create_time() == identity[1]
+                                    and GeomPreprocessor._is_wine_display_child(child)):
+                                # A transient role-query failure on the last launcher
+                                # poll must not retain a now-confirmed display helper.
+                                del children[identity]
+                                continue
+                        except psutil.NoSuchProcess:
+                            pass  # The retained wait still establishes its exit status.
+                        active.append(record["process"])
+                        continue
+                    code = record["exit_code"]
+                    exit_codes[identity] = code
+                    timed_out = timed_out or record.get("timed_out", False)
+                    if record["error"]:
+                        errors.append(record["error"])
+                    elif code != 0:
+                        errors.append(f"preprocessing child {identity[0]} exit status {code!r}")
+                if not active:
                     break
-
-                try:
-                    current_size = tmp_hdf_path.stat().st_size
-                except OSError:
+                if time.monotonic() >= deadline:
+                    timed_out = True
                     break
-
-                if current_size == last_size:
-                    stable_since = stable_since or time.time()
-                    if time.time() - stable_since >= 2:
-                        break
-                else:
-                    last_size = current_size
-                    stable_since = time.time()
-
-            time.sleep(1)
-
+                time.sleep(0.5)
+        except (psutil.Error, RuntimeError, OSError) as exc:
+            errors.append(str(exc))
+        if timed_out or errors:
+            errors.extend(GeomPreprocessor._terminate_tracked_children(tuple(children.values())))
         return {
-            "saw_child": saw_child,
-            "timed_out": time.time() >= deadline,
-            "tmp_hdf_path": tmp_hdf_path
-            if GeomPreprocessor._path_is_fresh(tmp_hdf_path, start_time)
-            else None,
+            "saw_child": bool(children), "timed_out": timed_out,
+            "tmp_hdf_path": tmp_hdf_path, "errors": errors,
         }
 
     @staticmethod
-    def _ras_processes_using_path(path: Path) -> List[int]:
-        """Return RAS process IDs with command lines referencing a path."""
-        try:
-            import psutil
-        except Exception:
-            return []
+    def _watch_preprocess_child(child: Any, deadline: float) -> dict:
+        """Begin an owned-process wait while the native exit handle is available."""
+        import threading
 
-        path_text = str(path).casefold()
-        path_posix = path.as_posix().casefold()
-        file_name = path.name.casefold()
-        pids = []
+        import psutil
 
-        for process in psutil.process_iter(["pid", "name", "cmdline"]):
+        record = {
+            "identity": (child.pid, child.create_time()), "process": child,
+            "finished": False, "exit_code": None, "error": None, "timed_out": False,
+        }
+        def wait():
             try:
-                info = process.info
-                name = str(info.get("name") or "").casefold()
-                cmdline = " ".join(str(part) for part in info.get("cmdline") or [])
-                command = cmdline.casefold()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                continue
+                record["exit_code"] = child.wait(timeout=max(0, deadline - time.monotonic()))
+            except psutil.TimeoutExpired as exc:
+                record["timed_out"] = True
+                record["error"] = "preprocessing child timed out: " + str(exc)
+            except (psutil.Error, OSError) as exc:
+                record["error"] = "preprocessing child wait failed: " + str(exc)
+            finally:
+                record["finished"] = True
+        threading.Thread(target=wait, daemon=True).start()
+        return record
 
-            if "ras" not in name and "ras" not in command:
-                continue
-            if (
-                path_text in command
-                or path_posix in command
-                or ("completepreprocess" in command and file_name in command)
-            ):
-                pids.append(int(info["pid"]))
+    @staticmethod
+    def _ras_processes_using_path(path: Path) -> List[int]:
+        """Find exact-path native preprocessing processes; unknown inspection fails."""
+        import ntpath
 
+        import psutil
+
+        def normalize(value):
+            return ntpath.normcase(ntpath.normpath(str(value).strip('"')))
+
+        target = normalize(path)
+        pids = []
+        for process in psutil.process_iter():
+            try:
+                name = process.name().casefold()
+                if name not in ("rasprocess.exe", "rasgeompreprocess.exe"):
+                    continue
+                tokens = process.cmdline()
+                if any(normalize(token) == target for token in tokens):
+                    pids.append(process.pid)
+            except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                continue
+            except psutil.AccessDenied as exc:
+                raise RuntimeError("GEOMETRY_PROCESS_INSPECTION_FAILED: " + str(exc)) from exc
         return pids
 
     @staticmethod
-    def _terminate_process_tree(process: subprocess.Popen) -> None:
-        """Terminate a process and its children."""
-        try:
-            import psutil
+    def _terminate_tracked_children(records: tuple) -> list[str]:
+        """Cancel retained identities after failure within one cleanup wait budget."""
+        import psutil
 
-            parent = psutil.Process(process.pid)
-            children = parent.children(recursive=True)
-            for child in children:
-                try:
-                    child.kill()
-                except psutil.NoSuchProcess:
-                    pass
-            parent.kill()
-            process.wait(timeout=10)
-        except Exception:
+        errors = []
+        deadline = time.monotonic() + 10
+        killed = []
+        for record in records:
+            child = record["process"]
             try:
-                process.kill()
-                process.wait(timeout=10)
-            except Exception:
+                if child.is_running() and child.create_time() == record["identity"][1]:
+                    child.kill()
+                    killed.append(child)
+            except psutil.NoSuchProcess:
                 pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child cleanup failed: {exc}")
+        for child in killed:
+            try:
+                child.wait(timeout=max(0, deadline - time.monotonic()))
+            except psutil.NoSuchProcess:
+                pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child reap failed: {exc}")
+        return errors
+
+    @staticmethod
+    def _terminate_process_tree(
+        process: subprocess.Popen, parent_identity: Optional[tuple] = None,
+    ) -> list[str]:
+        """Cancel owned work after failure, retaining inspection and cleanup errors."""
+        import psutil
+        errors = []
+        deadline = time.monotonic() + 10
+        children = []
+        if parent_identity is None:
+            errors.append("owned tree cleanup unverified: launcher identity unavailable")
+        try:
+            if parent_identity is not None:
+                parent = psutil.Process(process.pid)
+                if parent.is_running() and parent.create_time() == parent_identity[1]:
+                    children = parent.children(recursive=True)
+        except psutil.NoSuchProcess:
+            pass
+        except (psutil.Error, OSError) as exc:
+            errors.append(f"owned tree inspection failed: {exc}")
+        for child in children:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child cleanup failed: {exc}")
+        try:
+            try:
+                active = process.poll() is None
+            except OSError as exc:
+                errors.append(f"owned launcher inspection failed: {exc}")
+                active = True  # Popen's retained native handle still owns the launcher.
+            if active:
+                process.kill()
+            process.wait(timeout=max(0, deadline - time.monotonic()))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"owned launcher cleanup failed: {exc}")
+        for child in children:
+            try:
+                child.wait(timeout=max(0, deadline - time.monotonic()))
+            except psutil.NoSuchProcess:
+                pass
+            except (psutil.Error, OSError) as exc:
+                errors.append(f"owned child reap failed: {exc}")
+        return errors
 
     @staticmethod
     def _read_compute_messages(
@@ -998,10 +1234,7 @@ class GeomPreprocessor:
             stripped = line.strip()
             if not stripped:
                 continue
-            if any(
-                pattern.search(stripped)
-                for pattern in GEOMETRY_PREPROCESSOR_BLOCKING_PATTERNS
-            ):
+            if any(pattern.search(stripped) for pattern in GEOMETRY_PREPROCESSOR_BLOCKING_PATTERNS):
                 # Avoid common non-blocking metric text.
                 if re.search(r"volume\s+accounting\s+error", stripped, re.IGNORECASE):
                     continue
@@ -1089,13 +1322,17 @@ class GeomPreprocessor:
         """Validate the known HEC-RAS 5/6 geometry-HDF recovery schema."""
         import h5py
 
-        if not GeomPreprocessor._LEGACY_GEOMETRY_HDF_PATTERN.search(geom_hdf_path.name):
+        if not GeomPreprocessor._LEGACY_GEOMETRY_HDF_PATTERN.search(
+            geom_hdf_path.name
+        ):
             raise ValueError(
                 "Legacy recovery accepts only geometry HDF filenames matching "
                 "'*.g##.hdf'."
             )
 
-        file_type = GeomPreprocessor._decode_hdf_attribute(hdf.attrs.get("File Type"))
+        file_type = GeomPreprocessor._decode_hdf_attribute(
+            hdf.attrs.get("File Type")
+        )
         file_version = GeomPreprocessor._decode_hdf_attribute(
             hdf.attrs.get("File Version")
         )
@@ -1134,16 +1371,17 @@ class GeomPreprocessor:
             for area_name, area in areas.items():
                 if not isinstance(area, h5py.Group):
                     continue
-                for (
-                    left,
-                    right,
-                ) in GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS:
+                for left, right in (
+                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASET_PAIRS
+                ):
                     if (left in area) != (right in area):
                         raise ValueError(
                             f"Mesh {area_name!r} has an incomplete legacy "
                             f"property-table pair: {left!r}/{right!r}."
                         )
-                for dataset_name in GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASETS:
+                for dataset_name in (
+                    GeomPreprocessor._LEGACY_GEOMPRE_HDF_AREA_DATASETS
+                ):
                     if dataset_name not in area:
                         continue
                     if not isinstance(area[dataset_name], h5py.Dataset):
@@ -1151,7 +1389,9 @@ class GeomPreprocessor:
                             f"Expected dataset at {areas_path}/{area_name}/"
                             f"{dataset_name}."
                         )
-                    targets.append(f"{areas_path}/{area_name}/{dataset_name}")
+                    targets.append(
+                        f"{areas_path}/{area_name}/{dataset_name}"
+                    )
         return targets
 
     @staticmethod
@@ -1255,7 +1495,8 @@ class GeomPreprocessor:
             ) from exc
 
         logger.warning(
-            "Legacy recovery removed %d solver-owned path(s) from %s; backup=%s",
+            "Legacy recovery removed %d solver-owned path(s) from %s; "
+            "backup=%s",
             len(targets),
             geom_hdf_path.name,
             resolved_backup,
@@ -1306,7 +1547,8 @@ class GeomPreprocessor:
     @staticmethod
     @log_call
     def clear_geompre_files(
-        plan_files: Union[str, Path, List[Union[str, Path]]] = None, ras_object=None
+        plan_files: Union[str, Path, List[Union[str, Path]]] = None,
+        ras_object=None
     ) -> None:
         """
         Clear HEC-RAS geometry preprocessor files for specified plan files.
@@ -1348,97 +1590,47 @@ class GeomPreprocessor:
         ras_obj.check_initialized()
 
         def _resolve_geompre_candidates(plan_path: Path, ras_obj) -> List[Path]:
-            """Resolve likely .c## files from plan metadata, then fall back to plan suffix."""
-            candidates = []
-            plan_match = re.search(r"\.p(\d+)$", plan_path.name, re.IGNORECASE)
-            plan_number = (
-                RasUtils.normalize_ras_number(plan_match.group(1))
-                if plan_match
-                else None
+            """Resolve only the .c## belonging to the exact on-disk plan geometry."""
+            plan_number = GeomPreprocessor._extract_plan_number(plan_path)
+            geometry_number = GeomPreprocessor._resolve_geometry_number(
+                plan_path, plan_number, ras_obj
             )
-
-            if (
-                plan_number is not None
-                and getattr(ras_obj, "plan_df", None) is not None
-                and not ras_obj.plan_df.empty
-                and "plan_number" in ras_obj.plan_df.columns
-                and "geometry_number" in ras_obj.plan_df.columns
-            ):
-                normalized_plan_numbers = ras_obj.plan_df["plan_number"].apply(
-                    RasUtils.normalize_ras_number
-                )
-                matching = ras_obj.plan_df[normalized_plan_numbers == plan_number]
-                if not matching.empty:
-                    geom_number = RasUtils.normalize_ras_number(
-                        matching.iloc[0]["geometry_number"]
-                    )
-                    if geom_number is not None:
-                        candidates.append(plan_path.with_suffix(f".c{geom_number}"))
-
-            geom_preprocessor_suffix = (
-                ".c" + "".join(plan_path.suffixes[1:]) if plan_path.suffixes else ".c"
-            )
-            candidates.append(plan_path.with_suffix(geom_preprocessor_suffix))
-
-            unique_candidates = []
-            seen = set()
-            for candidate in candidates:
-                candidate_str = str(candidate)
-                if candidate_str not in seen:
-                    unique_candidates.append(candidate)
-                    seen.add(candidate_str)
-            return unique_candidates
+            return [plan_path.with_suffix(f".c{geometry_number}")]
 
         def clear_single_file(plan_file: Union[str, Path], ras_obj) -> None:
             plan_path = Path(plan_file)
             cleared_any = False
-            for geom_preprocessor_file in _resolve_geompre_candidates(
-                plan_path, ras_obj
-            ):
+            for geom_preprocessor_file in _resolve_geompre_candidates(plan_path, ras_obj):
                 if not geom_preprocessor_file.exists():
                     continue
                 try:
                     geom_preprocessor_file.unlink()
-                    logger.debug(
-                        f"Deleted geometry preprocessor file: {geom_preprocessor_file}"
-                    )
+                    logger.debug(f"Deleted geometry preprocessor file: {geom_preprocessor_file}")
                     cleared_any = True
                     break
                 except PermissionError:
-                    logger.error(
-                        f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}"
-                    )
-                    raise PermissionError(
-                        f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied."
-                    )
+                    logger.error(f"Permission denied: Unable to delete geometry preprocessor file: {geom_preprocessor_file}")
+                    raise PermissionError(f"Unable to delete geometry preprocessor file: {geom_preprocessor_file}. Permission denied.")
                 except OSError as e:
-                    logger.error(
-                        f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}"
-                    )
-                    raise OSError(
-                        f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}"
-                    )
+                    logger.error(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
+                    raise OSError(f"Error deleting geometry preprocessor file: {geom_preprocessor_file}. {str(e)}")
 
             if not cleared_any:
-                logger.debug(
-                    "No geometry preprocessor artifacts found for plan: %s",
-                    plan_path.name,
-                )
+                logger.debug("No geometry preprocessor artifacts found for plan: %s", plan_path.name)
 
         if plan_files is None:
-            logger.info(
-                "Clearing all geometry preprocessor files in the project directory."
-            )
-            plan_files_to_clear = list(ras_obj.project_folder.glob(r"*.p*"))
+            logger.info("Clearing all geometry preprocessor files in the project directory.")
+            plan_files_to_clear = [
+                path for path in ras_obj.project_folder.glob(r'*.p*')
+                if re.fullmatch(r"\.p\d{1,2}", path.suffix, re.IGNORECASE)
+            ]
         elif isinstance(plan_files, (str, Path)):
             plan_files_to_clear = [plan_files]
             logger.debug(
                 "Clearing geometry preprocessor file for single plan: %s",
                 Path(plan_files).name,
             )
-            logger.debug(
-                f"Clearing geometry preprocessor file for single plan path: {plan_files}"
-            )
+            logger.debug(f"Clearing geometry preprocessor file for single plan path: {plan_files}")
         elif isinstance(plan_files, list):
             plan_files_to_clear = plan_files
             plan_file_names = [Path(plan_file).name for plan_file in plan_files]
@@ -1446,14 +1638,10 @@ class GeomPreprocessor:
                 "Clearing geometry preprocessor files for multiple plans: %s",
                 plan_file_names,
             )
-            logger.debug(
-                f"Clearing geometry preprocessor files for multiple plan paths: {plan_files}"
-            )
+            logger.debug(f"Clearing geometry preprocessor files for multiple plan paths: {plan_files}")
         else:
             logger.error("Invalid input type for plan_files.")
-            raise ValueError(
-                "Invalid input. Please provide a string, Path, list of paths, or None."
-            )
+            raise ValueError("Invalid input. Please provide a string, Path, list of paths, or None.")
 
         for plan_file in plan_files_to_clear:
             clear_single_file(plan_file, ras_obj)

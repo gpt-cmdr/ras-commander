@@ -1714,6 +1714,7 @@ def _reseed_after_perimeter_fix(
     hecras_dir=None,
     *,
     ras_object=None,
+    require_complete_products: bool = False,
 ) -> dict[str, Any]:
     """Persist a repaired perimeter and refresh its compiled HDF via Ras.exe.
 
@@ -1781,8 +1782,8 @@ def _reseed_after_perimeter_fix(
         raise RuntimeError(
             f"Repaired perimeter seed generation failed: {seeds.error_message}"
         )
-    _recompile_geometry_hdf_via_rasexe(text_path, hdf_path, ras_object=ras_object)
-    _ensure_hdf(text_path, require_current=True, mesh_name=mesh_name)
+    _recompile_geometry_hdf_via_rasexe(text_path, hdf_path, ras_object=ras_object, require_complete_products=require_complete_products)
+    _ensure_hdf(text_path, require_current=True, mesh_name=mesh_name, require_complete_products=require_complete_products)
     return evidence
 
 
@@ -2108,6 +2109,7 @@ def _recompile_geometry_hdf_via_rasexe(
     hdf_path: Path,
     *,
     ras_object=None,
+    require_complete_products: bool = False,
 ) -> Path:
     """Refresh a compiled geometry HDF from text through HEC-RAS/Ras.exe."""
     plan_number = _find_plan_for_geometry(geom_text_path, ras_object=ras_object)
@@ -2123,6 +2125,7 @@ def _recompile_geometry_hdf_via_rasexe(
         clear_geompre=True,
         force=True,
         geometry_only=True,
+        require_complete_products=require_complete_products,
     )
     if not preprocess_result.success:
         raise RuntimeError(
@@ -2690,6 +2693,7 @@ def _ensure_hdf(
     mesh_name: str | None = None,
     recompile_via_rasexe: bool = False,
     ignore_seed_count: bool = False,
+    require_complete_products: bool = False,
 ) -> Path:
     """Return an existing compiled HDF for *geom_text_path*.
 
@@ -2704,6 +2708,7 @@ def _ensure_hdf(
                 geom_text_path,
                 hdf_path,
                 ras_object=ras_object,
+                require_complete_products=require_complete_products,
             )
             if hdf_path.exists():
                 return hdf_path
@@ -2728,6 +2733,7 @@ def _ensure_hdf(
                 geom_text_path,
                 hdf_path,
                 ras_object=ras_object,
+                require_complete_products=require_complete_products,
             )
             consistency_issues = _mesh_hdf_consistency_issues(
                 geom_text_path,
@@ -3384,6 +3390,7 @@ class GeomMesh:
         ras_object=None,
         recompile_via_rasexe: bool = False,
         strict_refinement_containment: bool = False,
+        require_complete_products: bool = False,
     ) -> DomainContainmentResult:
         """Audit mesh features before point generation.
 
@@ -3401,6 +3408,8 @@ class GeomMesh:
 
         This read-only check is cross-platform and does not load RasMapperLib.
         A missing, stale, malformed, or ambiguous geometry HDF fails closed.
+        ``require_complete_products`` defaults to False and is forwarded to
+        native preprocessing when ``recompile_via_rasexe=True`` permits mutation.
         """
         geom_path = _resolve_geom_text_path(geom_number, ras_object)
         hdf_path = _ensure_hdf(
@@ -3410,6 +3419,7 @@ class GeomMesh:
             mesh_name=mesh_name,
             recompile_via_rasexe=recompile_via_rasexe,
             ignore_seed_count=True,
+            require_complete_products=require_complete_products,
         )
         hdf_metadata = _read_mesh_metadata_from_hdf(hdf_path)
         area_names = list(hdf_metadata)
@@ -5171,6 +5181,7 @@ class GeomMesh:
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
+        require_complete_products: bool = False,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -5231,6 +5242,8 @@ class GeomMesh:
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
                 The geometry must be referenced by a plan in *ras_object*.
+            require_complete_products: Forward strict completion to native
+                recompilation and perimeter-repair preprocessing. Defaults False.
             refinement_region_constraints: If False (default), evaluate and
                 repair the saved-point mesh with breakline/structure constraints.
                 Regions still shape point generation. True retains the earlier
@@ -5316,6 +5329,7 @@ class GeomMesh:
                 # computation points. Perimeter and breakline identity remain
                 # mandatory content-current gates.
                 ignore_seed_count=True,
+                require_complete_products=require_complete_products,
             )
 
             # ── Step 1a: Auto-detect cell size from text if not provided ──
@@ -5498,6 +5512,7 @@ class GeomMesh:
                     mesh_name,
                     hecras_dir,
                     ras_object=ras_object,
+                    require_complete_products=require_complete_products,
                 )
                 evidence["reason"] = reason
                 result.perimeter_repairs.append(evidence)
@@ -5900,6 +5915,7 @@ class GeomMesh:
         refinement_region_constraints: bool = False,
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
+        require_complete_products: bool = False,
     ) -> List[MeshResult]:
         """Generate/repair all 2D mesh areas in a geometry file.
 
@@ -5923,6 +5939,8 @@ class GeomMesh:
             ras_object (RasPrj, optional): Optional RasPrj instance for multi-project support.
             recompile_via_rasexe: If True, refresh a missing or content-stale
                 compiled geometry HDF through ``GeomPreprocessor``/Ras.exe.
+            require_complete_products: Forward strict completion to all native
+                recompilation and mesh-repair calls. Defaults False.
             refinement_region_constraints: Include region edges in mesh
                 constraints (RAS Mapper compatibility); defaults to False.
             strict_refinement_containment: Apply the old inward region margin;
@@ -5942,6 +5960,7 @@ class GeomMesh:
             require_current=True,
             ras_object=ras_object,
             recompile_via_rasexe=recompile_via_rasexe,
+            require_complete_products=require_complete_products,
         )
         geom = ns["RASGeometry"](str(hdf_path))
         d2fa = geom.D2FlowArea
@@ -5967,6 +5986,7 @@ class GeomMesh:
                 strict_refinement_containment=strict_refinement_containment,
                 robustness_screening=robustness_screening,
                 _require_current_hdf=False,
+                require_complete_products=require_complete_products,
             )
             results.append(r)
         return results

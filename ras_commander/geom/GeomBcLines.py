@@ -182,6 +182,128 @@ class GeomBcLines:
 
     @staticmethod
     @log_call
+    def set_bc_line_types(
+        geom_file: str | Path,
+        line_types: dict[str, str],
+        *,
+        hecras_dir: str | Path | None = None,
+        expected_geometry_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        """Set authored Internal/External BC types through native RAS Mapper APIs.
+
+        Works on a writable geometry HDF in a disposable project copy. The
+        compiled BC identities and coordinates must match the selected geometry
+        text. ``line_types`` maps exact existing names to ``Internal`` or
+        ``External``; callers supply the classification from their authored
+        boundary placement. ``SetConnectionType`` and ``SaveFeatureTable`` persist
+        it in an isolated process with HEC-RAS's bundled HDF5 runtime. No line
+        geometry, CRS, units or forcing is changed. A sibling backup is retained.
+        Returns before/after file hashes, native type decisions and backup path.
+        Re-run geometry preprocessing to rebuild connectivity after a change.
+        """
+        import hashlib
+        import json
+        import shutil
+        import uuid
+
+        import h5py
+
+        from .._landcover_native import _run_property_tables_worker
+        from ..dotnet.clr_bootstrap import find_hecras_install
+        from ._preprocess_contract import _digest, _feature_issues, _text_features
+        from .GeomPreprocessor import GeomPreprocessor
+
+        text_path = Path(geom_file).absolute()
+        hdf_path = text_path.with_suffix(text_path.suffix + ".hdf")
+        if expected_geometry_sha256 is not None:
+            actual = hashlib.sha256(text_path.read_bytes()).hexdigest()
+            if actual != expected_geometry_sha256:
+                raise ValueError("Geometry text changed before BC classification.")
+        GeomPreprocessor._require_closed_geometry_hdf(hdf_path)
+        features = _text_features(
+            text_path.read_text(encoding="utf-8").splitlines(),
+            "BC Line Name=",
+            "BC Line Arc=",
+        )
+        group = "Geometry/Boundary Condition Lines"
+        if not isinstance(line_types, dict) or any(
+            not isinstance(name, str) or kind not in ("Internal", "External")
+            for name, kind in line_types.items()
+        ):
+            raise ValueError(
+                "line_types must map exact BC names to Internal or External."
+            )
+        unknown = set(line_types) - {feature["name"] for feature in features}
+        if unknown:
+            raise ValueError("Unknown authored BC names: " + ", ".join(sorted(unknown)))
+        before_arrays = {}
+        with h5py.File(hdf_path, "r") as hdf:
+            issues = _feature_issues(hdf, group, features)
+            if issues:
+                raise ValueError(
+                    "Compiled BC geometry is not current: " + "; ".join(issues)
+                )
+            if not features:
+                return {
+                    "schema": "ras-bc-line-types/v1",
+                    "lines": [],
+                    "changed": False,
+                    "backup_path": None,
+                }
+            attributes = hdf[f"{group}/Attributes"][()]
+            if "Type" not in (attributes.dtype.names or ()):
+                raise ValueError("Compiled BC attributes have no Type field.")
+            for name, obj in hdf[group].items():
+                if isinstance(obj, h5py.Dataset) and name != "Attributes":
+                    before_arrays[name] = _digest(obj[()])
+        install = Path(hecras_dir) if hecras_dir is not None else find_hecras_install()
+        token = uuid.uuid4().hex
+        backup = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.bak")
+        receipt = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.json")
+        shutil.copy2(hdf_path, backup)
+        def file_hash(path):
+            digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(block)
+            return digest.hexdigest()
+
+        before_hash = file_hash(backup)
+        receipt.write_text(
+            json.dumps({"line_types": line_types}, indent=2) + "\n", encoding="utf-8"
+        )
+        _run_property_tables_worker(install, hdf_path, bc_types_receipt=receipt)
+        result = json.loads(receipt.read_text(encoding="utf-8"))
+        with h5py.File(hdf_path, "r") as hdf:
+            after = hdf[f"{group}/Attributes"][()]
+            for field in attributes.dtype.names:
+                if field != "Type" and _digest(attributes[field]) != _digest(
+                    after[field]
+                ):
+                    raise RuntimeError(
+                        f"Native BC classification changed input field {field}."
+                    )
+            for name, digest in before_arrays.items():
+                if name not in hdf[group] or _digest(hdf[group][name][()]) != digest:
+                    raise RuntimeError(f"Native BC classification changed {name}.")
+            for row in result["lines"]:
+                observed = bytes(after["Type"][row["index"]]).rstrip(b"\x00").decode()
+                if observed != row["after"]:
+                    raise RuntimeError("Native BC classification was not persisted.")
+        after_hash = file_hash(hdf_path)
+        result.update(
+            schema="ras-bc-line-types/v1",
+            changed=any(row["before"] != row["after"] for row in result["lines"]),
+            backup_path=str(backup),
+            before_sha256=before_hash,
+            after_sha256=after_hash,
+            bc_geometry_unchanged=True,
+        )
+        receipt.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        return result
+
+    @staticmethod
+    @log_call
     def replace_bc_lines(
         geom_file: str | Path,
         unsteady_files: list[str | Path],

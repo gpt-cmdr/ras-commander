@@ -14,6 +14,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from contextlib import contextmanager
@@ -1572,13 +1573,55 @@ def recompute_property_tables(
                 f"{result.stderr.strip() or result.stdout.strip()}"
             )
     else:
-        load_clr(install)
-        from RasMapperLib.Scripting import ComputePropertyTablesCommand  # type: ignore
-
-        command = ComputePropertyTablesCommand(str(geometry_hdf_path))
-        command.Execute(None)
+        _run_property_tables_worker(install, geometry_hdf_path)
     _validate_property_tables_postcondition(geometry_hdf_path)
     return geometry_hdf_path
+
+
+def _run_property_tables_worker(
+    install: Path, geometry_hdf_path: Path, *, calibration_source: Path | None = None,
+    bc_types_receipt: Path | None = None,
+) -> None:
+    """Keep HEC-RAS's native HDF5 runtime separate from h5py's loaded DLLs."""
+    from ._gdal_runtime import configure_rasmapper_gdal_bridge
+    from ._native_worker_environment import worker_environment
+
+    # Normalize in the caller's cwd before the subprocess changes directory.
+    # absolute() preserves mapped drives, unlike resolve() on Windows.
+    install = Path(install).absolute()
+    geometry_hdf_path = Path(geometry_hdf_path).absolute()
+    configure_rasmapper_gdal_bridge(install)
+    worker = Path(__file__).absolute().with_name("_property_tables_worker.py")
+    command = [sys.executable, "-I", str(worker), str(install), str(geometry_hdf_path)]
+    if calibration_source is not None:
+        if bc_types_receipt is not None:
+            raise ValueError("Native calibration and BC classification are separate operations.")
+        command.append(str(Path(calibration_source).absolute()))
+    if bc_types_receipt is not None:
+        command.extend(("--bc-types", str(Path(bc_types_receipt).absolute())))
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(geometry_hdf_path.parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=1800,
+            check=False,
+            env=worker_environment(1),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "Native property-table computation exceeded 1800 seconds."
+        ) from exc
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Native property-table computation failed in the isolated HEC-RAS runtime: "
+            + (result.stderr or result.stdout or f"exit {result.returncode}").strip()
+        )
+    if result.stdout:
+        logger.info("%s", result.stdout.strip())
 
 
 def associate_landcover_to_geometry(
@@ -1646,10 +1689,7 @@ def associate_landcover_to_geometry(
             validate=True,
         )
         if compute_property_tables:
-            from RasMapperLib.Scripting import ComputePropertyTablesCommand  # type: ignore
-
-            command = ComputePropertyTablesCommand(str(geometry_hdf_path))
-            command.Execute(None)
+            _run_property_tables_worker(install, geometry_hdf_path)
         expected_path = landcover_hdf_path
 
     if compute_property_tables:

@@ -124,9 +124,7 @@ def test_discover_ras_versions_scans_future_and_current_7x_folders(
     monkeypatch, version
 ):
     monkeypatch.setitem(sys.modules, "winreg", None)
-    fake_exe = Path(
-        rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe"
-    )
+    fake_exe = Path(rf"C:\Program Files (x86)\HEC\HEC-RAS\{version}\Ras.exe")
 
     def fake_exists(self):
         normalized = str(self).replace("\\", "/")
@@ -192,10 +190,10 @@ def test_normalize_ras_number_accepts_prefixed_strings_and_filenames():
     assert RasUtils.normalize_ras_number("Model.u12") == "12"
 
 
-def test_clear_geompre_files_uses_geometry_number_from_plan_df(tmp_path):
+def test_clear_geompre_files_uses_geometry_number_from_plan_file(tmp_path):
     project = _FakeRasProject(tmp_path)
     plan_path = tmp_path / "TestProject.p17"
-    plan_path.write_text("Plan Title=Legacy Test\n")
+    plan_path.write_text("Plan Title=Legacy Test\nGeom File=g05\n")
 
     geom_preprocessor = tmp_path / "TestProject.c05"
     geom_preprocessor.write_text("preprocessor\n")
