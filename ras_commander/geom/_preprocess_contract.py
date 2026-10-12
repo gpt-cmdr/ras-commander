@@ -331,8 +331,6 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
                 f"GEOMETRY_INPUT_INVALID: malformed computation points for {name}"
             )
         result["seed_points"][name] = np.asarray(values).reshape(int(count), 2)
-    from shapely.geometry import Polygon
-
     from .GeomLandCover import GeomLandCover
 
     for block in GeomLandCover._find_region_blocks(lines):
@@ -346,6 +344,8 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         result["manning_regions"].extend(features)
     result["manning_region_interactions"] = []
     if result["manning_regions"]:
+        from shapely.geometry import Polygon
+
         areas = GeomStorage.get_storage_area_polygons(geometry_path, exclude_2d=False)
         if any(list(areas["Name"]).count(name) != 1 for name in result["areas"]):
             raise ValueError(
@@ -512,6 +512,181 @@ def invalidate_products(hdf_path: Path) -> list[str]:
                 del hdf[path]
                 removed.append(path)
     return removed
+
+
+def _topology_issues(area: h5py.Group) -> list[str]:
+    """Check HEC-RAS 5/6 packed incidence, padding and reciprocal connectivity.
+
+    Coordinates use the geometry CRS/units. Float32 native normals and lengths
+    are compared at their storage precision; index/incidence checks are exact.
+    This reads regenerated topology, never restores or binds stale parent arrays.
+    """
+    issues = []
+
+    def read(name, rows=None, columns=None, integer=False):
+        obj = area.get(name)
+        if not isinstance(obj, h5py.Dataset):
+            issues.append(f"{name}: missing topology")
+            return None
+        data = obj[()]
+        if (
+            (columns is None and data.ndim != 1)
+            or (columns is not None and (data.ndim != 2 or data.shape[1] != columns))
+            or (rows is not None and len(data) != rows)
+            or (integer and data.dtype.kind not in "iu")
+        ):
+            issues.append(f"{name}: invalid topology schema")
+            return None
+        return data.astype(np.int64) if integer else data
+
+    centers = read("Cells Center Coordinate", columns=2)
+    points = read("FacePoints Coordinate", columns=2)
+    faces = read("Faces FacePoint Indexes", columns=2, integer=True)
+    if any(value is None for value in (centers, points, faces)):
+        return issues
+    nc, npnt, nf = len(centers), len(points), len(faces)
+    if not nc or not npnt or not nf:
+        return ["empty topology"]
+    for name, data in (
+        ("Cells Center Coordinate", centers),
+        ("FacePoints Coordinate", points),
+    ):
+        if not np.all(np.isfinite(data)):
+            issues.append(f"{name}: nonfinite coordinates")
+    adjacency = read("Faces Cell Indexes", nf, 2, integer=True)
+    if np.any(faces < 0) or np.any(faces >= npnt) or np.any(faces[:, 0] == faces[:, 1]):
+        issues.append("Faces FacePoint Indexes: invalid endpoint indexes")
+    if adjacency is not None and (
+        np.any(adjacency < 0)
+        or np.any(adjacency >= nc)
+        or np.any(adjacency[:, 0] == adjacency[:, 1])
+    ):
+        issues.append("Faces Cell Indexes: invalid adjacency")
+    if issues:
+        return issues  # Do not dereference malformed indexes.
+
+    def packed(prefix, rows, value_name, columns=None):
+        info = read(prefix + " Info", rows, 2, integer=True)
+        values = read(value_name, columns=columns, integer=True)
+        if info is None or values is None:
+            return None, None
+        # The packed native table is a partition, including zero-length rows.
+        counts = info[:, 1]
+        if np.any(info < 0) or np.any(counts > len(values)):
+            issues.append(f"{prefix}: invalid packed ranges")
+            return None, None
+        ends = np.cumsum(counts)
+        if ends[-1] != len(values) or not np.array_equal(info[:, 0], ends - counts):
+            issues.append(f"{prefix}: invalid packed ranges")
+            return None, None
+        return np.repeat(np.arange(rows), counts), values
+
+    cell_owner, cell_faces = packed(
+        "Cells Face and Orientation", nc, "Cells Face and Orientation Values", 2
+    )
+    point_owner, point_faces = packed(
+        "FacePoints Face and Orientation",
+        npnt,
+        "FacePoints Face and Orientation Values",
+        2,
+    )
+    pc_owner, point_cells = packed(
+        "FacePoints Cell", npnt, "FacePoints Cell Index Values"
+    )
+
+    def oriented(owner, values, targets, positive_column, name):
+        if owner is None:
+            return
+        if (
+            np.any(values[:, 0] < 0)
+            or np.any(values[:, 0] >= nf)
+            or not np.all(np.isin(values[:, 1], [-1, 1]))
+        ):
+            issues.append(f"{name}: invalid face indexes or orientations")
+            return
+        column = np.where(values[:, 1] == 1, positive_column, 1 - positive_column)
+        ids = values[:, 0]
+        if not np.array_equal(targets[ids, column], owner):
+            issues.append(f"{name}: adjacency/orientation mismatch")
+        # Each face has exactly one incidence on each side/endpoint.
+        if not np.array_equal(np.sort(ids * 2 + column), np.arange(nf * 2)):
+            issues.append(f"{name}: missing or duplicate face incidences")
+
+    if adjacency is not None:
+        oriented(cell_owner, cell_faces, adjacency, 0, "Cells Face and Orientation")
+    oriented(point_owner, point_faces, faces, 1, "FacePoints Face and Orientation")
+
+    obj = area.get("Cells FacePoint Indexes")
+    cell_points = obj[()] if isinstance(obj, h5py.Dataset) else None
+    if (
+        cell_points is None
+        or cell_points.ndim != 2
+        or len(cell_points) != nc
+        or cell_points.dtype.kind not in "iu"
+        or cell_points.shape[1] == 0
+    ):
+        issues.append("Cells FacePoint Indexes: invalid topology schema")
+    elif np.any(cell_points < -1) or np.any(cell_points >= npnt):
+        issues.append("Cells FacePoint Indexes: invalid point indexes")
+    else:
+        cell_points = cell_points.astype(np.int64)
+        valid = cell_points >= 0
+        if np.any(np.diff(valid.astype(int), axis=1) > 0) or np.any(
+            valid.sum(axis=1) < 2
+        ):
+            issues.append(
+                "Cells FacePoint Indexes: invalid trailing padding or empty cell"
+            )
+        cids, slots = np.nonzero(valid)
+        cp = cids * npnt + cell_points[cids, slots]
+        if len(np.unique(cp)) != len(cp):
+            issues.append("Cells FacePoint Indexes: duplicate cell points")
+        if pc_owner is not None:
+            if np.any(point_cells < 0) or np.any(point_cells >= nc):
+                issues.append("FacePoints Cell: invalid cell indexes")
+            elif not np.array_equal(
+                np.sort(cp), np.sort(point_cells * npnt + pc_owner)
+            ):
+                issues.append("FacePoints Cell: reciprocal cell/point mismatch")
+        if cell_owner is not None and cell_faces is not None and not issues:
+            endpoints = faces[cell_faces[:, 0]]
+            referenced = (cell_owner[:, None] * npnt + endpoints).ravel()
+            if not np.all(np.isin(referenced, cp)):
+                issues.append(
+                    "Cells FacePoint Indexes: cell faces reference other points"
+                )
+
+    normals = read("Faces NormalUnitVector and Length", nf, 3)
+    delta = points[faces[:, 1]] - points[faces[:, 0]]
+    lengths = np.linalg.norm(delta, axis=1)
+    if np.any(lengths <= 0) or not np.all(np.isfinite(lengths)):
+        issues.append("FacePoints Coordinate: degenerate face coordinates")
+    elif normals is not None:
+        expected_normals = np.column_stack(
+            (delta[:, 1] / lengths, -delta[:, 0] / lengths, lengths)
+        )
+        if not np.all(np.isfinite(normals)) or not np.allclose(
+            normals, expected_normals, rtol=2e-6, atol=2e-6
+        ):
+            issues.append("Faces NormalUnitVector and Length: face-coordinate mismatch")
+
+    info = read("Faces Perimeter Info", nf, 2, integer=True)
+    values = read("Faces Perimeter Values", columns=2)
+    if info is not None and values is not None:
+        counts = info[:, 1]
+        if (
+            np.any(info < 0)
+            or np.any(counts > len(values))
+            or np.sum(counts) != len(values)
+            or not np.array_equal(info[:, 0], np.cumsum(counts) - counts)
+        ):
+            issues.append("Faces Perimeter: invalid packed ranges")
+        if not np.all(np.isfinite(values)):
+            issues.append("Faces Perimeter Values: nonfinite coordinates")
+    flags = read("FacePoints Is Perimeter", npnt, integer=True)
+    if flags is not None and not np.all(np.isin(flags, [-1, 0])):
+        issues.append("FacePoints Is Perimeter: invalid flags")
+    return issues
 
 
 def validate(
@@ -723,6 +898,7 @@ def validate(
                 ("FacePoints Is Perimeter", len(points), None),
             ):
                 require(f"{path}/{topology}", rows, columns)
+            missing.extend(f"{path}/{issue}" for issue in _topology_issues(hdf[path]))
             for product in FACE_PRODUCTS[2:]:
                 require(f"{path}/{product}", face_count)
             pair(path, "Cells Volume Elevation", cells, 2, int(source["seed_count"]))

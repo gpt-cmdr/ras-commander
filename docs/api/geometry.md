@@ -858,6 +858,12 @@ and does not restore obsolete products. Completion requires a freshly written
 tables sized for the current topology, BC/reference attachments and associated
 infiltration tables. Infiltration uses interior-cell counts; volume tables
 also include ghost cells, whose zero-length entries are permitted.
+Topology validation checks integer index domains, contiguous packed ranges,
+reciprocal cell/face and point/face incidence with signed orientation,
+reciprocal cell/point membership, and trailing `-1` cell-point padding.
+Face coordinates must be finite, nondegenerate and consistent with native
+normals and lengths at float32 storage precision. Fresh child regeneration
+can replace stale parent topology; no parent indexes are restored.
 Reference-line terrain profiles are checked when authored. Manning polygon
 names and coordinates are checked against the geometry text; attachment families
 are required for regions intersecting a current 2D perimeter. A valid disjoint
@@ -902,9 +908,18 @@ lists missing or malformed required products; the corresponding reason is
 `GEOMETRY_PRODUCTS_INCOMPLETE`. Both lists default to empty.
 `completion_contract` records the contract version, text hash, area counts,
 preservation/completeness decisions, invalidated tables and backup path.
+It also records `lifecycle_verified` and `plan_restored`, both false until
+normal launcher/writer completion and exact original-plan restoration are
+positively established. Disabling restoration leaves `plan_restored=false`.
+The explicit `clear_geompre=True` path completes the unique geometry backup
+and input preflight before deleting caches, messages, or native products.
 A target open in the caller's h5py runtime
-returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Stdout is returned
-in the result. A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
+returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Captured stdout
+and stderr participate in blocking native-error parsing even with complete
+products and launcher exit 0; the merged stream is retained as `stdout`.
+Nonspatial preprocessing does not require Shapely; spatial imports occur only
+when authored Manning polygons require intersection checks.
+A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
 inspection or an unconfirmed child exit returns
 `GEOMETRY_PROCESS_COMPLETION_UNVERIFIED`. Unexpected monitoring or process-query
 errors also attempt bounded cancellation of retained owned writers before

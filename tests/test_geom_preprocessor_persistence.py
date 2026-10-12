@@ -177,6 +177,8 @@ def project_run(
     write_products=True,
     geometry_text="Geom Title=Synthetic\n",
     clear_geompre=False,
+    stdout="",
+    verify_restoration=True,
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     import psutil
@@ -206,6 +208,7 @@ def project_run(
         prj_file=prj,
         ras_exe_path=exe,
         check_initialized=lambda: None,
+        get_geom_entries=lambda: pd.DataFrame(),
     )
     monkeypatch.setattr(GP, "_resolve_plan_path", lambda *args: plan)
     references = iter(("01", "02" if changed_reference else "01"))
@@ -233,6 +236,8 @@ def project_run(
     killed = []
 
     def launch(*args, **kwargs):
+        kwargs["stdout"].write(stdout.encode())
+        kwargs["stdout"].flush()
         assert kwargs["shell"] is False
         assert kwargs["stdout"] is not module.subprocess.PIPE
         assert h5py.h5f.get_obj_count(types=h5py.h5f.OBJ_FILE) == 0
@@ -260,7 +265,8 @@ def project_run(
     result = GP.run_geometry_preprocessor(
         "01", ras_object=obj, dialog_watchdog=use_watchdog, clear_geompre=clear_geompre
     )
-    assert plan.read_bytes() == original
+    if verify_restoration:
+        assert plan.read_bytes() == original
     return result, killed
 
 
@@ -289,6 +295,92 @@ def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
     assert result.success and result.return_code == 0
     assert result.missing_geometry_inventory == []
     assert killed == []
+    assert result.completion_contract["lifecycle_verified"] is True
+    assert result.completion_contract["plan_restored"] is True
+
+
+def test_captured_native_error_rejects_complete_products_and_zero_exit(
+    tmp_path, monkeypatch
+):
+    result, killed = project_run(
+        tmp_path,
+        monkeypatch,
+        stdout="Error processing Precipitation data, exiting...\n",
+    )
+    assert not result.success and result.return_code == 0
+    assert result.completion_contract["products_complete"] is True
+    assert "Error processing Precipitation" in result.stdout
+    assert "Precipitation" in result.error and result.error_count > 0
+    assert not killed
+
+
+def test_nonspatial_compute_profile_does_not_require_shapely(tmp_path, monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "shapely", None)
+    monkeypatch.setitem(sys.modules, "shapely.geometry", None)
+    result, killed = project_run(
+        tmp_path, monkeypatch, geometry_text="Geom Title=1D text\n"
+    )
+    assert result.success and result.return_code == 0
+    assert not killed
+
+
+@pytest.mark.parametrize("authored_2d", [False, True])
+def test_failed_backup_invalidates_no_cache_messages_or_products(
+    tmp_path, monkeypatch, authored_2d
+):
+    import shutil
+
+    from test_geom_preprocessor_contract import fixture
+
+    geometry_text = "Geom Title=Synthetic\n"
+    if authored_2d:
+        template = tmp_path / "template"
+        template.mkdir()
+        text, _, _ = fixture(template)
+        geometry_text = text.read_text()
+        monkeypatch.setitem(
+            project_run.__globals__, "geometry", lambda _: fixture(tmp_path)[1]
+        )
+
+    cache = tmp_path / "Synthetic.c01"
+    cache.write_bytes(b"original cache")
+    message = tmp_path / "Synthetic.bco01"
+    message.write_bytes(b"original messages")
+    original_hdf = []
+
+    def fail_backup(source, destination):
+        original_hdf.append(source.read_bytes())
+        raise OSError("injected backup failure")
+
+    monkeypatch.setattr(shutil, "copy2", fail_backup)
+    result, killed = project_run(
+        tmp_path, monkeypatch, clear_geompre=True, geometry_text=geometry_text
+    )
+    assert not result.success and result.error == "injected backup failure"
+    assert result.return_code is None and not killed
+    assert cache.read_bytes() == b"original cache"
+    assert message.read_bytes() == b"original messages"
+    assert (tmp_path / "Synthetic.g01.hdf").read_bytes() == original_hdf[0]
+
+
+def test_real_wrapper_restoration_failure_has_no_successful_lifecycle_proof(
+    tmp_path, monkeypatch
+):
+    def fail_restore(path, original):
+        assert path.read_bytes() != original
+        raise RuntimeError("GEOMETRY_PLAN_RESTORE_FAILED: injected write failure")
+
+    monkeypatch.setattr(GP, "_restore_plan_file", fail_restore)
+    result, _ = project_run(tmp_path, monkeypatch, verify_restoration=False)
+    assert not result.success and result.return_code == 0
+    assert "GEOMETRY_PLAN_RESTORE_FAILED" in result.error
+    assert result.completion_contract["lifecycle_verified"] is False
+    assert result.completion_contract["plan_restored"] is False
+    assert (
+        tmp_path / "Synthetic.p01"
+    ).read_bytes() != b"Geom File=g01\nRun UNet=-1\nRun HTab=0\n"
 
 
 def test_native_precipitation_error_with_zero_launcher_exit_fails(

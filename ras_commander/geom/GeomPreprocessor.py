@@ -231,10 +231,6 @@ class GeomPreprocessor:
             hdf_message_path = project_folder / f"{project_name}.p{plan_num}.hdf"
             tmp_hdf_path = project_folder / f"{project_name}.p{plan_num}.tmp.hdf"
 
-            if clear_messages:
-                GeomPreprocessor._delete_files(message_paths)
-                GeomPreprocessor._delete_files([tmp_hdf_path])
-
             original_plan_text = (
                 plan_path.read_bytes()
                 if restore_plan_settings
@@ -260,9 +256,23 @@ class GeomPreprocessor:
                 "invalidated_products": [],
                 "geometry_backup_path": None,
                 "native_worker_threads": native_worker_threads if geometry_only else None,
+                "lifecycle_verified": False,
+                "plan_restored": False,
             }
             invalidated_products = []
             geometry_backup_path = None
+            if (clear_geompre or expected_contract["areas"]) and geometry_hdf_path.exists():
+                import shutil
+                import uuid
+
+                geometry_backup_path = geometry_hdf_path.with_name(
+                    geometry_hdf_path.name + f".preprocess-{uuid.uuid4().hex}.bak"
+                )
+                shutil.copy2(geometry_hdf_path, geometry_backup_path)
+                completion_contract["geometry_backup_path"] = str(geometry_backup_path)
+            if clear_messages:
+                GeomPreprocessor._delete_files(message_paths)
+                GeomPreprocessor._delete_files([tmp_hdf_path])
             process = None
             _watchdog = None
             stdio = tempfile.TemporaryFile()  # noqa: SIM115 - closed by the outer finally
@@ -308,20 +318,10 @@ class GeomPreprocessor:
                     raise RuntimeError(
                         "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
                     )
-                if clear_geompre:
-                    GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
-                if expected_contract["areas"]:
-                    import shutil
-                    import uuid
-
-                    if geometry_hdf_path.exists():
-                        geometry_backup_path = geometry_hdf_path.with_name(
-                            geometry_hdf_path.name + f".preprocess-{uuid.uuid4().hex}.bak"
-                        )
-                        shutil.copy2(geometry_hdf_path, geometry_backup_path)
-                        completion_contract["geometry_backup_path"] = str(geometry_backup_path)
-                    invalidated_products = invalidate_products(geometry_hdf_path)
-                    completion_contract["invalidated_products"] = invalidated_products
+                if clear_geompre or expected_contract["areas"]:
+                    if expected_contract["areas"]:
+                        invalidated_products = invalidate_products(geometry_hdf_path)
+                        completion_contract["invalidated_products"] = invalidated_products
                     GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
                 process = subprocess.Popen(
                     command_text,
@@ -400,6 +400,9 @@ class GeomPreprocessor:
                 finally:
                     if restore_plan_settings and original_plan_text is not None:
                         GeomPreprocessor._restore_plan_file(plan_path, original_plan_text)
+                        completion_contract["plan_restored"] = plan_path.read_bytes() == original_plan_text
+                        if not completion_contract["plan_restored"]:
+                            raise RuntimeError("GEOMETRY_PLAN_RESTORE_FAILED: original plan bytes differ")
 
             if process is None:
                 raise RuntimeError("HEC-RAS process was not started")
@@ -458,8 +461,9 @@ class GeomPreprocessor:
                 modified_after=start_time,
             )
 
-            parsed = ResultsParser.parse_compute_messages(messages)
-            blocking_lines = GeomPreprocessor._find_blocking_message_lines(messages)
+            native_messages = "\n".join((messages, stdout))
+            parsed = ResultsParser.parse_compute_messages(native_messages)
+            blocking_lines = GeomPreprocessor._find_blocking_message_lines(native_messages)
 
             errors = []
             if timed_out:
@@ -481,6 +485,10 @@ class GeomPreprocessor:
                 )
             missing_inventory = []
             missing_products = []
+            lifecycle_evidence = {
+                "lifecycle_verified": process.returncode == 0,
+                "plan_restored": completion_contract.get("plan_restored", False),
+            }
             if not timed_out and not child_monitor["timed_out"]:
                 missing_inventory, missing_products, completion_contract = validate(
                     geometry_text_path, geometry_hdf_path, expected_contract, start_time
@@ -490,6 +498,7 @@ class GeomPreprocessor:
                     str(geometry_backup_path) if geometry_backup_path is not None else None
                 )
                 completion_contract["native_worker_threads"] = native_worker_threads if geometry_only else None
+                completion_contract.update(lifecycle_evidence)
                 if missing_inventory:
                     errors.append("GEOMETRY_INPUT_CHANGED: " + "; ".join(missing_inventory))
                 if missing_products:

@@ -62,23 +62,31 @@ def products(path):
         )
         area = hdf.require_group(f"{AREA}/Synthetic")
         area.create_dataset("Cells Center Coordinate", data=np.zeros((3, 2)))
-        area.create_dataset("FacePoints Coordinate", data=np.zeros((4, 2)))
+        area.create_dataset(
+            "FacePoints Coordinate",
+            data=np.array([[0, 0], [1, 0], [1, 1], [2, 2]], dtype=float),
+        )
         area.create_dataset("Faces FacePoint Indexes", data=[[0, 1], [1, 2]])
         area.create_dataset("Faces Cell Indexes", data=[[0, 1], [1, 2]])
-        for name, shape in (
-            ("Cells Face and Orientation Info", (3, 2)),
-            ("Cells Face and Orientation Values", (4, 2)),
-            ("Cells FacePoint Indexes", (3, 4)),
-            ("Faces NormalUnitVector and Length", (2, 3)),
-            ("Faces Perimeter Info", (2, 2)),
-            ("Faces Perimeter Values", (2, 2)),
-            ("FacePoints Cell Info", (4, 2)),
-            ("FacePoints Cell Index Values", (4,)),
-            ("FacePoints Face and Orientation Info", (4, 2)),
-            ("FacePoints Face and Orientation Values", (4, 2)),
-            ("FacePoints Is Perimeter", (4,)),
-        ):
-            area.create_dataset(name, data=np.zeros(shape, dtype=int))
+        for name, data in {
+            "Cells Face and Orientation Info": [[0, 1], [1, 2], [3, 1]],
+            "Cells Face and Orientation Values": [[0, 1], [0, -1], [1, 1], [1, -1]],
+            "Cells FacePoint Indexes": [[0, 1, -1, -1], [0, 1, 2, -1], [1, 2, -1, -1]],
+            "Faces NormalUnitVector and Length": [[0, -1, 1], [1, 0, 1]],
+            "Faces Perimeter Info": [[0, 0], [0, 0]],
+            "Faces Perimeter Values": np.empty((0, 2)),
+            "FacePoints Cell Info": [[0, 2], [2, 3], [5, 2], [7, 0]],
+            "FacePoints Cell Index Values": [0, 1, 0, 1, 2, 1, 2],
+            "FacePoints Face and Orientation Info": [[0, 1], [1, 2], [3, 1], [4, 0]],
+            "FacePoints Face and Orientation Values": [
+                [0, -1],
+                [0, 1],
+                [1, -1],
+                [1, 1],
+            ],
+            "FacePoints Is Perimeter": [0, 0, 0, 0],
+        }.items():
+            area.create_dataset(name, data=data)
         for name in CELL_PRODUCTS[:3]:
             area.create_dataset(name, data=np.ones(3))
         for name in FACE_PRODUCTS[2:]:
@@ -96,6 +104,71 @@ def products(path):
         area.create_dataset("Infiltration/Abstraction Ratio", data=[0.2, 0.2])
         area.create_dataset("Infiltration/Minimum Infiltration Rate", data=[0.0, 0.0])
         area.create_dataset("Infiltration/Properties", data=[1])
+
+
+@pytest.mark.parametrize(
+    "dataset,value",
+    [
+        ("Cells FacePoint Indexes", 999999),
+        ("Cells Face and Orientation Info", 999999),
+        ("FacePoints Coordinate", 999999),
+        ("Faces Cell Indexes", 0),
+        ("Cells Face and Orientation Values", 999999),
+        ("FacePoints Cell Info", 999999),
+        ("FacePoints Cell Index Values", 999999),
+        ("FacePoints Face and Orientation Info", 999999),
+        ("FacePoints Face and Orientation Values", 999999),
+        ("Faces NormalUnitVector and Length", 0),
+        ("Faces Perimeter Info", 999999),
+        ("FacePoints Is Perimeter", 99),
+    ],
+)
+def test_corrupt_required_topology_fails_completion(tmp_path, dataset, value):
+    text, path, _ = fixture(tmp_path)
+    expected = snapshot(text, path)
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Synthetic/{dataset}"][...] = value
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert missing and not evidence["products_complete"]
+    assert changed == []  # Regenerated products, rather than authored inputs.
+
+
+@pytest.mark.parametrize(
+    "dataset,index,value",
+    [
+        ("Cells Face and Orientation Info", (1, 0), 0),
+        ("Cells Face and Orientation Values", (0, 1), -1),
+        ("FacePoints Face and Orientation Values", (0, 1), 1),
+        ("FacePoints Cell Index Values", 0, 2),
+        ("Cells FacePoint Indexes", (0, 1), 2),
+        ("Cells FacePoint Indexes", (0, 2), 0),
+        ("Faces Cell Indexes", (0, 0), 2),
+        ("Faces FacePoint Indexes", (0, 0), 2),
+        ("FacePoints Coordinate", (0, 0), 0.1),
+    ],
+)
+def test_in_domain_but_inconsistent_topology_fails(tmp_path, dataset, index, value):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Synthetic/{dataset}"][index] = value
+    assert validate(text, path, expected, time.time() - 1)[1]
+
+
+def test_fresh_child_topology_replaces_stale_parent_without_preserving_indexes(
+    tmp_path,
+):
+    text, path, _ = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        hdf[f"{AREA}/Synthetic/Cells FacePoint Indexes"][...] = 999999
+        hdf[f"{AREA}/Synthetic/Cells Face and Orientation Info"][...] = 999999
+    expected = snapshot(text, path)
+    assert validate(text, path, expected, time.time() - 1)[1]
+    with h5py.File(path, "r+") as hdf:
+        del hdf[f"{AREA}/Synthetic"]
+        del hdf["Geometry/GeomPreprocess"]
+    products(path)
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
 
 
 def manning_region(text, path, outside=True):
