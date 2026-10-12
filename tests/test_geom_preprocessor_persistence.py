@@ -173,6 +173,8 @@ def project_run(
     use_watchdog=False,
     owned_children=(),
     real_cleanup=False,
+    messages="",
+    write_products=True,
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     import psutil
@@ -188,6 +190,7 @@ def project_run(
     )
     folder = tmp_path
     path = geometry(folder / "Synthetic.g01.hdf")
+    (folder / "Synthetic.g01").write_text("Geom Title=Synthetic\n")
     plan = folder / "Synthetic.p01"
     plan.write_text("Geom File=g01\nRun UNet=-1\nRun HTab=0\n")
     original = plan.read_bytes()
@@ -212,7 +215,9 @@ def project_run(
     monkeypatch.setattr(
         module.RasPlan, "set_geom_preprocessor", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(GP, "_read_compute_messages", lambda *args, **kwargs: ([], ""))
+    monkeypatch.setattr(
+        GP, "_read_compute_messages", lambda *args, **kwargs: ([], messages)
+    )
     monkeypatch.setattr(GP, "_preprocessor_artifacts", lambda *args, **kwargs: [path])
     monkeypatch.setattr(
         GP, "_wait_for_preprocess_child", lambda **kwargs: {"timed_out": False}
@@ -229,6 +234,9 @@ def project_run(
         assert kwargs["shell"] is False
         assert kwargs["stdout"] is not module.subprocess.PIPE
         assert h5py.h5f.get_obj_count(types=h5py.h5f.OBJ_FILE) == 0
+        if write_products:
+            with h5py.File(path, "r+") as handle:
+                handle.create_dataset("Geometry/GeomPreprocess/Native", data=[1])
         if remove:
             with h5py.File(path, "r+") as handle:
                 del handle["Projection"]
@@ -261,6 +269,27 @@ def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
     assert killed == []
 
 
+def test_native_precipitation_error_with_zero_launcher_exit_fails(
+    tmp_path, monkeypatch
+):
+    result, killed = project_run(
+        tmp_path,
+        monkeypatch,
+        messages="Error processing Precipitation data, exiting...",
+    )
+    assert not result.success and result.return_code == 0
+    assert "Precipitation" in result.error
+    assert not killed
+
+
+def test_missing_geompreprocess_products_with_normal_exit_fails(tmp_path, monkeypatch):
+    result, killed = project_run(tmp_path, monkeypatch, write_products=False)
+    assert not result.success and result.return_code == 0
+    assert result.missing_geometry_products == ["Geometry/GeomPreprocess"]
+    assert "GEOMETRY_PRODUCTS_INCOMPLETE" in result.error
+    assert not killed
+
+
 def test_plan_reference_changed_during_setup_fails_before_launch(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, changed_reference=True)
     assert not result.success and result.return_code is None
@@ -279,7 +308,7 @@ def test_populated_mesh_with_inventory_loss_is_failure(tmp_path, monkeypatch):
     result, killed = project_run(tmp_path, monkeypatch, remove=True)
     assert not result.success
     assert result.missing_geometry_inventory == ["Projection"]
-    assert "GEOMETRY_INVENTORY_LOST" in result.error
+    assert "GEOMETRY_INPUT_CHANGED" in result.error
     assert killed == []
 
 

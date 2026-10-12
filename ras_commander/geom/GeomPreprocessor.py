@@ -113,9 +113,11 @@ class GeomPreprocessor:
         only before launch and after process completion; all handles opened by
         this method are closed before engine execution.
 
-        Existing geometry objects and attribute names must survive compilation.
-        Missing objects fail the operation even when mesh topology is populated.
-        Values may change through native recomputation; inventory preservation
+        Authored geometry inputs must survive unchanged. Native products must be
+        freshly generated and complete for the current mesh; obsolete incoming
+        parent products may be replaced. Geometry text, HDF-only associations,
+        Projection and Manning calibration define the retained inputs. Known
+        native product tables are invalidated before launch. Completion checking
         does not establish hydraulic acceptance. This method emits a result and
         captured stdout, modifies native artifacts in the project copy, and
         restores temporary plan flags when requested. It changes no CRS or units.
@@ -232,9 +234,15 @@ class GeomPreprocessor:
                 project_folder / f"{project_name}.g{geometry_number}.hdf"
             )
             GeomPreprocessor._require_closed_geometry_hdf(geometry_hdf_path)
-            expected_inventory = GeomPreprocessor._geometry_hdf_inventory(
+            GeomPreprocessor._geometry_hdf_inventory(
                 geometry_hdf_path
             )
+            from ._preprocess_contract import snapshot, invalidate_products, validate
+
+            geometry_text_path = geometry_hdf_path.with_suffix("")
+            expected_contract = snapshot(geometry_text_path, geometry_hdf_path)
+            invalidated_products = []
+            geometry_backup_path = None
             process = None
             _watchdog = None
             stdio = tempfile.TemporaryFile()  # noqa: SIM115 - closed by the outer finally
@@ -280,6 +288,17 @@ class GeomPreprocessor:
                     raise RuntimeError(
                         "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
                     )
+                if expected_contract["areas"]:
+                    import shutil
+                    import uuid
+
+                    if geometry_hdf_path.exists():
+                        geometry_backup_path = geometry_hdf_path.with_name(
+                            geometry_hdf_path.name + f".preprocess-{uuid.uuid4().hex}.bak"
+                        )
+                        shutil.copy2(geometry_hdf_path, geometry_backup_path)
+                    invalidated_products = invalidate_products(geometry_hdf_path)
+                    GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
                 process = subprocess.Popen(
                     command_text,
                     cwd=str(project_folder),
@@ -432,15 +451,20 @@ class GeomPreprocessor:
                     f"(.c{geometry_number}, .g{geometry_number}.hdf, .x{geometry_number}, or .b{plan_num})"
                 )
             missing_inventory = []
+            missing_products = []
+            completion_contract = {}
             if not timed_out and not child_monitor["timed_out"]:
-                actual_inventory = GeomPreprocessor._geometry_hdf_inventory(
-                    geometry_hdf_path
+                missing_inventory, missing_products, completion_contract = validate(
+                    geometry_text_path, geometry_hdf_path, expected_contract, start_time
                 )
-                missing_inventory = GeomPreprocessor._missing_geometry_inventory(
-                    expected_inventory, actual_inventory
+                completion_contract["invalidated_products"] = invalidated_products
+                completion_contract["geometry_backup_path"] = (
+                    str(geometry_backup_path) if geometry_backup_path is not None else None
                 )
                 if missing_inventory:
-                    errors.append("GEOMETRY_INVENTORY_LOST: " + "; ".join(missing_inventory))
+                    errors.append("GEOMETRY_INPUT_CHANGED: " + "; ".join(missing_inventory))
+                if missing_products:
+                    errors.append("GEOMETRY_PRODUCTS_INCOMPLETE: " + "; ".join(missing_products))
             geometry_hdf_ready, geometry_hdf_reason = (
                 GeomPreprocessor._geometry_hdf_readiness(
                     geometry_hdf_path,
@@ -467,6 +491,8 @@ class GeomPreprocessor:
                 timed_out=timed_out or child_monitor["timed_out"],
                 stdout=stdout,
                 missing_geometry_inventory=missing_inventory,
+                missing_geometry_products=missing_products,
+                completion_contract=completion_contract,
                 signal_detected=signal_detected,
                 compute_message_paths=existing_message_paths,
                 artifact_paths=artifact_paths,

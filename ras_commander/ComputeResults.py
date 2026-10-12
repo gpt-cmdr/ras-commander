@@ -873,6 +873,8 @@ class GeometryPreprocessResult:
     error: Optional[str] = None
 
     missing_geometry_inventory: list[str] = field(default_factory=list)
+    missing_geometry_products: list[str] = field(default_factory=list)
+    completion_contract: dict = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return self.success

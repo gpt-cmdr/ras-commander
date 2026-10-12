@@ -574,6 +574,7 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
 - `replace_bc_lines(...)` - Replace all target-area lines and supplied unsteady references
+- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply the exact BC names and types from the authored placement. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns type decisions and before/after hashes. It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
 
 ## GeomLateral
 
@@ -831,9 +832,28 @@ geometry and preprocessing artifacts remain in the copy. It preserves the
 project's CRS and units.
 
 Completion requires normal engine and preprocessing-child exit within
-`max_wait` (seconds), usable compiled geometry, and preservation of every
-incoming HDF object and attribute name. Native recomputation may change values
-and add objects. A quiet file or flow-start message does not end the wait.
+`max_wait` (seconds), unchanged authored inputs, and complete native products.
+The selected geometry text defines area perimeters and computation points,
+breaklines, BC/reference lines and structure records. It must remain
+byte-identical. Compiled area/feature mirrors are checked against that text;
+an incoming HDF can still describe a parent and does not define child features.
+HDF-only refinement regions, Projection, terrain/classification associations
+and Manning calibration are preserved semantically, allowing native fixed-string
+width changes without changing values.
+
+For authored 2D areas, the method retains a unique sibling HDF backup and removes
+recognized native product tables before launch, including `.c##` caches even when
+`clear_geompre=False`. This invalidation is restricted to HEC-RAS 5/6 geometry
+HDFs and geometry-only results copies named `.g##.hdf`; results/time-series
+hierarchies are rejected. Failed native work leaves the backup and diagnostics,
+and does not restore obsolete products. Completion requires a freshly written
+`Geometry/GeomPreprocess`, cell/face property pairs with valid packed ranges,
+tables sized for the current topology, BC/reference attachments and associated
+infiltration tables. Infiltration uses interior-cell counts; volume tables
+also include ghost cells, whose zero-length entries are permitted.
+Reference-line terrain profiles and Manning-region attachments are checked
+when authored. Structure property tables are required when structures exist.
+A quiet file or flow-start message does not end the wait.
 Recognized Wine desktop, console and plot-display invocations may outlive the
 geometry writers and are excluded from writer completion; unknown children
 still require a confirmed exit. A transient Wine invalid-handle error while
@@ -847,9 +867,14 @@ include hydraulic computation.
 
 `GeometryPreprocessResult` remains bool-compatible. `return_code` records the
 actual launcher exit; a nonzero exit always fails. `timed_out=True` fails even
-if geometry topology exists. `missing_geometry_inventory` lists lost object
-paths and `path@attribute` names (empty by default); loss returns
-`GEOMETRY_INVENTORY_LOST` in `error`. A target open in the caller's h5py runtime
+if geometry topology exists. `missing_geometry_inventory` now lists changed or
+missing authored inputs, rather than every incoming cache object;
+`GEOMETRY_INPUT_CHANGED` identifies this failure. `missing_geometry_products`
+lists missing or malformed required products; the corresponding reason is
+`GEOMETRY_PRODUCTS_INCOMPLETE`. Both lists default to empty.
+`completion_contract` records the contract version, text hash, area counts,
+preservation/completeness decisions, invalidated tables and backup path.
+A target open in the caller's h5py runtime
 returns `GEOMETRY_HDF_OPEN`; its handle is left with the caller. Stdout is returned
 in the result. A timeout returns `GEOMETRY_PREPROCESS_TIMEOUT`; uncertain process
 inspection or an unconfirmed child exit returns
@@ -1181,6 +1206,7 @@ constitute hydraulic acceptance.
         - delete_bc_line
         - rename_bc_line
         - replace_bc_lines
+        - set_bc_line_types
 
 ### GeomPipeNetwork source reference
 

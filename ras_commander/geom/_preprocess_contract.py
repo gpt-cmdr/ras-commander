@@ -1,0 +1,638 @@
+"""Read-only input snapshots and native geometry-product completion checks.
+
+Geometry text is authoritative when an incoming HDF still describes a parent.
+Only native product datasets are invalidated; authored features are never restored
+from a stale HDF. All HDF contexts close before native execution.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from pathlib import Path
+
+import h5py
+import numpy as np
+
+AREA = "Geometry/2D Flow Areas"
+CALIBRATION = "Geometry/Land Cover (Manning's n)/Calibration Table"
+CELL_PRODUCTS = (
+    "Cells Center Manning's n",
+    "Cells Minimum Elevation",
+    "Cells Surface Area",
+    "Cells Volume Elevation Info",
+    "Cells Volume Elevation Values",
+)
+FACE_PRODUCTS = (
+    "Faces Area Elevation Info",
+    "Faces Area Elevation Values",
+    "Faces Low Elevation Centroid",
+    "Faces Minimum Elevation",
+)
+FEATURES = {
+    "Geometry/2D Flow Area Break Lines": "BreakLine Name=",
+    "Geometry/Boundary Condition Lines": "BC Line Name=",
+    "Geometry/Reference Lines": "Reference Line Name=",
+    "Geometry/Structures": "Connection=",
+}
+REFINEMENT = "Geometry/2D Flow Area Refinement Regions"
+ASSOCIATIONS = (
+    "Terrain Filename",
+    "Terrain Layername",
+    "Land Cover Filename",
+    "Land Cover Layername",
+    "Infiltration Filename",
+    "Infiltration Layername",
+    "Percent Impervious Filename",
+    "Percent Impervious Layername",
+    "SI Units",
+)
+
+
+def _semantic(value):
+    """Preserve values while ignoring fixed-string width and compound padding."""
+    if isinstance(value, np.ndarray):
+        if value.dtype.names:
+            return (
+                value.shape,
+                tuple(value.dtype.names),
+                tuple(_semantic(v) for v in value.flat),
+            )
+        return (value.shape, tuple(_semantic(v) for v in value.flat))
+    if isinstance(value, np.void) and value.dtype.names:
+        return tuple((n, _semantic(value[n])) for n in value.dtype.names)
+    if isinstance(value, (bytes, np.bytes_)):
+        return bytes(value).rstrip(b"\x00")
+    if isinstance(value, np.generic):
+        return _semantic(value.item())
+    if isinstance(value, float) and np.isnan(value):
+        return ("nan",)
+    return value
+
+
+def _digest(value) -> str:
+    return hashlib.sha256(repr(_semantic(value)).encode("utf-8")).hexdigest()
+
+
+def _text_features(lines: list[str], prefix: str, arc: str) -> list[dict]:
+    from .GeomParser import GeomParser
+
+    features = []
+    for index, line in enumerate(lines):
+        if not line.startswith(prefix):
+            continue
+        name = line.split("=", 1)[1].strip()
+        storage = ""
+        controls = {}
+        for end in range(index + 1, len(lines)):
+            if "Storage Area=" in lines[end]:
+                storage = lines[end].split("=", 1)[1].strip()
+            for key, field in (
+                ("BreakLine CellSize Min=", "Cell Spacing Near"),
+                ("BreakLine CellSize Max=", "Cell Spacing Far"),
+                ("BreakLine Near Repeats=", "Near Repeats"),
+                ("BreakLine Protection Radius=", "Protection Radius"),
+            ):
+                if lines[end].startswith(key) and lines[end].split("=", 1)[1].strip():
+                    controls[field] = float(lines[end].split("=", 1)[1])
+            if lines[end].startswith(arc):
+                count = int(lines[end].split("=", 1)[1].strip())
+                values = []
+                for raw in lines[end + 1 :]:
+                    if len(values) >= count * 2:
+                        break
+                    values.extend(GeomParser.parse_fixed_width(raw, 16))
+                if len(values) != count * 2:
+                    raise ValueError(f"Malformed authored feature {name!r}")
+                features.append(
+                    {
+                        "name": name,
+                        "storage_area": storage,
+                        "coordinates": np.asarray(values).reshape(count, 2),
+                        "controls": controls,
+                    }
+                )
+                break
+            if lines[end].startswith(prefix):
+                raise ValueError(f"Missing authored coordinates for {name!r}")
+        else:
+            raise ValueError(f"Missing authored coordinates for {name!r}")
+    return features
+
+
+def _feature_issues(hdf, path: str, features: list[dict]) -> list[str]:
+    """Compare each serialized feature's identity and coordinates, in FID order."""
+    issues = []
+    if not features:
+        if path in hdf and "Attributes" in hdf[path] and len(hdf[path]["Attributes"]):
+            return [f"{path}: obsolete features remain"]
+        return issues
+    if path not in hdf:
+        return [path]
+    group = hdf[path]
+    if any(
+        name not in group for name in ("Attributes", "Polyline Info", "Polyline Points")
+    ):
+        return [f"{path}: missing authored feature geometry"]
+    attrs, info, points = (
+        group["Attributes"],
+        group["Polyline Info"],
+        group["Polyline Points"],
+    )
+    if (
+        len(attrs) != len(features)
+        or len(info) != len(features)
+        or "Name" not in (attrs.dtype.names or ())
+    ):
+        return [f"{path}: authored feature identities differ"]
+    for index, feature in enumerate(features):
+        # Native string fields are fixed width; names longer than the field are
+        # not accepted as preserved identities by this contract.
+        name = bytes(attrs["Name"][index]).rstrip(b"\x00").decode("utf-8").rstrip()
+        start, count = (int(v) for v in info[index, :2])
+        coords = points[start : start + count]
+        if (
+            name != feature["name"]
+            or start < 0
+            or count < 2
+            or coords.shape != feature["coordinates"].shape
+            or not np.allclose(coords, feature["coordinates"], rtol=0, atol=1e-6)
+        ):
+            issues.append(f"{path}/{index}: authored identity or coordinates changed")
+        if feature["storage_area"]:
+            area_field = next(
+                (key for key in ("SA-2D", "2D Area Name") if key in attrs.dtype.names),
+                None,
+            )
+            if (
+                area_field is None
+                or bytes(attrs[area_field][index]).rstrip(b"\x00").decode().strip()
+                != feature["storage_area"]
+            ):
+                issues.append(f"{path}/{index}: authored area association changed")
+        for field, value in feature.get("controls", {}).items():
+            if field not in attrs.dtype.names or float(attrs[field][index]) != float(
+                np.asarray(value, dtype=attrs.dtype[field])
+            ):
+                issues.append(f"{path}/{index}: authored {field} changed")
+    return issues
+
+
+def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
+    """Bind authored text, HDF-only associations, calibration and current inputs."""
+    from .GeomMesh import _mesh_hdf_consistency_issues, _read_mesh_metadata_from_text
+
+    text = geometry_path.read_bytes()
+    lines = text.decode("utf-8", errors="replace").splitlines()
+    result = {
+        "text_sha256": hashlib.sha256(text).hexdigest(),
+        "areas": _read_mesh_metadata_from_text(geometry_path),
+        "features": {
+            path: sum(line.startswith(key) for line in lines)
+            for path, key in FEATURES.items()
+        },
+        "inputs": {},
+        "attributes": {},
+        "feature_geometry": {
+            "Geometry/2D Flow Area Break Lines": _text_features(
+                lines, "BreakLine Name=", "BreakLine Polyline="
+            ),
+            "Geometry/Boundary Condition Lines": _text_features(
+                lines, "BC Line Name=", "BC Line Arc="
+            ),
+            "Geometry/Reference Lines": _text_features(
+                lines, "Reference Line Name=", "Reference Line Arc="
+            ),
+        },
+        "manning_region_count": sum(
+            line.startswith("LCMann Region Name=") for line in lines
+        ),
+    }
+    result["features"]["Geometry/Structures"] += sum(
+        line.startswith("SA/2D Area Conn=") for line in lines
+    )
+    # Metadata helper includes storage areas; only authored Is2D=-1 blocks belong
+    # in the required mesh contract, including an invalid empty seed block.
+    from .GeomStorage import GeomStorage
+
+    blocks = list(GeomStorage._iter_storage_area_blocks(lines))
+    two_d = {
+        GeomStorage._extract_storage_area_name(block[2][0])
+        for block in blocks
+        if GeomStorage._inspect_storage_area_block(block[2])["is_2d"]
+    }
+    result["areas"] = {
+        name: value for name, value in result["areas"].items() if name in two_d
+    }
+    from .GeomParser import GeomParser
+
+    result["seed_points"] = {}
+    for _, _, block in blocks:
+        name = GeomStorage._extract_storage_area_name(block[0])
+        if name not in two_d:
+            continue
+        info = GeomStorage._inspect_storage_area_block(block)
+        count = result["areas"][name]["seed_count"]
+        if info["points_idx"] is None or count is None:
+            raise ValueError(
+                f"GEOMETRY_INPUT_INVALID: no computation points for {name}"
+            )
+        values = []
+        for raw in block[info["points_idx"] + 1 : info["points_end"]]:
+            values.extend(GeomParser.parse_fixed_width(raw, 16))
+        if len(values) != int(count) * 2:
+            raise ValueError(
+                f"GEOMETRY_INPUT_INVALID: malformed computation points for {name}"
+            )
+        result["seed_points"][name] = np.asarray(values).reshape(int(count), 2)
+    if not hdf_path.exists():
+        return result
+    current = not _mesh_hdf_consistency_issues(geometry_path, hdf_path)
+    with h5py.File(hdf_path, "r") as hdf:
+        for path in ("/", "Geometry", *(f"{AREA}/{name}" for name in result["areas"])):
+            if path not in hdf:
+                continue
+            for name in (*ASSOCIATIONS, "Projection", "Units System"):
+                if name in hdf[path].attrs:
+                    result["attributes"][f"{path}@{name}"] = _digest(
+                        hdf[path].attrs[name]
+                    )
+        for path in ("Projection", CALIBRATION):
+            if path in hdf:
+                result["inputs"][path] = _digest(hdf[path][()])
+        # Refinement regions are HDF-only authored input, including when the
+        # cached parent topology has not yet been refreshed from child text.
+        if REFINEMENT in hdf:
+            result["features"][REFINEMENT] = len(hdf[REFINEMENT].get("Attributes", []))
+            for name, obj in hdf[REFINEMENT].items():
+                if isinstance(obj, h5py.Dataset):
+                    result["inputs"][f"{REFINEMENT}/{name}"] = _digest(obj[()])
+        # Text-backed inputs are compared with their selected text, never with
+        # an incoming mirror. Even a same-count HDF can contain unrounded seed
+        # coordinates or outdated breakline controls. Native import canonicalizes
+        # that mirror; the complete authored text must remain byte-identical.
+        result["incoming_mesh_current"] = current
+    return result
+
+
+def invalidate_products(hdf_path: Path) -> list[str]:
+    """Remove recognized derived tables so file freshness cannot hide old products."""
+    removed = []
+    if not hdf_path.exists():
+        return removed
+    with h5py.File(hdf_path, "r+") as hdf:
+        file_type = str(_semantic(hdf.attrs.get("File Type", b"")))
+        version = str(_semantic(hdf.attrs.get("File Version", b"")))
+        geometry_only_copy = "HEC-RAS Results" in file_type and not any(
+            key in hdf for key in ("Results", "Event Conditions", "Plan Data")
+        )
+        if (
+            ("HEC-RAS Geometry" not in file_type and not geometry_only_copy)
+            or not re.search(r"\.g\d{1,2}\.hdf$", hdf_path.name, re.IGNORECASE)
+            or not any(f"HEC-RAS {major}." in version for major in (5, 6))
+        ):
+            raise ValueError(
+                "GEOMETRY_CACHE_SCHEMA_UNSUPPORTED: product invalidation requires a HEC-RAS 5/6 geometry HDF or geometry-only results copy"
+            )
+        paths = [
+            "Geometry/GeomPreprocess",
+            "Geometry/Cross Sections/Property Tables",
+            "Geometry/Cross Sections/Flow Distribution",
+            "Geometry/Structures/Property Tables",
+        ]
+        for path in ("Geometry/Boundary Condition Lines", "Geometry/Reference Lines"):
+            paths.extend(
+                f"{path}/{name}"
+                for name in (
+                    "External Faces",
+                    "Internal Cells",
+                    "Internal Faces",
+                    "Terrain Profiles Info",
+                    "Terrain Profiles Values",
+                )
+            )
+        paths.extend(
+            f"Geometry/Land Cover (Manning's n)/{name}"
+            for name in ("External Faces", "Internal Cells", "Internal Faces")
+        )
+        if AREA in hdf:
+            for name, area in hdf[AREA].items():
+                if not isinstance(area, h5py.Group):
+                    continue
+                paths.extend(
+                    f"{AREA}/{name}/{product}"
+                    for product in (
+                        *CELL_PRODUCTS,
+                        *FACE_PRODUCTS,
+                        "Infiltration",
+                        "Percent Impervious",
+                    )
+                )
+                if "Property Tables Last Computed" in area.attrs:
+                    del area.attrs["Property Tables Last Computed"]
+        for path in paths:
+            if path in hdf:
+                del hdf[path]
+                removed.append(path)
+    return removed
+
+
+def validate(
+    geometry_path: Path, hdf_path: Path, expected: dict, started: float
+) -> tuple[list[str], list[str], dict]:
+    """Verify unchanged authored inputs and complete products for the current mesh."""
+    from .GeomMesh import _mesh_hdf_consistency_issues
+
+    changed = []
+    missing = []
+    evidence = {
+        "schema": "ras-geometry-completion/v1",
+        "areas": {},
+        "text_sha256": expected["text_sha256"],
+    }
+    if (
+        hashlib.sha256(geometry_path.read_bytes()).hexdigest()
+        != expected["text_sha256"]
+    ):
+        changed.append("geometry text")
+    if not hdf_path.exists():
+        return changed, ["geometry HDF"], evidence
+    if hdf_path.stat().st_mtime < started - 2:
+        missing.append("geometry HDF not freshly written")
+    with h5py.File(hdf_path, "r") as hdf:
+        for path, digest in expected["inputs"].items():
+            if path not in hdf or _digest(hdf[path][()]) != digest:
+                changed.append(path)
+        for key, digest in expected["attributes"].items():
+            path, name = key.rsplit("@", 1)
+            if (
+                path not in hdf
+                or name not in hdf[path].attrs
+                or _digest(hdf[path].attrs[name]) != digest
+            ):
+                changed.append(key)
+        for path, features in expected["feature_geometry"].items():
+            changed.extend(_feature_issues(hdf, path, features))
+        if "Geometry/GeomPreprocess" not in hdf or not len(
+            hdf["Geometry/GeomPreprocess"]
+        ):
+            missing.append("Geometry/GeomPreprocess")
+
+        def require(path, rows=None, columns=None):
+            if path not in hdf or not isinstance(hdf[path], h5py.Dataset):
+                missing.append(path)
+                return None
+            obj = hdf[path]
+            if (rows is not None and (not obj.shape or obj.shape[0] != rows)) or (
+                columns is not None and (len(obj.shape) != 2 or obj.shape[1] != columns)
+            ):
+                missing.append(f"{path}: invalid shape {obj.shape}")
+                return None
+            return obj
+
+        def pair(path, family, rows, columns, active_rows=None):
+            info = require(f"{path}/{family} Info", rows, 2)
+            values = require(f"{path}/{family} Values", columns=columns)
+            if info is None or values is None:
+                return
+            spans = info[()]
+            active = spans if active_rows is None else spans[:active_rows]
+            if (
+                np.any(spans < 0)
+                or np.any(spans[:, 0] + spans[:, 1] > len(values))
+                or np.any(active[:, 1] == 0)
+            ):
+                missing.append(f"{path}/{family}: invalid packed ranges")
+
+        def attachments(path, table, count, identity, index_field):
+            obj = require(f"{path}/{table}")
+            if obj is None:
+                return
+            fields = obj.dtype.names or ()
+            if identity not in fields or index_field not in fields:
+                missing.append(f"{path}/{table}: invalid attachment schema")
+                return
+            data = obj[()]
+            identifiers = data[identity]
+            if (
+                np.any(identifiers < 0)
+                or np.any(identifiers >= count)
+                or not set(range(count)).issubset(set(identifiers))
+            ):
+                missing.append(
+                    f"{path}/{table}: invalid or missing feature attachments"
+                )
+            attrs = hdf.get(f"{path}/Attributes")
+            area_field = next(
+                (
+                    field
+                    for field in ("SA-2D", "2D Area Name")
+                    if attrs is not None and field in (attrs.dtype.names or ())
+                ),
+                None,
+            )
+            if area_field is None:
+                missing.append(f"{path}/{table}: missing area associations")
+                return
+            for fid in {int(v) for v in identifiers if 0 <= v < count}:
+                area_name = (
+                    bytes(attrs[area_field][fid]).rstrip(b"\x00").decode().strip()
+                )
+                area = evidence["areas"].get(area_name)
+                limit = (
+                    None
+                    if area is None
+                    else area[
+                        "faces" if index_field == "Face Index" else "interior_cells"
+                    ]
+                )
+                indices = data[index_field][identifiers == fid]
+                if limit is None or np.any(indices < 0) or np.any(indices >= limit):
+                    missing.append(f"{path}/{table}: indexes outside current mesh")
+
+        for name, source in expected["areas"].items():
+            if not source.get("seed_count"):
+                missing.append(
+                    f"{AREA}/{name}: authored 2D area has no computation points"
+                )
+                continue
+            path = f"{AREA}/{name}"
+            collection = hdf.get(AREA)
+            if collection is None or any(
+                key not in collection
+                for key in ("Attributes", "Cell Info", "Cell Points")
+            ):
+                changed.append(f"{AREA}: missing authored computation points")
+            else:
+                attrs = collection["Attributes"]
+                names = [
+                    bytes(value).rstrip(b"\x00").decode().strip()
+                    for value in attrs["Name"]
+                ]
+                if names.count(name) != 1:
+                    changed.append(f"{path}: authored area identity changed")
+                else:
+                    index = names.index(name)
+                    start, count = (int(v) for v in collection["Cell Info"][index, :2])
+                    actual = collection["Cell Points"][start : start + count]
+                    authored = expected["seed_points"][name]
+                    if actual.shape != authored.shape or not np.allclose(
+                        actual, authored, rtol=0, atol=1e-6
+                    ):
+                        changed.append(f"{path}: authored computation points changed")
+            centers = require(f"{path}/Cells Center Coordinate", columns=2)
+            faces = require(f"{path}/Faces FacePoint Indexes", columns=2)
+            points = require(f"{path}/FacePoints Coordinate", columns=2)
+            if centers is None or faces is None or points is None:
+                continue
+            cells, face_count = len(centers), len(faces)
+            if cells == 0 or face_count == 0:
+                missing.append(f"{path}: empty topology")
+                continue
+            if np.any(faces[()] < 0) or np.any(faces[()] >= len(points)):
+                missing.append(f"{path}: invalid face point indexes")
+            cell_indexes = require(f"{path}/Faces Cell Indexes", face_count, 2)
+            if cell_indexes is not None and (
+                np.any(cell_indexes[()] < 0) or np.any(cell_indexes[()] >= cells)
+            ):
+                missing.append(f"{path}: invalid face cell indexes")
+            for product in CELL_PRODUCTS[:3]:
+                require(f"{path}/{product}", cells)
+            for product in FACE_PRODUCTS[2:]:
+                require(f"{path}/{product}", face_count)
+            pair(path, "Cells Volume Elevation", cells, 2, int(source["seed_count"]))
+            pair(path, "Faces Area Elevation", face_count, 4)
+            area = hdf[path]
+            # Infiltration has one value per interior cell, excluding ghost cells.
+            interior = int(source["seed_count"])
+            for family, association in (
+                ("Infiltration", "Infiltration Filename"),
+                ("Percent Impervious", "Percent Impervious Filename"),
+            ):
+                associated = bool(
+                    _semantic(
+                        area.attrs.get(
+                            association, hdf["Geometry"].attrs.get(association, b"")
+                        )
+                    )
+                )
+                if not associated:
+                    continue
+                group = area.get(family)
+                if group is None or not len(group):
+                    missing.append(f"{path}/{family}")
+                    continue
+                require(f"{path}/{family}/Cell Center Classifications", interior)
+                require(f"{path}/{family}/Face Center Classifications", face_count)
+                for product, obj in group.items():
+                    if isinstance(obj, h5py.Dataset) and product not in (
+                        "Properties",
+                        "Face Center Classifications",
+                    ):
+                        require(f"{path}/{family}/{product}", interior)
+            evidence["areas"][name] = {
+                "interior_cells": interior,
+                "total_cells": cells,
+                "faces": face_count,
+            }
+
+        for path, count in expected["features"].items():
+            if not count:
+                continue
+            require(f"{path}/Attributes", count)
+            if path.endswith("Boundary Condition Lines"):
+                # Types choose the required family; an empty external table is not completion.
+                attrs = hdf.get(f"{path}/Attributes")
+                if attrs is not None and "Type" in (attrs.dtype.names or ()):
+                    types = [bytes(v).rstrip(b"\x00").decode() for v in attrs["Type"]]
+                    for kind, table in (
+                        ("External", "External Faces"),
+                        ("Internal", "Internal Cells"),
+                        ("Internal", "Internal Faces"),
+                    ):
+                        ids = [i for i, value in enumerate(types) if value == kind]
+                        if ids:
+                            obj = require(f"{path}/{table}")
+                            if obj is not None and (
+                                "BC Line ID" not in (obj.dtype.names or ())
+                                or not set(ids).issubset(set(obj["BC Line ID"]))
+                            ):
+                                missing.append(
+                                    f"{path}/{table}: missing line attachments"
+                                )
+                            if obj is not None:
+                                # Only the corresponding type must have rows;
+                                # other IDs remain valid and bounded by mesh.
+                                all_ids = (
+                                    {int(v) for v in obj["BC Line ID"]}
+                                    if "BC Line ID" in (obj.dtype.names or ())
+                                    else set()
+                                )
+                                if not all_ids.issubset(set(range(count))):
+                                    missing.append(
+                                        f"{path}/{table}: invalid line indexes"
+                                    )
+                                field = (
+                                    "Face Index" if "Faces" in table else "Cell Index"
+                                )
+                                if field not in (obj.dtype.names or ()):
+                                    missing.append(f"{path}/{table}: missing {field}")
+                                else:
+                                    for fid in all_ids & set(range(count)):
+                                        area_name = (
+                                            bytes(attrs["SA-2D"][fid])
+                                            .rstrip(b"\x00")
+                                            .decode()
+                                            .strip()
+                                        )
+                                        area = evidence["areas"].get(area_name)
+                                        limit = (
+                                            None
+                                            if area is None
+                                            else area[
+                                                "faces"
+                                                if field == "Face Index"
+                                                else "interior_cells"
+                                            ]
+                                        )
+                                        data = obj[()]
+                                        indices = data[field][data["BC Line ID"] == fid]
+                                        if (
+                                            limit is None
+                                            or np.any(indices < 0)
+                                            or np.any(indices >= limit)
+                                        ):
+                                            missing.append(
+                                                f"{path}/{table}: indexes outside current mesh"
+                                            )
+                    if any(t not in ("Internal", "External") for t in types):
+                        missing.append(f"{path}/Attributes: invalid BC Type")
+                else:
+                    missing.append(f"{path}/Attributes: missing BC Type")
+            elif path.endswith("Reference Lines"):
+                attachments(
+                    path, "Internal Cells", count, "Reference Line ID", "Cell Index"
+                )
+                attachments(
+                    path, "Internal Faces", count, "Reference Line ID", "Face Index"
+                )
+                pair(path, "Terrain Profiles", count, 2)
+            elif path.endswith("Structures"):
+                if f"{path}/Property Tables" not in hdf or not len(
+                    hdf[f"{path}/Property Tables"]
+                ):
+                    missing.append(f"{path}/Property Tables")
+        if expected["manning_region_count"]:
+            path = "Geometry/Land Cover (Manning's n)"
+            count = expected["manning_region_count"]
+            require(f"{path}/Attributes", count)
+            for table, field in (
+                ("External Faces", "Face Index"),
+                ("Internal Faces", "Face Index"),
+                ("Internal Cells", "Cell Index"),
+            ):
+                attachments(path, table, count, "Region ID", field)
+    if expected["areas"]:
+        changed.extend(_mesh_hdf_consistency_issues(geometry_path, hdf_path))
+    evidence.update(inputs_preserved=not changed, products_complete=not missing)
+    return sorted(set(changed)), sorted(set(missing)), evidence
