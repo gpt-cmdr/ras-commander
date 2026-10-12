@@ -233,6 +233,14 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         line.startswith(("SA/2D Area Conn=", "Bridge Culvert-", "IW Pilot Flow=", "Lat Struct="))
         for line in lines
     )
+    # A malformed structure block can lack its normal feature marker. Only
+    # ordinary cross-section type 1 is understood in the structure-free scope.
+    from .GeomParser import GeomParser
+
+    unsupported_sections = any(
+        GeomParser.extract_keyword_value(line, "Type RM Length L Ch R").split(",", 1)[0].strip() != "1"
+        for line in lines if line.startswith("Type RM Length L Ch R =")
+    )
     # Metadata helper includes storage areas; only authored Is2D=-1 blocks belong
     # in the required mesh contract, including an invalid empty seed block.
     from .GeomStorage import GeomStorage
@@ -246,7 +254,7 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     result["areas"] = {
         name: value for name, value in result["areas"].items() if name in two_d
     }
-    if result["areas"] and result["features"]["Geometry/Structures"]:
+    if result["areas"] and (result["features"]["Geometry/Structures"] or unsupported_sections):
         raise NotImplementedError(
             "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: authored 2D structures require a qualified native structure-product contract"
         )
