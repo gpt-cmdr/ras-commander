@@ -28,7 +28,7 @@ import sys
 import time
 from numbers import Number
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from ._legal_dialogs import (
     TCU_BLOCKING_ERROR,
@@ -121,6 +121,10 @@ class RasPreprocess:
         require_linux_solver_ready: bool = True,
         *,
         accept_tcu: bool = False,
+        precipitation_repair_attempts: int = 6,
+        precipitation_repair_timeout: Optional[int] = None,
+        precipitation_repair_attempts: int = 6,
+        precipitation_repair_timeout: Optional[int] = None,
     ) -> PreprocessResult:
         """
         Preprocess a plan on Windows for Linux execution.
@@ -141,8 +145,22 @@ class RasPreprocess:
         report ``Completed Successfully=True``. Enabled point or gridded rain
         requires a non-empty two-dimensional precipitation ``Values`` dataset.
         Missing completion evidence is rejected, including when copying a fresh
-        final HDF. Failure retains artifact paths and readiness-signal details;
-        it does not automatically retry or repair native precipitation processing.
+        final HDF. Failure retains artifact paths and readiness-signal details.
+
+        HEC-RAS's own event-condition writer, ``RasProcess.exe
+        CompletePreProcess``, can intermittently write no point precipitation
+        for identical inputs. It reports "No valid precipitation time-series
+        data found for this time-window" and "Error processing Precipitation
+        data, exiting...", and Ras.exe then exits 0 before the unsteady
+        computation. This was observed in 8 of 47 processes (17%) with HEC-RAS
+        6.6 under Wine, and also with 6.4.1; it is not caused by the
+        early-stop logic. When a point-precipitation plan fails Event
+        Conditions validation and the temporary HDF, ``.b##`` and ``.x##`` are
+        all present, this method re-runs only ``RasProcess.exe
+        CompletePreProcess <project>.rasmap <plan>.tmp.hdf`` on the same
+        temporary HDF, from the project folder, and re-validates after each
+        attempt. A repaired file matched a first-try success exactly. Gridded
+        precipitation is not repaired this way.
 
         With HEC-RAS before 6.3, fails without launching HEC-RAS when the plan's
         geometry HDF references a land-cover, infiltration, or sediment file that
@@ -158,10 +176,20 @@ class RasPreprocess:
             accept_tcu: Explicitly authorize accepting an exact owned TCU wizard
                 during this launch. False by default; acceptance failures block
                 preprocessing and receipts are retained in the result.
+            precipitation_repair_attempts: Maximum ``CompletePreProcess``
+                re-runs used to complete point precipitation (default 6; 0
+                disables the repair). Repairs stop early on a timeout, a
+                legal-dialog block, a launch failure, or surviving processes.
+            precipitation_repair_timeout: Seconds allowed for each repair
+                attempt. Defaults to ``max_wait``, which already bounds the
+                full preprocessing run that includes this step.
 
         Returns:
             PreprocessResult: Result with success flag, file paths, and timing.
                 Bool-compatible: ``if preprocess_plan("01"):`` works.
+                ``precipitation_repair_attempts`` records each repair attempt,
+                and ``signal_source`` is ``"completepreprocess_repair"`` when
+                a repair completed the temporary HDF.
 
         Note:
             Errors are captured in PreprocessResult.error.
@@ -707,21 +735,73 @@ class RasPreprocess:
         try:
             import h5py
             from ._preprocess_validation import _event_condition_errors
-
             from ._preprocess_validation import _hdf_ras_major_version
 
             with h5py.File(tmp_hdf, "r") as hdf:
                 event_errors = _event_condition_errors(hdf, precipitation_mode)
                 ras_major = _hdf_ras_major_version(hdf)
+            hdf_readable = True
+            compatibility_errors = []
             if ras_major is not None and ras_major < 6:
                 c_file = project_folder / f"{project_name}.c{geometry_number}"
                 if not c_file.is_file() or c_file.stat().st_size == 0:
-                    event_errors.append(
+                    compatibility_errors.append(
                         f"HEC-RAS {ras_major}.x preprocessing did not write {c_file.name}"
                     )
         except Exception as exc:
             event_errors = [f"could not validate Event Conditions: {exc}"]
-        if event_errors:
+            hdf_readable = False
+            compatibility_errors = []
+
+        repair_attempts: List[Dict[str, Any]] = []
+        repair_note = None
+        if (
+            event_errors
+            and precipitation_mode == "point"
+            and int(precipitation_repair_attempts or 0) > 0
+            and hdf_readable
+            and not full_result_copied
+            and RasPreprocess._preprocessing_artifacts_ready(tmp_hdf, b_file, x_file)
+        ):
+            repaired, repair_attempts, repair_errors, repair_note = (
+                RasPreprocess._repair_point_precipitation(
+                    ras_exe=Path(ras_exe),
+                    project_folder=project_folder,
+                    project_name=project_name,
+                    prj_file=prj_file,
+                    plan_file=plan_file,
+                    tmp_hdf=tmp_hdf,
+                    precipitation_mode=precipitation_mode,
+                    max_attempts=int(precipitation_repair_attempts),
+                    timeout_seconds=(
+                        max_wait
+                        if precipitation_repair_timeout is None
+                        else precipitation_repair_timeout
+                    ),
+                )
+            )
+            if repaired:
+                logger.info(
+                    "Point precipitation for plan %s completed by "
+                    "CompletePreProcess repair attempt %d (initial signal: %s)",
+                    plan_num,
+                    len(repair_attempts),
+                    signal_source,
+                )
+                event_errors = []
+                signal_source = "completepreprocess_repair"
+            elif repair_attempts:
+                event_errors = repair_errors or event_errors
+
+        validation_errors = [*event_errors, *compatibility_errors]
+        if validation_errors:
+            error = "Preprocessing is incomplete: " + "; ".join(validation_errors)
+            if repair_attempts:
+                error += ". " + RasPreprocess._describe_failed_repair(
+                    repair_attempts, repair_note
+                )
+            elif repair_note:
+                error += f". Point-precipitation repair not attempted: {repair_note}"
             return make_result(
                 success=False,
                 plan_number=plan_num,
@@ -731,8 +811,9 @@ class RasPreprocess:
                 x_file_path=x_file,
                 signal_source=signal_source,
                 full_result_copied=full_result_copied,
-                error="Preprocessing is incomplete: " + "; ".join(event_errors),
+                error=error,
                 elapsed_seconds=time.time() - start_time,
+                precipitation_repair_attempts=repair_attempts,
             )
 
         # Fix line endings on .x file for Linux compatibility
@@ -766,7 +847,202 @@ class RasPreprocess:
             elapsed_seconds=elapsed,
             signal_source=signal_source,
             full_result_copied=full_result_copied,
+            precipitation_repair_attempts=repair_attempts,
         )
+
+    @staticmethod
+    def _read_event_condition_errors(
+        tmp_hdf: Path,
+        precipitation_mode: Optional[str],
+    ) -> Tuple[List[str], bool]:
+        """Validate Event Conditions in a writer-free temporary HDF.
+
+        Returns the problems and whether the HDF could be opened at all.
+        """
+        try:
+            import h5py
+            from ._preprocess_validation import _event_condition_errors
+
+            with h5py.File(tmp_hdf, "r") as hdf:
+                return list(_event_condition_errors(hdf, precipitation_mode)), True
+        except Exception as exc:
+            return [f"could not validate Event Conditions: {exc}"], False
+
+    @staticmethod
+    def _repair_point_precipitation(
+        *,
+        ras_exe: Path,
+        project_folder: Path,
+        project_name: str,
+        prj_file: Path,
+        plan_file: Path,
+        tmp_hdf: Path,
+        precipitation_mode: str,
+        max_attempts: int,
+        timeout_seconds: float,
+    ) -> Tuple[bool, List[Dict[str, Any]], List[str], Optional[str]]:
+        """Re-run ``RasProcess.exe CompletePreProcess`` until Event Conditions validate.
+
+        HEC-RAS's ``PointPrecipitationLayer`` can write no point precipitation
+        for identical inputs ("No valid precipitation time-series data found
+        for this time-window"). A fresh ``CompletePreProcess`` process on the
+        same temporary HDF writes it on a later attempt. The gauge DSS paths
+        in the HDF are relative (``.\\Hydrology\\<file>.dss``) and resolve
+        against the process working directory, so each attempt runs from the
+        project folder.
+
+        Returns ``(repaired, attempts, last_validation_errors, note)``. ``note``
+        explains why no attempt ran, or why attempts stopped before
+        ``max_attempts``.
+        """
+        rasprocess = Path(ras_exe).parent / "RasProcess.exe"
+        rasmap = Path(project_folder) / f"{project_name}.rasmap"
+        if not rasprocess.is_file():
+            return False, [], [], f"{rasprocess.name} not found beside {Path(ras_exe).name}"
+        if not rasmap.is_file():
+            return False, [], [], f"project file {rasmap.name} not found"
+
+        attempts: List[Dict[str, Any]] = []
+        errors: List[str] = []
+        for attempt in range(1, int(max_attempts) + 1):
+            logger.warning(
+                "Event Conditions incomplete in %s; re-running RasProcess.exe "
+                "CompletePreProcess (attempt %d of %d)",
+                tmp_hdf.name,
+                attempt,
+                max_attempts,
+            )
+            attempt_started = time.time()
+            run = RasPreprocess._run_completepreprocess(
+                rasprocess,
+                rasmap,
+                tmp_hdf,
+                working_dir=Path(project_folder),
+                timeout_seconds=timeout_seconds,
+            )
+            stop_reason = run["error"]
+            _stopped, surviving = RasPreprocess._terminate_exact_preprocess_residue(
+                project_file=prj_file,
+                plan_file=plan_file,
+                tmp_hdf=tmp_hdf,
+                started_at=attempt_started,
+            )
+            if surviving:
+                stop_reason = (
+                    "CompletePreProcess processes remained active after cleanup: "
+                    + ", ".join(str(pid) for pid in surviving)
+                )
+                errors = [stop_reason]
+            else:
+                errors, _readable = RasPreprocess._read_event_condition_errors(
+                    tmp_hdf, precipitation_mode
+                )
+            output = run["output"]
+            record = {
+                "attempt": attempt,
+                "return_code": run["return_code"],
+                "elapsed_seconds": round(time.time() - attempt_started, 1),
+                "no_valid_precipitation": (
+                    "no valid precipitation" in output.casefold()
+                ),
+                "validation_errors": list(errors),
+                "timed_out": run["timed_out"],
+                "error": stop_reason,
+            }
+            attempts.append(record)
+            if stop_reason is None and not errors and run["return_code"] == 0:
+                return True, attempts, [], None
+            if stop_reason is not None:
+                return False, attempts, errors, stop_reason
+        return False, attempts, errors, None
+
+    @staticmethod
+    def _run_completepreprocess(
+        rasprocess: Path,
+        rasmap: Path,
+        tmp_hdf: Path,
+        *,
+        working_dir: Path,
+        timeout_seconds: float,
+    ) -> Dict[str, Any]:
+        """Run one owned ``RasProcess.exe CompletePreProcess`` to completion.
+
+        Uses an argument vector, file-backed output (no pipe can fill while
+        polling) and the same scoped legal-dialog check and process-tree
+        termination as the Ras.exe launch. ``preprocess_plan`` already requires
+        Windows-hosted Python, including Windows Python under Wine, so
+        ``RasProcess.exe`` is launched directly.
+        """
+        import tempfile
+
+        command = [str(rasprocess), "CompletePreProcess", str(rasmap), str(tmp_hdf)]
+        result: Dict[str, Any] = {
+            "return_code": None,
+            "output": "",
+            "timed_out": False,
+            "error": None,
+        }
+        with tempfile.TemporaryFile(
+            mode="w+", encoding="utf-8", errors="replace"
+        ) as output_file:
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=str(working_dir),
+                    stdout=output_file,
+                    stderr=subprocess.STDOUT,
+                    shell=False,
+                )
+            except OSError as exc:
+                result["error"] = f"could not launch {Path(rasprocess).name}: {exc}"
+                return result
+
+            deadline = time.monotonic() + max(float(timeout_seconds), 1.0)
+            while process.poll() is None:
+                blocked = RasPreprocess._detect_first_run_tcu_dialog(process.pid)
+                if blocked and process.poll() is None:
+                    RasPreprocess._terminate_process_tree(process)
+                    result["error"] = blocked
+                    break
+                if time.monotonic() >= deadline:
+                    RasPreprocess._terminate_process_tree(process)
+                    result["timed_out"] = True
+                    result["error"] = (
+                        "CompletePreProcess timed out after "
+                        f"{int(timeout_seconds)} seconds"
+                    )
+                    break
+                time.sleep(0.5)
+
+            result["return_code"] = process.poll()
+            try:
+                output_file.seek(0)
+                result["output"] = output_file.read()
+            except (OSError, ValueError):
+                pass
+        return result
+
+    @staticmethod
+    def _describe_failed_repair(
+        attempts: List[Dict[str, Any]],
+        stop_note: Optional[str],
+    ) -> str:
+        """Summarize unsuccessful CompletePreProcess repair attempts for an error."""
+        details = []
+        for record in attempts:
+            detail = f"attempt {record['attempt']}: exit {record['return_code']}"
+            if record.get("no_valid_precipitation"):
+                detail += ", 'No valid precipitation' reported"
+            if record.get("error"):
+                detail += f", {record['error']}"
+            details.append(detail)
+        summary = (
+            f"Re-running RasProcess.exe CompletePreProcess {len(attempts)} "
+            f"time(s) did not complete point precipitation ({'; '.join(details)})"
+        )
+        if stop_note:
+            summary += f". Repair stopped early: {stop_note}"
+        return summary
 
     @staticmethod
     @log_call
