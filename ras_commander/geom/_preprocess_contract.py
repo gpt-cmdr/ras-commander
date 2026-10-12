@@ -243,7 +243,9 @@ def _feature_issues(
     return issues
 
 
-def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
+def snapshot(
+    geometry_path: Path, hdf_path: Path, *, require_complete_products: bool = True
+) -> dict:
     """Bind authored text, HDF-only associations, calibration and current inputs."""
     from .GeomMesh import _mesh_hdf_consistency_issues, _read_mesh_metadata_from_text
 
@@ -272,6 +274,7 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
         "manning_regions": [],
         "infiltration_methods": {},
         "projections": {},
+        "contract_qualified": True,
     }
     result["features"]["Geometry/Structures"] += sum(
         line.startswith(
@@ -307,12 +310,20 @@ def snapshot(geometry_path: Path, hdf_path: Path) -> dict:
     if result["areas"] and (
         result["features"]["Geometry/Structures"] or unsupported_sections
     ):
-        raise NotImplementedError(
-            "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: authored 2D structures require a qualified native structure-product contract"
-        )
+        if require_complete_products:
+            raise NotImplementedError(
+                "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED: authored 2D structures require a qualified native structure-product contract"
+            )
+        result["contract_qualified"] = False
+        return result
     from .GeomParser import GeomParser
 
     result["seed_points"] = {}
+    from .GeomMesh import _text_flow_area_perimeter
+
+    result["perimeters"] = {
+        name: _text_flow_area_perimeter(geometry_path, name) for name in two_d
+    }
     for _, _, block in blocks:
         name = GeomStorage._extract_storage_area_name(block[0])
         if name not in two_d:
@@ -689,6 +700,66 @@ def _topology_issues(area: h5py.Group) -> list[str]:
     return issues
 
 
+def _mesh_binding_issues(
+    area: h5py.Group, seeds: np.ndarray, ring: np.ndarray
+) -> list[str]:
+    """Bind native float64 coordinates to current text in its CRS and units.
+
+    Interior rows match computation points exactly. Remaining rows are native
+    two-vertex ghost cells; their centers are not authored seeds. Face points
+    must be covered by the current perimeter, allowing eight float64 ULPs for
+    native segment arithmetic. No optional spatial dependency is needed.
+    """
+    issues = []
+    centers = area["Cells Center Coordinate"][()]
+    points = area["FacePoints Coordinate"][()]
+    if any(v.dtype.kind != "f" or v.dtype.itemsize != 8 for v in (centers, points)):
+        return ["mesh coordinates: unsupported native coordinate precision"]
+    if not np.array_equal(centers[: len(seeds)], seeds):
+        issues.append(
+            "Cells Center Coordinate: interior centers differ from authored computation points"
+        )
+    cell_points = area.get("Cells FacePoint Indexes")
+    if (
+        cell_points is not None
+        and cell_points.ndim == 2
+        and len(cell_points) == len(centers)
+        and np.any((cell_points[len(seeds) :] >= 0).sum(axis=1) != 2)
+    ):
+        issues.append("Cells FacePoint Indexes: ghost cells must have two vertices")
+    if (
+        ring is None
+        or ring.ndim != 2
+        or ring.shape[1] != 2
+        or len(ring) < 3
+        or not np.all(np.isfinite(ring))
+    ):
+        return issues + ["FacePoints Coordinate: invalid authored perimeter"]
+    tolerance = 8 * np.spacing(max(1.0, float(np.max(np.abs(ring)))))
+    # Ray crossing plus point/segment distance handles concave rings, either
+    # orientation, horizontal edges, explicit closure and boundary roundoff.
+    inside = np.zeros(len(points), dtype=bool)
+    boundary = np.zeros(len(points), dtype=bool)
+    for a, b in zip(ring, np.roll(ring, -1, axis=0)):
+        delta = b - a
+        length2 = float(delta @ delta)
+        if not length2:
+            continue
+        offset = points - a
+        fraction = np.clip(offset @ delta / length2, 0, 1)
+        boundary |= (
+            np.linalg.norm(offset - fraction[:, None] * delta, axis=1) <= tolerance
+        )
+        if delta[1]:
+            crossing = (a[1] > points[:, 1]) != (b[1] > points[:, 1])
+            inside ^= crossing & (
+                points[:, 0] < a[0] + (points[:, 1] - a[1]) * delta[0] / delta[1]
+            )
+    if not np.all(inside | boundary):
+        issues.append("FacePoints Coordinate: points outside authored perimeter")
+    return issues
+
+
 def validate(
     geometry_path: Path, hdf_path: Path, expected: dict, started: float
 ) -> tuple[list[str], list[str], dict]:
@@ -707,6 +778,15 @@ def validate(
         != expected["text_sha256"]
     ):
         changed.append("geometry text")
+    if not expected.get("contract_qualified", True):
+        evidence.update(
+            status="not_qualified_for_structures",
+            reason_code="GEOMETRY_COMPLETION_NOT_QUALIFIED_FOR_STRUCTURES",
+            message="completion contract not qualified for structures",
+            inputs_preserved=None,
+            products_complete=False,
+        )
+        return changed, [], evidence
     if not hdf_path.exists():
         return changed, ["geometry HDF"], evidence
     if hdf_path.stat().st_mtime < started - 2:
@@ -899,6 +979,14 @@ def validate(
             ):
                 require(f"{path}/{topology}", rows, columns)
             missing.extend(f"{path}/{issue}" for issue in _topology_issues(hdf[path]))
+            missing.extend(
+                f"{path}/{issue}"
+                for issue in _mesh_binding_issues(
+                    hdf[path],
+                    expected["seed_points"][name],
+                    expected["perimeters"][name],
+                )
+            )
             for product in FACE_PRODUCTS[2:]:
                 require(f"{path}/{product}", face_count)
             pair(path, "Cells Volume Elevation", cells, 2, int(source["seed_count"]))

@@ -864,6 +864,12 @@ reciprocal cell/point membership, and trailing `-1` cell-point padding.
 Face coordinates must be finite, nondegenerate and consistent with native
 normals and lengths at float32 storage precision. Fresh child regeneration
 can replace stale parent topology; no parent indexes are restored.
+The leading interior center rows must exactly equal the current text's computation
+points in the qualified float64 native schema. Remaining rows are two-vertex
+ghost cells and are not compared to authored seeds. All face points must lie
+on or inside the current authored perimeter; the boundary tolerance is eight
+float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.
+Coherent translations of either coordinate array fail completion.
 Reference-line terrain profiles are checked when authored. Manning polygon
 names and coordinates are checked against the geometry text; attachment families
 are required for regions intersecting a current 2D perimeter. A valid disjoint
@@ -873,9 +879,20 @@ region IDs and current mesh indexes. A calibration table name alone does not
 establish a polygon interaction. Invalid or multipart polygon interaction schemas
 fail before mutation. The dimensioned product contract covers structure-free HEC-RAS
 5/6 geometry with authored 2D areas; it does not qualify pure 1D completion.
-Authored structures in 2D or mixed 1D/2D geometries fail before cache invalidation with
-`GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`: the structure-property schema has not
-been qualified for this completion contract. A nonempty native group does not
+`require_complete_products=False` is the public default. Structure-bearing 2D
+or mixed geometry runs with normal engine/writer lifecycle, native-error and
+plan-restoration checks, without the unqualified product invalidation/checks.
+Its `completion_contract.status` is `not_qualified_for_structures`, with reason
+`GEOMETRY_COMPLETION_NOT_QUALIFIED_FOR_STRUCTURES`, message "completion contract
+not qualified for structures", `inputs_preserved=None`, and `products_complete=False`.
+Process success therefore does not claim qualified structure products.
+Set `require_complete_products=True` for fail-closed workflows: these geometries
+fail before cache invalidation with `GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED`.
+In this compatibility path, captured stdout remains diagnostic; blocking errors
+are parsed from native compute-message files, as on the prior default path.
+Structure-free geometries always receive the complete contract checks, including
+blocking-error parsing of captured stdout.
+The structure-property schema has not been qualified. A nonempty native group does not
 prove complete structure products. Native infiltration region definitions and
 overrides are preserved as authored HDF-only inputs.
 A quiet file or flow-start message does not end the wait.

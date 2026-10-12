@@ -61,10 +61,12 @@ def products(path):
             "Node Info", data=[1]
         )
         area = hdf.require_group(f"{AREA}/Synthetic")
-        area.create_dataset("Cells Center Coordinate", data=np.zeros((3, 2)))
+        area.create_dataset(
+            "Cells Center Coordinate", data=[[0.2, 0.2], [0.6, 0.6], [2.0, 2.0]]
+        )
         area.create_dataset(
             "FacePoints Coordinate",
-            data=np.array([[0, 0], [1, 0], [1, 1], [2, 2]], dtype=float),
+            data=np.array([[0, 0], [1, 0], [1, 1], [0.5, 0.25]], dtype=float),
         )
         area.create_dataset("Faces FacePoint Indexes", data=[[0, 1], [1, 2]])
         area.create_dataset("Faces Cell Indexes", data=[[0, 1], [1, 2]])
@@ -169,6 +171,58 @@ def test_fresh_child_topology_replaces_stale_parent_without_preserving_indexes(
         del hdf["Geometry/GeomPreprocess"]
     products(path)
     assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+
+
+@pytest.mark.parametrize(
+    "dataset", ["FacePoints Coordinate", "Cells Center Coordinate"]
+)
+def test_coherent_translation_is_not_current_authored_mesh(tmp_path, dataset):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        obj = hdf[f"{AREA}/Synthetic/{dataset}"]
+        obj[...] = obj[()] + 1_000_000
+    changed, missing, evidence = validate(text, path, expected, time.time() - 1)
+    assert not changed and missing
+    assert not evidence["products_complete"]
+
+
+def test_centers_require_exact_native_precision_but_ghosts_are_not_seeds(tmp_path):
+    text, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        obj = hdf[f"{AREA}/Synthetic/Cells Center Coordinate"]
+        obj[2] = [-100, -100]  # Ghost centers can lie outside the perimeter.
+    assert validate(text, path, expected, time.time() - 1)[:2] == ([], [])
+    with h5py.File(path, "r+") as hdf:
+        obj = hdf[f"{AREA}/Synthetic/Cells Center Coordinate"]
+        obj[0, 0] = np.nextafter(obj[0, 0], np.inf)
+    assert any(
+        "interior centers" in v
+        for v in validate(text, path, expected, time.time() - 1)[1]
+    )
+
+
+def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, expected = fixture(tmp_path)
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        points = area["FacePoints Coordinate"]
+        ring = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+        points[0] = [0.0, -np.spacing(1.0)]
+        assert not _mesh_binding_issues(
+            area, expected["seed_points"]["Synthetic"], ring
+        )
+        points[0] = [0.0, -16 * np.spacing(1.0)]
+        assert _mesh_binding_issues(area, expected["seed_points"]["Synthetic"], ring)
+        points[...] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5, 0.75]]
+        concave = np.array(
+            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5, 0.25], [0.0, 1.0]]
+        )
+        for current in (concave, concave[::-1]):
+            assert _mesh_binding_issues(
+                area, expected["seed_points"]["Synthetic"], current
+            )
 
 
 def manning_region(text, path, outside=True):

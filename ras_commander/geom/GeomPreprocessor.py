@@ -103,6 +103,7 @@ class GeomPreprocessor:
         flow_start_signals: Optional[List[str]] = None,
         dialog_watchdog: bool = True,
         native_worker_threads: int | None = 1,
+        require_complete_products: bool = False,
     ) -> GeometryPreprocessResult:
         """
         Run HEC-RAS geometry preprocessing and review detailed compute messages.
@@ -147,6 +148,11 @@ class GeomPreprocessor:
                 Positive integers are allowed; None retains the inherited pool
                 settings. Hydraulic solver core settings are unchanged. The
                 override applies only when geometry_only=True.
+            require_complete_products: If True, refuse unqualified structure-bearing
+                2D geometry before cache invalidation. Defaults to False for
+                compatibility: structures run with the normal lifecycle checks,
+                but report completion contract not qualified for structures.
+                Structure-free geometry always receives the complete product checks.
 
         Returns:
             GeometryPreprocessResult: Bool-compatible validation result.
@@ -161,6 +167,8 @@ class GeomPreprocessor:
         command_text = ""
         completion_contract = {}
         owned_registry = {"children": {}, "parent_identity": None}
+        if not isinstance(require_complete_products, bool):
+            return GeometryPreprocessResult(success=False, error="GEOMETRY_PREPROCESS_INVALID_CONTRACT: require_complete_products must be boolean")
         if max_wait <= 0:
             return GeometryPreprocessResult(
                 success=False,
@@ -247,7 +255,11 @@ class GeomPreprocessor:
             from ._preprocess_contract import snapshot, invalidate_products, validate
 
             geometry_text_path = geometry_hdf_path.with_suffix("")
-            expected_contract = snapshot(geometry_text_path, geometry_hdf_path)
+            expected_contract = snapshot(
+                geometry_text_path, geometry_hdf_path,
+                require_complete_products=require_complete_products,
+            )
+            qualified_areas = expected_contract["areas"] if expected_contract["contract_qualified"] else {}
             completion_contract = {
                 "schema": "ras-geometry-completion/v1",
                 "text_sha256": expected_contract["text_sha256"],
@@ -261,7 +273,7 @@ class GeomPreprocessor:
             }
             invalidated_products = []
             geometry_backup_path = None
-            if (clear_geompre or expected_contract["areas"]) and geometry_hdf_path.exists():
+            if (clear_geompre or qualified_areas) and geometry_hdf_path.exists():
                 import shutil
                 import uuid
 
@@ -318,8 +330,8 @@ class GeomPreprocessor:
                     raise RuntimeError(
                         "GEOMETRY_PLAN_REFERENCE_CHANGED: selected plan geometry changed before launch"
                     )
-                if clear_geompre or expected_contract["areas"]:
-                    if expected_contract["areas"]:
+                if clear_geompre or qualified_areas:
+                    if qualified_areas:
                         invalidated_products = invalidate_products(geometry_hdf_path)
                         completion_contract["invalidated_products"] = invalidated_products
                     GeomPreprocessor.clear_geompre_files(plan_path, ras_object=ras_obj)
@@ -461,7 +473,10 @@ class GeomPreprocessor:
                 modified_after=start_time,
             )
 
-            native_messages = f"{messages}\n{stdout}"
+            native_messages = (
+                f"{messages}\n{stdout}"
+                if expected_contract["contract_qualified"] else messages
+            )
             parsed = ResultsParser.parse_compute_messages(native_messages)
             blocking_lines = GeomPreprocessor._find_blocking_message_lines(native_messages)
 

@@ -179,6 +179,7 @@ def project_run(
     clear_geompre=False,
     stdout="",
     verify_restoration=True,
+    require_complete_products=False,
 ):
     module = importlib.import_module("ras_commander.geom.GeomPreprocessor")
     import psutil
@@ -263,7 +264,11 @@ def project_run(
             lambda process, **kwargs: killed.append(process.pid),
         )
     result = GP.run_geometry_preprocessor(
-        "01", ras_object=obj, dialog_watchdog=use_watchdog, clear_geompre=clear_geompre
+        "01",
+        ras_object=obj,
+        dialog_watchdog=use_watchdog,
+        clear_geompre=clear_geompre,
+        require_complete_products=require_complete_products,
     )
     if verify_restoration:
         assert plan.read_bytes() == original
@@ -282,12 +287,96 @@ def test_unqualified_structures_preserve_geometry_cache_before_launch(
         + f"{0.2:16.6f}{0.2:16.6f}\nConnection=Bridge,0,0\n"
     )
     result, killed = project_run(
-        tmp_path, monkeypatch, geometry_text=text, clear_geompre=True
+        tmp_path,
+        monkeypatch,
+        geometry_text=text,
+        clear_geompre=True,
+        require_complete_products=True,
     )
     assert not result.success
     assert "GEOMETRY_PRODUCTS_SCHEMA_UNSUPPORTED" in result.error
     assert cache.read_bytes() == b"retained native cache"
     assert killed == []
+
+
+def test_default_structure_path_runs_without_claiming_qualified_products(
+    tmp_path, monkeypatch
+):
+    text = (
+        "Storage Area=Synthetic,0,0\nStorage Area Surface Line= 4\n"
+        + "".join(f"{x:16.6f}{y:16.6f}" for x, y in [(0, 0), (1, 0), (1, 1), (0, 0)])
+        + "\nStorage Area Is2D=-1\nStorage Area 2D Points= 1\n"
+        + f"{0.2:16.6f}{0.2:16.6f}\nConnection=Bridge,0,0\n"
+    )
+    result, killed = project_run(
+        tmp_path,
+        monkeypatch,
+        geometry_text=text,
+        stdout="WRITE ATTR ERROR: ERROR: Geometry not found in WriteAttributePreCheck\n",
+    )
+    assert result.success and not killed
+    contract = result.completion_contract
+    assert contract["status"] == "not_qualified_for_structures"
+    assert contract["reason_code"] == "GEOMETRY_COMPLETION_NOT_QUALIFIED_FOR_STRUCTURES"
+    assert contract["products_complete"] is False
+    assert contract["inputs_preserved"] is None
+    assert contract["invalidated_products"] == []
+    assert contract["lifecycle_verified"] is True and contract["plan_restored"] is True
+    assert "WRITE ATTR ERROR" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "dataset", ["FacePoints Coordinate", "Cells Center Coordinate"]
+)
+def test_public_wrapper_rejects_translated_regenerated_mesh(
+    tmp_path, monkeypatch, dataset
+):
+    import runpy
+    from pathlib import Path
+
+    helpers = runpy.run_path(
+        str(Path(__file__).with_name("test_geom_preprocessor_contract.py"))
+    )
+    template = tmp_path / "template"
+    template.mkdir()
+    text, _, _ = helpers["fixture"](template)
+    folder = tmp_path / "model"
+    folder.mkdir()
+    monkeypatch.setitem(
+        project_run.__globals__,
+        "geometry",
+        lambda path: helpers["fixture"](path.parent)[1],
+    )
+    original_setattr = monkeypatch.setattr
+
+    def intercept(target, name, value):
+        if name == "_resolve_geometry_number":
+            value = lambda *a: "01"
+        if name == "Popen":
+            launch = value
+
+            def regenerate(*args, **kwargs):
+                result = launch(*args, **kwargs)
+                path = folder / "Synthetic.g01.hdf"
+                with h5py.File(path, "r+") as hdf:
+                    del hdf[helpers["AREA"] + "/Synthetic"]
+                helpers["products"](path)
+                with h5py.File(path, "r+") as hdf:
+                    obj = hdf[helpers["AREA"] + "/Synthetic/" + dataset]
+                    obj[...] = obj[()] + 1_000_000
+                return result
+
+            value = regenerate
+        return original_setattr(target, name, value)
+
+    monkeypatch.setattr = intercept
+    result, killed = project_run(
+        folder, monkeypatch, geometry_text=text.read_text(), write_products=False
+    )
+    assert not result.success and not killed
+    assert "GEOMETRY_PRODUCTS_INCOMPLETE" in result.error
+    assert result.completion_contract["inputs_preserved"] is True
+    assert result.completion_contract["products_complete"] is False
 
 
 def test_normal_exit_with_complete_inventory_never_kills(tmp_path, monkeypatch):
