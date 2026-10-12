@@ -58,9 +58,9 @@ Example:
 import platform
 import threading
 import warnings
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -73,6 +73,7 @@ from .._gdal_runtime import (
 from ..LoggingConfig import get_logger
 
 logger = get_logger(__name__)
+_SamplingResult = TypeVar("_SamplingResult")
 
 _RAS_INSTALL_PATHS = [
     Path("C:/Program Files (x86)/HEC/HEC-RAS/7.0"),
@@ -170,6 +171,27 @@ class RasTerrainMod:
             use_obstructions,
             nodata_values,
         )
+
+    @staticmethod
+    @log_call
+    def run_serial_native_sampling(
+        operation: Callable[[], _SamplingResult],
+    ) -> tuple[_SamplingResult, dict[str, Any]]:
+        """Run eager native sampling on one CLR pool worker in an isolated process.
+
+        Caller must own a fresh Windows/Wine worker with no concurrent native or
+        CLR work. The callback retains its units, CRS, source mutation policy and
+        artifacts; exhaust all native iterators inside it. Public affinity and
+        ThreadPool controls prevent nested native parallel HDF reads. They are
+        verified before sampling and restored/read back on return or exception.
+        Unsupported controls fail closed. No HEC private cache or hydraulic
+        parameter changes. Returns the callback result and execution evidence;
+        this function writes no files. Concurrent/nested calls are rejected.
+        A callback must not await separately queued CLR work.
+        """
+        from .._terrain_sampling_execution import run_serial_sampling
+
+        return run_serial_sampling(operation)
 
     @staticmethod
     def _find_hecras_path() -> Path:

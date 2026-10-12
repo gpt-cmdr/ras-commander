@@ -218,3 +218,13 @@ modified terrains lowered the same 38 centres relative to their unmodified
 readback. This supports the native overload and switch at those coordinates;
 it does not establish complete-support or corpus acceptance. The production
 wrapper still requires frozen-runtime qualification and every-centre evidence.
+
+
+For isolated workers, wrap eager profile and point readback in
+`RasTerrainMod.run_serial_native_sampling(operation)` and retain the returned
+execution evidence. This public execution control addresses nested native
+parallel HDF access; the 4096-point bound still applies inside each supplied
+point batch. Stored records, order, coordinates and native hydraulic parameters
+remain unchanged. The single worker, process-affinity selection and restoration
+must be read back successfully. Fresh source-parent first-profile controls pass
+under this execution mode; complete-support and corpus checks remain necessary.
