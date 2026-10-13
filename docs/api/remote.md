@@ -503,6 +503,22 @@ pip install ras-commander[remote-all]
         - status
         - submit
 
+### RasContainerImages source reference
+
+::: ras_commander.RasContainerImages.RasContainerImages
+    options:
+      show_root_heading: false
+      heading_level: 3
+      show_source: false
+      members:
+        - applicable_roles
+        - cache_directory
+        - catalog
+        - ensure_sif_command
+        - get
+        - normalize_version
+        - resolve_sif
+
 ### SlurmSiteConfig source reference
 
 ::: ras_commander.RasSlurm.SlurmSiteConfig

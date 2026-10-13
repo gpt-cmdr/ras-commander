@@ -1,0 +1,18 @@
+{
+  "schema": "ras-commander-container-images/v1",
+  "note": "Published HEC-RAS container images. 'ghcr' and 'sif' are filled when an image is published to ghcr.io/gpt-cmdr; until then the resolver uses 'mirror'. 'sif_sha256' is set only for SIFs published as ORAS artifacts (byte-identical for every user).",
+  "images": [
+    {"role": "wine-precompute", "hec_ras_version": "6.5", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-wine-precompute_6.5@sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99"},
+    {"role": "wine-precompute", "hec_ras_version": "6.6", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318"},
+    {"role": "wine-precompute", "hec_ras_version": "7.0.1", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-wine-precompute_7.0.1@sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d"},
+    {"role": "linux-unsteady", "hec_ras_version": "6.5", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.5@sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8"},
+    {"role": "linux-unsteady", "hec_ras_version": "6.6", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c"},
+    {"role": "linux-unsteady", "hec_ras_version": "7.0.1", "ghcr": null, "sif": null, "sif_sha256": null,
+     "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_7.0.1@sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9"}
+  ]
+}

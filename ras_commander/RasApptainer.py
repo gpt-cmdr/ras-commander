@@ -171,6 +171,25 @@ def _safe_posix(value: Any) -> bool:
     )
 
 
+def _ras_version_problems(version: Any) -> list[str]:
+    """Explain why a release cannot run this API's native solve, if it cannot."""
+    from .RasContainerImages import applicable_roles, normalize_version
+
+    try:
+        folder = normalize_version(version)
+    except ValueError:
+        return ["ras_version must be a HEC-RAS release such as '6.6' or '7.0.1'"]
+    if "linux-unsteady" not in applicable_roles(folder):
+        return [f"ras_version {folder} has no HEC Linux engine; run it under Wine with "
+                "RasSlurm and a Wine executor image instead"]
+    if folder == "5.0.7":
+        return ["ras_version 5.0.7 uses the bin_ras native layout, which RasApptainer's engine "
+                "does not support yet; use RasCmdr.compute_plan_linux or a Wine executor"]
+    if folder != version:
+        return [f"ras_version must be the install folder name {folder!r}"]
+    return []
+
+
 def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
     bad: list[str] = []
     for name in ("site_name", "ssh_user", "partition", "account", "qos", "nodelist"):
@@ -196,8 +215,7 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
             "container_identity must be an immutable reference: "
             "'sif:sha256:<hex>' or '<registry>/<repo>@sha256:<hex>' (mutable tags are rejected)"
         )
-    if not (isinstance(p.ras_version, str) and re.fullmatch(r"[67]\.[0-9]+(?:\.[0-9]+)?", p.ras_version)):
-        bad.append("ras_version must look like '6.6' or '7.0.1' (native Linux HEC-RAS 6.x or 7.x)")
+    bad.extend(_ras_version_problems(p.ras_version))
     if type(p.num_cores) is not int or not 1 <= p.num_cores <= 256:
         bad.append("num_cores must be an integer from 1 through 256")
     if p.slurm_memory is not None and not (isinstance(p.slurm_memory, str) and _MEMORY.fullmatch(p.slurm_memory)):

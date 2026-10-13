@@ -45,6 +45,14 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
 - `remote/docker/setup_docker.py` lists its HEC-RAS 6.6 entry under `6.6`
   again; it was mislabeled `7.0`, so `--version 6.6` was rejected.
 
+- `RasContainerImages` adds a packaged, digest-pinned image catalog and a
+  local SIF cache: `resolve_sif(role, version, sif_path=..., cache_dir=...,
+  pull="never"|"missing"|"always")` uses a supplied or cached SIF before
+  pulling, and `ensure_sif_command()` fills a shared cluster cache over SSH.
+  `applicable_roles()` reports which image roles apply to HEC-RAS 4.0 through
+  7.x. The executor build script accepts any 4.x–7.x install-folder version and
+  skips the GDAL bridge for releases without GDAL.
+
 **Breaking changes**
 
 - Removed `SlurmSiteConfig.memory_per_task`, which never set memory; use

@@ -40,6 +40,10 @@ rather than substituting an image by name.
     Requalify your image and site with a representative request before a campaign; a
     receipt is computational evidence, not hydraulic approval.
 
+To reuse a local or cached SIF (or fill a shared cache once), use
+`RasContainerImages.resolve_sif()` or `ensure_sif_command()`; see
+[Use a local or cached image](apptainer-images.md#use-a-local-or-cached-image).
+
 ## Create a portable bundle
 
 Run this from an installed version exposing the portable APIs, or from a

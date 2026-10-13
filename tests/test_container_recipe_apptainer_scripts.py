@@ -259,12 +259,16 @@ def _run_executor_build(environment, *args):
                           capture_output=True, text=True, timeout=60)
 
 
-@pytest.mark.parametrize("change", ["version", "tagged-base", "wheel-name", "commit", "tag"])
+@pytest.mark.parametrize(
+    "change", ["version", "beta-version", "tagged-base", "wheel-name", "commit", "tag"]
+)
 def test_executor_build_validates_inputs_before_docker(executor_inputs, tmp_path, change):
     environment, marker, wheel, base = executor_inputs
     version, tag = "6.6", "local/hec-ras-wine-executor_6.6:review"
     if change == "version":
-        version = "6.4"
+        version = "3.1"
+    elif change == "beta-version":
+        version = "6.7 Beta 5"
     elif change == "tagged-base":
         base = "rascommander/hec-ras-wine-precompute_6.6:v4"
     elif change == "wheel-name":
@@ -297,3 +301,12 @@ def test_executor_build_reaches_docker_with_valid_inputs(executor_inputs):
     assert completed.returncode != 0
     calls = marker.read_text().splitlines()
     assert calls[0] == "image inspect " + base
+
+
+@pytest.mark.parametrize("version", ["4.1.0", "5.0.7", "6.3.1", "7.1"])
+def test_executor_build_accepts_any_4x_to_7x_install_folder(executor_inputs, version):
+    environment, marker, wheel, base = executor_inputs
+    completed = _run_executor_build(
+        environment, version, base, wheel, f"local/hec-ras-wine-executor_{version}:review"
+    )
+    assert "HEC-RAS version must be" not in completed.stderr

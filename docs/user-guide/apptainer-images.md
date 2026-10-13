@@ -15,7 +15,69 @@ Apptainer, use the executor derived from it. The [container catalog](container-i
 lists published registry digests. A registry digest and a SIF SHA-256 are
 different identities: jobs verify the SIF bytes.
 
-## Get a SIF
+## Which images apply to which HEC-RAS release
+
+| HEC-RAS | Full Windows compute under Wine (`wine-executor`; `RasSlurm`) | Wine preprocessing → native Linux solve (`wine-precompute` + `linux-unsteady`; `RasDocker`, `RasApptainer`) |
+| --- | --- | --- |
+| 4.0, 4.1, 5.0–5.0.6, 6.0 | Applies | Not applicable: HEC published no Linux engine |
+| 5.0.7 | Applies | Linux engine exists (`bin_ras` layout); supported by `RasCmdr.compute_plan_linux`, not yet by `RasApptainer` |
+| 6.1 – 7.x | Applies | Applies |
+
+`RasContainerImages.applicable_roles(version)` returns the same answer in code.
+An applicable role still needs an image built for that release: the recipes
+take any install-folder version (`4.1.0`, `5.0.7`, `6.3.1`, `6.6`, `7.0.1`, …),
+but a Wine image needs a prepared Windows HEC-RAS profile of that release (see
+the [pre-compute preparation guide][precompute]). Published images are listed
+in the packaged catalog (`RasContainerImages.catalog()`) and in the
+[container catalog](container-images.md).
+
+## Use a local or cached image
+
+Jobs always run a SIF on shared storage that is verified by its SHA-256.
+`RasContainerImages.resolve_sif` picks it, in this order:
+
+1. **Your own image** — `sif_path=` (a site-built or locally cached SIF), used
+   as-is after hashing; pass `expected_sha256=` to pin it.
+2. **The cache** — `cache_dir=`, else `$RAS_COMMANDER_IMAGE_CACHE`, else
+   `~/.cache/ras-commander/images`. Files are named by registry digest and
+   re-verified on every use (against the published SIF hash, or the `.sha256`
+   sidecar recorded when the file was pulled).
+3. **The registry** — pulled into the cache only if `pull` allows: `"never"`
+   (offline; fail if not cached), `"missing"` (default), or `"always"`.
+
+```python
+from ras_commander import RasContainerImages
+from ras_commander.RasSlurm import SlurmSiteConfig
+
+native = RasContainerImages.resolve_sif(
+    "linux-unsteady", "6.6", cache_dir="/shared/ras-images", pull="never",
+)
+executor = RasContainerImages.resolve_sif(
+    "wine-executor", "4.1", sif_path="/shared/ras-images/hec-ras-wine-executor_4.1.0.sif",
+)
+site = SlurmSiteConfig(
+    site_name="example", apptainer_image=str(executor.path),
+    apptainer_image_sha256=executor.sha256, container_identity=executor.container_identity,
+)
+```
+
+When you submit from a workstation over SSH, fill the cluster's shared cache
+from its login host instead. `ensure_sif_command` returns an idempotent bash
+snippet that reuses a verified copy or pulls one, and prints `<sha256>  <path>`:
+
+```python
+from ras_commander import RasApptainer, RasContainerImages, SshApptainerTransport
+
+command = RasContainerImages.ensure_sif_command("linux-unsteady", "6.6", "/shared/ras-images")
+result = SshApptainerTransport(profile).run(["bash", "-c", command])
+sha256, path = result.stdout.split()
+```
+
+Point the cache at storage that compute nodes can read so one copy serves every
+job. Cache entries are never overwritten in place; a new release has a new
+digest and a new file.
+
+## Get a SIF manually
 
 **Pull by digest.** On a node with registry access, pull once to shared storage
 and record the SIF hash:

@@ -82,7 +82,10 @@ apptainer pull /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif    
 sha256sum /shared/images/rascommander-hec-ras-linux-unsteady_6.6-v1.sif
 ```
 
-`RasApptainer.pull_command(profile)` prints this command for a profile. Put the digest in
+`RasApptainer.pull_command(profile)` prints this command for a profile. To reuse a local or cached SIF (or fill a shared cache once), use
+`RasContainerImages.resolve_sif()` or `ensure_sif_command()`; see
+[Use a local or cached image](apptainer-images.md#use-a-local-or-cached-image).
+ Put the digest in
 `apptainer_image_sha256` and `container_identity` (`sif:sha256:<digest>`). Jobs refuse to run on a
 mismatch. Do not pull per job.
 
