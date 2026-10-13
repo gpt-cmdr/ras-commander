@@ -65,6 +65,22 @@ The ordered schema is:
 `ready`, `not_ready`, `unknown`, or `not_required`. In particular,
 `not_inspected` is never silently promoted to ready.
 
+Foreign Windows filesystem references on POSIX have null `resolved_path` and file facts
+(including `exists` and `sha256`); they are not reported as missing local files.
+Their `inspection_state` is `ambiguous` and readiness is `unknown`, or
+`not_required` when the row is explicitly optional. Additive reason codes are:
+
+| Reason code | Meaning and scope |
+|-------------|-------------------|
+| `reference_foreign_windows_anchor` | On POSIX, an absolute Windows drive or UNC anchor is `external` with `portable=false`; a drive-relative or backslash root-relative reference is `ambiguous` with `portable=null`. No host drive/share mapping is inferred. |
+
+Structured RASMapper rows and raw XML rows retain foreign lexical references
+with the precise reason above. The shared resolver does not prefix foreign
+anchors with the project folder. Native POSIX absolute paths and relative paths using
+either separator resolve normally. Parent traversal and symlinks are evaluated
+against the real project root. DSS pathnames such as `//BASIN/...` are dataset
+identifiers, so filesystem-anchor classification does not apply to them.
+
 Controlled DSS 6/7 tests found existing-file reads byte-stable, but the normal
 Java handle remained write-capable and several read APIs created a new DSS file
 when the target was missing. Direct source pathname and coverage requests
