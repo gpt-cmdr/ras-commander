@@ -458,20 +458,12 @@ class CloudWorker(BaseWorker):
 
 ---
 
-## Future Worker Types
+## HPC Clusters (Slurm)
 
-The following worker-factory backends remain placeholders. Implemented Slurm
-execution uses the separate [RasSlurm](../user-guide/slurm-portable-execution.md)
-and [RasApptainer](../user-guide/slurm-apptainer-execution.md) APIs:
-
-
-| Worker | Description | Status |
-|--------|-------------|--------|
-| **SshWorker** | Direct SSH execution | Planned |
-| **WinrmWorker** | Windows Remote Management | Planned |
-| **SlurmWorker** | HPC cluster integration | Planned |
-| **AwsEc2Worker** | AWS EC2 instances | Planned |
-| **AzureFrWorker** | Azure Functions/VMs | Planned |
+The worker factory supports only `psexec`, `local`, and `docker`. For Slurm
+clusters, use the separate [RasSlurm](../user-guide/slurm-portable-execution.md)
+(portable request pool) and [RasApptainer](../user-guide/slurm-apptainer-execution.md)
+(Apptainer containers) APIs.
 
 ## Related
 

@@ -22,8 +22,7 @@ This library was initially conceptualized in the Australian Water School course 
 
 Use `RasDocker` for Wine preprocessing and native Linux unsteady computation
 on Windows or Linux, `RasApptainer` for one prepared native unsteady plan per
-Slurm allocation, or `RasSlurm` for portable execution request pools. The
-worker-factory `SlurmWorker` remains a stub.
+Slurm allocation, or `RasSlurm` for portable execution request pools.
 
 - [Choose an execution backend](https://rascommander.info/ras/user-guide/execution-backends/)
 - [Docker setup and two-stage workflow](https://rascommander.info/ras/user-guide/container-execution/)
@@ -208,7 +207,7 @@ Install only what you need using pip extras:
 | `execution` | Alias for `compute` | `pip install ras-commander[execution]` |
 | `full` | Historical ras-commander feature dependency set | `pip install ras-commander[full]` |
 | `all` | Full feature set plus every optional integration below | `pip install ras-commander[all]` |
-| `remote-all` | All remote backends (SSH, WinRM, Docker, AWS, Azure) | `pip install ras-commander[remote-all]` |
+| `remote-all` | All remote worker dependencies (Docker, plus paramiko for SSH-hosted Docker staging) | `pip install ras-commander[remote-all]` |
 | `gui` | GUI automation & screenshots (Pillow) | `pip install ras-commander[gui]` |
 | `usgs` | USGS gauge data (dataretrieval) | `pip install ras-commander[usgs]` |
 | `notebooks` | Example notebook deps (rasterio, pyproj, aiohttp, dataretrieval) | `pip install ras-commander[notebooks]` |

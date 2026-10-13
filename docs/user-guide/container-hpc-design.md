@@ -2,15 +2,17 @@
 
 The implementation comparison was checked September 11, 2026. This page
 retains the proposed TACC/PyLauncher integration, with implementation status
-updated October 7, 2026. [RasApptainer](slurm-apptainer-execution.md) now
-implements one prepared native unsteady plan per Slurm allocation;
-[RasSlurm](slurm-portable-execution.md) implements portable request pools.
-Their contracts differ from the proposed worker integration below.
+updated October 13, 2026. [RasApptainer](slurm-apptainer-execution.md)
+implements one native unsteady plan per Slurm allocation and an optional Wine
+prepare job; [RasSlurm](slurm-portable-execution.md) implements portable
+request pools and job arrays. Their contracts differ from the proposed
+worker integration below.
 
-The [Docker image pairs](container-images.md) have Docker qualification.
-The canonical SIF profile has not been qualified by a live `RasApptainer`
-run, and these images have not been qualified on TACC. Earlier CLB runs with
-another SIF do not qualify these image payloads.
+The [Docker image pairs](container-images.md) have Docker qualification. CLB
+has run both Slurm APIs live with site-built SIFs (see
+[execution backends](execution-backends.md#image-compatibility-and-qualification));
+the published SIF payloads have not been run live through `RasApptainer` or
+qualified on TACC.
 
 ## Useful patterns from public implementations
 
@@ -105,8 +107,12 @@ select the final HDF named by a successful compute receipt. Merely changing
 the Docker image would leave the collector reading uncomputed input.
 
 Qualify native Apptainer execution first using a prepared model. Wine
-preprocessing can continue in the tested Docker environment while the model
-and receipt are transferred to TACC. Running Wine preparation under
-Apptainer needs separate qualification: its private Wine prefix must be
-placed on writable scratch, rather than relying on the image's default
-`/run/ras-job` directory being writable to an arbitrary host user.
+preparation can then move to the cluster with
+`RasApptainer.render_prepare_job`, which uses the
+[Wine executor image](apptainer-images.md#wine-executor-image): the SIF stays
+read-only, and each task copies the baked prefix into its own node-scratch
+`/tmp` under `apptainer exec --contain --cleanenv`. This replaces relying on
+the pre-compute image's default `/run/ras-job` directory, which an arbitrary
+host user cannot write under Apptainer. Wine needs a CPU-numbering shim when a
+Slurm CPU set does not start at CPU 0; see
+[the CPU shim](apptainer-images.md#cpu-numbering-shim).

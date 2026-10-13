@@ -1,10 +1,11 @@
 # Portable execution requests on Slurm
 
 `RasSlurm` renders, stages, submits, monitors, cancels, and collects portable
-execution requests in one exclusive-node Slurm allocation. Each request runs
-with one core through Apptainer. This differs from
-[`RasApptainer`](slurm-apptainer-execution.md), which stages native solver-ready
-artifacts for one unsteady plan per allocation.
+execution requests on Slurm. Each request runs with one core through Apptainer,
+either as a step of one exclusive-node allocation (`execution_mode="pool"`, the
+default) or as one task of a Slurm job array (`execution_mode="array"`). This
+differs from [`RasApptainer`](slurm-apptainer-execution.md), which stages
+native solver-ready artifacts for one unsteady plan per allocation.
 
 ## Prerequisites
 
@@ -13,7 +14,9 @@ artifacts for one unsteady plan per allocation.
   and an immutable `container_identity` shared by the site and requests.
 - An image with Python, the portable executor
   (`ras_commander.remote.execute_request`), and the requested HEC-RAS runtime.
-  Windows execution on Linux needs the Wine seed/Python settings described in
+  For Windows HEC-RAS under Wine, build the
+  [Wine executor image](apptainer-images.md#wine-executor-image), which sets the
+  Wine seed, Windows Python, and CPU-shim variables described in
   [Portable Plan Execution](../api/remote.md#portable-plan-execution).
 - Slurm commands and Apptainer on the cluster. The allocation launcher needs
   host Python 3; the container needs its own Python executor.
@@ -21,9 +24,18 @@ artifacts for one unsteady plan per allocation.
   Remote scratch and the SIF must be visible to login and compute nodes.
 
 The [published Wine/native pairs](container-images.md) are qualified for
-`RasDocker`; they are not a qualified portable-executor image. Supply a
-compatible image rather than substituting one by name. No live Slurm run is
-claimed by this tutorial.
+`RasDocker`; the Wine pre-compute image by itself is not a portable executor.
+Derive an executor from it as described in [Apptainer images](apptainer-images.md)
+rather than substituting an image by name.
+
+!!! info "Production evidence"
+    CLB ran 436 one-core HEC-RAS 6.6 steady requests through `RasSlurm` (ras-commander
+    0.97.0) under Wine in a SIF derived from `rascommander/hec-ras-wine-precompute_6.6`;
+    all 436 passed after one memory retry, and compute plus stored maps matched native
+    Windows results bit for bit. The v2 launcher (contained steps, per-step node scratch,
+    CPU shim, job arrays) is newer than that run. Requalify your image and site with a
+    representative request before a campaign; a receipt is computational evidence, not
+    hydraulic approval.
 
 ## Create a portable bundle
 
@@ -73,8 +85,9 @@ site = SlurmSiteConfig(
     apptainer_image_sha256=sif_sha256,
     container_identity=identity,
     slots_per_node=2,
-    slurm_memory="3G",  # Per-task step limit; allocation reserves this times slots.
+    slurm_memory="3G",  # Per-request step limit; pool mode reserves this times slots.
     time_limit="02:00:00",
+    node_scratch_root="/scratch",  # Node-local disk for each step's private /tmp.
     # Add account, partition, qos, and modules required by your site.
 )
 submission = RasSlurm.render_submission(
@@ -93,10 +106,45 @@ the allocation requests `slurm_memory × slots_per_node` and each task step
 uses `slurm_memory` as its memory limit. The example requests `--mem=6G` for
 two slots and `--mem=3G` for each step. When it is omitted, this API emits no
 memory directive; the site's Slurm defaults determine available memory.
-`memory_per_task` is accepted by the configuration but currently does not
-set allocation or step memory. Use `slurm_memory` for an explicit reservation.
 Choose the wall time for the whole pool, including staging and executor
 margins; it is not automatically checked against each request's timeout.
+
+### Contained steps and node scratch
+
+Every request runs as `apptainer exec --contain --cleanenv` with three binds:
+the request bundle read-only at `/job`, its empty output directory writable,
+and a step-private directory `<node_scratch_root>/ras-commander-<jobid>-<execution_id>-*`
+as `/tmp`. The Wine executor copies its baked prefix into that `/tmp`, so the SIF
+stays read-only and concurrent steps never share a prefix, host `/tmp`, or the
+request bundle. No `--writable-tmpfs` or overlay is needed. The launcher removes
+the step directory after the step ends; results and step logs are already in the
+output directory. Point `node_scratch_root` at node-local disk with room for one
+copy of the image's Wine prefix per concurrent step.
+
+### Job-array mode
+
+```python
+site = SlurmSiteConfig(
+    site_name="example",
+    apptainer_image="/shared/images/portable-hecras.sif",
+    apptainer_image_sha256=sif_sha256,
+    container_identity=identity,
+    execution_mode="array",
+    array_throttle=20,      # At most 20 requests running at once.
+    slurm_memory="3400M",   # Memory for each array task.
+    time_limit="02:00:00",  # Wall time for each request, not the whole campaign.
+    node_scratch_root="/scratch",
+)
+```
+
+Array mode writes `#SBATCH --array=0-<N-1>%<throttle>` with one task, one CPU,
+and `slurm_memory` per array task, and no `--exclusive`. Each task runs exactly
+one request (`--array-index $SLURM_ARRAY_TASK_ID`) as a named `srun` step, so
+collection validates the same per-request `rc-###` step accounting as pool mode.
+`status` summarizes every array task: `RUNNING` while any task is active,
+`COMPLETED` only when all are, otherwise the first failed state. Use array mode
+when requests should spread over many nodes or the scheduler should backfill
+them; use pool mode when a site allocates whole nodes or charges per node.
 
 ## Stage and submit
 
@@ -119,8 +167,8 @@ The real submission consumes the selected site's allocation.
 For several independent requests, pass their paths to `render_submission`.
 The convenience method `submit_batch(request_paths, directory, site=site,
 transport=transport)` performs rendering, staging, and submission immediately.
-Use separate bundles and unique IDs/output paths; this is a bounded task pool,
-not a Slurm job array or chained-model workflow.
+Use separate bundles and unique IDs/output paths. Neither mode chains
+models; each request is independent.
 
 ## Reload, inspect, and collect
 
@@ -144,6 +192,11 @@ in `errors`; do not treat successful neighboring requests as a successful pool.
 Keep the final HDF selected by the receipt and inspect its results through the
 [HDF APIs](../api/hdf.md). Retain receipts and logs for failed requests too.
 
+Submission handles and batch manifests use the v2 schema
+(`ras-commander-slurm-submission/v2`). A v1 handle written by ras-commander
+0.105.0 or earlier is rejected with an explanation; check status and collect it
+with the version that rendered it. Requests and receipts are unchanged.
+
 `RasSlurm.cancel(submission)` cancels the recorded allocation. If a submission
 command fails without a trustworthy job ID, reconcile the allocation on the
 cluster before submitting again. Do not treat a transport error as proof that
@@ -157,6 +210,8 @@ Slurm never accepted the job.
 | Remote staging fails | Check SSH, transfer tools, shared-path permissions, and whether that exact submission directory already exists |
 | Job remains pending | Inspect Slurm's resource/account/partition reason; reduce requests or correct the site settings |
 | Executor cannot import or launch | Verify Python, installed portable executor, executable path, and Wine environment in the selected SIF |
+| `SLURM_STEP_SCRATCH_FAILED` | `node_scratch_root` is missing on the compute node, is a symlink, or contains `,`/`:`; set it to an existing node-local directory |
+| Intermittent `0xC0000005` in `RasProcess.exe` | The Slurm CPU set does not start at CPU 0 and the image lacks the CPU shim; rebuild with `RAS_COMMANDER_WINE_CPU_SHIM` set (see [Apptainer images](apptainer-images.md#cpu-numbering-shim)) |
 | Receipt or scheduler step fails | Read `collection.errors`, retained solver logs, and accounting; a final HDF filename alone is insufficient |
 | Allocation expires before the pool ends | Increase allocation wall time or reduce pool size; account for queued tasks and executor overhead |
 

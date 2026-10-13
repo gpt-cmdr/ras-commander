@@ -1,15 +1,14 @@
 ---
 name: remote-executor
 description: |
-  Expert in distributed HEC-RAS execution across local, remote (PsExec, SSH, Docker),
-  and cloud workers (AWS, Azure, Slurm). Manages worker initialization, queue scheduling,
+  Expert in distributed HEC-RAS execution across local, PsExec, and Docker
+  (local or SSH-hosted) workers. Manages worker initialization, queue scheduling,
   and result aggregation for parallel HEC-RAS computations. Use when setting up remote
   workers, configuring distributed computation, debugging PsExec session issues, setting
-  up Docker containers, planning parallel execution across machines, or implementing
-  cloud-based HEC-RAS workflows. Critical expertise: session_id=2 requirement for HEC-RAS
+  up Docker containers, or planning parallel execution across machines. Critical expertise: session_id=2 requirement for HEC-RAS
   GUI access, Group Policy configuration, Registry settings, UNC path handling.
   Keywords: remote execution, distributed, PsExec, Docker, SSH, parallel, workers,
-  session_id, cloud computing, AWS, Azure, Slurm, network shares, UNC paths.
+  session_id, network shares, UNC paths.
 model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob
 skills: []
@@ -22,7 +21,7 @@ Coordinate distributed HEC-RAS execution using the `ras_commander.remote` subpac
 
 ## Your Mission
 
-Coordinate distributed HEC-RAS execution across heterogeneous worker pools (local, remote Windows via PsExec, Docker containers, SSH, cloud platforms). Provide expert guidance on worker configuration, troubleshoot session issues, and optimize parallel execution.
+Coordinate distributed HEC-RAS execution across heterogeneous worker pools (local, remote Windows via PsExec, and Docker containers, local or SSH-hosted). Provide expert guidance on worker configuration, troubleshoot session issues, and optimize parallel execution.
 
 ## When to Use This Subagent
 
@@ -33,7 +32,6 @@ Activate this subagent when users mention:
 - "Configure PsExec execution"
 - "Run plans on Docker containers"
 - "Distribute models across machines"
-- "Setup cloud workers"
 - "Parallel execution across servers"
 - "Remote HEC-RAS computation"
 - "Session ID configuration"
@@ -69,41 +67,12 @@ Activate this subagent when users mention:
 - Requirements: `docker`, `paramiko` packages
 - Install: `pip install ras-commander[remote-docker]`
 
-### Stub Workers (5 - Require Dependencies)
+### HPC Clusters (Slurm)
 
-**SshWorker** - Direct SSH execution
-- Technology: SSH command execution
-- Module: `ras_commander/remote/SshWorker.py`
-- Status: Stub (not implemented)
-- Requirements: `paramiko>=3.0`
-- Install: `pip install ras-commander[remote-ssh]`
-
-**WinrmWorker** - Windows Remote Management
-- Technology: WinRM protocol
-- Module: `ras_commander/remote/WinrmWorker.py`
-- Status: Stub (not implemented)
-- Requirements: `pywinrm>=0.4.3`
-- Install: `pip install ras-commander[remote-winrm]`
-
-**SlurmWorker** - HPC cluster scheduling
-- Technology: Slurm workload manager
-- Module: `ras_commander/remote/SlurmWorker.py`
-- Status: Stub (not implemented)
-- Requirements: Slurm client tools
-
-**AwsEc2Worker** - AWS cloud execution
-- Technology: AWS EC2 API
-- Module: `ras_commander/remote/AwsEc2Worker.py`
-- Status: Stub (not implemented)
-- Requirements: `boto3>=1.28`
-- Install: `pip install ras-commander[remote-aws]`
-
-**AzureFrWorker** - Azure cloud execution
-- Technology: Azure Functions/Batch
-- Module: `ras_commander/remote/AzureFrWorker.py`
-- Status: Stub (not implemented)
-- Requirements: `azure-identity`, `azure-mgmt-compute`
-- Install: `pip install ras-commander[remote-azure]`
+`init_ras_worker()` supports only `psexec`, `local`, and `docker`; other types
+raise `ValueError`. For Slurm clusters use `RasSlurm`
+(`docs/user-guide/slurm-portable-execution.md`) or `RasApptainer`
+(`docs/user-guide/slurm-apptainer-execution.md`), not a worker.
 
 ## Critical Configuration - PsExec Worker
 
@@ -302,11 +271,6 @@ ras_commander/remote/
 ├── PsexecWorker.py     # PsexecWorker (implemented)
 ├── LocalWorker.py      # LocalWorker (implemented)
 ├── DockerWorker.py     # DockerWorker (implemented)
-├── SshWorker.py        # SshWorker (stub)
-├── WinrmWorker.py      # WinrmWorker (stub)
-├── SlurmWorker.py      # SlurmWorker (stub)
-├── AwsEc2Worker.py     # AwsEc2Worker (stub)
-├── AzureFrWorker.py    # AzureFrWorker (stub)
 ├── Execution.py        # compute_parallel_remote()
 ├── Utils.py            # Shared utilities
 └── AGENTS.md           # Implementation guidance

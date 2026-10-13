@@ -11,7 +11,6 @@ The remote execution framework provides:
 - **PsexecWorker**: Windows remote execution via PsExec over network shares
 - **LocalWorker**: Local parallel execution (baseline)
 - **DockerWorker**: Container execution via Docker over SSH
-- **Worker stubs**: SshWorker, WinrmWorker, SlurmWorker, AwsEc2Worker, AzureFrWorker
 
 The separate [RasSlurm](slurm-portable-execution.md) and
 [RasApptainer](slurm-apptainer-execution.md) APIs implement Slurm execution.
@@ -481,13 +480,10 @@ worker = init_ras_worker(
 # Basic remote support
 pip install ras-commander
 
-# SSH/Docker support
-pip install ras-commander[remote-ssh]
+# Docker support
+pip install ras-commander[remote-docker]
 
-# AWS EC2 support
-pip install ras-commander[remote-aws]
-
-# All remote backends
+# Docker plus paramiko for SSH-hosted Docker staging
 pip install ras-commander[remote-all]
 ```
 

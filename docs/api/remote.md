@@ -79,14 +79,15 @@ docker = init_ras_worker(
 )
 ```
 
-### Exported worker stubs
+### Supported worker types
 
-`SshWorker`, `WinrmWorker`, `SlurmWorker`, `AwsEc2Worker`, and `AzureFrWorker`
-are exported placeholders, not implemented worker backends. Installing their
-extras does not implement execution. The separate `RasSlurm` portable-request
-adapter below is implemented; do not confuse it with the `SlurmWorker` stub.
-`RasApptainer` is a separate static API for one native-Linux unsteady solve per
-Slurm allocation; see [Slurm + Apptainer Execution](../user-guide/slurm-apptainer-execution.md).
+`init_ras_worker()` accepts `"psexec"`, `"local"`, and `"docker"`. Any other
+worker type raises `ValueError`. Slurm/HPC execution is not a worker backend:
+use the `RasSlurm` portable-request adapter below
+([Slurm Portable Execution](../user-guide/slurm-portable-execution.md)) or
+`RasApptainer`, a static API for one native-Linux unsteady solve per Slurm
+allocation with an optional Wine prepare job
+([Slurm + Apptainer Execution](../user-guide/slurm-apptainer-execution.md)).
 
 ## Execution
 
@@ -194,7 +195,12 @@ docker_result = RasPortableDocker.execute_request(request_path)
   Linux, a Windows `ras_executable` is run through Windows Python under Wine.
   This needs the image variables `RAS_COMMANDER_WINE_PREFIX_SEED` and
   `RAS_COMMANDER_WINE_PYTHON`, plus `RAS_COMMANDER_WINE_ARCH` (optional,
-  default `win64`). Each request gets its own copy of the Wine prefix in
+  default `win64`) and `RAS_COMMANDER_WINE_CPU_SHIM` (optional absolute path to
+  the [CPU-numbering shim](../user-guide/apptainer-images.md#cpu-numbering-shim),
+  preloaded for Wine processes; empty or `0` disables it). The executor also
+  disables the Wine debugger (`winedbg.exe=d`) so a crash exits instead of
+  waiting. The [Wine executor image](../user-guide/apptainer-images.md#wine-executor-image)
+  sets all four. Each request gets its own copy of the Wine prefix in
   Python's temporary directory, selected through the process `TMPDIR` where
   applicable. Fleet runners should bind that directory to writable node-local
   scratch. The temporary parent must be an absolute regular directory outside
@@ -206,9 +212,13 @@ docker_result = RasPortableDocker.execute_request(request_path)
 - `RasPortableDocker.execute_request()` and `execute_pool(max_concurrent=8)`
   mount the bundle read-only and only the output directory writable.
 - `RasSlurm.render_submission()`, `stage()`, `submit()`, `status()`,
-  `cancel()`, `collect()`, and `submit_batch()` run one exclusive-node Slurm
-  allocation. `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`,
-  with `transfer_mode="rsync"` or `"scp"`.
+  `cancel()`, `collect()`, and `submit_batch()` run requests as one
+  exclusive-node pool (`execution_mode="pool"`) or a throttled job array
+  (`execution_mode="array"`, `array_throttle`). Each step runs
+  `apptainer exec --contain --cleanenv` with a private
+  `<node_scratch_root>/ras-commander-<jobid>-<execution_id>-*` bound as `/tmp`.
+  `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`, with
+  `transfer_mode="rsync"` or `"scp"`.
 - `validate_execution_receipt()` checks that a receipt belongs to its request
   and container image. Pass `verify_result_hdf_digest=True` after results cross
   a transfer boundary.
@@ -485,9 +495,11 @@ pip install ras-commander[remote-all]
         - cancel
         - check_solver_ready
         - collect
+        - collect_prepare
         - load_profile
         - pull_command
         - render_job
+        - render_prepare_job
         - status
         - submit
 

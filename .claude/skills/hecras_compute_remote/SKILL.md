@@ -5,7 +5,7 @@ harness_scope: shared
 source_owner: gpt-cmdr
 security_review: internal
 description: |
-  Distributed HEC-RAS execution across remote workers (PsExec, Docker, SSH, cloud).
+  Distributed HEC-RAS execution across remote workers (PsExec, local, Docker incl. SSH-hosted Docker).
   Handles worker initialization, queue scheduling, and result aggregation. Use when
   setting up remote execution, distributed computation, cloud workflows, scaling
   HEC-RAS across machines, parallel processing on multiple computers, Windows remote
@@ -156,7 +156,7 @@ worker = init_ras_worker(
 **Docker Prerequisites**:
 - Docker Desktop installed (local) or Docker daemon on remote
 - Python packages: `pip install docker paramiko`
-- HEC-RAS Docker image built (see `ras-commander-cloud` repo)
+- HEC-RAS Docker image built with `ras_commander/remote/docker/setup_docker.py`
 - SSH key configured for remote execution
 
 ## Distributed Execution
@@ -346,11 +346,6 @@ ras_commander/remote/
 ├── PsexecWorker.py     # PsexecWorker (IMPLEMENTED)
 ├── LocalWorker.py      # LocalWorker (IMPLEMENTED)
 ├── DockerWorker.py     # DockerWorker (IMPLEMENTED, requires docker+paramiko)
-├── SshWorker.py        # SshWorker (stub, requires paramiko)
-├── WinrmWorker.py      # WinrmWorker (stub, requires pywinrm)
-├── SlurmWorker.py      # SlurmWorker (stub)
-├── AwsEc2Worker.py     # AwsEc2Worker (stub, requires boto3)
-├── AzureFrWorker.py    # AzureFrWorker (stub, requires azure-*)
 ├── Execution.py        # compute_parallel_remote() + helpers
 └── Utils.py            # Shared utilities
 ```
@@ -367,8 +362,10 @@ worker = init_ras_worker(worker_type, **config)
 ### Lazy Loading
 Workers with optional dependencies use `check_*_dependencies()` for lazy loading:
 - Docker: `pip install docker paramiko`
-- SSH: `pip install paramiko`
-- AWS: `pip install boto3`
+
+Slurm/HPC execution is not a worker: use `RasSlurm` or `RasApptainer`
+(see `docs/user-guide/slurm-portable-execution.md` and
+`docs/user-guide/slurm-apptainer-execution.md`).
 
 Read `ras_commander/remote/AGENTS.md` for the lazy loading pattern.
 

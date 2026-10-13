@@ -77,24 +77,6 @@ exception_classes:
           preprocess_on_host=True
       )
 
-  - class_name: SshWorker
-    module: ras_commander.remote.SshWorker
-    reason: |
-      Future worker for SSH-based remote execution. Maintains SSH connection state,
-      remote file paths, and execution queue.
-    category: workers
-    instantiation_required: true
-    status: planned
-
-  - class_name: WinrmWorker
-    module: ras_commander.remote.WinrmWorker
-    reason: |
-      Future worker for Windows Remote Management execution. Maintains WinRM session
-      state and execution queue.
-    category: workers
-    instantiation_required: true
-    status: planned
-
   # ============================================================================
   # EXECUTION CALLBACKS
   # ============================================================================

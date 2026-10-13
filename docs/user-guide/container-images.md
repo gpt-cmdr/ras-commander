@@ -95,19 +95,24 @@ image contract, TACC, or these payloads through `RasApptainer`/`RasSlurm`.
 A successful transfer or hash check is not execution evidence. A successful
 computation is not engineering approval.
 
-`RasApptainer` has offline rendering, transport, and receipt tests. Its canonical
-6.6 profile is derived from this native image's layout and metadata and still
-requires a live qualification. Earlier CLB runs with a different SIF that included
-`RasGeomPreprocess` do not qualify this default image. The published native image
-does not contain `RasGeomPreprocess`; provide completed preprocessing artifacts.
+`RasApptainer` and `RasSlurm` have run live on CLB's Slurm cluster with site-built
+SIFs (a native 6.6 engine that includes `RasGeomPreprocess`, and Wine executors
+derived from the 6.6 pre-compute image). The canonical `RasApptainer` profile uses
+this native image's layout and metadata and still requires a live run with these
+exact payloads. The published native image does not contain `RasGeomPreprocess`;
+provide completed preprocessing artifacts. See [Apptainer images](apptainer-images.md)
+for SIF conversion and the Wine executor derived from the pre-compute image.
 
 ## Build, reproduce, and maintain
 
 The [native container source README](https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-unsteady/README.md)
 describes external vendor runtime inputs, package inventories, the Dockerfile,
-and controlled rebuilds. The
-[Wine operating guide](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/OPERATION.md)
-describes the installed prefix, mounts, preprocessing checks, and runtime setup.
+and controlled rebuilds. The Wine pre-compute recipe now lives in this repository
+at [`containers/hecras-wine-precompute`](https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-precompute/README.md);
+the published `v4` images were built from the
+[ras2fim-2d recipe](https://github.com/gpt-cmdr/ras2fim-2d/blob/dc60b219091e85bcb4564eca45313475c39ce58a/containers/hecras-prepare/OPERATION.md),
+and the in-repository successor (`v5`, not yet published) adds the
+[CPU-numbering shim](apptainer-images.md#cpu-numbering-shim).
 Wine recreation from an empty prefix was not qualified by the release record.
 
 For a new image release, update this catalog with the actual digest, embedded
