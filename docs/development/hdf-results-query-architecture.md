@@ -2,6 +2,26 @@
 
 This decision resolves the exploratory work tracked in #306–#309.
 
+## Conceptual basis and acknowledgments
+
+Gyan Basyal ([@gyanz](https://github.com/gyanz)) and his
+[Rivia library](https://github.com/gyanz/rivia) provided the conceptual basis
+for RAS Commander's spatial results query work. Rivia's elegant point, profile,
+velocity, and flow query functions inspired the design of `HdfResultsQuery`.
+We gratefully acknowledge Gyan and WEST Consultants, Inc., credited by Rivia's
+[license](https://github.com/gyanz/rivia/blob/master/LICENSE).
+
+The page below records the later bounded-read and deferred-selection decision
+for `HdfResultView`; that class and the spatial `HdfResultsQuery` namespace
+serve different purposes. Rivia's lazy HDF datasets are also a useful comparison
+for selective reads, while RAS Commander's view adds explicit source-change
+checks and bounded conversion/reduction APIs.
+
+[Related libraries and worked examples](../about/related-libraries.md) compares
+these approaches and demonstrates Rivia's mesh-face discharge and WSE profile
+queries. It also credits pyHMT2D's influence on spatial probing and identifies
+workflows where pydsstools or pyHMT2D is a useful companion.
+
 ## Decision
 
 `ras-commander` remains the semantic HEC-RAS layer and provides three levels of

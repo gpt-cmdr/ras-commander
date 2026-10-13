@@ -65,8 +65,8 @@ RAS Commander uses two standard environment names:
 conda create -n RasCommander python=3.13
 conda activate RasCommander
 
-# Install ras-commander
-pip install ras-commander
+# Install ras-commander with the dependencies the examples and notebooks use
+pip install "ras-commander[full]"
 
 # Install Jupyter (for notebooks)
 pip install jupyter ipykernel
@@ -76,7 +76,7 @@ python -m ipykernel install --user --name RasCommander --display-name "Python (R
 !!! tip "Quick Install"
     For a quick install without Jupyter:
     ```bash
-    pip install --upgrade ras-commander
+    pip install --upgrade "ras-commander[full]"
     ```
 
 ## Installation Profiles
@@ -86,6 +86,13 @@ These are installed automatically with `pip install ras-commander`:
 ```bash
 h5py numpy pandas
 ```
+
+The core install supports project inventory: `init_ras_project()` and the
+project DataFrames, including geometry counts read from geometry HDF files.
+Downloading example projects with
+`RasExamples.extract_project()` also needs `requests`. Without it, the call
+raises an `ImportError` that names the `full` extra. Geospatial, plotting, and
+precipitation APIs need the `full` extra.
 
 For command-line HEC-RAS execution, compute-message parsing, and direct HDF
 result extraction without RasControl/COM or the full geospatial stack:

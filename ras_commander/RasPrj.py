@@ -76,6 +76,7 @@ Functions in RasPrj that are not part of the class:
         
 """
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
@@ -90,6 +91,35 @@ from ras_commander._rasmap_schema import (
 from ._ras_text import _write_ras_text
 
 logger = get_logger(__name__)
+
+_RAS_UNAVAILABLE_ON_PLATFORM_MESSAGE = (
+    "HEC-RAS executable not available on this platform; read-only file and "
+    "HDF operations still work. To run plans, see: "
+    "https://rascommander.info/ras/getting-started/installation/"
+)
+
+
+def _ras_unavailable_on_platform(discovered_versions: Optional[str] = None) -> bool:
+    """Return True on a non-Windows host where no HEC-RAS install was discovered.
+
+    Args:
+        discovered_versions: The discovery summary already computed by
+            ``get_ras_exe`` (``"none"`` when discovery found nothing). When
+            omitted, version discovery runs here.
+
+    Returns:
+        bool: False on Windows, so Windows logging is unchanged.
+    """
+    if sys.platform.startswith("win"):
+        return False
+    if discovered_versions is not None:
+        return discovered_versions == "none"
+    try:
+        from .RasUtils import RasUtils
+        return not RasUtils.discover_ras_versions()
+    except Exception as exc:
+        logger.debug("HEC-RAS version discovery failed: %s", exc)
+        return False
 
 
 @dataclass
@@ -2777,12 +2807,15 @@ def init_ras_project(
                 break
         
         if not detected_version:
-            logger.error("No valid HEC-RAS version found in any plan files.")
             ras_exe_path = "Ras.exe"
-            logger.warning(
-                "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
-                "See: https://rascommander.info/ras/getting-started/installation/"
-            )
+            if _ras_unavailable_on_platform():
+                logger.warning(_RAS_UNAVAILABLE_ON_PLATFORM_MESSAGE)
+            else:
+                logger.error("No valid HEC-RAS version found in any plan files.")
+                logger.warning(
+                    "No valid HEC-RAS version was detected. Running HEC-RAS will fail. "
+                    "See: https://rascommander.info/ras/getting-started/installation/"
+                )
     
     # Initialize or re-initialize with the determined executable path
     # Pass specified_prj_file to avoid re-searching when user provided .prj file directly
@@ -3068,7 +3101,12 @@ def get_ras_exe(ras_version=None):
                 f"HEC-RAS Version {version_str} folder exists but Ras.exe not found at expected path: "
                 f"{default_path}. Discovered versions: {discovered_versions}. Running HEC-RAS will fail."
             )
-            logger.error(error_msg)
+            if _ras_unavailable_on_platform(discovered_versions):
+                # Expected on a non-Windows host without HEC-RAS; the caller
+                # reports this once instead of once per version probe.
+                logger.debug(error_msg)
+            else:
+                logger.error(error_msg)
             return "Ras.exe"
 
     # FALLBACK 2: Fuzzy match against known folder list
@@ -3097,7 +3135,10 @@ def get_ras_exe(ras_version=None):
         f"Discovered versions: {discovered_versions}. Candidate paths checked: {candidates}. "
         "Running HEC-RAS will fail unless a valid installed version is specified."
     )
-    logger.error(error_msg)
+    if _ras_unavailable_on_platform(discovered_versions):
+        logger.debug(error_msg)
+    else:
+        logger.error(error_msg)
     return "Ras.exe"
 
 

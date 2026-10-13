@@ -45,8 +45,18 @@ List of Functions in RasExamples:
 """
 import os
 import sys
-import requests
 import zipfile
+
+# Download dependencies are optional; the core install has only h5py, numpy,
+# and pandas. Extracting from an already-downloaded archive needs neither.
+try:
+    import requests
+except ImportError:
+    requests = None
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 import pandas as pd
 from pathlib import Path
 import shutil
@@ -55,12 +65,50 @@ import csv
 from datetime import datetime
 import logging
 import re
-from tqdm import tqdm
 from ras_commander import get_logger
 from ras_commander.LoggingConfig import log_call
 from ras_commander.RasUtils import RasUtils
 
 logger = get_logger(__name__)
+
+
+_DOWNLOAD_EXTRA_HINT = 'pip install "ras-commander[full]"'
+
+
+def _require_requests():
+    """Return ``requests`` for downloads, or raise an actionable ImportError.
+
+    The core ``ras-commander`` install includes only h5py, numpy, and pandas.
+    Extracting a project from an already-downloaded example archive needs no
+    extra package; downloading one needs ``requests``.
+    """
+    if requests is None:
+        raise ImportError(
+            "Downloading HEC-RAS example projects requires the 'requests' "
+            "package, which the core ras-commander install does not include. "
+            f"Install it with: {_DOWNLOAD_EXTRA_HINT} (or: pip install requests)"
+        )
+    return requests
+
+
+class _NoProgress:
+    """Stand-in for a tqdm progress bar when tqdm is not installed."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def update(self, n=1):
+        return None
+
+
+def _progress_bar(**kwargs):
+    """Return a tqdm progress bar, or a no-op stand-in without tqdm."""
+    if tqdm is None:
+        return _NoProgress()
+    return tqdm(**kwargs)
 
 
 def _format_log_path(path: Union[str, Path]) -> str:
@@ -430,6 +478,7 @@ class RasExamples:
             )
             logger.debug("Example projects download URL: %s", zip_url)
             logger.debug("Saving example projects zip to: %s", cls._zip_file_path)
+            _require_requests()
             try:
                 response = requests.get(zip_url, stream=True)
                 response.raise_for_status()
@@ -805,10 +854,11 @@ class RasExamples:
         Download a file from a URL to a specified destination folder with progress bar.
         """
         local_filename = dest_folder / url.split('/')[-1]
+        _require_requests()
         try:
             with requests.get(url, stream=True) as r:
                 r.raise_for_status()
-                with open(local_filename, 'wb') as f, tqdm(
+                with open(local_filename, 'wb') as f, _progress_bar(
                     desc=local_filename.name,
                     total=file_size,
                     unit='iB',
@@ -899,6 +949,7 @@ class RasExamples:
         logger.info("Downloading special project '%s'...", project_name)
         logger.debug("Special project download URL: %s", url)
         
+        _require_requests()
         try:
             response = requests.get(url, stream=True, timeout=300)
             response.raise_for_status()
@@ -909,7 +960,7 @@ class RasExamples:
             # Download with progress bar
             with open(zip_file_path, 'wb') as file:
                 if total_size > 0:
-                    with tqdm(
+                    with _progress_bar(
                         desc=f"Downloading {project_name}",
                         total=total_size,
                         unit='iB',
