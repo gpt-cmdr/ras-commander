@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import threading
@@ -919,9 +920,40 @@ def test_launcher_binds_private_node_scratch_as_contained_tmp(tmp_path, monkeypa
         ]
         tmp_bind = [item for item in command if item.endswith(":/tmp:rw")]
         assert len(tmp_bind) == 1
-        assert tmp_bind[0].startswith(str(scratch_root / "ras-commander-77-job-"))
-    # Step scratch (the Wine prefix copy) is removed; outputs are kept.
+        assert tmp_bind[0].startswith(str(scratch_root / "77" / "ras-commander-job-"))
+    # Step scratch (the Wine prefix copy) and the job directory the launcher
+    # created are removed; outputs are kept.
     assert list(scratch_root.iterdir()) == []
+
+
+def test_launcher_uses_prolog_job_scratch_under_root_owned_parent(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    (scratch_root / "77").mkdir(mode=0o700)  # created by the Slurm prolog
+    scratch_root.chmod(0o555)  # parent not writable by the job user
+    try:
+        assert launcher.run(rendered.submission_directory / "slurm_batch.json")
+    finally:
+        scratch_root.chmod(0o755)
+    assert len(commands) == 2
+    # The prolog's directory is kept for the epilog; step directories are removed.
+    assert list((scratch_root / "77").iterdir()) == []
+
+
+def test_launcher_rejects_job_scratch_owned_by_someone_else(tmp_path, monkeypatch):
+    launcher, rendered, scratch_root, commands = _launcher_batch(
+        tmp_path, monkeypatch, mode="pool"
+    )
+    (scratch_root / "77").mkdir()
+    real_lstat = os.lstat
+    monkeypatch.setattr(
+        launcher.os, "lstat",
+        lambda path: type("S", (), {"st_uid": os.getuid() + 1})()
+        if str(path).endswith("/77") else real_lstat(path),
+    )
+    assert not launcher.run(rendered.submission_directory / "slurm_batch.json")
+    assert commands == []
 
 
 def test_launcher_array_index_runs_exactly_one_request(tmp_path, monkeypatch):

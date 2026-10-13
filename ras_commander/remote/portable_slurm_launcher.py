@@ -80,8 +80,17 @@ def _run_step_process(
                 shutil.move(str(temporary), str(destination))
 
 
-def _step_scratch(site: dict, execution_id: str) -> Path:
-    """Create the step-private node-scratch directory bound as ``/tmp``."""
+_CREATED_JOB_SCRATCH: set = set()
+
+
+def _job_scratch(site: dict) -> Path:
+    """Return ``<node_scratch_root>/<SLURM_JOB_ID>``, owned by this user.
+
+    Sites whose prolog creates per-job scratch (``/scratch/$SLURM_JOB_ID``)
+    keep a root-owned parent; elsewhere (for example ``/tmp``) the launcher
+    creates it 0700. Either way it must be a real directory owned by the job
+    user, so another user cannot pre-create or redirect it.
+    """
     root = Path(site["node_scratch_root"])
     job = os.environ.get("SLURM_JOB_ID", "")
     if not root.is_absolute() or root.is_symlink() or not root.is_dir():
@@ -90,9 +99,32 @@ def _step_scratch(site: dict, execution_id: str) -> Path:
         raise ValueError("SLURM_JOB_ID is required for step scratch")
     if any("," in part or ":" in part for part in root.parts):
         raise ValueError("Apptainer bind host paths cannot contain ',' or ':'")
-    # mkdtemp creates a new 0700 directory with an unpredictable name, so no
-    # other user on a shared node can pre-create or redirect it.
-    return Path(tempfile.mkdtemp(prefix=f"ras-commander-{job}-{execution_id}-", dir=root))
+    job_dir = root / job
+    try:
+        job_dir.mkdir(mode=0o700)
+        _CREATED_JOB_SCRATCH.add(job_dir)
+    except FileExistsError:
+        pass
+    status = os.lstat(job_dir)
+    if not job_dir.is_dir() or job_dir.is_symlink() or status.st_uid != os.getuid():
+        raise ValueError(f"Job scratch {job_dir} must be a directory owned by this user")
+    return job_dir
+
+
+def _step_scratch(site: dict, execution_id: str) -> Path:
+    """Create the step-private node-scratch directory bound as ``/tmp``."""
+    # mkdtemp creates a new 0700 directory with an unpredictable name.
+    return Path(tempfile.mkdtemp(prefix=f"ras-commander-{execution_id}-", dir=_job_scratch(site)))
+
+
+def _remove_created_job_scratch() -> None:
+    """Remove a job scratch directory this launcher created, once it is empty."""
+    for job_dir in tuple(_CREATED_JOB_SCRATCH):
+        try:
+            job_dir.rmdir()
+        except OSError:
+            pass
+        _CREATED_JOB_SCRATCH.discard(job_dir)
 
 
 def _run_step(root: Path, site: dict, step: dict) -> bool:
@@ -213,6 +245,13 @@ def _validate_step(step: dict) -> None:
 
 
 def run(batch_path: Path, array_index: int | None = None) -> bool:
+    try:
+        return _run_batch(batch_path, array_index)
+    finally:
+        _remove_created_job_scratch()
+
+
+def _run_batch(batch_path: Path, array_index: int | None) -> bool:
     root = batch_path.resolve().parent
     payload = json.loads(batch_path.read_text(encoding="utf-8"))
     if payload.get("launcher", {}).get("version") != LAUNCHER_VERSION:

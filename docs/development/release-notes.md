@@ -29,7 +29,7 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
 - `RasSlurm` adds `execution_mode="array"` with `array_throttle`: one Slurm array
   task per request, validated with the same per-request step accounting.
 - Every portable Slurm step now runs `apptainer exec --contain --cleanenv` with a
-  step-private `<node_scratch_root>/ras-commander-<jobid>-<execution_id>-*` bound as
+  step-private `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*` bound as
   `/tmp` (new `SlurmSiteConfig.node_scratch_root`, default `/tmp`), so Wine
   prefixes never share host `/tmp`. The launcher is now
   `ras-portable-slurm-launcher/v2`.

@@ -216,7 +216,7 @@ docker_result = RasPortableDocker.execute_request(request_path)
   exclusive-node pool (`execution_mode="pool"`) or a throttled job array
   (`execution_mode="array"`, `array_throttle`). Each step runs
   `apptainer exec --contain --cleanenv` with a private
-  `<node_scratch_root>/ras-commander-<jobid>-<execution_id>-*` bound as `/tmp`.
+  `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*` bound as `/tmp`.
   `SlurmTransportConfig` supports `mode="local"` or `mode="ssh"`, with
   `transfer_mode="rsync"` or `"scp"`.
 - `validate_execution_receipt()` checks that a receipt belongs to its request

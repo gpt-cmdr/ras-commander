@@ -113,13 +113,16 @@ margins; it is not automatically checked against each request's timeout.
 
 Every request runs as `apptainer exec --contain --cleanenv` with three binds:
 the request bundle read-only at `/job`, its empty output directory writable,
-and a step-private directory `<node_scratch_root>/ras-commander-<jobid>-<execution_id>-*`
+and a step-private directory `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*`
 as `/tmp`. The Wine executor copies its baked prefix into that `/tmp`, so the SIF
 stays read-only and concurrent steps never share a prefix, host `/tmp`, or the
 request bundle. No `--writable-tmpfs` or overlay is needed. The launcher removes
 the step directory after the step ends; results and step logs are already in the
 output directory. Point `node_scratch_root` at node-local disk with room for one
-copy of the image's Wine prefix per concurrent step.
+copy of the image's Wine prefix per concurrent step. When the Slurm prolog
+creates `<node_scratch_root>/$SLURM_JOB_ID` (for example `/scratch/$SLURM_JOB_ID`
+under a root-owned `/scratch`), steps use it; otherwise the launcher creates it
+(0700) and removes it afterwards. It must be owned by the job user.
 
 ### Job-array mode
 
