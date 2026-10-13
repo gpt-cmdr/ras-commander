@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.105.0 (October 2026)
+
+**HDF structure types appear in geometry summaries**
+
+Geometry HDF structure `Type` values are now decoded as text, so bridges,
+culverts, inline weirs, lateral structures, and connections contribute to
+their corresponding `geom_df` counts. Legacy integer codes remain supported,
+and text fallback runs only when the HDF field is absent to prevent
+double-counting (#520).
+
 **Remaining fixed-width table writers reject overflow**
 
 The USGS flow/stage table generator, central geometry formatter (including
