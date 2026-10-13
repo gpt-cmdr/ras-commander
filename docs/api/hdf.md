@@ -2,6 +2,11 @@
 
 Classes for reading and processing HEC-RAS HDF result files.
 
+Rivia provided the conceptual basis for `HdfResultsQuery`; pyHMT2D also
+influenced HDF extraction and spatial probing workflows. See
+[Related libraries](../about/related-libraries.md) for author credit,
+query semantics, and companion-library examples.
+
 ## Exact native mesh dataset identity
 
 Use `HdfMesh.get_mesh_geometry_inventory(hdf_path)` to inventory every native

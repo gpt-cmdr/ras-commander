@@ -47,6 +47,26 @@ RAS Commander represents a practical demonstration of LLM Forward principles app
 
 ## Technical Contributors
 
+### Spatial Results Queries and Rivia
+
+**Gyan Basyal (gyanz)** and [Rivia](https://github.com/gyanz/rivia) provided the
+conceptual basis for `HdfResultsQuery`. Rivia's elegant spatial, profile,
+velocity, and flow query functions inspired this design. We gratefully
+acknowledge Gyan and WEST Consultants, Inc., credited by Rivia's license.
+Rivia also supplied the StoreAllMaps approach used by `RasProcess`.
+See [Related libraries](related-libraries.md) for a comparison and demonstrations
+of Rivia capabilities that remain useful alongside RAS Commander.
+
+### pyHMT2D HDF Extraction and Spatial Probing
+
+**Xiaofeng Liu and the pyHMT2D contributors**, through
+[pyHMT2D](https://github.com/psu-efd/pyHMT2D), influenced early HDF extraction
+and the spatial probing, transect, calibration, and uncertainty workflows
+explored during development. Its VTK-based analysis motivated useful direct
+HDF/scipy query workflows in RAS Commander. See
+[Related libraries](related-libraries.md#pyhmt2d-recent-release-and-complementary-workflows)
+for release context and complementary ParaView/SRH-2D workflows.
+
 ### Native HEC-DSS Access
 
 **Gyan Basyal (gyanz)** maintains
@@ -222,4 +242,4 @@ contributors. See [Cite and Support RAS Commander](../cite.md).
 
 ---
 
-**Last Updated**: 2026-07-19
+**Last Updated**: 2026-10-13

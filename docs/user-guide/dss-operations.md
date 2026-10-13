@@ -6,6 +6,9 @@ RAS Commander reads and writes HEC-DSS boundary and precipitation data.
 through HEC Monolith. Existing Monolith users do not need pydsstools for this
 capability. The native writer below is an optional backend alternative.
 
+For paired data, quality flags, location/vertical-datum metadata, and other
+native DSS record workflows, see [using pydsstools directly](../about/related-libraries.md#pydsstools-use-native-dss-features-directly).
+
 ## Direct precipitation arrays to DSS7
 
 `RasDss.write_precip_grid_arrays()` writes NumPy arrays through the native
