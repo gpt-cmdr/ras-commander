@@ -77,6 +77,17 @@ the upstream implementation is used as a dependency and is not copied into
 RAS Commander. See the [upstream project](https://github.com/gyanz/pydsstools)
 for its documentation, contribution, and sponsorship options.
 
+### HDF Readers and the Java DSS Bridge
+
+[FEMA-FFRD's rashdf](https://github.com/fema-ffrd/rashdf) provided HDF readers
+that were incorporated, revised, adapted, and extended where noted in RAS
+Commander's HDF modules. We acknowledge the upstream authors and contributors.
+
+**Michael Koohafkan's [dssrip2](https://github.com/mkoohafkan/dssrip2)** is an R
+HEC-DSS library. Its HEC Monolith JAR download, platform-native library, and
+cache-management approach was replicated in RAS Commander's
+`_hec_monolith.py` Java bridge. We gratefully acknowledge that foundation.
+
 ### HDF Data Access & Structure Analysis
 
 **Sean Micek, P.E.**

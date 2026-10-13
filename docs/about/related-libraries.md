@@ -15,6 +15,14 @@ citing related work.
 | Native HEC-DSS records and metadata | [Gyan Basyal's pydsstools](https://github.com/gyanz/pydsstools) | Optional native precipitation-grid dependency; use upstream directly for its broader record and metadata APIs |
 | ParaView/VTK analysis and HEC-RAS/SRH-2D comparison | [Xiaofeng Liu's pyHMT2D](https://github.com/psu-efd/pyHMT2D) | Earlier HDF extraction and spatial probing influence; offers a separate multi-solver workflow |
 
+Other acknowledged work includes [FEMA-FFRD's rashdf](https://github.com/fema-ffrd/rashdf),
+whose HDF readers were adapted and extended where noted in RAS Commander,
+and [Michael Koohafkan's dssrip2](https://github.com/mkoohafkan/dssrip2),
+whose HEC Monolith download/cache approach informed our Java DSS bridge.
+rashdf also offers focused geometry export APIs and a CLI; dssrip2 is an option
+for R users reading and writing DSS. These credits complement the Python
+workflows below.
+
 These are task-based starting points, not numerical-equivalence claims. Shared
 names such as “velocity,” “maximum,” or “profile” can describe different spatial
 locations, output intervals, reconstruction algorithms, or summary envelopes.
