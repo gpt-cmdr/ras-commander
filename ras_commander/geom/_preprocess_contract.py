@@ -712,7 +712,10 @@ def _mesh_binding_issues(
     two-vertex ghost cells; their centers are not authored seeds. All native
     face polylines, including ghost-adjacent faces and packed intermediate
     vertices, must be covered by the current perimeter. Boundary arithmetic
-    allows eight float64 ULPs in source CRS units. Spatial imports are local
+    allows eight float64 ULPs at the original perimeter magnitude in source
+    CRS units. Spatial predicates use a uniformly translated local frame to
+    avoid cancellation in tiny buffers at large projected offsets; authored
+    and native arrays remain unchanged. Spatial imports are local
     so nonspatial preprocessing does not require Shapely.
     """
     issues = []
@@ -741,6 +744,9 @@ def _mesh_binding_issues(
     ):
         return issues + ["FacePoints Coordinate: invalid authored perimeter"]
     tolerance = 8 * np.spacing(max(1.0, float(np.max(np.abs(ring)))))
+    origin = ring[0].copy()
+    ring = ring - origin
+    points = points - origin
     import shapely
 
     # Native rings can encode holes with doubled connecting edges. Noding and
@@ -762,6 +768,7 @@ def _mesh_binding_issues(
         return issues + [
             "Faces Perimeter Values: unsupported native coordinate precision"
         ]
+    values = values - origin
     if not np.all(shapely.covers(domain, shapely.points(values))):
         issues.append("Faces Perimeter Values: points outside authored perimeter")
     # Topology/ranges were checked before this function. Resolve the same

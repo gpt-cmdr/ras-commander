@@ -49,6 +49,38 @@ def test_constraint_default_excludes_regions_and_retains_structures():
     assert gm._build_breaklines(area, ns, True) == ["breakline", "region", "structure"]
 
 
+@pytest.mark.parametrize("geometry", [
+    Polygon([(0, 0), (40, 40), (0, 40), (40, 0), (0, 0)]),
+    Polygon(box(0, 0, 100, 100).exterior.coords, [box(20, 20, 80, 80).exterior.coords]),
+    Polygon([(0, 0), (10, 0), (20, 0), (0, 0)]),
+])
+def test_recorded_refinement_repair_preserves_positive_area(tmp_path, monkeypatch, geometry):
+    import geopandas as gpd
+    import h5py
+    from shapely import make_valid
+    from shapely.ops import unary_union
+    from ras_commander.hdf.HdfBndry import HdfBndry
+
+    path, hdf = _write_containment_fixture(tmp_path)
+    gm.GeomMesh.replace_refinement_regions(path, [
+        {"name": "source", "polygon": box(0, 0, 100, 100), "spacing_dx": 10, "spacing_dy": 15}
+    ])
+    monkeypatch.setattr(HdfBndry, "get_refinement_regions", lambda _: gpd.GeoDataFrame(
+        {"Name": ["source"], "rr_id": [0]}, geometry=[geometry]
+    ))
+    before = hdf.read_bytes()
+    specs, report = gm.GeomMesh.clip_refinement_regions(path, box(-10, -10, 110, 110), invalid_regions="repair")
+    assert hdf.read_bytes() == before
+    expected = unary_union(list(gm._iter_polygon_geometries(make_valid(geometry))))
+    assert unary_union([s["polygon"] for s in specs]).equals(expected)
+    assert all(not s["polygon"].interiors and s["spacing_dx"] == 10 and s["spacing_dy"] == 15 for s in specs)
+    assert report.attrs["repairs"][0]["positive_area_preserved"]
+    if expected.is_empty:
+        assert report.reason.tolist() == ["degenerate_source_no_positive_area"]
+    else:
+        assert report.reason.iloc[0].startswith("repaired_source_geometry:")
+
+
 def test_clip_keeps_native_properties_and_reports_fragments(tmp_path):
     path, hdf_path = _write_containment_fixture(tmp_path)
     patch = json.loads(PATCH.read_text())

@@ -86,17 +86,29 @@ import shutil
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 from uuid import uuid4
 
 import h5py
 import numpy as np
 import pandas as pd
 
-from .HdfBase import HdfBase
-from .HdfUtils import HdfUtils
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
+from .HdfBase import HdfBase
+from .HdfUtils import HdfUtils
 
 # Type hints only - not imported at runtime
 if TYPE_CHECKING:
@@ -339,6 +351,129 @@ class HdfMesh:
 
     Note: This class relies on HdfBase and HdfUtils for some underlying operations.
     """
+
+    @staticmethod
+    @log_call
+    @standardize_input(file_type="geom_hdf")
+    def get_mesh_geometry_inventory(
+        hdf_path: Union[str, Path],
+        *,
+        dataset_paths: Optional[Sequence[str]] = None,
+        max_chunk_bytes: int = 8 * 1024 * 1024,
+        ras_object=None,
+    ) -> pd.DataFrame:
+        """Inventory exact native 2D dataset identities without changing the HDF.
+
+        Args:
+            hdf_path: Geometry or child-result HDF path, or geometry number
+                resolved by the input decorator with the explicit ras_object.
+            dataset_paths: Exact previously inventoried paths to read. By default,
+                inventory every dataset below ``Geometry/2D Flow Areas``. Supply
+                the reference inventory's paths when results add property tables.
+                Paths must be unique and remain below that native group.
+            max_chunk_bytes: Maximum uncompressed bytes in a read slab; positive
+                integer, default 8 MiB. An indivisible row exceeding it is rejected.
+            ras_object: Explicit project context for geometry-number resolution.
+
+        Returns:
+            DataFrame with dataset_path, dtype, shape, bytes and sha256, ordered
+            by dataset path. Dtype includes native descriptors and metadata;
+            shape is a tuple. The digest covers fixed-width array bytes in C order,
+            independent of HDF compression or storage chunk layout. Coordinates,
+            units and CRS are not transformed. No file or artifact is written.
+
+        Raises:
+            ValueError: Empty/missing inventory, unsafe or linked paths, unsupported
+                variable-width dtype, or invalid read budget.
+            OSError: The HDF or a dataset cannot be read.
+
+        Notes:
+            Matching complete reference rows proves only those dataset identities.
+            It does not compare HDF attributes, projections, boundary associations,
+            additional result datasets, whole-file bytes or hydraulic acceptance.
+            Callers must bind both HDF digests to fresh native execution receipts
+            and validate the surrounding geometry, CRS and attachment contracts.
+        """
+        import hashlib
+        import json
+
+        if isinstance(max_chunk_bytes, bool) or not isinstance(max_chunk_bytes, int):
+            raise ValueError("max_chunk_bytes must be a positive integer")
+        if max_chunk_bytes <= 0:
+            raise ValueError("max_chunk_bytes must be a positive integer")
+        base = "Geometry/2D Flow Areas"
+        rows = []
+        with h5py.File(hdf_path, "r") as hdf:
+            mesh_group = hdf
+            for part in base.split("/"):
+                if part not in mesh_group:
+                    raise ValueError("native Geometry/2D Flow Areas group is absent")
+                if not isinstance(mesh_group.get(part, getlink=True), h5py.HardLink):
+                    raise ValueError("native mesh inventory contains a nonlocal group link")
+                mesh_group = mesh_group[part]
+                if not isinstance(mesh_group, h5py.Group):
+                    raise ValueError("native Geometry/2D Flow Areas group is absent")
+            paths = []
+
+            def inspect_links(group, prefix, ancestors):
+                address = h5py.h5o.get_info(group.id).addr
+                if address in ancestors:
+                    raise ValueError("native mesh inventory contains a cyclic group link")
+                for name in sorted(group):
+                    path = prefix + "/" + name
+                    if not isinstance(group.get(name, getlink=True), h5py.HardLink):
+                        raise ValueError("native mesh inventory contains a nonlocal link: " + path)
+                    item = group[name]
+                    if isinstance(item, h5py.Dataset):
+                        paths.append(path)
+                    elif isinstance(item, h5py.Group):
+                        inspect_links(item, path, ancestors | {address})
+                    else:
+                        raise ValueError("unsupported native mesh object: " + path)
+
+            inspect_links(mesh_group, base, set())
+            if dataset_paths is not None:
+                if isinstance(dataset_paths, (str, bytes)):
+                    raise ValueError("dataset_paths must be a sequence of unique native paths")
+                selected = list(dataset_paths)
+                if any(not isinstance(p, str) for p in selected):
+                    raise ValueError("dataset_paths must contain strings")
+                if len(set(selected)) != len(selected):
+                    raise ValueError("dataset_paths must contain unique native paths")
+                if any(p not in paths for p in selected):
+                    raise ValueError("requested native mesh dataset is missing or outside the group")
+                paths = sorted(selected)
+            if not paths:
+                raise ValueError("native mesh dataset inventory is empty")
+            for path in paths:
+                dataset = hdf[path]
+                if dataset.shape is None or dataset.dtype.hasobject:
+                    raise ValueError("fixed-width native mesh dataset required: " + path)
+                try:
+                    dtype = json.dumps(
+                        {"descr": dataset.dtype.descr, "metadata": dict(dataset.dtype.metadata or {})},
+                        sort_keys=True, separators=(",", ":"),
+                    )
+                except (TypeError, ValueError) as error:
+                    raise ValueError("unsupported native mesh dtype metadata: " + path) from error
+                digest = hashlib.sha256()
+                if dataset.ndim == 0:
+                    if dataset.dtype.itemsize > max_chunk_bytes:
+                        raise ValueError("native dataset scalar exceeds max_chunk_bytes: " + path)
+                    digest.update(np.asarray(dataset[()], dtype=dataset.dtype).tobytes(order="C"))
+                elif dataset.size:
+                    row_bytes = dataset.dtype.itemsize * int(np.prod(dataset.shape[1:], dtype=object))
+                    if row_bytes > max_chunk_bytes:
+                        raise ValueError("native dataset row exceeds max_chunk_bytes: " + path)
+                    slab_rows = max(1, max_chunk_bytes // max(1, row_bytes))
+                    for start in range(0, dataset.shape[0], slab_rows):
+                        digest.update(dataset[start:start + slab_rows].tobytes(order="C"))
+                rows.append({
+                    "dataset_path": path, "dtype": dtype, "shape": tuple(dataset.shape),
+                    "bytes": int(dataset.size) * dataset.dtype.itemsize,
+                    "sha256": digest.hexdigest(),
+                })
+        return pd.DataFrame(rows, columns=["dataset_path", "dtype", "shape", "bytes", "sha256"])
 
     @staticmethod
     @standardize_input(file_type='geom_hdf')
@@ -4079,10 +4214,10 @@ class HdfMesh:
         List[int]
             Sorted list of face IDs (0-indexed) that satisfy the spatial filter.
         """
-        from shapely.geometry import Point, MultiPolygon
-        from shapely.ops import unary_union
-        from shapely import prepare
         from geopandas import GeoDataFrame
+        from shapely import prepare
+        from shapely.geometry import MultiPolygon, Point
+        from shapely.ops import unary_union
 
         if isinstance(polygon, GeoDataFrame):
             polygon = unary_union(polygon.geometry)

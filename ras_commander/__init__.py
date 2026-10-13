@@ -297,7 +297,7 @@ _LAZY_EXPORTS = {
             'CrossSectionReachLengths', 'GeomStorage', 'GeomProjection',
             'GeomLateral', 'GeomInlineWeir', 'GeomBridge', 'GeomCulvert',
             'GeomCulvertGIS', 'GeomReferenceFeatures', 'GeomBcLines',
-            'GeomMesh', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
+            'GeomMesh', 'GeomMeshRepair', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
             'BCFixResult', 'DomainContainmentResult',
             'DomainContainmentViolation',
         )
@@ -495,7 +495,7 @@ __all__ = [
     'CrossSectionBuildResult', 'CrossSectionManningsN', 'CrossSectionReachLengths',
     'GeomStorage', 'GeomProjection', 'GeomLateral',
     'GeomInlineWeir', 'GeomBridge', 'GeomCulvert', 'GeomCulvertGIS',
-    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh',
+    'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh', 'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult', 'BCConflict', 'BCFixResult', 'DomainContainmentResult',
     'DomainContainmentViolation',

@@ -194,7 +194,15 @@ docker_result = RasPortableDocker.execute_request(request_path)
   Linux, a Windows `ras_executable` is run through Windows Python under Wine.
   This needs the image variables `RAS_COMMANDER_WINE_PREFIX_SEED` and
   `RAS_COMMANDER_WINE_PYTHON`, plus `RAS_COMMANDER_WINE_ARCH` (optional,
-  default `win64`). Each request gets its own copy of the Wine prefix.
+  default `win64`). Each request gets its own copy of the Wine prefix in
+  Python's temporary directory, selected through the process `TMPDIR` where
+  applicable. Fleet runners should bind that directory to writable node-local
+  scratch. The temporary parent must be an absolute regular directory outside
+  the request bundle and image seed. The executor maps the actual copied prefix
+  into Windows, removes it after the attempt, and keeps project results and
+  receipts in the declared output directory. Runtime staging messages identify
+  prefix-copy start, completion, and delegated execution start. Solver deadlines
+  and the requirement for an absent or empty output directory remain unchanged.
 - `RasPortableDocker.execute_request()` and `execute_pool(max_concurrent=8)`
   mount the bundle read-only and only the output directory writable.
 - `RasSlurm.render_submission()`, `stage()`, `submit()`, `status()`,
@@ -535,3 +543,13 @@ pip install ras-commander[remote-all]
       show_root_heading: false
       heading_level: 3
       show_source: false
+
+### Wine request path translation
+
+On POSIX hosts, the portable CLI checks the copied task-private prefix's `Z:`
+symlink. When it resolves to the POSIX root, an absolute request path without
+parent traversal or Windows drive/separator syntax in a POSIX component is translated directly to the equivalent `Z:` path. This
+avoids a separate cold Wine startup just to translate a path. Prefixes with
+other drive mappings or incompatible component names retain `winepath` conversion and its error handling.
+Delegated Windows Python execution, request validation, execution deadlines,
+source immutability and task-private wineserver shutdown stay unchanged.

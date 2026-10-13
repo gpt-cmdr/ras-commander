@@ -1498,6 +1498,11 @@ def _build_feature_actions(
             frame = frame.to_crs(parent_boundary.crs)
         for index, row in frame.iterrows():
             geometry = row.geometry
+            repaired_refinement = False
+            if feature_type == "refinement_region" and geometry is not None and not geometry.is_valid:
+                from .geom.GeomMeshRepair import GeomMeshRepair
+                geometry, _repair = GeomMeshRepair.repair_refinement_polygon(geometry)
+                repaired_refinement = True
             feature_id = str(row.get(id_columns[feature_type], index))
             name = str(row.get("Name", f"{feature_type}_{feature_id}"))
             if feature_type == "bc_line":
@@ -1513,6 +1518,8 @@ def _build_feature_actions(
                 )
                 if action == "clip":
                     reason = "trimmed_to_one_cell_inward_buffer"
+                if repaired_refinement:
+                    reason = "repaired_source_refinement_geometry:" + reason
             else:
                 retained, action, reason = _clip_action(geometry, child)
             records.append(
@@ -1974,7 +1981,7 @@ def _plan_numeric_breakline_containment(
     failed_names: set[str],
     cell_size: float,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Plan bounded endpoint clipping against the exact compiled ring, without mutation."""
+    """Plan bounded clipping or vertex projection against the exact ring, without mutation."""
     if not math.isfinite(cell_size) or cell_size <= 0:
         raise ValueError(
             "Numeric breakline repair requires positive finite cell spacing"
@@ -1996,6 +2003,7 @@ def _plan_numeric_breakline_containment(
             source = LineString(item["coords"])
             clipped = source.intersection(guarded)
             displacement = source.hausdorff_distance(clipped)
+            method = "endpoint_clip"
             if (
                 clipped.geom_type != "LineString"
                 or clipped.is_empty
@@ -2005,6 +2013,37 @@ def _plan_numeric_breakline_containment(
                 raise ValueError(
                     "Numeric breakline repair cannot drop or split a retained line"
                 )
+            if math.isfinite(displacement) and displacement > limit:
+                # At an acute intersection, a microscopic normal deficit can
+                # remove a long endpoint. Preserve that endpoint by projecting
+                # only exterior vertices into the guarded polygon instead.
+                from shapely.geometry import Point
+                from shapely.ops import nearest_points
+
+                interior = guarded.buffer(-margin)
+                if interior.is_empty:
+                    raise ValueError(
+                        "Breakline containment deficit exceeds numeric repair bounds"
+                    )
+                coordinates = []
+                for xy in source.coords:
+                    point = Point(xy)
+                    if not guarded.covers(point):
+                        point = nearest_points(interior, point)[0]
+                    coordinates.append(tuple(point.coords[0]))
+                projected = LineString(coordinates)
+                projected_displacement = source.hausdorff_distance(projected)
+                if (
+                    not interior.is_empty
+                    and projected.is_valid
+                    and projected.length > 0
+                    and guarded.covers(projected)
+                    and math.isfinite(projected_displacement)
+                    and projected_displacement <= limit
+                ):
+                    clipped = projected
+                    displacement = projected_displacement
+                    method = "bounded_vertex_projection"
             if (
                 not math.isfinite(displacement)
                 or displacement > limit
@@ -2024,12 +2063,17 @@ def _plan_numeric_breakline_containment(
                     "after_length": clipped.length,
                     "removed_length": source.length - clipped.length,
                     "geometry_displacement": displacement,
+                    "method": method,
                 }
             )
         output.append(revised)
     return output, {
         "schema": "ras-numeric-breakline-containment-repair/v1",
-        "reason_code": "NUMERIC_BREAKLINE_CONTAINMENT_CLIP",
+        "reason_code": (
+            "NUMERIC_BREAKLINE_CONTAINMENT_VERTEX_REPAIR"
+            if any(r["method"] == "bounded_vertex_projection" for r in repairs)
+            else "NUMERIC_BREAKLINE_CONTAINMENT_CLIP"
+        ),
         "horizontal_units": "source_horizontal_units",
         "maximum_geometry_displacement": limit,
         "one_cell_inward_distance": cell_size,

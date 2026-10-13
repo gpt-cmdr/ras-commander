@@ -198,7 +198,14 @@ class GeomBcLines:
         boundary placement. ``SetConnectionType`` and ``SaveFeatureTable`` persist
         it in an isolated process with HEC-RAS's bundled HDF5 runtime. No line
         geometry, CRS, units or forcing is changed. A sibling backup is retained.
-        Returns before/after file hashes, native type decisions and backup path.
+        ``line_types`` may name a subset of lines; unnamed lines keep their type.
+        Returns before/after file hashes, backup path and ``lines``: one native
+        type decision per compiled line, unnamed lines included. The native
+        receipt must match every decision. Matching types return without native writes or a backup. When the native
+        exporter omits compiled Length or compacts fixed-width identity strings,
+        preserve the original attribute schema and values and copy only verified
+        Type decisions. Unknown field loss, input changes or truncation raise and
+        restore the entire HDF backup.
         Re-run geometry preprocessing to rebuild connectivity after a change.
         """
         import hashlib
@@ -230,9 +237,7 @@ class GeomBcLines:
             not isinstance(name, str) or kind not in ("Internal", "External")
             for name, kind in line_types.items()
         ):
-            raise ValueError(
-                "line_types must map exact BC names to Internal or External."
-            )
+            raise ValueError("line_types must map exact BC names to Internal or External.")
         unknown = set(line_types) - {feature["name"] for feature in features}
         if unknown:
             raise ValueError("Unknown authored BC names: " + ", ".join(sorted(unknown)))
@@ -240,9 +245,7 @@ class GeomBcLines:
         with h5py.File(hdf_path, "r") as hdf:
             issues = _feature_issues(hdf, group, features)
             if issues:
-                raise ValueError(
-                    "Compiled BC geometry is not current: " + "; ".join(issues)
-                )
+                raise ValueError("Compiled BC geometry is not current: " + "; ".join(issues))
             if not features:
                 return {
                     "schema": "ras-bc-line-types/v1",
@@ -250,17 +253,18 @@ class GeomBcLines:
                     "changed": False,
                     "backup_path": None,
                 }
-            attributes = hdf[f"{group}/Attributes"][()]
+            attribute_dataset = hdf[f"{group}/Attributes"]
+            attributes = attribute_dataset[()]
+            attribute_metadata = dict(attribute_dataset.attrs)
             if "Type" not in (attributes.dtype.names or ()):
                 raise ValueError("Compiled BC attributes have no Type field.")
             for name, obj in hdf[group].items():
                 if isinstance(obj, h5py.Dataset) and name != "Attributes":
                     before_arrays[name] = _digest(obj[()])
-        install = Path(hecras_dir) if hecras_dir is not None else find_hecras_install()
-        token = uuid.uuid4().hex
-        backup = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.bak")
-        receipt = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.json")
-        shutil.copy2(hdf_path, backup)
+
+        def decoded(value):
+            return bytes(value).rstrip(b"\x00").decode("utf-8")
+
         def file_hash(path):
             digest = hashlib.sha256()
             with path.open("rb") as stream:
@@ -268,38 +272,124 @@ class GeomBcLines:
                     digest.update(block)
             return digest.hexdigest()
 
+        # One decision per compiled row, matching the native worker's receipt:
+        # unrequested lines keep their original type.
+        decisions = [
+            {
+                "index": index,
+                "name": decoded(row["Name"]),
+                "before": decoded(row["Type"]),
+                "after": line_types.get(decoded(row["Name"]), decoded(row["Type"])),
+            }
+            for index, row in enumerate(attributes)
+        ]
+        if not set(line_types) <= {row["name"] for row in decisions}:
+            raise ValueError("Compiled BC identities differ from authored type decisions.")
+        if all(row["before"] == row["after"] for row in decisions):
+            digest = file_hash(hdf_path)
+            return {
+                "schema": "ras-bc-line-types/v1",
+                "lines": decisions,
+                "changed": False,
+                "backup_path": None,
+                "before_sha256": digest,
+                "after_sha256": digest,
+                "bc_geometry_unchanged": True,
+                "attribute_schema_preserved": True,
+            }
+
+        install = Path(hecras_dir) if hecras_dir is not None else find_hecras_install()
+        token = uuid.uuid4().hex
+        backup = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.bak")
+        receipt = hdf_path.with_name(hdf_path.name + f".bc-types-{token}.json")
+        shutil.copy2(hdf_path, backup)
         before_hash = file_hash(backup)
         receipt.write_text(
             json.dumps({"line_types": line_types}, indent=2) + "\n", encoding="utf-8"
         )
-        _run_property_tables_worker(install, hdf_path, bc_types_receipt=receipt)
-        result = json.loads(receipt.read_text(encoding="utf-8"))
-        with h5py.File(hdf_path, "r") as hdf:
-            after = hdf[f"{group}/Attributes"][()]
-            for field in attributes.dtype.names:
-                if field != "Type" and _digest(attributes[field]) != _digest(
-                    after[field]
+        try:
+            _run_property_tables_worker(install, hdf_path, bc_types_receipt=receipt)
+            result = json.loads(receipt.read_text(encoding="utf-8"))
+            with h5py.File(hdf_path, "r+") as hdf:
+                after = hdf[f"{group}/Attributes"][()]
+                original_fields = set(attributes.dtype.names or ())
+                native_fields = set(after.dtype.names or ())
+                if (
+                    len(after) != len(attributes)
+                    or not {"Name", "SA-2D", "Type"}.issubset(native_fields)
+                    or native_fields - original_fields
+                    or original_fields - native_fields - {"Length"}
+                ):
+                    raise RuntimeError("Native BC classification changed the attribute schema.")
+                for field in original_fields & native_fields - {"Type"}:
+                    if attributes[field].dtype.kind == after[field].dtype.kind == "S":
+                        equal = [bytes(v).rstrip(b"\x00") for v in attributes[field]] == [
+                            bytes(v).rstrip(b"\x00") for v in after[field]
+                        ]
+                    else:
+                        equal = _digest(attributes[field]) == _digest(after[field])
+                    if not equal:
+                        raise RuntimeError(f"Native BC classification changed input field {field}.")
+                for name, digest in before_arrays.items():
+                    if name not in hdf[group] or _digest(hdf[group][name][()]) != digest:
+                        raise RuntimeError(f"Native BC classification changed {name}.")
+                # The native receipt must list every original row exactly once,
+                # with requested rows at their authored type and all other rows
+                # unchanged.
+                expected = {row["index"]: row for row in decisions}
+                observed = result["lines"]
+                if (
+                    not isinstance(observed, list)
+                    or any(
+                        not isinstance(row, dict)
+                        or not isinstance(row.get("index"), int)
+                        or isinstance(row["index"], bool)
+                        for row in observed
+                    )
+                    or len(observed) != len(expected)
+                    or {row["index"]: row for row in observed} != expected
                 ):
                     raise RuntimeError(
-                        f"Native BC classification changed input field {field}."
+                        "Native BC classification receipt differs from the authored decisions."
                     )
-            for name, digest in before_arrays.items():
-                if name not in hdf[group] or _digest(hdf[group][name][()]) != digest:
-                    raise RuntimeError(f"Native BC classification changed {name}.")
-            for row in result["lines"]:
-                observed = bytes(after["Type"][row["index"]]).rstrip(b"\x00").decode()
-                if observed != row["after"]:
-                    raise RuntimeError("Native BC classification was not persisted.")
-        after_hash = file_hash(hdf_path)
-        result.update(
-            schema="ras-bc-line-types/v1",
-            changed=any(row["before"] != row["after"] for row in result["lines"]),
-            backup_path=str(backup),
-            before_sha256=before_hash,
-            after_sha256=after_hash,
-            bc_geometry_unchanged=True,
-        )
-        receipt.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+                preserved = attributes.copy()
+                for index, row in enumerate(after):
+                    desired = expected[index]["after"]
+                    if decoded(row["Type"]) != desired:
+                        raise RuntimeError("Native BC classification was not persisted.")
+                    preserved["Type"][index] = desired.encode("ascii")
+                    if decoded(preserved["Type"][index]) != desired:
+                        raise RuntimeError(
+                            "Native BC Type does not fit the original attribute dtype."
+                        )
+                # SaveFeatureTable in HEC-RAS 6.6 drops Length and compacts string
+                # storage. Preserve the compiled schema and all original values,
+                # copying only independently verified native Type decisions.
+                del hdf[f"{group}/Attributes"]
+                restored = hdf[group].create_dataset("Attributes", data=preserved)
+                for key, value in attribute_metadata.items():
+                    restored.attrs[key] = value
+                readback = restored[()]
+                if readback.dtype != preserved.dtype or any(
+                    readback[field].tobytes() != preserved[field].tobytes()
+                    for field in preserved.dtype.names
+                ):
+                    raise RuntimeError("Native BC attribute preservation failed.")
+            after_hash = file_hash(hdf_path)
+            result.update(
+                schema="ras-bc-line-types/v1",
+                changed=any(row["before"] != row["after"] for row in result["lines"]),
+                backup_path=str(backup),
+                before_sha256=before_hash,
+                after_sha256=after_hash,
+                bc_geometry_unchanged=True,
+                attribute_schema_preserved=True,
+                native_attribute_fields=list(after.dtype.names),
+            )
+            receipt.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        except Exception:
+            shutil.copy2(backup, hdf_path)
+            raise
         return result
 
     @staticmethod

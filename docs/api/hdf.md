@@ -2,6 +2,37 @@
 
 Classes for reading and processing HEC-RAS HDF result files.
 
+## Exact native mesh dataset identity
+
+Use `HdfMesh.get_mesh_geometry_inventory(hdf_path)` to inventory every native
+dataset below `Geometry/2D Flow Areas` without modifying the file. The ordered
+DataFrame contains `dataset_path`, `dtype`, `shape`, `bytes` and `sha256`.
+Descriptors and metadata preserve the fixed-width native dtype; SHA-256 covers
+the uncompressed C-order array bytes. HDF compression and storage chunking
+therefore do not affect the dataset identity. Coordinates, units and CRS are
+not converted.
+
+```python
+reference = HdfMesh.get_mesh_geometry_inventory("child.g01.hdf")
+result = HdfMesh.get_mesh_geometry_inventory(
+    "child.p09.hdf", dataset_paths=reference.dataset_path.tolist()
+)
+same_mesh_datasets = reference.to_dict("records") == result.to_dict("records")
+```
+
+Selecting the complete reference paths permits additional result property
+datasets without asserting that those additions match. Missing, duplicate,
+nonlocal or variable-width paths fail explicitly. An empty inventory cannot
+pass. Reads use slabs bounded by `max_chunk_bytes` (default 8 MiB); a native
+row that cannot fit that budget is rejected.
+
+Bind both HDF file digests to fresh native preprocessing or execution receipts
+before using the comparison. Matching dataset rows does not establish whole
+HDF equality, matching attributes or projections, native boundary ownership,
+structure attachment, hydraulic equivalence or engineering approval. Verify
+those independent contracts through their corresponding public APIs. This
+reader performs no native execution and writes no artifact.
+
 ## SA/2D native attachment evidence
 
 Call `HdfStruc.get_connection_attachments(hdf_path, connections_df=None,
