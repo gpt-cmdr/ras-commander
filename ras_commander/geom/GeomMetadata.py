@@ -230,11 +230,12 @@ class GeomMetadata:
     @staticmethod
     def _get_xs_count_hdf(hdf: h5py.File) -> int:
         """Get the validated 1D cross-section count for modern or legacy HDF."""
-        # Lazy import keeps the geometry metadata module independent during
-        # package initialization while sharing one schema-recognition contract.
-        from ..hdf.HdfXsec import HdfXsec
+        # Use the h5py-only helper that HdfXsec also delegates to. Importing
+        # HdfXsec would require geopandas and shapely, which the core install
+        # does not include.
+        from ..hdf._HdfXsecSchema import get_cross_section_count
 
-        return HdfXsec._get_cross_section_count(hdf)
+        return get_cross_section_count(hdf)
 
     # HEC-RAS geometry HDFs store /Geometry/Structures/Attributes "Type" as
     # fixed-length byte strings (b'Bridge', b'Culvert', b'Inline', b'Lateral',
