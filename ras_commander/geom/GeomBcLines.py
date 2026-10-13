@@ -198,8 +198,10 @@ class GeomBcLines:
         boundary placement. ``SetConnectionType`` and ``SaveFeatureTable`` persist
         it in an isolated process with HEC-RAS's bundled HDF5 runtime. No line
         geometry, CRS, units or forcing is changed. A sibling backup is retained.
-        Returns before/after file hashes, native type decisions and backup path.
-        Matching types return without native writes or a backup. When the native
+        ``line_types`` may name a subset of lines; unnamed lines keep their type.
+        Returns before/after file hashes, backup path and ``lines``: one native
+        type decision per compiled line, unnamed lines included. The native
+        receipt must match every decision. Matching types return without native writes or a backup. When the native
         exporter omits compiled Length or compacts fixed-width identity strings,
         preserve the original attribute schema and values and copy only verified
         Type decisions. Unknown field loss, input changes or truncation raise and
@@ -270,17 +272,18 @@ class GeomBcLines:
                     digest.update(block)
             return digest.hexdigest()
 
+        # One decision per compiled row, matching the native worker's receipt:
+        # unrequested lines keep their original type.
         decisions = [
             {
                 "index": index,
                 "name": decoded(row["Name"]),
                 "before": decoded(row["Type"]),
-                "after": line_types[decoded(row["Name"])],
+                "after": line_types.get(decoded(row["Name"]), decoded(row["Type"])),
             }
             for index, row in enumerate(attributes)
-            if decoded(row["Name"]) in line_types
         ]
-        if {row["name"] for row in decisions} != set(line_types):
+        if not set(line_types) <= {row["name"] for row in decisions}:
             raise ValueError("Compiled BC identities differ from authored type decisions.")
         if all(row["before"] == row["after"] for row in decisions):
             digest = file_hash(hdf_path)
@@ -330,6 +333,9 @@ class GeomBcLines:
                 for name, digest in before_arrays.items():
                     if name not in hdf[group] or _digest(hdf[group][name][()]) != digest:
                         raise RuntimeError(f"Native BC classification changed {name}.")
+                # The native receipt must list every original row exactly once,
+                # with requested rows at their authored type and all other rows
+                # unchanged.
                 expected = {row["index"]: row for row in decisions}
                 observed = result["lines"]
                 if (
@@ -348,11 +354,7 @@ class GeomBcLines:
                     )
                 preserved = attributes.copy()
                 for index, row in enumerate(after):
-                    desired = (
-                        expected[index]["after"]
-                        if index in expected
-                        else decoded(attributes[index]["Type"])
-                    )
+                    desired = expected[index]["after"]
                     if decoded(row["Type"]) != desired:
                         raise RuntimeError("Native BC classification was not persisted.")
                     preserved["Type"][index] = desired.encode("ascii")

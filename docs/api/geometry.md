@@ -574,15 +574,17 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
 - `replace_bc_lines(...)` - Replace all target-area lines and supplied unsteady references
-- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply the exact BC names and types from the authored placement. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns type decisions and before/after hashes. It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
+- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply exact BC names and types from the authored placement; lines not named keep their current type. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns before/after hashes and `lines`, one type decision per compiled line (unnamed lines included, unchanged). It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
 
 Matching types return with `changed=false`, identical hashes and no backup or
 native write. For a real change, native export can omit the compiled `Length`
 field and compact identity string storage. The API validates the native row
 identities and every other retained value, then preserves the original attribute
 schema, metadata and quantities while copying only verified `Type` decisions.
-It never invents a missing length. Unknown field loss, input changes, an invalid
-decision receipt or type truncation fail and restore the whole HDF backup.
+It never invents a missing length. The native receipt must list every compiled
+line exactly once with its expected type. Unknown field loss, input changes, an
+invalid or incomplete decision receipt, a type change on an unnamed line or type
+truncation fail and restore the whole HDF backup.
 The additive `attribute_schema_preserved` flag and, after native work,
 `native_attribute_fields` list describe this preservation in the existing
 `ras-bc-line-types/v1` record. Recompile geometry after an actual type change;
