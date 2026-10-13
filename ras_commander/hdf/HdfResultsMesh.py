@@ -79,6 +79,9 @@ HdfUtils for common operations. Methods use @log_call decorator for logging and
 
 """
 
+from __future__ import annotations
+
+
 from pathlib import Path
 from typing import (
     Any,
@@ -92,12 +95,15 @@ from typing import (
     overload,
 )
 
-import geopandas as gpd
 import h5py
 import numpy as np
 import pandas as pd
-import xarray as xr
 
+from .._optional_deps import (
+    OptionalDependencyError,
+    optional_module,
+    require_module,
+)
 from .._rasmap_schema import rasmap_dataframe_is_usable
 from ..Decorators import log_call, standardize_input
 from ..LoggingConfig import get_logger
@@ -105,6 +111,9 @@ from .HdfBase import HdfBase
 from .HdfMesh import HdfMesh
 from .HdfResultView import HdfResultView, Selection
 from .HdfUtils import HdfUtils
+
+gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfResultsMesh")
+xr = optional_module("xarray", "Returning xarray results from HdfResultsMesh")
 
 logger = get_logger(__name__)
 
@@ -202,6 +211,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, var, round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_summary: {str(e)}")
             logger.error(f"Variable: {var}")
@@ -1432,6 +1443,8 @@ class HdfResultsMesh:
                     # Assign the variable name as the DataArray name
                     da.name = HdfResultsMesh._mesh_data_var_name(var)
                     datasets.append(da)
+                except OptionalDependencyError:
+                    raise
                 except Exception as e:
                     logger.warning(f"Failed to process {var} for mesh {mesh_name}: {str(e)}")
         
@@ -1441,6 +1454,8 @@ class HdfResultsMesh:
         
         try:
             return xr.merge(datasets, join="outer")
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Failed to merge datasets: {str(e)}")
             return xr.Dataset()
@@ -1487,6 +1502,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_path:
                 return HdfResultsMesh._get_mesh_cells_timeseries_output(hdf_path, mesh_names, var, truncate)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_cells_timeseries: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
@@ -1524,6 +1541,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Maximum Water Surface", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_max_ws: {str(e)}")
             raise ValueError(f"Failed to get maximum water surface: {str(e)}")
@@ -1549,6 +1568,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Minimum Water Surface", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_min_ws: {str(e)}")
             raise ValueError(f"Failed to get minimum water surface: {str(e)}")
@@ -1570,6 +1591,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Maximum Face Velocity", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_max_face_v: {str(e)}")
             raise ValueError(f"Failed to get maximum face velocity: {str(e)}")
@@ -1594,6 +1617,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Minimum Face Velocity", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_min_face_v: {str(e)}")
             raise ValueError(f"Failed to get minimum face velocity: {str(e)}")
@@ -1618,6 +1643,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Maximum Water Surface Error", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_max_ws_err: {str(e)}")
             raise ValueError(f"Failed to get maximum water surface error: {str(e)}")
@@ -1646,6 +1673,8 @@ class HdfResultsMesh:
         try:
             with h5py.File(hdf_path, 'r') as hdf_file:
                 return HdfResultsMesh.get_mesh_summary_output(hdf_file, "Cell Last Iteration", round_to)
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_max_iter: {str(e)}")
             raise ValueError(f"Failed to get maximum iteration count: {str(e)}")
@@ -1745,13 +1774,16 @@ class HdfResultsMesh:
                 missing required geometry or result datasets, or their
                 dimensions and cell counts are inconsistent.
         """
-        from shapely.geometry import Point
+        GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
+        Point = require_module(
+            "shapely.geometry", "Returning GeoDataFrame results from HdfResultsMesh"
+        ).Point
 
         try:
             source_name = Path(hdf_path).name
 
             def empty_result(crs=None) -> gpd.GeoDataFrame:
-                return gpd.GeoDataFrame(
+                return GeoDataFrame(
                     {
                         "mesh_name": pd.Series(dtype="object"),
                         "cell_id": pd.Series(dtype="int64"),
@@ -1876,7 +1908,7 @@ class HdfResultsMesh:
                         continue
 
                     geom = [Point(x, y) for x, y in xy]
-                    df = gpd.GeoDataFrame({
+                    df = GeoDataFrame({
                         "mesh_name": [mesh_name] * len(max_depth),
                         "cell_id": range(len(max_depth)),
                         "maximum_depth": max_depth,
@@ -1886,7 +1918,7 @@ class HdfResultsMesh:
             if not dfs:
                 return empty_result(crs)
 
-            result = gpd.GeoDataFrame(
+            result = GeoDataFrame(
                 pd.concat(dfs, ignore_index=True),
                 geometry="geometry",
                 crs=crs,
@@ -1895,6 +1927,8 @@ class HdfResultsMesh:
             logger.debug(f"Extracted max depth for {len(result)} cells")
             return result
 
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_max_depth: {str(e)}")
             raise ValueError(f"Failed to get maximum depth: {str(e)}") from e
@@ -2496,6 +2530,8 @@ class HdfResultsMesh:
                             )
                         else:
                             missing_optional_variables.append(variable)
+                    except OptionalDependencyError:
+                        raise
                     except Exception as e:
                         logger.error(f"Error processing variable '{variable}' for mesh '{mesh_name}': {str(e)}")
 
@@ -2526,6 +2562,8 @@ class HdfResultsMesh:
                         logger.warning(f"No valid data variables found for mesh '{mesh_name}'")
 
             return datasets
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in _mesh_cells_timeseries_output: {str(e)}")
             raise ValueError(f"Error processing timeseries output data: {e}")
@@ -2600,6 +2638,8 @@ class HdfResultsMesh:
                 dims=dims,
                 attrs={"units": units, "mesh_name": mesh_name, "variable": var},
             )
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error in get_mesh_timeseries_output: {str(e)}")
             raise ValueError(f"Failed to get timeseries output: {str(e)}")
@@ -2777,6 +2817,7 @@ class HdfResultsMesh:
             A GeoDataFrame containing the summary output data with decoded attributes as metadata.
             Returns empty GeoDataFrame if variable is not found.
         """
+        GeoDataFrame = gpd.GeoDataFrame  # Fail fast with the install command.
         try:
             values = HdfResultsMesh._get_mesh_summary_values_output(
                 hdf_file,
@@ -2784,7 +2825,7 @@ class HdfResultsMesh:
                 round_to,
             )
             if values.empty:
-                return gpd.GeoDataFrame()
+                return GeoDataFrame()
 
             attrs = dict(values.attrs)
             if "Face" in var:
@@ -2802,7 +2843,7 @@ class HdfResultsMesh:
             else:
                 values["geometry"] = None
 
-            result = gpd.GeoDataFrame(values, geometry="geometry")
+            result = GeoDataFrame(values, geometry="geometry")
             crs = HdfBase.get_projection(hdf_file)
             if crs:
                 result.set_crs(crs, inplace=True)
@@ -2810,6 +2851,8 @@ class HdfResultsMesh:
             logger.debug("Processed %s rows of summary output data", len(result))
             return result
         
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error processing summary output data: {e}")
             raise ValueError(f"Error processing summary output data: {e}")
@@ -2996,6 +3039,8 @@ class HdfResultsMesh:
                                 }
                             }
                     
+                    except OptionalDependencyError:
+                        raise
                     except Exception as e:
                         logger.warning(f"Error processing boundary condition '{bc_name}': {str(e)}")
                         continue
@@ -3069,6 +3114,8 @@ class HdfResultsMesh:
                             ds = ds.assign_coords(
                                 {"2d area": ("bc_name", values)}
                             )
+                    except OptionalDependencyError:
+                        raise
                     except Exception as e:
                         logger.debug(
                             "Could not add canonical metadata coordinate "
@@ -3099,6 +3146,8 @@ class HdfResultsMesh:
                         ds = ds.assign_coords(
                             {coordinate_name: ("bc_name", values)}
                         )
+                    except OptionalDependencyError:
+                        raise
                     except Exception as e:
                         logger.debug(
                             f"Could not add metadata coordinate '{key}': "
@@ -3171,6 +3220,8 @@ class HdfResultsMesh:
                 
                 return ds
                 
+        except OptionalDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Error getting all boundary conditions timeseries: {str(e)}")
             return xr.Dataset()

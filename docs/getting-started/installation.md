@@ -94,8 +94,8 @@ Downloading example projects with
 raises an `ImportError` that names the `full` extra. Geospatial, plotting, and
 precipitation APIs need the `full` extra.
 
-For command-line HEC-RAS execution, compute-message parsing, and direct HDF
-result extraction without RasControl/COM or the full geospatial stack:
+For command-line HEC-RAS execution and compute-message parsing without
+RasControl/COM or the full geospatial stack:
 
 ```bash
 pip install "ras-commander[compute]"
@@ -104,6 +104,22 @@ pip install "ras-commander[compute]"
 The `execution` extra is an alias for `compute`. Both add psutil and, on
 Windows, pywin32 for the normal process and dialog supervision used by
 `RasCmdr.compute_plan()`.
+
+The `compute` install reads results that are returned as pandas DataFrames.
+Examples are plan-level results from `HdfResultsPlan` (compute messages,
+runtime, and volume accounting) and geometry-free 2D mesh summary values from
+`HdfResultsMesh.get_mesh_summary_values()`. The HDF result classes import
+without the optional packages. Functions that return an xarray object (time
+series such as `HdfResultsMesh.get_mesh_timeseries()` and
+`HdfResultsXsec.get_xsec_timeseries()`) need xarray. Functions that return a
+GeoDataFrame (such as `HdfResultsMesh.get_mesh_max_ws()` and
+`HdfResultsMesh.get_mesh_max_depth()`) need geopandas. Without the package,
+these functions raise an `ImportError` that names the package and the install
+command. To add the complete results stack to a `compute` install:
+
+```bash
+pip install "ras-commander[compute,full]"
+```
 
 For the historical complete feature dependency set, including geospatial,
 plotting, scientific, precipitation, and remote-data dependencies:

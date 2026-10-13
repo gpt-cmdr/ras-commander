@@ -21,19 +21,23 @@ Results Retrieval Functions:
 Note: All functions use the @standardize_input decorator to validate input paths
 and the @log_call decorator for logging function calls.
 """
+
+from __future__ import annotations
+
 import h5py
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-import xarray as xr
 from pathlib import Path
-from shapely.geometry import LineString, Point, MultiLineString, Polygon, MultiPolygon
 from typing import List, Dict, Any, Optional, Union, Tuple
+from .._optional_deps import optional_module, require_module
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
 from .HdfResultsMesh import HdfResultsMesh
+
+gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPipe")
+xr = optional_module("xarray", "Returning xarray results from HdfPipe")
 
 logger = get_logger(__name__)
 
@@ -100,6 +104,9 @@ class HdfPipe:
             - Polyline: LineString geometries
             - Terrain_Profiles: List of (station, elevation) tuples
         """
+        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
+        LineString = shapely_geometry.LineString
+
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Conduits' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -193,6 +200,9 @@ class HdfPipe:
         Example:
             >>> nodes_gdf = HdfPipe.get_pipe_nodes("path/to/plan.hdf")
         """
+        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
+        Point = shapely_geometry.Point
+
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Nodes' not in f:
                 raise KeyError(_missing_hdf_object_message(
@@ -308,6 +318,12 @@ class HdfPipe:
             - Node points
             - Associated attributes
         """
+        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPipe")
+        LineString = shapely_geometry.LineString
+        MultiLineString = shapely_geometry.MultiLineString
+        MultiPolygon = shapely_geometry.MultiPolygon
+        Polygon = shapely_geometry.Polygon
+
         with h5py.File(hdf_path, 'r') as f:
             if '/Geometry/Pipe Networks' not in f:
                 raise KeyError(_missing_hdf_object_message(
