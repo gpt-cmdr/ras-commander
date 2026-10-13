@@ -118,18 +118,11 @@ setup(
         'full': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES,
         # Remote execution backends (PsExec worker has no extra deps)
         'remote': [],  # Base remote - PsExec only, no additional deps
-        'remote-ssh': ['paramiko>=3.0'],
-        'remote-winrm': ['pywinrm>=0.4.3'],
         'remote-docker': ['docker>=6.0'],
-        'remote-aws': ['boto3>=1.28'],
-        'remote-azure': ['azure-identity>=1.14', 'azure-mgmt-compute>=30.0'],
+        # paramiko backs DockerWorker SSH/SFTP staging for ssh:// Docker hosts.
         'remote-all': [
             'paramiko>=3.0',
-            'pywinrm>=0.4.3',
             'docker>=6.0',
-            'boto3>=1.28',
-            'azure-identity>=1.14',
-            'azure-mgmt-compute>=30.0',
         ],
         # GUI automation and screenshot capture (Windows only)
         'gui': [
@@ -186,11 +179,7 @@ setup(
         # Everything (all optional dependencies)
         'all': FULL_FEATURE_DEPENDENCIES + COMPUTE_DEPENDENCIES + [
             'paramiko>=3.0',
-            'pywinrm>=0.4.3',
             'docker>=6.0',
-            'boto3>=1.28',
-            'azure-identity>=1.14',
-            'azure-mgmt-compute>=30.0',
             'Pillow>=9.0',
             'comtypes>=1.4.0; sys_platform == "win32"',
             'dataretrieval>=1.0',

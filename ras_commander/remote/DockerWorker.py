@@ -14,15 +14,15 @@ Prerequisites:
        - Download: https://www.docker.com/products/docker-desktop
        - Ensure Linux containers mode is enabled (default)
 
-    2. HEC-RAS 6.6 Linux binaries (not redistributable)
-       - Users must obtain from HEC or build their own
-       - Required structure in ras-commander-cloud repo:
-         reference/Linux_RAS_v66/bin/  (RasUnsteady, RasGeomPreprocess, etc.)
-         reference/Linux_RAS_v66/libs/ (Intel MKL and runtime libraries)
+    2. Build the HEC-RAS Docker image with the bundled setup script,
+       ras_commander/remote/docker/setup_docker.py. It downloads the HEC-RAS
+       Linux binaries from HEC (or extracts them from a local install via
+       --ras-install), generates the Dockerfile, copies
+       ras_commander/remote/docker/scripts/run_ras.sh into the image, and
+       tags the result hecras:<version>:
 
-    3. Build the Docker image:
-       cd path/to/ras-commander-cloud
-       docker build -t hecras:6.6 .
+       python ras_commander/remote/docker/setup_docker.py --list
+       python ras_commander/remote/docker/setup_docker.py --version <version>
 
        Image size: ~2.75 GB (includes full Intel MKL for AVX512 support)
 

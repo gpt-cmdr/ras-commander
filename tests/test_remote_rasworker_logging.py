@@ -90,3 +90,26 @@ def test_load_workers_from_json_info_is_path_concise(monkeypatch, tmp_path, capl
     assert "Loaded worker: Local Test (local)" in debug_text
     assert "Loaded worker: Remote Test (psexec)" in debug_text
     assert str(config_path.resolve()) in debug_text
+
+
+def test_removed_worker_types_raise_value_error_naming_hpc_path():
+    import pytest
+
+    for worker_type in ("slurm", "ssh", "winrm", "aws_ec2", "azure_fr"):
+        with pytest.raises(ValueError) as excinfo:
+            rasworker_module.init_ras_worker(
+                worker_type, ras_exe_path=r"C:\HEC-RAS\6.6\Ras.exe"
+            )
+        message = str(excinfo.value)
+        assert "psexec, local, docker" in message
+        assert "RasSlurm" in message and "RasApptainer" in message
+
+
+def test_removed_worker_stubs_are_not_exported():
+    import ras_commander
+    import ras_commander.remote as remote
+
+    for name in ("SlurmWorker", "SshWorker", "WinrmWorker", "AwsEc2Worker", "AzureFrWorker"):
+        assert name not in remote.__all__
+        assert name not in ras_commander.__all__
+        assert not hasattr(remote, name)

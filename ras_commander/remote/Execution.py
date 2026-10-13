@@ -487,12 +487,6 @@ def _execute_single_plan(
                 if hdf_file.exists():
                     result.hdf_path = str(hdf_file)
 
-        elif worker.worker_type == "ssh":
-            result.error_message = "SSH worker not yet implemented"
-
-        elif worker.worker_type == "winrm":
-            result.error_message = "WinRM worker not yet implemented"
-
         elif worker.worker_type == "docker":
             from .DockerWorker import execute_docker_plan
             success = execute_docker_plan(
@@ -516,15 +510,6 @@ def _execute_single_plan(
                     if tmp_hdf.exists():
                         result.hdf_path = str(tmp_hdf)
 
-        elif worker.worker_type == "slurm":
-            result.error_message = "Slurm worker not yet implemented"
-
-        elif worker.worker_type == "aws_ec2":
-            result.error_message = "AWS EC2 worker not yet implemented"
-
-        elif worker.worker_type == "azure_fr":
-            result.error_message = "Azure worker not yet implemented"
-
         else:
             result.error_message = f"Unknown worker type: {worker.worker_type}"
 
@@ -543,8 +528,6 @@ def _execute_single_plan(
                 result.result_format = "legacy"
                 result.hdf_path = None
 
-    except NotImplementedError as e:
-        result.error_message = str(e)
     except Exception as e:
         result.error_message = f"Execution error: {e}"
         logger.exception(f"Error executing plan {plan_number} on {worker.worker_id}")
