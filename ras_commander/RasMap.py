@@ -715,6 +715,98 @@ class RasMap:
 
     @staticmethod
     @log_call
+    def remove_terrain_layers(rasmap_path: str | Path) -> list[str]:
+        """Remove all terrain registrations from a cloned Mapper file.
+
+        Mutates only the supplied XML; never deletes HDF/TIFF files or changes
+        geometry-HDF associations. The caller must register its replacement
+        terrain and explicitly associate every geometry before native execution.
+        No units or coordinates are converted.
+
+        Args:
+            rasmap_path: Explicit Mapper XML in a versioned child clone.
+
+        Returns:
+            Names of removed terrain registrations, in document order.
+
+        Raises:
+            xml.etree.ElementTree.ParseError: Malformed Mapper XML.
+        """
+        from ._terrain_registration import remove_terrain_layers
+
+        return remove_terrain_layers(rasmap_path)
+
+    @staticmethod
+    def create_terrain_sampling_map(
+        source_mapper: str | Path, terrain_hdf: str | Path,
+        projection_prj: str | Path, output_mapper: str | Path,
+        geometry_hdf: str | Path | None = None,
+    ) -> str:
+        """Create a new export-only Mapper with one unchanged native terrain layer.
+
+        Resolves a unique terrain basename from source registrations, including
+        stale delivered directory spellings. Reads source files without mutation;
+        writes only the new Mapper. Returns its native terrain name. Grid, CRS,
+        vertical units and modification enable flags remain unchanged.
+        Optional geometry_hdf registers a caller-owned geometry copy for native
+        profile sampling; it defaults to no geometry registration.
+        """
+        from ._terrain_registration import create_terrain_sampling_map
+        return create_terrain_sampling_map(source_mapper, terrain_hdf, projection_prj, output_mapper, geometry_hdf)
+
+    @staticmethod
+    def relocate_rasmap_assets(rasmap_path: str | Path, assets: list[Path]) -> list[dict]:
+        """Rebind uniquely named copied assets relatively in a caller-owned Mapper.
+
+        Mutates only the supplied clone's Filename attributes. Duplicate asset
+        basenames are rejected before writing. Does not alter grids, CRS, native
+        terrain names, result-map parameters or vertical units.
+        """
+        from ._terrain_registration import relocate_rasmap_assets
+        return relocate_rasmap_assets(rasmap_path, assets)
+
+    @staticmethod
+    def audit_terrain_associations(rasmap_path: str | Path, geometry_hdfs: list[Path]) -> dict:
+        """Read terrain, classification, projection and geometry links after relocation.
+
+        Returns pass/hold with every material path, its existence/relative state,
+        and stale result-map terrain names. No files, grids, CRS or units change.
+        Requires a nonempty geometry list; every geometry terrain association
+        must resolve to one registered native terrain HDF.
+        Unrelated display layers and omitted parent result files are outside scope.
+        """
+        from ._terrain_registration import audit_terrain_associations
+        return audit_terrain_associations(rasmap_path, geometry_hdfs)
+
+    @staticmethod
+    @log_call
+    def reassign_result_map_terrains(
+        rasmap_path: str | Path, terrain_names: Dict[str, str]
+    ) -> List[Dict[str, str]]:
+        """Replace named terrain references in a caller-owned Mapper clone.
+
+        Updates result-map ``MapParameters.Terrain`` and calculated-layer
+        ``Terrain.Name`` references using an explicit old-to-new name mapping.
+        Every destination name must already be registered. Other result-map
+        settings, geometry associations, terrain registrations and native HDFs
+        are unchanged. No CRS, units or elevations are transformed.
+
+        Args:
+            rasmap_path: Writable cloned .rasmap file; never pass a source project.
+            terrain_names: Exact, case-sensitive old-to-new terrain names.
+
+        Returns:
+            Change records with plan_name, element, attribute, old_terrain_name
+            and new_terrain_name. Empty when no references need replacement.
+            Writes only the supplied Mapper file, atomically after validation.
+            Use set_geometry_association separately for geometry HDF terrain links.
+        """
+        from ._terrain_registration import reassign_result_map_terrains
+
+        return reassign_result_map_terrains(rasmap_path, terrain_names)
+
+    @staticmethod
+    @log_call
     def list_terrain_layers(
         ras_project_path: Union[str, Path],
         ras_object=None,
@@ -5573,6 +5665,7 @@ class RasMap:
         layer_name: str = "Terrain",
         projection_prj: Optional[Union[str, Path]] = None,
         ras_object=None,
+        relative_paths: bool = False,
     ) -> None:
         """
         Add terrain layer to RASMapper configuration.
@@ -5588,6 +5681,10 @@ class RasMap:
             projection_prj: Path to ESRI PRJ file. If provided, updates
                 RASProjectionFilename element. Default: None (keeps existing).
             ras_object (RasPrj, optional): Optional RasPrj object instance (default: global ras).
+            relative_paths: Include sibling and parent folders in relative terrain
+                and projection references on the same drive. Default False keeps
+                the existing descendant-only behavior. Different drives retain
+                absolute references. Use True for relocatable cloned bundles.
 
         Returns:
             None
@@ -5660,7 +5757,11 @@ class RasMap:
 
         try:
             # Calculate relative path
-            rel_path = terrain_hdf_resolved.relative_to(rasmap_dir)
+            rel_path = (
+                Path(os.path.relpath(terrain_hdf_resolved, rasmap_dir))
+                if relative_paths
+                else terrain_hdf_resolved.relative_to(rasmap_dir)
+            )
             # Format as Windows-style relative path with .\ prefix
             rel_path_str = ".\\" + str(rel_path).replace("/", "\\")
         except ValueError:
@@ -5714,8 +5815,11 @@ class RasMap:
         # Update projection reference if provided
         if projection_prj is not None:
             try:
-                prj_rel_path = RasUtils.safe_resolve(projection_prj).relative_to(
-                    rasmap_dir
+                projection_resolved = RasUtils.safe_resolve(projection_prj)
+                prj_rel_path = (
+                    Path(os.path.relpath(projection_resolved, rasmap_dir))
+                    if relative_paths
+                    else projection_resolved.relative_to(rasmap_dir)
                 )
                 prj_rel_path_str = ".\\" + str(prj_rel_path).replace("/", "\\")
             except ValueError:

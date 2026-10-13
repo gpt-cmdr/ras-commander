@@ -396,20 +396,53 @@ def _find_project_file(project_folder: Path) -> Optional[Path]:
     return None
 
 
+def _expand_reference_text(filename: str | Path) -> str:
+    """Clean paired quotes and expand both RAS percent and host variables."""
+    text = str(filename).strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        text = text[1:-1].strip()
+    text = _WINDOWS_ENV_VAR_PATTERN.sub(
+        lambda match: os.environ.get(match.group(1), match.group(0)), text
+    )
+    return os.path.expandvars(text)
+
+
+def _unresolved_reference(filename: str | Path) -> tuple[str, bool | None, str] | None:
+    """Classify a reference with no provable native host resolution."""
+    text = _expand_reference_text(filename)
+    windows = PureWindowsPath(text)
+    if os.name != "nt" and (windows.drive or text.startswith("\\")):
+        if windows.is_absolute():
+            return "external", False, "reference_foreign_windows_anchor"
+        return "ambiguous", None, "reference_foreign_windows_anchor"
+    return None
+
+
 def resolve_rasmap_relative_path(
     project_folder: Union[str, Path],
     filename: Optional[Union[str, Path]],
 ) -> Optional[Path]:
-    """Resolve a filename from .rasmap XML to an absolute filesystem path."""
+    """Resolve a RASMapper reference or preserve a foreign lexical path.
+
+    On POSIX, Windows anchors remain lexical Paths with no owner prefix;
+    they are not native resolutions. Inventory classifies them explicitly.
+    Native Windows anchor behavior and unresolved percent variables retain
+    their existing handling.
+    """
     if filename in (None, ""):
         return None
 
+    unresolved = _unresolved_reference(filename)
+    if unresolved is not None:
+        return Path(_expand_reference_text(filename))
     project_folder = RasUtils.safe_resolve(Path(project_folder))
-    original_filename_str = str(filename).strip()
-    filename_str = _WINDOWS_ENV_VAR_PATTERN.sub(
-        lambda match: os.environ.get(match.group(1), match.group(0)),
-        original_filename_str,
-    ).strip()
+    filename_str = _expand_reference_text(filename)
+    # Preserve legacy lexical handling of unresolved percent variables.
+    # Environment ambiguity is outside this host-anchor correction.
+    if str(filename).strip().startswith("%") and _WINDOWS_ENV_VAR_PATTERN.search(filename_str):
+        return Path(filename_str)
+    if os.name != "nt" and Path(filename_str).is_absolute():
+        return RasUtils.safe_resolve(Path(filename_str.replace("\\", "/")))
     path = PureWindowsPath(filename_str.replace("/", "\\"))
 
     if path.is_absolute():
@@ -417,12 +450,6 @@ def resolve_rasmap_relative_path(
         if os.name == "nt":
             return RasUtils.safe_resolve(resolved)
         return resolved
-
-    if (
-        original_filename_str.startswith("%")
-        and _WINDOWS_ENV_VAR_PATTERN.search(filename_str)
-    ):
-        return Path(filename_str)
 
     relative_str = filename_str.replace("/", "\\")
     if relative_str.startswith(".\\") or relative_str.startswith("./"):

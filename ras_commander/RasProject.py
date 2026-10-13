@@ -30,6 +30,7 @@ from .LoggingConfig import get_logger
 from .RasPrj import RasPrj, init_ras_project
 from .RasUnsteady import RasUnsteady
 from .RasUtils import RasUtils
+from ._land_classification_helper import _expand_reference_text, _unresolved_reference
 from ._rasmap_schema import expected_rasmap_path, rasmap_dataframe_is_usable
 from .schemas import DATAFRAME_SCHEMAS
 
@@ -473,10 +474,11 @@ def _plan_window(plan_path: Path) -> tuple[Optional[datetime], Optional[datetime
     return _parse_ras_time(",".join(parts[:2])), _parse_ras_time(",".join(parts[2:]))
 
 
-def _resolve_reference(owner: Path, raw: str) -> Path:
-    expanded = os.path.expandvars(raw.strip().strip('"'))
-    if os.name == "nt":
-        expanded = expanded.replace("/", "\\")
+def _resolve_reference(owner: Path, raw: str) -> Path | None:
+    if _unresolved_reference(raw) is not None:
+        return None
+    expanded = _expand_reference_text(raw)
+    expanded = expanded.replace("\\", "/")
     candidate = Path(expanded)
     if not candidate.is_absolute():
         candidate = owner.parent / candidate
@@ -563,12 +565,21 @@ def _add_asset(
     occurrence: int = 0,
     id_discriminator: Optional[str] = None,
 ) -> str:
+    unresolved = _unresolved_reference(raw) if raw and kind != "dss_pathname" else None
+    if unresolved is not None:
+        # Foreign anchors have no local file facts.
+        path = None
     facts = _path_facts(path, hash_file=hash_files)
     scope, portable = (
         ("ambiguous", None)
         if path is None or facts["access_error"] is not None
         else _path_scope(project_root, path)
     )
+    if unresolved is not None:
+        scope, portable, path_reason = unresolved
+        state = "ambiguous"
+        readiness = "not_required" if required is False else "unknown"
+        reason_code = path_reason
     if state is None:
         if facts["access_error"] is not None:
             state = "ambiguous"
@@ -681,7 +692,7 @@ def _add_implied_vector_sidecars(
     depth: InspectionDepth,
     project_root: Path,
     owner: Path,
-    vector_path: Path,
+    vector_path: Path | None,
     parent_asset_id: str,
     required: Optional[bool],
     hash_files: bool,
@@ -689,7 +700,7 @@ def _add_implied_vector_sidecars(
     occurrence: int = 0,
 ) -> list[Path]:
     """Inventory mechanically required ESRI Shapefile sidecars."""
-    if vector_path.suffix.casefold() != ".shp":
+    if vector_path is None or vector_path.suffix.casefold() != ".shp":
         return []
     sidecars: list[Path] = []
     for sidecar_occurrence, suffix in enumerate((".shx", ".dbf")):
@@ -1285,8 +1296,9 @@ def _inspect_project_assets_impl(
             if column not in rasmap_df.columns:
                 continue
             for occurrence, raw_path in enumerate(_as_values(summary.get(column))):
-                path = RasUtils.safe_resolve(Path(raw_path))
-                seen_map_paths.add(os.path.normcase(str(path)))
+                path = _resolve_reference(rasmap_path, raw_path)
+                if path is not None:
+                    seen_map_paths.add(os.path.normcase(str(path)))
                 map_required = False if kind in {"stored_map", "projection"} else None
                 map_reason = (
                     "rasmap_reference_not_plan_associated"
@@ -1336,7 +1348,7 @@ def _inspect_project_assets_impl(
                     if not raw:
                         continue
                     path = _resolve_reference(rasmap_path, raw)
-                    if os.path.normcase(str(path)) in seen_map_paths:
+                    if path is not None and os.path.normcase(str(path)) in seen_map_paths:
                         continue
                     kind = (
                         "directory"
@@ -1360,7 +1372,8 @@ def _inspect_project_assets_impl(
                         parent_asset_id=rasmap_id,
                         occurrence=occurrence,
                     )
-                    seen_map_paths.add(os.path.normcase(str(path)))
+                    if path is not None:
+                        seen_map_paths.add(os.path.normcase(str(path)))
                     for sidecar in _add_implied_vector_sidecars(
                         rows,
                         inventory_id=inventory_id,
