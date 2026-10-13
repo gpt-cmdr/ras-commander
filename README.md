@@ -182,7 +182,9 @@ pip install ras-commander[all]
 pip install --upgrade ras-commander
 ```
 
-The standard install provides project inventory and direct HDF access. For a
+The standard install provides project inventory and direct HDF access.
+Downloading example projects with `RasExamples` and running the example
+notebooks need the `full` extra (`pip install "ras-commander[full]"`). For a
 lean batch runner that also executes plans through `RasCmdr.compute_plan()`, use:
 
 ```bash
