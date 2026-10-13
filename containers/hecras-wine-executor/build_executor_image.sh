@@ -148,9 +148,12 @@ assert header[:4] == b"\x7fELF" and header[4] == 2 and header[18] == 0x3E, "cpus
 PY
 
 # Root-owned, world-readable seed: every task copies it into private scratch.
-chown -R root:root "$SEED"
-find "$SEED" -type d -exec chmod 755 {} +
-find "$SEED" -type f -exec chmod u+rw,go+r,go-w {} +
+# Touch only entries that differ: overlayfs copies every file chown/chmod
+# touches into the new layer, so a blanket recursive change duplicates the
+# whole multi-GB prefix (observed: a 4.9 GB layer).
+find "$SEED" \( ! -user root -o ! -group root \) -exec chown -h root:root {} +
+find "$SEED" -type d ! -perm 755 -exec chmod 755 {} +
+find "$SEED" -type f \( ! -perm -u=rw -o ! -perm -g=r -o ! -perm -o=r -o -perm /go=w \) -exec chmod u+rw,go+r,go-w {} +
 rm -rf /tmp/build-home
 echo LAYER-OK
 '
