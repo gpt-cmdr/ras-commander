@@ -9,7 +9,7 @@ security_review: internal
 
 # Cloud Native GIS
 
-Coordinate cloud-native workflows through the current ras2cng or hms2cng public API/CLI. Use this skill when invoked directly or routed from RAS/HMS Commander. Read [runtime and MCP boundaries](../ras-commander/references/runtime-and-mcp.md) for version discipline and the informational-tool boundary.
+Coordinate cloud-native workflows through the current ras2cng or hms2cng public API/CLI. Use this skill when invoked directly or routed from RAS/HMS Commander. Version discipline and the informational-tool boundary follow the `ras-commander` and `hms-commander` skills: use installed public packages, preserve user pins, and never call project MCP from the main agent.
 
 1. Identify the source model family and requested output. Route HEC-RAS to ras2cng and HEC-HMS to hms2cng. Mixed tasks retain separate source identity and can share a declared output catalog.
 2. Discover the installed version and supported command/signature. Read the selected package's current help, public docs, and available canonical AGENTS instructions. Resolve checkout paths from the environment; do not assume `C:/GH` or a NAS mount exists. Do not import the whole historical export skill as a current CLI contract.
