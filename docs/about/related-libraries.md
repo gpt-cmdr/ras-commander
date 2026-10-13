@@ -42,6 +42,7 @@ and [source](https://github.com/gyanz/rivia).
 | File lifetime | HDF reader keeps a handle open; use a context manager | A result view reopens the source and checks its fingerprint; iterators hold a handle during consumption |
 | Selective values | Lazy `h5py.Dataset` slices and convenience methods returning arrays/Series | Direct selections, bounded iterators/reductions, and container conversion |
 | Arbitrary coordinate samples | Geometry-aware query and reconstruction methods | `HdfResultsQuery.query_point()` / `query_points()` offer nearest-center or IDW sampling |
+| Raster rendering | `area.export_raster(..., render_mode=...)` uses Rivia's rasterization pipeline | `RasMap.set_water_surface_render_mode()` and `store_all_maps(..., render_mode=...)` control native RASMapper rendering |
 | Along-line hydraulics | WSE stations include cell crossings; discharge sums oriented fluxes across a connected mesh-face path | Dedicated polyline WSE/velocity/flow profiles and time-series methods; assess each method's semantics before comparison |
 
 Nearest-center or IDW values are not automatically equivalent to RASMapper
@@ -96,13 +97,53 @@ units, dry-cell handling, and spatial location before comparing values.
   plan includes that output. See the [sediment examples](https://github.com/gyanz/rivia/blob/32d795622928d18ce947e9d3b313657bdf0dbffb/docs/guide/quickstart.md).
 - **Raster rendering:** `area.export_raster("wse", timestep=0, ...)` offers
   horizontal, sloping, and hybrid modes following RASMapper's rendering
-  approach. This is useful when rendering semantics matter. Upstream documents
-  possible edge-case differences, so establish equivalence on your model
-  rather than assuming every raster is identical to RASMapper output.
+  approach. RAS Commander also exposes render-mode selection, as shown below.
+  Rivia's own rasterization pipeline is a useful alternative to invoking the
+  installed RASMapper libraries. Upstream documents possible edge-case
+  differences, so establish equivalence on your model rather than assuming
+  every raster is identical to RASMapper output.
 - **1D output blocks:** `plan.cross_sections("mapping")`, `"output"`,
   `"profile"`, and `"post_process"` distinguish interval/block semantics.
   Rivia's DSS reader is another option for 1D records spanning restart runs;
   see its data access guide.
+
+### RAS Commander also exposes raster render modes
+
+[RasMap's rendering APIs](../api/rasmapper/index.md#ras_commander.RasMap.RasMap.set_water_surface_render_mode)
+are public controls, not just internal possibilities.
+`set_water_surface_render_mode()` updates the project's `.rasmap` for display
+and stored-map exports. `get_water_surface_render_mode()` reads those settings.
+`store_all_maps(..., render_mode=...)` also accepts an explicit export override.
+
+With an initialized project and an already computed plan:
+
+```python
+from ras_commander import RasMap
+
+# Persist display/export settings in the active project's .rasmap.
+RasMap.set_water_surface_render_mode(
+    "slopingPretty",
+    reduce_shallow_to_horizontal=True,
+    use_depth_weighted_faces=False,
+)
+settings = RasMap.get_water_surface_render_mode()
+
+# Generate stored maps already configured for plan 01 using an explicit mode.
+export = RasMap.store_all_maps("01", mode="configured", render_mode="slopingPretty")
+```
+
+RAS Commander accepts `horizontal`, `sloping`, and `slopingPretty`; the last
+supports shallow-cell fallback and depth-weighted face contributions. Rivia
+uses `horizontal`, `sloping`, and `hybrid`. These names describe related
+rendering concepts, but do not establish a one-to-one numerical mapping.
+
+RAS Commander's stored-map helper invokes the installed RASMapper libraries
+and applies rendering settings there. It requires a supported installed
+HEC-RAS environment and configured map/terrain inputs. Merely setting a mode
+does not establish cross-version raster equivalence; the validation registry
+in `RasMap` qualifies specific version/mode combinations. Rivia's
+`area.export_raster()` instead exposes its renderer directly on a flow-area
+object. Choose the workflow and validate the output against your requirements.
 
 ## pydsstools: use native DSS features directly
 
@@ -187,7 +228,8 @@ VTK review files; it does not run HEC-RAS. See the upstream
 ## Evidence and acknowledgment practice
 
 This comparison was checked against Rivia `32d7956`, pydsstools `eb61931`, and
-pyHMT2D `57645ff` on 2026-10-13. Examples were checked against upstream source;
+pyHMT2D `57645ff` on 2026-10-13. Companion-library examples were checked against upstream source; the RAS Commander
+render-mode example was checked against its public API;
 they have not been executed against a common HEC-RAS model here. They are
 workflow demonstrations, not a benchmark or a hydraulic-equivalence report.
 
