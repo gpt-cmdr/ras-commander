@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import random
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,7 @@ _WINE_PYTHON = "RAS_COMMANDER_WINE_PYTHON"
 _WINE_ARCH = "RAS_COMMANDER_WINE_ARCH"
 _WINE_DELEGATED = "RAS_COMMANDER_WINE_DELEGATED"
 _WINE_PREFIX_WINDOWS = "RAS_COMMANDER_WINE_PREFIX_WINDOWS"
+_WINE_CPU_SHIM = "RAS_COMMANDER_WINE_CPU_SHIM"
 _WINDOWS_SAFE_PATH_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._()+-\\:"
 )
@@ -73,6 +76,63 @@ def _wine_environment(request: RasExecutionRequest) -> tuple[Path, str, str]:
     return seed.resolve(), python_value, arch
 
 
+def _wine_cpu_shim() -> Optional[Path]:
+    """Return the image's CPU-numbering shim, or ``None`` when it is disabled.
+
+    In a Slurm/cgroup CPU set that does not start at CPU 0, Wine reports the
+    raw host CPU id as the Windows processor number. .NET code in HEC-RAS
+    preprocessing indexes per-processor state with it and fails intermittently
+    with 0xC0000005. The shim remaps ``sched_getcpu`` to the index within the
+    process affinity mask. Images set ``RAS_COMMANDER_WINE_CPU_SHIM`` to the
+    shim's absolute path; an unset, empty, or ``0`` value disables it.
+    """
+    setting = os.environ.get(_WINE_CPU_SHIM, "").strip()
+    if setting in {"", "0"}:
+        return None
+    shim = Path(setting)
+    if not shim.is_absolute() or shim.is_symlink() or not shim.is_file():
+        raise ValueError(f"{_WINE_CPU_SHIM} must name an absolute regular file")
+    if any(character in setting for character in " :"):
+        raise ValueError(f"{_WINE_CPU_SHIM} cannot contain spaces or colons")
+    return shim
+
+
+def _free_x_display() -> int:
+    """Return an X display number not in use on this node.
+
+    Contained steps have private ``/tmp`` directories, so ``xvfb-run -a``
+    cannot see other steps' lock files, while Linux Xvfb also listens on an
+    abstract socket shared through the host network namespace. Probe that
+    socket name for a free display instead of relying on ``/tmp`` locks.
+    """
+    candidates = random.sample(range(100, 32000), 200)
+    for display in candidates:
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.bind(f"\0/tmp/.X11-unix/X{display}")
+        except OSError:
+            continue
+        finally:
+            probe.close()
+        return display
+    raise RuntimeError("No free X display number found for Xvfb")
+
+
+def _xvfb_command(xvfb_run: str) -> list[str]:
+    """Return an ``xvfb-run`` prefix bound to a free, node-unique display."""
+    return [xvfb_run, "-n", str(_free_x_display())]
+
+
+def _disable_wine_debugger(overrides: str) -> str:
+    """Return DLL overrides that stop a crash from waiting in winedbg."""
+    entries = [entry for entry in overrides.split(";") if entry.strip()]
+    for entry in entries:
+        names = entry.split("=", 1)[0].split(",")
+        if any(name.strip().lower() in {"winedbg", "winedbg.exe"} for name in names):
+            return ";".join(entries)
+    return ";".join(entries + ["winedbg.exe=d"])
+
+
 def _shutdown_wineserver(wineserver: str, environment: dict[str, str]) -> None:
     """Wait for the task-private server, terminating it if it does not exit."""
     try:
@@ -110,6 +170,7 @@ def _execute_with_wine(
     if os.environ.get(_WINE_DELEGATED):
         raise RuntimeError("Refusing recursive Wine request delegation")
     seed, windows_python, arch = _wine_environment(request)
+    cpu_shim = _wine_cpu_shim()
     tools = {
         name: _required_tool(name)
         for name in ("wine", "winepath", "wineserver", "xvfb-run")
@@ -147,11 +208,20 @@ def _execute_with_wine(
             _WINE_DELEGATED: "1",
         }
     )
+    environment["WINEDLLOVERRIDES"] = _disable_wine_debugger(
+        environment.get("WINEDLLOVERRIDES", "")
+    )
+    if cpu_shim is not None:
+        preload = environment.get("LD_PRELOAD", "").strip()
+        if str(cpu_shim) not in preload.replace(":", " ").split():
+            environment["LD_PRELOAD"] = f"{cpu_shim} {preload}".strip()
     wine_invoked = False
     try:
         print("ras-commander Wine runtime: copying task-private prefix", flush=True)
         shutil.copytree(seed, prefix, symlinks=True)
         print("ras-commander Wine runtime: task-private prefix ready", flush=True)
+        if cpu_shim is not None:
+            print(f"ras-commander Wine runtime: CPU shim {cpu_shim}", flush=True)
         wine_invoked = True
         # The image seed normally maps Z: to the POSIX root. Verify the copied
         # mapping before using it, avoiding a separate cold Wine startup merely
@@ -213,8 +283,7 @@ def _execute_with_wine(
         print("ras-commander Wine runtime: starting delegated execution", flush=True)
         completed = subprocess.run(
             [
-                tools["xvfb-run"],
-                "-a",
+                *_xvfb_command(tools["xvfb-run"]),
                 tools["wine"],
                 windows_python,
                 "-m",

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 
+import pytest
 from ras_commander.RasSlurm import (
     SLURM_BATCH_SCHEMA,
     SLURM_SUBMISSION_SCHEMA,
@@ -93,34 +94,37 @@ def test_v1_receipt_fields_schema_and_validation_are_stable(tmp_path):
     assert validated == receipt
 
 
-def test_v1_slurm_submission_handle_round_trips(tmp_path):
-    request_path = _bundle(tmp_path)
+def test_v1_slurm_submission_handle_is_rejected_with_guidance(tmp_path):
+    _bundle(tmp_path)
     payload = _load("slurm_submission.json")
     text = json.dumps(payload).replace(
         "__SUBMISSION_DIRECTORY__", tmp_path.resolve().as_posix()
     )
     payload = json.loads(text)
 
-    submission = SlurmSubmission.from_dict(payload)
-
-    assert payload["schema"] == SLURM_SUBMISSION_SCHEMA
-    assert set(payload["site"]) == {item.name for item in fields(SlurmSiteConfig)}
+    assert payload["schema"] == "ras-commander-slurm-submission/v1"
+    assert SLURM_SUBMISSION_SCHEMA == "ras-commander-slurm-submission/v2"
+    # v1 sites carried the no-op memory_per_task field, removed in v2.
+    assert "memory_per_task" in payload["site"]
+    assert "memory_per_task" not in {item.name for item in fields(SlurmSiteConfig)}
     assert set(payload["transport"]) == {
         item.name for item in fields(SlurmTransportConfig)
     }
-    assert submission.request_paths == (request_path.resolve(),)
-    assert submission.transport.transfer_mode == "scp"
-    assert SlurmSubmission.from_dict(submission.to_dict()) == submission
+    with pytest.raises(ValueError, match="collect it with the version that rendered it"):
+        SlurmSubmission.from_dict(payload)
 
 
-def test_v1_slurm_batch_steps_are_accepted_by_the_launcher():
+def test_v1_slurm_batch_steps_keep_the_step_contract(tmp_path):
     payload = _load("slurm_batch.json")
 
-    assert payload["schema"] == SLURM_BATCH_SCHEMA
-    assert payload["launcher"]["version"] == portable_slurm_launcher.LAUNCHER_VERSION
-    assert set(payload["site"]) == {item.name for item in fields(SlurmSiteConfig)}
+    assert payload["schema"] == "ras-commander-slurm-batch/v1"
+    assert SLURM_BATCH_SCHEMA == "ras-commander-slurm-batch/v2"
     for step in payload["steps"]:
         portable_slurm_launcher._validate_step(step)
+    batch = tmp_path / "slurm_batch.json"
+    batch.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Launcher version does not match batch"):
+        portable_slurm_launcher.run(batch)
 
 
 def test_public_exports_resolve_to_classes_after_submodule_imports():

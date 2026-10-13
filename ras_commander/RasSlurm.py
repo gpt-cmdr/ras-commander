@@ -1,8 +1,13 @@
-"""Slurm/Apptainer adapter for portable one-core steady-plan requests.
+"""Slurm/Apptainer adapter for portable one-core steady and unsteady requests.
 
 Local and SSH transports use the same staged directory. Remote jobs never
 contain workstation paths: each request is rebuilt as a self-contained bundle
 under ``bundles/<execution_id>`` and the batch manifest stores relative paths.
+
+Two scheduling modes share the request, launcher, and receipt contract:
+``execution_mode="pool"`` runs every request inside one exclusive-node
+allocation; ``execution_mode="array"`` submits one Slurm array task per request
+so the scheduler can spread requests across nodes.
 """
 
 from __future__ import annotations
@@ -31,8 +36,9 @@ from .remote.portable_slurm_launcher import LAUNCHER_VERSION
 
 
 logger = get_logger(__name__)
-SLURM_BATCH_SCHEMA = "ras-commander-slurm-batch/v1"
-SLURM_SUBMISSION_SCHEMA = "ras-commander-slurm-submission/v1"
+SLURM_BATCH_SCHEMA = "ras-commander-slurm-batch/v2"
+SLURM_SUBMISSION_SCHEMA = "ras-commander-slurm-submission/v2"
+_LEGACY_SUBMISSION_SCHEMA = "ras-commander-slurm-submission/v1"
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\Z")
 _MODULE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+:-]{0,127}\Z")
 _MEMORY = re.compile(r"[1-9][0-9]*(?:[KMGTP])?\Z", re.IGNORECASE)
@@ -58,16 +64,28 @@ def _allocation_memory(per_task: str, slots: int) -> str:
 
 @dataclass(frozen=True)
 class SlurmSiteConfig:
-    """Scheduler-only settings kept outside hydraulic request manifests."""
+    """Scheduler-only settings kept outside hydraulic request manifests.
+
+    ``execution_mode="pool"`` (default) reserves one exclusive node and runs up
+    to ``slots_per_node`` one-core requests concurrently. ``"array"`` submits one
+    single-core array task per request, at most ``array_throttle`` at once.
+    ``slurm_memory`` is the memory for each request step; pool mode reserves it
+    once per slot. Each step binds a private directory below
+    ``node_scratch_root`` (node-local disk; ``/tmp`` by default) to ``/tmp`` in
+    a ``--contain`` container, so Wine prefixes and temporary files never share
+    host ``/tmp`` or the request bundle.
+    """
 
     site_name: str
     apptainer_image: str
     apptainer_image_sha256: str
     container_identity: str
     slots_per_node: int = 8
-    memory_per_task: str = "3G"
     slurm_memory: Optional[str] = None
     time_limit: str = "02:00:00"
+    execution_mode: str = "pool"
+    array_throttle: Optional[int] = None
+    node_scratch_root: str = "/tmp"
     partition: Optional[str] = None
     account: Optional[str] = None
     qos: Optional[str] = None
@@ -95,8 +113,18 @@ class SlurmSiteConfig:
                 raise ValueError(f"{name} contains unsupported Slurm characters")
         if not 1 <= self.slots_per_node <= 256:
             raise ValueError("slots_per_node must be from 1 through 256")
-        if not _MEMORY.fullmatch(self.memory_per_task):
-            raise ValueError("memory_per_task must look like '3072M' or '3G'")
+        if self.execution_mode not in {"pool", "array"}:
+            raise ValueError("execution_mode must be 'pool' or 'array'")
+        if self.array_throttle is not None and (
+            type(self.array_throttle) is not int or self.array_throttle < 1
+        ):
+            raise ValueError("array_throttle must be omitted or a positive integer")
+        if self.array_throttle is not None and self.execution_mode != "array":
+            raise ValueError("array_throttle requires execution_mode='array'")
+        if not _REMOTE_PATH.fullmatch(self.node_scratch_root) or any(
+            part in {".", ".."} for part in self.node_scratch_root.split("/")
+        ):
+            raise ValueError("node_scratch_root must be a safe absolute POSIX path")
         if self.slurm_memory is not None and not _MEMORY.fullmatch(self.slurm_memory):
             raise ValueError("slurm_memory must be omitted or look like '3072M' or '3G'")
         if not _TIME.fullmatch(self.time_limit):
@@ -285,7 +313,14 @@ class SlurmSubmission:
     def from_dict(cls, payload: Mapping) -> "SlurmSubmission":
         """Validate and rehydrate a stored lifecycle handle."""
         values = dict(payload)
-        if values.pop("schema", None) != SLURM_SUBMISSION_SCHEMA:
+        schema = values.pop("schema", None)
+        if schema == _LEGACY_SUBMISSION_SCHEMA:
+            raise ValueError(
+                "This Slurm submission handle uses the v1 schema written by "
+                "ras-commander 0.105.0 or earlier; check status and collect it "
+                "with the version that rendered it"
+            )
+        if schema != SLURM_SUBMISSION_SCHEMA:
             raise ValueError("Unsupported Slurm submission schema")
         expected = {
             "submission_id",
@@ -301,7 +336,7 @@ class SlurmSubmission:
             "job_id",
         }
         if set(values) != expected:
-            raise ValueError("Slurm submission fields do not match the v1 schema")
+            raise ValueError("Slurm submission fields do not match the v2 schema")
         values["submission_directory"] = Path(values["submission_directory"])
         values["request_paths"] = tuple(Path(path) for path in values["request_paths"])
         values["site"] = SlurmSiteConfig(**values["site"])
@@ -341,6 +376,30 @@ class SlurmCollection:
             or self.accounting.allocation_state == "COMPLETED"
         )
         return receipts_ok and scheduler_ok and not self.errors
+
+
+_ACTIVE_STATES = frozenset({"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "REQUEUED", "RESIZING", "SUSPENDED"})
+
+
+def _array_state(records: Sequence["SlurmTaskAccounting"], submission: "SlurmSubmission") -> str:
+    """Summarize array-task allocations: active, all completed, or first failure.
+
+    Array tasks have their own raw job IDs and share the submission's job name;
+    their ``.batch``/``.extern`` and ``rc-###`` step records are excluded.
+    """
+    tasks = [item for item in records if item.job_name == submission.submission_id]
+    states = [item.state for item in tasks]
+    active = [state for state in states if state in _ACTIVE_STATES]
+    if active:
+        return "RUNNING" if "RUNNING" in active else active[0]
+    # Cancelled pending tasks can appear as one range record (``<id>_[k-n]``),
+    # so a terminal failure ends the array even with fewer records than tasks.
+    failures = [state for state in states if state != "COMPLETED"]
+    if failures:
+        return failures[0]
+    if len(tasks) < len(submission.request_paths):
+        return "PENDING" if not tasks else "RUNNING"
+    return "COMPLETED"
 
 
 def _ssh_base(transport: SlurmTransportConfig) -> list[str]:
@@ -463,7 +522,7 @@ def _validate_local_apptainer_paths(submission: SlurmSubmission) -> None:
 
 
 class RasSlurm:
-    """Render, transport, and manage one exclusive-node Slurm allocation."""
+    """Render, transport, and manage a Slurm request pool or job array."""
 
     @staticmethod
     @log_call
@@ -483,7 +542,7 @@ class RasSlurm:
 
         Args:
             request_paths (Sequence[Union[str, Path]]): Request files to run in
-                one exclusive-node allocation.
+                one exclusive-node allocation or as one array task each.
             submission_directory (Union[str, Path]): Absent or empty directory.
             site (SlurmSiteConfig): Scheduler, image, and memory settings.
             submission_id (Optional[str]): Allocation name; random if omitted.
@@ -559,18 +618,44 @@ class RasSlurm:
         atomic_write_json(directory / "slurm_batch.json", batch_payload)
         batch_sha256 = sha256_file(directory / "slurm_batch.json")
 
-        directives = [
-            "#!/bin/bash",
-            f"#SBATCH --job-name={identifier}",
-            "#SBATCH --nodes=1",
-            f"#SBATCH --ntasks={site.slots_per_node}",
-            "#SBATCH --cpus-per-task=1",
-            f"#SBATCH --time={site.time_limit}",
-            "#SBATCH --exclusive",
-            "#SBATCH --output=slurm-%j.out",
-            "#SBATCH --error=slurm-%j.err",
-        ]
-        if site.slurm_memory is not None:
+        if site.execution_mode == "array":
+            array = f"0-{len(steps) - 1}"
+            if site.array_throttle is not None:
+                array += f"%{site.array_throttle}"
+            directives = [
+                "#!/bin/bash",
+                f"#SBATCH --job-name={identifier}",
+                f"#SBATCH --array={array}",
+                "#SBATCH --nodes=1",
+                "#SBATCH --ntasks=1",
+                "#SBATCH --cpus-per-task=1",
+                f"#SBATCH --time={site.time_limit}",
+                "#SBATCH --output=slurm-%A_%a.out",
+                "#SBATCH --error=slurm-%A_%a.err",
+            ]
+            if site.slurm_memory is not None:
+                directives.append(f"#SBATCH --mem={site.slurm_memory}")
+            launch = (
+                f"{site.launcher_python_executable} portable_slurm_launcher.py "
+                'slurm_batch.json --array-index "$SLURM_ARRAY_TASK_ID"'
+            )
+        else:
+            directives = [
+                "#!/bin/bash",
+                f"#SBATCH --job-name={identifier}",
+                "#SBATCH --nodes=1",
+                f"#SBATCH --ntasks={site.slots_per_node}",
+                "#SBATCH --cpus-per-task=1",
+                f"#SBATCH --time={site.time_limit}",
+                "#SBATCH --exclusive",
+                "#SBATCH --output=slurm-%j.out",
+                "#SBATCH --error=slurm-%j.err",
+            ]
+            launch = (
+                f"{site.launcher_python_executable} "
+                "portable_slurm_launcher.py slurm_batch.json"
+            )
+        if site.execution_mode == "pool" and site.slurm_memory is not None:
             # An exclusive allocation receives every CPU on the node even when
             # the request pool uses fewer slots.  --mem-per-cpu would therefore
             # be multiplied by the physical CPU count and can make a valid
@@ -604,10 +689,7 @@ class RasSlurm:
                     f"echo '{batch_sha256}  slurm_batch.json' "
                     "| sha256sum --check --strict -"
                 ),
-                (
-                    f"{site.launcher_python_executable} "
-                    "portable_slurm_launcher.py slurm_batch.json"
-                ),
+                launch,
                 "",
             )
         )
@@ -826,7 +908,7 @@ class RasSlurm:
         transport: SlurmTransportConfig = SlurmTransportConfig(),
         submission_id: Optional[str] = None,
     ) -> SlurmSubmission:
-        """Render, stage, and submit one exclusive-node request pool.
+        """Render, stage, and submit one request pool or job array.
 
         Args:
             request_paths (Sequence[Union[str, Path]]): Request files.
@@ -921,11 +1003,16 @@ class RasSlurm:
                     elapsed=columns[5].strip(),
                 )
             )
-        allocation = next(
-            (item.state for item in records if item.job_id == submission.job_id),
-            records[0].state if records else "UNKNOWN",
-        )
+        if submission.site.execution_mode == "array":
+            allocation = _array_state(records, submission)
+        else:
+            allocation = next(
+                (item.state for item in records if item.job_id == submission.job_id),
+                records[0].state if records else "UNKNOWN",
+            )
         if not records or allocation in {"PENDING", "RUNNING", "CONFIGURING", "UNKNOWN"}:
+            # squeue reports the first listed state for arrays; sacct remains
+            # the authority once every task has a terminal record.
             active = subprocess.run(
                 RasSlurm._scheduler_command(
                     submission,

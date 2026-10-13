@@ -89,9 +89,9 @@ def test_linux_windows_request_uses_private_wine_prefix(tmp_path, monkeypatch):
     assert copy_calls[0][2] is True
     assert not copy_calls[0][1].parent.exists()
     assert copy_calls[0][1].parent.parent == runtime_parent
-    assert commands[2] == [
-        "/usr/bin/xvfb-run",
-        "-a",
+    assert commands[2][:2] == ["/usr/bin/xvfb-run", "-n"]
+    assert 100 <= int(commands[2][2]) < 32000
+    assert commands[2][3:] == [
         "/usr/bin/wine",
         WINDOWS_PYTHON,
         "-m",
@@ -405,3 +405,97 @@ def test_wine_runtime_rejects_symlink_temporary_parent(tmp_path, monkeypatch):
     )
     assert execute_request_cli.main(["execute-request", str(request_path)]) == 2
     assert not any(parent.iterdir())
+
+
+def _wine_child_environment(tmp_path, monkeypatch):
+    """Run one mocked Wine delegation and return the delegated environment."""
+    request_path = _request(tmp_path)
+    seed = tmp_path / "seed-prefix"
+    seed.mkdir()
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PREFIX_SEED", str(seed))
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PYTHON", WINDOWS_PYTHON)
+    runtime_parent = tmp_path / "runtime-temp"
+    runtime_parent.mkdir()
+    monkeypatch.setattr(
+        execute_request_cli.tempfile, "gettempdir", lambda: str(runtime_parent)
+    )
+    monkeypatch.setattr(execute_request_cli, "_is_linux", lambda: True)
+    monkeypatch.setattr(
+        execute_request_cli.shutil, "which", lambda name: f"/usr/bin/{name}"
+    )
+    child_environment = {}
+
+    def run(command, **kwargs):
+        if command[0].endswith("winepath"):
+            converted = (
+                r"Z:\job\request.json"
+                if command[-1].endswith("request.json")
+                else rf"Z:\runtime-temp\{Path(command[-1]).parent.name}\prefix"
+            )
+            return subprocess.CompletedProcess(command, 0, stdout=converted, stderr="")
+        if command[0].endswith("xvfb-run"):
+            child_environment.update(kwargs["env"])
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(execute_request_cli.subprocess, "run", run)
+    result = execute_request_cli.main(["execute-request", str(request_path)])
+    return result, child_environment
+
+
+def test_wine_cpu_shim_is_preloaded_for_delegated_wine(tmp_path, monkeypatch):
+    shim = tmp_path / "cpushim.so"
+    shim.write_bytes(b"\x7fELF")
+    monkeypatch.setenv("RAS_COMMANDER_WINE_CPU_SHIM", str(shim))
+    monkeypatch.setenv("LD_PRELOAD", "/opt/other.so")
+
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+
+    assert result == 0
+    assert environment["LD_PRELOAD"] == f"{shim} /opt/other.so"
+    assert environment["WINEDLLOVERRIDES"] == "winedbg.exe=d"
+
+
+@pytest.mark.parametrize("setting", ["", "0"])
+def test_wine_cpu_shim_can_be_disabled(tmp_path, monkeypatch, setting):
+    monkeypatch.setenv("RAS_COMMANDER_WINE_CPU_SHIM", setting)
+    monkeypatch.delenv("LD_PRELOAD", raising=False)
+
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+
+    assert result == 0
+    assert "LD_PRELOAD" not in environment
+
+
+def test_missing_wine_cpu_shim_fails_before_runtime_state(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("RAS_COMMANDER_WINE_CPU_SHIM", str(tmp_path / "absent.so"))
+
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+
+    assert result == 2
+    assert environment == {}
+    assert "RAS_COMMANDER_WINE_CPU_SHIM" in capsys.readouterr().err
+    assert not any((tmp_path / "runtime-temp").iterdir())
+
+
+def test_existing_wine_debugger_override_is_kept(tmp_path, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
+    monkeypatch.setenv("WINEDLLOVERRIDES", "mscoree=n;winedbg=b")
+
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+
+    assert result == 0
+    assert environment["WINEDLLOVERRIDES"] == "mscoree=n;winedbg=b"
+
+
+def test_free_x_display_skips_displays_bound_by_other_steps(monkeypatch):
+    import socket
+
+    taken = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    taken.bind("\0/tmp/.X11-unix/X31999")
+    try:
+        monkeypatch.setattr(
+            execute_request_cli.random, "sample", lambda population, k: [31999, 31998]
+        )
+        assert execute_request_cli._free_x_display() == 31998
+    finally:
+        taken.close()
