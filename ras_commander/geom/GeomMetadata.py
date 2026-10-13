@@ -152,8 +152,12 @@ class GeomMetadata:
                 result['geometry_metadata_source'] = 'hdf'
                 result['geometry_metadata_valid'] = True
 
-                # These two inventories are not stored in the geometry HDF.
-                if geom_path and geom_path.exists():
+                # Lateral structures and SA/2D connections come from the HDF
+                # structure Type field when it exists. Older HDFs without that
+                # field fall back to the plain-text inventory so the counts
+                # are taken from exactly one source.
+                hdf_has_structure_types = result.pop('_hdf_structure_types', False)
+                if not hdf_has_structure_types and geom_path and geom_path.exists():
                     result = GeomMetadata._add_text_only_counts(geom_path, result)
             except Exception as exc:
                 errors.append(f"HDF inspection failed: {exc}")
@@ -232,18 +236,59 @@ class GeomMetadata:
 
         return HdfXsec._get_cross_section_count(hdf)
 
+    # HEC-RAS geometry HDFs store /Geometry/Structures/Attributes "Type" as
+    # fixed-length byte strings (b'Bridge', b'Culvert', b'Inline', b'Lateral',
+    # b'Connection'). Integer codes are accepted for legacy files.
+    _STRUCTURE_TYPE_KEYS = {
+        'bridge': 'num_bridges',
+        'culvert': 'num_culverts',
+        'inline': 'num_weirs',
+        'lateral': 'num_lateral_structures',
+        'connection': 'num_sa_2d_connections',
+    }
+    _LEGACY_STRUCTURE_TYPE_CODES = {
+        2: 'num_bridges',
+        3: 'num_culverts',
+        4: 'num_weirs',
+    }
+
     @staticmethod
-    def _get_structure_counts_hdf(hdf: h5py.File) -> Dict[str, int]:
+    def _structure_type_key(struct_type: Any) -> Optional[str]:
+        """Map one HDF structure Type value to its count key, or ``None``."""
+        if isinstance(struct_type, (bytes, bytearray)):
+            struct_type = bytes(struct_type).decode('utf-8', errors='replace')
+        if isinstance(struct_type, str):
+            return GeomMetadata._STRUCTURE_TYPE_KEYS.get(
+                struct_type.strip().strip('\x00').strip().lower()
+            )
+        try:
+            code = int(struct_type)
+        except (TypeError, ValueError):
+            return None
+        return GeomMetadata._LEGACY_STRUCTURE_TYPE_CODES.get(code)
+
+    @staticmethod
+    def _get_structure_counts_hdf(hdf: h5py.File) -> Dict[str, Any]:
         """
-        Get inline structure counts from geometry HDF.
+        Get structure counts from geometry HDF.
 
-        Note: HDF stores all inline structures together. We parse the Type field
-        to break down by structure type:
-        - Type 2: Bridge
-        - Type 3: Culvert
-        - Type 4: Inline Weir
+        HDF stores all structures together in ``/Geometry/Structures/Attributes``.
+        The ``Type`` field holds byte strings that map to these counts:
 
-        Returns dict with: num_bridges, num_culverts, num_weirs, num_gates
+        - ``Bridge``: ``num_bridges``
+        - ``Culvert``: ``num_culverts``
+        - ``Inline``: ``num_weirs`` (inline weir structures)
+        - ``Lateral``: ``num_lateral_structures``
+        - ``Connection``: ``num_sa_2d_connections``
+
+        Legacy integer codes 2, 3, and 4 map to bridges, culverts, and inline
+        weirs. Other values are ignored.
+
+        Returns:
+            dict with ``num_bridges``, ``num_culverts``, ``num_weirs``, and
+            ``num_gates``. When the ``Type`` field exists, the dict also holds
+            ``num_lateral_structures``, ``num_sa_2d_connections``, and the
+            private flag ``_hdf_structure_types`` set to ``True``.
         """
         result = {
             'num_bridges': 0,
@@ -265,11 +310,18 @@ class GeomMetadata:
             logger.debug("No Type field in structures, total: %s", attrs.shape[0])
             return result
 
+        result['num_lateral_structures'] = 0
+        result['num_sa_2d_connections'] = 0
+        result['_hdf_structure_types'] = True
+        unrecognized = set()
         for struct_type in attrs['Type']:
-            if struct_type == 2:
-                result['num_bridges'] += 1
-            elif struct_type == 4:
-                result['num_weirs'] += 1
+            key = GeomMetadata._structure_type_key(struct_type)
+            if key is None:
+                unrecognized.add(repr(struct_type))
+            else:
+                result[key] += 1
+        if unrecognized:
+            logger.debug("Uncounted structure Type values: %s", sorted(unrecognized))
 
         gate_path = '/Geometry/Structures/Gate Groups/Attributes'
         if gate_path in hdf:
@@ -351,9 +403,10 @@ class GeomMetadata:
         counts: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Add counts that are only available from plain text (not in HDF).
+        Add lateral structure and SA/2D connection counts from plain text.
 
-        Specifically: lateral structures and SA/2D connections.
+        Used when the geometry HDF has no structure ``Type`` field to supply
+        these counts.
 
         Parameters:
             geom_path: Path to plain text geometry file
