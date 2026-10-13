@@ -213,6 +213,7 @@ Terrain profile and volume comparison with modifications applied. Uses RasMapper
 
 - `get_terrain_extent(rasmap_path, geom_hdf_path, ras_object=None)` - Get terrain bounding box with modifications applied
 - `get_terrain_profile(rasmap_path, geom_hdf_path, x_coords, y_coords, filter_tolerance=0.01, ras_object=None)` - Sample terrain elevation along polyline
+- `iter_terrain_point_elevations(rasmap_path, terrain_name, point_batches, cell_size, use_obstructions=True, nodata_values=(-9999.0,))` - Read bounded original-coordinate Float64 batches as native Float32 elevations; isolated HEC-RAS 6.6, serial native calls of at most 65536 points with caller batch shape/order preserved, no interpolation/fallback.
 - `get_terrain_volume_elevation(rasmap_path, geom_hdf_path, x_coords, y_coords, ...)` - Compute elevation-volume curve for polygon
 
 ### Comparison Methods
@@ -462,6 +463,7 @@ prerequisites and return contracts take precedence over abbreviated summaries.
         - compute_modified_terrain_raster
         - get_terrain_extent
         - get_terrain_profile
+        - iter_terrain_point_elevations
         - get_terrain_volume_elevation
         - setup_gdal_bridge
 
@@ -511,3 +513,37 @@ prerequisites and return contracts take precedence over abbreviated summaries.
       show_root_heading: false
       heading_level: 3
       show_source: false
+
+
+### Isolated serial native sampling
+
+`RasTerrainMod.run_serial_native_sampling(operation)` runs an eager callback on
+one CLR ThreadPool worker and returns `(result, execution_evidence)`. Use it only
+inside a caller-owned fresh Windows or Wine process without other native/CLR
+work. Exhaust point iterators inside the callback; do not return a lazy iterator
+or await separately queued CLR work. Calls cannot be concurrent or nested.
+
+The helper selects one already-available processor through the public process
+API, lowers the public CLR worker and completion-port limits to one, verifies
+both controls, and dispatches the callback onto that sole pool worker. Native
+nested `Parallel.For` work then cannot obtain a second pool worker. No HEC private
+cache, coordinates, source records, profile tolerance, cell size or obstruction
+parameter is changed. Runtime limitations fail before the callback is invoked.
+Affinity and original minimum/maximum thread counts are restored and read back
+on success or exception; restoration failure cannot yield a successful result.
+
+Execution evidence records the mode `single-clr-pool-worker-v1`, original and
+sampling processor-affinity masks, reported processor count, original minimum
+and maximum thread limits, the sampling minimum and maximum `[1, 1]`, pool dispatch and
+runtime restoration. The helper writes no artifacts. Units, CRS, mutation policy
+and artifacts remain those of the callback. The caller retains this evidence.
+
+The CLR may reject a requested thread limit; actual return values and readback
+are required, not a presumed one-thread environment. See the public
+[ThreadPool limit contract](https://learn.microsoft.com/en-us/dotnet/api/system.threading.threadpool.setmaxthreads)
+and [default Parallel scheduler behavior](https://github.com/microsoft/referencesource/blob/main/mscorlib/system/threading/Tasks/Parallel.cs).
+Source-parent first-profile controls under the qualified HEC-RAS 6.6 Wine runtime
+crashed in native parallel HDF reads under the ordinary execution mode and
+returned finite nonempty profiles under the verified serial mode. These controls
+qualify the execution experiment; they do not establish complete-support,
+corpus, hydraulic mesh or engineering acceptance.

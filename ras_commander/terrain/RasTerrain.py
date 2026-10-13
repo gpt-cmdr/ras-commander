@@ -2224,6 +2224,83 @@ class RasTerrain:
 
     @staticmethod
     @log_call
+    def create_terrain_hdf_lossless(
+        input_raster: Union[str, Path],
+        output_hdf: Union[str, Path],
+        projection_prj: Union[str, Path],
+        units: str = "Feet",
+        hecras_version: str = "6.6",
+        timeout_seconds: float = 1800,
+        gdal_num_threads: int = 1,
+    ) -> Path:
+        """Register one Float32 foot DEM without rounding or reprojection.
+
+        Uses HEC-RAS 6.6's native ``TerrainComputable`` with ``RoundTo.None``
+        in an isolated Windows/Wine Python process. Regenerates the TIFF,
+        overviews and native HDF caches together; never replaces a TIFF after
+        compilation. Input must be square, north-up, nodata=-9999 with no explicit
+        validity mask and in the
+        same projected foot CRS as the PRJ. Values must already be in feet;
+        no vertical datum or unit conversion is performed.
+
+        Creates a new HDF/TIFF/VRT prefix, ``.creation.json`` validation receipt
+        and ``.creation.log``. Existing output prefixes are rejected and the
+        input is read-only. Validates exact stored pixel bits and native HDF
+        structure. Native centre, mesh and hydraulic qualification are separate
+        checks. Requires rasterio, NumPy, h5py, pythonnet and installed HEC-RAS 6.6.
+        The ordinary ``create_terrain_hdf`` defaults remain unchanged.
+
+        Args:
+            input_raster: Read-only Float32 GeoTIFF with elevations in feet.
+            output_hdf: New .hdf path; creates its parent directory and siblings.
+            projection_prj: PRJ defining the same projected foot CRS as the raster.
+            units: Elevation units. Only "Feet" is supported (default).
+            hecras_version: Installed native runtime. Only "6.6" is supported (default).
+            timeout_seconds: Positive native subprocess deadline, default 1800 seconds.
+                Excludes input inspection and output validation. An expired deadline
+                terminates only the launched process tree and retains a failed receipt.
+            gdal_num_threads: Positive GDAL thread cap, default 1.
+
+        Returns:
+            Path to the new native terrain HDF after registration and stored-bit checks.
+
+        Raises:
+            ValueError: Unsupported inputs, options, or an existing output prefix.
+            FileNotFoundError: Input, projection, or native runtime is unavailable.
+            RuntimeError: Native creation or output validation fails.
+            subprocess.TimeoutExpired: The native subprocess exceeds its deadline.
+        """
+        import math
+
+        from ._lossless_create import create_lossless
+
+        if units != "Feet" or hecras_version != "6.6":
+            raise ValueError(
+                "Lossless native creation supports only Feet and HEC-RAS 6.6"
+            )
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be finite and positive")
+        if (
+            isinstance(gdal_num_threads, bool)
+            or not isinstance(gdal_num_threads, int)
+            or gdal_num_threads < 1
+        ):
+            raise ValueError("gdal_num_threads must be a positive integer")
+        source, output, projection = (
+            RasUtils.safe_resolve(Path(path))
+            for path in (input_raster, output_hdf, projection_prj)
+        )
+        for path in (source, projection):
+            if not path.is_file():
+                raise FileNotFoundError(path)
+        install = RasTerrain._get_hecras_path(hecras_version)
+        env = RasTerrain._build_hecras_terrain_env(install, gdal_num_threads)
+        return create_lossless(
+            source, output, projection, install, env, timeout_seconds
+        )
+
+    @staticmethod
+    @log_call
     def vrt_to_tiff(
         vrt_path: Union[str, Path],
         output_path: Union[str, Path],

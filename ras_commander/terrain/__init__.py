@@ -49,6 +49,7 @@ Requirements:
     - HEC-RAS 6.3+ installed (for RasProcess.exe and GDAL tools)
     - Optional: pythonnet for RasTerrainMod (terrain modification analysis)
     - Optional: rasterio for advanced raster analysis
+    - USGS downloader: requests (loaded only when its API is requested)
 
 Usage:
     from ras_commander.terrain import RasTerrain, RasTerrainMod
@@ -74,8 +75,27 @@ See Also:
 
 from .RasTerrain import RasTerrain
 from ..ComputeResults import TerrainExportResult
-from .Usgs3depAws import TerrainBuildError, Usgs3depAws
 from .RasTerrainModWriter import RasTerrainModification, RasTerrainModWriter
+
+
+def __getattr__(name):
+    """Load the network downloader only when its public API is requested."""
+    if name in {'TerrainBuildError', 'Usgs3depAws'}:
+        from importlib import import_module
+
+        try:
+            module = import_module('.Usgs3depAws', __name__)
+        except ModuleNotFoundError as exc:
+            if exc.name == 'requests':
+                raise ImportError(
+                    'USGS terrain downloads require requests; install requests '
+                    'before using Usgs3depAws.'
+                ) from exc
+            raise
+        for public in ('TerrainBuildError', 'Usgs3depAws'):
+            globals()[public] = getattr(module, public)
+        return globals()[name]
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 # Conditional import - RasTerrainMod requires pythonnet (Windows only)
 try:

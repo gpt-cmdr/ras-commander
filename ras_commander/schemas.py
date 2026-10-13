@@ -1672,3 +1672,19 @@ DATAFRAME_SCHEMAS["mesh_perimeter_faces_report"] = {
     ] + _BC_OWNERSHIP_REPORT_COLUMNS,
     "note": "Report mode only: unassigned faces have empty owner lists; single-owner faces have singleton lists; repeated native associations have null scalar BC fields and all distinct owners listed. attrs['duplicate_ownership'], duplicate_face_count, duplicate_face_row_count and face_ownership_unique summarize only the requested mesh. Other validation stays active; files are read-only.",
 }
+
+
+DATAFRAME_SCHEMAS["terrain_modification_features"] = {
+    "description": "Complete native polyline and SetValue polygon terrain modification identities and support distances.",
+    "accessor": "RasTerrainModWriter.get_modification_features(terrain_hdf_path, crs)",
+    "source": "ras_commander._terrain_modification_subset.read_features()",
+    "extra_columns": False,
+    "dynamic": False,
+    "columns": [
+        {"name": "group_name", "dtype": "str", "description": "Native modification group name."},
+        {"name": "feature_index", "dtype": "int64", "description": "Zero-based native Attributes row within the group."},
+        {"name": "support_distance", "dtype": "float64", "description": "Native Max Reach/Max Extent in terrain horizontal CRS units; zero for complete SetValue polygons; no conversion."},
+        {"name": "geometry", "dtype": "geometry", "description": "Complete LineString/MultiLineString, Polygon, or Point for a native single-vertex record, in the caller-declared terrain CRS."},
+    ],
+    "note": "Read-only. Unknown layouts or unavailable support fail. No terrain grid is loaded or CRS inferred. Empty frames retain the same columns and explicit CRS.",
+}

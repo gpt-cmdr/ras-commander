@@ -99,6 +99,7 @@ plugins:
           - api/hdf.md
           - api/geometry.md
           - api/terrain.md
+          - terrain-input-subsets.md
           - api/fixit.md
           - api/dss.md
           - api/containers.md
@@ -265,6 +266,7 @@ nav:
     - HDF Modules: api/hdf.md
     - Geometry Modules: api/geometry.md
     - Terrain Modules: api/terrain.md
+    - Native Terrain Subsets: terrain-input-subsets.md
     - Fixit Module: api/fixit.md
     - DSS Modules: api/dss.md
     - Docker Container API: api/containers.md
