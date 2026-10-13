@@ -9,6 +9,16 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**HDF result classes import under the compute install**
+
+`HdfResultsMesh`, `HdfResultsXsec`, `HdfResultView`, `HdfPipe`, and `HdfPump`
+now import without xarray, geopandas, or shapely. DataFrame results, such as
+`HdfResultsMesh.get_mesh_summary_values()`, work with the `compute` extra.
+Functions that return xarray objects or GeoDataFrames raise an `ImportError`
+that names the missing package and `pip install "ras-commander[full]"`. The
+installation guide no longer states that the `compute` extra covers all
+direct HDF result extraction.
+
 ### v0.105.0 (October 2026)
 
 **HDF structure types appear in geometry summaries**
