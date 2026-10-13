@@ -59,7 +59,7 @@ VERSIONS = {
         "libs_path": "libs",
         "notes": "Rocky Linux 8 base"
     },
-    "7.0": {
+    "6.6": {
         "url": "https://www.hec.usace.army.mil/software/hec-ras/downloads/Linux_RAS_v66.zip",
         "base_image": "rockylinux:8",
         "bin_path": "bin",

@@ -35,6 +35,12 @@ from this source tree.
 
 The published native images install source `604704d440c49a39d6f6e8bae262e2233d895dd0`; Wine controller source is `dc60b219091e85bcb4564eca45313475c39ce58a`, with Windows library source `9e4217713e954236b0c16023e1815c6f2b7a5309`. Those revisions identify the published image payloads. The host API follows the installed ras-commander release. Use the public image references below with `pull="always"`.
 
+The successor Wine preprocessing recipe is [hecras-wine-precompute](../hecras-wine-precompute/README.md);
+its next tag, `v5`, adds a CPU-numbering shim that the published `v4`
+images lack. For Slurm, [hecras-wine-executor](../hecras-wine-executor/README.md)
+derives a portable-executor image and [apptainer](../apptainer/README.md) converts
+images to SIFs.
+
 ## Run through the Python API
 
 Pull both matching images before the first run to refresh the local tags:
