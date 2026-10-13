@@ -9,6 +9,71 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.105.0 (October 2026)
+
+**HDF structure types appear in geometry summaries**
+
+Geometry HDF structure `Type` values are now decoded as text, so bridges,
+culverts, inline weirs, lateral structures, and connections contribute to
+their corresponding `geom_df` counts. Legacy integer codes remain supported,
+and text fallback runs only when the HDF field is absent to prevent
+double-counting (#520).
+
+**Core installation supports project inspection**
+
+Geometry HDF cross-section counts now use a lightweight schema helper, so
+`geom_df` can inspect HDF files without importing geopandas. `RasExamples`
+loads without optional `requests` and `tqdm`; downloading without `requests`
+now gives an actionable installation error, and progress output is skipped
+when `tqdm` is unavailable. The installation guide and README clarify that
+the `full` extra provides the geospatial stack used by examples (#521).
+
+**Read-only initialization is quieter without HEC-RAS**
+
+On non-Windows hosts without a discovered HEC-RAS installation, project
+initialization now reports one warning that read-only file and HDF operations
+remain available. Executable discovery details stay at DEBUG; Windows and
+hosts with a discovered installation keep their existing behavior (#522).
+
+**Portable project asset references**
+
+Project inventory now resolves supported Windows-style relative paths on
+POSIX and preserves foreign Windows anchors as lexical evidence. Foreign
+anchors receive the additive `reference_foreign_windows_anchor` reason code
+without invented local file facts or changes to public columns and signatures
+(#471).
+
+**Traceable native terrain input and verification**
+
+Terrain primitives now support shared-coordinate point sampling, relative
+terrain registration, result-map reassociation and audits, polygon-complete
+modification handling, and lossless native terrain creation and queries
+(#504, #515). These primitives provide input and inspection evidence; each
+model child still requires its own qualification before hydraulic acceptance.
+
+**Geometry and mesh reliability**
+
+Mesh generation follows HEC-RAS constraint semantics and includes opt-in
+robustness screening and recorded seed repairs. Polygon unions preserve
+containment and native breakline flags; bounded geometry authoring, breakout
+identity, gate GIS support, connection endpoints, and cloned-geometry
+infiltration association handling received fixes (#496, #499–#506).
+Geometry reference feature names may contain commas (#494).
+
+**Execution and forcing fixes**
+
+Boundary-only children no longer inherit meteorological forcing (#514).
+Point-rainfall workflows reject incomplete preprocessing and event conditions
+(#511), and RASMapper HDF5 access isolates its runtime while recovering
+regional mappings (#512). Apptainer receipts now escape backslashes correctly
+(#492).
+
+**Documentation**
+
+Docker Hub and Slurm/Apptainer execution paths are documented (#493), and the
+library guide credits the Rivia query design and related companion libraries
+(#519).
+
 **Remaining fixed-width table writers reject overflow**
 
 The USGS flow/stage table generator, central geometry formatter (including
