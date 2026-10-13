@@ -115,6 +115,7 @@ _LAZY_EXPORTS = {
     'ApptainerJob': ('.RasApptainer', 'ApptainerJob'),
     'ApptainerStatus': ('.RasApptainer', 'ApptainerStatus'),
     'ApptainerCollection': ('.RasApptainer', 'ApptainerCollection'),
+    'ApptainerPrepareCollection': ('.RasApptainer', 'ApptainerPrepareCollection'),
     'ApptainerTransport': ('.RasApptainer', 'ApptainerTransport'),
     'SshApptainerTransport': ('.RasApptainer', 'SshApptainerTransport'),
     'ApptainerProfileError': ('.RasApptainer', 'ApptainerProfileError'),
@@ -321,8 +322,7 @@ _LAZY_EXPORTS = {
 # Remote execution - lazy loaded to avoid importing until needed
 # This reduces import time and allows optional dependencies to be truly optional
 _REMOTE_EXPORTS = {
-    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
-    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'DockerWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results', 'validate_unsteady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
@@ -504,8 +504,7 @@ __all__ = [
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',
 
     # Remote execution (lazy loaded)
-    'RasWorker', 'PsexecWorker', 'LocalWorker', 'SshWorker', 'WinrmWorker',
-    'DockerWorker', 'SlurmWorker', 'AwsEc2Worker', 'AzureFrWorker',
+    'RasWorker', 'PsexecWorker', 'LocalWorker', 'DockerWorker',
     'init_ras_worker', 'load_workers_from_json', 'compute_parallel_remote',
     'ExecutionResult', 'get_worker_status', 'validate_steady_results', 'validate_unsteady_results',
     'PreprocessPolicy', 'RasExecutionRequest', 'RasExecutionReceipt',
@@ -513,7 +512,7 @@ __all__ = [
     'RasPortableDocker', 'PortableDockerExecutionResult', 'PortableDockerPoolResult',
     'RasSlurm', 'SlurmSiteConfig', 'SlurmTransportConfig', 'SlurmSubmission',
     'SlurmStatus', 'SlurmTaskAccounting', 'SlurmCollection',
-    'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
+    'RasApptainer', 'ApptainerSiteProfile', 'ApptainerJob', 'ApptainerStatus', 'ApptainerCollection', 'ApptainerPrepareCollection', 'ApptainerTransport', 'SshApptainerTransport', 'ApptainerProfileError', 'InputCheckError',
 
     # DSS operations (lazy loaded)
     'RasDss',

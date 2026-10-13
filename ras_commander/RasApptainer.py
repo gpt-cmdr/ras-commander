@@ -1,18 +1,22 @@
-"""Native-Linux HEC-RAS 6.6 unsteady execution on Slurm through Apptainer.
+"""Native-Linux HEC-RAS unsteady execution on Slurm through Apptainer.
 
 ``RasApptainer`` takes the artifacts produced by Windows preprocessing
 (``<project>.p##.tmp.hdf``, ``<project>.b##``, ``<project>.x##``; see
 ``RasPreprocess``), renders a self-contained job folder plus an ``sbatch``
 script, and drives it over a pluggable SSH transport.
 
-Nothing here contacts a cluster unless a transport is supplied and
-``dry_run=False``. ``render_job`` and ``submit(..., dry_run=True)`` are fully
-offline. The receipt written by the job is computational/transfer evidence
-only; it is never a statement that results are acceptable engineering output.
+Those artifacts can come from a Windows workstation or from a Slurm prepare
+job: ``render_prepare_job`` stages a complete project and runs Windows
+preprocessing under Wine in a separate executor SIF (``prepare_image``), and
+``collect_prepare`` verifies the results and assembles a prepared project for
+``render_job``. This mirrors ``RasDocker.preprocess_plan`` followed by
+``RasDocker.compute_plan``.
 
-Selected fim-commander ``PortableSiteProfile`` fields are accepted as logged
-compatibility no-ops. A usable profile still needs this API's SSH and
-native-image settings.
+Nothing here contacts a cluster unless a transport is supplied and
+``dry_run=False``. ``render_job``, ``render_prepare_job`` and
+``submit(..., dry_run=True)`` are fully offline. Receipts written by jobs are
+computational/transfer evidence only; they are never a statement that results
+are acceptable engineering output.
 """
 
 from __future__ import annotations
@@ -47,6 +51,7 @@ logger = get_logger(__name__)
 
 PROFILE_SCHEMA = "ras-commander-apptainer-profile/v1"
 JOB_SCHEMA = "ras-commander-apptainer-job/v1"
+PREPARE_JOB_SCHEMA = "ras-commander-apptainer-prepare-job/v1"
 RECEIPT_SCHEMA = "ras-commander-apptainer-receipt/v1"
 
 _SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
@@ -71,10 +76,7 @@ _OCI_SOURCE = re.compile(
 _ZERO_SHA256 = "0" * 64
 _WINDOWS_ABSOLUTE_DSS = re.compile(r"^[A-Za-z]:[\\/].*\.dss\s*$", re.IGNORECASE)
 _WRITE_DSS_FILE = re.compile(r"^\s*Write DSS File\s*=\s*T\s*$", re.IGNORECASE)
-_FIM_ONLY_FIELDS = frozenset({
-    "launcher_python_executable", "max_concurrent", "memory_per_task", "ras_executable",
-    "rsync_executable", "timeout_seconds", "transfer_mode",
-})
+_WINDOWS_EXECUTABLE = re.compile(r"[A-Za-z]:\\[A-Za-z0-9 ._()+\\-]+\.exe\Z", re.IGNORECASE)
 
 
 # --------------------------------------------------------------------------
@@ -98,6 +100,11 @@ class ApptainerSiteProfile:
     is node-local scratch; the job works in ``<node_scratch_root>/$SLURM_JOB_ID``.
     ``image`` is a shared SIF that an administrator pulled once from the OCI
     reference in ``container_identity``; its bytes are SHA-256 verified by every job.
+
+    ``prepare_image`` and ``prepare_image_sha256`` optionally name a shared Wine
+    executor SIF (``containers/hecras-wine-executor``) for
+    :meth:`RasApptainer.render_prepare_job`. ``prepare_ras_executable`` defaults
+    to the standard ``C:\\Program Files (x86)\\HEC\\HEC-RAS\\<ras_version>\\Ras.exe``.
     """
 
     site_name: str
@@ -135,6 +142,11 @@ class ApptainerSiteProfile:
     squeue_executable: str = "squeue"
     ssh_executable: str = "ssh"
     scp_executable: str = "scp"
+    prepare_image: Optional[str] = None
+    prepare_image_sha256: Optional[str] = None
+    prepare_ras_executable: Optional[str] = None
+    prepare_python_executable: str = "python"
+    prepare_timeout_seconds: int = 3600
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "modules", tuple(self.modules))
@@ -184,8 +196,8 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
             "container_identity must be an immutable reference: "
             "'sif:sha256:<hex>' or '<registry>/<repo>@sha256:<hex>' (mutable tags are rejected)"
         )
-    if not (isinstance(p.ras_version, str) and re.fullmatch(r"6\.[0-9]+(?:\.[0-9]+)?", p.ras_version)):
-        bad.append("ras_version must look like '6.6' (native Linux unsteady is HEC-RAS 6.x)")
+    if not (isinstance(p.ras_version, str) and re.fullmatch(r"[67]\.[0-9]+(?:\.[0-9]+)?", p.ras_version)):
+        bad.append("ras_version must look like '6.6' or '7.0.1' (native Linux HEC-RAS 6.x or 7.x)")
     if type(p.num_cores) is not int or not 1 <= p.num_cores <= 256:
         bad.append("num_cores must be an integer from 1 through 256")
     if p.slurm_memory is not None and not (isinstance(p.slurm_memory, str) and _MEMORY.fullmatch(p.slurm_memory)):
@@ -214,8 +226,21 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
         v = getattr(p, name)
         if v is not None and (not isinstance(v, str) or "\x00" in v):
             bad.append(f"{name} must be a path string")
+    if (p.prepare_image is None) != (p.prepare_image_sha256 is None):
+        bad.append("prepare_image and prepare_image_sha256 must be set together")
+    if p.prepare_image is not None and not _safe_posix(p.prepare_image):
+        bad.append("prepare_image must be a safe absolute POSIX path")
+    if p.prepare_image_sha256 is not None and not (
+            isinstance(p.prepare_image_sha256, str) and _SHA256.fullmatch(p.prepare_image_sha256)):
+        bad.append("prepare_image_sha256 must be a lowercase 64-hex SHA-256")
+    if p.prepare_ras_executable is not None and not (
+            isinstance(p.prepare_ras_executable, str)
+            and _WINDOWS_EXECUTABLE.fullmatch(p.prepare_ras_executable)):
+        bad.append("prepare_ras_executable must be an absolute Windows .exe path")
+    if type(p.prepare_timeout_seconds) is not int or not 60 <= p.prepare_timeout_seconds <= 172800:
+        bad.append("prepare_timeout_seconds must be an integer from 60 through 172800")
     for name in ("apptainer_executable", "sbatch_executable", "scancel_executable", "sacct_executable",
-                 "squeue_executable", "ssh_executable", "scp_executable"):
+                 "squeue_executable", "ssh_executable", "scp_executable", "prepare_python_executable"):
         value = getattr(p, name)
         if not (isinstance(value, str) and (_MODULE.fullmatch(value) or _safe_posix(value))):
             bad.append(f"{name} contains unsupported characters")
@@ -242,6 +267,7 @@ class ApptainerJob:
     slurm_job_id: Optional[str] = None
     dry_run: bool = False
     submitted_at: Optional[str] = None
+    kind: str = "solve"  # solve | prepare
 
     @property
     def script_path(self) -> Path:
@@ -271,6 +297,33 @@ class ApptainerCollection:
     receipt: Optional[dict]
     success: bool
     problems: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ApptainerPrepareCollection:
+    """Collected Wine-preparation evidence and, on success, a prepared project.
+
+    ``project_folder`` holds the staged project overlaid with the files the
+    preparation changed or created (``.p##.tmp.hdf``, ``.b##``, ``.x##``, the
+    plan file); pass it to :meth:`RasApptainer.render_job`.
+    """
+
+    slurm_job_id: str
+    scheduler_state: str
+    directory: Path
+    project_folder: Optional[Path]
+    receipt: Optional[dict]
+    success: bool
+    problems: tuple[str, ...] = ()
+
+
+def _safe_input_path(name: Any) -> bool:
+    """Return whether a staged project-relative path is safe for scripts and SHA256SUMS."""
+    if not isinstance(name, str) or not name or name.startswith(("/", "-")):
+        return False
+    if any(character in name for character in "\\\n\r\x00") or name != name.strip():
+        return False
+    return all(part not in {"", ".", ".."} for part in name.split("/"))
 
 
 def validate_receipt(payload: Any) -> dict:
@@ -700,6 +753,99 @@ if [ "$STATUS" = succeeded ]; then rm -rf "$NODE_SCRATCH_ROOT/$SLURM_JOB_ID/ras"
 """
 
 
+PREPARE_JOB_SCRIPT_TEMPLATE = """#!/bin/bash
+@SBATCH@
+set -u
+umask 002
+@MODULES@
+JOB_ROOT=@JOB_ROOT@
+IMAGE=@IMAGE@
+IMAGE_SHA256=@IMAGE_SHA@
+REQUEST_SHA256=@REQUEST_SHA@
+NODE_SCRATCH_ROOT=@NODE_SCRATCH@
+APPTAINER=@APPTAINER@
+PYTHON=@PYTHON@
+PROJECT_FILE=@PROJECT_FILE@
+PLAN=@PLAN@
+NUM_CORES=@CORES@
+PREPARE_TIMEOUT=@TIMEOUT@
+RAS_EXECUTABLE=@RAS_EXECUTABLE@
+ARTIFACTS=(@ARTIFACTS@)
+@ENVIRONMENT@
+OUT_FINAL="$JOB_ROOT/out/$SLURM_JOB_ID"
+OUT="$OUT_FINAL.partial"
+SCRATCH="$NODE_SCRATCH_ROOT/$SLURM_JOB_ID/ras-prepare"
+WORK="$SCRATCH/job"
+RC=1; REASON=LAUNCH_FAILED; COPY_OK=false
+WORKER_PID=""; TERMINATED=0
+trap 'TERMINATED=1; [ -n "$WORKER_PID" ] && kill -TERM "$WORKER_PID" 2>/dev/null' TERM
+
+sha_of() { sha256sum < "$1" | cut -d' ' -f1; }
+
+run_prepare() {
+  [ "$(sha_of "$IMAGE")" = "$IMAGE_SHA256" ] || { REASON=IMAGE_MISMATCH; return 1; }
+  (cd "$JOB_ROOT/inputs" && sha256sum --quiet -c SHA256SUMS) || { REASON=INPUT_MISMATCH; return 1; }
+  mkdir -p "$WORK" "$SCRATCH/tmp" || { REASON=SCRATCH_FAILED; return 1; }
+  cp -a "$JOB_ROOT/inputs/." "$WORK/" && rm -f "$WORK/SHA256SUMS" || { REASON=STAGE_FAILED; return 1; }
+  cp -p "$JOB_ROOT/inputs/SHA256SUMS" "$SCRATCH/input.sha256"
+  (cd "$WORK" && sha256sum --quiet -c "$SCRATCH/input.sha256") || { REASON=STAGE_MISMATCH; return 1; }
+  "$APPTAINER" exec --contain --cleanenv \\
+    --bind "$WORK:/job" --bind "$SCRATCH/tmp:/tmp" --pwd /job "$IMAGE" \\
+    "$PYTHON" -m ras_commander.remote.apptainer_prepare prepare \\
+    --project "/job/$PROJECT_FILE" --plan "$PLAN" --num-cores "$NUM_CORES" \\
+    --timeout "$PREPARE_TIMEOUT" --ras-executable "$RAS_EXECUTABLE" \\
+    --request-sha256 "$REQUEST_SHA256" --receipt /job/.prepare_receipt.json \\
+    > "$SCRATCH/prepare.log" 2>&1 &
+  WORKER_PID=$!
+  wait "$WORKER_PID"; RC=$?
+  if [ "$TERMINATED" -eq 1 ]; then wait "$WORKER_PID" 2>/dev/null; REASON=TERMINATED; return 1; fi
+  if [ "$RC" -ne 0 ]; then REASON=PREPARE_FAILED; return 1; fi
+  REASON=COMPLETED
+  return 0
+}
+
+copy_back() {
+  mkdir -p "$OUT/project" "$OUT/logs" || return 1
+  local f rel sum
+  while IFS= read -r -d '' f; do
+    rel=${f#"$WORK"/}
+    [ "$rel" = .prepare_receipt.json ] && continue
+    sum=$(sha_of "$f")
+    # Unchanged staged inputs are not copied back, except the solver artifacts,
+    # which are always returned; everything copied is hash-verified.
+    if [[ " ${ARTIFACTS[*]} " != *" $rel "* ]] && grep -qxF "$sum  $rel" "$SCRATCH/input.sha256"; then continue; fi
+    mkdir -p "$OUT/project/$(dirname "$rel")" || return 1
+    cp -p "$f" "$OUT/project/$rel" || return 1
+    [ "$(sha_of "$OUT/project/$rel")" = "$sum" ] || return 1
+  done < <(find "$WORK" -type f ! -type l -print0)
+  if [ -f "$WORK/.prepare_receipt.json" ]; then
+    cp -p "$WORK/.prepare_receipt.json" "$OUT/prepare_receipt.json" || return 1
+  fi
+  # Staged inputs the preparation removed (for example stale geometry preprocessing).
+  while read -r _ rel; do
+    [ -e "$WORK/$rel" ] || printf '%s\\n' "$rel"
+  done < "$SCRATCH/input.sha256" > "$OUT/deleted_inputs.txt" || return 1
+  [ -f "$SCRATCH/prepare.log" ] && cp -p "$SCRATCH/prepare.log" "$OUT/logs/prepare.log"
+  return 0
+}
+
+run_prepare
+JOB_OK=$?
+mkdir -p "$JOB_ROOT/out" && mkdir "$OUT" || { echo "output directory exists: $OUT" >&2; exit 2; }
+mkdir -p "$OUT/logs" || exit 2
+[ -f "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" ] && cp -p "$JOB_ROOT/slurm-$SLURM_JOB_ID.out" "$OUT/logs/slurm-$SLURM_JOB_ID.out"
+if [ -d "$WORK" ]; then
+  if copy_back; then COPY_OK=true; else REASON=COPY_BACK_FAILED; fi
+fi
+printf '{"request_sha256": "%s", "slurm_job_id": "%s", "reason_code": "%s", "exit_code": %s, "copy_verified": %s}\\n' \\
+  "$REQUEST_SHA256" "$SLURM_JOB_ID" "$REASON" "$RC" "$COPY_OK" > "$OUT/job_status.json"
+(cd "$OUT" && find . -type f ! -path ./SHA256SUMS -print0 | LC_ALL=C sort -z | sed -z 's#^\\./##' | xargs -0 sha256sum > SHA256SUMS)
+mv "$OUT" "$OUT_FINAL" || exit 2
+# The Wine prefix copy lives in $SCRATCH/tmp; remove scratch only after a verified success.
+if [ "$JOB_OK" -eq 0 ] && [ "$COPY_OK" = true ]; then rm -rf "$SCRATCH"; exit 0; fi
+exit 1
+"""
+
 def _fill(template: str, values: Mapping[str, str]) -> str:
     out = template
     for key, value in values.items():
@@ -991,15 +1137,17 @@ def _load_request(job: ApptainerJob) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(inputs, dict) or not inputs:
         raise RuntimeError("Rendered request has no staged input hashes")
     input_dir = Path(job.job_directory) / "inputs"
+    safe_name = _safe_input_path if request.get("schema") == PREPARE_JOB_SCHEMA else (
+        lambda value: bool(_SAFE_NAME.fullmatch(str(value))))
     for name, digest in inputs.items():
         path = input_dir / name
-        if not _SAFE_NAME.fullmatch(str(name)) or sha256_file(path) != digest:
+        if not safe_name(name) or sha256_file(path) != digest:
             raise RuntimeError(f"Staged input does not match rendered request: {name}")
     manifest = input_dir / "SHA256SUMS"
     if sha256_file(manifest) != request.get("input_manifest_sha256"):
         raise RuntimeError("Staged SHA256SUMS does not match rendered request")
     engine = Path(job.job_directory) / "engine.sh"
-    if sha256_file(engine) != request.get("engine_sha256"):
+    if request.get("schema") == JOB_SCHEMA and sha256_file(engine) != request.get("engine_sha256"):
         raise RuntimeError("Staged engine.sh does not match rendered request")
     script = Path(job.job_directory) / "job.sh"
     script_text = script.read_text(encoding="utf-8")
@@ -1080,7 +1228,7 @@ def _validate_collected_solve(destination: Path, job: ApptainerJob,
 # --------------------------------------------------------------------------
 
 class RasApptainer:
-    """Static namespace for native HEC-RAS 6.6 unsteady execution via Slurm + Apptainer."""
+    """Static namespace for native HEC-RAS unsteady execution via Slurm + Apptainer."""
 
     @staticmethod
     @log_call
@@ -1106,14 +1254,6 @@ class RasApptainer:
             problems.append(f"unsupported schema {schema!r} (expected {PROFILE_SCHEMA!r})")
         data = {k: v for k, v in data.items() if not k.startswith("_")}  # "_comment" keys
         known = {f.name for f in fields(ApptainerSiteProfile)}
-        # fim-commander's memory setting describes a task; this API requests one
-        # task, so it is a safe fallback when the native Slurm memory is omitted.
-        if "memory_per_task" in data and "slurm_memory" not in data:
-            data["slurm_memory"] = data["memory_per_task"]
-        fim_only = sorted(set(data) & _FIM_ONLY_FIELDS)
-        for key in fim_only:
-            logger.info("Ignoring fim-commander-only profile field %s for RasApptainer", key)
-            data.pop(key)
         for key in sorted(set(data) - known):
             problems.append(f"unknown field {key!r}")
         for f in fields(ApptainerSiteProfile):
@@ -1283,6 +1423,211 @@ class RasApptainer:
         return job
 
     @staticmethod
+    @log_call
+    def render_prepare_job(
+        project_folder: Union[str, Path],
+        project_name: str,
+        plan_number: Union[str, int],
+        profile: ApptainerSiteProfile,
+        job_directory: Union[str, Path],
+    ) -> ApptainerJob:
+        """Stage a complete project for Wine preprocessing on Slurm. No SSH.
+
+        The job runs ``RasPreprocess.preprocess_plan`` under Windows Python in
+        the profile's ``prepare_image`` (a Wine executor SIF), with the plan's
+        solver cores set to ``profile.num_cores``. Submit it with
+        :meth:`submit`, then use :meth:`collect_prepare` and
+        :meth:`render_job` on the prepared project it returns.
+
+        Every regular file below ``project_folder`` is staged with its relative
+        path (terrain and other subfolders included); external dependencies
+        outside the folder are not followed. Writes ``inputs/`` with
+        ``SHA256SUMS``, ``job.sh`` and ``job.json``.
+
+        Raises:
+            ApptainerProfileError: If the profile has no ``prepare_image``.
+            ValueError: If names are unsafe or a staged path is unsupported.
+            FileNotFoundError: If the project or plan file is missing.
+            FileExistsError: If ``job_directory`` is not new or empty.
+        """
+        if profile.prepare_image is None or profile.prepare_image_sha256 is None:
+            raise ApptainerProfileError(["render_prepare_job requires prepare_image and prepare_image_sha256"])
+        project_folder = Path(project_folder)
+        job_directory = Path(job_directory)
+        plan = f"{int(plan_number):02d}" if not isinstance(plan_number, str) else plan_number
+        if not _PLAN_NUMBER.fullmatch(plan):
+            raise ValueError("plan_number must be two digits, e.g. '01'")
+        if not _SAFE_NAME.fullmatch(project_name):
+            raise ValueError("project_name must contain only letters, digits, '.', '_' and '-'")
+        project_file = project_folder / f"{project_name}.prj"
+        if not project_file.is_file():
+            raise FileNotFoundError(f"Project file not found: {project_file}")
+        xtoken = _plan_geometry_token(project_folder, project_name, plan)
+        if job_directory.exists() and any(job_directory.iterdir()):
+            raise FileExistsError(f"job_directory must be new or empty: {job_directory}")
+        links = [path for path in project_folder.rglob("*") if path.is_symlink()]
+        if links:
+            raise ValueError(f"Project trees cannot contain symbolic links: {links[0]}")
+        sources = sorted(
+            (path for path in project_folder.rglob("*") if path.is_file()),
+            key=lambda path: path.relative_to(project_folder).as_posix(),
+        )
+        inputs = job_directory / "inputs"
+        inputs.mkdir(parents=True, exist_ok=True)
+        staged: dict[str, str] = {}
+        for source in sources:
+            relative = source.relative_to(project_folder).as_posix()
+            if relative == "SHA256SUMS" or not _safe_input_path(relative):
+                raise ValueError(f"Unsupported project path for staging: {relative!r}")
+            destination = inputs / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            staged[relative] = sha256_file(destination)
+        (inputs / "SHA256SUMS").write_text(
+            "".join(f"{staged[n]}  {n}\n" for n in sorted(staged)), encoding="utf-8", newline="\n")
+        manifest_sha = sha256_file(inputs / "SHA256SUMS")
+
+        ras_executable = profile.prepare_ras_executable or (
+            f"C:\\Program Files (x86)\\HEC\\HEC-RAS\\{profile.ras_version}\\Ras.exe")
+        if not _WINDOWS_EXECUTABLE.fullmatch(ras_executable):
+            raise ValueError(f"Derived Windows HEC-RAS path is unsupported: {ras_executable!r}")
+        profile_view = profile.to_dict()
+        for local_only in ("identity_file", "known_hosts_file"):
+            profile_view.pop(local_only, None)
+        job_name = f"{profile.site_name}-{project_name}-p{plan}-prep"[:128]
+        if not _TOKEN.fullmatch(job_name):
+            raise ValueError(f"Derived job name is not a safe Slurm token: {job_name!r}")
+        attempt_id = uuid.uuid4().hex
+        remote_dir = f"{profile.scratch_root.rstrip('/')}/{job_name}/attempt-{attempt_id}"
+        script_values = {
+            "SBATCH": _sbatch_directives(profile, job_name, remote_dir),
+            "MODULES": "\n".join(f"module load {shlex.quote(m)}" for m in profile.modules),
+            "JOB_ROOT": shlex.quote(remote_dir),
+            "IMAGE": shlex.quote(profile.prepare_image),
+            "IMAGE_SHA": profile.prepare_image_sha256,
+            "REQUEST_SHA": "<REQUEST_SHA256>",
+            "NODE_SCRATCH": shlex.quote(profile.node_scratch_root.rstrip("/")),
+            "APPTAINER": shlex.quote(profile.apptainer_executable),
+            "PYTHON": shlex.quote(profile.prepare_python_executable),
+            "PROJECT_FILE": shlex.quote(project_file.name),
+            "PLAN": shlex.quote(plan),
+            "CORES": str(profile.num_cores),
+            "TIMEOUT": str(profile.prepare_timeout_seconds),
+            "RAS_EXECUTABLE": shlex.quote(ras_executable),
+            "ARTIFACTS": " ".join(shlex.quote(name) for name in (
+                f"{project_name}.p{plan}.tmp.hdf", f"{project_name}.b{plan}",
+                f"{project_name}.{xtoken}")),
+            "ENVIRONMENT": "\n".join(f"export {k}={shlex.quote(str(v))}"
+                                     for k, v in sorted(profile.environment.items())),
+        }
+        template_job_sha = _job_script_request_hash(_fill(PREPARE_JOB_SCRIPT_TEMPLATE, script_values))
+        request = {
+            "schema": PREPARE_JOB_SCHEMA, "project": project_name, "plan": plan, "xtoken": xtoken,
+            "input_hashes": staged, "input_manifest_sha256": manifest_sha,
+            "job_sha256": template_job_sha, "ras_executable": ras_executable,
+            "profile": profile_view,
+        }
+        request_sha = _canonical_sha256(request)
+        script_values["REQUEST_SHA"] = request_sha
+        (job_directory / "job.sh").write_text(
+            _fill(PREPARE_JOB_SCRIPT_TEMPLATE, script_values), encoding="utf-8", newline="\n")
+        job = ApptainerJob(
+            job_name=job_name, request_sha256=request_sha, job_directory=job_directory,
+            remote_directory=remote_dir, project_name=project_name, plan_number=plan,
+            geometry_token=xtoken, attempt_id=attempt_id, kind="prepare",
+        )
+        RasApptainer._persist(job, extra={
+            "profile": profile_view, "request": request,
+            "job_file_sha256": sha256_file(job_directory / "job.sh"),
+        })
+        return job
+
+    @staticmethod
+    @log_call
+    def collect_prepare(job: ApptainerJob, transport: ApptainerTransport,
+                        profile: ApptainerSiteProfile,
+                        project_destination: Union[str, Path],
+                        destination: Optional[Union[str, Path]] = None) -> ApptainerPrepareCollection:
+        """Download a terminal prepare job, verify it, and assemble the prepared project.
+
+        ``success`` requires scheduler state COMPLETED, a matching
+        ``SHA256SUMS``, and a succeeded prepare receipt bound to this request
+        whose ``.p##.tmp.hdf``/``.b##``/``.x##`` hashes match the downloaded
+        files. Only then is ``project_destination`` (new or empty) written: the
+        staged project overlaid with every changed or new file.
+        """
+        if job.kind != "prepare":
+            raise ValueError("collect_prepare requires a job from render_prepare_job")
+        state = RasApptainer.status(job, transport, profile)
+        if not state.terminal:
+            raise RuntimeError(f"Job {state.slurm_job_id} is {state.state}; not terminal yet")
+        dest = Path(destination) if destination else Path(job.job_directory) / "collected" / state.slurm_job_id
+        if dest.exists():
+            raise FileExistsError(f"Collect destination already exists: {dest}")
+        project_destination = Path(project_destination)
+        if project_destination.exists() and any(project_destination.iterdir()):
+            raise FileExistsError(f"project_destination must be new or empty: {project_destination}")
+        request, _ = _load_request(job)
+        transport.get_tree(f"{job.remote_directory}/out/{state.slurm_job_id}", dest)
+        problems: list[str] = []
+        receipt: Optional[dict] = None
+        try:
+            listed = set()
+            for line in (dest / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+                digest, name = line.split("  ", 1)
+                listed.add(name)
+                path = dest / name
+                if not _safe_input_path(name) or not path.is_file() or sha256_file(path) != digest:
+                    problems.append(f"output hash mismatch: {name}")
+            present = {path.relative_to(dest).as_posix() for path in dest.rglob("*")
+                       if path.is_file()} - {"SHA256SUMS"}
+            if present != listed:
+                problems.append("downloaded files differ from SHA256SUMS")
+            status = json.loads((dest / "job_status.json").read_text(encoding="utf-8"))
+            if status.get("request_sha256") != job.request_sha256 or status.get("slurm_job_id") != state.slurm_job_id:
+                problems.append("job status is not bound to this request and allocation")
+            if status.get("reason_code") != "COMPLETED" or status.get("copy_verified") is not True:
+                problems.append(f"prepare job reports {status.get('reason_code')}")
+            receipt = json.loads((dest / "prepare_receipt.json").read_text(encoding="utf-8"))
+            if receipt.get("schema") != "ras-commander-apptainer-prepare-receipt/v1":
+                problems.append("unsupported prepare receipt schema")
+            if receipt.get("request_sha256") != job.request_sha256:
+                problems.append("prepare receipt request_sha256 does not match the submitted job")
+            if receipt.get("status") != "succeeded":
+                problems.append(f"prepare receipt reports {receipt.get('status')} "
+                                f"({receipt.get('reason_code')}): {receipt.get('detail')}")
+            expected = [f"{job.project_name}.p{job.plan_number}.tmp.hdf",
+                        f"{job.project_name}.b{job.plan_number}",
+                        f"{job.project_name}.{job.geometry_token}"]
+            deleted = [line for line in (dest / "deleted_inputs.txt").read_text(
+                encoding="utf-8").splitlines() if line]
+            if any(name not in request["input_hashes"] for name in deleted):
+                problems.append("deleted_inputs.txt names a file that was not staged")
+            for name in expected:
+                record = (receipt.get("outputs") or {}).get(name)
+                path = dest / "project" / name
+                if not record or not path.is_file() or sha256_file(path) != record.get("sha256"):
+                    problems.append(f"prepared artifact missing or not bound to the receipt: {name}")
+        except (OSError, ValueError, KeyError, AttributeError) as exc:
+            problems.append(f"prepare evidence unusable: {exc}")
+        if state.state != "COMPLETED":
+            problems.append(f"scheduler state is {state.state}")
+        prepared: Optional[Path] = None
+        if not problems:
+            inputs = Path(job.job_directory) / "inputs"
+            shutil.copytree(
+                inputs, project_destination, dirs_exist_ok=True,
+                # Only the staging manifest is skipped; nested project files keep their names.
+                ignore=lambda folder, names: ["SHA256SUMS"] if Path(folder) == inputs else [],
+            )
+            for name in deleted:
+                (project_destination / name).unlink(missing_ok=True)
+            shutil.copytree(dest / "project", project_destination, dirs_exist_ok=True)
+            prepared = project_destination
+        return ApptainerPrepareCollection(state.slurm_job_id, state.state, dest, prepared, receipt,
+                                          success=not problems, problems=tuple(problems))
+
+    @staticmethod
     def _persist(job: ApptainerJob, extra: Optional[Mapping[str, Any]] = None) -> None:
         path = Path(job.job_directory) / "job.json"
         payload: dict[str, Any] = {}
@@ -1318,7 +1663,12 @@ class RasApptainer:
             return replace(job, dry_run=True)
         if transport is None or profile is None:
             raise ValueError("A transport and profile are required unless dry_run=True")
-        if profile.apptainer_image_sha256 == _ZERO_SHA256 or profile.container_identity.endswith(_ZERO_SHA256):
+        placeholder = (
+            profile.prepare_image_sha256 == _ZERO_SHA256 if job.kind == "prepare"
+            else profile.apptainer_image_sha256 == _ZERO_SHA256
+            or profile.container_identity.endswith(_ZERO_SHA256)
+        )
+        if placeholder:
             raise ApptainerProfileError([
                 "all-zero image digest is a placeholder and cannot be submitted; record the SIF SHA-256"
             ])
@@ -1421,6 +1771,8 @@ class RasApptainer:
         if dest.exists():
             raise FileExistsError(f"Collect destination already exists: {dest}")
         request, _ = _load_request(job)
+        if request.get("schema") != JOB_SCHEMA:
+            raise ValueError("collect requires a solve job; use collect_prepare for prepare jobs")
         transport.get_tree(f"{job.remote_directory}/out/{state.slurm_job_id}", dest)
         problems: list[str] = []
         receipt: Optional[dict] = None
