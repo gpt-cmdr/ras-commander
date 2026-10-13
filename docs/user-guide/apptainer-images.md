@@ -124,15 +124,23 @@ build compiles it when the base lacks it. The successor pre-compute recipe
 
 ## Qualification status
 
-CLB has run Wine HEC-RAS 6.6 requests through `RasSlurm`, native solves through
-`RasApptainer`, and Wine preprocessing under Apptainer on its Slurm cluster,
-using site-built SIFs derived from the published pre-compute image with the
-same per-task prefix pattern. No executor image built from this recipe has been
-published, the shim-bearing pre-compute `v5` has not been built, and the
-published native SIF has not been run live through `RasApptainer`. Build and
-convert the images, then run one representative model end to end on your
-cluster before a campaign. A successful job is computational evidence, not
-engineering approval.
+Live qualification on October 13, 2026 (ras-commander PR #525, Apptainer 1.5.4, partition `clb`): an executor built from this recipe on `rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a2…` (7.37 GB image, SIF `98c88cee…`) and the published native 6.6 `v1` SIF (`428385b9…`), both converted with `build_sif_from_archive.sbatch`:
+
+| Run | Result |
+| --- | --- |
+| `RasSlurm` pool, 2 slots, Muncie plans 01 (1D) and 03 (2D) under Wine | Both steps `COMPLETED 0:0` on one node, receipts validated, collection succeeded |
+| `RasSlurm` job array, throttle 2, same requests | Two array tasks, each one `rc-###` step, `COMPLETED 0:0`; results identical to the pool run |
+| `RasApptainer.render_prepare_job` → `collect_prepare`, plan 03 | Wine preprocessing in 34 s with the CPU shim; prepared project verified |
+| `RasApptainer.render_job` → `collect` on the prepared project, published native SIF | 2 cores, 33 s; results populated to the planned end time |
+| Wine (1 core) vs native (2 cores) water surface, plan 03 | Max difference 0.0031 ft at any time step; maximum-WSE map within 0.0001 ft |
+
+Each Wine step's memory peak reached about 6 GiB (cgroup accounting, including
+the private prefix copy and file cache); budget `slurm_memory` at 6–8 GiB per
+Wine request and measure on your models. The 6.5 and 7.0.1 executors, the
+shim-bearing pre-compute `v5`, and TACC were not run. Build and convert the
+images, then run one representative model end to end on your cluster before a
+campaign. A successful job is computational evidence, not engineering
+approval.
 
 [native]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-unsteady/README.md
 [precompute]: https://github.com/gpt-cmdr/ras-commander/blob/main/containers/hecras-wine-precompute/README.md

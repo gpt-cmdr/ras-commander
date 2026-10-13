@@ -46,9 +46,12 @@ a compatible installed runtime.
 CLB has run `RasSlurm` (Wine steady requests) and `RasApptainer` (native
 unsteady solves) live on its Slurm cluster with site-built SIFs, and has run
 Wine preprocessing under Apptainer with the per-task prefix pattern these APIs
-use. The published `rascommander/hec-ras-linux-unsteady_*` SIF has not yet been
-run live through `RasApptainer`, and `render_prepare_job` is new; qualify the
-exact images on your cluster first. See
+use. On October 13, 2026 the current APIs were run live with the 6.6 Wine
+executor built from this repository and the published native 6.6 SIF: a
+`RasSlurm` pool and a job array (two concurrent Wine requests each), and a
+`RasApptainer` Wine prepare job followed by a native solve, all collected
+successfully. Qualify the exact images and a representative model on your
+cluster first. See
 [HPC design and qualification boundaries](container-hpc-design.md).
 
 Keep source models separate from working copies. Match the HEC-RAS version

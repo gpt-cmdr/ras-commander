@@ -32,10 +32,13 @@ rather than substituting an image by name.
     CLB ran 436 one-core HEC-RAS 6.6 steady requests through `RasSlurm` (ras-commander
     0.97.0) under Wine in a SIF derived from `rascommander/hec-ras-wine-precompute_6.6`;
     all 436 passed after one memory retry, and compute plus stored maps matched native
-    Windows results bit for bit. The v2 launcher (contained steps, per-step node scratch,
-    CPU shim, job arrays) is newer than that run. Requalify your image and site with a
-    representative request before a campaign; a receipt is computational evidence, not
-    hydraulic approval.
+    Windows results bit for bit. On October 13, 2026 the v2 launcher (contained steps,
+    per-step node scratch, CPU shim, job arrays) ran Muncie 1D and 2D Wine requests
+    concurrently in pool mode and as a job array with an executor built from this
+    repository; all steps completed and collected, and pool and array results were
+    identical. Each Wine step peaked near 6 GiB; set `slurm_memory` to 6–8 GiB per request.
+    Requalify your image and site with a representative request before a campaign; a
+    receipt is computational evidence, not hydraulic approval.
 
 ## Create a portable bundle
 

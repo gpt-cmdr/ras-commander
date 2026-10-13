@@ -10,8 +10,12 @@ Wine, where ras-commander drives the installed Windows HEC-RAS.
 
 [RasSlurm](../../docs/user-guide/slurm-portable-execution.md) launches this
 contract under Slurm and Apptainer; `RasPortableDocker` uses it with Docker.
-No image built from this recipe has been published or qualified. Build one,
-convert it to a SIF, and qualify it at the site before use.
+A 6.6 executor built from this recipe was qualified live on the CLB Slurm cluster
+on October 13, 2026 (Muncie 1D and 2D requests through `RasSlurm` pool and array
+modes, and a `RasApptainer` prepare job); see
+[Apptainer images](../../docs/user-guide/apptainer-images.md#qualification-status).
+No executor image is published. Build one, convert it to a SIF, and qualify it at
+the site before use.
 
 ## What the derivative adds
 

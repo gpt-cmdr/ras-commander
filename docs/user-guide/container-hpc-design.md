@@ -11,7 +11,8 @@ worker integration below.
 The [Docker image pairs](container-images.md) have Docker qualification. CLB
 has run both Slurm APIs live with site-built SIFs (see
 [execution backends](execution-backends.md#image-compatibility-and-qualification));
-the published SIF payloads have not been run live through `RasApptainer` or
+the published native 6.6 SIF and an executor built from this repository were
+run live through both APIs on October 13, 2026. None of these images has been
 qualified on TACC.
 
 ## Useful patterns from public implementations

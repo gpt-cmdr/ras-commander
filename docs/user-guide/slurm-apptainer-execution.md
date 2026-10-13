@@ -68,9 +68,12 @@ for 6.5 and 7.0.1 (`rascommander/hec-ras-linux-unsteady_<version>:v1`); set `ras
     CLB has run `RasApptainer.render_job`, `submit`, and `collect` live on its Slurm cluster
     with a site-built HEC-RAS 6.6 native SIF (`ras-hecras.sif`, which ships `RasGeomPreprocess`).
     Those jobs collected successfully with verified copy-back, populated unsteady results, and the
-    planned final simulation time. The published `rascommander/hec-ras-linux-unsteady_*` SIFs use
-    the same engine contract but have not yet been run live through this API; qualify the image
-    you pull with one representative plan before a campaign.
+    planned final simulation time. On October 13, 2026 the published
+    `rascommander/hec-ras-linux-unsteady_6.6:v1` SIF solved a Wine-prepared Muncie 2D plan
+    through this API (2 cores, 33 s) and collected successfully; its water surfaces matched the
+    Windows engine run under Wine to within 0.0031 ft (maximum-WSE map within 0.0001 ft). The
+    6.5 and 7.0.1 SIFs use the same layout but were not run; qualify the image you pull with one
+    representative plan before a campaign.
 
 An administrator pulls it once, on a node, to shared storage, then records the digest:
 
@@ -255,9 +258,11 @@ handoff gate; they run unchanged on the prepared files.
     CLB has run `RasPreprocess.preprocess_plan` under Wine inside Apptainer on Slurm with the same
     per-task prefix pattern, then solved the prepared models natively. On one model, RasMapper's
     direct property-table API crashed under Wine while `RasPreprocess.preprocess_plan` succeeded,
-    which is why the prepare job uses the latter. `render_prepare_job` and `collect_prepare`
-    themselves are new; run one representative model end to end on your cluster before relying on
-    them.
+    which is why the prepare job uses the latter. On October 13, 2026 `render_prepare_job` and
+    `collect_prepare` prepared Muncie plan 03 (2D) on the CLB cluster in the 6.6 executor SIF built
+    from `containers/hecras-wine-executor` (34 s, CPU shim loaded) and the prepared project solved
+    natively as described above. That is one model and one version; run a representative model
+    end to end on your cluster before relying on them.
 
 ## The engine command
 
