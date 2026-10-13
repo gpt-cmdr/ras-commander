@@ -265,8 +265,9 @@ def test_face_perimeter_roundoff_and_concave_ring(tmp_path):
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("bend", [False, True])
+@pytest.mark.parametrize("offset", [(0.0, 0.0), (1_000_000.0, 10_000_000.0)])
 def test_native_concave_face_uses_intermediates_not_endpoint_chord(
-    tmp_path, reverse, bend
+    tmp_path, reverse, bend, offset
 ):
     from ras_commander.geom._preprocess_contract import _mesh_binding_issues
 
@@ -278,8 +279,17 @@ def test_native_concave_face_uses_intermediates_not_endpoint_chord(
             del area["Faces Perimeter Values"]
             area.create_dataset("Faces Perimeter Values", data=[[0.8, 0.5]])
             area["Faces Perimeter Info"][...] = [[0, 0], [0, 1]]
+        ring += offset
+        for name in (
+            "Cells Center Coordinate",
+            "FacePoints Coordinate",
+            "Faces Perimeter Values",
+        ):
+            area[name][...] = area[name][()] + offset
         issues = _mesh_binding_issues(
-            area, expected["seed_points"]["Synthetic"], ring[::-1] if reverse else ring
+            area,
+            expected["seed_points"]["Synthetic"] + offset,
+            ring[::-1] if reverse else ring,
         )
     assert bool(issues) is (not bend)
     if not bend:
@@ -288,7 +298,8 @@ def test_native_concave_face_uses_intermediates_not_endpoint_chord(
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("bend", [False, True])
-def test_native_faces_honor_keyhole_ring_and_ghosts(tmp_path, reverse, bend):
+@pytest.mark.parametrize("offset", [(0.0, 0.0), (-1_000_000.0, 10_000_000.0)])
+def test_native_faces_honor_keyhole_ring_and_ghosts(tmp_path, reverse, bend, offset):
     from ras_commander.geom._preprocess_contract import _mesh_binding_issues
 
     _, path, expected = fixture(tmp_path)
@@ -320,10 +331,88 @@ def test_native_faces_honor_keyhole_ring_and_ghosts(tmp_path, reverse, bend):
             del area["Faces Perimeter Values"]
             area.create_dataset("Faces Perimeter Values", data=[[0.4, 0.3], [0.6, 0.3]])
             area["Faces Perimeter Info"][...] = [[0, 2], [2, 0]]
+        ring += offset
+        for name in (
+            "Cells Center Coordinate",
+            "FacePoints Coordinate",
+            "Faces Perimeter Values",
+        ):
+            area[name][...] = area[name][()] + offset
         issues = _mesh_binding_issues(
-            area, expected["seed_points"]["Synthetic"], ring[::-1] if reverse else ring
+            area,
+            expected["seed_points"]["Synthetic"] + offset,
+            ring[::-1] if reverse else ring,
         )
     assert bool(issues) is (not bend)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("sign", [1, -1])
+def test_slanted_offset_boundary_binding_is_read_only(tmp_path, reverse, sign):
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, _ = fixture(tmp_path)
+    ring = sign * (
+        np.array([(0.0, 0.0), (5670.0, 216.0), (2472.0, 3239.0), (0.0, 6000.0)])
+        + [1_000_000.0, 10_000_000.0]
+    )
+    if reverse:
+        ring = ring[::-1].copy()
+    ring = np.vstack([ring, ring[0]])
+    seeds = np.array([ring[:4].mean(axis=0)])
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        replacements = {
+            "Cells Center Coordinate": seeds,
+            "Cells FacePoint Indexes": [[0, 1, 2, 3]],
+            "FacePoints Coordinate": ring[:4],
+            "Faces FacePoint Indexes": [[0, 1], [1, 2], [2, 3], [3, 0]],
+            "Faces Perimeter Info": [[0, 1], [1, 1], [2, 1], [3, 1]],
+            "Faces Perimeter Values": (ring[:4] + np.roll(ring[:4], -1, axis=0)) / 2,
+        }
+        for name, data in replacements.items():
+            del area[name]
+            area.create_dataset(name, data=data)
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    original_ring, original_seeds = ring.copy(), seeds.copy()
+    with h5py.File(path, "r") as hdf:
+        assert not _mesh_binding_issues(hdf[f"{AREA}/Synthetic"], seeds, ring)
+    assert np.array_equal(ring, original_ring)
+    assert np.array_equal(seeds, original_seeds)
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+
+
+@pytest.mark.parametrize("offset", [(0.0, 0.0), (1_000_000.0, 10_000_000.0)])
+@pytest.mark.parametrize("ulps", [4, 8, 16])
+@pytest.mark.parametrize("target", ["endpoint", "intermediate", "seed"])
+def test_local_binding_preserves_world_ulp_limit(tmp_path, offset, ulps, target):
+    from ras_commander.geom._preprocess_contract import _mesh_binding_issues
+
+    _, path, expected = fixture(tmp_path)
+    ring = np.array([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]) + offset
+    seeds = expected["seed_points"]["Synthetic"] + offset
+    spacing = np.spacing(max(1.0, float(np.max(np.abs(ring)))))
+    with h5py.File(path, "r+") as hdf:
+        area = hdf[f"{AREA}/Synthetic"]
+        area["Cells Center Coordinate"][...] = (
+            area["Cells Center Coordinate"][()] + offset
+        )
+        area["FacePoints Coordinate"][...] = area["FacePoints Coordinate"][()] + offset
+        if target == "endpoint":
+            area["FacePoints Coordinate"][0] = [offset[0], offset[1] - ulps * spacing]
+        elif target == "intermediate":
+            del area["Faces Perimeter Values"]
+            area.create_dataset(
+                "Faces Perimeter Values",
+                data=[[offset[0] + 0.5, offset[1] - ulps * spacing]],
+            )
+            area["Faces Perimeter Info"][...] = [[0, 1], [1, 0]]
+        else:
+            area["Cells Center Coordinate"][0] = seeds[0] + [ulps * spacing, 0.0]
+        issues = _mesh_binding_issues(area, seeds, ring)
+    assert bool(issues) is (target == "seed" or ulps > 8)
+    if target == "seed":
+        assert any("interior centers differ" in issue for issue in issues)
 
 
 def test_exterior_native_intermediate_vertex_fails_complete_contract(tmp_path):

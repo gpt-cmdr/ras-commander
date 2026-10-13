@@ -23,9 +23,7 @@ def test_numeric_endpoint_repair_keeps_identity_controls_and_inputs():
         {"name": "Inside", "coords": [(30, 20), (40, 20)]},
     ]
     original = deepcopy(specs)
-    revised, record = module._plan_numeric_breakline_containment(
-        perimeter, specs, {"Road"}, 10
-    )
+    revised, record = module._plan_numeric_breakline_containment(perimeter, specs, {"Road"}, 10)
     assert specs == original
     assert revised[1] == specs[1]
     assert {key: value for key, value in revised[0].items() if key != "coords"} == {
@@ -45,10 +43,25 @@ def test_material_deficit_or_empty_fragment_is_rejected(coords):
 
 
 def test_disconnected_repair_cannot_split_a_retained_line():
-    perimeter = Polygon(
-        [(0, 0), (10, 0), (10, 10), (6, 10), (6, 4), (4, 4), (4, 10), (0, 10)]
-    )
+    perimeter = Polygon([(0, 0), (10, 0), (10, 10), (6, 10), (6, 4), (4, 4), (4, 10), (0, 10)])
     with pytest.raises(ValueError, match="drop or split"):
         module._plan_numeric_breakline_containment(
             perimeter, [{"name": "Road", "coords": [(2, 8), (8, 8)]}], {"Road"}, 0.1
         )
+
+
+def test_acute_numeric_deficit_preserves_endpoint_within_original_limit():
+    source = LineString([(20, 9.9999), (80, 10.01)])
+    specs = [{"name": "Road", "coords": list(source.coords), "cell_size_near": 2}]
+    before = deepcopy(specs)
+    revised, record = module._plan_numeric_breakline_containment(
+        box(0, 0, 100, 100), specs, {"Road"}, 10
+    )
+    repaired = LineString(revised[0]["coords"])
+    assert specs == before
+    assert source.hausdorff_distance(repaired) <= 0.01
+    assert abs(source.length - repaired.length) < 0.01
+    assert box(0, 0, 100, 100).buffer(-10).covers(repaired)
+    assert record["maximum_geometry_displacement"] == 0.01
+    assert record["repairs"][0]["method"] == "bounded_vertex_projection"
+    assert record["perimeter_unchanged"] and record["native_controls_unchanged"]

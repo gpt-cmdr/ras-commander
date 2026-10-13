@@ -574,7 +574,21 @@ targets `fim-hecras-wine:6.6-clb-v8`.
 - `delete_bc_line(geom_file, name)` - Delete a named geometry line
 - `rename_bc_line(geom_file, old_name, new_name)` - Rename a geometry line
 - `replace_bc_lines(...)` - Replace all target-area lines and supplied unsteady references
-- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply the exact BC names and types from the authored placement. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns type decisions and before/after hashes. It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
+- `set_bc_line_types(geom_file, line_types, *, hecras_dir=None, expected_geometry_sha256=None)` - Persist explicit `Internal`/`External` classifications in a current compiled geometry through native RAS Mapper APIs. Supply exact BC names and types from the authored placement; lines not named keep their current type. The method requires matching text/HDF BC identities and coordinates, retains a sibling HDF backup, and returns before/after hashes and `lines`, one type decision per compiled line (unnamed lines included, unchanged). It uses an isolated process with HEC-RAS's bundled HDF5; it does not edit BC coordinates or forcing. Re-run geometry preprocessing after a type changes to rebuild connectivity.
+
+Matching types return with `changed=false`, identical hashes and no backup or
+native write. For a real change, native export can omit the compiled `Length`
+field and compact identity string storage. The API validates the native row
+identities and every other retained value, then preserves the original attribute
+schema, metadata and quantities while copying only verified `Type` decisions.
+It never invents a missing length. The native receipt must list every compiled
+line exactly once with its expected type. Unknown field loss, input changes, an
+invalid or incomplete decision receipt, a type change on an unnamed line or type
+truncation fail and restore the whole HDF backup.
+The additive `attribute_schema_preserved` flag and, after native work,
+`native_attribute_fields` list describe this preservation in the existing
+`ras-bc-line-types/v1` record. Recompile geometry after an actual type change;
+these fields do not establish native product completion or hydraulic acceptance.
 
 ## GeomLateral
 
@@ -877,6 +891,12 @@ vectorized, prepared geometry predicates in bounded batches. Concavities and
 keyhole-encoded holes are honored; a bent boundary face is never replaced by its
 endpoint chord. The boundary tolerance is eight
 float64 ULPs at the perimeter's coordinate magnitude, in the geometry CRS units.
+The predicate subtracts the first perimeter vertex uniformly from perimeter,
+face endpoints and intermediate vertices before geometric operations, retaining
+the tolerance computed in original coordinates. This avoids numerical false
+exclusions at large projected offsets without editing arrays, scaling, snapping
+or expanding the permitted boundary allowance. Interior-center binding remains
+an exact comparison in original coordinates.
 Coherent translations of either coordinate array fail completion.
 Reference-line terrain profiles are checked when authored. Manning polygon
 names and coordinates are checked against the geometry text; attachment families
@@ -1387,7 +1407,9 @@ movement at most 0.01 source horizontal units. No source file is changed.
 
 A cloned geometry sidecar `<geometry>.breakline_containment_repair.json`
 (`ras-numeric-breakline-containment-repair/v1`) is written before mutation.
-It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP`, horizontal units,
+It records `reason_code=NUMERIC_BREAKLINE_CONTAINMENT_CLIP` or
+`NUMERIC_BREAKLINE_CONTAINMENT_VERTEX_REPAIR`, with each line's `method` set to
+`endpoint_clip` or `bounded_vertex_projection`, horizontal units,
 maximum movement, one-cell spacing, additional margin, compiled perimeter WKB
 SHA256, perimeter/control preservation flags, and per-line before/after WKB
 hashes, lengths, removed length and movement. The plan binds the current text
@@ -1396,3 +1418,96 @@ success) to `validated` or `failed` (with native mesh success and final hashes).
 Exceptions preserve the last sidecar. The result's default-empty
 `breakline_containment_repairs` list returns completed retry records. Native
 compilation and the original strict containment audit still must pass.
+
+### Fresh geometry preprocessor evidence
+
+`GeomPreprocessor.run_geometry_preprocessor(..., geometry_only=True)` waits for
+normal launcher and owned-child exits before inspecting the geometry HDF.
+Messages and fresh sidecars cannot shorten that wait. The post-completion
+contract checks fresh products, authored inputs, topology, native face binding,
+process errors and exact plan restoration. Run against a disposable project
+copy and inspect the returned completion evidence. FIM callers require
+`require_complete_products=True`, including repair and mesh-generation paths.
+The upstream default remains `False` for explicitly unqualified structure
+schemas; it does not waive qualified structure-free checks. These checks
+establish software geometry completion, not hydraulic acceptance.
+
+
+## Recorded refinement and generated-point repairs
+
+`GeomMesh.clip_refinement_regions(..., invalid_regions="repair")` reads delivered
+geometry without changing the source HDF. GEOS `make_valid` supplies valid
+polygon coverage; every positive-area component survives before clipping.
+Holes are partitioned into hole-free pieces without filling them. Zero-area
+remnants are recorded explicitly. The returned DataFrame keeps its existing
+columns and stores source repair records in `report.attrs["repairs"]`, including
+validity, source/repaired WKB hashes and areas, nonpolygon remnants and the
+positive-area preservation check. Default `invalid_regions="raise"` is unchanged.
+Breakout preflight normalizes invalid source refinements before intersection,
+and marks the corresponding feature-action reason.
+
+`GeomMeshRepair.plan_refinement_support` plans a bounded grid for a retained
+region whose final cells fail local-resolution QA. Coordinates and dx/dy share
+the source projected CRS and project length units. Plans preserve source region
+coverage and spacing controls, retain existing points, record each added XY
+coordinate, and fail before mutation if the candidate budget is exceeded.
+When the bounding box exceeds the remaining budget, the planner intersects grid
+columns with the support polygon. It bounds each fallback region's column count
+and the total examined grid sites by `max_points`, preserving the original lattice, ordering
+and strict containment checks. `candidate_count` still records the bounding-box
+count. Such plans also record `candidate_generation` and
+`examined_candidate_count`; ordinary plans keep their existing evidence shape.
+`GeomMeshRepair.apply_refinement_support` requires a hash-guarded child geometry,
+an exact serialized-seed match and strictly interior additions. It changes only
+the selected child's point block. Use attempt-owned copies and then refresh
+native mesh metadata, recompile and recheck all engineering gates.
+
+`GeomMeshRepair.plan_native_seed_removal` reads specific native topology errors.
+It requires native error indexes or fewer-than-three-face cells, and proves
+each cell point matches the corresponding generated seed within 1e-6 project
+units. It never changes perimeter vertices.
+`DuplicatePoints` repairs use native `BadIndexes` referring to input seeds,
+because this state may have no physical cell collection. Every index must be
+integral and within the supplied finite XY seed array. The plan records the
+index basis, native index count, seed count, selected coordinates and removal
+budget (`max_removals`, default 8192). Missing indexes, indexes outside the input
+array, removing every seed, or exceeding the budget hold before mutation.
+Remaining seed order and all perimeter and feature controls are preserved.
+Successful native recompilation and all final spacing checks remain required.
+Optional
+`generate_computation_points(..., repair_generated_points=True)` applies at most
+five such bootstrap repairs and emits each plan to `evidence_callback` before
+writing geometry text. Observer errors abort generation and appear in the
+returned `MeshResult` error. Supply the persisted dimensionless minimum face
+length ratio for the preview. The option defaults to `False`.
+
+These repair plans support native meshing; they do not establish hydraulic
+acceptance. Successful native recompilation and the caller's spatial and
+hydraulic review remain required.
+
+Numeric breakline containment repairs keep their maximum geometry displacement
+of 0.01 in project horizontal units and the exact one-cell inward containment
+gate. The usual endpoint clip is unchanged. At an acute intersection, clipping
+can remove a long endpoint despite a microscopic normal deficit; a bounded
+fallback projects exterior vertices into the guarded polygon. It must retain
+one valid line, satisfy the original displacement cap and exact containment,
+and preserve controls and the perimeter. Material deficits and disconnected
+fragments still fail closed. Each record identifies `endpoint_clip` or
+`bounded_vertex_projection` in `repairs[].method`; projection uses reason
+`NUMERIC_BREAKLINE_CONTAINMENT_VERTEX_REPAIR`, while endpoint clipping keeps
+`NUMERIC_BREAKLINE_CONTAINMENT_CLIP`. Coordinates remain in the same CRS.
+
+`removed_length` is the signed original length minus repaired length in project
+units; bounded vertex projection can make this diagnostic negative.
+
+`GeomMeshRepair.plan_compiled_polygon_seed_removal` accepts serialized XY seeds,
+native-index-ordered physical centers and public HDF polygon diagnostics in one
+projected CRS/project unit system. Both complete center arrays must have the
+same count and agree by index within 1e-6 units. Only consistent `no_polygon`
+and `multiple_polygons` records for physical cells authorize a plan; ghost IDs
+and unrelated diagnostics do not. Duplicate/inconsistent diagnostics fail.
+The caller may lower the removal budget from its hard maximum of 32; removing
+every seed is prohibited. The method returns `ras-compiled-polygon-seed-repair/v1`
+with diagnostic and coordinate evidence, and changes nothing. Hash-guarded
+application to disposable geometry, native rebuilding, exhaustive physical
+polygon reconstruction and all feature/hydraulic gates remain caller duties.
