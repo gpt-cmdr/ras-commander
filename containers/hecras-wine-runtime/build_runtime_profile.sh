@@ -21,6 +21,12 @@ WHEEL_PATH=$(readlink -f -- "$3")
 OUT=$4
 COMMIT=${RAS_COMMANDER_COMMIT:?set RAS_COMMANDER_COMMIT}
 BASE=${BASE:-local/hecras-wine-base:py311-dotnet48}
+# HECRAS_MSI (env): an MSI already extracted from the installer (7.x combined
+# installers: ../hecras-unsteady/extract_installer.py); skips the launcher.
+MSI_MOUNT=()
+if [ -n "${HECRAS_MSI:-}" ]; then
+    MSI_MOUNT=(-v "$(readlink -f -- "$HECRAS_MSI"):/payload/hecras.msi:ro")
+fi
 DOCKER=${DOCKER:-docker}
 HERE=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")" && pwd)
 
@@ -38,6 +44,7 @@ trap '"$DOCKER" rm -f "$BUILDER" >/dev/null 2>&1 || true' EXIT
 "$DOCKER" run -d --name "$BUILDER" --security-opt apparmor=unconfined \
     -v "$INSTALLER:/payload/setup.exe:ro" -v "$WHEEL_PATH:/payload/$WHEEL:ro" \
     -v "$HERE/accept_tcu.py:/payload/accept_tcu.py:ro" \
+    "${MSI_MOUNT[@]}" \
     "$BASE" sleep infinity >/dev/null
 
 "$DOCKER" exec -e VERSION="$VERSION" -e WHEEL="$WHEEL" "$BUILDER" bash -euo pipefail -c '
@@ -47,6 +54,13 @@ py="C:\\Python311\\python.exe"
 runtime=/build/prefix/drive_c/ras-commander-runtime
 mkdir -p "$runtime"
 cp /payload/setup.exe /tmp/setup.exe
+if [ -f /payload/hecras.msi ]; then
+    echo "== msiexec (pre-extracted MSI)"
+    cp /payload/hecras.msi /tmp/hecras.msi
+    timeout 2400 xvfb-run -a wine msiexec /i "Z:\\tmp\\hecras.msi" /qn /norestart "/l*v" "Z:\\tmp\\msi.log"
+    wineserver -w || true
+fi
+[ -f "$ras_dir/Ras.exe" ] || {
 echo "== launcher"
 # Some launchers install directly (6.x); others unpack the MSI and then wait on
 # a prerequisite download (7.x .NET 4.8.1). Stop a launcher that has unpacked
@@ -65,6 +79,7 @@ done
 kill "$launcher" 2>/dev/null || true
 wineserver -k || true
 wineserver -w || true
+}
 if [ ! -f "$ras_dir/Ras.exe" ]; then
     msi=$(find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | head -n1)
     [ -n "$msi" ] || { echo "error: launcher installed nothing and unpacked no HEC-RAS MSI" >&2; exit 3; }
