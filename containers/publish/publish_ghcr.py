@@ -94,8 +94,11 @@ def plan(archives: Path, sifs: Path | None, registry: str, tag: str) -> list[dic
     return actions
 
 
-def _run(command: list[str]) -> str:
-    return subprocess.run(command, check=True, capture_output=True, text=True).stdout
+def _run(command: list[str], cwd: Path | None = None) -> str:
+    completed = subprocess.run(command, cwd=cwd, capture_output=True, text=True)
+    if completed.returncode:
+        raise RuntimeError(f"{command[0]} {command[1]} failed: {completed.stderr.strip()[-2000:]}")
+    return completed.stdout
 
 
 def push(action: dict) -> str:
@@ -108,11 +111,18 @@ def push(action: dict) -> str:
         if not match:
             raise RuntimeError(f"could not read the loaded image from: {loaded!r}")
         _run(["docker", "tag", match.group(1), action["target"]])
-        output = _run(["docker", "push", action["target"]])
+        try:
+            output = _run(["docker", "push", action["target"]])
+        finally:
+            # Images are several GB; keep one on the host at a time.
+            subprocess.run(["docker", "rmi", action["target"], match.group(1)],
+                           check=False, capture_output=True)
         digests = _DIGEST.findall(output.rsplit("digest:", 1)[-1])
     else:
+        # oras records the file name as given; push from the SIF's folder.
         output = _run(["oras", "push", "--format", "json", action["target"],
-                       f"{action['file'].name}:application/vnd.sylabs.sif.layer.v1.sif"])
+                       f"{action['file'].name}:application/vnd.sylabs.sif.layer.v1.sif"],
+                      cwd=action["file"].parent)
         digests = [json.loads(output)["digest"]] if output.strip() else []
     if not digests:
         raise RuntimeError(f"no digest reported for {action['target']}")
