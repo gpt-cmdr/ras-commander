@@ -511,6 +511,21 @@ _VOLUME_ACCOUNTING_FIELDS = {
     "volume_starting": "Volume Starting",
     "volume_ending": "Volume Ending",
 }
+# HEC-RAS 5.x has no Volume Accounting group: the same accounting is a set of
+# "Vol Accounting ..." attributes on the summary group, with the units inside
+# the "Vol Accounting" text ("Volume Accounting in Acre Feet").
+_LEGACY_VOLUME_ACCOUNTING_GROUP = "Results/Unsteady/Summary"
+_LEGACY_VOLUME_ACCOUNTING_FIELDS = {
+    "volume_error": "Vol Accounting Error",
+    "volume_error_percent": "Vol Accounting Error Percentage",
+    "boundary_outflow_volume": "Vol Accounting DS Outflow",
+    "volume_starting": "Vol Accounting Cell Start",
+    "volume_ending": "Vol Accounting Cell End",
+}
+_LEGACY_INFLOW_ATTRIBUTES = ("Vol Accounting US Inflow", "Vol Accounting Lat Hydro")
+# Net exchange terms: when nonzero, total inflow cannot be separated from outflow.
+_LEGACY_NET_ATTRIBUTES = (
+    "Vol Accounting 2D Bdry", "Vol Accounting Groundwater", "Vol Accounting LS, Pump Div")
 _CUBIC_FEET_PER_ACRE_FOOT = 43560.0
 _INTERVAL_UNIT_SECONDS = {"SEC": 1, "MIN": 60, "HOUR": 3600, "DAY": 86400}
 _INFLOW_HYDROGRAPH_KEYS = (
@@ -629,6 +644,40 @@ def _integrate_hydrograph(values: list[float], step_seconds: float, window: floa
 
 
 @log_call
+def _legacy_volume_accounting(legacy: dict) -> tuple[Union[dict, None], list[str]]:
+    """Map HEC-RAS 5.x summary attributes onto the 6.x Volume Accounting names.
+
+    Returns ``(attributes, not_determinable)``; ``attributes`` is None when a
+    required 5.x attribute is absent.
+    """
+    names = list(_LEGACY_VOLUME_ACCOUNTING_FIELDS.values()) + list(_LEGACY_INFLOW_ATTRIBUTES)
+    if any(name not in legacy for name in names):
+        return None, []
+    attributes = {
+        _VOLUME_ACCOUNTING_FIELDS[field]: legacy[name]
+        for field, name in _LEGACY_VOLUME_ACCOUNTING_FIELDS.items()
+    }
+    try:
+        inflow = sum(float(legacy[name]) for name in _LEGACY_INFLOW_ATTRIBUTES)
+    except (TypeError, ValueError):
+        inflow = float("nan")
+    attributes[_VOLUME_ACCOUNTING_FIELDS["boundary_inflow_volume"]] = inflow
+    label = legacy["Vol Accounting"]
+    if isinstance(label, bytes):
+        label = label.decode("utf-8", errors="replace")
+    match = re.fullmatch(r"\s*Volume Accounting in\s+(.+?)\s*", str(label))
+    attributes["Vol Accounting in"] = match.group(1) if match else None
+    net_terms = []
+    for name in _LEGACY_NET_ATTRIBUTES:
+        try:
+            nonzero = float(legacy.get(name, 0.0)) != 0.0
+        except (TypeError, ValueError):
+            nonzero = True
+        if nonzero:
+            net_terms.append("UNSTEADY_INFLOW_NET_EXCHANGE_TERMS")
+    return attributes, net_terms
+
+
 def validate_unsteady_results(
     hdf_path: Union[str, Path],
     flow_path: Union[str, Path],
@@ -706,11 +755,17 @@ def validate_unsteady_results(
         with h5py.File(hdf_path, "r") as handle:
             group = handle.get(_VOLUME_ACCOUNTING_GROUP)
             attributes = dict(group.attrs) if group is not None else None
+            legacy_group = handle.get(_LEGACY_VOLUME_ACCOUNTING_GROUP)
+            legacy = dict(legacy_group.attrs) if legacy_group is not None else {}
     except Exception as exc:  # noqa: BLE001 - fail closed on any read error
         summary["error"] = f"{type(exc).__name__}: {exc}"
         reason_codes.append("UNSTEADY_RESULTS_UNREADABLE")
         return summary
 
+    legacy_net_terms: list[str] = []
+    if attributes is None and "Vol Accounting" in legacy:
+        attributes, legacy_net_terms = _legacy_volume_accounting(legacy)
+        summary["volume_accounting_layout"] = "hec-ras-5-summary-attributes"
     missing = (
         list(_VOLUME_ACCOUNTING_FIELDS.values())
         if attributes is None
@@ -739,7 +794,7 @@ def validate_unsteady_results(
         reason_codes.append("UNSTEADY_VOLUME_ERROR_EXCEEDED")
 
     # --- inflow reconciliation, only when the inflow is fully determinable ----
-    not_determinable: list[str] = []
+    not_determinable: list[str] = list(legacy_net_terms)
     try:
         flow_text = Path(flow_path).read_text(encoding="utf-8", errors="replace")
         not_determinable.extend(_inflow_not_determinable(flow_text))
