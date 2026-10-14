@@ -111,12 +111,14 @@ xvfb-run -a wine "$py" -m pip install -q --disable-pip-version-check --no-index 
     --force-reinstall --no-compile "C:\\ras-commander-runtime\\$WHEEL"
 xvfb-run -a wine "$py" -c "import ras_commander, sys; print(\"windows ras_commander\", ras_commander.__version__)"
 echo "== terms and conditions"
+# <= 6.0 keeps TCU state per machine: the dialog run here proves the flow works,
+# but tasks accept again in their own prefix (RAS_COMMANDER_WINE_ACCEPT_TCU=1).
 cp /payload/accept_tcu.py "$runtime/accept_tcu.py"
 xvfb-run -a wine "$py" "C:\\ras-commander-runtime\\accept_tcu.py" "$ras_win" \
     "C:\\ras-commander-runtime\\tcu-probe.json" \
     || { cat "$runtime/tcu-probe.json" >&2 || true; echo "error: TCU acceptance was not verified" >&2; exit 5; }
 RAS_COMMANDER_TCU_PROBE="C:\\ras-commander-runtime\\tcu-probe.json" xvfb-run -a wine "$py" -c \
-    "from ras_commander import RasTcu; s = RasTcu.status(ras_version=r\"$ras_win\"); print(s); assert s.accepted is True"
+    "from ras_commander import RasTcu; from ras_commander.remote.execute_request import _is_legacy_tcu_release as legacy; s = RasTcu.status(ras_version=r\"$ras_win\"); print(s); assert (s.accepted is None and s.reason == \"wine-legacy-unverifiable\") if legacy(r\"$ras_win\") else s.accepted is True"
 wineserver -k || true; wineserver -w || true
 rm -rf /build/prefix/drive_c/users/root/AppData/Local/Temp/* /build/prefix/drive_c/windows/temp/* /tmp/setup.exe
 echo PROFILE-OK
