@@ -1467,7 +1467,13 @@ class TestRasMapperLibVersionCompat:
         ]
         geometry = MagicMock()
         geometry.D2FlowArea.FeatureCount.return_value = 1
-        geometry.D2FlowArea.Geometry.MeshPoints = {0: mesh_points}
+        geometry.D2FlowArea.Geometry.MeshPoints = types.SimpleNamespace(
+            GetMeshEditingPoints=lambda: mesh_points
+        )
+        geometry.MeshPerimeters.GetDevelopmentTin.return_value.ContainsPoint.return_value = True
+        # This test isolates overload/region argument compatibility; point-layer
+        # normalization is covered by the multi-area regeneration regressions.
+        monkeypatch.setattr(geom_mesh_module, "_replace_area_points", lambda *args: 0)
         geometry.BreakLines.FeatureCount.return_value = 2
         geometry.SA2DStructures.FeatureCount.return_value = 0
         geometry.MeshRegions.FeatureCount.return_value = 3
