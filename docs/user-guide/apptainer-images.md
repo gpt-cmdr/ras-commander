@@ -10,6 +10,11 @@ converted to a SIF once, then pinned by its SHA-256.
 | Wine preprocessing (Docker workflow) | `rascommander/hec-ras-wine-precompute_<version>:v4` | [`RasDocker.preprocess_plan`](container-execution.md) | [`containers/hecras-wine-precompute`][precompute] |
 | Wine portable executor | Derived from the pre-compute image | [`RasSlurm`](slurm-portable-execution.md), [`RasApptainer.render_prepare_job`](slurm-apptainer-execution.md#wine-preparation-on-the-cluster), `RasPortableDocker` | [`containers/hecras-wine-executor`][executor] |
 
+Qualified images for every supported release are published at `ghcr.io/gpt-cmdr`: OCI images
+as `hec-ras-<role>_<version>` and byte-identical SIFs (ORAS) as `hec-ras-<role>-sif_<version>`,
+tag `0.106.0`. The packaged catalog pins each by digest and records the SIF's SHA-256, so
+`resolve_sif()` and `ensure_sif_command()` pull the published SIF and verify it.
+
 The pre-compute image is a Docker controller with its own entry point; under
 Apptainer, use the executor derived from it. The [container catalog](container-images.md)
 lists published registry digests. A registry digest and a SIF SHA-256 are

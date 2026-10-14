@@ -34,6 +34,25 @@ def apptainer(tmp_path, monkeypatch):
     return str(fake), log
 
 
+_TEST_CATALOG = [
+    ContainerImage("linux-unsteady", "6.6", None,
+                   "docker.io/rascommander/hec-ras-linux-unsteady_6.6@sha256:" + "6" * 64, None, None),
+    ContainerImage("linux-unsteady", "7.0.1", None,
+                   "docker.io/rascommander/hec-ras-linux-unsteady_7.0.1@sha256:" + "7" * 64, None, None),
+    ContainerImage("wine-precompute", "6.6", None,
+                   "docker.io/rascommander/hec-ras-wine-precompute_6.6@sha256:" + "8" * 64, None, None),
+]
+
+
+@pytest.fixture(autouse=True)
+def fixed_catalog(request, monkeypatch):
+    """Resolver tests use a fixed, OCI-only catalog; the packaged one changes on publication."""
+    if "packaged_catalog" in request.keywords:
+        return
+    module = __import__("ras_commander.RasContainerImages", fromlist=["x"])
+    monkeypatch.setattr(module, "_load_catalog", lambda: list(_TEST_CATALOG))
+
+
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -75,13 +94,16 @@ def test_roles_apply_by_release(version, roles):
     assert applicable_roles(version) == roles
 
 
+@pytest.mark.packaged_catalog
 def test_catalog_entries_are_digest_pinned_and_applicable():
     catalog = RasContainerImages.catalog()
     assert {(i.role, i.hec_ras_version) for i in catalog} >= {
-        ("linux-unsteady", "6.6"), ("wine-precompute", "6.6"), ("linux-unsteady", "7.0.1")}
+        ("linux-unsteady", "6.6"), ("wine-precompute", "6.6"), ("linux-unsteady", "7.0.1"),
+        ("wine-executor", "5.0"), ("wine-executor", "5.0.7"), ("wine-executor", "7.0.1")}
     for image in catalog:
         assert "@sha256:" in image.reference
         assert image.role in applicable_roles(image.hec_ras_version)
+        assert image.sif is None or (image.sif.startswith("oras://ghcr.io/") and image.sif_sha256)
 
 
 def test_native_role_is_refused_for_releases_without_a_linux_engine():

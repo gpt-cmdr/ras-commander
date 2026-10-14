@@ -195,7 +195,7 @@ def test_compute_passes_cores_and_explicit_preparation_receipt(monkeypatch, proj
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"version": "7.0"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
+    {"version": "7.1"}, {"timeout": 0}, {"timeout": True}, {"timeout": 1.5},
     {"num_cores": 0}, {"num_cores": True}, {"num_cores": 9}, {"num_cores": 2.5},
     {"resume": "yes"}, {"pull": "sometimes"},
     {"replace_generated": "yes"}, {"run_id": "../escape"}, {"run_id": ".hidden"},
@@ -482,7 +482,7 @@ def test_701_cannot_use_a_different_version_image_or_receipt(monkeypatch, projec
     ("4.1", "RasControl"),
     ("6.3.1", "has no HEC Linux engine"),
     ("6.0", "has no HEC Linux engine"),
-    ("5.0.7", "pass image="),
+    ("7.1", "pass image="),
     ("66", "install folder name"),
 ])
 def test_releases_are_checked_against_native_engines_and_the_catalog(monkeypatch, project, version, message):
