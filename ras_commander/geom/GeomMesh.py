@@ -110,6 +110,11 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+
+class _MeshRegenerationError(RuntimeError):
+    """Native regeneration returned no target points after clearing stale seeds."""
+
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _HECRAS_SEARCH_PATHS = [
@@ -465,6 +470,11 @@ def _generate_seeds_via_net(
     Calls the private RegenerateMeshPoints instance method via reflection,
     which internally runs the full EnforceBreaklines 5-step pipeline.
 
+    Normal regeneration merges the in-memory editing points and clears the
+    target area before invoking Mapper. Only that area is regenerated; points
+    belonging to other areas are preserved and excluded from the return value.
+    No points in this private geometry instance are saved to the HDF.
+
     Replicates the GUI's SA2DLinesAsBreakLines behavior: SA2D structures
     (internal dams, weirs) are temporarily added as breaklines with their
     spacing parameters (Near Repeats, Protection Radius) so that
@@ -480,7 +490,7 @@ def _generate_seeds_via_net(
     Args:
         geom_hdf_path: Path to compiled .g##.hdf file.
         ns: .NET type namespace from _imports().
-        fid: 0-based flow area feature index for MeshPoints lookup.
+        fid: 0-based flow area feature index for perimeter selection.
         grid_anchor: Optional lattice point to anchor the regular grid on.
         evidence: Optional dict updated with anchored-generation counts.
 
@@ -524,6 +534,8 @@ def _generate_seeds_via_net(
 
         bl_count = bl.FeatureCount()
         perim_count = d2fa.FeatureCount()
+        if not 0 <= fid < perim_count:
+            raise ValueError(f"2D flow area index {fid} out of range ({perim_count} areas)")
 
         bl_idx = NetList[System.Int32]()
         for i in range(bl_count):
@@ -547,6 +559,21 @@ def _generate_seeds_via_net(
                     regenerate_idx.Add(i)
             lattice = _anchored_lattice_points(geom, fid, grid_anchor, ns)
             replaced = _replace_area_points(geom, fid, lattice, ns)
+        else:
+            # HDF loading creates one multipoint feature per area. Mapper's
+            # regeneration expects one editing multipoint and otherwise catches
+            # its own "multiple multipoints" exception, leaving stale seeds.
+            # Merge in memory and clear only the target, so a swallowed failure
+            # cannot be mistaken for a successful deterministic regeneration.
+            target_tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+            if target_tin is None:
+                raise _MeshRegenerationError(
+                    f"2D flow area {fid} has no development TIN for regeneration"
+                )
+            _replace_area_points(geom, fid, ns["PointMs"](), ns)
+            perim_idx = NetList[System.Int32]()
+            perim_idx.Add(int(fid))
+            regenerate_idx = perim_idx
 
         pg = ns["PointGenerator"](geom)
         pg_type = pg.GetType()
@@ -568,13 +595,24 @@ def _generate_seeds_via_net(
         )
 
         seeds_pm = ns["PointMs"]()
-        if lattice is None:
-            mp = d2fa.Geometry.MeshPoints[fid]
-        else:
-            # The anchored path leaves one merged multipoint (all areas).
-            mp = d2fa.Geometry.MeshPoints.GetMeshEditingPoints()
+        # Both paths now use one merged editing feature. Its feature index no
+        # longer corresponds to the original flow-area FID (notably fid > 0).
+        mp = d2fa.Geometry.MeshPoints.GetMeshEditingPoints()
+        if mp is None and lattice is None:
+            raise _MeshRegenerationError(
+                f"RAS Mapper regeneration returned no editing points for 2D flow area {fid}"
+            )
         for i in range(mp.PointMCount()):
-            seeds_pm.Add(mp.PointM(i))
+            point = mp.PointM(i)
+            if lattice is not None or target_tin.ContainsPoint(point):
+                seeds_pm.Add(point)
+
+        if lattice is None and seeds_pm.Count == 0:
+            raise _MeshRegenerationError(
+                f"RAS Mapper regeneration produced no computation points for "
+                f"2D flow area {fid}; stale target points were cleared before "
+                "the native call"
+            )
 
         if lattice is not None:
             # RegenerateMeshPoints swallows its own exceptions. With features
@@ -5758,6 +5796,12 @@ class GeomMesh:
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f".NET RegenerateMeshPoints"
                 )
+            except _MeshRegenerationError as exc:
+                # A known silent native failure must not become an unconstrained
+                # lattice fallback that loses breakline/refinement enforcement.
+                raise _MeshRegenerationError(
+                    f"[{mesh_name}] Native point regeneration failed: {exc}"
+                ) from exc
             except Exception as exc:
                 if anchor is not None:
                     raise RuntimeError(

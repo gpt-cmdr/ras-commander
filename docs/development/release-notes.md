@@ -9,6 +9,17 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+**Multi-area computation points regenerate correctly**
+
+`GeomMesh.generate()` now regenerates the selected 2D area's computation
+points on geometries with multiple 2D areas. Previously, RAS Mapper caught
+its own multiple-multipoint error and the library accepted the stored points
+as regenerated. The seed helper merges the editing collection in memory,
+clears the selected area's old points, and returns only that area's regenerated
+points. Other areas retain their points. A native call that leaves the selected
+area empty returns an error instead of falling back to a plain lattice.
+Public signatures and the grid-anchor path are unchanged.
+
 **HDF result classes import under the compute install**
 
 `HdfResultsMesh`, `HdfResultsXsec`, `HdfResultView`, `HdfPipe`, and `HdfPump`
