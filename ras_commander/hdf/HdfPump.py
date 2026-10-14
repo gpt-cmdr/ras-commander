@@ -13,19 +13,23 @@ List of Functions in HdfPump:
 
 """
 
+from __future__ import annotations
+
+
 
 import h5py
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-import xarray as xr
 from pathlib import Path
-from shapely.geometry import Point
 from typing import List, Dict, Any, Optional, Union
+from .._optional_deps import optional_module, require_module
 from .HdfUtils import HdfUtils
 from .HdfBase import HdfBase
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+
+gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfPump")
+xr = optional_module("xarray", "Returning xarray results from HdfPump")
 
 logger = get_logger(__name__)
 
@@ -91,6 +95,9 @@ class HdfPump:
         Raises:
             KeyError: If the pump station group exists but required datasets are missing.
         """
+        shapely_geometry = require_module("shapely.geometry", "Returning GeoDataFrame results from HdfPump")
+        Point = shapely_geometry.Point
+
         with h5py.File(hdf_path, 'r') as hdf:
             pump_stations_path = "/Geometry/Pump Stations"
             if pump_stations_path not in hdf:
