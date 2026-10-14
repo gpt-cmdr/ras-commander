@@ -675,3 +675,51 @@ def test_clear_geometry_infiltration_never_edits_through_links(tmp_path, kind):
             h["Geometry/2D Flow Areas/A"].attrs["Infiltration Filename"]
             == "legitimate.hdf"
         )
+
+
+def _area_only_source(folder):
+    folder.mkdir()
+    source = folder / "model.g01.hdf"
+    with h5py.File(source, "w") as h:
+        h.create_group("Geometry/2D Flow Areas/A").attrs["Infiltration Filename"] = (
+            "legit.hdf"
+        )
+    return source
+
+
+@pytest.mark.skipif(os.name != "nt", reason="NTFS directory junctions")
+def test_clear_geometry_infiltration_refuses_a_junctioned_directory(tmp_path):
+    # Gate KU reproduction: child directory is a junction to the source directory.
+    source = _area_only_source(tmp_path / "source")
+    junction = tmp_path / "child"
+    made = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(source.parent)],
+        capture_output=True,
+        check=False,
+    )
+    if made.returncode != 0 or not junction.exists():
+        pytest.skip("directory junctions cannot be created here")
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="reparse-point|linked path"):
+        clear_geometry_infiltration(junction / source.name)
+    assert _sha256(source) == before
+
+
+def test_clear_geometry_infiltration_refuses_a_symlinked_directory(tmp_path):
+    source = _area_only_source(tmp_path / "source")
+    link = tmp_path / "child"
+    try:
+        os.symlink(source.parent, link, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("directory symlinks cannot be created here")
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="linked path|reparse-point"):
+        clear_geometry_infiltration(link / source.name)
+    assert _sha256(source) == before
+
+
+def test_clear_geometry_infiltration_still_clears_a_plain_single_link_file(tmp_path):
+    source = _area_only_source(tmp_path / "plain")
+    clear_geometry_infiltration(source)
+    with h5py.File(source) as h:
+        assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs

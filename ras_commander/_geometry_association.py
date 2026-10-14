@@ -78,6 +78,25 @@ def safe_resolve_path(path: PathLike) -> Path:
     return RasUtils.safe_resolve(Path(path))
 
 
+def _refuse_linked_path(path: PathLike) -> None:
+    """Raise ValueError if the path or any parent directory is a link or junction.
+
+    Walks the absolute, unresolved path. A symbolic link or a Windows reparse
+    point (directory junction) anywhere along it could redirect an edit to
+    another file, so editing callers refuse such paths before any write.
+    """
+    candidate = Path(os.path.abspath(os.fspath(path)))
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    for component in (candidate, *candidate.parents):
+        if not os.path.lexists(component):
+            continue
+        if os.path.islink(component):
+            raise ValueError(f"refusing a linked path component: {component}")
+        attributes = getattr(os.lstat(component), "st_file_attributes", 0)
+        if attributes & reparse:
+            raise ValueError(f"refusing a reparse-point path component: {component}")
+
+
 def decode_hdf_attr(value: Any) -> Optional[str]:
     """Decode an HDF attribute value to a clean string."""
     if value is None:
@@ -783,7 +802,8 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     snapshot). Other area attributes, such as an override table hash, stay.
     Every traversed member must be a hard link owned by the supplied file; a
     soft or external link is rejected before any write, and so is a file
-    with more than one filesystem hard link (its bytes are shared). Existing
+    with more than one filesystem hard link (its bytes are shared) or a path
+    with a symbolic link or junction in any component. Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -795,6 +815,9 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """
     import h5py
 
+    # Gate KU: a link or junction anywhere on the supplied path could redirect
+    # the edit to another geometry; refuse before resolving or writing.
+    _refuse_linked_path(hdf_path)
     path = safe_resolve_path(hdf_path)
     if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
         raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
