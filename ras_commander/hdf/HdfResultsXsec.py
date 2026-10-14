@@ -27,6 +27,9 @@ Notes:
 - Functions return xarray Datasets for efficient handling of multi-dimensional data
 """
 
+from __future__ import annotations
+
+
 import re
 from pathlib import Path
 from typing import Union, Optional, List, Dict, Tuple, Sequence
@@ -34,12 +37,14 @@ from typing import Union, Optional, List, Dict, Tuple, Sequence
 import h5py
 import numpy as np
 import pandas as pd
-import xarray as xr
 
+from .._optional_deps import OptionalDependencyError, optional_module
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 from ..Decorators import standardize_input, log_call
 from ..LoggingConfig import get_logger
+
+xr = optional_module("xarray", "Returning xarray results from HdfResultsXsec")
 
 logger = get_logger(__name__)
 
@@ -186,6 +191,8 @@ class HdfResultsXsec:
                 hdf_path,
                 exc_info=True,
             )
+            raise
+        except OptionalDependencyError:
             raise
         except Exception as e:
             logger.error(

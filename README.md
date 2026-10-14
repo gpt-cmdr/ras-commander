@@ -191,7 +191,9 @@ pip install --upgrade "ras-commander[compute]"
 ```
 
 The `compute` surface excludes RasControl/COM and the geospatial and plotting
-stacks. It does not bypass ras-commander: `RasCmdr` still constructs and owns
+stacks. HDF result functions that return xarray objects or GeoDataFrames need
+the `full` extra; use `pip install "ras-commander[compute,full]"` to run plans
+and extract those results in one environment. It does not bypass ras-commander: `RasCmdr` still constructs and owns
 the HEC-RAS command-line execution, message handling, verification options, and
 normal post-compute DataFrame refreshes.
 

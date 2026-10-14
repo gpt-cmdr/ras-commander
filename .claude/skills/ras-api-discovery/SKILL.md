@@ -9,7 +9,7 @@ security_review: internal
 
 # RAS API Discovery
 
-Identify the requested capability and installed `ras-commander` version. Read [release and runtime boundaries](../ras-commander/references/runtime-and-mcp.md). Distinguish installed behavior, current published behavior, and repository development work.
+Identify the requested capability and installed `ras-commander` version. Follow the runtime setup and MCP rules in the `ras-commander` skill: use the installed public Python API, and if `ras_commander` is not importable, install `ras-commander[full]` into a task-local environment (uv preferred) rather than answering from file searches. Distinguish installed behavior, current published behavior, and repository development work.
 
 Use public exports, signatures, docstrings, canonical schemas, and examples from the matching package/release. Search source when these do not establish an answer. Source inspection is appropriate for API discovery; it does not authorize copying parsers or bypassing public APIs to extract project data. Treat website/main examples as potentially newer than the installed release.
 
@@ -19,4 +19,4 @@ Split large investigations into focused source, example, or contract reviews usi
 
 Return the supported method and verified signature, canonical schema/return fields, a version-matched usage example when available, required dependencies, source locators, and any unresolved API gap. Label an unexecuted example as unexecuted. Keep large research artifacts in the caller's authorized workspace only when needed. No fixed drive, repository location, or global project object is assumed.
 
-Use the fuller Python workflow for project data. Any project MCP query requires a bounded informational subagent under the linked runtime contract. A discovered API is not evidence that its output or side effects satisfy that boundary.
+Use the fuller Python workflow for project data. Any project MCP query requires a bounded informational subagent under the `ras-commander` skill's MCP contract. A discovered API is not evidence that its output or side effects satisfy that boundary.

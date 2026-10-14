@@ -10,15 +10,17 @@ from typing import Any, Iterator, Optional, SupportsIndex, Union
 import h5py
 import numpy as np
 import pandas as pd
-import xarray as xr
 from numpy.typing import DTypeLike
 
+from .._optional_deps import optional_module
 from ..Decorators import log_call
 from ..LoggingConfig import get_logger
 from .HdfBase import HdfBase
 from .HdfUtils import HdfUtils
 
 Selection = Optional[Union[SupportsIndex, slice]]
+
+xr = optional_module("xarray", "Returning xarray results from HdfResultView")
 
 logger = get_logger(__name__)
 
