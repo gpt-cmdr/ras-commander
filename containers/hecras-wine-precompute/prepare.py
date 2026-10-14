@@ -271,6 +271,9 @@ def wine_environment(prefix, base=None):
     environment["WINEPREFIX"] = str(prefix)
     environment.setdefault("DISPLAY", ":99")
     environment["WINEDLLOVERRIDES"] = disable_wine_debugger(environment.get("WINEDLLOVERRIDES"))
+    # HEC-RAS 7.0's OpenMP runtime aborts under Wine (OMP: Error #179) unless
+    # affinity is disabled; the portable executor applies the same default.
+    environment.setdefault("KMP_AFFINITY", "disabled")
 
     shim_record = None
     setting = environment.get(CPU_SHIM_VARIABLE)
@@ -291,6 +294,7 @@ def wine_environment(prefix, base=None):
     record = {
         "WINEDEBUG": environment.get("WINEDEBUG"),
         "WINEDLLOVERRIDES": environment["WINEDLLOVERRIDES"],
+        "KMP_AFFINITY": environment["KMP_AFFINITY"],
         "cpu_shim": shim_record,
     }
     return environment, record

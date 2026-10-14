@@ -378,6 +378,7 @@ def test_wine_environment_preloads_shim_and_disables_debugger(tmp_path):
     assert record == {
         "WINEDEBUG": "err+all,fixme-all",
         "WINEDLLOVERRIDES": "mscoree=n;winedbg.exe=d",
+        "KMP_AFFINITY": "disabled",
         "cpu_shim": {"path": str(shim.resolve()), "sha256": hashlib.sha256(b"shim").hexdigest()},
     }
     again, _ = prepare.wine_environment(tmp_path / "prefix", environment)
@@ -589,3 +590,12 @@ def test_release_profile_destination_must_stay_outside_the_repository(monkeypatc
     source.mkdir()
     with pytest.raises(bundle.JobError, match="outside the source repository"):
         bundle.export_profile(source, REPO_ROOT / "working" / "release", "6.5")
+
+
+def test_wine_environment_disables_openmp_affinity_unless_set(tmp_path):
+    prepare = load_container_script("prepare")
+    environment, record = prepare.wine_environment(tmp_path / "prefix", {"RAS_COMMANDER_WINE_CPU_SHIM": "0"})
+    assert environment["KMP_AFFINITY"] == "disabled" and record["KMP_AFFINITY"] == "disabled"
+    kept, _ = prepare.wine_environment(tmp_path / "prefix",
+                                       {"RAS_COMMANDER_WINE_CPU_SHIM": "0", "KMP_AFFINITY": "compact"})
+    assert kept["KMP_AFFINITY"] == "compact"

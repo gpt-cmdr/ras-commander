@@ -138,6 +138,7 @@ class RasDocker:
         replace_generated: bool = False, docker_executable: str = "docker",
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> ContainerResult:
         """Create ``.tmp.hdf``, ``.b##`` and ``.x##`` in the Wine image.
 
@@ -163,6 +164,10 @@ class RasDocker:
             run_id: Optional unique 1–64 character run ID. IDs cannot be reused,
                 including after failed launches; omitted IDs are generated.
             user: Container user; ``"root"`` supports Windows bind mounts.
+            apparmor_profile: Optional AppArmor profile for the container
+                (``--security-opt apparmor=<profile>``). Hosts whose default
+                Docker profile denies Wine's sockets (``wineserver: socket:
+                Permission denied``) need ``"unconfined"`` or a site profile.
             stream_callback: Partial ExecutionCallback object. An optional
                 ``on_container_event(event)`` receives project/stage identity,
                 live stdout/stderr, validated completion and resume events.
@@ -180,6 +185,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=None,
+            apparmor_profile=apparmor_profile,
             stream_callback=stream_callback, resume=resume,
         )
 
@@ -194,6 +200,7 @@ class RasDocker:
         pull: str = "missing", run_id: Optional[str] = None, user: str = "root",
         prepare_receipt: Optional[Union[str, Path]] = None,
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> ContainerResult:
         """Run preprocessed inputs with the native Linux unsteady solver image.
 
@@ -211,6 +218,7 @@ class RasDocker:
             mounts=mounts, timeout=timeout, num_cores=num_cores,
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, run_id=run_id, user=user, prepare_receipt=prepare_receipt,
+            apparmor_profile=apparmor_profile,
             stream_callback=stream_callback, resume=resume,
         )
 
@@ -226,6 +234,7 @@ class RasDocker:
         docker_executable: str = "docker", pull: str = "missing",
         run_id: Optional[str] = None, user: str = "root",
         stream_callback: Optional[Any] = None, resume: bool = False,
+        apparmor_profile: Optional[str] = None,
     ) -> Tuple[ContainerResult, Optional[ContainerResult]]:
         """Prepare then compute, stopping if preparation fails.
 
@@ -243,6 +252,7 @@ class RasDocker:
             replace_generated=replace_generated, docker_executable=docker_executable,
             pull=pull, user=user,
             stream_callback=stream_callback, resume=resume,
+            apparmor_profile=apparmor_profile,
         )
         prepared = RasDocker.preprocess_plan(
             project_path, plan_number, image=preprocess_image,
@@ -335,7 +345,8 @@ class RasDocker:
     @staticmethod
     def _execute(stage, project_path, plan_number, *, version, image, mounts,
                  timeout, num_cores, replace_generated, docker_executable, pull,
-                 run_id, user, prepare_receipt, stream_callback=None, resume=False):
+                 run_id, user, prepare_receipt, stream_callback=None, resume=False,
+                 apparmor_profile=None):
         started = time.monotonic()
         from .RasContainerImages import RasContainerImages, applicable_roles, normalize_version
 
@@ -364,6 +375,10 @@ class RasDocker:
         for name, value in (("docker_executable", docker_executable), ("user", user)):
             if not isinstance(value, str) or not value.strip() or any(c in value for c in "\x00\r\n"):
                 raise ValueError(f"{name} must be a nonempty string without control characters")
+        if apparmor_profile is not None and not (
+                isinstance(apparmor_profile, str)
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", apparmor_profile)):
+            raise ValueError("apparmor_profile must be a profile name such as 'unconfined'")
         project = RasUtils.safe_resolve(Path(project_path).expanduser())
         if not project.is_file() or project.suffix.lower() != ".prj":
             raise ValueError("project_path must point to an existing .prj file")
@@ -432,6 +447,7 @@ class RasDocker:
             command = [docker_executable, "run", "--rm", "--pull", pull,
                        "--name", name, "--label", f"{_OWNER_LABEL}={owner}",
                        "--cidfile", str(cid_file), "--user", user,
+                       *(["--security-opt", f"apparmor={apparmor_profile}"] if apparmor_profile else []),
                        "--cpus", str(num_cores), *mount_args,
                        image, stage, "--project", f"/job/{project.name}", "--plan", plan,
                        "--timeout", str(timeout), "--run-id", run_id,

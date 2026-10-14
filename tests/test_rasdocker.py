@@ -501,3 +501,14 @@ def test_explicit_image_supports_a_release_without_published_defaults(monkeypatc
         pass
     assert calls and any("local/hec-ras-wine-precompute_5.0.7:v5-test" in part
                          for call in calls for part in call)
+
+
+def test_apparmor_profile_is_opt_in_and_validated(monkeypatch, project):
+    calls = _fake_run(monkeypatch, project)
+    assert RasDocker.preprocess_plan(project, 1, run_id="apparmor-default")
+    assert "--security-opt" not in calls[0][0]
+    assert RasDocker.preprocess_plan(project, 1, run_id="apparmor-unconfined", apparmor_profile="unconfined")
+    command = calls[1][0]
+    assert command[command.index("--security-opt") + 1] == "apparmor=unconfined"
+    with pytest.raises(ValueError, match="apparmor_profile"):
+        RasDocker.preprocess_plan(project, 1, apparmor_profile="unconfined --privileged")
