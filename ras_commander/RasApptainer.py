@@ -924,7 +924,7 @@ run_prepare() {
     "$PYTHON" -m ras_commander.remote.apptainer_prepare prepare \\
     --project "/job/$PROJECT_FILE" --plan "$PLAN" --num-cores "$NUM_CORES" \\
     --timeout "$PREPARE_TIMEOUT" --ras-executable "$RAS_EXECUTABLE" \\
-    --request-sha256 "$REQUEST_SHA256" --receipt /job/.prepare_receipt.json \\
+    --request-sha256 "$REQUEST_SHA256" --receipt /job/.prepare_receipt.json @PREPARE_FLAGS@\\
     > "$SCRATCH/prepare.log" 2>&1 &
   WORKER_PID=$!
   wait "$WORKER_PID"; RC=$?
@@ -1726,6 +1726,12 @@ class RasApptainer:
             raise ValueError(f"Derived job name is not a safe Slurm token: {job_name!r}")
         attempt_id = uuid.uuid4().hex
         remote_dir = f"{profile.scratch_root.rstrip('/')}/{job_name}/attempt-{attempt_id}"
+        # Releases before 6.3.1 also hand the .c## computed geometry to the solver.
+        computed_geometry = profile.arguments == "cfile"
+        prepare_artifacts = [f"{project_name}.p{plan}.tmp.hdf", f"{project_name}.b{plan}",
+                             f"{project_name}.{xtoken}"]
+        if computed_geometry:
+            prepare_artifacts.append(f"{project_name}.c{xtoken[1:]}")
         script_values = {
             "SBATCH": _sbatch_directives(profile, job_name, remote_dir),
             "MODULES": "\n".join(f"module load {shlex.quote(m)}" for m in profile.modules),
@@ -1741,9 +1747,8 @@ class RasApptainer:
             "CORES": str(profile.num_cores),
             "TIMEOUT": str(profile.prepare_timeout_seconds),
             "RAS_EXECUTABLE": shlex.quote(ras_executable),
-            "ARTIFACTS": " ".join(shlex.quote(name) for name in (
-                f"{project_name}.p{plan}.tmp.hdf", f"{project_name}.b{plan}",
-                f"{project_name}.{xtoken}")),
+            "ARTIFACTS": " ".join(shlex.quote(name) for name in prepare_artifacts),
+            "PREPARE_FLAGS": "--require-computed-geometry " if computed_geometry else "",
             "ENVIRONMENT": "\n".join(f"export {k}={shlex.quote(str(v))}"
                                      for k, v in sorted(profile.environment.items())),
         }
@@ -1754,6 +1759,8 @@ class RasApptainer:
             "job_sha256": template_job_sha, "ras_executable": ras_executable,
             "profile": profile_view,
         }
+        if computed_geometry:
+            request["computed_geometry"] = True
         request_sha = _canonical_sha256(request)
         script_values["REQUEST_SHA"] = request_sha
         (job_directory / "job.sh").write_text(
@@ -1826,6 +1833,8 @@ class RasApptainer:
             expected = [f"{job.project_name}.p{job.plan_number}.tmp.hdf",
                         f"{job.project_name}.b{job.plan_number}",
                         f"{job.project_name}.{job.geometry_token}"]
+            if request.get("computed_geometry"):
+                expected.append(f"{job.project_name}.c{job.geometry_token[1:]}")
             deleted = [line for line in (dest / "deleted_inputs.txt").read_text(
                 encoding="utf-8").splitlines() if line]
             if any(name not in request["input_hashes"] for name in deleted):

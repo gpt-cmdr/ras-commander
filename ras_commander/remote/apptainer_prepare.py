@@ -114,17 +114,21 @@ def _windows_worker(
     return 0 if payload["success"] else 1
 
 
-def _expected_artifacts(project_file: Path, plan: str) -> list[Path]:
+def _expected_artifacts(project_file: Path, plan: str, computed_geometry: bool = False) -> list[Path]:
+    """Solver inputs preparation must produce; ``.c##`` for releases before 6.3.1."""
     from ..RasApptainer import _plan_geometry_token
 
     stem = project_file.stem
     folder = project_file.parent
     xtoken = _plan_geometry_token(folder, stem, plan)
-    return [
+    artifacts = [
         folder / f"{stem}.p{plan}.tmp.hdf",
         folder / f"{stem}.b{plan}",
         folder / f"{stem}.{xtoken}",
     ]
+    if computed_geometry:
+        artifacts.append(folder / f"{stem}.c{xtoken[1:]}")
+    return artifacts
 
 
 def _prepare(
@@ -135,6 +139,7 @@ def _prepare(
     ras_executable: str,
     request_sha256: str,
     receipt_path: Path,
+    computed_geometry: bool = False,
 ) -> int:
     """Run Windows preprocessing under a task-private Wine prefix and record it."""
     from . import execute_request as wine
@@ -216,7 +221,7 @@ def _prepare(
         )
         worker = json.loads(result_path.read_text(encoding="utf-8")) if result_path.is_file() else None
         receipt["worker"] = worker
-        artifacts = _expected_artifacts(project_file, plan)
+        artifacts = _expected_artifacts(project_file, plan, computed_geometry)
         missing = [path.name for path in artifacts if not path.is_file() or path.stat().st_size == 0]
         if completed.returncode != 0 or not worker or not worker.get("success"):
             receipt["detail"] = (worker or {}).get("error") or f"Wine worker exited {completed.returncode}"
@@ -235,7 +240,7 @@ def _prepare(
                 receipt["reason_code"] = "COMPLETED"
         receipt["outputs"] = {
             path.name: {"sha256": _sha256(path), "size_bytes": path.stat().st_size}
-            for path in _expected_artifacts(project_file, plan)
+            for path in _expected_artifacts(project_file, plan, computed_geometry)
             if path.is_file()
         }
     except subprocess.TimeoutExpired:
@@ -264,6 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--project", type=Path, required=True)
     prepare.add_argument("--receipt", type=Path, required=True)
     prepare.add_argument("--request-sha256", required=True)
+    prepare.add_argument("--require-computed-geometry", action="store_true",
+                         help="also require the .c## computed geometry (HEC-RAS before 6.3.1)")
     worker = commands.add_parser("windows-worker", help="Windows Python side (internal)")
     worker.add_argument("--project", required=True)
     worker.add_argument("--result", type=Path, required=True)
@@ -293,7 +300,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     return _prepare(
         project, args.plan, args.num_cores, args.timeout, args.ras_executable,
-        args.request_sha256, args.receipt,
+        args.request_sha256, args.receipt, args.require_computed_geometry,
     )
 
 
