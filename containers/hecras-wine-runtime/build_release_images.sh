@@ -24,12 +24,19 @@ CONTEXT="$WORK/context-$VERSION"
 PRECOMPUTE_TAG="local/hec-ras-wine-precompute_$VERSION:v5-$SHORT"
 EXECUTOR_TAG="local/hec-ras-wine-executor_$VERSION:$SHORT"
 mkdir -p "$WORK" "$ARCHIVES"
-cleanup() { rm -rf -- "$PROFILE" "$CONTEXT"; }
+cleanup() { rm -rf -- "$PROFILE" "$PROFILE-examples" "$CONTEXT"; }
 trap cleanup EXIT
 
 echo "== [$VERSION] runtime profile"
 rm -rf -- "$PROFILE"
 bash "$HERE/build_runtime_profile.sh" "$VERSION" "$INSTALLER" "$WHEEL" "$PROFILE"
+
+if [ -d "$PROFILE-examples" ]; then
+    EXAMPLES="hec-ras-examples_${VERSION}_${SHORT}.tar.gz"
+    tar -czf "$ARCHIVES/$EXAMPLES" -C "$PROFILE-examples" .
+    (cd "$ARCHIVES" && sha256sum "$EXAMPLES" > "$EXAMPLES.sha256")
+    rm -rf -- "$PROFILE-examples"
+fi
 
 echo "== [$VERSION] pre-compute image"
 rm -rf -- "$CONTEXT"
@@ -61,5 +68,7 @@ for tag in "$PRECOMPUTE_TAG" "$EXECUTOR_TAG"; do
 done
 if [ -z "${KEEP_IMAGES:-}" ]; then
     "$DOCKER" rmi "$EXECUTOR_TAG" "$PRECOMPUTE_TAG" >/dev/null
+    # The build context (the whole runtime profile) is cached by BuildKit.
+    "$DOCKER" builder prune -af >/dev/null
 fi
 echo "RELEASE-IMAGES-OK $VERSION"

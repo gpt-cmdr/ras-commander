@@ -203,6 +203,7 @@ echo LAYER-OK
 
 echo "== verify $TAG"
 "$DOCKER" run --rm "${SECURITY[@]}" --cpus "$BUILD_CPUS" --network none \
+    --tmpfs /tmp:rw,exec,size=${VERIFY_TMPFS_SIZE:-12g} \
     --env "EXPECTED_VERSION=$WHEEL_VERSION" --env "EXPECTED_SEED=$SEED" --env "EXPECTED_SHIM=$SHIM" \
     --env "GDAL_BRIDGE=$GDAL_BRIDGE" \
     --entrypoint /bin/bash "$TAG" -c '

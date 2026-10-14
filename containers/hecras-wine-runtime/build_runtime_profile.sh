@@ -78,6 +78,15 @@ if [ ! -f "$ras_dir/Ras.exe" ]; then
     find "/build/prefix/drive_c/Program Files (x86)/HEC" -iname ras.exe >&2 || true
     exit 4
 fi
+# Example projects are test data, not runtime: export them beside the profile.
+if [ -d "$ras_dir/Example Projects" ]; then
+    mkdir -p /build/examples
+    mv "$ras_dir/Example Projects" /build/examples/raw
+    find /build/examples/raw -maxdepth 1 -iname "Example_Projects*.exe" -print0 \
+        | while IFS= read -r -d "" archive; do 7z x -y -o/build/examples/projects "$archive" >/dev/null; rm -f "$archive"; done
+    [ -d /build/examples/projects ] || mv /build/examples/raw /build/examples/projects
+    rm -rf /build/examples/raw
+fi
 echo "== ras-commander"
 cp "/payload/$WHEEL" "$runtime/$WHEEL"
 xvfb-run -a wine "$py" -m pip install -q --disable-pip-version-check --no-index --no-deps \
@@ -96,6 +105,9 @@ echo PROFILE-OK
 '
 echo "== export prefix"
 "$DOCKER" cp "$BUILDER:/build/prefix" "$OUT/prefix"
+if "$DOCKER" exec "$BUILDER" test -d /build/examples/projects; then
+    "$DOCKER" cp "$BUILDER:/build/examples/projects" "$OUT-examples"
+fi
 python3 - "$OUT" "$VERSION" "$COMMIT" "$WHEEL" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
