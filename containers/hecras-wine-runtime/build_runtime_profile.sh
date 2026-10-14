@@ -129,7 +129,8 @@ ras_win="C:\\Program Files (x86)\\HEC\\HEC-RAS\\$VERSION\\$ras_name"
 if [ -d "$ras_dir/Example Projects" ]; then
     mkdir -p /build/examples
     mv "$ras_dir/Example Projects" /build/examples/raw
-    find /build/examples/raw -maxdepth 1 -iname "Example_Projects*.exe" -print0 \
+    # Releases package them as Example_Projects*.exe (6.x) or Example Projects.7z (5.0.x).
+    find /build/examples/raw -maxdepth 1 \( -iname "Example_Projects*.exe" -o -iname "Example*Projects*.7z" \) -print0 \
         | while IFS= read -r -d "" archive; do 7z x -y -o/build/examples/projects "$archive" >/dev/null; rm -f "$archive"; done
     [ -d /build/examples/projects ] || mv /build/examples/raw /build/examples/projects
     rm -rf /build/examples/raw
