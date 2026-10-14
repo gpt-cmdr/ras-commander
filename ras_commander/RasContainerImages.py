@@ -358,6 +358,8 @@ class RasContainerImages:
         work = (work_dir or f"{cache_dir.rstrip('/')}/.apptainer-work").rstrip("/")
         if not work.startswith("/") and not work.startswith("$"):
             raise ValueError("work_dir must be an absolute POSIX path")
+        expected_check = (f' && [ "$(cut -d" " -f1 {q(path + ".sha256")})" = {q(expected)} ]'
+                          if expected else "")
         return (
             "set -eu; "
             # Build in the cache filesystem unless the site chose otherwise; a
@@ -368,7 +370,7 @@ class RasContainerImages:
             'trap \'rm -rf "$APPTAINER_TMPDIR"\' EXIT; '
             f'if [ -f {q(path)} ] && [ -f {q(path + ".sha256")} ] && '
             f'[ "$(sha256sum {q(path)} | cut -d" " -f1)" = "$(cut -d" " -f1 {q(path + ".sha256")})" ]'
-            f'{" && [ \"$(cut -d\" \" -f1 " + q(path + ".sha256") + ")\" = " + q(expected) + " ]" if expected else ""}; '
+            f'{expected_check}; '
             f"then :; else {pull_block}; fi; "
             f'[ -f {q(path)} ] && [ -s {q(path + ".sha256")} ] || {{ echo "no verified SIF at {path}" >&2; exit 3; }}; '
             f'printf "%s  %s\\n" "$(cut -d" " -f1 {q(path + ".sha256")})" {q(path)}'
