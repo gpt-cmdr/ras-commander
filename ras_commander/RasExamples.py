@@ -182,11 +182,19 @@ class RasExamples:
             "4.1", "4.0", "3.1.3", "3.1.2", "3.1.1", "3.0", "2.2"
         ]
 
-    # GitHub release tags per version (HEC publishes under different tags)
-    _version_release_tags = {
-        "7.0": "1.0.45",
+    # Example-project assets HEC publishes on GitHub: version -> (release tag,
+    # asset name). Earlier releases ship their examples only inside the
+    # installer (Example Projects/Example_Projects.exe).
+    _example_assets = {
+        "6.1": ("1.0.21", "Example_Projects.zip"),
+        "6.2": ("1.0.23", "HEC-RAS_62_Example_Projects.zip"),
+        "6.3": ("1.0.25", "HEC-RAS_63_Example_Projects.zip"),
+        "6.3.1": ("1.0.25", "HEC-RAS_63_Example_Projects.zip"),
+        "6.4.1": ("1.0.28", "HEC-RAS_64_Example_Projects.zip"),
+        "6.5": ("1.0.31", "Example_Projects_6_5.zip"),
+        "6.6": ("1.0.33", "Example_Projects_6_6.zip"),
+        "7.0": ("1.0.45", "Example_Projects_7_0.zip"),
     }
-    _default_release_tag = "1.0.33"
 
     # User data directory for ZIP files and CSV cache (writable without admin)
     _user_data_dir = _get_user_data_dir() / 'examples'
@@ -456,8 +464,15 @@ class RasExamples:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        release_tag = cls._version_release_tags.get(version_number, cls._default_release_tag)
-        zip_url = f"{cls.base_url}{release_tag}/Example_Projects_{version_number.replace('.', '_')}.zip"
+        if version_number not in cls._example_assets:
+            raise ValueError(
+                f"HEC does not publish a separate example-project download for HEC-RAS "
+                f"{version_number}; its examples ship inside the installer "
+                f"(Example Projects/Example_Projects.exe). Hosted versions: "
+                f"{', '.join(cls._example_assets)}"
+            )
+        release_tag, asset = cls._example_assets[version_number]
+        zip_url = f"{cls.base_url}{release_tag}/{asset}"
 
         # Create user data directory for ZIP storage (writable without admin)
         try:
