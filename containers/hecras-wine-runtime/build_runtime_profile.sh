@@ -55,6 +55,9 @@ ras_win="C:\\Program Files (x86)\\HEC\\HEC-RAS\\$VERSION\\Ras.exe"
 py="C:\\Python311\\python.exe"
 runtime=/build/prefix/drive_c/ras-commander-runtime
 mkdir -p "$runtime"
+# Older installers write ras.exe in lower case; Windows paths are
+# case-insensitive under Wine, but these checks run on Linux.
+ras_exe() { find "$ras_dir" -maxdepth 1 -iname ras.exe -print -quit 2>/dev/null; }
 # The .NET optimization (NGEN) services auto-start on every boot. Under some
 # launchers (5.0.7) mscorsvw crash-loops and wineboot never finishes, so the
 # install never starts. HEC-RAS does not need them: disable them while no
@@ -79,7 +82,7 @@ if [ -f /payload/hecras.msi ]; then
     timeout 2400 xvfb-run -a wine msiexec /i "Z:\\tmp\\hecras.msi" /qn /norestart "/l*v" "Z:\\tmp\\msi.log"
     wineserver -w || true
 fi
-[ -f "$ras_dir/Ras.exe" ] || {
+[ -n "$(ras_exe)" ] || {
 echo "== launcher"
 # InstallShield launchers re-exec themselves and return at once while msiexec
 # installs in the background, so wait for Wine itself to go idle (wineserver
@@ -96,7 +99,7 @@ for second in $(seq 1 3600); do
     sleep 1
     [ "$second" -lt 5 ] || pgrep -x wineserver >/dev/null || break
     if pgrep -i "^msiexec" >/dev/null; then idle=0; else idle=$((idle + 1)); fi
-    if [ ! -f "$ras_dir/Ras.exe" ] && [ "$second" -ge 300 ] && [ "$idle" -ge 60 ] \
+    if [ -z "$(ras_exe)" ] && [ "$second" -ge 300 ] && [ "$idle" -ge 60 ] \
         && find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | grep -q .; then
         echo "launcher idle after ${second}s with its MSI unpacked and no installer running; stopping it"
         break
@@ -106,7 +109,7 @@ wineserver -k || true
 wineserver -w || true
 kill "$xvfb" 2>/dev/null || true
 }
-if [ ! -f "$ras_dir/Ras.exe" ]; then
+if [ -z "$(ras_exe)" ]; then
     msi=$(find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | head -n1)
     [ -n "$msi" ] || { echo "error: launcher installed nothing and unpacked no HEC-RAS MSI" >&2; exit 3; }
     cp "$msi" /tmp/hecras.msi
@@ -114,12 +117,14 @@ if [ ! -f "$ras_dir/Ras.exe" ]; then
     timeout 2400 xvfb-run -a wine msiexec /i "Z:\\tmp\\hecras.msi" /qn /norestart "/l*v" "Z:\\tmp\\msi.log"
     wineserver -w || true
 fi
-if [ ! -f "$ras_dir/Ras.exe" ]; then
+if [ -z "$(ras_exe)" ]; then
     echo "error: Ras.exe not installed at $ras_dir; found:" >&2
     find "/build/prefix/drive_c/Program Files (x86)/HEC" -iname ras.exe >&2 || true
     exit 4
 fi
 disable_ngen
+ras_name=$(basename "$(ras_exe)")
+ras_win="C:\\Program Files (x86)\\HEC\\HEC-RAS\\$VERSION\\$ras_name"
 # Example projects are test data, not runtime: export them beside the profile.
 if [ -d "$ras_dir/Example Projects" ]; then
     mkdir -p /build/examples
@@ -162,10 +167,12 @@ def sha(path):
         for block in iter(lambda: handle.read(4 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+ras_dir = out / "prefix/drive_c/Program Files (x86)/HEC/HEC-RAS" / version
+ras_name = next(p.name for p in ras_dir.iterdir() if p.name.lower() == "ras.exe")
 paths = [
     "prefix/drive_c/Python311/python.exe",
     f"prefix/drive_c/ras-commander-runtime/{wheel}",
-    f"prefix/drive_c/Program Files (x86)/HEC/HEC-RAS/{version}/Ras.exe",
+    f"prefix/drive_c/Program Files (x86)/HEC/HEC-RAS/{version}/{ras_name}",
     "prefix/drive_c/ras-commander-runtime/tcu-probe.json",
 ]
 artifacts = [{"path": p, "sha256": sha(out / p)} for p in paths]
@@ -178,7 +185,7 @@ manifest = {
     "wine": {
         "prefix_seed": "prefix",
         "windows_python": "C:\\Python311\\python.exe",
-        "ras_executable": f"C:\\Program Files (x86)\\HEC\\HEC-RAS\\{version}\\Ras.exe",
+        "ras_executable": f"C:\\Program Files (x86)\\HEC\\HEC-RAS\\{version}\\{ras_name}",
         "ras_commander_wheel": f"C:\\ras-commander-runtime\\{wheel}",
         "tcu_probe": "C:\\ras-commander-runtime\\tcu-probe.json",
     },
