@@ -410,10 +410,11 @@ def test_failed_writer_scan_does_not_forget_a_writer_already_seen(
         *args, started_at=1000.0, solver_started=lambda: True)
 
 
-def test_solver_start_without_an_observed_writer_never_authorizes_handoff(
+def test_solver_start_hands_off_when_a_release_runs_no_separate_writer(
     tmp_path,
     monkeypatch,
 ):
+    """HEC-RAS 6.1 never runs a separate CompletePreProcess writer."""
     _write_artifacts(tmp_path, materialized=True)
     monkeypatch.setattr(
         RasPreprocess,
@@ -421,11 +422,31 @@ def test_solver_start_without_an_observed_writer_never_authorizes_handoff(
         staticmethod(lambda *_args: ()),
     )
     state = {}
+    args = (tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03", state)
     assert not RasPreprocess._completepreprocess_handoff_ready(
-        tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03",
-        state, started_at=1000.0, solver_started=lambda: True,
+        *args, started_at=1000.0, solver_started=lambda: False)
+    assert RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: True)
+    assert state["writer_observation"] == "solver_started_no_writer_observed"
+
+
+def test_solver_start_never_hands_off_while_a_writer_runs_or_the_scan_fails(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
+    writer_states = iter(((448,), (-1,)))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
     )
-    assert "writer_observation" not in state
+    state = {}
+    args = (tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03", state)
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: True)
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: True)
 
 
 def test_handoff_preserves_writer_observation_until_artifacts_arrive(

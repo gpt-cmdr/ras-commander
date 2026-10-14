@@ -1479,10 +1479,11 @@ class RasPreprocess:
     ) -> bool:
         """Return when an observed native writer has ended and artifacts are quiet.
 
-        Also return once the observed writer has ended and ``solver_started``
-        reports this launch's own unsteady solver running: HEC-RAS starts the
-        solver only after it has written the event conditions, and the solver's
+        Also return once no writer is active and ``solver_started`` reports this
+        launch's own unsteady solver running: HEC-RAS starts the solver only
+        after preprocessing has written the event conditions, and the solver's
         own writes would otherwise keep the artifacts from ever going quiet.
+        Some releases (6.1) run no separate writer at all.
 
         This is an active-engine predicate.  It intentionally never opens the
         temporary HDF: HDF5 readers can deny Windows writer access.  The caller
@@ -1519,6 +1520,21 @@ class RasPreprocess:
             stability_state.pop("observed_at", None)
             return False
 
+        # HEC-RAS starts its unsteady solver only after preprocessing; with no
+        # writer running (a successful scan), the solver's start is the handoff.
+        # Some releases (6.1) never run a separate CompletePreProcess writer.
+        # Completed-file validation still requires the materialized precipitation.
+        if solver_started is not None and solver_started():
+            stability_state.pop("active_completepreprocess_pids", None)
+            stability_state["writer_observation"] = (
+                "solver_started" if stability_state.get("completepreprocess_seen")
+                else "solver_started_no_writer_observed")
+            logger.info(
+                "No CompletePreProcess writer is active and the owned unsteady "
+                "solver started; stopping before it advances"
+            )
+            return True
+
         # The narrow process matcher may not have observed a writer yet.  That
         # absence is not evidence that no writer can still start, so it cannot
         # authorize an early stop or any HDF read.
@@ -1528,15 +1544,6 @@ class RasPreprocess:
             stability_state.pop("fingerprint", None)
             stability_state.pop("observed_at", None)
             return False
-
-        if solver_started is not None and solver_started():
-            stability_state.pop("active_completepreprocess_pids", None)
-            stability_state["writer_observation"] = "solver_started"
-            logger.info(
-                "Observed CompletePreProcess writer ended and the owned unsteady "
-                "solver started; stopping before it advances"
-            )
-            return True
 
         if not RasPreprocess._preprocessing_artifacts_ready(
             tmp_hdf,
