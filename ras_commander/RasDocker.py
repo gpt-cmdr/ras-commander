@@ -26,7 +26,10 @@ from ._container_resume import find_resume, record_resume
 
 
 logger = get_logger(__name__)
-_VERSIONS = {"6.5", "6.6", "7.0.1"}
+# Releases with the published Docker Hub v4/v1 pairs used as defaults. Other
+# releases with a HEC Linux engine take their defaults from the packaged image
+# catalog (RasContainerImages) or an explicit ``image=``.
+_DOCKER_HUB_DEFAULT_VERSIONS = {"6.5", "6.6", "7.0.1"}
 _RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _OWNER_LABEL = "info.rascommander.docker-run-owner"
 _RESERVED_MOUNTS = {
@@ -334,8 +337,19 @@ class RasDocker:
                  timeout, num_cores, replace_generated, docker_executable, pull,
                  run_id, user, prepare_receipt, stream_callback=None, resume=False):
         started = time.monotonic()
-        if version not in _VERSIONS:
-            raise ValueError("version must be '6.5', '6.6' or '7.0.1'")
+        from .RasContainerImages import RasContainerImages, applicable_roles, normalize_version
+
+        try:
+            folder = normalize_version(version)
+        except ValueError as exc:
+            raise ValueError(f"version must be a HEC-RAS release such as '6.6': {exc}") from exc
+        if folder != version:
+            raise ValueError(f"version must be the install folder name {folder!r}")
+        if "linux-unsteady" not in applicable_roles(version):
+            raise ValueError(
+                f"RasDocker runs Wine preprocessing then a native Linux solve; HEC-RAS {version} "
+                "has no HEC Linux engine. Run it entirely under Wine with RasPortableDocker or RasSlurm."
+            )
         for name, value in (("timeout", timeout), ("num_cores", num_cores)):
             if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
@@ -356,7 +370,13 @@ class RasDocker:
         plan = RasDocker._normalize_plan(plan_number)
         family = "wine-precompute" if stage == "prepare" else "linux-unsteady"
         tag = "v4" if stage == "prepare" else "v1"
-        image = image if image is not None else f"rascommander/hec-ras-{family}_{version}:{tag}"
+        if image is None and version in _DOCKER_HUB_DEFAULT_VERSIONS:
+            image = f"rascommander/hec-ras-{family}_{version}:{tag}"
+        elif image is None:
+            try:
+                image = RasContainerImages.get(family, version).reference
+            except LookupError as exc:
+                raise ValueError(f"{exc}; pass image= with a local or registry image") from exc
         if not isinstance(image, str) or not image or image.startswith("-") or any(c.isspace() or c == "\x00" for c in image):
             raise ValueError("image must be a Docker image reference, not CLI options")
         known_image = re.search(r"(?:^|/)hec-ras-(wine-precompute|linux-unsteady)_([^:@/]+)(?=[:@]|$)", image)

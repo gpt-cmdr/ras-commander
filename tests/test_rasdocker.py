@@ -475,3 +475,28 @@ def test_701_cannot_use_a_different_version_image_or_receipt(monkeypatch, projec
     assert not calls
     result = method(project, 1, version=requested, image="local-qualification:custom")
     assert not result and "version does not match" in result.error
+
+
+@pytest.mark.parametrize("version, message", [
+    ("4.1.0", "has no HEC Linux engine"),
+    ("4.1", "install folder name"),
+    ("6.0", "has no HEC Linux engine"),
+    ("5.0.7", "pass image="),
+    ("66", "install folder name"),
+])
+def test_releases_are_checked_against_native_engines_and_the_catalog(monkeypatch, project, version, message):
+    calls = _fake_run(monkeypatch, project)
+    with pytest.raises(ValueError, match=message):
+        RasDocker.preprocess_plan(project, "01", version=version)
+    assert calls == []
+
+
+def test_explicit_image_supports_a_release_without_published_defaults(monkeypatch, project):
+    calls = _fake_run(monkeypatch, project)
+    try:
+        RasDocker.preprocess_plan(project, "01", version="5.0.7",
+                                  image="local/hec-ras-wine-precompute_5.0.7:v5-test")
+    except Exception:
+        pass
+    assert calls and any("local/hec-ras-wine-precompute_5.0.7:v5-test" in part
+                         for call in calls for part in call)
