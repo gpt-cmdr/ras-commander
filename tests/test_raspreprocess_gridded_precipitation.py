@@ -347,6 +347,65 @@ def test_completepreprocess_handoff_waits_for_seen_writer_exit_and_stat_stabilit
     assert state["writer_observation"] == "writer_quiescent"
 
 
+def test_handoff_stops_once_seen_writer_ended_and_owned_solver_started(
+    tmp_path,
+    monkeypatch,
+):
+    """The solver's own writes keep artifacts busy; its start is the handoff signal."""
+    _write_artifacts(tmp_path, materialized=True)
+    state = {}
+    writer_states = iter(((444,), (), ()))
+    solver = iter((False, True))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
+    )
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_validate_materialized_gridded_precipitation",
+        staticmethod(lambda *_args: (_ for _ in ()).throw(AssertionError("HDF opened"))),
+    )
+    args = (
+        tmp_path / "fixture.p01.tmp.hdf",
+        tmp_path / "fixture.b01",
+        tmp_path / "fixture.x03",
+        state,
+    )
+
+    # Writer active: never ready, and the solver probe is not consulted.
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: next(solver)
+    )
+    # Writer gone, solver not yet running: falls through to the quiescence wait.
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: next(solver)
+    )
+    # Writer gone and the owned solver started: ready immediately.
+    assert RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: next(solver)
+    )
+    assert state["writer_observation"] == "solver_started"
+
+
+def test_solver_start_without_an_observed_writer_never_authorizes_handoff(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: ()),
+    )
+    state = {}
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03",
+        state, started_at=1000.0, solver_started=lambda: True,
+    )
+    assert "writer_observation" not in state
+
+
 def test_handoff_preserves_writer_observation_until_artifacts_arrive(
     tmp_path,
     monkeypatch,

@@ -27,7 +27,7 @@ import sys
 import time
 from numbers import Number
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from ._legal_dialogs import (
     TCU_BLOCKING_ERROR,
@@ -352,6 +352,13 @@ class RasPreprocess:
             )
 
         gridded_stability_state: Dict[str, object] = {}
+        solver_started = lambda: RasPreprocess._unsteady_compute_started(
+            process.pid,
+            tmp_hdf,
+            b_file,
+            x_file,
+            artifact_baseline=artifact_baseline,
+        )
         if requires_gridded_precipitation:
             alternate_signal_condition = lambda: (
                 RasPreprocess._completepreprocess_handoff_ready(
@@ -361,6 +368,7 @@ class RasPreprocess:
                     gridded_stability_state,
                     started_at=start_time,
                     artifact_baseline=artifact_baseline,
+                    solver_started=solver_started,
                 )
             )
             alternate_signal_description = (
@@ -445,6 +453,7 @@ class RasPreprocess:
                     gridded_stability_state,
                     started_at=start_time,
                     artifact_baseline=artifact_baseline,
+                    solver_started=solver_started,
                 ):
                     signal_source = "bco_completepreprocess_writer_quiescent"
                     logger.info(
@@ -1466,8 +1475,14 @@ class RasPreprocess:
         artifact_baseline: Optional[
             Dict[Path, Optional[Tuple[int, int]]]
         ] = None,
+        solver_started: Optional[Callable[[], bool]] = None,
     ) -> bool:
         """Return when an observed native writer has ended and artifacts are quiet.
+
+        Also return once the observed writer has ended and ``solver_started``
+        reports this launch's own unsteady solver running: HEC-RAS starts the
+        solver only after it has written the event conditions, and the solver's
+        own writes would otherwise keep the artifacts from ever going quiet.
 
         This is an active-engine predicate.  It intentionally never opens the
         temporary HDF: HDF5 readers can deny Windows writer access.  The caller
@@ -1508,6 +1523,15 @@ class RasPreprocess:
             stability_state.pop("fingerprint", None)
             stability_state.pop("observed_at", None)
             return False
+
+        if solver_started is not None and solver_started():
+            stability_state.pop("active_completepreprocess_pids", None)
+            stability_state["writer_observation"] = "solver_started"
+            logger.info(
+                "Observed CompletePreProcess writer ended and the owned unsteady "
+                "solver started; stopping before it advances"
+            )
+            return True
 
         if not RasPreprocess._preprocessing_artifacts_ready(
             tmp_hdf,
