@@ -782,7 +782,8 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     group (which keeps its own copy, read first by the strict preprocessing
     snapshot). Other area attributes, such as an override table hash, stay.
     Every traversed member must be a hard link owned by the supplied file; a
-    soft or external link is rejected before any write. Existing
+    soft or external link is rejected before any write, and so is a file
+    with more than one filesystem hard link (its bytes are shared). Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -858,6 +859,13 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     with path.open("r+b") as original:
         original_stat = os.fstat(original.fileno())
         original_mode = stat.S_IMODE(original_stat.st_mode)
+        # A filesystem hard link shares bytes with another name (for example a
+        # delivered source geometry); editing it would edit that file too.
+        if original_stat.st_nlink > 1:
+            raise ValueError(
+                "infiltration clearing refuses a geometry with other hard links; "
+                "clear an independent copy"
+            )
         # POSIX writes can clear set-ID bits. Refuse before writing if this
         # user cannot reapply those bits to the existing file object.
         if (

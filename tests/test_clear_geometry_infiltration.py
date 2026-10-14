@@ -234,32 +234,24 @@ def test_clear_geometry_infiltration_validates_every_attribute_before_success(
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.parametrize("fail", [False, True])
-def test_clear_geometry_infiltration_preserves_hard_link_identity(
-    tmp_path, monkeypatch, fail
-):
+def test_clear_geometry_infiltration_refuses_hard_linked_files(tmp_path, monkeypatch):
+    # A hard-linked geometry shares its bytes with another name; clearing it
+    # would edit that other file too, so the call refuses before any write.
     path = _geometry_file(tmp_path / "child.g02.hdf")
     alias = tmp_path / "alias.g02.hdf"
     os.link(path, alias)
     before_stat = path.stat()
     before = _sha256(path)
 
-    def fail_validation(edited_path):
-        raise OSError("injected validation I/O failure")
-
     def forbid_replace(*args):
         pytest.fail("the original file must never be replaced or renamed")
 
     monkeypatch.setattr(association.os, "replace", forbid_replace)
     monkeypatch.setattr(association.os, "rename", forbid_replace)
-    if fail:
-        monkeypatch.setattr(association, "read_geometry_association", fail_validation)
-        with pytest.raises(OSError, match="injected validation"):
-            RasMap.clear_geometry_infiltration(path)
-        assert _sha256(path) == before
-    else:
+    with pytest.raises(ValueError, match="hard links"):
         RasMap.clear_geometry_infiltration(path)
-        assert not read_geometry_association(alias)["infiltration_hdf_path"]
+    assert _sha256(path) == before
+    assert read_geometry_association(alias)["infiltration_hdf_path"]
     after_stat = path.stat()
     assert (after_stat.st_dev, after_stat.st_ino, after_stat.st_nlink) == (
         before_stat.st_dev,
@@ -267,8 +259,26 @@ def test_clear_geometry_infiltration_preserves_hard_link_identity(
         before_stat.st_nlink,
     )
     assert os.path.samefile(path, alias)
-    assert path.read_bytes() == alias.read_bytes()
     assert set(tmp_path.iterdir()) == {path, alias}
+
+
+def test_clear_geometry_infiltration_refuses_child_hard_linked_to_source(tmp_path):
+    # Gate KP reproduction: a child that is a filesystem hard link of the source.
+    source = tmp_path / "source.g01.hdf"
+    child = tmp_path / "child.g02.hdf"
+    with h5py.File(source, "w") as h:
+        h.create_group("Geometry/2D Flow Areas/A").attrs["Infiltration Filename"] = (
+            "legit.hdf"
+        )
+    os.link(source, child)
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="hard links"):
+        clear_geometry_infiltration(child)
+    assert _sha256(source) == before
+    with h5py.File(source) as h:
+        assert (
+            h["Geometry/2D Flow Areas/A"].attrs["Infiltration Filename"] == "legit.hdf"
+        )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX ownership and mode contract")
