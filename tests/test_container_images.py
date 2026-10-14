@@ -195,3 +195,11 @@ def test_ensure_sif_command_fails_loudly_when_the_pull_fails(tmp_path, apptainer
     completed = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
     assert completed.returncode == 3 and completed.stdout == ""
     assert not list((tmp_path / "cache").glob("*.sif*"))
+
+
+def test_ensure_sif_command_work_dir_is_configurable():
+    script = RasContainerImages.ensure_sif_command(
+        "linux-unsteady", "6.6", "/shared/cache", work_dir="/scratch/$SLURM_JOB_ID/aw")
+    assert "/scratch/$SLURM_JOB_ID/aw" in script and "/shared/cache/.apptainer-work" not in script
+    with pytest.raises(ValueError, match="absolute"):
+        RasContainerImages.ensure_sif_command("linux-unsteady", "6.6", "/c", work_dir="rel")

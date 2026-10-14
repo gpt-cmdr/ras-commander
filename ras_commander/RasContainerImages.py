@@ -318,6 +318,7 @@ class RasContainerImages:
         *,
         apptainer_executable: str = "apptainer",
         pull: bool = True,
+        work_dir: Optional[str] = None,
     ) -> str:
         """Return a bash snippet that reuses or fills a shared cluster cache.
 
@@ -325,6 +326,11 @@ class RasContainerImages:
         prints ``<sha256>  <path>`` for a verified cached SIF, pulling it first
         when absent (unless ``pull=False``). Use the printed hash in the site
         configuration. The snippet never overwrites a verified file.
+
+        ``work_dir`` (default ``<cache_dir>/.apptainer-work``) holds Apptainer's
+        build temp and layer cache unless ``APPTAINER_TMPDIR`` /
+        ``APPTAINER_CACHEDIR`` are already set. Use node-local disk when the
+        cache is on network storage; unpacking image layers there is slow.
         """
         image = RasContainerImages.get(role, version)
         if not cache_dir.startswith("/") or any(c in cache_dir for c in "\x00\n"):
@@ -341,7 +347,9 @@ class RasContainerImages:
             f'mv -f "$tmp.sha256" {q(path + ".sha256")} && mv -f "$tmp" {q(path)} '
             '|| { rm -f "$tmp" "$tmp.sha256"; echo "apptainer pull failed" >&2; exit 3; }'
         ) if pull else f'echo "not cached: {path}" >&2; exit 4'
-        work = f"{cache_dir.rstrip('/')}/.apptainer-work"
+        work = (work_dir or f"{cache_dir.rstrip('/')}/.apptainer-work").rstrip("/")
+        if not work.startswith("/") and not work.startswith("$"):
+            raise ValueError("work_dir must be an absolute POSIX path")
         return (
             "set -eu; "
             # Build in the cache filesystem unless the site chose otherwise; a
