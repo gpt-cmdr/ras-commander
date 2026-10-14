@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -513,3 +514,67 @@ def test_wine_keeps_a_caller_openmp_affinity(tmp_path, monkeypatch):
     monkeypatch.setenv("KMP_AFFINITY", "compact")
     result, environment = _wine_child_environment(tmp_path, monkeypatch)
     assert result == 0 and environment["KMP_AFFINITY"] == "compact"
+
+
+LEGACY_RAS = r"C:\Program Files (x86)\HEC\HEC-RAS\6.0\Ras.exe"
+
+
+def _legacy_wine_run(tmp_path, monkeypatch, *, verified=True):
+    request_path = _request(tmp_path, ras_executable=LEGACY_RAS)
+    seed = tmp_path / "seed-prefix"
+    seed.mkdir()
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PREFIX_SEED", str(seed))
+    monkeypatch.setenv("RAS_COMMANDER_WINE_PYTHON", WINDOWS_PYTHON)
+    monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
+    runtime = tmp_path / "runtime-temp"
+    runtime.mkdir()
+    monkeypatch.setattr(execute_request_cli.tempfile, "gettempdir", lambda: str(runtime))
+    monkeypatch.setattr(execute_request_cli, "_is_linux", lambda: True)
+    monkeypatch.setattr(execute_request_cli.shutil, "which", lambda name: f"/usr/bin/{name}")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, dict(kwargs.get("env", {}))))
+        if command[0].endswith("winepath"):
+            converted = (r"Z:\job\request.json" if command[-1].endswith("request.json")
+                         else rf"Z:\runtime-temp\{Path(command[-1]).parent.name}\{Path(command[-1]).name}")
+            return subprocess.CompletedProcess(command, 0, stdout=converted, stderr="")
+        if any(part.endswith("accept_tcu.py") for part in command):
+            probe = next(runtime.iterdir()) / "tcu-probe.json"
+            probe.write_text(json.dumps({"executables": [{"verified": verified}]}))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(execute_request_cli.subprocess, "run", run)
+    return execute_request_cli.main(["execute-request", str(request_path)]), calls
+
+
+def test_legacy_release_without_opt_in_fails_before_wine(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RAS_COMMANDER_WINE_ACCEPT_TCU", raising=False)
+    result, calls = _legacy_wine_run(tmp_path, monkeypatch)
+    assert result == 2
+    assert "RAS_COMMANDER_WINE_ACCEPT_TCU=1" in capsys.readouterr().err
+    assert not any(c[0][0].endswith("xvfb-run") for c in calls)
+
+
+def test_legacy_release_accepts_in_task_prefix_before_compute(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAS_COMMANDER_WINE_ACCEPT_TCU", "1")
+    result, calls = _legacy_wine_run(tmp_path, monkeypatch)
+    wine_calls = [c for c in calls if c[0][0].endswith("xvfb-run")]
+    assert result == 0 and len(wine_calls) == 2
+    accept, compute = wine_calls
+    assert any(part.endswith("accept_tcu.py") for part in accept[0]) and accept[0][-1] == "task"
+    assert "execute-request" in compute[0]
+    assert compute[1]["RAS_COMMANDER_TCU_PROBE"].endswith("tcu-probe.json")
+
+
+def test_legacy_release_refuses_unverified_task_acceptance(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("RAS_COMMANDER_WINE_ACCEPT_TCU", "1")
+    result, calls = _legacy_wine_run(tmp_path, monkeypatch, verified=False)
+    assert result == 2 and "not verified" in capsys.readouterr().err
+    assert not any("execute-request" in c[0] for c in calls if c[0][0].endswith("xvfb-run"))
+
+
+def test_release_61_and_later_never_runs_task_acceptance(tmp_path, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_WINE_ACCEPT_TCU", raising=False)
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+    assert result == 0 and "RAS_COMMANDER_TCU_PROBE" not in environment

@@ -164,7 +164,7 @@ def _wine_version() -> str:
         return "not-wine"
 
 
-def main(ras_exe: str, probe_path: str, timeout: float = 180.0) -> int:
+def main(ras_exe: str, probe_path: str, timeout: float = 180.0, scope: str = "image") -> int:
     first = _session(ras_exe, timeout)
     second = _session(ras_exe, timeout) if first["result"] in {"accepted", "no-dialog"} else None
     verified = bool(second) and second["result"] == "no-dialog"
@@ -174,6 +174,8 @@ def main(ras_exe: str, probe_path: str, timeout: float = 180.0) -> int:
         "schema": "ras-commander-tcu-probe/v1",
         "terms": "https://www.hec.usace.army.mil/software/hec-ras/",
         "wine": _wine_version(),
+        # "image": accepted at image build; "task": accepted in this task's prefix.
+        "scope": scope,
         "executables": [{
             "ras_executable": ras_exe,
             "ras_executable_sha256": digest,
@@ -189,4 +191,4 @@ def main(ras_exe: str, probe_path: str, timeout: float = 180.0) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1], sys.argv[2]))
+    sys.exit(main(sys.argv[1], sys.argv[2], scope=sys.argv[3] if len(sys.argv) > 3 else "image"))

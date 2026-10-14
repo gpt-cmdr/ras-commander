@@ -205,6 +205,11 @@ class RasTcu:
             record = json.loads(Path(record_path).read_text(encoding="utf-8"))
             entries = record.get("executables", []) if record.get("schema") == TCU_PROBE_SCHEMA else []
             for entry in entries:
+                legacy = RasTcu._version_tuple(Path(exe).parent.name)
+                # HEC-RAS 6.0 and earlier keep per-machine state: only an
+                # acceptance given in this task's prefix counts.
+                if legacy is not None and legacy[:2] <= (6, 0) and record.get("scope") != "task":
+                    continue
                 if (str(entry.get("ras_executable", "")).casefold() == str(exe).casefold()
                         and entry.get("verified") is True):
                     digest = hashlib.sha256(Path(exe).read_bytes()).hexdigest()

@@ -216,6 +216,9 @@ def _prepare(
             "--timeout", str(timeout),
             "--result", windows(result_path),
         ]
+        if wine._is_legacy_tcu_release(ras_executable):
+            wine._accept_legacy_tcu(tools, environment, windows_python, ras_executable,
+                                    task_root, windows)
         print("ras-commander prepare: starting Wine preprocessing", flush=True)
         completed = subprocess.run(
             command, check=False, shell=False, env=environment, timeout=timeout + 300
