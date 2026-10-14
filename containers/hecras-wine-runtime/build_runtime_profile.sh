@@ -62,16 +62,19 @@ if [ -f /payload/hecras.msi ]; then
 fi
 [ -f "$ras_dir/Ras.exe" ] || {
 echo "== launcher"
-# Some launchers install directly (6.x); others unpack the MSI and then wait on
-# a prerequisite download (7.x .NET 4.8.1). Stop a launcher that has unpacked
-# its MSI but installed nothing after five minutes, then install the MSI.
+# Launchers normally install through msiexec themselves. Some instead unpack
+# the MSI and then wait on a prerequisite download with no installer running.
+# Stop a launcher only in that state (MSI unpacked, no msiexec for 60 s, after
+# five minutes); interrupting an install in progress leaves a broken one.
 xvfb-run -a wine /tmp/setup.exe /s /v"/qn /norestart" > /tmp/launcher.log 2>&1 &
 launcher=$!
-for second in $(seq 1 1800); do
+idle=0
+for second in $(seq 1 3600); do
     kill -0 "$launcher" 2>/dev/null || break
-    if [ ! -f "$ras_dir/Ras.exe" ] && [ "$second" -ge 300 ] \
+    if pgrep -fi "msiexec" >/dev/null; then idle=0; else idle=$((idle + 1)); fi
+    if [ ! -f "$ras_dir/Ras.exe" ] && [ "$second" -ge 300 ] && [ "$idle" -ge 60 ] \
         && find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | grep -q .; then
-        echo "launcher still waiting after ${second}s with its MSI unpacked; stopping it"
+        echo "launcher idle after ${second}s with its MSI unpacked and no installer running; stopping it"
         break
     fi
     sleep 1
