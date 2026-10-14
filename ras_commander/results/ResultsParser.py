@@ -37,6 +37,11 @@ class ResultsParser:
             r"the interpolation surface may not generate correctly because of this\.\s*"
             r"See the points in the error layer\.$"
         ),
+        # HEC-RAS 6.1 reports an optional geometry layer that a plan lacks while
+        # writing plan attributes; the computation continues and completes.
+        "hec_ras_write_attribute_precheck_missing_geometry_layer": (
+            r"^WRITE ATTR ERROR: ERROR: Geometry/[A-Za-z ]+ not found in WriteAttributePreCheck$"
+        ),
     }
 
     # Configurable keyword sets for error/warning detection
