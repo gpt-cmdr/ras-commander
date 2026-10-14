@@ -299,7 +299,7 @@ _LAZY_EXPORTS = {
             'GeomCulvertGIS', 'GeomReferenceFeatures', 'GeomBcLines',
             'GeomMesh', 'GeomMeshRepair', 'GeomPipeNetwork', 'MeshResult', 'BCConflict',
             'BCFixResult', 'DomainContainmentResult',
-            'DomainContainmentViolation',
+            'DomainContainmentViolation', 'GridAnchor',
         )
     },
     **{
@@ -498,7 +498,7 @@ __all__ = [
     'GeomReferenceFeatures', 'GeomBcLines', 'GeomMesh', 'GeomMeshRepair',
     'GeomPipeNetwork',
     'MeshResult', 'BCConflict', 'BCFixResult', 'DomainContainmentResult',
-    'DomainContainmentViolation',
+    'DomainContainmentViolation', 'GridAnchor',
 
     # Deprecated geometry classes (will be removed before v1.0)
     'RasGeo', 'RasGeometry', 'RasGeometryUtils',

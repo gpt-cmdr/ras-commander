@@ -1,0 +1,490 @@
+{
+ "description": "Point generation only (RAS Mapper 6.6 via RAS Commander), six child 2D areas of one 300 ft rain-on-grid parent. identical = within 0.01 ft of a parent cell center; interior = farther than one base cell from the child perimeter.",
+ "parent_phase_ft": [
+  201.05256974697113,
+  273.7802358996123
+ ],
+ "spacing_ft": 300.0,
+ "children": {
+  "wb-2534836": {
+   "child_phase_ft": [
+    258.59865976008587,
+    17.066212199628353
+   ],
+   "needed_shift_ft": [
+    242.45390998688526,
+    256.71402369998395
+   ],
+   "translation_ft": [
+    -57.546090013114735,
+    -43.285976300016046
+   ],
+   "parent_points_inside": 3059,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 3810,
+    "seconds": 3.1,
+    "points_inside": 3037,
+    "identical_share": 0.4514,
+    "identical_interior_share": 0.488,
+    "interior_points": 2793,
+    "parent_reproduced_share": 0.4482,
+    "parent_reproduced_interior_share": 0.4878,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 3810,
+    "seconds": 3.0,
+    "points_inside": 3037,
+    "identical_share": 0.4514,
+    "identical_interior_share": 0.488,
+    "interior_points": 2793,
+    "parent_reproduced_share": 0.4482,
+    "parent_reproduced_interior_share": 0.4878,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 3810,
+    "seconds": 2.9,
+    "points_inside": 3037,
+    "identical_share": 0.4514,
+    "identical_interior_share": 0.488,
+    "interior_points": 2793,
+    "parent_reproduced_share": 0.4482,
+    "parent_reproduced_interior_share": 0.4878,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 3831,
+    "seconds": 3.6,
+    "points_inside": 3058,
+    "identical_share": 0.984,
+    "identical_interior_share": 0.9911,
+    "interior_points": 2797,
+    "parent_reproduced_share": 0.9837,
+    "parent_reproduced_interior_share": 0.9921,
+    "on_parent_lattice_share": 0.5373
+   },
+   "c_translate": {
+    "raw_points": 3814,
+    "refill": 19,
+    "seconds": 3.3,
+    "points_inside": 3060,
+    "identical_share": 0.9771,
+    "identical_interior_share": 0.9911,
+    "interior_points": 2797,
+    "parent_reproduced_share": 0.9774,
+    "parent_reproduced_interior_share": 0.9921,
+    "on_parent_lattice_share": 0.5369
+   },
+   "b_vs_c_points": {
+    "b_interior": 2797,
+    "c_interior": 2797,
+    "b_interior_not_in_c": 0,
+    "c_interior_not_in_b": 0,
+    "b_band_not_in_c": 20,
+    "c_band_not_in_b": 22
+   }
+  },
+  "wb-2534838": {
+   "child_phase_ft": [
+    276.77128871995956,
+    191.00289520062506
+   ],
+   "needed_shift_ft": [
+    224.28128102701157,
+    82.77734069898725
+   ],
+   "translation_ft": [
+    -75.71871897298843,
+    82.77734069898725
+   ],
+   "parent_points_inside": 4087,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 4152,
+    "seconds": 1.9,
+    "points_inside": 4020,
+    "identical_share": 0.4192,
+    "identical_interior_share": 0.446,
+    "interior_points": 3688,
+    "parent_reproduced_share": 0.4123,
+    "parent_reproduced_interior_share": 0.448,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 4152,
+    "seconds": 1.7,
+    "points_inside": 4020,
+    "identical_share": 0.4192,
+    "identical_interior_share": 0.446,
+    "interior_points": 3688,
+    "parent_reproduced_share": 0.4123,
+    "parent_reproduced_interior_share": 0.448,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 4152,
+    "seconds": 2.3,
+    "points_inside": 4020,
+    "identical_share": 0.4192,
+    "identical_interior_share": 0.446,
+    "interior_points": 3688,
+    "parent_reproduced_share": 0.4123,
+    "parent_reproduced_interior_share": 0.448,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 4188,
+    "seconds": 2.1,
+    "points_inside": 4056,
+    "identical_share": 0.8368,
+    "identical_interior_share": 0.8638,
+    "interior_points": 3671,
+    "parent_reproduced_share": 0.8304,
+    "parent_reproduced_interior_share": 0.8636,
+    "on_parent_lattice_share": 0.4315
+   },
+   "c_translate": {
+    "raw_points": 4145,
+    "refill": 10,
+    "seconds": 1.7,
+    "points_inside": 4014,
+    "identical_share": 0.8348,
+    "identical_interior_share": 0.864,
+    "interior_points": 3670,
+    "parent_reproduced_share": 0.8199,
+    "parent_reproduced_interior_share": 0.8636,
+    "on_parent_lattice_share": 0.431
+   },
+   "b_vs_c_points": {
+    "b_interior": 3671,
+    "c_interior": 3670,
+    "b_interior_not_in_c": 3,
+    "c_interior_not_in_b": 2,
+    "b_band_not_in_c": 79,
+    "c_band_not_in_b": 38
+   }
+  },
+  "wb-2534846": {
+   "child_phase_ft": [
+    194.18682631198317,
+    139.2329404000193
+   ],
+   "needed_shift_ft": [
+    6.865743434987962,
+    134.54729549959302
+   ],
+   "translation_ft": [
+    6.865743434987962,
+    134.54729549959302
+   ],
+   "parent_points_inside": 6800,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 6913,
+    "seconds": 6.2,
+    "points_inside": 6721,
+    "identical_share": 0.5178,
+    "identical_interior_share": 0.5378,
+    "interior_points": 6449,
+    "parent_reproduced_share": 0.5118,
+    "parent_reproduced_interior_share": 0.5382,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 6913,
+    "seconds": 6.6,
+    "points_inside": 6721,
+    "identical_share": 0.5178,
+    "identical_interior_share": 0.5378,
+    "interior_points": 6449,
+    "parent_reproduced_share": 0.5118,
+    "parent_reproduced_interior_share": 0.5382,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 6913,
+    "seconds": 7.8,
+    "points_inside": 6721,
+    "identical_share": 0.5178,
+    "identical_interior_share": 0.5378,
+    "interior_points": 6449,
+    "parent_reproduced_share": 0.5118,
+    "parent_reproduced_interior_share": 0.5382,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 6967,
+    "seconds": 7.5,
+    "points_inside": 6775,
+    "identical_share": 0.982,
+    "identical_interior_share": 0.9851,
+    "interior_points": 6425,
+    "parent_reproduced_share": 0.9784,
+    "parent_reproduced_interior_share": 0.9822,
+    "on_parent_lattice_share": 0.4689
+   },
+   "c_translate": {
+    "raw_points": 6906,
+    "refill": 20,
+    "seconds": 6.8,
+    "points_inside": 6726,
+    "identical_share": 0.9796,
+    "identical_interior_share": 0.9851,
+    "interior_points": 6425,
+    "parent_reproduced_share": 0.969,
+    "parent_reproduced_interior_share": 0.9822,
+    "on_parent_lattice_share": 0.4648
+   },
+   "b_vs_c_points": {
+    "b_interior": 6425,
+    "c_interior": 6425,
+    "b_interior_not_in_c": 0,
+    "c_interior_not_in_b": 0,
+    "b_band_not_in_c": 77,
+    "c_band_not_in_b": 28
+   }
+  },
+  "wb-2534852": {
+   "child_phase_ft": [
+    168.26254339597654,
+    273.6078072991222
+   ],
+   "needed_shift_ft": [
+    32.790026350994594,
+    0.17242860049009323
+   ],
+   "translation_ft": [
+    32.790026350994594,
+    0.17242860049009323
+   ],
+   "parent_points_inside": 14677,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 14611,
+    "seconds": 8.9,
+    "points_inside": 14608,
+    "identical_share": 0.5752,
+    "identical_interior_share": 0.59,
+    "interior_points": 13935,
+    "parent_reproduced_share": 0.5725,
+    "parent_reproduced_interior_share": 0.5888,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 14611,
+    "seconds": 7.7,
+    "points_inside": 14608,
+    "identical_share": 0.5752,
+    "identical_interior_share": 0.59,
+    "interior_points": 13935,
+    "parent_reproduced_share": 0.5725,
+    "parent_reproduced_interior_share": 0.5888,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 14611,
+    "seconds": 10.4,
+    "points_inside": 14608,
+    "identical_share": 0.5752,
+    "identical_interior_share": 0.59,
+    "interior_points": 13935,
+    "parent_reproduced_share": 0.5725,
+    "parent_reproduced_interior_share": 0.5888,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 14604,
+    "seconds": 9.9,
+    "points_inside": 14601,
+    "identical_share": 0.9694,
+    "identical_interior_share": 0.9692,
+    "interior_points": 13894,
+    "parent_reproduced_share": 0.9644,
+    "parent_reproduced_interior_share": 0.9644,
+    "on_parent_lattice_share": 0.394
+   },
+   "c_translate": {
+    "raw_points": 14593,
+    "refill": 13,
+    "seconds": 9.0,
+    "points_inside": 14603,
+    "identical_share": 0.9685,
+    "identical_interior_share": 0.9692,
+    "interior_points": 13894,
+    "parent_reproduced_share": 0.9636,
+    "parent_reproduced_interior_share": 0.9644,
+    "on_parent_lattice_share": 0.394
+   },
+   "b_vs_c_points": {
+    "b_interior": 13894,
+    "c_interior": 13894,
+    "b_interior_not_in_c": 0,
+    "c_interior_not_in_b": 0,
+    "b_band_not_in_c": 12,
+    "c_band_not_in_b": 14
+   }
+  },
+  "wb-2516632": {
+   "child_phase_ft": [
+    42.65736904996447,
+    204.43122459948063
+   ],
+   "needed_shift_ft": [
+    158.39520069700666,
+    69.34901130013168
+   ],
+   "translation_ft": [
+    -141.60479930299334,
+    69.34901130013168
+   ],
+   "parent_points_inside": 62830,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 62367,
+    "seconds": 50.1,
+    "points_inside": 62367,
+    "identical_share": 0.5268,
+    "identical_interior_share": 0.5349,
+    "interior_points": 61142,
+    "parent_reproduced_share": 0.5229,
+    "parent_reproduced_interior_share": 0.5325,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 62367,
+    "seconds": 51.1,
+    "points_inside": 62367,
+    "identical_share": 0.5268,
+    "identical_interior_share": 0.5349,
+    "interior_points": 61142,
+    "parent_reproduced_share": 0.5229,
+    "parent_reproduced_interior_share": 0.5325,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 62367,
+    "seconds": 60.2,
+    "points_inside": 62367,
+    "identical_share": 0.5268,
+    "identical_interior_share": 0.5349,
+    "interior_points": 61142,
+    "parent_reproduced_share": 0.5229,
+    "parent_reproduced_interior_share": 0.5325,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 62543,
+    "seconds": 56.3,
+    "points_inside": 62543,
+    "identical_share": 0.9627,
+    "identical_interior_share": 0.9626,
+    "interior_points": 61169,
+    "parent_reproduced_share": 0.9583,
+    "parent_reproduced_interior_share": 0.9586,
+    "on_parent_lattice_share": 0.4375
+   },
+   "c_translate": {
+    "raw_points": 62349,
+    "refill": 277,
+    "seconds": 51.0,
+    "points_inside": 62571,
+    "identical_share": 0.9595,
+    "identical_interior_share": 0.9626,
+    "interior_points": 61169,
+    "parent_reproduced_share": 0.9555,
+    "parent_reproduced_interior_share": 0.9586,
+    "on_parent_lattice_share": 0.438
+   },
+   "b_vs_c_points": {
+    "b_interior": 61169,
+    "c_interior": 61169,
+    "b_interior_not_in_c": 0,
+    "c_interior_not_in_b": 0,
+    "b_band_not_in_c": 202,
+    "c_band_not_in_b": 230
+   }
+  },
+  "wb-2516595": {
+   "child_phase_ft": [
+    132.85841281001922,
+    273.6078072991222
+   ],
+   "needed_shift_ft": [
+    68.19415693695191,
+    0.17242860049009323
+   ],
+   "translation_ft": [
+    68.19415693695191,
+    0.17242860049009323
+   ],
+   "parent_points_inside": 234714,
+   "b_self_equals_native": true,
+   "native": {
+    "raw_points": 236422,
+    "seconds": 350.1,
+    "points_inside": 233606,
+    "identical_share": 0.5594,
+    "identical_interior_share": 0.5649,
+    "interior_points": 231205,
+    "parent_reproduced_share": 0.5568,
+    "parent_reproduced_interior_share": 0.5628,
+    "on_parent_lattice_share": 0.0
+   },
+   "a_shift": {
+    "raw_points": 236422,
+    "seconds": 372.5,
+    "points_inside": 233606,
+    "identical_share": 0.5594,
+    "identical_interior_share": 0.5649,
+    "interior_points": 231205,
+    "parent_reproduced_share": 0.5568,
+    "parent_reproduced_interior_share": 0.5628,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_self": {
+    "raw_points": 236422,
+    "seconds": 373.5,
+    "points_inside": 233606,
+    "identical_share": 0.5594,
+    "identical_interior_share": 0.5649,
+    "interior_points": 231205,
+    "parent_reproduced_share": 0.5568,
+    "parent_reproduced_interior_share": 0.5628,
+    "on_parent_lattice_share": 0.0
+   },
+   "b_anchor": {
+    "raw_points": 236529,
+    "seconds": 364.2,
+    "points_inside": 233713,
+    "identical_share": 0.9694,
+    "identical_interior_share": 0.9705,
+    "interior_points": 231143,
+    "parent_reproduced_share": 0.9653,
+    "parent_reproduced_interior_share": 0.9667,
+    "on_parent_lattice_share": 0.4105
+   },
+   "c_translate": {
+    "raw_points": 236369,
+    "refill": 147,
+    "seconds": 303.7,
+    "points_inside": 233698,
+    "identical_share": 0.9689,
+    "identical_interior_share": 0.9705,
+    "interior_points": 231143,
+    "parent_reproduced_share": 0.9647,
+    "parent_reproduced_interior_share": 0.9667,
+    "on_parent_lattice_share": 0.4105
+   },
+   "b_vs_c_points": {
+    "b_interior": 231143,
+    "c_interior": 231143,
+    "b_interior_not_in_c": 0,
+    "c_interior_not_in_b": 0,
+    "b_band_not_in_c": 176,
+    "c_band_not_in_b": 161
+   }
+  }
+ }
+}

@@ -7,8 +7,70 @@ pythonnet or Windows dependencies.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+@dataclass(frozen=True)
+class GridAnchor:
+    """One point of a 2D area's regular computation-point lattice.
+
+    RAS Mapper lays the regular (base) grid of a 2D flow area from the
+    area's own bounding box: the first point is half a cell inside the
+    minimum x and the maximum y, then one point every ``spacing_dx`` /
+    ``spacing_dy``. A child area cut from a parent therefore gets a grid
+    that is offset from the parent's by a sub-cell vector. A ``GridAnchor``
+    names a lattice point (and the spacing) that the regenerated grid must
+    pass through instead, so a child or ensemble member re-meshes on the
+    parent's lattice.
+
+    Coordinates and spacing are in the geometry's projected CRS and
+    horizontal units. Only the phase ``(x mod spacing_dx, y mod spacing_dy)``
+    matters; any lattice point of the parent gives the same grid.
+
+    Attributes:
+        x: X coordinate of a lattice point.
+        y: Y coordinate of a lattice point.
+        spacing_dx: Lattice spacing in x (the base cell size).
+        spacing_dy: Lattice spacing in y.
+        source: Free-text provenance, such as the parent HDF and area name.
+    """
+
+    x: float
+    y: float
+    spacing_dx: float
+    spacing_dy: float
+    source: str = ""
+
+    def __post_init__(self) -> None:
+        for name in ("x", "y", "spacing_dx", "spacing_dy"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError(f"GridAnchor.{name} must be a number")
+            if not math.isfinite(float(value)):
+                raise ValueError(f"GridAnchor.{name} must be finite")
+        if self.spacing_dx <= 0 or self.spacing_dy <= 0:
+            raise ValueError("GridAnchor spacing must be positive")
+
+    @property
+    def phase(self) -> Tuple[float, float]:
+        """Lattice phase ``(x mod spacing_dx, y mod spacing_dy)``."""
+        return (
+            float(self.x) % float(self.spacing_dx),
+            float(self.y) % float(self.spacing_dy),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return machine-readable anchor evidence."""
+        return {
+            "x": float(self.x),
+            "y": float(self.y),
+            "spacing_dx": float(self.spacing_dx),
+            "spacing_dy": float(self.spacing_dy),
+            "phase": list(self.phase),
+            "source": self.source,
+        }
 
 
 @dataclass(frozen=True)
@@ -91,6 +153,10 @@ class MeshResult:
 
     # Empty when disabled; otherwise records rounds, convergence, timing and errors.
     robustness_screening: Dict[str, Any] = field(default_factory=dict)
+
+    # Empty unless generate(grid_anchor=...) was used; then the anchor and
+    # lattice/seed counts of each anchored point generation.
+    grid_anchor: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:

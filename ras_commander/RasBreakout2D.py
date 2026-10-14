@@ -21,6 +21,7 @@ import math
 import re
 import tempfile
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -29,12 +30,13 @@ import h5py
 import numpy as np
 import pandas as pd
 from pyproj import CRS
-from shapely import intersects_xy, make_valid
+from shapely import get_coordinates, intersects_xy, make_valid
 from shapely.geometry import (
     GeometryCollection,
     LineString,
     MultiLineString,
     MultiPolygon,
+    Point,
     Polygon,
 )
 from shapely.geometry.base import BaseGeometry
@@ -123,6 +125,19 @@ class Breakout2DSpec:
     GIS support and the additional recognized metadata/template records during
     preflight and clone rechecks. It defaults to False. Native attachments still
     require separate evidence after preprocessing.
+
+    ``max_breakline_perimeter_crossings`` drops, instead of clipping, any
+    source breakline that crosses the mesh trim boundary (the child perimeter
+    eroded by one base cell) more than this many times. Crossings are real
+    inside/outside transitions along the source line; running along or
+    touching the boundary is not a crossing, and self-intersections do not
+    count. Recommended: ``2`` for breakouts that re-mesh on the parent's grid
+    (``prepare_cloned_geometry(anchor_grid_to_parent=True)``). A line that ends
+    inside (1) or passes straight through (2) is clipped as usual; a line that
+    weaves across the boundary (3 or more) is dropped, because its clipped
+    pieces create problem cells at the boundary. ``None`` (default, kept for
+    backward compatibility) clips every line. Dropped lines carry the reason
+    code ``exceeds_child_perimeter_crossing_limit`` in ``feature_actions``.
     """
 
     source_plan: Union[str, int]
@@ -136,6 +151,7 @@ class Breakout2DSpec:
     allow_holes: bool = False
     contributing_geometry_hdfs: tuple[str | Path, ...] = ()
     allow_extended_connection_support: bool = False
+    max_breakline_perimeter_crossings: Optional[int] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.contributing_geometry_hdfs, (str, Path)):
@@ -161,6 +177,13 @@ class Breakout2DSpec:
             numeric = float(value)
             if not math.isfinite(numeric) or numeric < 0:
                 raise ValueError(f"{name} must be finite and non-negative")
+        limit = self.max_breakline_perimeter_crossings
+        if limit is not None and (
+            isinstance(limit, bool) or not isinstance(limit, int) or limit < 0
+        ):
+            raise ValueError(
+                "max_breakline_perimeter_crossings must be None or a non-negative int"
+            )
 
 
 @dataclass
@@ -502,6 +525,7 @@ class RasBreakout2D:
             source_features,
             existing_boundaries,
             mesh_trim_boundary,
+            max_breakline_perimeter_crossings=spec.max_breakline_perimeter_crossings,
         )
         connection_actions = _classify_outside_connections(
             source_geometry_path, child, float(spec.containment_tolerance),
@@ -666,6 +690,7 @@ class RasBreakout2D:
         max_mesh_iterations: int = 8,
         disable_meteorology: bool = False,
         require_complete_products: bool = False,
+        anchor_grid_to_parent: bool = False,
     ) -> Breakout2DPreparationResult:
         """Trim mesh-owned features and remesh only the cloned geometry.
 
@@ -720,6 +745,15 @@ class RasBreakout2D:
             require_complete_products: Require the qualified completion contract
                 for every native refresh, including numeric-repair retries and
                 mesh repairs. Defaults to False for upstream compatibility.
+            anchor_grid_to_parent: Lay the child's regular computation-point
+                grid on the parent area's lattice
+                (:meth:`GeomMesh.get_grid_anchor` of the source geometry HDF)
+                instead of the child's own bounding box, so interior cells
+                away from breakline and region changes coincide with the
+                parent's. Requires ``remesh`` and the parent's base spacing.
+                Defaults to False. Evidence is in ``mesh_result.grid_anchor``.
+                Recommended with
+                ``Breakout2DSpec(max_breakline_perimeter_crossings=2)``.
 
         Returns:
             Breakout2DPreparationResult: Evidence for each preparation step.
@@ -741,6 +775,18 @@ class RasBreakout2D:
             raise RuntimeError("Cloned unsteady file changed before preparation")
         if not isinstance(disable_meteorology, bool):
             raise TypeError("disable_meteorology must be a bool")
+        if not isinstance(anchor_grid_to_parent, bool):
+            raise TypeError("anchor_grid_to_parent must be a bool")
+        if anchor_grid_to_parent and not remesh:
+            raise ValueError("anchor_grid_to_parent requires remesh=True")
+        grid_anchor = (
+            GeomMesh.get_grid_anchor(
+                preflight.source_geometry_hdf,
+                mesh_name=preflight.spec.source_2d_area,
+            )
+            if anchor_grid_to_parent
+            else None
+        )
 
         unsupported_points = preflight.feature_actions[
             (preflight.feature_actions["feature_type"] == "reference_point")
@@ -898,6 +944,7 @@ class RasBreakout2D:
                 ras_object=ras_object,
                 max_iterations=max_mesh_iterations,
                 require_complete_products=require_complete_products,
+                grid_anchor=grid_anchor,
             )
             violations = getattr(
                 getattr(mesh_result, "domain_containment", None), "violations", []
@@ -989,6 +1036,7 @@ class RasBreakout2D:
                     ras_object=ras_object,
                     max_iterations=max_mesh_iterations,
                     require_complete_products=require_complete_products,
+                    grid_anchor=grid_anchor,
                 )
                 repair.update(
                     status="validated" if mesh_result.ok else "failed",
@@ -1472,6 +1520,7 @@ def _build_feature_actions(
     source_features: dict[str, gpd.GeoDataFrame],
     existing_boundaries: pd.DataFrame,
     mesh_trim_boundary: BaseGeometry,
+    max_breakline_perimeter_crossings: Optional[int] = None,
 ) -> gpd.GeoDataFrame:
     records = [
         _action_record(
@@ -1510,6 +1559,19 @@ def _build_feature_actions(
                     geometry,
                     "preserve",
                     "boundary_condition_scope_deferred",
+                )
+            elif (
+                feature_type == "breakline"
+                and max_breakline_perimeter_crossings is not None
+                and geometry is not None
+                and not geometry.is_empty
+                and _boundary_crossings(geometry, mesh_trim_boundary)
+                > max_breakline_perimeter_crossings
+            ):
+                retained, action, reason = (
+                    None,
+                    "drop",
+                    "exceeds_child_perimeter_crossing_limit",
                 )
             elif feature_type in {"breakline", "refinement_region"}:
                 retained, action, reason = _clip_action(
@@ -1573,6 +1635,54 @@ def _clip_action(
     if retained.is_empty or _geometry_measure(retained) <= 0:
         return None, "drop", "outside_child_boundary"
     return retained, "clip", "partially_intersects_child_boundary"
+
+
+def _boundary_crossings(geometry: BaseGeometry, boundary: BaseGeometry) -> int:
+    """Count how many times a line passes between the inside and outside of ``boundary``.
+
+    The source line is walked vertex to vertex. Each straight segment is split
+    where it meets the boundary edge, and each piece is classified as inside,
+    outside or on the edge. Pieces on the edge (overlap or touch) are not a
+    side, so running along the edge or touching it and turning back is not a
+    crossing. A crossing is a change between inside and outside along the
+    walk. Self-intersections of the line do not matter. A line wholly inside
+    counts 0, a line with one end outside 1, a line passing through 2, and a
+    line weaving along the edge more than 2. A closed line counts the change
+    across its closing vertex, so its count does not depend on the start vertex.
+    Parts of a multipart line are summed.
+    """
+    if boundary is None or boundary.is_empty:
+        return 0
+    edge = boundary.boundary
+    tolerance = 1e-9 * max(1.0, *(abs(value) for value in boundary.bounds))
+    total = 0
+    for line in _line_parts(geometry):
+        coords = line.coords
+        sides: list[bool] = []
+        for start, end in pairwise(coords):
+            segment = LineString([start, end])
+            if segment.length <= tolerance:
+                continue
+            breaks = {0.0, 1.0}
+            for xy in get_coordinates(segment.intersection(edge)):
+                fraction = segment.project(Point(xy), normalized=True)
+                breaks.add(min(1.0, max(0.0, float(fraction))))
+            for low, high in pairwise(sorted(breaks)):
+                if (high - low) * segment.length <= tolerance:
+                    continue
+                middle = segment.interpolate((low + high) / 2, normalized=True)
+                if edge.distance(middle) <= tolerance:
+                    continue
+                inside = bool(boundary.contains(middle))
+                if not sides or sides[-1] != inside:
+                    sides.append(inside)
+        crossings = max(0, len(sides) - 1)
+        if line.is_closed and len(sides) > 1 and sides[0] != sides[-1]:
+            # A closed line wraps around: count the change across its closing vertex too,
+            # so the count does not depend on which vertex the ring starts at.
+            crossings += 1
+        total += crossings
+    return total
 
 
 def _geometry_measure(geometry: Optional[BaseGeometry]) -> float:

@@ -98,6 +98,7 @@ from .GeomMeshDataclasses import (
     BCFixResult,
     DomainContainmentResult,
     DomainContainmentViolation,
+    GridAnchor,
     MeshResult,
 )
 
@@ -279,7 +280,186 @@ def _generate_seeds_safe(perim, cell_size: float, ns: dict):
     return PointGenerator.GeneratePoints(perim, float(cell_size))
 
 
-def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "PointMs":
+def _grid_anchor_from_hdf(
+    hdf_path: Union[str, Path],
+    mesh_name: Optional[str] = None,
+    mesh_index: int = 0,
+) -> GridAnchor:
+    """Return the first regular-grid point RAS Mapper uses for a 2D area.
+
+    RAS Mapper's ``PointGenerator`` seeds the base lattice at the area
+    bounding box's ``(min x + dx/2, max y - dy/2)``. The bounding box is that
+    of the stored perimeter (all parts), and ``Spacing dy`` falls back to
+    ``Spacing dx`` when it is not positive, as in RAS Mapper.
+    """
+    import h5py
+    import numpy as np
+
+    path = Path(hdf_path)
+    with h5py.File(path, "r") as hdf:
+        group = hdf["Geometry/2D Flow Areas"]
+        attrs = group["Attributes"][()]
+        names = [_decode_hdf_text(value).strip() for value in attrs["Name"]]
+        if mesh_name is not None:
+            if mesh_name not in names:
+                raise ValueError(
+                    f"2D flow area {mesh_name!r} not found in {path.name}; "
+                    f"available={names}"
+                )
+            index = names.index(mesh_name)
+        else:
+            if not 0 <= mesh_index < len(names):
+                raise ValueError(f"mesh_index {mesh_index} out of range for {path.name}")
+            index = mesh_index
+        info = group["Polygon Info"][()]
+        points = group["Polygon Points"][()]
+        start, count = int(info[index][0]), int(info[index][1])
+        ring = np.asarray(points[start : start + count], dtype=float)
+        dx = float(attrs["Spacing dx"][index])
+        dy = float(attrs["Spacing dy"][index]) if "Spacing dy" in attrs.dtype.names else dx
+    if not math.isfinite(dx) or dx <= 0:
+        raise ValueError(f"{names[index]}: Spacing dx is not positive in {path.name}")
+    if not math.isfinite(dy) or dy <= 0:
+        dy = dx
+    if len(ring) < 3:
+        raise ValueError(f"{names[index]}: perimeter has fewer than three points")
+    return GridAnchor(
+        x=float(ring[:, 0].min()) + 0.5 * dx,
+        y=float(ring[:, 1].max()) - 0.5 * dy,
+        spacing_dx=dx,
+        spacing_dy=dy,
+        source=f"{path.name}:{names[index]}",
+    )
+
+
+def _coerce_grid_anchor(value: Any, cell_size: float) -> GridAnchor:
+    """Normalize ``grid_anchor`` input to a GridAnchor with the mesh spacing."""
+    if isinstance(value, GridAnchor):
+        anchor = value
+    elif (
+        isinstance(value, (tuple, list))
+        and len(value) == 2
+        and all(isinstance(v, Number) and not isinstance(v, bool) for v in value)
+    ):
+        anchor = GridAnchor(float(value[0]), float(value[1]), cell_size, cell_size)
+    else:
+        raise TypeError("grid_anchor must be a GridAnchor or an (x, y) pair")
+    tolerance = 1e-6 * max(1.0, abs(cell_size))
+    if (
+        abs(anchor.spacing_dx - cell_size) > tolerance
+        or abs(anchor.spacing_dy - cell_size) > tolerance
+    ):
+        raise ValueError(
+            f"grid_anchor spacing ({anchor.spacing_dx:g}, {anchor.spacing_dy:g}) "
+            f"differs from the mesh cell size {cell_size:g}; a lattice anchor "
+            "only applies to grids of the same spacing"
+        )
+    return anchor
+
+
+def _anchored_lattice_points(geom, fid: int, anchor: GridAnchor, ns: dict):
+    """Regular lattice through ``anchor``, filtered exactly as RAS Mapper does.
+
+    Mirrors ``PointGenerator.GeneratePointsInternal`` for a 2D perimeter:
+    a point is kept when the perimeter's development TIN contains it and it
+    is not within ``GetCellSizeDistanceBuffer(dx, dy)`` of the perimeter.
+    Only the lattice origin differs: the anchor's phase instead of the
+    perimeter's bounding box. Rows run top to bottom, columns left to right.
+    """
+    perimeters = geom.MeshPerimeters
+    polygon = perimeters.Polygon(fid)
+    tin = perimeters.GetDevelopmentTin(fid)
+    segments = perimeters.GetSegmentSpatialIndex(fid)
+    if polygon is None or tin is None or segments is None:
+        raise RuntimeError(f"2D perimeter {fid} is not a valid polygon for point generation")
+    size = perimeters.GetCellSize2D(fid)
+    dx = float(size.X)
+    dy = float(size.Y)
+    if not math.isfinite(dy) or dy <= 0:
+        dy = dx
+    tolerance = 1e-6 * max(1.0, dx, dy)
+    if abs(anchor.spacing_dx - dx) > tolerance or abs(anchor.spacing_dy - dy) > tolerance:
+        raise ValueError(
+            f"grid_anchor spacing ({anchor.spacing_dx:g}, {anchor.spacing_dy:g}) "
+            f"differs from the 2D area spacing ({dx:g}, {dy:g})"
+        )
+    buffer = float(ns["PointGenerator"].GetCellSizeDistanceBuffer(dx, dy))
+    extent = polygon.ComputeExtent()
+    left, top = float(extent.Left), float(extent.Top)
+    right, bottom = left + float(extent.Width), top - float(extent.Height)
+    k0 = math.ceil((left - anchor.x) / dx)
+    k1 = math.floor((right - anchor.x) / dx)
+    m0 = math.ceil((anchor.y - top) / dy)
+    m1 = math.floor((anchor.y - bottom) / dy)
+    PointM = ns["PointM"]
+    lattice = ns["PointMs"]()
+    for m in range(m0, m1 + 1):
+        y = anchor.y - dy * m
+        for k in range(k0, k1 + 1):
+            point = PointM(anchor.x + dx * k, y)
+            if tin.ContainsPoint(point) and not polygon.PointCloseToPerimeter(
+                point, buffer, segments
+            ):
+                lattice.Add(point)
+    return lattice
+
+
+def _replace_area_points(geom, fid: int, lattice, ns: dict) -> int:
+    """Replace one area's computation points with ``lattice`` in memory.
+
+    RAS Mapper's ``RegenerateMeshPoints`` works on a single multipoint
+    feature; a geometry HDF loads one per 2D area. Points outside the target
+    perimeter are kept, so other areas are unchanged. Returns the number of
+    points removed from the target area. The HDF is not written.
+    """
+    from RasMapperLib import MultiPoint  # type: ignore
+
+    layer = geom.MeshPoints
+    tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+    merged = ns["PointMs"]()
+    removed = 0
+    for feature in range(layer.FeatureCount()):
+        points = layer[feature]
+        for i in range(points.PointMCount()):
+            point = points.PointM(i)
+            if tin.ContainsPoint(point):
+                removed += 1
+            else:
+                merged.Add(point)
+    for i in range(lattice.Count):
+        merged.Add(lattice[i])
+    layer.DeleteAllFeatures()
+    layer.AddFeature(MultiPoint(merged))
+    return removed
+
+
+def _features_reach_area(geom, fid: int, tin) -> bool:
+    """Whether any breakline, SA/2D structure line or region reaches area ``fid``."""
+    perimeter = geom.MeshPerimeters.Polygon(fid)
+    lines = geom.BreakLines
+    for i in range(lines.FeatureCount()):
+        line = lines.Polyline(i)
+        if line is None:
+            continue
+        if any(tin.ContainsPoint(line.PointM(j)) for j in range(line.Count)):
+            return True
+        if perimeter.Intersects(line):
+            return True
+    regions = geom.MeshRegions
+    for i in range(regions.FeatureCount()):
+        region = regions.Polygon(i)
+        if region is not None and perimeter.AreaIntersects(region):
+            return True
+    return False
+
+
+def _generate_seeds_via_net(
+    geom_hdf_path: str,
+    ns: dict,
+    fid: int = 0,
+    grid_anchor: Optional[GridAnchor] = None,
+    evidence: Optional[dict] = None,
+) -> "PointMs":
     """Generate breakline- and refinement-region-aware seeds via RAS Mapper.
 
     Calls the private RegenerateMeshPoints instance method via reflection,
@@ -290,10 +470,19 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
     spacing parameters (Near Repeats, Protection Radius) so that
     EnforceBreaklines generates the correct corridor seeds.
 
+    With ``grid_anchor``, the area's regular grid is laid on the anchor's
+    lattice instead of the area's bounding box: the anchored lattice
+    replaces the area's points in memory, and RegenerateMeshPoints runs
+    with the area active but not regenerated (the call RAS Mapper's own
+    breakline and refinement-region editors make). RAS Mapper then adds the
+    refinement-region points and enforces the breaklines on that lattice.
+
     Args:
         geom_hdf_path: Path to compiled .g##.hdf file.
         ns: .NET type namespace from _imports().
         fid: 0-based flow area feature index for MeshPoints lookup.
+        grid_anchor: Optional lattice point to anchor the regular grid on.
+        evidence: Optional dict updated with anchored-generation counts.
 
     Returns PointMs collection of seed points.
     """
@@ -347,6 +536,18 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
         for i in range(region_count):
             region_idx.Add(i)
 
+        regenerate_idx = perim_idx
+        lattice = None
+        if grid_anchor is not None:
+            # Lay the area's regular grid on the anchor's lattice ourselves and
+            # let RAS Mapper regenerate only the other areas' grids.
+            regenerate_idx = NetList[System.Int32]()
+            for i in range(perim_count):
+                if i != fid:
+                    regenerate_idx.Add(i)
+            lattice = _anchored_lattice_points(geom, fid, grid_anchor, ns)
+            replaced = _replace_area_points(geom, fid, lattice, ns)
+
         pg = ns["PointGenerator"](geom)
         pg_type = pg.GetType()
         method = pg_type.GetMethod(
@@ -360,16 +561,45 @@ def _generate_seeds_via_net(geom_hdf_path: str, ns: dict, fid: int = 0) -> "Poin
 
         # The parameter list grew across releases: 4 in 6.0-6.2, 6 in
         # 6.3-6.3.1 (progress reporters), 7 from 6.4.1 (treatInactiveAsNotPresent).
-        args = [bl_idx, region_idx, perim_idx, perim_idx, None, None, False]
+        args = [bl_idx, region_idx, perim_idx, regenerate_idx, None, None, False]
         method.Invoke(
             pg,
             System.Array[System.Object](args[: len(method.GetParameters())]),
         )
 
-        mp = d2fa.Geometry.MeshPoints[fid]
         seeds_pm = ns["PointMs"]()
+        if lattice is None:
+            mp = d2fa.Geometry.MeshPoints[fid]
+        else:
+            # The anchored path leaves one merged multipoint (all areas).
+            mp = d2fa.Geometry.MeshPoints.GetMeshEditingPoints()
         for i in range(mp.PointMCount()):
             seeds_pm.Add(mp.PointM(i))
+
+        if lattice is not None:
+            # RegenerateMeshPoints swallows its own exceptions. With features
+            # in this area to enforce, an unchanged lattice means it silently
+            # did nothing.
+            tin = geom.MeshPerimeters.GetDevelopmentTin(fid)
+            area_count = sum(
+                1 for i in range(seeds_pm.Count) if tin.ContainsPoint(seeds_pm[i])
+            )
+            if area_count == lattice.Count and _features_reach_area(geom, fid, tin):
+                raise RuntimeError(
+                    "RegenerateMeshPoints returned the anchored lattice unchanged; "
+                    "RAS Mapper did not enforce breaklines or refinement regions"
+                )
+            if evidence is not None:
+                evidence.update(
+                    {
+                        "anchor": grid_anchor.to_dict(),
+                        "lattice_points": int(lattice.Count),
+                        "replaced_points": int(replaced),
+                        "area_points_after_enforcement": int(area_count),
+                        "breaklines": int(bl_count),
+                        "refinement_regions": int(region_count),
+                    }
+                )
 
         logger.debug(
             f"Seeds via .NET RegenerateMeshPoints: {seeds_pm.Count} "
@@ -5005,6 +5235,50 @@ class GeomMesh:
 
     @staticmethod
     @log_call
+    def get_grid_anchor(
+        geometry: Union[str, Number, Path],
+        mesh_name: Optional[str] = None,
+        mesh_index: int = 0,
+        ras_object: Optional[RasPrj] = None,
+    ) -> GridAnchor:
+        """Return the regular-grid lattice point of a compiled 2D flow area.
+
+        RAS Mapper starts a 2D area's regular computation-point grid half a
+        cell inside the area's bounding box: at ``(min x + dx/2, max y - dy/2)``
+        of the stored perimeter, then one point every ``Spacing dx`` /
+        ``Spacing dy``. This reads that point and the spacing from the
+        compiled geometry HDF. Pass the result to
+        ``GeomMesh.generate(grid_anchor=...)`` so a child or ensemble member
+        cut from this area re-meshes on the same lattice.
+
+        Read-only; nothing is loaded through .NET, so it runs on any
+        platform with h5py.
+
+        Args:
+            geometry: Compiled geometry HDF path (``.g##.hdf``), geometry
+                text path (``.hdf`` is appended), or geometry number.
+            mesh_name: 2D flow area name (None = use ``mesh_index``).
+            mesh_index: 0-based 2D-area index when ``mesh_name`` is None.
+            ras_object (RasPrj, optional): RasPrj instance for
+                geometry-number lookup; None uses the global project.
+
+        Returns:
+            GridAnchor in the geometry's CRS and horizontal units, with
+            ``source`` naming the HDF file and area.
+
+        Raises:
+            FileNotFoundError: The geometry or its compiled HDF is missing.
+            ValueError: The area is missing or has no positive spacing.
+        """
+        path = Path(geometry) if isinstance(geometry, (str, Path)) else None
+        if path is None or path.suffix.lower() != ".hdf":
+            path = Path(str(_resolve_geom_text_path(geometry, ras_object)) + ".hdf")
+        if not path.is_file():
+            raise FileNotFoundError(f"Compiled geometry HDF not found: {path}")
+        return _grid_anchor_from_hdf(path, mesh_name=mesh_name, mesh_index=mesh_index)
+
+    @staticmethod
+    @log_call
     def generate_computation_points(
         geom_number: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
@@ -5182,6 +5456,7 @@ class GeomMesh:
         strict_refinement_containment: bool = False,
         robustness_screening: bool = False,
         require_complete_products: bool = False,
+        grid_anchor: Optional[Union[GridAnchor, Tuple[float, float]]] = None,
     ) -> MeshResult:
         """
         Generate or regenerate a 2D mesh headlessly via text-first workflow.
@@ -5260,6 +5535,17 @@ class GeomMesh:
                 max_iterations repair rounds and 50% more seeds; failure prevents
                 saving the screened mesh. Native preprocessing is still required.
                 Diagnostics are returned in MeshResult.robustness_screening.
+            grid_anchor: Optional lattice point for the regular (base) grid,
+                as a :class:`GridAnchor` or an ``(x, y)`` pair in the
+                geometry's CRS and units. RAS Mapper otherwise starts the grid
+                half a cell inside the area's own bounding box, so a child cut
+                from a parent gets an offset grid. With an anchor, the grid
+                passes through the anchor's lattice (use
+                :meth:`get_grid_anchor` on the parent geometry), and RAS
+                Mapper still generates the refinement-region and breakline
+                points on it. The anchor spacing must equal ``cell_size``.
+                Requires RegenerateMeshPoints; there is no unanchored
+                fallback. Evidence is returned in ``MeshResult.grid_anchor``.
 
         Returns:
             MeshResult with status, cell_count, face_count, fixes_applied, and
@@ -5273,6 +5559,9 @@ class GeomMesh:
 
         Raises:
             ValueError: The face-length ratio is not positive and finite.
+            TypeError: ``grid_anchor`` is not a GridAnchor or ``(x, y)`` pair.
+                (A grid anchor whose spacing differs from the cell size
+                returns ``status="exception"`` with the reason.)
             RuntimeError: A perimeter repair handoff or subsequent mesh retry
                 fails, chained to the original mesh repair reason. Retries
                 share the existing ``max_iterations`` bound.
@@ -5309,6 +5598,9 @@ class GeomMesh:
                 bl_spacing_near = legacy_bl_spacing
             if bl_spacing_far is None:
                 bl_spacing_far = legacy_bl_spacing
+        if grid_anchor is not None and not isinstance(grid_anchor, GridAnchor):
+            # Type check now; spacing is checked once the cell size is known.
+            _coerce_grid_anchor(grid_anchor, 1.0)
 
         repair_reason = None
         try:
@@ -5348,6 +5640,11 @@ class GeomMesh:
                     logger.debug(
                         f"Auto-detected cell size {cell_size} from HDF Spacing dx"
                     )
+            anchor = (
+                _coerce_grid_anchor(grid_anchor, float(cell_size))
+                if grid_anchor is not None
+                else None
+            )
 
             # ── Step 1b: Fail-closed mesh-feature containment gate ───
             # Breaklines and SA/2D structures retain the one-cell margin.
@@ -5444,17 +5741,34 @@ class GeomMesh:
             # Always try RegenerateMeshPoints first — it uses the correct
             # grid origin from the HDF regardless of whether breaklines exist.
             net_seeds_ok = False
+            anchor_evidence: dict = {}
+            # Pass anchor keywords only when anchoring, so callers that wrap
+            # the seed generator with the original signature keep working.
+            seed_kwargs = (
+                {"grid_anchor": anchor, "evidence": anchor_evidence}
+                if anchor is not None
+                else {}
+            )
             try:
-                seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+                seeds_pm = _generate_seeds_via_net(
+                    str(hdf_path), ns, fid=fid, **seed_kwargs
+                )
                 net_seeds_ok = True
                 logger.debug(
                     f"[{mesh_name}] {seeds_pm.Count} seeds via "
                     f".NET RegenerateMeshPoints"
                 )
             except Exception as exc:
+                if anchor is not None:
+                    raise RuntimeError(
+                        f"Anchored point generation failed: {exc}"
+                    ) from exc
                 logger.warning(
                     f"[{mesh_name}] RegenerateMeshPoints failed: {exc}"
                 )
+            if anchor is not None:
+                result.grid_anchor = {**anchor_evidence, "repairs": []}
+                result.fixes_applied.append("grid_anchor:lattice_phase_locked")
 
             if not net_seeds_ok:
                 if robustness_screening:
@@ -5536,7 +5850,17 @@ class GeomMesh:
                 breaklines = _build_breaklines(
                     d2fa, ns, refinement_region_constraints=refinement_region_constraints
                 )
-                current_seeds_pm = _generate_seeds_via_net(str(hdf_path), ns, fid=fid)
+                repair_evidence: dict = {}
+                current_seeds_pm = _generate_seeds_via_net(
+                    str(hdf_path), ns, fid=fid,
+                    **(
+                        {"grid_anchor": anchor, "evidence": repair_evidence}
+                        if anchor is not None
+                        else {}
+                    ),
+                )
+                if anchor is not None:
+                    result.grid_anchor["repairs"].append(repair_evidence)
                 outside = _seed_indexes_outside_perimeter(
                     current_seeds_pm, current_perim, strictly_inside=True
                 )

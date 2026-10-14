@@ -75,6 +75,7 @@ from .GeomMeshDataclasses import (
     BCFixResult,
     DomainContainmentResult,
     DomainContainmentViolation,
+    GridAnchor,
     MeshResult,
 )
 
@@ -109,4 +110,5 @@ __all__ = [
     'BCFixResult',
     'DomainContainmentResult',
     'DomainContainmentViolation',
+    'GridAnchor',
 ]
