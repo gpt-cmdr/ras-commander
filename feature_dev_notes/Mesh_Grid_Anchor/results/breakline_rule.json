@@ -1,0 +1,478 @@
+{
+ "wb-2534838": {
+  "parent_lines_touching": [
+   {
+    "name": "Stream (525)",
+    "length_ft": 5242.7,
+    "crossings_perimeter": 1,
+    "crossings_trim_boundary": 1
+   },
+   {
+    "name": "Stream (433)",
+    "length_ft": 3246.0,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (670)",
+    "length_ft": 2160.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1068)",
+    "length_ft": 843.4,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Road (95)",
+    "length_ft": 27236.0,
+    "crossings_perimeter": 1,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (675)",
+    "length_ft": 400.4,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1245)",
+    "length_ft": 2736.6,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1267)",
+    "length_ft": 152.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (713)",
+    "length_ft": 201.2,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (620)",
+    "length_ft": 3444.1,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Road (100)",
+    "length_ft": 35268.4,
+    "crossings_perimeter": 4,
+    "crossings_trim_boundary": 4
+   },
+   {
+    "name": "Stream (1232)",
+    "length_ft": 4906.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (766)",
+    "length_ft": 4924.1,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (486)",
+    "length_ft": 1134.7,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (875)",
+    "length_ft": 3281.0,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1272)",
+    "length_ft": 2828.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (460)",
+    "length_ft": 3749.0,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1077)",
+    "length_ft": 13570.4,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (871)",
+    "length_ft": 2763.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Road (114)",
+    "length_ft": 5535.8,
+    "crossings_perimeter": 2,
+    "crossings_trim_boundary": 6
+   }
+  ],
+  "child_pieces": 24,
+  "unmapped_child_pieces": [],
+  "limit_1": {
+   "points_inside": 3762,
+   "identical_share": 0.9024,
+   "identical_interior_share": 0.916,
+   "interior_points": 3463,
+   "parent_reproduced_share": 0.8307,
+   "parent_reproduced_interior_share": 0.8638,
+   "on_parent_lattice_share": 0.533,
+   "dropped_parent_lines": [
+    "Road (100)",
+    "Road (114)"
+   ],
+   "child_pieces_dropped": 6,
+   "differing_points": 367,
+   "differing_in_perimeter_band": 76,
+   "differing_interior_near_dropped_lines": 150,
+   "differing_interior_elsewhere": 141,
+   "breaklines_loaded": 18
+  },
+  "limit_2": {
+   "points_inside": 3762,
+   "identical_share": 0.9024,
+   "identical_interior_share": 0.916,
+   "interior_points": 3463,
+   "parent_reproduced_share": 0.8307,
+   "parent_reproduced_interior_share": 0.8638,
+   "on_parent_lattice_share": 0.533,
+   "dropped_parent_lines": [
+    "Road (100)",
+    "Road (114)"
+   ],
+   "child_pieces_dropped": 6,
+   "differing_points": 367,
+   "differing_in_perimeter_band": 76,
+   "differing_interior_near_dropped_lines": 150,
+   "differing_interior_elsewhere": 141,
+   "breaklines_loaded": 18
+  }
+ },
+ "wb-2534836": {
+  "parent_lines_touching": [
+   {
+    "name": "Stream (484)",
+    "length_ft": 2524.2,
+    "crossings_perimeter": 1,
+    "crossings_trim_boundary": 1
+   },
+   {
+    "name": "Stream (1051)",
+    "length_ft": 4764.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1247)",
+    "length_ft": 5862.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1048)",
+    "length_ft": 2611.9,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1204)",
+    "length_ft": 2405.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (593)",
+    "length_ft": 23106.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Road (99)",
+    "length_ft": 40324.3,
+    "crossings_perimeter": 2,
+    "crossings_trim_boundary": 2
+   }
+  ],
+  "child_pieces": 7,
+  "unmapped_child_pieces": [],
+  "limit_1": {
+   "points_inside": 3039,
+   "identical_share": 0.9901,
+   "identical_interior_share": 0.995,
+   "interior_points": 2786,
+   "parent_reproduced_share": 0.9837,
+   "parent_reproduced_interior_share": 0.9921,
+   "on_parent_lattice_share": 0.5469,
+   "dropped_parent_lines": [
+    "Road (99)"
+   ],
+   "child_pieces_dropped": 1,
+   "differing_points": 30,
+   "differing_in_perimeter_band": 16,
+   "differing_interior_near_dropped_lines": 6,
+   "differing_interior_elsewhere": 8,
+   "breaklines_loaded": 6
+  },
+  "limit_2": {
+   "points_inside": 3058,
+   "identical_share": 0.984,
+   "identical_interior_share": 0.9911,
+   "interior_points": 2797,
+   "parent_reproduced_share": 0.9837,
+   "parent_reproduced_interior_share": 0.9921,
+   "on_parent_lattice_share": 0.5373,
+   "dropped_parent_lines": [],
+   "child_pieces_dropped": 0,
+   "differing_points": 49,
+   "differing_in_perimeter_band": 24,
+   "differing_interior_near_dropped_lines": 0,
+   "differing_interior_elsewhere": 25,
+   "breaklines_loaded": 7
+  }
+ },
+ "wb-2534846": {
+  "parent_lines_touching": [
+   {
+    "name": "Stream (1385)",
+    "length_ft": 3902.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1628)",
+    "length_ft": 2980.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1813)",
+    "length_ft": 1098.4,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1684)",
+    "length_ft": 853.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1868)",
+    "length_ft": 5438.6,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (3120)",
+    "length_ft": 43.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1636)",
+    "length_ft": 2303.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1731)",
+    "length_ft": 753.2,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1433)",
+    "length_ft": 2430.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1800)",
+    "length_ft": 1478.9,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1649)",
+    "length_ft": 1122.0,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (3114)",
+    "length_ft": 37.8,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1494)",
+    "length_ft": 2655.2,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1750)",
+    "length_ft": 16241.6,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1669)",
+    "length_ft": 7730.9,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1806)",
+    "length_ft": 4706.9,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (3106)",
+    "length_ft": 66.7,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1598)",
+    "length_ft": 3155.7,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1699)",
+    "length_ft": 3084.2,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1824)",
+    "length_ft": 7522.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1883)",
+    "length_ft": 3059.6,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1575)",
+    "length_ft": 3690.1,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1513)",
+    "length_ft": 7733.4,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1881)",
+    "length_ft": 1707.0,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (3102)",
+    "length_ft": 796.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1764)",
+    "length_ft": 2613.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1579)",
+    "length_ft": 3578.0,
+    "crossings_perimeter": 1,
+    "crossings_trim_boundary": 1
+   },
+   {
+    "name": "Stream (1389)",
+    "length_ft": 7371.1,
+    "crossings_perimeter": 1,
+    "crossings_trim_boundary": 1
+   },
+   {
+    "name": "Stream (1664)",
+    "length_ft": 3095.5,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1619)",
+    "length_ft": 5888.2,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1777)",
+    "length_ft": 3044.6,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   },
+   {
+    "name": "Stream (1713)",
+    "length_ft": 339.3,
+    "crossings_perimeter": 0,
+    "crossings_trim_boundary": 0
+   }
+  ],
+  "child_pieces": 32,
+  "unmapped_child_pieces": [],
+  "limit_1": {
+   "points_inside": 6775,
+   "identical_share": 0.982,
+   "identical_interior_share": 0.9851,
+   "interior_points": 6425,
+   "parent_reproduced_share": 0.9784,
+   "parent_reproduced_interior_share": 0.9822,
+   "on_parent_lattice_share": 0.4689,
+   "dropped_parent_lines": [],
+   "child_pieces_dropped": 0,
+   "differing_points": 122,
+   "differing_in_perimeter_band": 26,
+   "differing_interior_near_dropped_lines": 0,
+   "differing_interior_elsewhere": 96,
+   "breaklines_loaded": 32
+  },
+  "limit_2": {
+   "points_inside": 6775,
+   "identical_share": 0.982,
+   "identical_interior_share": 0.9851,
+   "interior_points": 6425,
+   "parent_reproduced_share": 0.9784,
+   "parent_reproduced_interior_share": 0.9822,
+   "on_parent_lattice_share": 0.4689,
+   "dropped_parent_lines": [],
+   "child_pieces_dropped": 0,
+   "differing_points": 122,
+   "differing_in_perimeter_band": 26,
+   "differing_interior_near_dropped_lines": 0,
+   "differing_interior_elsewhere": 96,
+   "breaklines_loaded": 32
+  }
+ }
+}
