@@ -388,6 +388,28 @@ def test_handoff_stops_once_seen_writer_ended_and_owned_solver_started(
     assert state["writer_observation"] == "solver_started"
 
 
+def test_failed_writer_scan_does_not_forget_a_writer_already_seen(
+    tmp_path,
+    monkeypatch,
+):
+    _write_artifacts(tmp_path, materialized=True)
+    writer_states = iter(((448,), (-1,), ()))
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_active_complete_preprocess_writers",
+        staticmethod(lambda *_args: next(writer_states)),
+    )
+    state = {}
+    args = (tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03", state)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000.0)
+    # The scan fails: never ready on that poll, but the observation survives.
+    assert not RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: True)
+    assert state.get("completepreprocess_seen") is True
+    assert RasPreprocess._completepreprocess_handoff_ready(
+        *args, started_at=1000.0, solver_started=lambda: True)
+
+
 def test_solver_start_without_an_observed_writer_never_authorizes_handoff(
     tmp_path,
     monkeypatch,

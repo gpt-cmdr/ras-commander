@@ -1497,9 +1497,14 @@ class RasPreprocess:
             if writers == (-1,):
                 logger.warning(
                     "Could not enumerate CompletePreProcess writers; refusing "
-                    "gridded-preprocessing handoff"
+                    "gridded-preprocessing handoff for this poll"
                 )
-                stability_state.clear()
+                # A failed scan proves nothing about the writer, so restart the
+                # quiescence wait but keep whether a writer was already seen:
+                # once it has exited it can never be observed again.
+                for key in ("active_completepreprocess_pids", "writer_absent_since",
+                            "fingerprint", "observed_at"):
+                    stability_state.pop(key, None)
                 return False
             if stability_state.get("active_completepreprocess_pids") != writers:
                 logger.info(
