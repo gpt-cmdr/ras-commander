@@ -241,8 +241,8 @@ def _ras_version_problems(version: Any) -> list[str]:
 
     try:
         folder = normalize_version(version)
-    except ValueError:
-        return ["ras_version must be a HEC-RAS release such as '6.6' or '7.0.1'"]
+    except ValueError as exc:
+        return [f"ras_version must be a HEC-RAS release such as '6.6' or '7.0.1': {exc}"]
     if "linux-unsteady" not in applicable_roles(folder):
         return [f"ras_version {folder} has no HEC Linux engine; run it under Wine with "
                 "RasSlurm and a Wine executor image instead"]

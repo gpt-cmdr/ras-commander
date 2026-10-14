@@ -3,7 +3,9 @@
 #   1. runtime profile (build_runtime_profile.sh)
 #   2. pre-compute image  hec-ras-wine-precompute_<version> (../hecras-wine-precompute, target bundled)
 #   3. portable executor  hec-ras-wine-executor_<version>   (../hecras-wine-executor)
-#   4. docker-save archives with .sha256 sidecars in <archive-dir>
+#   4. docker-save archives with .sha256 sidecars in <archive-dir>. The pre-compute
+#      image is the executor's base; it is archived only for releases with a HEC
+#      Linux engine (5.0.7, 6.1, 6.5, 6.6, 7.x), the only ones it serves.
 #
 # Usage: build_release_images.sh <version> <HEC-RAS_Setup.exe> <ras-commander wheel> <work-dir> <archive-dir>
 # Env: RAS_COMMANDER_COMMIT (required; the commit the wheel was built from), DOCKER,
@@ -23,6 +25,10 @@ PROFILE="$WORK/profile-$VERSION"
 CONTEXT="$WORK/context-$VERSION"
 PRECOMPUTE_TAG="local/hec-ras-wine-precompute_$VERSION:v5-$SHORT"
 EXECUTOR_TAG="local/hec-ras-wine-executor_$VERSION:$SHORT"
+case "$VERSION" in
+    5.0.7|6.1|6.5|6.6|7.*) SAVE_TAGS=("$PRECOMPUTE_TAG" "$EXECUTOR_TAG") ;;
+    *) SAVE_TAGS=("$EXECUTOR_TAG") ;;
+esac
 mkdir -p "$WORK" "$ARCHIVES"
 cleanup() { rm -rf -- "$PROFILE" "$PROFILE-examples" "$CONTEXT"; }
 trap cleanup EXIT
@@ -58,7 +64,7 @@ echo "== [$VERSION] executor image"
 RAS_COMMANDER_COMMIT=$COMMIT bash "$CONTAINERS/hecras-wine-executor/build_executor_image.sh" \
     "$VERSION" "$PRECOMPUTE_ID" "$WHEEL" "$EXECUTOR_TAG"
 
-for tag in "$PRECOMPUTE_TAG" "$EXECUTOR_TAG"; do
+for tag in "${SAVE_TAGS[@]}"; do
     name=$(basename "${tag%%:*}")_${tag##*:}
     echo "== [$VERSION] save $tag -> $ARCHIVES/$name.tar.gz"
     "$DOCKER" save "$tag" | gzip -1 > "$ARCHIVES/$name.tar.gz.partial"

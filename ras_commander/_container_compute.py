@@ -130,7 +130,7 @@ def _runtime(manifest_path, expected_version=None):
         native_release = False
     if data.get("kind") != "native" or not native_release:
         raise ValueError("Native runtime must declare a HEC-RAS release with a Linux engine "
-                         "(5.0.7 or 6.1 through 7.x)")
+                         "(5.0.7, 6.1, 6.5, 6.6, or 7.x)")
     if expected_version and version != expected_version:
         raise ValueError("Bundled native runtime does not match the image HEC-RAS version")
     root = manifest_path.parent.resolve()

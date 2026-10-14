@@ -478,8 +478,9 @@ def test_701_cannot_use_a_different_version_image_or_receipt(monkeypatch, projec
 
 
 @pytest.mark.parametrize("version, message", [
-    ("4.1.0", "has no HEC Linux engine"),
-    ("4.1", "install folder name"),
+    ("4.1.0", "RasControl"),
+    ("4.1", "RasControl"),
+    ("6.3.1", "has no HEC Linux engine"),
     ("6.0", "has no HEC Linux engine"),
     ("5.0.7", "pass image="),
     ("66", "install folder name"),

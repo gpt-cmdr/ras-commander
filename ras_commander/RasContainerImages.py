@@ -2,10 +2,11 @@
 
 ``RasContainerImages`` answers two questions:
 
-* Which image roles apply to a HEC-RAS release? Every Windows release from 4.0
-  through 7.x can run under Wine (``wine-executor``). Wine preprocessing for a
+* Which image roles apply to a HEC-RAS release? Every Windows release from 5.0
+  through 7.x can run under Wine (``wine-executor``). HEC-RAS 4.x has no
+  command-line compute and is driven through COM on Windows (``RasControl``). Wine preprocessing for a
   native Linux solve (``wine-precompute`` + ``linux-unsteady``) applies only
-  where HEC published a Linux engine: 5.0.7 and 6.1 through 7.x.
+  where HEC published a Linux engine: 5.0.7, 6.1, 6.5, 6.6, and 7.x.
 * Which SIF should a job use? :meth:`resolve_sif` prefers a SIF the caller
   supplies, then a verified copy in the local cache, and pulls from the
   registry only when the policy allows. :meth:`ensure_sif_command` renders the
@@ -38,13 +39,14 @@ logger = get_logger(__name__)
 
 CATALOG_SCHEMA = "ras-commander-container-images/v1"
 CACHE_ENVIRONMENT = "RAS_COMMANDER_IMAGE_CACHE"
+# Releases before 7.0 for which HEC published a Linux engine (7.x installers all include one).
+_NATIVE_ENGINE_RELEASES = frozenset({"5.0.7", "6.1", "6.5", "6.6"})
 ROLES = ("wine-executor", "wine-precompute", "linux-unsteady")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _DIGEST_REFERENCE = re.compile(r"[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}\Z")
-_INSTALL_FOLDER = re.compile(r"[4-7]\.[0-9]+(?:\.[0-9]+)?\Z")
+_INSTALL_FOLDER = re.compile(r"[5-7]\.[0-9]+(?:\.[0-9]+)?\Z")
 # Aliases match RasPrj.get_ras_exe so the same spellings work everywhere.
 _VERSION_ALIASES = {
-    "4.1": "4.1.0", "41": "4.1.0", "410": "4.1.0", "40": "4.0",
     "50": "5.0", "501": "5.0.1", "503": "5.0.3", "504": "5.0.4", "505": "5.0.5",
     "506": "5.0.6", "507": "5.0.7",
     "60": "6.0", "61": "6.1", "6.1.0": "6.1", "62": "6.2", "63": "6.3", "631": "6.3.1",
@@ -54,11 +56,12 @@ _VERSION_ALIASES = {
 
 
 def normalize_version(version: Union[str, float, int]) -> str:
-    """Return the Windows install-folder name for a HEC-RAS release (4.0 to 7.x).
+    """Return the Windows install-folder name for a HEC-RAS release (5.0 to 7.x).
 
-    Accepts the spellings ``RasPrj`` accepts: ``"4.1"`` → ``"4.1.0"``,
-    ``"507"`` or ``"5.07"`` → ``"5.0.7"``, ``"66"`` → ``"6.6"``. Beta releases
-    are not supported for containers.
+    Accepts the spellings ``RasPrj`` accepts: ``"507"`` or ``"5.07"`` →
+    ``"5.0.7"``, ``"641"`` → ``"6.4.1"``, ``"66"`` → ``"6.6"``. Beta releases
+    are not supported for containers. HEC-RAS 4.x is refused: it computes
+    only through its COM interface, which needs a Windows host (``RasControl``).
     """
     text = str(version).strip()
     legacy = re.fullmatch(r"(\d)\.(\d{2})", text)
@@ -66,8 +69,12 @@ def normalize_version(version: Union[str, float, int]) -> str:
         major, minor = legacy.groups()
         text = f"{major}.{minor[0]}.{int(minor[1])}"
     text = _VERSION_ALIASES.get(text, text)
-    if not _INSTALL_FOLDER.fullmatch(text) or not (4, 0) <= _version_key(text)[:2] < (8, 0):
-        raise ValueError(f"Unsupported HEC-RAS version for containers: {version!r} (expected 4.0 to 7.x)")
+    if re.fullmatch(r"4(?:\.\d+)*|4\d+", text):
+        raise ValueError(
+            f"HEC-RAS {version!r} is not supported in containers: 4.x has no command-line "
+            "compute and runs only through its COM interface on Windows (RasControl)")
+    if not _INSTALL_FOLDER.fullmatch(text) or not (5, 0) <= _version_key(text)[:2] < (8, 0):
+        raise ValueError(f"Unsupported HEC-RAS version for containers: {version!r} (expected 5.0 to 7.x)")
     return text
 
 
@@ -79,14 +86,15 @@ def applicable_roles(version: Union[str, float, int]) -> tuple[str, ...]:
     """Return the image roles that apply to a HEC-RAS release.
 
     ``wine-executor`` (full Windows compute under Wine) applies to every
-    release from 4.0 to 7.x. ``wine-precompute`` and ``linux-unsteady`` (Wine
+    release from 5.0 to 7.x. ``wine-precompute`` and ``linux-unsteady`` (Wine
     preprocessing then a native Linux solve) need a HEC Linux engine: 5.0.7,
-    and 6.1 through 7.x.
+    6.1, 6.5, 6.6, and 7.x (7.x installers include it). HEC published none for
+    6.0 or 6.2 through 6.4.1.
     """
     folder = normalize_version(version)
     key = _version_key(folder)
     roles = ["wine-executor"]
-    if folder == "5.0.7" or key >= (6, 1):
+    if folder in _NATIVE_ENGINE_RELEASES or key >= (7, 0):
         roles += ["wine-precompute", "linux-unsteady"]
     return tuple(roles)
 

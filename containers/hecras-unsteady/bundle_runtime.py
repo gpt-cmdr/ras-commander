@@ -14,8 +14,9 @@ import re
 import shutil
 import tempfile
 
-# Releases with a HEC native Linux engine: 5.0.7 (bin_ras layout) and 6.1-7.x.
-_NATIVE_VERSION = re.compile(r"(?:5\.0\.7|6\.(?:[1-9])(?:\.[0-9]+)?|7\.[0-9]+(?:\.[0-9]+)?)\Z")
+# Releases with a HEC native Linux engine: 5.0.7 (bin_ras layout), 6.1, 6.5, 6.6,
+# and 7.x. HEC published none for 6.0 or 6.2 through 6.4.1.
+_NATIVE_VERSION = re.compile(r"(?:5\.0\.7|6\.[156]|7\.[0-9]+(?:\.[0-9]+)?)\Z")
 _LAYOUT_EXECUTABLE = {"canonical": "RasUnsteady", "bin_ras": "rasUnsteady64"}
 
 
@@ -47,11 +48,11 @@ def _copy_tree(source, destination):
 
 def bundle_runtime(*, engine_source, libraries_source, notices_source, hec_ras_version, output,
                    layout=None):
-    """Bundle one native engine. ``layout`` is ``canonical`` (6.1-7.x: RasUnsteady
+    """Bundle one native engine. ``layout`` is ``canonical`` (6.1, 6.5, 6.6, 7.x: RasUnsteady
     plus a ``libs`` tree) or ``bin_ras`` (5.0.7: ``rasUnsteady64`` with its
     libraries beside it, staged as ``engine/bin_ras``); default from the version."""
     if not _NATIVE_VERSION.fullmatch(str(hec_ras_version)):
-        raise ValueError("Native HEC-RAS engines exist for 5.0.7 and 6.1 through 7.x")
+        raise ValueError("Native HEC-RAS engines exist for 5.0.7, 6.1, 6.5, 6.6, and 7.x")
     layout = layout or ("bin_ras" if hec_ras_version == "5.0.7" else "canonical")
     if layout not in _LAYOUT_EXECUTABLE or (layout == "bin_ras") != (hec_ras_version == "5.0.7"):
         raise ValueError("layout must be bin_ras for 5.0.7 and canonical otherwise")
@@ -115,7 +116,7 @@ def main():
     parser.add_argument("--libraries-source", type=Path, required=True)
     parser.add_argument("--notices-source", type=Path, required=True)
     parser.add_argument("--hec-ras-version", required=True,
-                        help="5.0.7 or 6.1 through 7.x (the HEC Linux engine release)")
+                        help="5.0.7, 6.1, 6.5, 6.6, or 7.x (the HEC Linux engine release)")
     parser.add_argument("--layout", choices=sorted(_LAYOUT_EXECUTABLE),
                         help="default: bin_ras for 5.0.7, canonical otherwise")
     parser.add_argument("--output", type=Path, required=True)

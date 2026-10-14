@@ -87,9 +87,7 @@ def profile61():
 @pytest.mark.parametrize("version, layout, arguments", [
     ("5.0.7", "bin_ras", "cfile"),
     ("6.1", "canonical", "cfile"),
-    ("6.2", "canonical", "cfile"),
-    ("6.3", "canonical", "cfile"),
-    ("6.3.1", "canonical", "tmphdf"),
+    ("6.5", "canonical", "tmphdf"),
     ("6.6", "canonical", "tmphdf"),
     ("7.0.1", "canonical", "tmphdf"),
 ])
@@ -106,7 +104,7 @@ def test_61_profile_uses_canonical_library_defaults(profile61):
 
 
 def test_solver_arguments_is_overridable_and_recorded():
-    prof = RasApptainer.profile_from_dict(_profile_dict(ras_version="6.3", solver_arguments="tmphdf"))
+    prof = RasApptainer.profile_from_dict(_profile_dict(ras_version="6.1", solver_arguments="tmphdf"))
     assert prof.arguments == "tmphdf" and prof.to_dict()["solver_arguments"] == "tmphdf"
     prof = RasApptainer.profile_from_dict(_profile_dict(ras_version="6.6", solver_arguments="cfile"))
     assert prof.arguments == "cfile"

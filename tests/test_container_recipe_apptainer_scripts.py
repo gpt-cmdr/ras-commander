@@ -303,8 +303,8 @@ def test_executor_build_reaches_docker_with_valid_inputs(executor_inputs):
     assert calls[0] == "image inspect " + base
 
 
-@pytest.mark.parametrize("version", ["4.1.0", "5.0.7", "6.3.1", "7.1"])
-def test_executor_build_accepts_any_4x_to_7x_install_folder(executor_inputs, version):
+@pytest.mark.parametrize("version", ["5.0", "5.0.7", "6.3.1", "7.1"])
+def test_executor_build_accepts_any_5x_to_7x_install_folder(executor_inputs, version):
     environment, marker, wheel, base = executor_inputs
     completed = _run_executor_build(
         environment, version, base, wheel, f"local/hec-ras-wine-executor_{version}:review"

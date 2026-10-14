@@ -538,9 +538,10 @@ def test_unknown_portable_profile_fields_are_rejected():
 
 
 @pytest.mark.parametrize("version, message", [
-    ("4.1.0", "no HEC Linux engine"), ("6.0", "no HEC Linux engine"),
+    ("4.1.0", "RasControl"), ("6.0", "no HEC Linux engine"),
     ("5.0.6", "no HEC Linux engine"), ("5.0.5", "no HEC Linux engine"),
-    ("4.1", "no HEC Linux engine"), ("66", "install folder name"),
+    ("6.3.1", "no HEC Linux engine"), ("6.4.1", "no HEC Linux engine"),
+    ("4.1", "RasControl"), ("66", "install folder name"),
 ])
 def test_profile_explains_releases_without_a_supported_native_engine(version, message):
     data = _profile_dict()
@@ -549,7 +550,7 @@ def test_profile_explains_releases_without_a_supported_native_engine(version, me
         RasApptainer.profile_from_dict(data)
 
 
-@pytest.mark.parametrize("version", ["6.1", "6.3.1", "6.5", "6.6", "7.0.1", "7.1"])
+@pytest.mark.parametrize("version", ["6.1", "6.5", "6.6", "7.0", "7.0.1", "7.1"])
 def test_profile_accepts_native_linux_6x_and_7x(version):
     data = _profile_dict()
     data["ras_version"] = version

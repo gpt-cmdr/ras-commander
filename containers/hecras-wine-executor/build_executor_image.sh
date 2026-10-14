@@ -47,10 +47,10 @@ DOCKER=${DOCKER:-docker}
 BUILD_CPUS=${BUILD_CPUS:-2}
 WINE_SECURITY_OPT=${WINE_SECURITY_OPT-apparmor=unconfined}
 
-# Any Windows HEC-RAS release from 4.x through 7.x, named by its install folder
-# (4.1.0, 5.0.7, 6.3.1, 6.6, 7.0.1, ...). The base image must declare the same version.
-[[ "$VERSION" =~ ^[4-7]\.[0-9]+(\.[0-9]+)?$ ]] \
-    || { echo "error: HEC-RAS version must be an install folder name such as 4.1.0, 5.0.7, 6.6 or 7.0.1" >&2; exit 2; }
+# Any Windows HEC-RAS release from 5.0 through 7.x, named by its install folder
+# (5.0, 5.0.7, 6.3.1, 6.6, 7.0.1, ...). The base image must declare the same version.
+[[ "$VERSION" =~ ^[5-7]\.[0-9]+(\.[0-9]+)?$ ]] \
+    || { echo "error: HEC-RAS version must be an install folder name such as 5.0, 5.0.7, 6.6 or 7.0.1" >&2; exit 2; }
 [[ "$BASE" =~ ^([a-z0-9][a-z0-9._/:-]*@)?sha256:[0-9a-f]{64}$ ]] \
     || { echo "error: base image must be pinned by digest (name@sha256:<64 hex>) or a local image ID (sha256:<64 hex>)" >&2; exit 2; }
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "error: RAS_COMMANDER_COMMIT must be a full 40-hex commit" >&2; exit 2; }
@@ -113,8 +113,8 @@ if [ -n "$CONSTRAINTS" ]; then
     CONSTRAINT_ARG="-c /tmp/build-constraints.txt"
 fi
 
-# RasMapper's GDAL folder ships with 5.x and later; 4.x releases have none, so
-# the bridge (and its label) is created only when the base contains it.
+# The GDAL bridge (and its label) is created only when the release ships
+# RasMapper's GDAL folder.
 if "$DOCKER" run --rm --network none --entrypoint /bin/sh "$BASE" -c \
         "test -d \"$SEED/drive_c/Program Files (x86)/HEC/HEC-RAS/$VERSION/GDAL\""; then
     GDAL_BRIDGE=C:/Python311/GDAL

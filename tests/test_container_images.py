@@ -39,7 +39,7 @@ def _sha(data: bytes) -> str:
 
 
 @pytest.mark.parametrize("given, folder", [
-    ("4.1", "4.1.0"), ("41", "4.1.0"), ("4.10", "4.1.0"), ("5.07", "5.0.7"), ("507", "5.0.7"),
+    ("5.0", "5.0"), ("50", "5.0"), ("5.03", "5.0.3"), ("5.07", "5.0.7"), ("507", "5.0.7"),
     ("6.6", "6.6"), ("66", "6.6"), (6.6, "6.6"), ("6.4", "6.4.1"), ("7.0.1", "7.0.1"), ("7.1.0", "7.1"),
 ])
 def test_versions_normalize_to_install_folders(given, folder):
@@ -52,10 +52,21 @@ def test_unsupported_versions_are_rejected(bad):
         normalize_version(bad)
 
 
+@pytest.mark.parametrize("legacy", ["4.0", "4.1", "4.1.0", "4.10", "41", "410"])
+def test_hec_ras_4_points_to_the_windows_com_interface(legacy):
+    with pytest.raises(ValueError, match="RasControl"):
+        normalize_version(legacy)
+
+
 @pytest.mark.parametrize("version, roles", [
-    ("4.1", ("wine-executor",)),
+    ("5.0", ("wine-executor",)),
     ("5.0.6", ("wine-executor",)),
     ("6.0", ("wine-executor",)),
+    ("6.2", ("wine-executor",)),
+    ("6.3.1", ("wine-executor",)),
+    ("6.4.1", ("wine-executor",)),
+    ("6.5", ("wine-executor", "wine-precompute", "linux-unsteady")),
+    ("7.0", ("wine-executor", "wine-precompute", "linux-unsteady")),
     ("5.0.7", ("wine-executor", "wine-precompute", "linux-unsteady")),
     ("6.1", ("wine-executor", "wine-precompute", "linux-unsteady")),
     ("7.0.1", ("wine-executor", "wine-precompute", "linux-unsteady")),
@@ -75,12 +86,12 @@ def test_catalog_entries_are_digest_pinned_and_applicable():
 
 def test_native_role_is_refused_for_releases_without_a_linux_engine():
     with pytest.raises(ValueError, match="no HEC Linux engine"):
-        RasContainerImages.get("linux-unsteady", "4.1")
+        RasContainerImages.get("linux-unsteady", "6.0")
 
 
 def test_unpublished_image_explains_how_to_supply_one():
     with pytest.raises(LookupError, match="sif_path"):
-        RasContainerImages.get("wine-executor", "4.1")
+        RasContainerImages.get("wine-executor", "5.0.6")
 
 
 def test_explicit_local_sif_is_used_without_pulling(tmp_path, apptainer):
@@ -88,15 +99,15 @@ def test_explicit_local_sif_is_used_without_pulling(tmp_path, apptainer):
     local = tmp_path / "site-built.sif"
     local.write_bytes(b"site image")
     resolved = RasContainerImages.resolve_sif(
-        "wine-executor", "4.1", sif_path=local, apptainer_executable=fake)
+        "wine-executor", "5.0.6", sif_path=local, apptainer_executable=fake)
     assert resolved.source == "explicit" and resolved.path == local.resolve()
     assert resolved.container_identity == f"sif:sha256:{_sha(b'site image')}"
     assert not log.exists()
     with pytest.raises(ValueError, match="does not match"):
-        RasContainerImages.resolve_sif("wine-executor", "4.1", sif_path=local,
+        RasContainerImages.resolve_sif("wine-executor", "5.0.6", sif_path=local,
                                        expected_sha256="0" * 64, apptainer_executable=fake)
     with pytest.raises(FileNotFoundError):
-        RasContainerImages.resolve_sif("wine-executor", "4.1", sif_path=tmp_path / "absent.sif")
+        RasContainerImages.resolve_sif("wine-executor", "5.0.6", sif_path=tmp_path / "absent.sif")
 
 
 def test_cache_is_filled_once_then_reused_offline(tmp_path, apptainer):
