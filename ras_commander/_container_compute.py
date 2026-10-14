@@ -122,16 +122,28 @@ def _runtime(manifest_path, expected_version=None):
     if data.get("schema") not in {"ras-commander-native-runtime/v1", "ras-commander-runtime/v1"}:
         raise ValueError("Unsupported native runtime manifest schema")
     version = data.get("hec_ras_version")
-    if data.get("kind") != "native" or version not in {"6.5", "6.6", "7.0.1"}:
-        raise ValueError("Native runtime must declare HEC-RAS 6.5, 6.6 or 7.0.1")
+    from .RasContainerImages import applicable_roles
+
+    try:
+        native_release = "linux-unsteady" in applicable_roles(version)
+    except ValueError:
+        native_release = False
+    if data.get("kind") != "native" or not native_release:
+        raise ValueError("Native runtime must declare a HEC-RAS release with a Linux engine "
+                         "(5.0.7 or 6.1 through 7.x)")
     if expected_version and version != expected_version:
         raise ValueError("Bundled native runtime does not match the image HEC-RAS version")
     root = manifest_path.parent.resolve()
-    engine = _confined(root / data.get("native", {}).get("engine_directory", "engine"), root)
-    executable = _file(engine / "RasUnsteady")
+    native = data.get("native", {})
+    layout = native.get("layout", "canonical")
+    if layout not in {"canonical", "bin_ras"}:
+        raise ValueError("Native runtime layout must be canonical or bin_ras")
+    engine = _confined(root / native.get("engine_directory", "engine"), root)
+    default_executable = "RasUnsteady" if layout == "canonical" else "bin_ras/rasUnsteady64"
+    executable = _file(_confined(engine / native.get("executable", default_executable), root))
     if os.name != "nt" and not os.access(executable, os.X_OK):
-        raise ValueError("Bundled RasUnsteady is not executable")
-    if not (engine / "libs").is_dir():
+        raise ValueError(f"Bundled {executable.name} is not executable")
+    if layout == "canonical" and not (engine / "libs").is_dir():
         raise ValueError("Bundled native runtime is missing its vendor libs directory")
     artifacts = data.get("artifacts", [])
     declared = set()

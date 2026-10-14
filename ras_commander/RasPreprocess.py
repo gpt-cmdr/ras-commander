@@ -640,8 +640,17 @@ class RasPreprocess:
             import h5py
             from ._preprocess_validation import _event_condition_errors
 
+            from ._preprocess_validation import _hdf_ras_major_version
+
             with h5py.File(tmp_hdf, "r") as hdf:
                 event_errors = _event_condition_errors(hdf, precipitation_mode)
+                ras_major = _hdf_ras_major_version(hdf)
+            if ras_major is not None and ras_major < 6:
+                c_file = project_folder / f"{project_name}.c{geometry_number}"
+                if not c_file.is_file() or c_file.stat().st_size == 0:
+                    event_errors.append(
+                        f"HEC-RAS {ras_major}.x preprocessing did not write {c_file.name}"
+                    )
         except Exception as exc:
             event_errors = [f"could not validate Event Conditions: {exc}"]
         if event_errors:

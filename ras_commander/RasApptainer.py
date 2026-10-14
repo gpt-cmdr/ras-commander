@@ -69,6 +69,12 @@ DEFAULT_LD_LIBRARY_PATH = (
     f"{DEFAULT_HECRAS_DIR}/libs", f"{DEFAULT_HECRAS_DIR}/libs/mkl",
     f"{DEFAULT_HECRAS_DIR}/libs/rhel_8",
 )
+# Native solver layouts inside the image.  ``canonical`` is the HEC-RAS 6.1+/7.x
+# ``RasUnsteady <proj>.p##.tmp.hdf x##`` engine with a ``libs/`` tree; ``bin_ras`` is the
+# HEC-RAS 5.0.7 ``rasUnsteady64 <proj>.c## b##`` engine with libraries colocated in
+# ``hecras_dir`` (the image provides the ``libgfortran.so.3`` soname link).
+NATIVE_LAYOUTS = ("canonical", "bin_ras")
+_BIN_RAS_VERSIONS = frozenset({"5.0.7"})
 _STACK_SIZE = re.compile(r"[1-9][0-9]*[KMGkmg]?\Z")
 _OCI_SOURCE = re.compile(
     r"docker://[a-z0-9][a-z0-9._/-]*(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127}|@sha256:[0-9a-f]{64})\Z"
@@ -101,6 +107,12 @@ class ApptainerSiteProfile:
     ``image`` is a shared SIF that an administrator pulled once from the OCI
     reference in ``container_identity``; its bytes are SHA-256 verified by every job.
 
+    ``native_layout`` selects how the engine is invoked inside the image:
+    ``"canonical"`` (HEC-RAS 6.1+/7.x ``RasUnsteady``) or ``"bin_ras"`` (HEC-RAS 5.0.7
+    ``rasUnsteady64``, which also consumes the computed-geometry ``.c##`` file). ``None``
+    derives it from ``ras_version``. When ``ld_library_path`` is omitted it defaults to
+    the canonical ``libs/`` tree, or to ``(hecras_dir,)`` for ``bin_ras``.
+
     ``prepare_image`` and ``prepare_image_sha256`` optionally name a shared Wine
     executor SIF (``containers/hecras-wine-executor``) for
     :meth:`RasApptainer.render_prepare_job`. ``prepare_ras_executable`` defaults
@@ -118,8 +130,12 @@ class ApptainerSiteProfile:
     identity_file: Optional[str] = None
     known_hosts_file: Optional[str] = None
     node_scratch_root: str = "/scratch"
-    hecras_dir: str = DEFAULT_HECRAS_DIR
-    ld_library_path: tuple[str, ...] = DEFAULT_LD_LIBRARY_PATH
+    # None = layout default: the engine root of the native image, or its
+    # ``bin_ras`` folder for HEC-RAS 5.0.7.
+    hecras_dir: Optional[str] = None
+    # None = layout default (DEFAULT_LD_LIBRARY_PATH, or (hecras_dir,) for bin_ras).
+    ld_library_path: Optional[tuple[str, ...]] = None
+    native_layout: Optional[str] = None
     ras_version: str = "6.6"
     num_cores: int = 2
     slurm_memory: Optional[str] = None
@@ -150,7 +166,15 @@ class ApptainerSiteProfile:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "modules", tuple(self.modules))
-        object.__setattr__(self, "ld_library_path", tuple(self.ld_library_path))
+        if self.hecras_dir is None:
+            object.__setattr__(self, "hecras_dir", f"{DEFAULT_HECRAS_DIR}/bin_ras"
+                               if self.layout == "bin_ras" else DEFAULT_HECRAS_DIR)
+        if self.ld_library_path is None:
+            default_ld = ((self.hecras_dir,) if self.layout == "bin_ras" and isinstance(self.hecras_dir, str)
+                          else DEFAULT_LD_LIBRARY_PATH)
+            object.__setattr__(self, "ld_library_path", default_ld)
+        else:
+            object.__setattr__(self, "ld_library_path", tuple(self.ld_library_path))
         object.__setattr__(self, "environment", dict(self.environment))
         problems = _profile_problems(self)
         if problems:
@@ -160,7 +184,18 @@ class ApptainerSiteProfile:
         data = asdict(self)
         data["modules"] = list(self.modules)
         data["ld_library_path"] = list(self.ld_library_path)
+        if data["native_layout"] is None:
+            # Omitted when derived so canonical profiles (and their request hashes) are unchanged.
+            del data["native_layout"]
         return data
+
+    @property
+    def layout(self) -> str:
+        """The effective native layout: explicit ``native_layout`` or derived from ``ras_version``."""
+        if self.native_layout is not None:
+            return self.native_layout
+        return "bin_ras" if (isinstance(self.ras_version, str)
+                             and self.ras_version in _BIN_RAS_VERSIONS) else "canonical"
 
 
 def _safe_posix(value: Any) -> bool:
@@ -182,9 +217,6 @@ def _ras_version_problems(version: Any) -> list[str]:
     if "linux-unsteady" not in applicable_roles(folder):
         return [f"ras_version {folder} has no HEC Linux engine; run it under Wine with "
                 "RasSlurm and a Wine executor image instead"]
-    if folder == "5.0.7":
-        return ["ras_version 5.0.7 uses the bin_ras native layout, which RasApptainer's engine "
-                "does not support yet; use RasCmdr.compute_plan_linux or a Wine executor"]
     if folder != version:
         return [f"ras_version must be the install folder name {folder!r}"]
     return []
@@ -230,6 +262,18 @@ def _profile_problems(p: ApptainerSiteProfile) -> list[str]:
             bad.append(f"environment entry {key!r} is invalid")
     if type(p.geom_preprocess) is not bool:
         bad.append("geom_preprocess must be true or false")
+    if p.native_layout is not None and p.native_layout not in NATIVE_LAYOUTS:
+        bad.append(f"native_layout must be omitted or one of {list(NATIVE_LAYOUTS)}")
+    elif isinstance(p.ras_version, str) and not _ras_version_problems(p.ras_version):
+        if p.layout == "bin_ras" and p.ras_version not in _BIN_RAS_VERSIONS:
+            bad.append(f"native_layout 'bin_ras' is the HEC-RAS 5.0.7 engine layout; "
+                       f"ras_version {p.ras_version} uses 'canonical'")
+        elif p.layout == "canonical" and p.ras_version in _BIN_RAS_VERSIONS:
+            bad.append(f"ras_version {p.ras_version} ships only the 'bin_ras' engine layout "
+                       "(rasUnsteady64); native_layout 'canonical' is not available")
+    if p.geom_preprocess is True and p.layout == "bin_ras":
+        bad.append("geom_preprocess is not available for the bin_ras (HEC-RAS 5.0.7) layout: "
+                   "its Linux distribution has no RasGeomPreprocess; preprocess on Windows")
     if type(p.stack_unlimited) is not bool:
         bad.append("stack_unlimited must be true or false")
     for name in ("omp_stacksize", "kmp_stacksize"):
@@ -511,6 +555,12 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
     property tables contain no NaN; and (3) unless ``geom_preprocess=True`` (for an image that
     ships ``RasGeomPreprocess``), ``/Geometry/GeomPreprocess`` is present and non-empty.
     2D-specific checks are skipped for valid 1D/storage-area-only plans.
+
+    HEC-RAS 5.x files (root ``File Version`` ``HEC-RAS 5.*``) never write Completed
+    Successfully or ``/Geometry/GeomPreprocess``, and keep their 2D property tables in the
+    computed-geometry ``.c##`` file instead of the HDF, so checks (2) and (3) and the
+    completion flag are skipped for them; :meth:`RasApptainer.render_job` instead requires a
+    non-empty ``.c##`` file for the ``bin_ras`` layout.
     """
     import h5py
     import numpy as np
@@ -521,11 +571,13 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
     except (OSError, TypeError) as exc:
         return [f"cannot open as HDF5: {exc}"]
     with hdf:
-        from ._preprocess_validation import _event_condition_errors
+        from ._preprocess_validation import _event_condition_errors, _hdf_ras_major_version
 
         problems.extend(_event_condition_errors(hdf))
+        major = _hdf_ras_major_version(hdf)
+        ras5 = major is not None and major < 6
         areas = _area_names(hdf)
-        if not geom_preprocess:
+        if not geom_preprocess and not ras5:
             geompre = hdf.get("Geometry/GeomPreprocess")
             if (geompre is None or not hasattr(geompre, "keys") or not len(geompre)):
                 problems.append(
@@ -554,6 +606,8 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
                         node = hdf.get(f"{base}/{name}")
                         if node is None or not getattr(node, "shape", None) or node.shape[0] == 0:
                             problems.append(f"missing or empty {base}/{name}")
+            if ras5:
+                continue  # 5.x 2D property tables live in the .c## file, not the HDF
             area_group = hdf[f"Geometry/2D Flow Areas/{area}"]
             float_tables: list[tuple[str, Any]] = []
 
@@ -582,13 +636,16 @@ def check_solver_ready(tmp_hdf: Union[str, Path], *, geom_preprocess: bool = Fal
 # CLB T7.1 cluster scripts. If the image contract changes (different binary
 # path, extra preprocessing, different validation), change this template only.
 # Placeholders are ``@NAME@`` and are filled by ``_render_engine_script``.
+# The ``bin_ras`` (HEC-RAS 5.0.7) layout swaps only the solver launch for HEC's own
+# ``rasUnsteady64 <proj>.c## b##`` convention (cwd-relative basenames, results in the
+# tmp.hdf); the canonical rendering is byte-identical to the pre-5.0.7 template.
 
 ENGINE_SCRIPT_TEMPLATE = """#!/bin/bash
 # Runs INSIDE the Apptainer image, cwd /job (writable node-scratch copy).
 set -u
 PROJECT=@PROJECT@
 PLAN=@PLAN@
-XTOKEN=@XTOKEN@
+XTOKEN=@XTOKEN@@CTOKEN_LINE@
 HECRAS=@HECRAS_DIR@
 export LD_LIBRARY_PATH=@LD_LIBRARY_PATH@
 export OMP_NUM_THREADS=@CORES@
@@ -604,7 +661,7 @@ ln -s "$PROJECT.b$PLAN" io.b
 ln -s "$PROJECT.$XTOKEN" io.X
 ln -s "$PROJECT.$XTOKEN" io.x
 @GEOM_PREPROCESS@
-"$HECRAS/RasUnsteady" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN" > solver.log 2>&1 &
+@SOLVER_LAUNCH@
 SOLVER_PID=$!
 trap 'kill -TERM "$SOLVER_PID" 2>/dev/null; wait "$SOLVER_PID"; exit 143' TERM
 wait "$SOLVER_PID"
@@ -619,6 +676,11 @@ fi
 mv "$PROJECT.p$PLAN.tmp.hdf" "$PROJECT.p$PLAN.hdf" || exit 4
 exit 0
 """
+
+_CANONICAL_SOLVER_LAUNCH = '"$HECRAS/RasUnsteady" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN" > solver.log 2>&1 &'
+# libgfortran.so.3 (the soname of HEC's colocated libgfortran.so) is the image's job.
+_BIN_RAS_SOLVER_LAUNCH = """[ -x "$HECRAS/rasUnsteady64" ] || { echo "HEC-RAS 5.0.7 solver $HECRAS/rasUnsteady64 is missing or not executable; the native image must provide it with its colocated libraries" >&2; exit 6; }
+"$HECRAS/rasUnsteady64" "$PROJECT.$CTOKEN" "b$PLAN" > solver.log 2>&1 &"""
 
 _GEOM_PREPROCESS_BLOCK = """"$HECRAS/RasGeomPreprocess" "$PROJECT.p$PLAN.tmp.hdf" "$XTOKEN" > geompre.log 2>&1 || exit 3
 grep -q 'Finished Processing Geometry' geompre.log || exit 3"""
@@ -892,11 +954,17 @@ def _host_stack_block(profile: ApptainerSiteProfile) -> str:
             'DETAIL="host ulimit -s unlimited failed"; return 1; }')
 
 
-def _render_engine_script(profile: ApptainerSiteProfile, project: str, plan: str, xtoken: str) -> str:
+def _render_engine_script(profile: ApptainerSiteProfile, project: str, plan: str, xtoken: str,
+                          ctoken: Optional[str] = None) -> str:
+    bin_ras = profile.layout == "bin_ras"
+    if bin_ras and (not ctoken or profile.geom_preprocess):
+        raise ValueError("bin_ras engine requires a .c## token and no geometry preprocessing")
     return _fill(ENGINE_SCRIPT_TEMPLATE, {
         "PROJECT": shlex.quote(project),
         "PLAN": shlex.quote(plan),
         "XTOKEN": shlex.quote(xtoken),
+        "CTOKEN_LINE": f"\nCTOKEN={shlex.quote(ctoken)}" if bin_ras else "",
+        "SOLVER_LAUNCH": _BIN_RAS_SOLVER_LAUNCH if bin_ras else _CANONICAL_SOLVER_LAUNCH,
         "HECRAS_DIR": shlex.quote(profile.hecras_dir),
         "LD_LIBRARY_PATH": shlex.quote(":".join(profile.ld_library_path)),
         "CORES": str(profile.num_cores),
@@ -932,6 +1000,29 @@ def _plan_geometry_token(project_folder: Path, project: str, plan: str) -> str:
                 return f"x{match.group(1)}"
             break
     raise ValueError(f"No parseable 'Geom File=' entry in {plan_file}; refusing to guess the x-file")
+
+
+def _check_layout_matches_hdf(tmp_hdf: Path, profile: ApptainerSiteProfile) -> None:
+    """Refuse to run a 5.x tmp.hdf on a canonical engine or a 6.x+ tmp.hdf on bin_ras."""
+    import h5py
+
+    from ._preprocess_validation import _hdf_ras_major_version
+
+    try:
+        with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
+            major = _hdf_ras_major_version(hdf)
+    except (OSError, TypeError):
+        return  # unreadable files are reported by check_solver_ready / later staging
+    if profile.layout == "bin_ras" and major != 5:
+        raise ValueError(
+            f"{tmp_hdf} File Version does not identify HEC-RAS 5.x (major={major}); the bin_ras "
+            "(HEC-RAS 5.0.7) engine needs a 5.0.7 Windows preprocessing output"
+        )
+    if profile.layout == "canonical" and major is not None and major < 6:
+        raise ValueError(
+            f"{tmp_hdf} was written by HEC-RAS {major}.x; profile ras_version "
+            f"{profile.ras_version} uses the canonical engine. Use ras_version '5.0.7'."
+        )
 
 
 def _canonical_sha256(payload: Any) -> str:
@@ -1310,6 +1401,11 @@ class RasApptainer:
         endings, any declared external gridded-DSS input, and ``SHA256SUMS``),
         ``engine.sh``, ``job.sh`` and ``job.json``. The source project is never
         modified.
+
+        For the ``bin_ras`` (HEC-RAS 5.0.7) layout the non-empty computed-geometry
+        ``<project>.c<geom>`` file is also required and staged byte-for-byte (it is binary),
+        the compiled-HDF core attributes are left untouched (5.0.7 has none to rewrite), and
+        the engine runs ``rasUnsteady64 <project>.c<geom> b<plan>`` in the job directory.
         """
         project_folder = Path(project_folder)
         job_directory = Path(job_directory)
@@ -1319,14 +1415,25 @@ class RasApptainer:
         if not _SAFE_NAME.fullmatch(project_name):
             raise ValueError("project_name must contain only letters, digits, '.', '_' and '-'")
         xtoken = _plan_geometry_token(project_folder, project_name, plan)
+        bin_ras = profile.layout == "bin_ras"
+        # 5.0.7 consumes the computed geometry (.c##) and is invoked with it (CLB-886).
+        ctoken = f"c{xtoken[1:]}" if bin_ras else None
         names = [f"{project_name}.p{plan}.tmp.hdf", f"{project_name}.b{plan}",
                  f"{project_name}.{xtoken}"]
+        if ctoken:
+            names.append(f"{project_name}.{ctoken}")
         missing = [n for n in names if not (project_folder / n).is_file()]
         if missing:
             raise FileNotFoundError(
                 f"Missing Windows preprocessing artifacts in {project_folder}: {missing}. "
                 "Run RasPreprocess.preprocess_plan() first."
             )
+        if ctoken and (project_folder / names[3]).stat().st_size == 0:
+            raise ValueError(
+                f"Computed-geometry file {project_folder / names[3]} is empty; the HEC-RAS 5.0.7 "
+                "solver requires it. Re-run RasPreprocess.preprocess_plan() on Windows."
+            )
+        _check_layout_matches_hdf(project_folder / names[0], profile)
         if job_directory.exists() and any(job_directory.iterdir()):
             raise FileExistsError(f"job_directory must be new or empty: {job_directory}")
         if check_inputs:
@@ -1341,9 +1448,10 @@ class RasApptainer:
         for name in names:
             source = project_folder / name
             source_hashes[name] = sha256_file(source)
-            data = source.read_bytes() if not name.endswith(".hdf") else None
+            binary = name.endswith(".hdf") or name == f"{project_name}.{ctoken}"
+            data = source.read_bytes() if not binary else None
             if data is None:
-                # Large HDF: stream copy, never text-converted.
+                # Large HDF / binary computed geometry: stream copy, never text-converted.
                 shutil.copyfile(source, inputs / name)
             else:
                 (inputs / name).write_bytes(data.replace(b"\r\n", b"\n"))  # LF for Linux solver
@@ -1363,7 +1471,14 @@ class RasApptainer:
         # RasUnsteady reads these compiled-HDF attributes, not merely OMP/MKL.
         # The source tmp.hdf is immutable; only the staged copy is rewritten.
         from .RasCmdr import RasCmdr
-        core_evidence = RasCmdr._set_linux_hdf_num_cores(inputs / names[0], profile.num_cores)
+        if bin_ras:
+            # Mirrors RasCmdr.compute_plan_linux: 5.0.7 has no compiled-HDF core attributes
+            # to rewrite; threads come from OMP/MKL_NUM_THREADS in engine.sh.
+            core_evidence = {"skipped": "bin_ras (HEC-RAS 5.0.7): compiled-HDF core "
+                             "attributes are not rewritten; OMP/MKL_NUM_THREADS set the threads",
+                             "num_cores": profile.num_cores}
+        else:
+            core_evidence = RasCmdr._set_linux_hdf_num_cores(inputs / names[0], profile.num_cores)
         if check_inputs:
             problems = check_solver_ready(
                 inputs / names[0], geom_preprocess=profile.geom_preprocess
@@ -1375,7 +1490,7 @@ class RasApptainer:
             "".join(f"{staged[n]}  {n}\n" for n in sorted(input_names)), encoding="utf-8", newline="\n")
         manifest_sha = sha256_file(inputs / "SHA256SUMS")
 
-        engine = _render_engine_script(profile, project_name, plan, xtoken)
+        engine = _render_engine_script(profile, project_name, plan, xtoken, ctoken)
         (job_directory / "engine.sh").write_text(engine, encoding="utf-8", newline="\n")
         engine_sha = sha256_file(job_directory / "engine.sh")
 
@@ -1423,6 +1538,9 @@ class RasApptainer:
             "gridded_dss_input": staged_gridded_dss,
             "profile": profile_view,
         }
+        if bin_ras:
+            # Extra fields only for bin_ras so canonical request hashes are unchanged.
+            request.update({"native_layout": "bin_ras", "ctoken": ctoken})
         request_sha = _canonical_sha256(request)
         script_values["REQUEST_SHA"] = request_sha
         script = _fill(JOB_SCRIPT_TEMPLATE, script_values)

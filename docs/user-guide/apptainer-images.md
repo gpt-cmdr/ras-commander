@@ -20,7 +20,7 @@ different identities: jobs verify the SIF bytes.
 | HEC-RAS | Full Windows compute under Wine (`wine-executor`; `RasSlurm`) | Wine preprocessing → native Linux solve (`wine-precompute` + `linux-unsteady`; `RasDocker`, `RasApptainer`) |
 | --- | --- | --- |
 | 4.0, 4.1, 5.0–5.0.6, 6.0 | Applies | Not applicable: HEC published no Linux engine |
-| 5.0.7 | Applies | Linux engine exists (`bin_ras` layout); supported by `RasCmdr.compute_plan_linux`, not yet by `RasApptainer` |
+| 5.0.7 | Applies | Applies: Linux engine uses the `bin_ras` layout (`rasUnsteady64` plus the `.c##` computed geometry); supported by `RasCmdr.compute_plan_linux` and `RasApptainer` (see [HEC-RAS 5.0.7](slurm-apptainer-execution.md#hec-ras-507-bin_ras-layout)); no published native image yet |
 | 6.1 – 7.x | Applies | Applies |
 
 `RasContainerImages.applicable_roles(version)` returns the same answer in code.

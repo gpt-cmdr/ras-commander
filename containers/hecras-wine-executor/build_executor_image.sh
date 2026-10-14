@@ -51,8 +51,8 @@ WINE_SECURITY_OPT=${WINE_SECURITY_OPT-apparmor=unconfined}
 # (4.1.0, 5.0.7, 6.3.1, 6.6, 7.0.1, ...). The base image must declare the same version.
 [[ "$VERSION" =~ ^[4-7]\.[0-9]+(\.[0-9]+)?$ ]] \
     || { echo "error: HEC-RAS version must be an install folder name such as 4.1.0, 5.0.7, 6.6 or 7.0.1" >&2; exit 2; }
-[[ "$BASE" =~ ^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$ ]] \
-    || { echo "error: base image must be pinned by digest (name@sha256:<64 hex>)" >&2; exit 2; }
+[[ "$BASE" =~ ^([a-z0-9][a-z0-9._/:-]*@)?sha256:[0-9a-f]{64}$ ]] \
+    || { echo "error: base image must be pinned by digest (name@sha256:<64 hex>) or a local image ID (sha256:<64 hex>)" >&2; exit 2; }
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "error: RAS_COMMANDER_COMMIT must be a full 40-hex commit" >&2; exit 2; }
 [[ "$TAG" =~ ^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] \
     || { echo "error: tag must be <repository>:<tag>" >&2; exit 2; }

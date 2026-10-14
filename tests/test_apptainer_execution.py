@@ -120,7 +120,7 @@ def test_fixture_and_example_profiles_load():
     ({"time_limit": "soon"}, "time_limit"),
     ({"slurm_memory": "lots"}, "slurm_memory"),
     ({"partition": "a b; rm -rf /"}, "partition"),
-    ({"ras_version": "5.0.7"}, "ras_version"),
+    ({"ras_version": "5.0.6"}, "ras_version"),
     ({"prepare_image": "/images/wine.sif"}, "set together"),
     ({"prepare_image": "relative.sif", "prepare_image_sha256": "c" * 64}, "prepare_image must"),
     ({"prepare_ras_executable": "C:/Ras.exe"}, "prepare_ras_executable"),
@@ -539,7 +539,8 @@ def test_unknown_portable_profile_fields_are_rejected():
 
 @pytest.mark.parametrize("version, message", [
     ("4.1.0", "no HEC Linux engine"), ("6.0", "no HEC Linux engine"),
-    ("5.0.7", "bin_ras"), ("4.1", "no HEC Linux engine"), ("66", "install folder name"),
+    ("5.0.6", "no HEC Linux engine"), ("5.0.5", "no HEC Linux engine"),
+    ("4.1", "no HEC Linux engine"), ("66", "install folder name"),
 ])
 def test_profile_explains_releases_without_a_supported_native_engine(version, message):
     data = _profile_dict()
