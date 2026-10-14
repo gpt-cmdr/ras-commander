@@ -193,6 +193,7 @@ def _prepare(
         environment["WINEDLLOVERRIDES"] = wine._disable_wine_debugger(
             environment.get("WINEDLLOVERRIDES", "")
         )
+        wine._disable_openmp_affinity(environment)
         if cpu_shim is not None:
             preload = environment.get("LD_PRELOAD", "").strip()
             environment["LD_PRELOAD"] = f"{cpu_shim} {preload}".strip()

@@ -499,3 +499,17 @@ def test_free_x_display_skips_displays_bound_by_other_steps(monkeypatch):
         assert execute_request_cli._free_x_display() == 31998
     finally:
         taken.close()
+
+
+def test_wine_disables_openmp_affinity_unless_caller_sets_it(tmp_path, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
+    monkeypatch.delenv("KMP_AFFINITY", raising=False)
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+    assert result == 0 and environment["KMP_AFFINITY"] == "disabled"
+
+
+def test_wine_keeps_a_caller_openmp_affinity(tmp_path, monkeypatch):
+    monkeypatch.delenv("RAS_COMMANDER_WINE_CPU_SHIM", raising=False)
+    monkeypatch.setenv("KMP_AFFINITY", "compact")
+    result, environment = _wine_child_environment(tmp_path, monkeypatch)
+    assert result == 0 and environment["KMP_AFFINITY"] == "compact"

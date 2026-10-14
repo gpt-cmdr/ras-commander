@@ -123,6 +123,17 @@ def _xvfb_command(xvfb_run: str) -> list[str]:
     return [xvfb_run, "-n", str(_free_x_display())]
 
 
+def _disable_openmp_affinity(environment: dict) -> None:
+    """Disable Intel OpenMP thread pinning for Windows HEC-RAS under Wine.
+
+    HEC-RAS 7.0 enables CPU affinity; under Wine in a Slurm CPU set its
+    ``GetNumaNodeProcessorMaskEx()`` query fails and the unsteady engine aborts
+    with ``OMP: Error #179``. The allocation already bounds the CPUs, so the
+    pinning adds nothing. A caller-provided ``KMP_AFFINITY`` is kept.
+    """
+    environment.setdefault("KMP_AFFINITY", "disabled")
+
+
 def _disable_wine_debugger(overrides: str) -> str:
     """Return DLL overrides that stop a crash from waiting in winedbg."""
     entries = [entry for entry in overrides.split(";") if entry.strip()]
@@ -211,6 +222,7 @@ def _execute_with_wine(
     environment["WINEDLLOVERRIDES"] = _disable_wine_debugger(
         environment.get("WINEDLLOVERRIDES", "")
     )
+    _disable_openmp_affinity(environment)
     if cpu_shim is not None:
         preload = environment.get("LD_PRELOAD", "").strip()
         if str(cpu_shim) not in preload.replace(":", " ").split():
