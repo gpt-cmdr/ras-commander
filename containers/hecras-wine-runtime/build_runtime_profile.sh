@@ -53,6 +53,23 @@ ras_win="C:\\Program Files (x86)\\HEC\\HEC-RAS\\$VERSION\\Ras.exe"
 py="C:\\Python311\\python.exe"
 runtime=/build/prefix/drive_c/ras-commander-runtime
 mkdir -p "$runtime"
+# The .NET optimization (NGEN) services auto-start on every boot. Under some
+# launchers (5.0.7) mscorsvw crash-loops and wineboot never finishes, so the
+# install never starts. HEC-RAS does not need them: disable them while no
+# wineserver is running, before the launcher and again after the install.
+disable_ngen() {
+    wineserver -w || true
+    python3 - <<"PY"
+import re
+path = "/build/prefix/system.reg"
+text = open(path, encoding="utf-8").read()
+text, count = re.subn(r"(clr_optimization_v4\.0\.30319_(?:32|64)\][^\[]*?.Start.=dword:)0000000[0-9]",
+                      r"\g<1>00000004", text)
+assert count == 2, f"expected 2 .NET optimization services, found {count}"
+open(path, "w", encoding="utf-8").write(text)
+PY
+}
+disable_ngen
 cp /payload/setup.exe /tmp/setup.exe
 if [ -f /payload/hecras.msi ]; then
     echo "== msiexec (pre-extracted MSI)"
@@ -96,6 +113,7 @@ if [ ! -f "$ras_dir/Ras.exe" ]; then
     find "/build/prefix/drive_c/Program Files (x86)/HEC" -iname ras.exe >&2 || true
     exit 4
 fi
+disable_ngen
 # Example projects are test data, not runtime: export them beside the profile.
 if [ -d "$ras_dir/Example Projects" ]; then
     mkdir -p /build/examples
