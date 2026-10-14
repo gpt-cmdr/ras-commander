@@ -56,7 +56,7 @@ Usage:
     cells = HdfMesh.get_mesh_cell_polygons("plan.hdf")
 """
 
-from importlib import import_module
+from .._optional_deps import import_feature_module
 import sys
 from types import ModuleType
 
@@ -85,7 +85,10 @@ def _load_export(name):
     if target is None:
         raise AttributeError(f"module 'ras_commander.hdf' has no attribute '{name}'")
     module_name, attribute_name = target
-    value = getattr(import_module(module_name, __name__), attribute_name)
+    module = import_feature_module(
+        module_name, __name__, f"ras_commander.hdf.{name}"
+    )
+    value = getattr(module, attribute_name)
     globals()[name] = value
     return value
 

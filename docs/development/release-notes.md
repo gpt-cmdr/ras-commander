@@ -106,6 +106,42 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
   `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
   no-ops; unknown fields are rejected.
 
+**2D cell results identify ghost cells**
+
+HEC-RAS writes cell results for the physical cells of a 2D flow area followed
+by ghost cells outside the perimeter. `Geometry/2D Flow Areas/Attributes`
+`Cell Count` is the physical count, so the extra columns did not match the
+mesh polygons (BaldEagleCrkMulti2D p07: 89,879 result columns, 87,039 cells).
+Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
+`get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
+`get_mesh_max_iter()`, `get_mesh_last_iter()`, and `get_mesh_max_depth()` now
+include an `is_ghost_cell` column. Cell time series from `get_mesh_timeseries()`
+and `get_mesh_cells_timeseries()` carry an `is_ghost_cell` coordinate along
+`cell_id`. Each of these methods and `iter_mesh_timeseries()` accepts
+`include_ghost_cells=False` to return physical cells only. The default keeps
+ghost cells, so existing result shapes are unchanged. Face results are
+unaffected.
+
+**HdfBase timestamp readers accept paths**
+
+`HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
+accept a `str` or `Path` as well as an open `h5py.File`. A path previously
+failed with `TypeError: string indices must be integers`.
+`get_unsteady_timestamps()` also reads `Time Date Stamp` when a plan HDF has
+no `Time Date Stamp (ms)` dataset, as in HEC-RAS 5.0.x, and raises a
+`ValueError` naming both datasets when neither exists.
+
+**Missing optional packages name the extra to install**
+
+A public export whose module needs a package outside the core install now
+raises an `ImportError` naming the package and the extra that provides it,
+instead of a bare `ModuleNotFoundError`. psutil and pywin32 point to
+`pip install "ras-commander[compute]"`; other packages point to
+`pip install "ras-commander[full]"`. `RasCmdr.compute_plan()`,
+`compute_parallel()`, `compute_test_mode()`, and `inspect_plan_processes()`
+check for psutil before launching HEC-RAS, and `RasControl` reports missing
+pywin32 before opening the COM interface.
+
 ### v0.105.0 (October 2026)
 
 **HDF structure types appear in geometry summaries**

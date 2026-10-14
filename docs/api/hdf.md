@@ -282,6 +282,24 @@ read only. The fallback is computed only in memory and does not create or write
 not producer output and are labeled separately from pre-existing HEC-RAS result
 fixtures.
 
+**Ghost cells.** HEC-RAS writes 2D cell results for the physical cells
+followed by ghost cells outside the mesh perimeter, so a cell result has more
+columns than the mesh has polygons. `Geometry/2D Flow Areas/Attributes`
+`Cell Count` is the physical count; cell IDs at or above it are ghost cells.
+Cell results carry an `is_ghost_cell` column (DataFrames and GeoDataFrames) or
+coordinate along `cell_id` (xarray). Pass `include_ghost_cells=False` to the
+summary, maximum-depth, and time-series methods above to return physical cells
+only; for `get_mesh_timeseries()` and `iter_mesh_timeseries()` this clips
+`spatial_selection` to the physical cells. The default keeps ghost cells. Face
+results are unaffected.
+
+```python
+max_ws = HdfResultsMesh.get_mesh_max_ws(hdf_path, include_ghost_cells=False)
+wse = HdfResultsMesh.get_mesh_timeseries(
+    hdf_path, "BaldEagleCr", "Water Surface", include_ghost_cells=False
+)
+```
+
 The maximum methods have different temporal bases. `get_mesh_max_ws()` and
 `get_mesh_max_face_v()` read native HEC-RAS Summary Output maxima, which are
 tracked across the computation and can include peaks between saved

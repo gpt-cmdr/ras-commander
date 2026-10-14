@@ -117,12 +117,14 @@ class HdfBase:
         return fingerprint_model_inputs(Path(hdf_path), normalized, block_bytes)
 
     @staticmethod
-    def get_simulation_start_time(hdf_file: h5py.File) -> datetime:
+    @standardize_input(file_type='plan_hdf')
+    def get_simulation_start_time(hdf_file: Union[h5py.File, str, Path]) -> datetime:
         """
         Extract the simulation start time from the HDF file.
 
         Args:
-            hdf_file: Open HDF file object containing RAS simulation data.
+            hdf_file: Open plan HDF handle, or a path (``str`` or ``Path``) to
+                one. A path is opened read-only for the duration of the call.
 
         Returns:
             datetime: Simulation start time as a datetime object.
@@ -170,19 +172,39 @@ class HdfBase:
         )
 
     @staticmethod
-    def get_unsteady_timestamps(hdf_file: h5py.File) -> List[datetime]:
+    @standardize_input(file_type='plan_hdf')
+    def get_unsteady_timestamps(hdf_file: Union[h5py.File, str, Path]) -> List[datetime]:
         """
         Extract the list of unsteady timestamps from the HDF file.
 
         Args:
-            hdf_file (h5py.File): Open HDF file object.
+            hdf_file: Open plan HDF handle, or a path (``str`` or ``Path``) to
+                one. A path is opened read-only for the duration of the call.
 
         Returns:
             List[datetime]: A list of datetime objects representing the unsteady timestamps.
+
+        Raises:
+            ValueError: If the plan HDF has no unsteady output timestamps.
+
+        Note:
+            Reads 'Time Date Stamp (ms)' and falls back to 'Time Date Stamp'
+            when a plan HDF does not write the millisecond dataset.
         """
-        group_path = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series/Time Date Stamp (ms)"
-        raw_datetimes = hdf_file[group_path][:]
-        return [HdfUtils.parse_ras_datetime_ms(x.decode("utf-8")) for x in raw_datetimes]
+        base = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
+        for ts_name, parse in (
+            ("Time Date Stamp (ms)", HdfUtils.parse_ras_datetime_ms),
+            ("Time Date Stamp", HdfUtils.parse_ras_datetime),
+        ):
+            dataset = hdf_file.get(f"{base}/{ts_name}")
+            if dataset is not None:
+                return [parse(x.decode("utf-8")) for x in dataset[:]]
+        file_label = Path(getattr(hdf_file, "filename", "HDF file")).name
+        raise ValueError(
+            f"No unsteady output timestamps in {file_label}: neither "
+            f"'{base}/Time Date Stamp (ms)' nor '{base}/Time Date Stamp' exists. "
+            "The plan may be steady or may not have been computed."
+        )
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
