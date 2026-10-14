@@ -21,7 +21,8 @@ different identities: jobs verify the SIF bytes.
 | --- | --- | --- |
 | 4.0, 4.1, 5.0–5.0.6, 6.0 | Applies | Not applicable: HEC published no Linux engine |
 | 5.0.7 | Applies | Applies: Linux engine uses the `bin_ras` layout (`rasUnsteady64` plus the `.c##` computed geometry); supported by `RasCmdr.compute_plan_linux` and `RasApptainer` (see [HEC-RAS 5.0.7](slurm-apptainer-execution.md#hec-ras-507-bin_ras-layout)); no published native image yet |
-| 6.1 – 7.x | Applies | Applies |
+| 6.1 – 6.3 | Applies | Applies: canonical `RasUnsteady` + `libs/` layout, but the pre-6.3.1 solver arguments (`RasUnsteady <project>.c## b##`, needs the `.c##` computed geometry; see [solver argument conventions](slurm-apptainer-execution.md#solver-argument-conventions-by-release)); verified for 6.1, 6.2/6.3 assumed |
+| 6.3.1 – 7.x | Applies | Applies |
 
 `RasContainerImages.applicable_roles(version)` returns the same answer in code.
 An applicable role still needs an image built for that release: the recipes

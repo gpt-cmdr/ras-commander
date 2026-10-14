@@ -2,7 +2,8 @@
 
 `RasApptainer` runs a HEC-RAS 5.0.7, 6.x or 7.x **native-Linux unsteady** plan on any Slurm cluster
 that has Apptainer, starting from the artifacts that Windows preprocessing produced
-(`<project>.p##.tmp.hdf`, `<project>.b##`, `<project>.x##`, plus `<project>.c##` for 5.0.7; see
+(`<project>.p##.tmp.hdf`, `<project>.b##`, `<project>.x##`, plus `<project>.c##` for releases
+before 6.3.1 such as 5.0.7 and 6.1; see
 `RasPreprocess`). Those artifacts
 can come from a Windows workstation or from a
 [Wine prepare job on the same cluster](#wine-preparation-on-the-cluster), which mirrors
@@ -23,7 +24,7 @@ requests, use [RasSlurm](slurm-portable-execution.md); the
 | --- | --- |
 | Site profile | JSON file: SSH target, shared staging root, node scratch, SIF path and SHA-256, Slurm account/partition/qos, cores, memory, time |
 | Image | One immutable OCI image pulled **once** by an administrator into a shared SIF. Every job re-verifies the SIF SHA-256 before use |
-| Job folder | Rendered locally: `inputs/` (tmp.hdf, .b, .x, the .c for 5.0.7, `SHA256SUMS`), `engine.sh`, `job.sh`, `job.json` |
+| Job folder | Rendered locally: `inputs/` (tmp.hdf, .b, .x, the .c for pre-6.3.1 releases, `SHA256SUMS`), `engine.sh`, `job.sh`, `job.json` |
 | Prepare job (optional) | Rendered locally from a complete project: `inputs/` (the project tree), `job.sh`, `job.json`. Runs Windows preprocessing under Wine in a separate executor SIF and returns the solver inputs |
 | Job run | Verifies image and inputs, copies to node-local scratch, runs the solver in Apptainer, hash-verifies the copy-back, writes `receipt.json` |
 | Transport | Pluggable object with `run`, `put_tree`, `get_tree`. `SshApptainerTransport` uses OpenSSH/scp; tests use a fake |
@@ -48,10 +49,11 @@ Key fields:
 | `image`, `apptainer_image_sha256`, `container_identity` | Shared SIF path, its SHA-256, and the immutable identity (`sif:sha256:<hex>` or `registry/repo@sha256:<hex>`) |
 | `oci_source` | OCI reference used for the one-time pull; it may be tag- or digest-pinned (`docker://repo@sha256:...`) |
 | `hecras_dir`, `ld_library_path` | Solver directory inside the image and its library path. The defaults are derived from the canonical image Dockerfile and registry metadata, not a live API qualification. For the `bin_ras` layout an omitted `hecras_dir` defaults to `/opt/hecras-runtime/engine/bin_ras` (where the native 5.0.7 image puts HEC's `bin_ras` folder) and an omitted `ld_library_path` to `hecras_dir` alone (HEC colocates the 5.0.7 libraries with the binary). |
-| `native_layout` | Optional: `canonical` (6.1+/7.x `RasUnsteady`) or `bin_ras` (5.0.7 `rasUnsteady64`). Omit it to derive the layout from `ras_version`; a layout that does not match the release is rejected. |
+| `native_layout` | Optional library layout: `canonical` (6.1+/7.x `RasUnsteady` with a `libs/` tree) or `bin_ras` (5.0.7 `rasUnsteady64` with colocated libraries). Omit it to derive the layout from `ras_version`; a layout that does not match the release is rejected. |
+| `solver_arguments` | Optional solver argument convention, independent of the layout: `cfile` (`<engine> <project>.c## b##`) or `tmphdf` (`RasUnsteady <project>.p##.tmp.hdf x##`). Omit it to derive it from `ras_version`: releases before 6.3.1 (5.0.7, 6.1; 6.2 and 6.3 are treated the same) use `cfile`, 6.3.1 and later `tmphdf`. `bin_ras` accepts only `cfile`. An explicit value is recorded in the request. See [Solver argument conventions](#solver-argument-conventions-by-release). |
 | `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | When `stack_unlimited=true`, the job checks both host and container stack limits; it fails with `STACK_LIMIT_FAILED` if either cannot be raised. `OMP_STACKSIZE`/`KMP_STACKSIZE` default to `2G`; `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores`. |
 | `num_cores`, `slurm_memory`, `time_limit`, `account`, `partition`, `qos`, `nodelist` | Slurm resources (all but `num_cores` optional) |
-| `geom_preprocess` | Enable only for an image that ships `RasGeomPreprocess`. When false (the default), 6.x/7.x inputs must already contain non-empty `/Geometry/GeomPreprocess`. Rejected for `bin_ras`: the 5.0.7 Linux distribution has no `RasGeomPreprocess`. |
+| `geom_preprocess` | Enable only for an image that ships `RasGeomPreprocess`. When false (the default), 6.x/7.x inputs must already contain non-empty `/Geometry/GeomPreprocess`. Rejected for `bin_ras`: the 5.0.7 Linux distribution has no `RasGeomPreprocess`. Also rejected for `cfile` releases (for example 6.1), which consume the Windows-computed `.c##` geometry. |
 | `ras_version` | HEC-RAS release of the native engine: `5.0.7`, `6.x` from 6.1, or `7.x` (for example `6.6` or `7.0.1`). Releases without a HEC Linux engine (4.x, 5.0–5.0.6, 6.0) are rejected. It also selects the default Windows `Ras.exe` for prepare jobs |
 | `prepare_image`, `prepare_image_sha256` | Optional shared [Wine executor SIF](apptainer-images.md#wine-executor-image) and its SHA-256, required only by `render_prepare_job`. Set both or neither |
 | `prepare_ras_executable`, `prepare_python_executable`, `prepare_timeout_seconds` | Windows `Ras.exe` inside the executor (default `C:\Program Files (x86)\HEC\HEC-RAS\<ras_version>\Ras.exe`), the image's Linux Python (default `python`), and the preprocessing timeout (default 3600 s) |
@@ -123,6 +125,34 @@ build. Collection validation is the same as for 6.x, since the 5.0.7 result HDF 
 `Results/Unsteady/.../Time Date Stamp` structure. This path is covered by offline tests with a
 stand-in solver; qualify it with a representative 5.0.7 plan on your cluster before relying on it.
 
+## Solver argument conventions by release
+
+The library layout and the solver's argument convention are independent. Verified against HEC's
+official Linux distributions:
+
+| Release | Library layout | Solver arguments (cwd = project) | Needs `.c##` |
+| --- | --- | --- | --- |
+| 5.0.7 (`HEC-RAS_507_linux.zip`) | `bin_ras` | `rasUnsteady64 <project>.c<geom> b<plan>` (`cfile`) | yes |
+| 6.1 (`HEC-RAS_610_Linux.zip`) | canonical (`RasUnsteady` + `libs/`, `libs/mkl`, `libs/rhel_8`) | `RasUnsteady <project>.c<geom> b<plan>` (`cfile`) | yes |
+| 6.3.1 – 7.x | canonical | `RasUnsteady <project>.p<plan>.tmp.hdf x<geom>` (`tmphdf`) | no |
+
+HEC's 6.1 solver exits with code 29 when given the 6.3.1+ `tmp.hdf x##` arguments. 6.2 and 6.3
+are treated as `cfile` (no HEC Linux builds of those are known). For a `cfile` profile with the
+canonical layout (`ras_version: "6.1"`), `render_job` stages the non-empty `.c##` file byte-for-byte,
+leaves the compiled-HDF core attributes untouched (`OMP_NUM_THREADS`/`MKL_NUM_THREADS` still follow
+`num_cores`), runs `"$HECRAS/RasUnsteady" "$PROJECT.$CTOKEN" "b$PLAN"`, and records
+`native_layout: "canonical"`, `solver_arguments: "cfile"` and `ctoken` in the request. `render_job`
+also refuses a tmp HDF whose root `File Version` release uses a different convention than the
+profile (for example a 6.1 file with a 6.6 profile). Requests, engine scripts and job scripts for
+6.3.1+ profiles are byte-identical to earlier versions. The 6.1 path is covered by offline tests
+with a stand-in solver; qualify it with a representative 6.1 plan on your cluster.
+
+`RasCmdr.compute_plan_linux` (and the RasDocker native worker that calls it) chooses the same
+convention from the tmp HDF `File Version`, falling back to the install layout (`bin_ras` →
+`cfile`, otherwise `tmphdf`) when the attribute is absent. It finds HEC's 6.1 `libs/` tree two
+levels above `Ras_v61/Release`, and when `libs/rhel_8` exists it omits `libs/centos_7`, as HEC's
+`run_unsteady.sh` does.
+
 ## Solver-ready inputs and the pre-submit check
 
 `render_job` first runs `ras_commander.RasApptainer.check_solver_ready` on the local, completed tmp.hdf, read-only with HDF5 locking off.
@@ -139,10 +169,12 @@ It raises `InputCheckError` (exported from `ras_commander`) listing every proble
 - `geom_preprocess=false` and `/Geometry/GeomPreprocess` is absent or empty.
 
 These 2D checks are applied only to 2D areas that exist, so completed 1D/storage-area-only plans
-are supported. For a HEC-RAS 5.x tmp HDF (root `File Version` `HEC-RAS 5.*`) the
-`Completed Successfully`, `/Geometry/GeomPreprocess` and 2D property-table NaN checks are
-skipped, because 5.x never writes the first two and keeps its 2D property tables in the `.c##`
-file; `render_job` requires that non-empty `.c##` file instead.
+are supported. For a tmp HDF from a release before 6.3.1 (root `File Version` `HEC-RAS 5.*` or
+`HEC-RAS 6.1`–`6.3`) the `/Geometry/GeomPreprocess` and 2D property-table NaN checks are skipped,
+because those releases read their computed geometry, including the 2D property tables, from the
+`.c##` file; `render_job` requires that non-empty `.c##` file instead. `Completed Successfully` is
+skipped only for 5.x, which never writes it; it stays required for 6.1. The 6.1 relaxation follows
+from the `cfile` invocation and has not yet been checked against a live 6.1 Windows output.
 
 Never run it on a file HEC-RAS is still writing. Pass `check_inputs=False` to skip.
 
@@ -308,8 +340,9 @@ handoff gate; they run unchanged on the prepared files.
 
 The only code that knows how the solver is invoked is `ENGINE_SCRIPT_TEMPLATE` in
 `ras_commander/RasApptainer.py`. It mirrors `RasCmdr.compute_plan_linux`: `io.*` aliases,
-`LD_LIBRARY_PATH`, then `RasUnsteady <project>.p##.tmp.hdf x##` (or, for the 5.0.7 `bin_ras`
-layout, `rasUnsteady64 <project>.c## b##`). The `x`/`c` suffix comes from the
+`LD_LIBRARY_PATH`, then `RasUnsteady <project>.p##.tmp.hdf x##` for 6.3.1+, or the pre-6.3.1
+`cfile` form: `RasUnsteady <project>.c## b##` (6.1, canonical layout) or `rasUnsteady64
+<project>.c## b##` (5.0.7 `bin_ras` layout). The `x`/`c` suffix comes from the
 plan's geometry (`Geom File=g##`), not from the plan number. The job checks the completion banner
 and fatal markers before promoting the tmp HDF. Collection also requires the full
 `RasCmdr._validate_linux_solve` fatal-marker/result check, populated `/Results/Unsteady`, and the

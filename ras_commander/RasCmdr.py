@@ -5707,17 +5707,35 @@ class RasCmdr:
             - {project}.p{plan_num}.tmp.hdf — preprocessed plan HDF
             - {project}.b{plan_num} — boundary conditions file
             - {project}.x{geom_num} — cross-section preprocessor file
-            - {project}.c{geom_num} — computed-geometry file (5.0.7 layout only)
+            - {project}.c{geom_num} — non-empty computed-geometry file
+              (releases before 6.3.1 only; see "Solver argument convention")
 
-        Supported native Linux install layouts (auto-detected from ``ras_exe_dir``):
+        Supported native Linux install (library) layouts, auto-detected from
+        ``ras_exe_dir``:
 
-        * **canonical (6.3.1-7.0)** — ``RasUnsteady`` at the install root with a
-          sibling ``libs/`` tree (``libs/``, ``libs/mkl/``, ``libs/rhel_8/``).
-          Invoked as ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+        * **canonical (6.1, 6.3.1-7.x)** — ``RasUnsteady`` in ``ras_exe_dir`` with a
+          ``libs/`` tree (``libs/``, ``libs/mkl/``, ``libs/rhel_8/``) beside it, in
+          its parent, or — for HEC's 6.1 ``RAS_Linux_test_setup/Ras_v61/Release``
+          layout — two levels up. When both ``libs/rhel_8`` and ``libs/centos_7``
+          exist only ``rhel_8`` is used, matching HEC's ``run_unsteady.sh``.
         * **bin_ras (5.0.7)** — ``bin_ras/rasUnsteady64`` with libraries colocated
-          in ``bin_ras/`` (no ``libs/`` tree). Invoked as
-          ``rasUnsteady64 {proj}.c{geom} b{plan}`` and additionally requires the
-          ``.c{geom}`` computed-geometry file. (CLB-886)
+          in ``bin_ras/`` (no ``libs/`` tree). (CLB-886)
+
+        Solver argument convention (independent of the library layout), selected
+        from the plan ``*.tmp.hdf`` root ``File Version`` attribute (e.g.
+        ``'HEC-RAS 6.1 ...'``), falling back to the install layout (``bin_ras`` →
+        ``cfile``, otherwise ``tmphdf``) when the attribute is absent or unreadable:
+
+        * **cfile** — releases before 6.3.1 (5.0.7, 6.1; 6.2/6.3 are treated the
+          same): ``<engine> {proj}.c{geom} b{plan}`` with cwd = project folder.
+          The non-empty ``.c{geom}`` file is required, and the compiled-HDF core
+          attributes are not rewritten (``OMP_NUM_THREADS``/``MKL_NUM_THREADS``
+          still carry ``num_cores``).
+        * **tmphdf** — 6.3.1 and later: ``RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}``.
+
+        A ``bin_ras`` (5.0.7) engine refuses a tmp.hdf whose File Version is 6.3.1
+        or later. Both conventions write results into the tmp.hdf, which is then
+        promoted to ``{proj}.p{plan}.hdf``.
 
         Detection and binary resolution mirror
         :meth:`RasUtils._scan_native_linux_ras` (root ``RasUnsteady`` →
@@ -5743,12 +5761,15 @@ class RasCmdr:
         Args:
             plan_number (Union[str, Number]): Plan number to execute (e.g., "01").
             ras_exe_dir (Union[str, Path]): HEC-RAS Linux install directory. For the
-                canonical layout this holds ``RasUnsteady`` + ``libs/``; for the
+                canonical layout this holds ``RasUnsteady`` (with ``libs/`` beside it,
+                in its parent, or two levels up for HEC's 6.1 distribution); for the
                 5.0.7 layout it holds ``bin_ras/rasUnsteady64`` + its libraries.
             ras_object (RasPrj, optional): Optional RAS project object. If None, uses global ras.
             timeout_sec (int): Maximum execution time in seconds (default 14400 = 4 hours).
             dos2unix (bool): Convert CRLF→LF in text files before execution (default True).
-            num_cores (int, optional): Number of cores. If specified, updates plan file.
+            num_cores (int, optional): Number of cores. If specified, updates the
+                plan file, sets OMP/MKL threads and, for 6.3.1+ (``tmphdf``) releases,
+                the compiled ``*.tmp.hdf`` core attributes.
             retry (bool): Retry once on failure after retry_delay_sec (default True).
             retry_delay_sec (int): Seconds to wait before retry (default 30).
 
@@ -5756,7 +5777,9 @@ class RasCmdr:
             ComputeResult: Result object with success bool and results_df_row.
 
         Raises:
-            FileNotFoundError: If RasUnsteady binary, .tmp.hdf, .b, or .x files not found.
+            FileNotFoundError: If the RasUnsteady binary, .tmp.hdf, .b, or .x files
+                are missing, or (pre-6.3.1 releases) the .c file is missing or empty.
+            ValueError: If a ``bin_ras`` (5.0.7) engine is given a 6.3.1+ tmp.hdf.
 
         Example:
             >>> # Phase 1: Preprocess on Windows (generates .tmp.hdf, .b, .x)
@@ -5844,10 +5867,20 @@ class RasCmdr:
         tmp_hdf = project_dir / f"{project_name}.p{plan_num_str}.tmp.hdf"
         b_file = project_dir / f"{project_name}.b{plan_num_str}"
         x_file = project_dir / f"{project_name}.x{geom_num}"
-        # 5.0.7 (bin_ras/rasUnsteady64) additionally consumes the computed-geometry
-        # ".c{geom}" binary file and is invoked as `rasUnsteady64 {proj}.c{geom} b{plan}`
-        # rather than the 6.x/7.0 `RasUnsteady {tmp.hdf} x{geom}` convention (CLB-886).
+        # Releases before 6.3.1 (5.0.7, 6.1) consume the computed-geometry ".c{geom}"
+        # binary file and are invoked as `<engine> {proj}.c{geom} b{plan}` rather than
+        # the 6.3.1+ `RasUnsteady {tmp.hdf} x{geom}` convention (CLB-886). The
+        # convention follows the release that wrote the tmp.hdf, not the lib layout.
         c_file = project_dir / f"{project_name}.c{geom_num}"
+        solver_arguments, solver_arguments_source = RasCmdr._select_linux_solver_arguments(
+            tmp_hdf, layout
+        )
+        logger.info(
+            "Plan %s: native solver argument convention %r (from %s)",
+            plan_num_str,
+            solver_arguments,
+            solver_arguments_source,
+        )
 
         missing = []
         if not tmp_hdf.exists():
@@ -5856,12 +5889,16 @@ class RasCmdr:
             missing.append(f".b{plan_num_str}")
         if not x_file.exists():
             missing.append(f".x{geom_num}")
-        if layout["needs_c_file"] and not c_file.exists():
-            missing.append(f".c{geom_num}")
+        if solver_arguments == "cfile":
+            if not c_file.exists():
+                missing.append(f".c{geom_num}")
+            elif c_file.stat().st_size == 0:
+                missing.append(f".c{geom_num} (empty)")
 
         if missing:
             raise FileNotFoundError(
-                f"Missing prerequisite files for Linux execution ({layout['label']} layout): "
+                f"Missing prerequisite files for Linux execution ({layout['label']} layout, "
+                f"{solver_arguments} solver arguments): "
                 f"{', '.join(missing)}. "
                 f"Run RasPreprocess.preprocess_plan() on Windows first (Phase 1). "
                 f"See examples/510_linux_execution.ipynb for the complete workflow."
@@ -5880,7 +5917,9 @@ class RasCmdr:
                     ras_object=ras_obj,
                 )
                 hdf_core_evidence = None
-                if not layout["needs_c_file"]:
+                # Pre-6.3.1 (cfile) releases are not known to carry the compiled-HDF
+                # core attributes; their threads come from OMP/MKL_NUM_THREADS only.
+                if solver_arguments == "tmphdf":
                     hdf_core_evidence = RasCmdr._set_linux_hdf_num_cores(
                         tmp_hdf,
                         effective_num_cores,
@@ -5916,6 +5955,7 @@ class RasCmdr:
                 retry=retry,
                 retry_delay_sec=retry_delay_sec,
                 ras_obj=ras_obj,
+                solver_arguments=solver_arguments,
             )
 
         # Build LD_LIBRARY_PATH — auto-detect library locations per layout:
@@ -5985,10 +6025,11 @@ class RasCmdr:
 
             try:
                 start_time = time.time()
-                # Argument convention differs by layout (CLB-886):
-                #   5.0.7:    rasUnsteady64 {proj}.c{geom} b{plan}   (cwd-relative basenames)
-                #   6.x/7.0:  RasUnsteady   {proj}.p{plan}.tmp.hdf x{geom}
-                if layout["needs_c_file"]:
+                # Argument convention differs by release (CLB-886):
+                #   cfile  (<6.3.1, e.g. 5.0.7, 6.1): <engine> {proj}.c{geom} b{plan}
+                #                                     (cwd-relative basenames)
+                #   tmphdf (6.3.1+):                  RasUnsteady {proj}.p{plan}.tmp.hdf x{geom}
+                if solver_arguments == "cfile":
                     ras_args = [c_file.name, f"b{plan_num_str}"]
                 else:
                     ras_args = [str(tmp_hdf), f"x{geom_num}"]
@@ -6156,6 +6197,97 @@ class RasCmdr:
             "label": "canonical",
         }
 
+    # Native Linux solver argument conventions (independent of the library layout).
+    LINUX_SOLVER_ARGUMENTS = ("cfile", "tmphdf")
+    # First release invoked as ``RasUnsteady <proj>.p##.tmp.hdf x##``.
+    _LINUX_TMPHDF_FIRST_RELEASE = (6, 3, 1)
+
+    @staticmethod
+    def _ras_release_tuple(value: Any) -> Optional[tuple]:
+        """Parse a HEC-RAS release into ``(major, minor, patch)``.
+
+        Accepts a version/folder name (``'6.1'``, ``'6.3.1'``, ``'7.0.1'``,
+        ``'6.7 Beta 5'``) or a ``File Version`` attribute value
+        (``'HEC-RAS 5.0.7 March 2019'``, ``b'HEC-RAS 6.6 September 2024'``).
+        Returns ``None`` when no release can be parsed.
+        """
+        if isinstance(value, (bytes, bytearray)):
+            value = bytes(value).decode("utf-8", "replace")
+        if not isinstance(value, str):
+            try:
+                import numpy as np
+
+                arr = np.asarray(value)
+                if arr.shape == () or arr.size == 1:
+                    return RasCmdr._ras_release_tuple(arr.reshape(-1)[0].item())
+            except Exception:
+                pass
+            return None
+        text = value.replace("\x00", "").strip()
+        match = re.search(r"hec-ras\s+(\d+)\.(\d+)(?:\.(\d+))?", text, re.IGNORECASE)
+        if match is None:
+            match = re.match(r"(\d+)\.(\d+)(?:\.(\d+))?(?![\d.])", text)
+        if match is None:
+            return None
+        return tuple(int(group or 0) for group in match.groups())
+
+    @staticmethod
+    def _linux_solver_arguments_for_release(release: Any) -> Optional[str]:
+        """Return ``'cfile'`` for releases before 6.3.1, ``'tmphdf'`` otherwise.
+
+        ``release`` may be anything :meth:`_ras_release_tuple` accepts (or such a
+        tuple). 5.0.7 and 6.1 are verified ``cfile`` releases; 6.2/6.3 are treated
+        the same (no HEC Linux builds of those are known). Returns ``None`` when
+        the release cannot be parsed.
+        """
+        parsed = release if isinstance(release, tuple) else RasCmdr._ras_release_tuple(release)
+        if not parsed:
+            return None
+        padded = (tuple(parsed) + (0, 0, 0))[:3]
+        return "cfile" if padded < RasCmdr._LINUX_TMPHDF_FIRST_RELEASE else "tmphdf"
+
+    @staticmethod
+    def _tmp_hdf_ras_release(tmp_hdf: Union[str, Path]) -> Optional[tuple]:
+        """Read the release from a plan HDF root ``File Version``; ``None`` if unknown."""
+        try:
+            import h5py
+
+            with h5py.File(str(tmp_hdf), "r", locking=False) as hdf:
+                return RasCmdr._ras_release_tuple(hdf.attrs.get("File Version"))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _select_linux_solver_arguments(tmp_hdf: Union[str, Path], layout: dict) -> tuple:
+        """Choose the native solver argument convention for one plan.
+
+        The tmp.hdf ``File Version`` release wins; when it is absent or unreadable
+        the install layout decides (``bin_ras`` → ``cfile``, else ``tmphdf``).
+
+        Returns:
+            tuple[str, str]: ``(convention, source)`` where ``source`` describes
+            the evidence used.
+
+        Raises:
+            ValueError: If a ``bin_ras`` (HEC-RAS 5.0.7) engine would be given a
+                6.3.1+ tmp.hdf, which it cannot run.
+        """
+        release = RasCmdr._tmp_hdf_ras_release(tmp_hdf)
+        from_release = RasCmdr._linux_solver_arguments_for_release(release)
+        if from_release is not None:
+            if layout.get("needs_c_file") and from_release != "cfile":
+                raise ValueError(
+                    f"{Path(tmp_hdf).name} was written by HEC-RAS "
+                    f"{'.'.join(str(part) for part in release)}, but the "
+                    f"{layout.get('label', 'bin_ras')} engine runs only HEC-RAS 5.0.7 "
+                    "plans; use a matching HEC-RAS Linux install"
+                )
+            return from_release, (
+                "tmp.hdf File Version " + ".".join(str(part) for part in release)
+            )
+        fallback = "cfile" if layout.get("needs_c_file") else "tmphdf"
+        return fallback, f"{layout.get('label', 'install')} layout (no File Version)"
+
     @staticmethod
     def _effective_linux_core_count(requested_cores: int) -> int:
         """Cap a requested solver core count to the process affinity envelope."""
@@ -6248,14 +6380,22 @@ class RasCmdr:
                 ld_path_parts.append(str(d))
         if ld_path_parts:
             return ":".join(ld_path_parts)
-        # Canonical: auto-detect a libs/ tree next to the binary.
+        # Canonical: auto-detect a libs/ tree next to the binary, in its parent,
+        # or two levels up (HEC's 6.1 RAS_Linux_test_setup/Ras_v61/Release layout).
         lib_base = ras_exe_dir / "libs"
         if not lib_base.exists():
             lib_base = ras_exe_dir.parent / "libs"
+        if not lib_base.exists() and (ras_exe_dir.parent.parent / "libs").exists():
+            lib_base = ras_exe_dir.parent.parent / "libs"
         if lib_base.exists():
             ld_path_parts.append(str(lib_base))
+            # 6.1 ships both rhel_8 and centos_7 variants of the same libraries;
+            # HEC's run_unsteady.sh uses libs:libs/mkl:libs/rhel_8 only.
+            skip_centos_7 = (lib_base / "rhel_8").is_dir()
             for subdir in sorted(lib_base.iterdir()):
                 if subdir.is_dir():
+                    if skip_centos_7 and subdir.name == "centos_7":
+                        continue
                     ld_path_parts.append(str(subdir))
                     logger.debug(f"Added library path: {subdir}")
         else:
@@ -7044,8 +7184,19 @@ printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s
         retry: bool,
         retry_delay_sec: int,
         ras_obj,
+        solver_arguments: str = "tmphdf",
     ) -> 'ComputeResult':
-        """Run native Linux RasUnsteady from a Windows Python session via WSL."""
+        """Run native Linux RasUnsteady from a Windows Python session via WSL.
+
+        ``solver_arguments`` is the release convention chosen by
+        :meth:`compute_plan_linux`: ``'tmphdf'`` (6.3.1+, default) runs
+        ``RasUnsteady <tmp.hdf> x<geom>``; ``'cfile'`` (pre-6.3.1, e.g. 6.1) runs
+        ``RasUnsteady <proj>.c<geom> b<plan>`` from the project folder.
+        """
+        if solver_arguments not in RasCmdr.LINUX_SOLVER_ARGUMENTS:
+            raise ValueError(
+                f"solver_arguments must be one of {list(RasCmdr.LINUX_SOLVER_ARGUMENTS)}"
+            )
         state_path = project_dir / (
             f".{project_name}.p{plan_number}.ras-commander-wsl.identity"
         )
@@ -7160,9 +7311,14 @@ printf '__RAS_COMMANDER_WSL_RECOVERY__ status=%s term=%s kill=%s pid=%s start=%s
         project_name_q = shlex.quote(project_name)
         ras_exe_q = shlex.quote(ras_exe)
         ras_exe_dir_q = shlex.quote(ras_exe_dir)
-        tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
+        if solver_arguments == "cfile":
+            # Pre-6.3.1: cwd-relative computed geometry and boundary tokens.
+            tmp_hdf_q = shlex.quote(f"{project_name}.c{geom_num}")
+            geom_arg_q = shlex.quote(f"b{plan_number}")
+        else:
+            tmp_hdf_q = shlex.quote(tmp_hdf_wsl)
+            geom_arg_q = shlex.quote(f"x{geom_num}")
         log_path_q = shlex.quote(log_path_wsl)
-        geom_arg_q = shlex.quote(f"x{geom_num}")
         state_file_q = shlex.quote(state_path.name)
         lease_token_q = shlex.quote(str(wsl_plan_lease["token"]))
 

@@ -48,7 +48,22 @@ runtime=/build/prefix/drive_c/ras-commander-runtime
 mkdir -p "$runtime"
 cp /payload/setup.exe /tmp/setup.exe
 echo "== launcher"
-timeout 1800 xvfb-run -a wine /tmp/setup.exe /s /v"/qn /norestart" || echo "launcher exit $?"
+# Some launchers install directly (6.x); others unpack the MSI and then wait on
+# a prerequisite download (7.x .NET 4.8.1). Stop a launcher that has unpacked
+# its MSI but installed nothing after five minutes, then install the MSI.
+xvfb-run -a wine /tmp/setup.exe /s /v"/qn /norestart" > /tmp/launcher.log 2>&1 &
+launcher=$!
+for second in $(seq 1 1800); do
+    kill -0 "$launcher" 2>/dev/null || break
+    if [ ! -f "$ras_dir/Ras.exe" ] && [ "$second" -ge 300 ] \
+        && find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | grep -q .; then
+        echo "launcher still waiting after ${second}s with its MSI unpacked; stopping it"
+        break
+    fi
+    sleep 1
+done
+kill "$launcher" 2>/dev/null || true
+wineserver -k || true
 wineserver -w || true
 if [ ! -f "$ras_dir/Ras.exe" ]; then
     msi=$(find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | head -n1)

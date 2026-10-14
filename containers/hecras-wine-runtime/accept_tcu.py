@@ -37,6 +37,9 @@ TITLE = "Terms and Conditions for Use (TCU)"
 AGREE_PREFIX = "I agree to the above Terms and Conditions"
 ADVANCE_LABELS = ("Next ...", "OK")
 BM_GETCHECK, BM_CLICK, WM_CLOSE = 0x00F0, 0x00F5, 0x0010
+# Seconds the dialog must stay closed (accepted) or never appear (relaunch).
+DIALOG_SETTLE_SECONDS = 10
+NO_DIALOG_SECONDS = 45
 
 user32 = ctypes.windll.user32
 EnumProc = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
@@ -89,7 +92,9 @@ def _session(ras_exe: str, timeout: float) -> dict:
     evidence: dict = {"actions": [], "result": None}
     process = subprocess.Popen([ras_exe])
     deadline = time.monotonic() + timeout
+    started = time.monotonic()
     dialog_seen = False
+    dialog_gone_since = None
     try:
         while time.monotonic() < deadline:
             if process.poll() is not None:
@@ -98,13 +103,21 @@ def _session(ras_exe: str, timeout: float) -> dict:
             windows = _windows(process.pid)
             dialogs = [h for h in windows if _text(h) == TITLE]
             if not dialogs:
-                main_windows = [h for h in windows if _text(h).startswith("HEC-RAS")]
-                if main_windows and (dialog_seen or time.monotonic() > deadline - timeout + 20):
-                    evidence["result"] = "accepted" if dialog_seen else "no-dialog"
-                    evidence["main_window"] = _text(main_windows[0])
+                # Releases differ in what follows the dialog (5.0.7 shows a titled
+                # main form; 6.x under Xvfb only its hidden "RAS" window), so the
+                # evidence is the dialog's absence while Ras.exe keeps running.
+                now = time.monotonic()
+                dialog_gone_since = dialog_gone_since or now
+                if dialog_seen and now - dialog_gone_since >= DIALOG_SETTLE_SECONDS:
+                    evidence["result"] = "accepted"
+                elif not dialog_seen and now - started >= NO_DIALOG_SECONDS:
+                    evidence["result"] = "no-dialog"
+                if evidence["result"]:
+                    evidence["windows"] = [_text(h) or _class(h) for h in windows]
                     break
                 time.sleep(1)
                 continue
+            dialog_gone_since = None
             dialog_seen = True
             dialog = dialogs[0]
             controls = {(_class(c), _text(c)): c for c in _children(dialog)}
