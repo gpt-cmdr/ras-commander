@@ -630,8 +630,38 @@ def test_clear_geometry_infiltration_clears_compiled_area_copies(tmp_path):
 def test_clear_geometry_infiltration_acts_when_only_an_area_copy_remains(tmp_path):
     path = tmp_path / "child.g03.hdf"
     with h5py.File(path, "w") as h:
-        area = h.create_group("Geometry").create_group("2D Flow Areas").create_group("A")
+        area = (
+            h.create_group("Geometry").create_group("2D Flow Areas").create_group("A")
+        )
         area.attrs["Infiltration Filename"] = "stale.hdf"
     clear_geometry_infiltration(path)
     with h5py.File(path) as h:
         assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs
+
+
+@pytest.mark.parametrize("kind", ["external", "soft"])
+def test_clear_geometry_infiltration_never_edits_through_links(tmp_path, kind):
+    # Gate KG reproduction: an area linked to another geometry must not be cleared.
+    source = tmp_path / "source.g01.hdf"
+    child = tmp_path / "child.g02.hdf"
+    with h5py.File(source, "w") as h:
+        area = h.create_group("Geometry/2D Flow Areas/A")
+        area.attrs["Infiltration Filename"] = "legitimate.hdf"
+        area.attrs["Other"] = "keep"
+    with h5py.File(child, "w") as h:
+        areas = h.create_group("Geometry/2D Flow Areas")
+        h.create_group("Elsewhere/A").attrs["Infiltration Filename"] = "child.hdf"
+        if kind == "external":
+            areas["A"] = h5py.ExternalLink(source.name, "/Geometry/2D Flow Areas/A")
+        else:
+            areas["A"] = h5py.SoftLink("/Elsewhere/A")
+    source_before, child_before = _sha256(source), _sha256(child)
+    with pytest.raises(ValueError, match="file-owned"):
+        clear_geometry_infiltration(child)
+    assert _sha256(source) == source_before
+    assert _sha256(child) == child_before
+    with h5py.File(source) as h:
+        assert (
+            h["Geometry/2D Flow Areas/A"].attrs["Infiltration Filename"]
+            == "legitimate.hdf"
+        )

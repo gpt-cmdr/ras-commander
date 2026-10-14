@@ -780,7 +780,9 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     native infiltration filename, layer name and date attributes from
     ``/Geometry`` and from every compiled ``/Geometry/2D Flow Areas/<area>``
     group (which keeps its own copy, read first by the strict preprocessing
-    snapshot). Other area attributes, such as an override table hash, stay. Existing
+    snapshot). Other area attributes, such as an override table hash, stay.
+    Every traversed member must be a hard link owned by the supplied file; a
+    soft or external link is rejected before any write. Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -817,11 +819,30 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     # preprocessing snapshot reads the area copy first, so clear both levels.
     area_attr_names = (*attr_names, "Infiltration Date Last Modified")
 
+    def owned_member(group, name):
+        # Inspect each link before dereferencing it: a soft or external link
+        # could point into another file, which must never be read for editing.
+        link = group.get(name, getlink=True)
+        if not isinstance(link, h5py.HardLink):
+            # Documented API contract: layout problems raise ValueError.
+            raise ValueError(  # noqa: TRY004
+                f"{group.name}/{name} must be a directly linked, file-owned HDF object"
+            )
+        member = group[name]
+        if member.file.id != group.file.id:
+            raise ValueError(
+                f"{group.name}/{name} must be a directly linked, file-owned HDF object"
+            )
+        return member
+
     def area_groups(geometry):
-        areas = geometry.get("2D Flow Areas")
+        if geometry.get("2D Flow Areas", getlink=True) is None:
+            return []
+        areas = owned_member(geometry, "2D Flow Areas")
         if not isinstance(areas, h5py.Group):
             return []
-        return [areas[name] for name in areas if isinstance(areas[name], h5py.Group)]
+        members = [owned_member(areas, name) for name in areas]
+        return [member for member in members if isinstance(member, h5py.Group)]
 
     def associated(geometry):
         return any(name in geometry.attrs for name in attr_names) or any(
