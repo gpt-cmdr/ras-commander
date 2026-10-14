@@ -19,7 +19,10 @@ RUNTIME_SCHEMA = "ras-commander-runtime/v1"
 JOB_SCHEMA = "ras-commander-job/v1"
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-ACCEPTED_SIGNALS = {"bco", "owned_process_artifacts"}
+# RasPreprocess early-stop signals. The gridded-precipitation ones are returned
+# only after completed-file validation of the materialized precipitation.
+ACCEPTED_SIGNALS = {"bco", "owned_process_artifacts", "completepreprocess_writer_quiescent",
+                    "bco_completepreprocess_writer_quiescent"}
 CPU_SHIM_VARIABLE = "RAS_COMMANDER_WINE_CPU_SHIM"
 DEFAULT_CPU_SHIM = Path(__file__).with_name("cpushim.so")
 

@@ -599,3 +599,16 @@ def test_wine_environment_disables_openmp_affinity_unless_set(tmp_path):
     kept, _ = prepare.wine_environment(tmp_path / "prefix",
                                        {"RAS_COMMANDER_WINE_CPU_SHIM": "0", "KMP_AFFINITY": "compact"})
     assert kept["KMP_AFFINITY"] == "compact"
+
+
+def test_controller_accepts_every_gridded_preprocessing_signal():
+    """The controller must accept RasPreprocess's gridded-precipitation early stops."""
+    import re as _re
+    from pathlib import Path as _Path
+    prepare = load_container_script("prepare")
+    source = (_Path(__file__).resolve().parents[1] / "ras_commander" / "RasPreprocess.py").read_text()
+    gridded = set(_re.findall(r'"((?:bco_)?completepreprocess_writer_quiescent)"', source))
+    assert gridded == {"completepreprocess_writer_quiescent", "bco_completepreprocess_writer_quiescent"}
+    assert gridded <= prepare.ACCEPTED_SIGNALS
+    assert {"timeout", "blocked_legal_dialog", "natural_completion", "full_result_copy"}.isdisjoint(
+        prepare.ACCEPTED_SIGNALS)
