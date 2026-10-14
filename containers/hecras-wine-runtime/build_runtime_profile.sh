@@ -123,6 +123,27 @@ if [ -z "$(ras_exe)" ]; then
     exit 4
 fi
 disable_ngen
+# HEC-RAS 4.x is a VB6 program whose THREED32/WAITEGL controls link MFC40.DLL,
+# which Windows ships and the installer assumes; their self-registration fails
+# silently without it and Ras.exe stops on "Run-time error 339". Install it
+# (winetricks mfc40, hash-checked) and register those controls again.
+syswow=/build/prefix/drive_c/windows/syswow64
+mfc40_controls=()
+for control in "$syswow"/*.[oO][cC][xX]; do
+    [ -f "$control" ] && grep -qai "MFC40.DLL" "$control" && mfc40_controls+=("$(basename "$control")")
+done
+if [ "${#mfc40_controls[@]}" -gt 0 ]; then
+    echo "== mfc40 for ${mfc40_controls[*]}"
+    [ -f "$syswow/mfc40.dll" ] || W_CACHE=/tmp/winetricks-cache xvfb-run -a winetricks -q mfc40 >/tmp/mfc40.log 2>&1 \
+        || { tail -20 /tmp/mfc40.log >&2; echo "error: winetricks mfc40 failed" >&2; exit 6; }
+    rm -rf /tmp/winetricks-cache
+    [ -f "$syswow/mfc40.dll" ] || { echo "error: mfc40.dll was not installed" >&2; exit 6; }
+    for control in "${mfc40_controls[@]}"; do
+        xvfb-run -a wine "C:\\windows\\syswow64\\regsvr32.exe" /s "C:\\windows\\syswow64\\$control" \
+            || { echo "error: regsvr32 $control failed" >&2; exit 6; }
+    done
+    wineserver -w || true
+fi
 ras_name=$(basename "$(ras_exe)")
 ras_win="C:\\Program Files (x86)\\HEC\\HEC-RAS\\$VERSION\\$ras_name"
 # Example projects are test data, not runtime: export them beside the profile.
