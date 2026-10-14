@@ -777,7 +777,10 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """Remove infiltration association from an attempt-owned geometry HDF.
 
     Mutates only the supplied .gNN.hdf; rejects plan/result HDFs. Removes the
-    native infiltration filename, layer name and date attributes. Existing
+    native infiltration filename, layer name and date attributes from
+    ``/Geometry`` and from every compiled ``/Geometry/2D Flow Areas/<area>``
+    group (which keeps its own copy, read first by the strict preprocessing
+    snapshot). Other area attributes, such as an override table hash, stay. Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -810,9 +813,23 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
 
     field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
     attr_names = tuple(field[key] for key in ("filename_attr", "layer_attr", "date_attr"))
+    # Compiled 2D areas carry their own copy of the association; the strict
+    # preprocessing snapshot reads the area copy first, so clear both levels.
+    area_attr_names = (*attr_names, "Infiltration Date Last Modified")
+
+    def area_groups(geometry):
+        areas = geometry.get("2D Flow Areas")
+        if not isinstance(areas, h5py.Group):
+            return []
+        return [areas[name] for name in areas if isinstance(areas[name], h5py.Group)]
+
+    def associated(geometry):
+        return any(name in geometry.attrs for name in attr_names) or any(
+            name in area.attrs for area in area_groups(geometry) for name in area_attr_names
+        )
+
     with h5py.File(path, "r") as handle:
-        attrs = owned_geometry(handle).attrs
-        if not any(name in attrs for name in attr_names):
+        if not associated(owned_geometry(handle)):
             return path
 
     # Retain a handle to the original object for byte restoration; neither
@@ -868,13 +885,16 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
                 os.fsync(backup.fileno())
                 mutated = True  # Opening r+ can itself change HDF bytes.
                 with h5py.File(path, "r+") as handle:
-                    attrs = owned_geometry(handle).attrs
+                    geometry = owned_geometry(handle)
                     for name in attr_names:
-                        if name in attrs:
-                            del attrs[name]
+                        if name in geometry.attrs:
+                            del geometry.attrs[name]
+                    for area in area_groups(geometry):
+                        for name in area_attr_names:
+                            if name in area.attrs:
+                                del area.attrs[name]
                 with h5py.File(path, "r") as handle:
-                    attrs = owned_geometry(handle).attrs
-                    if any(name in attrs for name in attr_names):
+                    if associated(owned_geometry(handle)):
                         raise RuntimeError("infiltration association remained after clearing")
                 observed = read_geometry_association(path)
                 if observed.get("infiltration_hdf_path"):

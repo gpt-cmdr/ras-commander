@@ -604,3 +604,34 @@ def test_readonly_input_fails_without_backup_leak(tmp_path):
         assert list(tmp_path.iterdir()) == [path]
     finally:
         path.chmod(stat.S_IWRITE | stat.S_IREAD)
+
+
+def test_clear_geometry_infiltration_clears_compiled_area_copies(tmp_path):
+    path = tmp_path / "child.g02.hdf"
+    with h5py.File(path, "w") as h:
+        g = h.create_group("Geometry")
+        g.attrs["Infiltration Filename"] = ".\\Land Classification\\Infiltration.hdf"
+        g.attrs["Land Cover Filename"] = "cover.hdf"
+        areas = g.create_group("2D Flow Areas")
+        areas.create_dataset("Attributes", data=[1])
+        area = areas.create_group("Area 1")
+        area.attrs["Infiltration Filename"] = ".\\Land Classification\\Infiltration.hdf"
+        area.attrs["Infiltration Layername"] = "Infiltration"
+        area.attrs["Infiltration Date Last Modified"] = "06MAR2024"
+        area.attrs["Infiltration Override Table Hash"] = [1, 2]
+        area.attrs["Other"] = "kept"
+    clear_geometry_infiltration(path)
+    with h5py.File(path) as h:
+        assert dict(h["Geometry"].attrs) == {"Land Cover Filename": "cover.hdf"}
+        kept = h["Geometry/2D Flow Areas/Area 1"].attrs
+        assert set(kept) == {"Infiltration Override Table Hash", "Other"}
+
+
+def test_clear_geometry_infiltration_acts_when_only_an_area_copy_remains(tmp_path):
+    path = tmp_path / "child.g03.hdf"
+    with h5py.File(path, "w") as h:
+        area = h.create_group("Geometry").create_group("2D Flow Areas").create_group("A")
+        area.attrs["Infiltration Filename"] = "stale.hdf"
+    clear_geometry_infiltration(path)
+    with h5py.File(path) as h:
+        assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs
