@@ -36,9 +36,20 @@ rather than substituting an image by name.
     per-step node scratch, CPU shim, job arrays) ran Muncie 1D and 2D Wine requests
     concurrently in pool mode and as a job array with an executor built from this
     repository; all steps completed and collected, and pool and array results were
-    identical. Each Wine step peaked near 6 GiB; set `slurm_memory` to 6–8 GiB per request.
+    identical. On October 13–14, executors built by
+    [`build_release_images.sh`](apptainer-images.md#build-wine-images-for-a-release) for every
+    Windows release from 5.0 through 7.0.1 each computed Muncie plans 01 (1D) and 03 (2D) as a
+    job array with validated receipts (see the
+    [qualification table](apptainer-images.md#qualification-status)). Each Wine step peaked near
+    6 GiB; set `slurm_memory` to 6–8 GiB per request.
     Requalify your image and site with a representative request before a campaign; a
     receipt is computational evidence, not hydraulic approval.
+
+HEC-RAS 6.0 and earlier record their terms acceptance per machine, so an executor image for
+those releases cannot carry it. Accept the terms in each task by setting
+`environment={"APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU": "1"}` on `SlurmSiteConfig`; without
+it the executor refuses to start HEC-RAS rather than wait on the dialog. See
+[HEC-RAS terms and conditions](apptainer-images.md#hec-ras-terms-and-conditions).
 
 To reuse a local or cached SIF (or fill a shared cache once), use
 `RasContainerImages.resolve_sif()` or `ensure_sif_command()`; see
@@ -220,7 +231,9 @@ Slurm never accepted the job.
 | Remote staging fails | Check SSH, transfer tools, shared-path permissions, and whether that exact submission directory already exists |
 | Job remains pending | Inspect Slurm's resource/account/partition reason; reduce requests or correct the site settings |
 | Executor cannot import or launch | Verify Python, installed portable executor, executable path, and Wine environment in the selected SIF |
-| `SLURM_STEP_SCRATCH_FAILED` | `node_scratch_root` is missing on the compute node, is a symlink, or contains `,`/`:`; set it to an existing node-local directory |
+| `SLURM_STEP_SCRATCH_FAILED` | `node_scratch_root` is missing on the compute node or contains `,`/`:`; set it to an existing node-local directory (a symlink to one is resolved) |
+| Receipt says HEC-RAS 6.0 and earlier record TCU acceptance per machine | Set `APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU=1` in the site `environment` to accept the terms in each task |
+| HEC-RAS 7.0 fails with `OMP: Error #179` under Wine | Use an executor from this repository's recipe; it sets `KMP_AFFINITY=disabled` unless you set it |
 | Intermittent `0xC0000005` in `RasProcess.exe` | The Slurm CPU set does not start at CPU 0 and the image lacks the CPU shim; rebuild with `RAS_COMMANDER_WINE_CPU_SHIM` set (see [Apptainer images](apptainer-images.md#cpu-numbering-shim)) |
 | Receipt or scheduler step fails | Read `collection.errors`, retained solver logs, and accounting; a final HDF filename alone is insufficient |
 | Allocation expires before the pool ends | Increase allocation wall time or reduce pool size; account for queued tasks and executor overhead |
