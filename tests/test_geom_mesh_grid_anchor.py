@@ -19,7 +19,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
-from shapely.geometry import LineString, Polygon, box
+from shapely.geometry import LineString, MultiLineString, Polygon, box
 
 from ras_commander import Breakout2DSpec, GridAnchor
 from ras_commander.geom import GeomMesh
@@ -153,6 +153,49 @@ def test_recommended_crossing_limit_drops_only_weaving_breaklines():
     assert reason["weaver"] == "exceeds_child_perimeter_crossing_limit"
     action, _ = actions(1)
     assert action["through"] == "drop" and action["single_entry"] == "clip"
+
+
+def _rotations(ring):
+    """Every start vertex of a closed coordinate list (first == last)."""
+    open_ring = ring[:-1]
+    return [open_ring[k:] + open_ring[:k] + [open_ring[k]] for k in range(len(open_ring))]
+
+
+@pytest.mark.parametrize(
+    ("ring", "expected"),
+    [
+        # Gate KA: starts on the boundary, leaves through the top edge and comes back through the left edge.
+        ([(0, 5), (5, 5), (5, 15), (-5, 15), (-5, 5), (0, 5)], 2),
+        ([(2, 2), (8, 2), (8, 8), (2, 8), (2, 2)], 0),  # wholly inside
+        ([(5, 5), (15, 5), (15, 7), (5, 7), (5, 5)], 2),  # one excursion outside
+        ([(-5, 2), (15, 2), (15, 4), (-5, 4), (-5, 2)], 4),  # passes through twice
+        ([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)], 0),  # the boundary itself
+    ],
+)
+def test_closed_line_crossings_do_not_depend_on_start_vertex(ring, expected):
+    child = box(0, 0, 10, 10)
+    counts = {b2d._boundary_crossings(LineString(r), child) for r in _rotations(ring)}
+    assert counts == {expected}
+
+
+def test_multipart_closed_lines_sum_and_drop_at_recommended_limit():
+    # Gate KA: two closed rectangles straddling the left edge, two real crossings each.
+    child = box(0, 0, 10, 10)
+    line = MultiLineString(
+        [
+            [(0, 1), (2, 1), (2, 3), (-2, 3), (-2, 1), (0, 1)],
+            [(0, 5), (2, 5), (2, 7), (-2, 7), (-2, 5), (0, 5)],
+        ]
+    )
+    assert b2d._boundary_crossings(line, child) == 4
+    parent = gpd.GeoDataFrame({"mesh_name": ["A"]}, geometry=[box(-20, -20, 30, 30)], crs=2277)
+    frame = gpd.GeoDataFrame({"bl_id": [1], "Name": ["closed_parts"]}, geometry=[line], crs=2277)
+    actions = b2d._build_feature_actions(
+        parent, child, {"breakline": frame}, pd.DataFrame(), child,
+        max_breakline_perimeter_crossings=2,
+    )
+    row = actions[actions.feature_type.eq("breakline")].iloc[0]
+    assert (row.action, row.reason) == ("drop", "exceeds_child_perimeter_crossing_limit")
 
 
 def test_breakout_spec_validates_crossing_limit():

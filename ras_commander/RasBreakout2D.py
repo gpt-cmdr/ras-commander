@@ -1647,7 +1647,9 @@ def _boundary_crossings(geometry: BaseGeometry, boundary: BaseGeometry) -> int:
     crossing. A crossing is a change between inside and outside along the
     walk. Self-intersections of the line do not matter. A line wholly inside
     counts 0, a line with one end outside 1, a line passing through 2, and a
-    line weaving along the edge more than 2.
+    line weaving along the edge more than 2. A closed line counts the change
+    across its closing vertex, so its count does not depend on the start vertex.
+    Parts of a multipart line are summed.
     """
     if boundary is None or boundary.is_empty:
         return 0
@@ -1674,7 +1676,12 @@ def _boundary_crossings(geometry: BaseGeometry, boundary: BaseGeometry) -> int:
                 inside = bool(boundary.contains(middle))
                 if not sides or sides[-1] != inside:
                     sides.append(inside)
-        total += max(0, len(sides) - 1)
+        crossings = max(0, len(sides) - 1)
+        if line.is_closed and len(sides) > 1 and sides[0] != sides[-1]:
+            # A closed line wraps around: count the change across its closing vertex too,
+            # so the count does not depend on which vertex the ring starts at.
+            crossings += 1
+        total += crossings
     return total
 
 
