@@ -41,7 +41,9 @@ OUT=$(readlink -f -- "$OUT")
 
 BUILDER=hecras-runtime-$(echo "$VERSION" | tr . -)-$$
 trap '"$DOCKER" rm -f "$BUILDER" >/dev/null 2>&1 || true' EXIT
-"$DOCKER" run -d --name "$BUILDER" --security-opt apparmor=unconfined \
+# --init reaps exited Wine processes; zombies would still match pgrep and keep
+# the launcher wait below from seeing Wine go idle.
+"$DOCKER" run -d --init --name "$BUILDER" --security-opt apparmor=unconfined \
     -v "$INSTALLER:/payload/setup.exe:ro" -v "$WHEEL_PATH:/payload/$WHEEL:ro" \
     -v "$HERE/accept_tcu.py:/payload/accept_tcu.py:ro" \
     "${MSI_MOUNT[@]}" \
