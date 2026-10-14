@@ -361,6 +361,44 @@ reproduce the full region's original points or transitions exactly. A region
 that surrounds the child can therefore produce different points when clipped
 to the child boundary.
 
+## Anchor a child's regular grid to its parent
+
+RAS Mapper starts a 2D area's regular computation-point grid half a cell inside
+the area's own bounding box, at `(min x + dx/2, max y - dy/2)`. The `Shift dx`
+and `Shift dy` attributes stored with the 2D area are not used by the point
+generator (decompiled RasMapperLib 6.5 through 7.0.1). A child area cut from a
+parent therefore gets a grid offset from the parent's by a sub-cell vector,
+even with the parent's spacing, breaklines and refinement regions.
+
+Pass the parent's lattice point to `generate()` to keep the parent's grid:
+
+```python
+anchor = GeomMesh.get_grid_anchor(parent_geometry_hdf, mesh_name="Parent")
+result = GeomMesh.generate("02", mesh_name="Parent", ras_object=child_ras,
+                           grid_anchor=anchor)
+print(result.grid_anchor)  # anchor, lattice and enforced point counts
+```
+
+`get_grid_anchor()` reads the stored perimeter and `Spacing dx/dy` from a
+compiled geometry HDF; it uses h5py only. With an anchor, `generate()` builds
+the lattice through the anchor and filters it with RAS Mapper's own perimeter
+rules. That lattice replaces the area's points in memory. RAS Mapper's
+`RegenerateMeshPoints` then runs with the area active but not regenerated, the
+same call RAS Mapper's breakline and refinement-region editors make. It adds
+the refinement-region points and enforces the breaklines on the anchored
+lattice. The anchor spacing must equal the mesh cell size, and there is no
+unanchored fallback. An `(x, y)` pair is accepted and takes the cell size as
+its spacing. With the area's own anchor, the result equals RAS Mapper's
+regeneration exactly.
+
+`RasBreakout2D.prepare_cloned_geometry(anchor_grid_to_parent=True)` applies the
+parent's anchor to the child remesh. `Breakout2DSpec(max_breakline_perimeter_crossings=1)`
+drops, rather than clips, a source breakline that crosses the child's one-cell
+trim boundary more than once (reason `exceeds_child_perimeter_crossing_limit`).
+
+The feature notes in `feature_dev_notes/Mesh_Grid_Anchor/` record the
+evidence and the comparison with a translate-and-restore workaround.
+
 ## HEC-RAS Version Support for Headless Mesh Generation
 
 `GeomMesh.generate()` and `GeomMesh.compute_property_tables()` support
@@ -493,6 +531,7 @@ and the [6.6 Mapper manual](https://www.hec.usace.army.mil/confluence/rasdocs/rm
         - set_geometry_association
         - compute_property_tables
         - generate_computation_points
+        - get_grid_anchor
         - generate
         - generate_all
         - detect_bc_conflicts
@@ -514,6 +553,10 @@ violations. `BCFixResult.ok` means no unresolved conflicts in that result; these
 are operation-specific states, not hydraulic acceptance criteria.
 
 ::: ras_commander.geom.GeomMeshDataclasses.MeshResult
+    options:
+      heading_level: 3
+
+::: ras_commander.geom.GeomMeshDataclasses.GridAnchor
     options:
       heading_level: 3
 

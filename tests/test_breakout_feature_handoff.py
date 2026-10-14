@@ -544,3 +544,49 @@ def test_gui_failure_result_keeps_exception_cause(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="refresh failed") as caught:
         RasBreakout2D.prepare_cloned_geometry(preflight, clone, ras_object=ras)
     assert caught.value.__cause__ is original
+
+
+def test_anchor_grid_to_parent_passes_parent_lattice_to_every_remesh(
+    tmp_path, monkeypatch
+):
+    from ras_commander import GridAnchor
+
+    preflight, clone, ras = _fixture(tmp_path)
+    anchor = GridAnchor(0.5, 9.5, 1.0, 1.0, source="parent")
+    anchor_calls, mesh_calls = [], []
+
+    def get_anchor(geometry, mesh_name=None, **kwargs):
+        anchor_calls.append((Path(geometry), mesh_name))
+        return anchor
+
+    def mesh(*args, **kwargs):
+        mesh_calls.append(kwargs.get("grid_anchor"))
+        return SimpleNamespace(ok=True, error_message=None)
+
+    def refresh(*args, **kwargs):
+        _sync_native_hdf(clone.geometry_path)
+        return SimpleNamespace(success=True, error=None, first_error_line=None)
+
+    _patch_points(
+        monkeypatch, lambda *a, **kw: SimpleNamespace(status="success", cell_count=10)
+    )
+    monkeypatch.setattr(
+        GeomPreprocessor, "run_geometry_preprocessor", staticmethod(refresh)
+    )
+    monkeypatch.setattr(GeomMesh, "get_grid_anchor", staticmethod(get_anchor))
+    monkeypatch.setattr(GeomMesh, "generate", staticmethod(mesh))
+    with pytest.raises(ValueError, match="requires remesh"):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, remesh=False, anchor_grid_to_parent=True
+        )
+    with pytest.raises(TypeError):
+        RasBreakout2D.prepare_cloned_geometry(
+            preflight, clone, ras_object=ras, anchor_grid_to_parent="yes"
+        )
+    assert not anchor_calls and not mesh_calls
+    RasBreakout2D.prepare_cloned_geometry(
+        preflight, clone, ras_object=ras, refresh_method="rasexe",
+        anchor_grid_to_parent=True,
+    )
+    assert anchor_calls == [(preflight.source_geometry_hdf, "Area")]
+    assert mesh_calls == [anchor]
