@@ -5239,7 +5239,7 @@ class GeomMesh:
         geometry: Union[str, Number, Path],
         mesh_name: Optional[str] = None,
         mesh_index: int = 0,
-        ras_object=None,
+        ras_object: Optional[RasPrj] = None,
     ) -> GridAnchor:
         """Return the regular-grid lattice point of a compiled 2D flow area.
 
@@ -5259,7 +5259,8 @@ class GeomMesh:
                 text path (``.hdf`` is appended), or geometry number.
             mesh_name: 2D flow area name (None = use ``mesh_index``).
             mesh_index: 0-based 2D-area index when ``mesh_name`` is None.
-            ras_object: Optional RasPrj for geometry-number lookup.
+            ras_object (RasPrj, optional): RasPrj instance for
+                geometry-number lookup; None uses the global project.
 
         Returns:
             GridAnchor in the geometry's CRS and horizontal units, with

@@ -392,9 +392,13 @@ its spacing. With the area's own anchor, the result equals RAS Mapper's
 regeneration exactly.
 
 `RasBreakout2D.prepare_cloned_geometry(anchor_grid_to_parent=True)` applies the
-parent's anchor to the child remesh. `Breakout2DSpec(max_breakline_perimeter_crossings=1)`
-drops, rather than clips, a source breakline that crosses the child's one-cell
-trim boundary more than once (reason `exceeds_child_perimeter_crossing_limit`).
+parent's anchor to the child remesh. Use it with
+`Breakout2DSpec(max_breakline_perimeter_crossings=2)` (recommended; the default
+`None` clips every line). That drops, rather than clips, a source breakline that
+weaves across the child's one-cell trim boundary, crossing it more than twice
+(reason `exceeds_child_perimeter_crossing_limit`). Crossings are inside/outside
+transitions along the line; running along the boundary is not a crossing. A line
+that ends inside or passes straight through is clipped as usual.
 
 The feature notes in `feature_dev_notes/Mesh_Grid_Anchor/` record the
 evidence and the comparison with a translate-and-restore workaround.

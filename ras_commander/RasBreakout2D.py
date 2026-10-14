@@ -21,6 +21,7 @@ import math
 import re
 import tempfile
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -29,12 +30,13 @@ import h5py
 import numpy as np
 import pandas as pd
 from pyproj import CRS
-from shapely import intersects_xy, make_valid
+from shapely import get_coordinates, intersects_xy, make_valid
 from shapely.geometry import (
     GeometryCollection,
     LineString,
     MultiLineString,
     MultiPolygon,
+    Point,
     Polygon,
 )
 from shapely.geometry.base import BaseGeometry
@@ -126,12 +128,16 @@ class Breakout2DSpec:
 
     ``max_breakline_perimeter_crossings`` drops, instead of clipping, any
     source breakline that crosses the mesh trim boundary (the child perimeter
-    eroded by one base cell) more than this many times. ``1`` applies the rule
-    "remove a breakline that crosses the child perimeter more than once": such
-    lines lie near the boundary and would otherwise be cut into pieces whose
-    seed rows differ from the parent's. ``None`` (default) clips every line.
-    Dropped lines carry the reason code
-    ``exceeds_child_perimeter_crossing_limit`` in ``feature_actions``.
+    eroded by one base cell) more than this many times. Crossings are real
+    inside/outside transitions along the source line; running along or
+    touching the boundary is not a crossing, and self-intersections do not
+    count. Recommended: ``2`` for breakouts that re-mesh on the parent's grid
+    (``prepare_cloned_geometry(anchor_grid_to_parent=True)``). A line that ends
+    inside (1) or passes straight through (2) is clipped as usual; a line that
+    weaves across the boundary (3 or more) is dropped, because its clipped
+    pieces create problem cells at the boundary. ``None`` (default, kept for
+    backward compatibility) clips every line. Dropped lines carry the reason
+    code ``exceeds_child_perimeter_crossing_limit`` in ``feature_actions``.
     """
 
     source_plan: Union[str, int]
@@ -746,6 +752,8 @@ class RasBreakout2D:
                 away from breakline and region changes coincide with the
                 parent's. Requires ``remesh`` and the parent's base spacing.
                 Defaults to False. Evidence is in ``mesh_result.grid_anchor``.
+                Recommended with
+                ``Breakout2DSpec(max_breakline_perimeter_crossings=2)``.
 
         Returns:
             Breakout2DPreparationResult: Evidence for each preparation step.
@@ -1630,32 +1638,43 @@ def _clip_action(
 
 
 def _boundary_crossings(geometry: BaseGeometry, boundary: BaseGeometry) -> int:
-    """Count how many times a line crosses into or out of ``boundary``.
+    """Count how many times a line passes between the inside and outside of ``boundary``.
 
-    Each inside run of the line has two ends; ends that are the line's own
-    endpoints are not crossings. A line wholly inside counts 0, a line with one
-    end outside counts 1 and a line passing through counts 2. A closed line
-    that leaves the boundary counts two crossings per inside run.
+    The source line is walked vertex to vertex. Each straight segment is split
+    where it meets the boundary edge, and each piece is classified as inside,
+    outside or on the edge. Pieces on the edge (overlap or touch) are not a
+    side, so running along the edge or touching it and turning back is not a
+    crossing. A crossing is a change between inside and outside along the
+    walk. Self-intersections of the line do not matter. A line wholly inside
+    counts 0, a line with one end outside 1, a line passing through 2, and a
+    line weaving along the edge more than 2.
     """
+    if boundary is None or boundary.is_empty:
+        return 0
+    edge = boundary.boundary
+    tolerance = 1e-9 * max(1.0, *(abs(value) for value in boundary.bounds))
     total = 0
     for line in _line_parts(geometry):
-        if line.length <= 0:
-            continue
-        inside = line.intersection(boundary)
-        if isinstance(inside, (MultiLineString, GeometryCollection)):
-            pieces = [part for part in _line_parts(inside) if part.length > 0]
-            if pieces:
-                inside = linemerge(pieces)
-        runs = [part for part in _line_parts(inside) if part.length > 0]
-        if not runs:
-            continue
-        if line.is_ring:
-            total += 0 if boundary.covers(line) else 2 * len(runs)
-            continue
-        own_ends = sum(
-            1 for point in line.boundary.geoms if boundary.covers(point)
-        )
-        total += max(0, 2 * len(runs) - own_ends)
+        coords = line.coords
+        sides: list[bool] = []
+        for start, end in pairwise(coords):
+            segment = LineString([start, end])
+            if segment.length <= tolerance:
+                continue
+            breaks = {0.0, 1.0}
+            for xy in get_coordinates(segment.intersection(edge)):
+                fraction = segment.project(Point(xy), normalized=True)
+                breaks.add(min(1.0, max(0.0, float(fraction))))
+            for low, high in pairwise(sorted(breaks)):
+                if (high - low) * segment.length <= tolerance:
+                    continue
+                middle = segment.interpolate((low + high) / 2, normalized=True)
+                if edge.distance(middle) <= tolerance:
+                    continue
+                inside = bool(boundary.contains(middle))
+                if not sides or sides[-1] != inside:
+                    sides.append(inside)
+        total += max(0, len(sides) - 1)
     return total
 
 

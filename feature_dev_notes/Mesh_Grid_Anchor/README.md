@@ -20,11 +20,11 @@ RAS Mapper then adds the refinement-region points and enforces the breaklines on
 the move-and-move-back workaround (option (c)). It gives the same interior points as option (c), needs no perimeter
 refill, and leaves no translated copies.
 
-| Child (parent cells inside) | As-run native | (a) `Shift dx/dy` | (b) anchored | (c) move and move back | (b) + breakline rule |
+| Child (parent cells inside) | As-run native | (a) `Shift dx/dy` | (b) anchored | (c) move and move back | (b) + breakline rule (limit 2) |
 |---|---|---|---|---|---|
-| wb-2534836 (3,059) | 0.451 / 0.488 | 0.451 / 0.488 | **0.984 / 0.991** | 0.977 / 0.991 | 0.990 / 0.995 |
+| wb-2534836 (3,059) | 0.451 / 0.488 | 0.451 / 0.488 | **0.984 / 0.991** | 0.977 / 0.991 | 0.984 / 0.991 |
 | wb-2534838 (4,087) | 0.419 / 0.446 | 0.419 / 0.446 | **0.837 / 0.864** | 0.835 / 0.864 | 0.902 / 0.916 |
-| wb-2534846 (6,800) | 0.518 / 0.538 | 0.518 / 0.538 | **0.982 / 0.985** | 0.980 / 0.985 | no line affected |
+| wb-2534846 (6,800) | 0.518 / 0.538 | 0.518 / 0.538 | **0.982 / 0.985** | 0.980 / 0.985 | 0.982 / 0.985 |
 | wb-2534852 (14,677) | 0.575 / 0.590 | 0.575 / 0.590 | **0.969 / 0.969** | 0.969 / 0.969 | not run |
 | wb-2516632 (62,830) | 0.527 / 0.535 | 0.527 / 0.535 | **0.963 / 0.963** | 0.960 / 0.963 | not run |
 | wb-2516595 (234,714) | 0.559 / 0.565 | 0.559 / 0.565 | **0.969 / 0.971** | 0.969 / 0.971 | not run |
@@ -195,28 +195,39 @@ Limits:
 
 ## Breakline rule
 
-Project engineer, 2026-10-14: "Breaklines that cross [the child perimeter] more than once should just be removed. They
-will be close to a boundary and be a little bit different anyway."
+Project engineer, 2026-10-14: breaklines that weave across the child perimeter must not be kept, because their
+clipped pieces create problem cells at the boundary. A line that ends inside the child (one crossing) or passes
+straight through it (two crossings) is fine.
 
-`Breakout2DSpec(max_breakline_perimeter_crossings=1)` applies it. During `preflight`, a source breakline that crosses
-the mesh trim boundary more than once is given action `drop` with reason `exceeds_child_perimeter_crossing_limit`.
-The trim boundary is the child perimeter eroded by one base cell, the boundary `RasBreakout2D` clips breaklines to.
-Crossings are counted as `2 x (inside runs) - (own endpoints inside)`: 0 wholly inside, 1 with one end outside, 2
-passing through. A closed line counts two per inside run. `None` (default) keeps the current behavior of clipping
-every line.
+**Recommended setting: `Breakout2DSpec(max_breakline_perimeter_crossings=2)`** together with
+`prepare_cloned_geometry(anchor_grid_to_parent=True)`. During `preflight`, a source breakline with more than two
+crossings of the mesh trim boundary gets action `drop` and reason `exceeds_child_perimeter_crossing_limit`; every
+other line is clipped as before. The trim boundary is the child perimeter eroded by one base cell, the boundary
+`RasBreakout2D` clips breaklines to. The library default stays `None` (clip every line) for backward compatibility.
 
-Point-generation results with the parent anchor (option (b)):
+Crossings are counted by walking the source line vertex to vertex. Each segment is split where it meets the boundary
+edge, each piece is classified as inside, outside or on the edge, and a crossing is a change between inside and
+outside. Running along the edge, or touching it and turning back, is not a crossing. Self-intersections of the line
+do not matter. Counts: 0 for a line wholly inside (including one that crosses itself) or one that only follows the
+edge, 1 for one end outside, 2 for a line passing through, and 3 or more for a line weaving across the edge. An
+earlier version counted pieces after clipping and returned 4 for a self-crossing line wholly inside and 2 for a line
+lying on the edge (gate JU). The counts reported below were rechecked with the corrected counter and are unchanged.
 
-| Child | Lines removed (perimeter crossings; trim-boundary crossings) | Identical overall / interior, without the rule | With the rule |
-|---|---|---|---|
-| wb-2534838 | Road (100) (4; 4), Road (114) (2; 6) | 0.837 / 0.864 | 0.902 / 0.916 |
-| wb-2534836 | Road (99) (2; 2), passes straight through | 0.984 / 0.991 | 0.990 / 0.995 |
-| wb-2534846 | none; two streams cross once | 0.982 / 0.985 | unchanged |
+Point-generation results with the parent anchor (option (b)) and the recommended limit:
 
-On wb-2534838, 150 of the 291 remaining interior differences lie within one base cell of the removed roads. There the
-parent has breakline rows and the child now has the plain lattice. The rule also removes lines that pass straight
-through the child (two crossings). Use `max_breakline_perimeter_crossings=2` to keep those and drop only lines that
-weave along the edge.
+| Child | Crossings, perimeter; trim boundary | Dropped at limit 2 | Identical overall / interior, no rule | Limit 2 |
+|---|---|---|---|---|
+| wb-2534838 | Road (100) 4; 4. Road (114) 2; 6 (runs along the edge) | Road (100), Road (114) | 0.837 / 0.864 | 0.902 / 0.916 |
+| wb-2534836 | Road (99) 2; 2 (passes through) | none | 0.984 / 0.991 | 0.984 / 0.991 |
+| wb-2534846 | two streams 1; 1 | none | 0.982 / 0.985 | 0.982 / 0.985 |
+
+On wb-2534838, 150 of the 291 remaining interior differences lie within one base cell of the removed roads. There
+the parent has breakline rows and the child now has the plain lattice.
+
+The boundary the count is taken against matters. On the larger children, several streams that never cross the child
+perimeter dip into the one-cell band. They cross the 300 ft trim boundary 2 times (kept at limit 2), and one does so
+4 times (dropped). One road crosses the perimeter 3 times but the trim boundary only 2 times (kept). Counting against
+the trim boundary matches where the line is actually cut.
 
 ## API
 
@@ -227,7 +238,7 @@ anchor = GeomMesh.get_grid_anchor(parent_hdf, mesh_name="Parent")   # GridAnchor
 result = GeomMesh.generate("02", mesh_name="Parent", ras_object=child, grid_anchor=anchor)
 result.grid_anchor  # {"anchor": {...}, "lattice_points": ..., "area_points_after_enforcement": ..., ...}
 
-spec = Breakout2DSpec(..., max_breakline_perimeter_crossings=1)
+spec = Breakout2DSpec(..., max_breakline_perimeter_crossings=2)   # recommended
 pre = RasBreakout2D.preflight(spec, ras_object=parent_project)
 prep = RasBreakout2D.prepare_cloned_geometry(pre, clone, ras_object=child, anchor_grid_to_parent=True)
 ```
@@ -268,4 +279,6 @@ Not implemented (proposals):
 - `scripts/probe_grid_anchor.py`: options (a), (b) with control, and (c) for one child against its parent.
 - `results/probe_summary.json`: per-child metrics for the table above (no model paths).
 - `results/breakline_rule.json`: crossing counts and metrics for the breakline rule.
+- `results/crossings_recount.json`: crossings of every parent breakline touching each child, with the corrected
+  counter, against the perimeter, the perimeter shrunk 5 ft and the 300 ft trim boundary.
 - `figures/`: copied from packet JE (fig1 grid phase, fig2 wet extent, fig3 IoU by child).

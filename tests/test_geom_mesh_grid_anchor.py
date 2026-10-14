@@ -103,9 +103,14 @@ def test_generate_rejects_bad_grid_anchor_before_meshing(tmp_path):
     ("line", "expected"),
     [
         (LineString([(2, 2), (8, 8)]), 0),  # wholly inside
+        (LineString([(2, 2), (8, 8), (2, 8), (8, 2)]), 0),  # self-crossing, wholly inside
+        (LineString([(-5, 0), (15, 0)]), 0),  # runs along the edge, never inside
+        (LineString([(2, 5), (0, 5), (0, 8), (3, 8)]), 0),  # touches the edge and returns
+        (LineString([(2, 5), (0, 5), (0, 8), (-3, 8)]), 1),  # leaves after running along the edge
         (LineString([(5, 5), (15, 5)]), 1),  # one end outside
         (LineString([(-5, 5), (15, 5)]), 2),  # passes through
-        (LineString([(-5, 2), (5, 2), (5, 12), (5.5, 12), (5.5, 2), (15, 2)]), 4),
+        (LineString([(-5, 2), (5, 2), (5, 12), (5.5, 12), (5.5, 2), (15, 2)]), 4),  # weaves
+        (LineString([(5, 5), (15, 5), (15, 7), (5, 7), (5, 5)]), 2),  # closed, leaves once
         (LineString([(20, 20), (30, 30)]), 0),  # outside
     ],
 )
@@ -113,17 +118,22 @@ def test_boundary_crossings(line, expected):
     assert b2d._boundary_crossings(line, box(0, 0, 10, 10)) == expected
 
 
-def test_breakline_crossing_limit_drops_instead_of_clipping():
+def test_recommended_crossing_limit_drops_only_weaving_breaklines():
+    """PE rule (recommended limit 2): weaving lines are dropped; inside, entering and through lines stay."""
     parent = gpd.GeoDataFrame({"mesh_name": ["A"]}, geometry=[box(-20, -20, 30, 30)], crs=2277)
     child = box(0, 0, 10, 10)
+    cases = {
+        "self_crossing": (LineString([(2, 2), (8, 8), (2, 8), (8, 2)]), 0),
+        "edge_follower": (LineString([(-5, 0), (15, 0)]), 0),
+        "single_entry": (LineString([(5, 5), (15, 5)]), 1),
+        "through": (LineString([(-5, 5), (15, 5)]), 2),
+        "weaver": (LineString([(-5, 2), (5, 2), (5, 12), (5.5, 12), (5.5, 2), (15, 2)]), 4),
+    }
+    for name, (line, expected) in cases.items():
+        assert b2d._boundary_crossings(line, child) == expected, name
     lines = gpd.GeoDataFrame(
-        {"bl_id": [1, 2, 3, 4], "Name": ["inside", "one", "through", "zigzag"]},
-        geometry=[
-            LineString([(2, 2), (8, 8)]),
-            LineString([(5, 5), (15, 5)]),
-            LineString([(-5, 5), (15, 5)]),
-            LineString([(-5, 2), (5, 2), (5, 12), (5.5, 12), (5.5, 2), (15, 2)]),
-        ],
+        {"bl_id": list(range(len(cases))), "Name": list(cases)},
+        geometry=[line for line, _ in cases.values()],
         crs=2277,
     )
 
@@ -135,19 +145,20 @@ def test_breakline_crossing_limit_drops_instead_of_clipping():
         rows = frame[frame.feature_type.eq("breakline")].set_index("name")
         return rows.action.to_dict(), rows.reason.to_dict()
 
-    action, _ = actions(None)
-    assert action == {"inside": "keep", "one": "clip", "through": "clip", "zigzag": "clip"}
-    action, reason = actions(1)
-    assert action == {"inside": "keep", "one": "clip", "through": "drop", "zigzag": "drop"}
-    assert reason["through"] == reason["zigzag"] == "exceeds_child_perimeter_crossing_limit"
-    action, _ = actions(2)
-    assert action["through"] == "clip" and action["zigzag"] == "drop"
+    default, _ = actions(None)
+    assert "drop" not in default.values()  # backward compatible: every line kept or clipped
+    action, reason = actions(2)
+    assert action == {**default, "weaver": "drop"}
+    assert action["self_crossing"] == "keep" and action["through"] == "clip"
+    assert reason["weaver"] == "exceeds_child_perimeter_crossing_limit"
+    action, _ = actions(1)
+    assert action["through"] == "drop" and action["single_entry"] == "clip"
 
 
 def test_breakout_spec_validates_crossing_limit():
     child = box(0, 0, 10, 10)
     assert Breakout2DSpec("01", "A", child, "x").max_breakline_perimeter_crossings is None
-    assert Breakout2DSpec("01", "A", child, "x", max_breakline_perimeter_crossings=1)
+    assert Breakout2DSpec("01", "A", child, "x", max_breakline_perimeter_crossings=2)
     for bad in (-1, 1.5, True):
         with pytest.raises(ValueError):
             Breakout2DSpec("01", "A", child, "x", max_breakline_perimeter_crossings=bad)
