@@ -4,7 +4,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG HEC_RAS_VERSION=6.5
 ARG RAS_COMMANDER_COMMIT=development
-ARG TINI_VERSION=0.19.0-3+b7
+ARG TINI_VERSION=0.19.0-3+b8
 ARG GCC_RUNTIME_VERSION=14.2.0-19
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \

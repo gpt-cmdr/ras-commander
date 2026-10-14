@@ -181,7 +181,7 @@ The exact image source revision is recorded in its OCI revision label.
 | Generated `runtime.json` | `/opt/hecras-runtime/runtime.json`; declares native runtime type, matching HEC-RAS version, and installed artifacts. Generated from external files, not a vendor binary stored in Git. |
 
 The base is Python 3.13.15 on Debian trixie, pinned in the
-[Dockerfile][dockerfile]. Additional Linux packages are `tini` 0.19.0-3+b7,
+[Dockerfile][dockerfile]. Additional Linux packages are `tini` 0.19.0-3+b8,
 `libgfortran5` 14.2.0-19, and `libgomp1` 14.2.0-19. `tini` forwards process
 signals and reaps child processes; the GCC runtime packages support the
 Fortran/OpenMP solver.

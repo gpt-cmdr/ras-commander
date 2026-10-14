@@ -174,7 +174,7 @@ The recorded inventory is common to the three tested bundled images except for t
 | Linux base | Debian Trixie; Python base image pinned by digest in the Dockerfile. |
 | Linux Python / pip | 3.13.15 / 26.2.1. |
 | WineHQ stable | `11.0.0.0~trixie-1`, with 32-bit and 64-bit support. |
-| Virtual display | Xvfb `2:21.1.16-1.3+deb13u3`, with xauth. |
+| Virtual display | Xvfb `2:21.1.16-1.3+deb13u4`, with xauth. |
 | Process support | procps and tini, pinned in the Dockerfile. |
 | Windows Python | 3.11.9, 64-bit, installed at `C:\Python311`. |
 | Microsoft .NET | Framework 4.8, registered version `4.8.03761`; history includes the .NET 4.0 prerequisite. |
