@@ -338,13 +338,22 @@ class RasContainerImages:
             'sum=$(sha256sum "$tmp" | cut -d" " -f1) && '
             f'{{ [ -z {q(expected)} ] || [ "$sum" = {q(expected)} ] || {{ rm -f "$tmp"; echo "hash mismatch" >&2; exit 5; }}; }} && '
             f'printf "%s  %s\\n" "$sum" {q(image.cache_name)} > "$tmp.sha256" && '
-            f'mv -f "$tmp.sha256" {q(path + ".sha256")} && mv -f "$tmp" {q(path)}'
+            f'mv -f "$tmp.sha256" {q(path + ".sha256")} && mv -f "$tmp" {q(path)} '
+            '|| { rm -f "$tmp" "$tmp.sha256"; echo "apptainer pull failed" >&2; exit 3; }'
         ) if pull else f'echo "not cached: {path}" >&2; exit 4'
+        work = f"{cache_dir.rstrip('/')}/.apptainer-work"
         return (
             "set -eu; "
+            # Build in the cache filesystem unless the site chose otherwise; a
+            # login host's small root can fill during SIF assembly.
+            f'export APPTAINER_TMPDIR="${{APPTAINER_TMPDIR:-{work}/tmp}}" '
+            f'APPTAINER_CACHEDIR="${{APPTAINER_CACHEDIR:-{work}/cache}}"; '
+            'mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"; '
+            'trap \'rm -rf "$APPTAINER_TMPDIR"\' EXIT; '
             f'if [ -f {q(path)} ] && [ -f {q(path + ".sha256")} ] && '
             f'[ "$(sha256sum {q(path)} | cut -d" " -f1)" = "$(cut -d" " -f1 {q(path + ".sha256")})" ]'
             f'{" && [ \"$(cut -d\" \" -f1 " + q(path + ".sha256") + ")\" = " + q(expected) + " ]" if expected else ""}; '
             f"then :; else {pull_block}; fi; "
+            f'[ -f {q(path)} ] && [ -s {q(path + ".sha256")} ] || {{ echo "no verified SIF at {path}" >&2; exit 3; }}; '
             f'printf "%s  %s\\n" "$(cut -d" " -f1 {q(path + ".sha256")})" {q(path)}'
         )

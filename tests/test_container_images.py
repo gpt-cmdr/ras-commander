@@ -184,3 +184,14 @@ def test_ensure_sif_command_is_idempotent(tmp_path, apptainer):
     offline = RasContainerImages.ensure_sif_command(
         "linux-unsteady", "7.0.1", str(cache), apptainer_executable=fake, pull=False)
     assert subprocess.run([BASH, "-c", offline], capture_output=True, text=True).returncode == 4
+
+
+@pytest.mark.skipif(BASH is None or os.name == "nt", reason="needs bash")
+def test_ensure_sif_command_fails_loudly_when_the_pull_fails(tmp_path, apptainer, monkeypatch):
+    fake, _ = apptainer
+    monkeypatch.setenv("FAKE_PULL_FAIL", "1")
+    script = RasContainerImages.ensure_sif_command(
+        "linux-unsteady", "7.0.1", str(tmp_path / "cache"), apptainer_executable=fake)
+    completed = subprocess.run([BASH, "-c", script], capture_output=True, text=True)
+    assert completed.returncode == 3 and completed.stdout == ""
+    assert not list((tmp_path / "cache").glob("*.sif*"))
