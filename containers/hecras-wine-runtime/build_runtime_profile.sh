@@ -79,26 +79,30 @@ if [ -f /payload/hecras.msi ]; then
 fi
 [ -f "$ras_dir/Ras.exe" ] || {
 echo "== launcher"
-# Launchers normally install through msiexec themselves. Some instead unpack
-# the MSI and then wait on a prerequisite download with no installer running.
-# Stop a launcher only in that state (MSI unpacked, no msiexec for 60 s, after
-# five minutes); interrupting an install in progress leaves a broken one.
-xvfb-run -a wine /tmp/setup.exe /s /v"/qn /norestart" > /tmp/launcher.log 2>&1 &
-launcher=$!
+# InstallShield launchers re-exec themselves and return at once while msiexec
+# installs in the background, so wait for Wine itself to go idle (wineserver
+# exits), not for the launcher process. Some launchers instead unpack the MSI
+# and then wait on a prerequisite download with no installer running: stop
+# only in that state (MSI unpacked, no msiexec for 60 s, after five minutes);
+# interrupting an install in progress leaves a broken one. Match process
+# names, not command lines: the text of this script mentions msiexec.
+Xvfb :91 -screen 0 1280x1024x24 -nolisten tcp >/dev/null 2>&1 &
+xvfb=$!
+DISPLAY=:91 wine /tmp/setup.exe /s /v"/qn /norestart" > /tmp/launcher.log 2>&1 &
 idle=0
 for second in $(seq 1 3600); do
-    kill -0 "$launcher" 2>/dev/null || break
-    if pgrep -fi "msiexec" >/dev/null; then idle=0; else idle=$((idle + 1)); fi
+    sleep 1
+    [ "$second" -lt 5 ] || pgrep -x wineserver >/dev/null || break
+    if pgrep -i "^msiexec" >/dev/null; then idle=0; else idle=$((idle + 1)); fi
     if [ ! -f "$ras_dir/Ras.exe" ] && [ "$second" -ge 300 ] && [ "$idle" -ge 60 ] \
         && find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | grep -q .; then
         echo "launcher idle after ${second}s with its MSI unpacked and no installer running; stopping it"
         break
     fi
-    sleep 1
 done
-kill "$launcher" 2>/dev/null || true
 wineserver -k || true
 wineserver -w || true
+kill "$xvfb" 2>/dev/null || true
 }
 if [ ! -f "$ras_dir/Ras.exe" ]; then
     msi=$(find /build/prefix/drive_c/users -iname "HEC-RAS*.msi" -newer /tmp/setup.exe | head -n1)
