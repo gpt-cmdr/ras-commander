@@ -151,6 +151,15 @@ features. As `get_breaklines()` and `get_refinement_regions()` already do, they
 now raise a `ValueError` naming the HDF and group. An HDF without the group
 still returns an empty GeoDataFrame.
 
+**AORC precipitation works with current xarray**
+
+The `precip`, `notebooks`, and `all` extras pinned `zarr<3`, but current
+xarray releases require zarr 3 and pass `zarr_format` to `zarr.open_group()`.
+A fresh install therefore paired xarray 2026.9 with zarr 2.18 and failed every
+AORC read with `TypeError: open_group() got an unexpected keyword argument
+'zarr_format'`. The cap is removed (`zarr>=2.14.0`). AORC downloads were
+verified with xarray 2026.9.0 and zarr 3.4.1.
+
 **HdfBase timestamp readers accept paths**
 
 `HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
