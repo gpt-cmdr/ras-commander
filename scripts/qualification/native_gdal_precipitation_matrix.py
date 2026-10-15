@@ -126,6 +126,20 @@ def _inspect_model_inputs(hdf_path):
     return receipt
 
 
+def _geometry_layer_associations(receipt):
+    """Read root layer bindings from an existing public-API fingerprint."""
+    if not isinstance(receipt, dict):
+        return None
+    attributes = receipt.get("groups", {}).get("/Geometry", {}).get("attributes")
+    if not isinstance(attributes, dict):
+        return None
+    return {
+        key: value
+        for key, value in attributes.items()
+        if isinstance(key, str) and key.endswith((" Filename", " Layername"))
+    }
+
+
 def _geometry_comparison_record(receipt):
     """Compare physical inputs with named audit and keyed-row normalization."""
     if (
@@ -260,6 +274,23 @@ def assess(report: dict) -> dict:
         left = _geometry_comparison_record(native.get("model_inputs"))
         right = _geometry_comparison_record(control.get("model_inputs"))
         checks["compiled_geometry_exact_parity"] = left is not None and left == right
+        if "source_geometry_associations" in report:
+            expected = report["source_geometry_associations"]
+            checks["compiled_geometry_exact_parity"] = (
+                checks["compiled_geometry_exact_parity"]
+                and isinstance(expected, dict)
+                and bool(expected)
+                and all(
+                    isinstance(key, str)
+                    and key.endswith((" Filename", " Layername"))
+                    for key in expected
+                )
+                and all(
+                    _geometry_layer_associations(route.get("model_inputs"))
+                    == expected
+                    for route in (native, control)
+                )
+            )
     return {"passed": all(checks.values()), "checks": checks}
 
 

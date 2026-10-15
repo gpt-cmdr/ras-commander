@@ -134,6 +134,54 @@ def test_geometry_comparison_excludes_only_named_audit_dates():
     assert _geometry_comparison_record(left) != _geometry_comparison_record(right)
 
 
+@pytest.mark.parametrize("expected", [{}, None, {"unrecognized": "value"}])
+def test_source_association_gate_rejects_invalid_baseline(expected):
+    import copy
+
+    report = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures/precipitation/native_gdal_hydraulic_failure.json"
+        ).read_text()
+    )
+    report["qualification_protocol"] = "native-gdal-v2-model-inputs"
+    report["source_geometry_associations"] = expected
+    geometry = {
+        "groups": {"/Geometry": {"attributes": {"Terrain Filename": "terrain.hdf"}}},
+        "datasets": {"/Geometry/Manning": {"sha256": "same"}},
+    }
+    for route in ("python_hdf", "vendor_gdal"):
+        report["routes"][route]["model_inputs"] = copy.deepcopy(geometry)
+    assert assess(report)["checks"]["compiled_geometry_exact_parity"] is False
+
+
+def test_matching_fallback_inputs_in_both_routes_cannot_hide_lost_source_layers():
+    import copy
+
+    report = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures/precipitation/native_gdal_hydraulic_failure.json"
+        ).read_text()
+    )
+    report["qualification_protocol"] = "native-gdal-v2-model-inputs"
+    expected = {"Terrain Filename": "terrain.hdf", "Land Cover Filename": "land.hdf"}
+    report["source_geometry_associations"] = expected
+    geometry = {
+        "groups": {"/Geometry": {"attributes": dict(expected)}},
+        "datasets": {"/Geometry/Manning": {"sha256": "same"}},
+    }
+    for route in ("python_hdf", "vendor_gdal"):
+        report["routes"][route]["model_inputs"] = copy.deepcopy(geometry)
+    assert assess(report)["checks"]["compiled_geometry_exact_parity"] is True
+    for route in ("python_hdf", "vendor_gdal"):
+        attributes = report["routes"][route]["model_inputs"]["groups"]["/Geometry"][
+            "attributes"
+        ]
+        del attributes["Land Cover Filename"]
+    assert assess(report)["checks"]["compiled_geometry_exact_parity"] is False
+
+
 def test_geometry_process_audit_requires_exact_known_schema():
     import copy
     from scripts.qualification.native_gdal_precipitation_matrix import (

@@ -63,6 +63,30 @@ def _provision_tcu(executable, *, operator_acceptance=False, acceptance_export=N
     return result
 
 
+def _compute_preprocessed_plan(
+    ras, *, cores, timeout, complete_geometry=False, disable_omp_affinity=False
+):
+    """Compute using prepared geometry unless a rebuild is explicitly requested.
+
+    Preprocessing has already generated the native inputs. Clearing its .c##
+    again asks HEC-RAS to rebuild geometry during the comparison solve. Keep
+    that separate, mutating operation behind ``complete_geometry``.
+    """
+    from ras_commander import RasCmdr
+
+    return RasCmdr.compute_plan(
+        "06",
+        ras_object=ras,
+        num_cores=cores,
+        clear_geompre=complete_geometry,
+        force_geompre=complete_geometry,
+        force_rerun=True,
+        verify=True,
+        max_runtime=timeout,
+        disable_omp_affinity=disable_omp_affinity,
+    )
+
+
 def _implementation_hashes():
     """Resolve source provenance independently of the chosen output directory."""
     source_root = Path(__file__).resolve().parents[2]
@@ -177,6 +201,7 @@ def main():
     from scripts.qualification.native_gdal_source_semantics import run as source_cases
     from scripts.qualification.native_gdal_precipitation_matrix import (
         assess,
+        _geometry_layer_associations,
         _inspect_model_inputs,
     )
 
@@ -185,6 +210,7 @@ def main():
         "execution_platform": args.execution_platform,
         "cores": args.cores,
         "force_geompre": args.complete_geometry,
+        "clear_geompre_before_compute": args.complete_geometry,
         "operator_accept_tcu": args.operator_accept_tcu,
         "diagnostic_scope": set(args.routes)
         != {"configured_only", "python_hdf", "vendor_gdal", "vendor_rate"},
@@ -279,6 +305,22 @@ def main():
                                 "Requested 2D core count was not present before preprocessing"
                             )
                         plan = ras.plan_df.loc[ras.plan_df.plan_number == "06"].iloc[0]
+                        geometry = RasPlan.get_geom_path(
+                            plan["geometry_number"], ras_object=ras
+                        )
+                        source_associations = _geometry_layer_associations(
+                            _inspect_model_inputs(Path(str(geometry) + ".hdf"))
+                        )
+                        if not source_associations:
+                            raise RuntimeError(
+                                "Qualification requires source geometry layer associations"
+                            )
+                        if "source_geometry_associations" not in row:
+                            row["source_geometry_associations"] = source_associations
+                        elif row["source_geometry_associations"] != source_associations:
+                            raise RuntimeError(
+                                "Fresh route copies have different geometry layer associations"
+                            )
                         u = RasPlan.get_unsteady_path(
                             plan["unsteady_number"], ras_object=ras
                         )
@@ -432,6 +474,25 @@ def main():
                             raise RuntimeError(
                                 "Compiled preprocessing core settings differ from requested count"
                             )
+                        geometry = RasPlan.get_geom_path(
+                            plan["geometry_number"], ras_object=ras
+                        )
+                        r["model_inputs_before_compute"] = _inspect_model_inputs(
+                            Path(str(geometry) + ".hdf")
+                        )
+                        geometry_preprocessor = Path(geometry).with_suffix(
+                            f".c{plan['geometry_number']}"
+                        )
+                        r["geometry_preprocessor_before_compute"] = {
+                            "path": str(geometry_preprocessor),
+                            "exists": geometry_preprocessor.is_file(),
+                        }
+                        if geometry_preprocessor.is_file():
+                            state = geometry_preprocessor.stat()
+                            r["geometry_preprocessor_before_compute"].update(
+                                size=state.st_size, mtime_ns=state.st_mtime_ns
+                            )
+                        save()
                         import threading
 
                         stop_windows = threading.Event()
@@ -511,15 +572,11 @@ def main():
                             )
                             sampler.start()
                         try:
-                            result = RasCmdr.compute_plan(
-                                "06",
-                                ras_object=ras,
-                                num_cores=args.cores,
-                                clear_geompre=True,
-                                force_geompre=args.complete_geometry,
-                                force_rerun=True,
-                                verify=True,
-                                max_runtime=args.timeout,
+                            result = _compute_preprocessed_plan(
+                                ras,
+                                cores=args.cores,
+                                timeout=args.timeout,
+                                complete_geometry=args.complete_geometry,
                                 disable_omp_affinity=args.disable_omp_affinity,
                             )
                         finally:

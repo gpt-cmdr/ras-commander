@@ -123,13 +123,28 @@ Missing land cover, infiltration or impervious associations, changed roughness a
 hydraulic tables fail this gate. A saved rainfall match cannot compensate for
 a different model. The companion JSON identifies retrospective input checks
 separately from a run executed with the revised protocol.
+The current driver also fingerprints source layer bindings before raster
+configuration and requires both final routes to preserve them. This strengthens
+the compiled-input gate against matching fallback models on both sides.
+Retained results receive a separate source-binding audit; original reports
+remain unchanged and the JSON distinguishes retrospective audits from the
+current driver's recorded baseline.
 
-An earlier 7.0 Wine comparison had equal rainfall but different hydraulics.
-Its native routes had lost land-cover and infiltration inputs. A new run using
-ordinary plan preprocessing restores exact rainfall and hydraulic parity.
-The driver now defaults to this workflow; `--complete-geometry` explicitly
-requests a separate Mapper geometry rebuild. The precise step that changed
-inputs in the earlier attempt was not isolated.
+Earlier 7.0 Wine comparisons had equal rainfall but different hydraulics
+when physical layer associations were lost. A later integration run again
+failed the rate route's compiled-input and hydraulic gates, despite exact
+final rainfall. A read-only instrumented retry with the same package and
+driver files passed all gates. The mutation step remains unisolated; this
+intermittent behavior is tracked in [issue #536](https://github.com/gpt-cmdr/ras-commander/issues/536).
+
+After explicit preprocessing, the current driver retains its geometry inputs
+with `clear_geompre=False`, records the geometry fingerprint and `.c##` state
+before compute, and still forces a new verified solve. `--complete-geometry`
+explicitly requests a separate Mapper rebuild and invalidation. Avoiding the
+redundant invalidation is a workflow correction, not a demonstrated causal
+repair of the intermittent native behavior. Compiled-input and hydraulic
+checks remain mandatory; the JSON retains the failed attempt separately
+from qualified results.
 
 A focused Mapper probe also exposed premature completion detection under
 Wine: old valid HDF tables could survive while a new rebuild was still at
@@ -165,8 +180,8 @@ usable GUI profile. Bounded OLE, registry and loader traces have not established
 a missing module, missing COM class or alternate-key fix. No speculative
 registry or component changes were made. This runtime failure is tracked in [issue #532](https://github.com/gpt-cmdr/ras-commander/issues/532).
 
-Exact 6.4 Windows qualification used a signed extracted runtime on a temporary
-local NTFS volume. Network runtime attempts failed; runtime location is part
+Exact 6.4 Windows qualification used a runtime extracted from the signed
+official installer on a temporary local NTFS volume. Network runtime attempts failed; runtime location is part
 of the tested profile. Older Windows releases can require the existing
 process-local CPU-only WMIC shim. Older event writers use
 `CompleteEventConditions`; preprocessing recognizes it alongside
@@ -198,8 +213,8 @@ following external HDF storage.
 sentinel in both registry views. `export_acceptance()` and
 `import_acceptance()` support explicitly authorized profile provisioning;
 exports exclude personal preferences and recent projects. Export requires a
-registry-backed value; a task-probe record alone is not portable acceptance. They are trusted
-operator configuration, not signed attestations. `accept_gui_terms()` requires
+registry-backed value; a task-probe record alone is not portable acceptance.
+Acceptance exports are trusted operator configuration, not signed attestations. `accept_gui_terms()` requires
 explicit assent, a stable enabled main window and graceful exit.
 
 For an authorized preprocessing launch, pass

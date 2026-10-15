@@ -1561,6 +1561,59 @@
       "after": "Both disposable copies, with and without Mapper configuration, finished by normal process exit; success=true.",
       "receipt_sha256": "c13fbbecb6c72cc6d9f0c257e9f4d814be8926b0a812bcefc9fa8f5346ee4014"
     },
-    "native_helper_source_sha256": "48475d5115397b2a8d0c706d568de5e9399b1a9ae46bcc816b6c15ca91a4ebb9"
+    "native_helper_source_sha256": "48475d5115397b2a8d0c706d568de5e9399b1a9ae46bcc816b6c15ca91a4ebb9",
+    "wine_geometry_drift": {
+      "version": "7.0",
+      "issue": "https://github.com/gpt-cmdr/ras-commander/issues/536",
+      "status": "Intermittent physical-input drift; original mutation step and causal fix remain unisolated. A passing retry does not close the issue.",
+      "failed_attempt": {
+        "report_sha256": "bce7b5167cba4a71c74d35b3d0241be0a4b950a67a8d259c20eb257775011faf",
+        "runtime_sha256": "9990c10531221469bf51a9a62ae91f36ec01e651bed83aadf632e678130ae797",
+        "clear_geompre_before_compute": true,
+        "force_geompre": false,
+        "disable_omp_affinity": true,
+        "cumulative_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": true,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": true
+        },
+        "rate_checks": {
+          "empty_control_fails": true,
+          "vendor_compute_verified": true,
+          "python_compute_verified": true,
+          "vendor_preprocess_verified": true,
+          "python_preprocess_verified": true,
+          "native_import_recorded": true,
+          "native_started_without_payload": true,
+          "after_import_exact_parity": true,
+          "temporary_exact_parity": true,
+          "final_exact_parity": false,
+          "positive_cell_rainfall": true,
+          "nonempty_hydraulics": true,
+          "compiled_geometry_exact_parity": false
+        },
+        "final_rainfall_exact_parity": true,
+        "geometry_text_and_rasmap_unchanged_across_routes": true
+      },
+      "instrumented_retry": {
+        "report_sha256": "68cc5d0b1dfac5b5a588c9ee92edcf5b4d47a5ee3b90826871901d5d7d91781f",
+        "same_retained_package_and_driver_files": true,
+        "cumulative_gates_passed": 13,
+        "rate_gates_passed": 13,
+        "native_import_and_preprocessing_preserved_layer_associations": true,
+        "original_failure_reproduced": false
+      },
+      "current_workflow": "Retain geometry prepared by explicit preprocessing (clear_geompre=False); separately request a rebuild only when intended. Record pre-compute compiled inputs and require full physical-input/forcing/hydraulic parity."
+    }
   }
 }

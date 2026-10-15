@@ -267,10 +267,19 @@ class PrecipCapabilities:
                 "The default Wine profile failed on unimplemented NUMA/affinity calls."
             )
 
+        if normalized == "7.0" and not prerelease:
+            notes.append(
+                "After explicit preprocessing, retain its geometry inputs with "
+                "RasCmdr.compute_plan(clear_geompre=False). A Wine 7.0 run with "
+                "redundant geometry invalidation lost physical layer associations "
+                "despite exact rainfall; the mutation step remains unresolved "
+                "(issue #536). Verify compiled inputs and hydraulics per run."
+            )
+
         if normalized == "6.4" and not prerelease:
             notes.append(
-                "Native NetCDF fully qualified using the signed extracted runtime on "
-                "a temporary NTFS virtual disk backed by approved task storage. "
+                "Native NetCDF fully qualified using a runtime from the signed "
+                "official installer on a temporary NTFS virtual disk backed by approved task storage. "
                 "Private UNC and mapped-network runtime attempts failed; runtime "
                 "location is part of the tested 6.4 environment."
             )

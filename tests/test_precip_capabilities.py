@@ -233,3 +233,13 @@ def test_wine60_source_import_does_not_imply_full_qualification():
 def test_wine_7x_qualification_records_required_openmp_profile(version):
     capability = PrecipCapabilities.for_version(version)
     assert any("disable_omp_affinity=True" in note and "KMP_AFFINITY=disabled" in note for note in capability.notes)
+
+
+def test_wine_70_records_unresolved_geometry_drift_and_prepared_input_workflow():
+    capability = PrecipCapabilities.for_version("7.0")
+    assert any(
+        "clear_geompre=False" in note
+        and "issue #536" in note
+        and "unresolved" in note
+        for note in capability.notes
+    )
