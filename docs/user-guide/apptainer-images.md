@@ -270,6 +270,35 @@ with the Wine result over computational cells.
 | 5.0.7 | Passed (terms accepted per task) | Passed, 74 s | 0.012 ft | 0.0001 ft |
 | 5.0.6, 5.0.5, 5.0.4, 5.0.3, 5.0.1, 5.0 | Passed (terms accepted per task) | No Linux engine | — | — |
 
+### Gridded precipitation
+
+BaldEagleCrkMulti2D plan 06 ("Gridded Precip - Infiltration", HEC's example from 6.0 on) was
+run with two precipitation sources: the bundled NEXRAD DSS grid (run window 2018-09-09
+18:00-19:20), and three synthetic hourly GeoTIFF frames imported with
+`RasUnsteady.set_gridded_precipitation_geotiff` (ras-commander writes the NetCDF and the
+"Imported Raster Data" payload HEC-RAS's GUI import would write). The check is the cumulative
+precipitation depth that reached the mesh.
+
+| HEC-RAS | DSS grid, Wine | DSS grid, native | GeoTIFF, Wine | GeoTIFF, native |
+| --- | --- | --- | --- | --- |
+| 7.0.1, 7.0, 6.6, 6.5 | Passed, 0.11454 in | Passed, identical | Passed, 0.11575 in | Passed, identical |
+| 6.4.1, 6.3.1, 6.3, 6.2 | Passed, 0.11454 in | No Linux engine | Passed, 0.11575 in | No Linux engine |
+| 6.1 | Passed, 0.11454 in | Passed, identical | Passed, 0.10978 in | Passed, identical |
+| 6.0 | Passed, 0.11454 in (terms per task) | No Linux engine | Passed, 0.10978 in | No Linux engine |
+
+The DSS results match the Windows reference for this window; the GeoTIFF results for 6.2 and
+later match the Windows/Wine 6.6 reference. 6.0 and 6.1 map the same raster to the mesh
+differently (identically under Wine and natively), so compare raster results within a release.
+A plan whose `.u##` names a GDAL raster without the imported payload fails in every release
+(`Expected precip dataset ... Imported Raster Data/Values does not exist`): HEC-RAS reads GDAL
+rasters only in its GUI import, so import them with ras-commander. HEC-RAS 5.x has no gridded
+meteorology.
+
+`RasDocker` with the final images ran Muncie plan 03 and the DSS case end to end (Wine
+preparation, native solve) for 7.0.1, 7.0, 6.6, and 6.5, with the same cumulative
+precipitation. Hosts whose Docker AppArmor profile denies Wine's sockets need
+`apparmor_profile="unconfined"`.
+
 Notes:
 
 - The differences are between engines (Windows under Wine on 1 core, Linux on 2 cores), not

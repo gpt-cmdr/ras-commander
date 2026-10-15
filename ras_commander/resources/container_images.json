@@ -53,9 +53,9 @@
     {
       "role": "wine-executor",
       "hec_ras_version": "5.0.7",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_5.0.7@sha256:5dfbdd994957544d8aa20e44e03215a17257f370f379b0834c8ff98cb52cdce2",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_5.0.7@sha256:082231e1174ff2118ce5ec57f606f4e2eaf265b12a1e8b1d8271be34b7aa7e5f",
-      "sif_sha256": "fe51c9960a17378bc4d7f2307b80e73302abba33eb03d55d86f5558f5935072c",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_5.0.7@sha256:7ea5163a4777246455f36f51f7192c8f78995d9b4777db4c252dcf9aacf43863",
+      "sif": null,
+      "sif_sha256": null,
       "mirror": null
     },
     {
@@ -69,9 +69,9 @@
     {
       "role": "wine-executor",
       "hec_ras_version": "6.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.1@sha256:4829fe06eff9c24277e96dcc78afd988f506b4e87895c87d08357fcb0b33364b",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_6.1@sha256:7715577516c6465646a022b3d07fc67893d291d65d3d029a0d70616a4548e5d4",
-      "sif_sha256": "b49fdbd7ee833f7ee8692dcf4b045db15605c02fc828588d8cada74b633b6b5e",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.1@sha256:0f07beb34a77d97a97cc855d2618f53b36908ba9222bb9cb95ecda59b982d28c",
+      "sif": null,
+      "sif_sha256": null,
       "mirror": null
     },
     {
@@ -109,39 +109,39 @@
     {
       "role": "wine-executor",
       "hec_ras_version": "6.5",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.5@sha256:0ef0da5028df7ee349fd86a72fc18ad8b32e523012059496241452e0139a080f",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_6.5@sha256:0ce2b810285535a43b6313bee52110d2dd3f49fcfacbe92720768a55daabc93b",
-      "sif_sha256": "e02c78f5b64fce6747d8ea31dff6aeea98466ef72ca9d4773fcddb91655e58e2",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.5@sha256:d8c7216a47d6c01146ea72977d6ad1d3f6575760ea1a47320c2039058170f513",
+      "sif": null,
+      "sif_sha256": null,
       "mirror": null
     },
     {
       "role": "wine-executor",
       "hec_ras_version": "6.6",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.6@sha256:4ff55deb4ef3d3f8e3d6f94280d3f28e959d00996fb773208487b1dc53d0baf4",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_6.6@sha256:b456656ada26d8c6365f367cdf2893ae1e27f5b3d37240e4408b2af5ec675a21",
-      "sif_sha256": "678c07b843f48f5caf268a7df61da911f7cd424cbda51f9f965974f9d0d6e9c3",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_6.6@sha256:c074ae74266c8f8f7a54e0b27abe33fabb52e729fb4395f61e5e2d101a9b8219",
+      "sif": null,
+      "sif_sha256": null,
       "mirror": null
     },
     {
       "role": "wine-executor",
       "hec_ras_version": "7.0",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_7.0@sha256:9e76481624cc5e4f640b0fbf386a3e8acf7a4641a9555cb5493ab7cf437aea82",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_7.0@sha256:e228dd8f560c69a94bb9e2213294805f978c77dd02b220c26bbc1291bb3c40e3",
-      "sif_sha256": "23a1a4f23c648d050c88478cf07bda63cc23c61c57212919498e0148306353f8",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_7.0@sha256:fd6dc9fd0b86456a4b58dc5f41da937b2be58d7a483659d10e7c6fefa1bf9963",
+      "sif": null,
+      "sif_sha256": null,
       "mirror": null
     },
     {
       "role": "wine-executor",
       "hec_ras_version": "7.0.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_7.0.1@sha256:42ea8bff337d2491d0fb634a9f28e8e616ce80ef29bae6e9d0f2db99c5a417a1",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_7.0.1@sha256:4764c194e41625dec4f034ebfe29d3a44b1109457eb5dbe203c15a1cdd79045f",
-      "sif_sha256": "0e4f131ddd908b402b9fd8c8a7ec6700b6200c085a3e6ce5b97541af122631e1",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-executor_7.0.1@sha256:386092006ed2653d30f9d8576ca8ea43690330aa1b73bf82e8c4b28f53c4f427",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-wine-executor-sif_7.0.1@sha256:24d3a879de3016971c0ffdef81523fbda27b0d15e1fd459144b022f9ab126e96",
+      "sif_sha256": "25504d99785e333a7733bf3ee35e6a78589429beb87ae98d0120d6f08af84147",
       "mirror": null
     },
     {
       "role": "wine-precompute",
       "hec_ras_version": "5.0.7",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_5.0.7@sha256:59a531c11427776d2f9f54ab53a5b634b76a04c0dc92d6423b82c09ed501892c",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_5.0.7@sha256:f013059b2584b2667d7b697729f034b4dc0bb27d1c2f929bfa1ac0265d1ea92f",
       "sif": null,
       "sif_sha256": null,
       "mirror": null
@@ -149,7 +149,7 @@
     {
       "role": "wine-precompute",
       "hec_ras_version": "6.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.1@sha256:0380a08b393de2737297b89ff8c7ab8e4c908998adba8f2636433d1e77b74b85",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.1@sha256:344838ddc0aae7e834f97145dcfcfd0f9d47a96f3179fd7cc54e7a8948f699ea",
       "sif": null,
       "sif_sha256": null,
       "mirror": null
@@ -157,7 +157,7 @@
     {
       "role": "wine-precompute",
       "hec_ras_version": "6.5",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.5@sha256:5ca74903b64cb449e44c177a8be5c5bdeba019495990e592371d1ee55a8764fa",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.5@sha256:95e418b8adc0541599e8c1b89f3903e027f20a81243f9362a752c93b4611f710",
       "sif": null,
       "sif_sha256": null,
       "mirror": "docker.io/rascommander/hec-ras-wine-precompute_6.5@sha256:5de3b51455e7405ea0f85f1d9112c8232e41faaad74a4c13bd511fad8c8eda99"
@@ -165,7 +165,7 @@
     {
       "role": "wine-precompute",
       "hec_ras_version": "6.6",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.6@sha256:a19b878fccfb89d2d767faf4b122d130a10abd63c05b707e1146094ccd4f0ea6",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_6.6@sha256:1eef40777dd4a1c99a18a1a6b9ce5524ea163b45133901dbe5d38895fef99c11",
       "sif": null,
       "sif_sha256": null,
       "mirror": "docker.io/rascommander/hec-ras-wine-precompute_6.6@sha256:5fbc07a20693cb867578048be632d88cee02618780259c1c7ddc258c9fbb4318"
@@ -173,7 +173,7 @@
     {
       "role": "wine-precompute",
       "hec_ras_version": "7.0",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_7.0@sha256:ca73b22f63e915419b789ac120b1fdaeeb7743e4376e73bc5d8cc684e14dd634",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_7.0@sha256:34f17ebb0cd6ef92ec993fd6cea8784da91556a8b83979d915cc010c264c0d12",
       "sif": null,
       "sif_sha256": null,
       "mirror": null
@@ -181,7 +181,7 @@
     {
       "role": "wine-precompute",
       "hec_ras_version": "7.0.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_7.0.1@sha256:c60ba4ffd9a123a205c90ca9f6d63a0c18974b6fb0c7c35140480634f4bf0917",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-wine-precompute_7.0.1@sha256:1e87099ebcf3777f0d56e4a4cb4b6501173a7d1886bee11712866da7419fc9aa",
       "sif": null,
       "sif_sha256": null,
       "mirror": "docker.io/rascommander/hec-ras-wine-precompute_7.0.1@sha256:f53db7bd9e256f203e07fee77a624aef3fe33ba23e04f94e2e3a9afc62f4359d"
@@ -189,49 +189,49 @@
     {
       "role": "linux-unsteady",
       "hec_ras_version": "5.0.7",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_5.0.7@sha256:9d28f8aadc115f4e0be5d9af4e1a5bf357854594745954f6898e8efbb1367223",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_5.0.7@sha256:8346abd77f75b2a4a071b415f7d16a95f56abfd39ce36dd36c8d47bb7d1ea7aa",
-      "sif_sha256": "897ef3850f16e19bfc36e9aa7cf3d3d3d80716e3f894f38f9dccc7e10eab1b5c",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_5.0.7@sha256:25190a37ac4a3f55ee4e07eab3521ddde4d0217f540768c8a1889367ad65deca",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_5.0.7@sha256:7067f2fc5f3119d0b44464f830864d70ab227f6ac944bf9ffa898c2a13aa1129",
+      "sif_sha256": "b48479f8f76d1288a33f0dbf05f4cfd719c9f39961f65cac5b4293acc816faab",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.1@sha256:ec8151d1020ca9fd988dfc903f6c028d29dce606abfeeee93c0d760497128449",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.1@sha256:5641f90964a0ff6328ad6cba8af058966f201be412f23a903d60ab8065312bd9",
-      "sif_sha256": "d78902203dbc690a9b426d4de7204f63e524423e1da8ab14d1a54632cf223828",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.1@sha256:2f78a61658c1311ac9934356d8ef4fea591362a165f7ba76ad88aaa3658804a7",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.1@sha256:1bc7e94051eff3eea00b12abaacdb8b6fc98ff39487079a9c240ea4b046c4c58",
+      "sif_sha256": "a26b4e83d346be0eca5ae88a059963fecc16022c3095565f11edda08a18989b6",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.5",
-      "ghcr": null,
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.5@sha256:d0e6925b1aae130ac0b6e246226b3f0a6a2009d82eaaa62634f803fefc9fe108",
-      "sif_sha256": "5f9263b65e9ae538bfad2df6843e232c7fc303ddf756c259f60eff38123ea676",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.5@sha256:d2e51d3a7f9a10f24d323deb819a1a770cfa03ee597bbb1a6f0f4f9dc8a43665",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.5@sha256:cd021db53d5081dd66f85f5cc5f6641e60b01d625dd4cf9fdcce75c4aaf2e78d",
+      "sif_sha256": "7e556b7153e26fbc7d2a1f31c824e9a329dc8dce80782d52b474b8dc34ec8a6d",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.5@sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8"
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.6",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:923b792028f8685c70b7c193e8645f03c7cf1788ed48cad7b39034d9665a5732",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.6@sha256:9f4f9037813c9bd8f592bf7752abc01609595f2ffb583e02a6aed93621d01039",
-      "sif_sha256": "428385b97675e3dcdc94c12e754c3c061f9cd8e0cdd67001c25846c18c1fa5b4",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:4260e287fd3494a14c95091e1aaedd2bab50aac0615cb987f65bd33a01018f0f",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.6@sha256:33552088545493d0ef6865a5c7d544b16f3ecd6191e4f20820a42faf41ab7b67",
+      "sif_sha256": "38759aeb98fa3ef07d9c691d4b2047e12147ec56a6e8cd5eb432e25fec7ccd04",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c"
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "7.0",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0@sha256:f940cd60cd8bef94e5a0c11e9e6050e67c0be51c5da627e77f9ae93a705d9193",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0@sha256:93a8809e5d70b461fb63e86bc374817a589a08fab340c3919296381d5b3519c2",
-      "sif_sha256": "52dc9541fede348c51a1c2efbf41fa7d780edc5f5b084e8104c5c94304698a60",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0@sha256:f2ae7e5dac3fe38e55fecc18fdf8d25dd0276f10519ac39fff171b1eecd8fd05",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0@sha256:b2fd5a48b30b5267ce5ece8ed1979d0f23f449060f78f4d7535f8097ef97dcff",
+      "sif_sha256": "c38485ccb0fac6ea77768ebb88bfbee7d9a4eb82ce033ef2401d417543ca8625",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "7.0.1",
-      "ghcr": null,
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0.1@sha256:5ff5d53faff74b904b70e939199115edef4f9d62a6f444a413f612e85b7783f4",
-      "sif_sha256": "934fe243dbfb8cbea84b469a74c406b76ac6344b01b7b18dcc985d7d3e15c7d3",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0.1@sha256:8e692487b70d924aa7f985fb6eef5610c979eba76ec4377e27947d8821b51fc5",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0.1@sha256:01d6393ed752039f0da6dea5a1c24ea0445f476c6f86e3c4d9ec72971bb4da0a",
+      "sif_sha256": "17f4fb931c73f7c2f22febbd55115d06dc056fe89cacb023aa379a61f81f74a6",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_7.0.1@sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9"
     }
   ]
