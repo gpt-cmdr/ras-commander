@@ -78,24 +78,32 @@ def safe_resolve_path(path: PathLike) -> Path:
     return RasUtils.safe_resolve(Path(path))
 
 
-def _refuse_linked_path(path: PathLike) -> None:
-    """Raise ValueError if the path or any parent directory is a link or junction.
+def _strip_extended_prefix(text: str) -> str:
+    """Drop a Windows extended-length prefix (\\\\?\\ or \\\\?\\UNC\\)."""
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    if text.startswith("\\\\?\\"):
+        return text[4:]
+    return text
 
-    Walks the absolute, unresolved path. A symbolic link or a Windows reparse
-    point (directory junction) anywhere along it could redirect an edit to
-    another file, so editing callers refuse such paths before any write.
+
+def _unredirected_path(path: PathLike) -> Path:
+    """Return the supplied file's resolved path, refusing any redirection.
+
+    The fully resolved path must equal the absolute path as supplied (after
+    removing extended-length prefixes and normalizing case). Any redirection,
+    whether a symbolic link, a junction at any depth, a SUBST drive or another
+    mapped alias, changes the resolved path and raises ValueError before any
+    write. The file must exist. Nothing is written.
     """
-    candidate = Path(os.path.abspath(os.fspath(path)))
-    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-    for component in (candidate, *candidate.parents):
-        if not os.path.lexists(component):
-            continue
-        if os.path.islink(component):
-            raise ValueError(f"refusing a linked path component: {component}")
-        attributes = getattr(os.lstat(component), "st_file_attributes", 0)
-        if attributes & reparse:
-            raise ValueError(f"refusing a reparse-point path component: {component}")
-
+    supplied = _strip_extended_prefix(os.path.abspath(os.fspath(path)))
+    resolved = _strip_extended_prefix(str(Path(os.fspath(path)).resolve(strict=True)))
+    if os.path.normcase(resolved) != os.path.normcase(supplied):
+        raise ValueError(
+            "infiltration clearing refuses a redirected path "
+            f"(supplied {supplied}, resolves to {resolved})"
+        )
+    return Path(resolved)
 
 def decode_hdf_attr(value: Any) -> Optional[str]:
     """Decode an HDF attribute value to a clean string."""
@@ -803,7 +811,8 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     Every traversed member must be a hard link owned by the supplied file; a
     soft or external link is rejected before any write, and so is a file
     with more than one filesystem hard link (its bytes are shared) or a path
-    with a symbolic link or junction in any component. Existing
+    whose fully resolved form differs from the supplied absolute path (any
+    link, junction, SUBST drive or mapped alias). Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -815,12 +824,12 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """
     import h5py
 
-    # Gate KU: a link or junction anywhere on the supplied path could redirect
-    # the edit to another geometry; refuse before resolving or writing.
-    _refuse_linked_path(hdf_path)
-    path = safe_resolve_path(hdf_path)
-    if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
+    if not re.search(r"\.g\d{2}\.hdf$", Path(os.fspath(hdf_path)).name, re.IGNORECASE):
         raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
+    # Gates KU/KZ: any redirection (symbolic link, junction at any depth, SUBST
+    # drive, mapped alias) could send the edit to another geometry. Require the
+    # resolved path to be the supplied path, then edit only that path.
+    path = _unredirected_path(hdf_path)
 
     def owned_geometry(handle):
         # Inspect the link before dereferencing an external writable target.

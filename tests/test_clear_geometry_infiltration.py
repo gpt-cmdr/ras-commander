@@ -700,7 +700,7 @@ def test_clear_geometry_infiltration_refuses_a_junctioned_directory(tmp_path):
     if made.returncode != 0 or not junction.exists():
         pytest.skip("directory junctions cannot be created here")
     before = _sha256(source)
-    with pytest.raises(ValueError, match="reparse-point|linked path"):
+    with pytest.raises(ValueError, match="redirected path"):
         clear_geometry_infiltration(junction / source.name)
     assert _sha256(source) == before
 
@@ -713,7 +713,7 @@ def test_clear_geometry_infiltration_refuses_a_symlinked_directory(tmp_path):
     except (OSError, NotImplementedError):
         pytest.skip("directory symlinks cannot be created here")
     before = _sha256(source)
-    with pytest.raises(ValueError, match="linked path|reparse-point"):
+    with pytest.raises(ValueError, match="redirected path"):
         clear_geometry_infiltration(link / source.name)
     assert _sha256(source) == before
 
@@ -723,3 +723,42 @@ def test_clear_geometry_infiltration_still_clears_a_plain_single_link_file(tmp_p
     clear_geometry_infiltration(source)
     with h5py.File(source) as h:
         assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows SUBST drives")
+@pytest.mark.parametrize("extended", [False, True])
+def test_clear_geometry_infiltration_refuses_a_subst_drive(tmp_path, extended):
+    # Gate KZ reproduction: a SUBST drive letter mapped to the source folder.
+    import string
+
+    source = _area_only_source(tmp_path / "source")
+    used = {d.upper() for d in os.listdrives()} if hasattr(os, "listdrives") else set()
+    free = [c for c in reversed(string.ascii_uppercase) if c + ":\\" not in used]
+    free = [c for c in free if not os.path.exists(c + ":\\")]
+    if not free:
+        pytest.skip("no free drive letter")
+    drive = free[0] + ":"
+    made = subprocess.run(
+        ["subst", drive, str(source.parent)], capture_output=True, check=False
+    )
+    if made.returncode != 0:
+        pytest.skip("subst is unavailable")
+    try:
+        target = drive + "\\" + source.name
+        if extended:
+            target = "\\\\?\\" + target
+        before = _sha256(source)
+        with pytest.raises(ValueError, match="redirected path"):
+            clear_geometry_infiltration(target)
+        assert _sha256(source) == before
+    finally:
+        subprocess.run(["subst", drive, "/d"], capture_output=True, check=False)
+
+
+def test_unredirected_path_accepts_extended_prefix_of_a_plain_file(tmp_path):
+    source = _area_only_source(tmp_path / "plain2")
+    if os.name == "nt":
+        assert (
+            association._unredirected_path("\\\\?\\" + str(source)) == source.resolve()
+        )
+    assert association._unredirected_path(source) == source.resolve()
