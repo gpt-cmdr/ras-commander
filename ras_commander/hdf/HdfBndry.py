@@ -738,7 +738,11 @@ class HdfBndry:
                 bc_lines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no boundary condition lines".
+            raise ValueError(
+                f"Failed to read boundary condition lines from {hdf_path} ({bc_lines_path}): {e}"
+            ) from e
 
     @staticmethod
     @log_call
@@ -1091,7 +1095,11 @@ class HdfBndry:
                 reference_lines_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no reference lines".
+            raise ValueError(
+                f"Failed to read reference lines from {hdf_path} ({reference_lines_path}): {e}"
+            ) from e
 
     @staticmethod
     @standardize_input(file_type='plan_hdf')
@@ -1157,6 +1165,10 @@ class HdfBndry:
                 reference_points_path,
                 str(e),
             )
-            return gpd.GeoDataFrame()
+            # An absent group returns an empty frame above; a group that exists
+            # but cannot be read is an error, not "no reference points".
+            raise ValueError(
+                f"Failed to read reference points from {hdf_path} ({reference_points_path}): {e}"
+            ) from e
 
     

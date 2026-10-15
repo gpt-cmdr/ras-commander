@@ -142,6 +142,15 @@ statistics also carried permanently-zero columns.
   `HdfMesh.get_mesh_cell_points(..., include_ghost_cells=False)`, or pass
   `include_ghost_cells=True`.
 
+**Unreadable boundary groups raise instead of returning an empty frame**
+
+`HdfBndry.get_bc_lines()`, `get_reference_lines()`, and `get_reference_points()`
+caught every read error and returned an empty GeoDataFrame. A malformed or
+unreadable group was therefore indistinguishable from a geometry with no
+features. As `get_breaklines()` and `get_refinement_regions()` already do, they
+now raise a `ValueError` naming the HDF and group. An HDF without the group
+still returns an empty GeoDataFrame.
+
 **HdfBase timestamp readers accept paths**
 
 `HdfBase.get_unsteady_timestamps()` and `HdfBase.get_simulation_start_time()`
