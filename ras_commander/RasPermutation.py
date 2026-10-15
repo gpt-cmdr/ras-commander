@@ -380,6 +380,18 @@ class RasPermutation:
         )
 
     @staticmethod
+    def _rows_for_plans(results_df: pd.DataFrame, plan_numbers) -> pd.DataFrame:
+        """Return the results rows for ``plan_numbers``.
+
+        A results frame without a ``plan_number`` column (for example, when
+        every plan in the batch failed) yields an empty frame, so the batch is
+        reported per permutation instead of raising ``KeyError``.
+        """
+        if results_df is None or "plan_number" not in results_df.columns:
+            return pd.DataFrame()
+        return results_df[results_df["plan_number"].isin(plan_numbers)].copy()
+
+    @staticmethod
     def _derive_status(
         summary_row: pd.Series,
         execution_success: Optional[bool],
@@ -833,10 +845,10 @@ class RasPermutation:
                     for plan_num, er in remote_results.items()
                 }
 
-                summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
-                summary_df = summary_df[
-                    summary_df["plan_number"].isin(plan_numbers)
-                ].copy()
+                summary_df = RasPermutation._rows_for_plans(
+                    batch_ras.update_results_df(plan_numbers=plan_numbers),
+                    plan_numbers,
+                )
             else:
                 if timeout_sec is not None:
                     logger.warning(
@@ -858,10 +870,10 @@ class RasPermutation:
 
                 summary_df = compute_result.results_df.copy()
                 if summary_df.empty:
-                    summary_df = batch_ras.update_results_df(plan_numbers=plan_numbers)
-                    summary_df = summary_df[
-                        summary_df["plan_number"].isin(plan_numbers)
-                    ].copy()
+                    summary_df = RasPermutation._rows_for_plans(
+                        batch_ras.update_results_df(plan_numbers=plan_numbers),
+                        plan_numbers,
+                    )
 
             if summary_df.empty:
                 batch_summary = batch_log_df[
