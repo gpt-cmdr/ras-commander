@@ -9,6 +9,8 @@ alone does not identify a development checkout.
 
 ### Unreleased
 
+### v0.106.0 (October 2026)
+
 **Multi-area computation points regenerate correctly**
 
 `GeomMesh.generate()` now regenerates the selected 2D area's computation
@@ -29,6 +31,16 @@ Functions that return xarray objects or GeoDataFrames raise an `ImportError`
 that names the missing package and `pip install "ras-commander[full]"`. The
 installation guide no longer states that the `compute` extra covers all
 direct HDF result extraction.
+
+**Stage hydrograph edits stay within the selected boundary**
+
+Stage hydrograph authoring now bounds every edit to the selected boundary block,
+including long inline tables and repeated edits. The new
+`RasUnsteady.set_stage_hydrograph_initial_stage()` setter can preserve dry
+initialization when an owned 2D child changes from normal depth to a stage
+hydrograph. It preserves sibling boundaries and source bytes and reports
+pre/post digests; it does not resolve native HEC-RAS `USXSID` solver errors
+(#517).
 
 **Removed unimplemented remote worker stubs**
 
@@ -105,6 +117,35 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
   (`memory_per_task`, `max_concurrent`, `ras_executable`, `transfer_mode`,
   `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
   no-ops; unknown fields are rejected.
+
+**Parent-grid mesh anchoring and geometry reliability**
+
+`GeomMesh.get_grid_anchor()` and `GeomMesh.generate(..., grid_anchor=...)` let
+child meshes follow a parent's regular grid while RAS Mapper applies
+refinement regions and breaklines. `RasBreakout2D.prepare_cloned_geometry()`
+can pass the parent anchor through; an optional breakline perimeter-crossing
+limit can discard lines that weave across a child trim boundary (#529).
+Multi-area geometries now regenerate the selected area's computation points
+instead of silently retaining stale points (#531).
+
+**Clear compiled 2D-area infiltration associations**
+
+`RasMap.clear_geometry_infiltration()` now removes stale infiltration
+associations from both geometry-level and per-area HDF attributes while
+preserving unrelated area attributes. It refuses redirected paths and unsafe
+HDF/filesystem links before writing (#530).
+
+**Native GDAL NetCDF precipitation import**
+
+`RasUnsteady.configure_gridded_gdal_precipitation()` and
+`import_gridded_gdal_precipitation()` add a vendor-GDAL route for cumulative
+depth and interval-ending hourly average rates. The import validates CF time
+and units, stages the accumulated-raster sidecar, then atomically replaces it
+after validation. Qualification is limited to the documented platform and
+release profiles and requires physical-input and hydraulic gates. Wine 7.0
+rate-attempt intermittency remains under investigation (#536), and Wine 6.0
+preprocessing/startup remains unqualified (#532); neither limitation is
+resolved by this release (#533).
 
 ### v0.105.0 (October 2026)
 
