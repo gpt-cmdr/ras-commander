@@ -46,6 +46,7 @@ def test_64_and_later_report_corrected_timing(version):
 
 
 def test_wmic_requirement_matches_executable_evidence():
+    assert PrecipCapabilities.for_version("6.0").requires_wmic_compatibility
     assert PrecipCapabilities.for_version("6.1").requires_wmic_compatibility
     assert PrecipCapabilities.for_version("6.2").requires_wmic_compatibility
     assert PrecipCapabilities.for_version("6.3.1").requires_wmic_compatibility
@@ -118,7 +119,7 @@ def test_route_qualification_does_not_overstate_format_evidence():
     assert any("WINEDLLOVERRIDES" in note for note in capabilities.notes)
     assert capabilities.qualification_for("netcdf") == "qualified_windows_and_wine"
     assert capabilities.qualification_for("netcdf", route="native_hdf") == "qualified_windows_and_wine"
-    assert capabilities.qualification_for("netcdf", route="native") == "documented"
+    assert capabilities.qualification_for("netcdf", route="native") == "qualified_windows_and_wine"
     assert capabilities.qualification_for("geotiff") == "qualified_windows_and_wine"
     assert capabilities.qualification_for("grib") == "documented"
     assert capabilities.qualification_for("grib", route="native") == "documented"
@@ -146,7 +147,7 @@ def test_qualification_evidence_is_exact_to_tested_release():
     assert not capabilities_632.requires_wmic_compatibility
     assert (
         PrecipCapabilities.for_version("7.0.1").native_netcdf_qualification
-        == "documented"
+        == "qualified_windows_and_wine"
     )
 
 
@@ -204,3 +205,41 @@ def test_unknown_route_qualification_fails_closed():
         PrecipCapabilities.for_version("6.6").qualification_for(
             "dss", route="translated_netcdf_with_native_hdf"
         )
+
+
+@pytest.mark.parametrize("version", ["6.0", "6.1", "6.2", "6.3", "6.3.1", "6.4", "6.4.1", "6.5", "6.6", "7.0", "7.0.1"])
+def test_native_gdal_windows_qualification_matches_exact_release_evidence(version):
+    capability = PrecipCapabilities.for_version(version)
+    assert capability.qualification_for("netcdf", route="native") == (
+        "qualified_windows_and_wine" if version in {"6.1", "6.2", "6.3", "6.3.1", "6.4", "6.4.1", "6.5", "6.6", "7.0", "7.0.1"} else "qualified_windows"
+    )
+    assert capability.qualification_for("netcdf", route="native_hdf") == (
+        capability.qualification_for("netcdf", route="native")
+    )
+    assert capability.native_grib_qualification == "documented"
+
+
+def test_native_gdal_unknown_patch_is_not_full_qualification():
+    assert PrecipCapabilities.for_version("6.4.2").native_netcdf_qualification == "documented"
+
+
+def test_wine60_source_import_does_not_imply_full_qualification():
+    capability = PrecipCapabilities.for_version("6.0")
+    assert capability.native_netcdf_qualification == "qualified_windows"
+    assert any("Wine 6.0" in note and "preprocessing stalled" in note for note in capability.notes)
+
+
+@pytest.mark.parametrize("version", ['7.0', '7.0.1'])
+def test_wine_7x_qualification_records_required_openmp_profile(version):
+    capability = PrecipCapabilities.for_version(version)
+    assert any("disable_omp_affinity=True" in note and "KMP_AFFINITY=disabled" in note for note in capability.notes)
+
+
+def test_wine_70_records_unresolved_geometry_drift_and_prepared_input_workflow():
+    capability = PrecipCapabilities.for_version("7.0")
+    assert any(
+        "clear_geompre=False" in note
+        and "issue #536" in note
+        and "unresolved" in note
+        for note in capability.notes
+    )

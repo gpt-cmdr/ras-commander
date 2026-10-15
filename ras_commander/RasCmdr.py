@@ -166,13 +166,34 @@ class RasCmdr:
         )
 
     @staticmethod
+    def _openmp_subprocess_env(
+        environment: Optional[dict[str, str]], disable_omp_affinity: bool,
+    ) -> Optional[dict[str, str]]:
+        """Disable Intel affinity queries only in the selected engine tree.
+
+        Intel documents ``disabled`` as disabling low-level affinity interfaces;
+        ``none`` still queries topology and is insufficient for Wine NUMA gaps.
+        Preserve an existing WMIC PATH shim and never mutate caller state.
+        """
+        if type(disable_omp_affinity) is not bool:
+            raise TypeError("disable_omp_affinity must be a bool")
+        if not disable_omp_affinity:
+            return environment
+        result = dict(os.environ if environment is None else environment)
+        for key in list(result):
+            if key.upper() == "KMP_AFFINITY":
+                del result[key]
+        result["KMP_AFFINITY"] = "disabled"
+        return result
+
+    @staticmethod
     def _legacy_wmic_subprocess_env(
         ras_object: 'RasPrj',
     ) -> tuple[Optional[dict[str, str]], Optional[tempfile.TemporaryDirectory]]:
-        """Supply the CPU-only WMIC surface required by HEC-RAS 6.1-6.3.
+        """Supply the CPU-only WMIC surface required by HEC-RAS 6.0-6.3.1.
 
         Current Windows releases can omit ``wmic.exe``.  The HEC-RAS 6.3
-        unsteady solver and executable qualification of 6.1 and 6.2 invoke five
+        unsteady solver and executable qualification of 6.0, 6.1 and 6.2 invoke five
         read-only ``wmic CPU get`` queries before starting numerical work and
         abort when the resulting ``systemInfo.txt`` is empty.  Provide those
         fields from CIM through a process-local PATH shim; do not install a
@@ -188,7 +209,7 @@ class RasCmdr:
         if (
             not RasCmdr._is_windows()
             or version is None
-            or version not in {(6, 1, 0), (6, 2, 0), (6, 3, 0), (6, 3, 1)}
+            or version not in {(6, 0, 0), (6, 1, 0), (6, 2, 0), (6, 3, 0), (6, 3, 1)}
             or shutil.which("wmic") is not None
         ):
             return None, None
@@ -2461,6 +2482,50 @@ class RasCmdr:
         )
 
     @staticmethod
+    @log_call
+    def inspect_plan_windows(
+        plan_number: Union[str, Number],
+        ras_object=None,
+        max_text_chars: int = 4096,
+    ) -> Dict[str, Any]:
+        """Read bounded Windows/Wine dialog text for one exact plan.
+
+        Complete process inventory is required before querying any window.
+        Only exact-plan matched PIDs with revalidated creation times may
+        contribute visible titles, static/button captions, list-box strings
+        and read-only, non-password edit text. Editable/password values and
+        other processes' text are excluded; no UI action is performed. Skipped
+        owned controls retain only class/style/identity metadata.
+
+        ``max_text_chars`` is a total title/caption budget (1..65536). The
+        JSON-safe result has explicit ``complete``, ``inventory``, ``windows``
+        and ``query_errors`` fields. An incomplete result grants no execution,
+        cancellation or result-file inspection permission. This diagnostic
+        does not change solver quiescence or completion requirements.
+
+        Args:
+            plan_number: Plan number resolved through project metadata.
+            ras_object: Optional initialized project.
+            max_text_chars: Total text budget from 1 through 65536 characters.
+
+        Returns:
+            JSON-safe ownership inventory, bounded windows and query errors.
+
+        Raises:
+            ValueError: The budget is invalid or the plan cannot be resolved.
+
+        """
+        if (
+            isinstance(max_text_chars, bool) or not isinstance(max_text_chars, int)
+            or not 1 <= max_text_chars <= 65536
+        ):
+            raise ValueError("max_text_chars must be an integer from 1 to 65536")
+        inventory = RasCmdr.inspect_plan_processes(plan_number, ras_object=ras_object)
+        from ._plan_windows import inspect_owned_plan_windows
+
+        return inspect_owned_plan_windows(inventory, max_text_chars)
+
+    @staticmethod
     def _resolve_plan_process_paths(
         plan_number: Union[str, Number],
         ras_object,
@@ -2967,6 +3032,7 @@ class RasCmdr:
         hdf_output_profile: Optional[str] = None,
         dialog_watchdog: bool = True,
         max_runtime: Optional[float] = None,
+        disable_omp_affinity: bool = False,
     ) -> 'ComputeResult':
         """
         Execute a single HEC-RAS plan in a specified location.
@@ -3048,6 +3114,10 @@ class RasCmdr:
                 historical launcher/callback behavior plus the existing
                 7,200-second asynchronous-solver bound. A timeout uses
                 exact-plan structured cancellation.
+            disable_omp_affinity (bool, optional): Set Intel ``KMP_AFFINITY=disabled``
+                only in the launched engine environment. Defaults to False.
+                Useful when Wine lacks NUMA/affinity APIs used by Intel OpenMP.
+                This preserves the scheduler CPU allocation and plan core count.
         Returns:
             ComputeResult: Result object with ``success`` bool and ``results_df_row`` (pd.Series or None).
                 Backward compatible with bool: ``if RasCmdr.compute_plan("01"):`` still works.
@@ -3064,6 +3134,7 @@ class RasCmdr:
                 every terminal gate.
 
         Raises:
+            TypeError: If ``disable_omp_affinity`` is not a bool.
             ValueError: If ``max_runtime`` is not a positive finite number
                 within the Windows subprocess-wait range, or ``None``.
 
@@ -3130,6 +3201,8 @@ class RasCmdr:
                 time can exceed ``max_runtime`` while ras-commander proves a
                 safe terminal state.
         """
+        if type(disable_omp_affinity) is not bool:
+            raise TypeError("disable_omp_affinity must be a bool")
         max_runtime_seconds = RasCmdr._normalize_max_runtime(max_runtime)
         _success = False
         _results_df_row = None
@@ -3174,6 +3247,8 @@ class RasCmdr:
             "artifact_finalization_cleanup": None,
             "artifact_finalization_failure": None,
         }
+        if disable_omp_affinity:
+            _execution_details["openmp_environment_overrides"] = {"KMP_AFFINITY": "disabled"}
         _compute_env = None
         _wmic_compat_dir = None
         try:
@@ -3445,6 +3520,11 @@ class RasCmdr:
             _compute_env, _wmic_compat_dir = RasCmdr._legacy_wmic_subprocess_env(
                 compute_ras
             )
+            _compute_env = RasCmdr._openmp_subprocess_env(
+                _compute_env, disable_omp_affinity
+            )
+            if disable_omp_affinity:
+                logger.info("Disabling Intel OpenMP affinity interfaces for this engine tree")
 
             # Per-plan stdio log. HEC-RAS stdout/stderr are redirected to this file
             # rather than a PIPE to avoid an inherited-pipe deadlock (CLB-880): with

@@ -85,6 +85,64 @@ def _is_wine_helper_runtime() -> bool:
     return True
 
 
+class _WindowsAffinityApi:
+    """Read full native masks without psutil's CPU-count-based enumeration."""
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+
+        self.ctypes = ctypes
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.kernel.GetCurrentProcess.argtypes = []
+        self.kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        self.kernel.GetProcessAffinityMask.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_size_t),
+        ]
+        self.kernel.GetProcessAffinityMask.restype = wintypes.BOOL
+        self.kernel.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+        self.kernel.SetProcessAffinityMask.restype = wintypes.BOOL
+        self.process = self.kernel.GetCurrentProcess()
+
+    def get(self):
+        process_mask, system_mask = self.ctypes.c_size_t(), self.ctypes.c_size_t()
+        if not self.kernel.GetProcessAffinityMask(self.process, self.ctypes.byref(process_mask), self.ctypes.byref(system_mask)):
+            raise OSError(self.ctypes.get_last_error(), "Cannot read native Wine CPU affinity masks")
+        return process_mask.value, system_mask.value
+
+    def set(self, mask):
+        if not self.kernel.SetProcessAffinityMask(self.process, mask):
+            raise OSError(self.ctypes.get_last_error(), "Cannot set native Wine CPU affinity mask")
+
+
+@contextmanager
+def _windows_wine_single_cpu_affinity() -> Iterator[None]:
+    # Wine can expose ProcessorCount=1 while the inherited native mask selects
+    # CPU4, for example under Slurm. psutil enumerates range(ProcessorCount)
+    # and can therefore return [] despite a valid nonzero mask. Use the full
+    # Win32 mask and verify the change; never guess an available CPU.
+    api = _WindowsAffinityApi()
+    previous, system = api.get()
+    if not previous or not system or previous & system != previous:
+        raise RuntimeError(f"Wine helper requires valid nonempty native CPU affinity masks (process={previous:#x}, system={system:#x})")
+    selected = previous & -previous
+    try:
+        api.set(selected)
+        observed, _ = api.get()
+        if observed != selected:
+            raise RuntimeError("Wine helper single-CPU affinity readback did not match")
+        logger.debug("Constrained Wine helper to native CPU mask %#x (previous=%#x)", selected, previous)
+        yield
+    finally:
+        try:
+            api.set(previous)
+            observed, _ = api.get()
+            if observed != previous:
+                raise RuntimeError("Wine helper original CPU affinity readback did not match")
+        except (OSError, RuntimeError):
+            logger.warning("Could not restore the Python process native CPU affinity after Wine helper execution", exc_info=True)
+
+
 @contextmanager
 def _wine_helper_single_cpu_affinity() -> Iterator[None]:
     """Serialize Wine mapper helpers on one inherited CPU.
@@ -100,9 +158,14 @@ def _wine_helper_single_cpu_affinity() -> Iterator[None]:
         yield
         return
 
-    import psutil
-
     with _WINE_HELPER_AFFINITY_LOCK:
+        if platform.system() == "Windows":
+            with _windows_wine_single_cpu_affinity():
+                yield
+            return
+
+        import psutil
+
         process = psutil.Process()
         previous_affinity = process.cpu_affinity()
         if not previous_affinity:

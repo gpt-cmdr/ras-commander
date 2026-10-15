@@ -5,12 +5,23 @@ from pathlib import Path
 import pandas as pd
 import psutil
 import h5py
+import pytest
 
 
 raspreprocess_module = importlib.import_module("ras_commander.RasPreprocess")
 RasPreprocess = raspreprocess_module.RasPreprocess
 
 PREPROCESS_LOGGER = "ras_commander.RasPreprocess"
+
+
+@pytest.fixture(autouse=True)
+def _available_owned_tcu_supervision(monkeypatch):
+    """Logging units simulate the Windows supervision available to their launcher."""
+    monkeypatch.setattr(
+        RasPreprocess,
+        "_tcu_supervision_availability_error",
+        staticmethod(lambda: None),
+    )
 
 
 class _FakeRasProject:

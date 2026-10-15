@@ -113,6 +113,33 @@ class RasPrecipHdf:
 
     @staticmethod
     @log_call
+    def inspect_gridded_precipitation(hdf_path: Union[str, Path]) -> dict:
+        """Inspect imported grids, processed forcing, and final cell results.
+
+        Returns shapes, value hashes, finite/nonzero counts, ranges, and imported
+        timestamps for available precipitation datasets and cell rainfall/depth/
+        water-surface arrays. Reads in bounded blocks. A missing path reports
+        exists=False; malformed/unreadable HDF raises. Call only after HEC-RAS
+        writers have exited. This receipt supports route comparisons; it does
+        not by itself qualify source semantics or hydraulic accuracy.
+
+        Args:
+            hdf_path: Geometry, unsteady, temporary or result HDF path.
+
+        Returns:
+            JSON-safe dataset summaries; exists=False for an absent file.
+
+        Raises:
+            OSError: An existing HDF cannot be read.
+            ValueError: A selected dataset has an unsupported layout.
+
+        """
+        from ._native_precip import inspect_precipitation
+
+        return inspect_precipitation(Path(hdf_path))
+
+    @staticmethod
+    @log_call
     def get_values_chunks(n_times: int, n_cells: int, itemsize: int = 4) -> Tuple[int, int]:
         """
         Chunk shape HEC-RAS uses for the ``Values`` dataset.

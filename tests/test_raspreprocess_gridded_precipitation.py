@@ -3,9 +3,11 @@
 import importlib
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import pandas as pd
+import pytest
 
 raspreprocess_module = importlib.import_module("ras_commander.RasPreprocess")
 RasPreprocess = raspreprocess_module.RasPreprocess
@@ -244,9 +246,11 @@ def test_unobserved_completepreprocess_never_authorizes_handoff_or_hdf_read(
     assert "writer_observation" not in state
 
 
+@pytest.mark.parametrize("action", ["CompletePreProcess", "CompleteEventConditions"])
 def test_completepreprocess_inventory_requires_exact_launch_owned_hdf(
     tmp_path,
     monkeypatch,
+    action,
 ):
     import psutil
 
@@ -261,7 +265,7 @@ def test_completepreprocess_inventory_requires_exact_launch_owned_hdf(
             {
                 "pid": 101,
                 "name": "RasProcess.exe",
-                "cmdline": ["RasProcess.exe", "CompletePreProcess", str(tmp_hdf)],
+                "cmdline": ["RasProcess.exe", action, str(tmp_hdf)],
                 "create_time": 1001.0,
             }
         ),
@@ -269,7 +273,7 @@ def test_completepreprocess_inventory_requires_exact_launch_owned_hdf(
             {
                 "pid": 102,
                 "name": "RasProcess.exe",
-                "cmdline": ["RasProcess.exe", "CompletePreProcess", tmp_hdf.name],
+                "cmdline": ["RasProcess.exe", action, tmp_hdf.name],
                 "create_time": 1001.0,
             }
         ),
@@ -277,7 +281,7 @@ def test_completepreprocess_inventory_requires_exact_launch_owned_hdf(
             {
                 "pid": 103,
                 "name": "RasProcess.exe",
-                "cmdline": ["RasProcess.exe", "CompletePreProcess", str(tmp_hdf)],
+                "cmdline": ["RasProcess.exe", action, str(tmp_hdf)],
                 "create_time": 900.0,
             }
         ),
@@ -543,9 +547,11 @@ def test_bco_readiness_does_not_require_short_lived_solver_process(tmp_path):
     )
 
 
+@pytest.mark.parametrize("require_linux", [True, False])
 def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
     tmp_path,
     monkeypatch,
+    require_linux,
 ):
     ras = _seed_project(tmp_path, gridded=True)
     process = _RunningProcess()
@@ -567,8 +573,11 @@ def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
         def monitor_until_signal(self, _process):
             _write_artifacts(tmp_path, materialized=True)
             assert self.alternate_signal_condition() is False
-            assert self.alternate_signal_condition() is False
-            assert self.alternate_signal_condition() is False
+            if require_linux:
+                assert self.alternate_signal_condition() is False
+                assert self.alternate_signal_condition() is False
+            # Native mode can stop after writer exit; every HDF read still
+            # waits for owned cleanup and post-stop stat quiescence.
             detected = self.alternate_signal_condition()
             assert detected is True
             self.signal_source = "alternate"
@@ -604,6 +613,7 @@ def test_alternate_handoff_never_opens_hdf_while_writer_or_root_is_active(
         max_wait=2,
         clear_existing=False,
         fix_line_endings=False,
+        require_linux_solver_ready=require_linux,
     )
 
     assert result.success is True
@@ -813,3 +823,79 @@ def test_preprocess_fails_when_exact_plan_residue_survives_cleanup(
 
     assert result.success is False
     assert "remained active after cleanup: 30220" in result.error
+
+
+def test_bco_handoff_finishes_quiescence_after_launcher_exits(tmp_path, monkeypatch):
+    ras = _seed_project(tmp_path, gridded=True)
+    process = _RunningProcess()
+    terminated, checks = [], []
+
+    class Monitor:
+        blocked_reason = None
+        signal_source = "bco"
+        enable_detailed_logging = staticmethod(lambda _plan: True)
+        def __init__(self, **_kwargs):
+            pass
+        def monitor_until_signal(self, _process):
+            _write_artifacts(tmp_path, materialized=True)
+            return True
+
+    def ready(*_args, **_kwargs):
+        checks.append(True)
+        process.returncode = 0
+        return len(checks) >= 2
+
+    _patch_launch(monkeypatch, Monitor, process, terminated)
+    monkeypatch.setattr(RasPreprocess, "_completepreprocess_handoff_ready", staticmethod(ready))
+    result = RasPreprocess.preprocess_plan(
+        "01", ras_object=ras, max_wait=2, clear_existing=False, fix_line_endings=False,
+    )
+    assert result.success
+    assert result.signal_source == "bco_completepreprocess_writer_quiescent"
+    assert len(checks) == 2
+
+
+def test_handoff_can_finish_after_fresh_final_consumes_temporary(tmp_path, monkeypatch):
+    _write_artifacts(tmp_path, materialized=True)
+    tmp = tmp_path / "fixture.p01.tmp.hdf"
+    final = tmp_path / "fixture.p01.hdf"
+    tmp.rename(final)
+    state = {"completepreprocess_seen": True}
+    monkeypatch.setattr(RasPreprocess, "_active_complete_preprocess_writers", staticmethod(lambda *_a: ()))
+    monkeypatch.setattr(RasPreprocess, "_GRIDDED_PRECIPITATION_STABLE_SECONDS", 0)
+    args = (tmp, tmp_path / "fixture.b01", tmp_path / "fixture.x03", state)
+    baseline = {tmp: None, final: None}
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, artifact_baseline=baseline)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, artifact_baseline=baseline, allow_completed_hdf=True)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, artifact_baseline=baseline, allow_completed_hdf=True)
+    assert RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, artifact_baseline=baseline, allow_completed_hdf=True)
+    state.clear();state["completepreprocess_seen"] = True
+    baseline[final] = RasPreprocess._artifact_state(final)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, artifact_baseline=baseline, allow_completed_hdf=True)
+
+
+@pytest.mark.parametrize("exited", [False, True])
+def test_tcu_scope_query_failure_only_blocks_a_running_launcher(monkeypatch, exited):
+    polls = iter([None, 0 if exited else None])
+    process = SimpleNamespace(pid=1234, poll=lambda: next(polls))
+    failure = RasPreprocess._TCU_SUPERVISION_ERROR + " Detail: PID not found"
+    monkeypatch.setattr(RasPreprocess, "_detect_first_run_tcu_dialog", staticmethod(lambda pid: failure))
+    assert RasPreprocess._detect_running_tcu_dialog(process) == (None if exited else failure)
+
+
+def test_detected_tcu_dialog_still_blocks_if_launcher_exits(monkeypatch):
+    process = SimpleNamespace(pid=1234, poll=lambda: None)
+    monkeypatch.setattr(RasPreprocess, "_detect_first_run_tcu_dialog", staticmethod(lambda pid: RasPreprocess._TCU_BLOCKING_ERROR))
+    assert RasPreprocess._detect_running_tcu_dialog(process) == RasPreprocess._TCU_BLOCKING_ERROR
+
+
+def test_transient_inventory_failure_preserves_observed_writer_but_blocks_handoff(tmp_path, monkeypatch):
+    _write_artifacts(tmp_path, materialized=True)
+    inventories = iter([(222,), (-1,), ()])
+    monkeypatch.setattr(RasPreprocess, "_active_complete_preprocess_writers", staticmethod(lambda *a: next(inventories)))
+    state = {}
+    args = (tmp_path / "fixture.p01.tmp.hdf", tmp_path / "fixture.b01", tmp_path / "fixture.x03", state)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, defer_stat_quiescence=True)
+    assert not RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, defer_stat_quiescence=True)
+    assert state["completepreprocess_seen"] is True
+    assert RasPreprocess._completepreprocess_handoff_ready(*args, started_at=1000, defer_stat_quiescence=True)

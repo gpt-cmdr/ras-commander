@@ -490,6 +490,34 @@ def _unsupported_plan_engine_error(
     )
 
 
+def _exact_event_writer_signature(process: RasProcessRecord, tmp_hdf_path: Path) -> bool:
+    """Recognize only the observed fixed-position RasProcess event writers."""
+    command = process.command_line
+    if process.name.casefold() != "rasprocess.exe" or len(command) not in (3, 4, 5):
+        return False
+    executable = normalize_windows_path_token(command[0], process.working_directory)
+    if ntpath.basename(executable) != "rasprocess.exe":
+        return False
+    if process.executable_path is not None and not _same_windows_path(
+        executable, process.executable_path,
+    ):
+        return False
+    if not any(_command_has_exact_marker(command[1:2], action) for action in (
+        "CompletePreProcess", "CompleteEventConditions",
+    )):
+        return False
+    if not _command_has_exact_path(command[2:3], tmp_hdf_path, process.working_directory):
+        return False
+    tail = command[3:]
+    return (
+        not tail
+        or len(tail) == 1 and _command_has_exact_marker(tail, "Units=US Customary")
+        or len(tail) == 2
+        and _command_has_exact_marker(tail[:1], "Units=US")
+        and _command_has_exact_marker(tail[1:], "Customary")
+    )
+
+
 def match_plan_processes(
     inventory: RasProcessInventory,
     *,
@@ -510,6 +538,9 @@ def match_plan_processes(
     identity_errors = []
     for process in inventory.processes:
         name = process.name.casefold()
+        if _exact_event_writer_signature(process, tmp_hdf_path):
+            matches.append(process)
+            continue
         if name not in _PLAN_MATCHABLE_PROCESS_NAMES:
             cwd_marker_match = (
                 process.working_directory is not None

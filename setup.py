@@ -84,6 +84,7 @@ setup(
             "RasStoreMapHelper.exe",
             "RasStoreMapHelper.exe.config",
             "RasStoreMapHelper.cs",
+            "RasMetImportHelper.cs",
             "RasMapperTerrainExportHelper.exe",
             "RasMapperTerrainExportHelper.cs",
             "BuildRasMapperTerrainExportHelper.ps1",
