@@ -128,7 +128,9 @@ configuration and requires both final routes to preserve them. This strengthens
 the compiled-input gate against matching fallback models on both sides.
 Retained results receive a separate source-binding audit; original reports
 remain unchanged and the JSON distinguishes retrospective audits from the
-current driver's recorded baseline.
+current driver's recorded baseline. The final unwrapped Wine 7.0 run passes all
+13 cumulative and 13 rate gates with the baseline recorded before import;
+all 21 qualified platform/release pairs preserve the eight source-binding fields.
 
 Earlier 7.0 Wine comparisons had equal rainfall but different hydraulics
 when physical layer associations were lost. A later integration run again

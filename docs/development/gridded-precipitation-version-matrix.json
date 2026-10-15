@@ -619,7 +619,7 @@
       ],
       "checks_per_positive_route": 13,
       "comparison": "Exact imported, independently preprocessed and final precipitation, water surface and hydraulic depth arrays; exact compiled geometry with named audit exclusions and sorted exact region/cell mappings preserving duplicates.",
-      "input_inspection": "Earlier matrices: retrospective public-API reads of retained quiescent final HDFs. Latest Wine7.0: direct thirteen-gate execution, rechecked with the final assessor. Original reports are immutable.",
+      "input_inspection": "Earlier matrices: retrospective public-API reads of retained quiescent final HDFs. Wine 6.1 and latest 7.0: direct thirteen-gate execution; source bindings independently audited for all qualified pairs. Latest 7.0 captures its source baseline before configuration/import. Original reports remain immutable.",
       "excluded_audit_attributes": [
         "Data Date",
         "Property Tables Last Computed",
@@ -700,7 +700,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.1": {
         "passed": true,
@@ -741,7 +743,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.2": {
         "passed": true,
@@ -782,7 +786,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.3": {
         "passed": true,
@@ -823,7 +829,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.3.1": {
         "passed": true,
@@ -864,7 +872,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.4": {
         "passed": true,
@@ -905,7 +915,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.4.1": {
         "passed": true,
@@ -946,7 +958,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.5": {
         "passed": true,
@@ -987,7 +1001,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.6": {
         "passed": true,
@@ -1028,7 +1044,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "7.0": {
         "passed": true,
@@ -1069,7 +1087,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "7.0.1": {
         "passed": true,
@@ -1110,7 +1130,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       }
     },
     "wine_full": {
@@ -1162,13 +1184,31 @@
           "nonempty_hydraulics": true,
           "compiled_geometry_exact_parity": true
         },
-        "original_report_sha256": "5490ab31897e2d7791b37a75354caeb6ae93b4ba1d1de78f3f6902b1ebc670c2",
-        "model_input_receipt_sha256": "b69f4abc4aaf20bcbf92b3c1faecdd4b89cefb50920bdb903217f97c4c1622ac",
-        "report_sha256": "d09902d28d9812daa20305232d51bfb9095fd5788fd24c062c9e7a112726da05",
-        "original_protocol": "native-gdal-v1",
-        "retrospective_inputs": true,
+        "original_report_sha256": "41c057d2b8d8b52f728a9336b5caeb3b557132d297cc90423307afd53f80830e",
+        "report_sha256": "41c057d2b8d8b52f728a9336b5caeb3b557132d297cc90423307afd53f80830e",
+        "original_protocol": "native-gdal-v2-model-inputs",
+        "retrospective_inputs": false,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "assessment_source_sha256": "b80ab8578e33837dff01baa3dad04c7626c825eed25fd316c77e91ef43419e86",
+        "implementation_sha256": {
+          "scripts/qualification/native_gdal_windows_versions.py": "0acdb364f76a034fbdf846a925c96380edb7fdb520d7dc786d7f84fcff28078a",
+          "scripts/qualification/native_gdal_precipitation_matrix.py": "9d3f954fa6530ebdbdf5a01b87d13692a3c82aea8e0a473ef2a5145e83a71726",
+          "ras_commander/hdf/HdfBase.py": "c4726bcbddc5cf8296fce6fc7b624bc98c94781ae4dae1b50a3228d9955d1b19",
+          "ras_commander/hdf/_fingerprint.py": "2cca994a36867a6405a5b8a336417be8a62546b6c1f54fb4a3aca8be0e9b37e4",
+          "ras_commander/_process_inspection.py": "2475f5d3498a165bf51b872db2edbf55e317b61a1a68d4ee1a626025efb61b29",
+          "ras_commander/RasCmdr.py": "1f23b935ee6e22c1f9ede7814ed62c2e2d73e59df313f36ce7374fea459b50ad",
+          "ras_commander/RasPreprocess.py": "1652790301d414f7892171ee2f3678e9f64330f556475030f47998d672e054e8",
+          "ras_commander/ComputeResults.py": "80b993a758a8fc45e2c144cdde0bb4f9054d9890ab59d8bcf07b729b95a4cbc5",
+          "ras_commander/RasTcu.py": "2695bfc765d49501fa25c6164b72eb5f38aa27118f168eaa6f0ecf4ffdc33dee",
+          "ras_commander/_tcu_gui.py": "3d1f13d7f0f3add0e8535e1ff4d7f9167eece7943e1e5ebbe190d580534ed29b",
+          "ras_commander/_plan_windows.py": "f247f2e80792f54d90912eebafcb3e5868a798c58e30a7060d2523cfa766f300",
+          "ras_commander/_native_precip.py": "6ee4281f44f119814d2125ac91c2008ddd224c9cb2e7241cdbd04f5a0f618e46",
+          "ras_commander/_native_helper.py": "eb78f92f63d2f2601f633808bd90d1557822de9651c04cbb42632b7a0259c631",
+          "ras_commander/native/RasMetImportHelper.cs": "48475d5115397b2a8d0c706d568de5e9399b1a9ae46bcc816b6c15ca91a4ebb9"
+        },
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.2": {
         "passed": true,
@@ -1209,7 +1249,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.3": {
         "passed": true,
@@ -1250,7 +1292,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.3.1": {
         "passed": true,
@@ -1291,7 +1335,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.4": {
         "passed": true,
@@ -1332,7 +1378,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.4.1": {
         "passed": true,
@@ -1373,7 +1421,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.5": {
         "passed": true,
@@ -1414,7 +1464,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.6": {
         "passed": true,
@@ -1455,7 +1507,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": false,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "7.0": {
         "passed": true,
@@ -1490,13 +1544,32 @@
           "nonempty_hydraulics": true,
           "compiled_geometry_exact_parity": true
         },
-        "original_report_sha256": "4c2f5ea04e1bbd641688e8856d12d434c869cd27301d99e808b63cd60f4be590",
-        "report_sha256": "4c2f5ea04e1bbd641688e8856d12d434c869cd27301d99e808b63cd60f4be590",
+        "original_report_sha256": "7b577a84f3e525cba84af49d6bf0071bbd28b5fce49faf5b67f240e7187ff95d",
+        "report_sha256": "7b577a84f3e525cba84af49d6bf0071bbd28b5fce49faf5b67f240e7187ff95d",
         "original_protocol": "native-gdal-v2-model-inputs",
         "retrospective_inputs": false,
         "disable_omp_affinity": true,
         "solver_cores": 1,
-        "assessment_source_sha256": "9d3f954fa6530ebdbdf5a01b87d13692a3c82aea8e0a473ef2a5145e83a71726"
+        "assessment_source_sha256": "b80ab8578e33837dff01baa3dad04c7626c825eed25fd316c77e91ef43419e86",
+        "implementation_sha256": {
+          "scripts/qualification/native_gdal_windows_versions.py": "64fa19a51f8ddf1c45c003ed47788f2d9c10a6a2ff8b1dda8d85395c94a26c10",
+          "scripts/qualification/native_gdal_precipitation_matrix.py": "b80ab8578e33837dff01baa3dad04c7626c825eed25fd316c77e91ef43419e86",
+          "ras_commander/hdf/HdfBase.py": "c4726bcbddc5cf8296fce6fc7b624bc98c94781ae4dae1b50a3228d9955d1b19",
+          "ras_commander/hdf/_fingerprint.py": "2cca994a36867a6405a5b8a336417be8a62546b6c1f54fb4a3aca8be0e9b37e4",
+          "ras_commander/_process_inspection.py": "2475f5d3498a165bf51b872db2edbf55e317b61a1a68d4ee1a626025efb61b29",
+          "ras_commander/RasCmdr.py": "1f23b935ee6e22c1f9ede7814ed62c2e2d73e59df313f36ce7374fea459b50ad",
+          "ras_commander/RasPreprocess.py": "1652790301d414f7892171ee2f3678e9f64330f556475030f47998d672e054e8",
+          "ras_commander/ComputeResults.py": "80b993a758a8fc45e2c144cdde0bb4f9054d9890ab59d8bcf07b729b95a4cbc5",
+          "ras_commander/RasTcu.py": "2695bfc765d49501fa25c6164b72eb5f38aa27118f168eaa6f0ecf4ffdc33dee",
+          "ras_commander/_tcu_gui.py": "3d1f13d7f0f3add0e8535e1ff4d7f9167eece7943e1e5ebbe190d580534ed29b",
+          "ras_commander/_plan_windows.py": "f247f2e80792f54d90912eebafcb3e5868a798c58e30a7060d2523cfa766f300",
+          "ras_commander/_native_precip.py": "6ee4281f44f119814d2125ac91c2008ddd224c9cb2e7241cdbd04f5a0f618e46",
+          "ras_commander/_native_helper.py": "eb78f92f63d2f2601f633808bd90d1557822de9651c04cbb42632b7a0259c631",
+          "ras_commander/native/RasMetImportHelper.cs": "48475d5115397b2a8d0c706d568de5e9399b1a9ae46bcc816b6c15ca91a4ebb9"
+        },
+        "source_associations_preserved": true,
+        "retrospective_source_associations": false,
+        "clear_geompre_before_compute": false
       },
       "7.0.1": {
         "passed": true,
@@ -1537,7 +1610,9 @@
         "original_protocol": "native-gdal-v1",
         "retrospective_inputs": true,
         "disable_omp_affinity": true,
-        "solver_cores": 1
+        "solver_cores": 1,
+        "source_associations_preserved": true,
+        "retrospective_source_associations": true
       },
       "6.0": {
         "passed": false,
@@ -1613,7 +1688,62 @@
         "native_import_and_preprocessing_preserved_layer_associations": true,
         "original_failure_reproduced": false
       },
-      "current_workflow": "Retain geometry prepared by explicit preprocessing (clear_geompre=False); separately request a rebuild only when intended. Record pre-compute compiled inputs and require full physical-input/forcing/hydraulic parity."
+      "current_workflow": "Retain geometry prepared by explicit preprocessing (clear_geompre=False); separately request a rebuild only when intended. Record pre-compute compiled inputs and require full physical-input/forcing/hydraulic parity.",
+      "prepared_geometry_comparisons": {
+        "instrumented_reuse": {
+          "report_sha256": "71af08d9e79d4a2d04947d9f8fd10e7adad867553bc885f91e14840d196c2a7d",
+          "cumulative_gates_passed": 13,
+          "rate_gates_passed": 13
+        },
+        "plain_driver": {
+          "report_sha256": "c5359243422fec9e248b89a6bc5c0064552ca4baab56d46c49472df1cdcf89ba",
+          "cumulative_gates_passed": 13,
+          "rate_gates_passed": 13
+        }
+      },
+      "source_guarded_plain_run": {
+        "report_sha256": "7b577a84f3e525cba84af49d6bf0071bbd28b5fce49faf5b67f240e7187ff95d",
+        "implementation_commit": "2e7c137fed5e0b25b6c40814917ae19729f78503",
+        "clear_geompre_before_compute": false,
+        "source_binding_fields": 8,
+        "cumulative_gates_passed": 13,
+        "rate_gates_passed": 13,
+        "causal_repair_established": false
+      }
+    },
+    "source_association_audit": {
+      "fields": 8,
+      "reference_associations": {
+        "Infiltration Filename": {
+          "bytes_base64": "LlxTb2lscyBEYXRhXEluZmlsdHJhdGlvbi5oZGY="
+        },
+        "Infiltration Layername": {
+          "bytes_base64": "SW5maWx0cmF0aW9u"
+        },
+        "Land Cover Filename": {
+          "bytes_base64": "LlxMYW5kIENsYXNzaWZpY2F0aW9uXExhbmRDb3Zlci5oZGY="
+        },
+        "Land Cover Layername": {
+          "bytes_base64": "TGFuZENvdmVy"
+        },
+        "Percent Impervious Filename": {
+          "bytes_base64": "LlxMYW5kIENsYXNzaWZpY2F0aW9uXExhbmRDb3Zlci5oZGY="
+        },
+        "Percent Impervious Layername": {
+          "bytes_base64": "TGFuZENvdmVy"
+        },
+        "Terrain Filename": {
+          "bytes_base64": "LlxUZXJyYWluXFRlcnJhaW41MC5oZGY="
+        },
+        "Terrain Layername": {
+          "bytes_base64": "VGVycmFpbjUw"
+        }
+      },
+      "source_reference_receipt_sha256": "3e55872a056179dd654a6d1ab97421aa1f798110f3334f7e96131a428ad90621",
+      "audit_sha256": "2e210d66f6975d0b1fa5afd4199e40ace99f3cbf656d564616d937464d6905e9",
+      "qualified_platform_release_pairs": 21,
+      "all_preserved": true,
+      "assessment_source_sha256": "b80ab8578e33837dff01baa3dad04c7626c825eed25fd316c77e91ef43419e86"
     }
   }
 }
