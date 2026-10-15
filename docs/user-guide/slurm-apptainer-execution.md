@@ -124,8 +124,8 @@ The image must provide `rasUnsteady64` and its libraries in `hecras_dir`
 builds it from `HEC-RAS_507_linux.zip`. No published 5.0.7 native image exists yet: set `image`,
 `apptainer_image_sha256`, `container_identity` and `oci_source` for the SIF you build. Collection
 validation is the same as for 6.x, since the 5.0.7 result HDF has the same
-`Results/Unsteady/.../Time Date Stamp` structure. On October 14, 2026 a 5.0.7 prepare job (Wine,
-with [per-task terms acceptance](apptainer-images.md#hec-ras-terms-and-conditions)) and native
+`Results/Unsteady/.../Time Date Stamp` structure. On October 14, 2026 a 5.0.7 prepare job (Wine)
+and native
 solve of Muncie plan 03 ran on the CLB cluster: 74 s on 2 cores, water surfaces within 0.012 ft of
 the Windows engine under Wine.
 
@@ -281,9 +281,9 @@ the cluster. Add the Wine executor SIF to the profile:
 "prepare_image_sha256": "<sha256sum of that SIF>"
 ```
 
-For HEC-RAS 6.0 and earlier (here, 5.0.7), the image cannot carry a terms acceptance; add
-`"environment": {"APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU": "1"}` to accept them in each
-task (see [HEC-RAS terms and conditions](apptainer-images.md#hec-ras-terms-and-conditions)).
+For HEC-RAS 6.0 and earlier (here, 5.0.7), add
+`"environment": {"APPTAINERENV_RAS_COMMANDER_WINE_ACCEPT_TCU": "1"}` (see
+[HEC-RAS 6.0 and earlier](apptainer-images.md#hec-ras-60-and-earlier)).
 
 ```python
 from ras_commander import RasApptainer, SshApptainerTransport
