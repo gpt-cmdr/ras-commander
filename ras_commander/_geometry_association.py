@@ -78,6 +78,33 @@ def safe_resolve_path(path: PathLike) -> Path:
     return RasUtils.safe_resolve(Path(path))
 
 
+def _strip_extended_prefix(text: str) -> str:
+    """Drop a Windows extended-length prefix (\\\\?\\ or \\\\?\\UNC\\)."""
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    if text.startswith("\\\\?\\"):
+        return text[4:]
+    return text
+
+
+def _unredirected_path(path: PathLike) -> Path:
+    """Return the supplied file's resolved path, refusing any redirection.
+
+    The fully resolved path must equal the absolute path as supplied (after
+    removing extended-length prefixes and normalizing case). Any redirection,
+    whether a symbolic link, a junction at any depth, a SUBST drive or another
+    mapped alias, changes the resolved path and raises ValueError before any
+    write. The file must exist. Nothing is written.
+    """
+    supplied = _strip_extended_prefix(os.path.abspath(os.fspath(path)))
+    resolved = _strip_extended_prefix(str(Path(os.fspath(path)).resolve(strict=True)))
+    if os.path.normcase(resolved) != os.path.normcase(supplied):
+        raise ValueError(
+            "infiltration clearing refuses a redirected path "
+            f"(supplied {supplied}, resolves to {resolved})"
+        )
+    return Path(resolved)
+
 def decode_hdf_attr(value: Any) -> Optional[str]:
     """Decode an HDF attribute value to a clean string."""
     if value is None:
@@ -777,7 +804,15 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """Remove infiltration association from an attempt-owned geometry HDF.
 
     Mutates only the supplied .gNN.hdf; rejects plan/result HDFs. Removes the
-    native infiltration filename, layer name and date attributes. Existing
+    native infiltration filename, layer name and date attributes from
+    ``/Geometry`` and from every compiled ``/Geometry/2D Flow Areas/<area>``
+    group (which keeps its own copy, read first by the strict preprocessing
+    snapshot). Other area attributes, such as an override table hash, stay.
+    Every traversed member must be a hard link owned by the supplied file; a
+    soft or external link is rejected before any write, and so is a file
+    with more than one filesystem hard link (its bytes are shared) or a path
+    whose fully resolved form differs from the supplied absolute path (any
+    link, junction, SUBST drive or mapped alias). Existing
     property tables remain stale until the caller rebuilds them. Terrain and
     roughness associations, coordinates, CRS and units are unchanged.
     Requires a directly linked /Geometry group owned by the supplied HDF.
@@ -789,9 +824,12 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     """
     import h5py
 
-    path = safe_resolve_path(hdf_path)
-    if not re.search(r"\.g\d{2}\.hdf$", path.name, re.IGNORECASE):
+    if not re.search(r"\.g\d{2}\.hdf$", Path(os.fspath(hdf_path)).name, re.IGNORECASE):
         raise ValueError("infiltration clearing requires a .gNN.hdf geometry")
+    # Gates KU/KZ: any redirection (symbolic link, junction at any depth, SUBST
+    # drive, mapped alias) could send the edit to another geometry. Require the
+    # resolved path to be the supplied path, then edit only that path.
+    path = _unredirected_path(hdf_path)
 
     def owned_geometry(handle):
         # Inspect the link before dereferencing an external writable target.
@@ -810,9 +848,42 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
 
     field = GEOMETRY_ASSOCIATION_FIELDS["infiltration_hdf_path"]
     attr_names = tuple(field[key] for key in ("filename_attr", "layer_attr", "date_attr"))
+    # Compiled 2D areas carry their own copy of the association; the strict
+    # preprocessing snapshot reads the area copy first, so clear both levels.
+    area_attr_names = (*attr_names, "Infiltration Date Last Modified")
+
+    def owned_member(group, name):
+        # Inspect each link before dereferencing it: a soft or external link
+        # could point into another file, which must never be read for editing.
+        link = group.get(name, getlink=True)
+        if not isinstance(link, h5py.HardLink):
+            # Documented API contract: layout problems raise ValueError.
+            raise ValueError(  # noqa: TRY004
+                f"{group.name}/{name} must be a directly linked, file-owned HDF object"
+            )
+        member = group[name]
+        if member.file.id != group.file.id:
+            raise ValueError(
+                f"{group.name}/{name} must be a directly linked, file-owned HDF object"
+            )
+        return member
+
+    def area_groups(geometry):
+        if geometry.get("2D Flow Areas", getlink=True) is None:
+            return []
+        areas = owned_member(geometry, "2D Flow Areas")
+        if not isinstance(areas, h5py.Group):
+            return []
+        members = [owned_member(areas, name) for name in areas]
+        return [member for member in members if isinstance(member, h5py.Group)]
+
+    def associated(geometry):
+        return any(name in geometry.attrs for name in attr_names) or any(
+            name in area.attrs for area in area_groups(geometry) for name in area_attr_names
+        )
+
     with h5py.File(path, "r") as handle:
-        attrs = owned_geometry(handle).attrs
-        if not any(name in attrs for name in attr_names):
+        if not associated(owned_geometry(handle)):
             return path
 
     # Retain a handle to the original object for byte restoration; neither
@@ -820,6 +891,13 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
     with path.open("r+b") as original:
         original_stat = os.fstat(original.fileno())
         original_mode = stat.S_IMODE(original_stat.st_mode)
+        # A filesystem hard link shares bytes with another name (for example a
+        # delivered source geometry); editing it would edit that file too.
+        if original_stat.st_nlink > 1:
+            raise ValueError(
+                "infiltration clearing refuses a geometry with other hard links; "
+                "clear an independent copy"
+            )
         # POSIX writes can clear set-ID bits. Refuse before writing if this
         # user cannot reapply those bits to the existing file object.
         if (
@@ -868,13 +946,16 @@ def clear_geometry_infiltration(hdf_path: PathLike) -> Path:
                 os.fsync(backup.fileno())
                 mutated = True  # Opening r+ can itself change HDF bytes.
                 with h5py.File(path, "r+") as handle:
-                    attrs = owned_geometry(handle).attrs
+                    geometry = owned_geometry(handle)
                     for name in attr_names:
-                        if name in attrs:
-                            del attrs[name]
+                        if name in geometry.attrs:
+                            del geometry.attrs[name]
+                    for area in area_groups(geometry):
+                        for name in area_attr_names:
+                            if name in area.attrs:
+                                del area.attrs[name]
                 with h5py.File(path, "r") as handle:
-                    attrs = owned_geometry(handle).attrs
-                    if any(name in attrs for name in attr_names):
+                    if associated(owned_geometry(handle)):
                         raise RuntimeError("infiltration association remained after clearing")
                 observed = read_geometry_association(path)
                 if observed.get("infiltration_hdf_path"):

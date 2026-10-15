@@ -234,32 +234,24 @@ def test_clear_geometry_infiltration_validates_every_attribute_before_success(
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.parametrize("fail", [False, True])
-def test_clear_geometry_infiltration_preserves_hard_link_identity(
-    tmp_path, monkeypatch, fail
-):
+def test_clear_geometry_infiltration_refuses_hard_linked_files(tmp_path, monkeypatch):
+    # A hard-linked geometry shares its bytes with another name; clearing it
+    # would edit that other file too, so the call refuses before any write.
     path = _geometry_file(tmp_path / "child.g02.hdf")
     alias = tmp_path / "alias.g02.hdf"
     os.link(path, alias)
     before_stat = path.stat()
     before = _sha256(path)
 
-    def fail_validation(edited_path):
-        raise OSError("injected validation I/O failure")
-
     def forbid_replace(*args):
         pytest.fail("the original file must never be replaced or renamed")
 
     monkeypatch.setattr(association.os, "replace", forbid_replace)
     monkeypatch.setattr(association.os, "rename", forbid_replace)
-    if fail:
-        monkeypatch.setattr(association, "read_geometry_association", fail_validation)
-        with pytest.raises(OSError, match="injected validation"):
-            RasMap.clear_geometry_infiltration(path)
-        assert _sha256(path) == before
-    else:
+    with pytest.raises(ValueError, match="hard links"):
         RasMap.clear_geometry_infiltration(path)
-        assert not read_geometry_association(alias)["infiltration_hdf_path"]
+    assert _sha256(path) == before
+    assert read_geometry_association(alias)["infiltration_hdf_path"]
     after_stat = path.stat()
     assert (after_stat.st_dev, after_stat.st_ino, after_stat.st_nlink) == (
         before_stat.st_dev,
@@ -267,8 +259,26 @@ def test_clear_geometry_infiltration_preserves_hard_link_identity(
         before_stat.st_nlink,
     )
     assert os.path.samefile(path, alias)
-    assert path.read_bytes() == alias.read_bytes()
     assert set(tmp_path.iterdir()) == {path, alias}
+
+
+def test_clear_geometry_infiltration_refuses_child_hard_linked_to_source(tmp_path):
+    # Gate KP reproduction: a child that is a filesystem hard link of the source.
+    source = tmp_path / "source.g01.hdf"
+    child = tmp_path / "child.g02.hdf"
+    with h5py.File(source, "w") as h:
+        h.create_group("Geometry/2D Flow Areas/A").attrs["Infiltration Filename"] = (
+            "legit.hdf"
+        )
+    os.link(source, child)
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="hard links"):
+        clear_geometry_infiltration(child)
+    assert _sha256(source) == before
+    with h5py.File(source) as h:
+        assert (
+            h["Geometry/2D Flow Areas/A"].attrs["Infiltration Filename"] == "legit.hdf"
+        )
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX ownership and mode contract")
@@ -604,3 +614,151 @@ def test_readonly_input_fails_without_backup_leak(tmp_path):
         assert list(tmp_path.iterdir()) == [path]
     finally:
         path.chmod(stat.S_IWRITE | stat.S_IREAD)
+
+
+def test_clear_geometry_infiltration_clears_compiled_area_copies(tmp_path):
+    path = tmp_path / "child.g02.hdf"
+    with h5py.File(path, "w") as h:
+        g = h.create_group("Geometry")
+        g.attrs["Infiltration Filename"] = ".\\Land Classification\\Infiltration.hdf"
+        g.attrs["Land Cover Filename"] = "cover.hdf"
+        areas = g.create_group("2D Flow Areas")
+        areas.create_dataset("Attributes", data=[1])
+        area = areas.create_group("Area 1")
+        area.attrs["Infiltration Filename"] = ".\\Land Classification\\Infiltration.hdf"
+        area.attrs["Infiltration Layername"] = "Infiltration"
+        area.attrs["Infiltration Date Last Modified"] = "06MAR2024"
+        area.attrs["Infiltration Override Table Hash"] = [1, 2]
+        area.attrs["Other"] = "kept"
+    clear_geometry_infiltration(path)
+    with h5py.File(path) as h:
+        assert dict(h["Geometry"].attrs) == {"Land Cover Filename": "cover.hdf"}
+        kept = h["Geometry/2D Flow Areas/Area 1"].attrs
+        assert set(kept) == {"Infiltration Override Table Hash", "Other"}
+
+
+def test_clear_geometry_infiltration_acts_when_only_an_area_copy_remains(tmp_path):
+    path = tmp_path / "child.g03.hdf"
+    with h5py.File(path, "w") as h:
+        area = (
+            h.create_group("Geometry").create_group("2D Flow Areas").create_group("A")
+        )
+        area.attrs["Infiltration Filename"] = "stale.hdf"
+    clear_geometry_infiltration(path)
+    with h5py.File(path) as h:
+        assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs
+
+
+@pytest.mark.parametrize("kind", ["external", "soft"])
+def test_clear_geometry_infiltration_never_edits_through_links(tmp_path, kind):
+    # Gate KG reproduction: an area linked to another geometry must not be cleared.
+    source = tmp_path / "source.g01.hdf"
+    child = tmp_path / "child.g02.hdf"
+    with h5py.File(source, "w") as h:
+        area = h.create_group("Geometry/2D Flow Areas/A")
+        area.attrs["Infiltration Filename"] = "legitimate.hdf"
+        area.attrs["Other"] = "keep"
+    with h5py.File(child, "w") as h:
+        areas = h.create_group("Geometry/2D Flow Areas")
+        h.create_group("Elsewhere/A").attrs["Infiltration Filename"] = "child.hdf"
+        if kind == "external":
+            areas["A"] = h5py.ExternalLink(source.name, "/Geometry/2D Flow Areas/A")
+        else:
+            areas["A"] = h5py.SoftLink("/Elsewhere/A")
+    source_before, child_before = _sha256(source), _sha256(child)
+    with pytest.raises(ValueError, match="file-owned"):
+        clear_geometry_infiltration(child)
+    assert _sha256(source) == source_before
+    assert _sha256(child) == child_before
+    with h5py.File(source) as h:
+        assert (
+            h["Geometry/2D Flow Areas/A"].attrs["Infiltration Filename"]
+            == "legitimate.hdf"
+        )
+
+
+def _area_only_source(folder):
+    folder.mkdir()
+    source = folder / "model.g01.hdf"
+    with h5py.File(source, "w") as h:
+        h.create_group("Geometry/2D Flow Areas/A").attrs["Infiltration Filename"] = (
+            "legit.hdf"
+        )
+    return source
+
+
+@pytest.mark.skipif(os.name != "nt", reason="NTFS directory junctions")
+def test_clear_geometry_infiltration_refuses_a_junctioned_directory(tmp_path):
+    # Gate KU reproduction: child directory is a junction to the source directory.
+    source = _area_only_source(tmp_path / "source")
+    junction = tmp_path / "child"
+    made = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(junction), str(source.parent)],
+        capture_output=True,
+        check=False,
+    )
+    if made.returncode != 0 or not junction.exists():
+        pytest.skip("directory junctions cannot be created here")
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="redirected path"):
+        clear_geometry_infiltration(junction / source.name)
+    assert _sha256(source) == before
+
+
+def test_clear_geometry_infiltration_refuses_a_symlinked_directory(tmp_path):
+    source = _area_only_source(tmp_path / "source")
+    link = tmp_path / "child"
+    try:
+        os.symlink(source.parent, link, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("directory symlinks cannot be created here")
+    before = _sha256(source)
+    with pytest.raises(ValueError, match="redirected path"):
+        clear_geometry_infiltration(link / source.name)
+    assert _sha256(source) == before
+
+
+def test_clear_geometry_infiltration_still_clears_a_plain_single_link_file(tmp_path):
+    source = _area_only_source(tmp_path / "plain")
+    clear_geometry_infiltration(source)
+    with h5py.File(source) as h:
+        assert "Infiltration Filename" not in h["Geometry/2D Flow Areas/A"].attrs
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows SUBST drives")
+@pytest.mark.parametrize("extended", [False, True])
+def test_clear_geometry_infiltration_refuses_a_subst_drive(tmp_path, extended):
+    # Gate KZ reproduction: a SUBST drive letter mapped to the source folder.
+    import string
+
+    source = _area_only_source(tmp_path / "source")
+    used = {d.upper() for d in os.listdrives()} if hasattr(os, "listdrives") else set()
+    free = [c for c in reversed(string.ascii_uppercase) if c + ":\\" not in used]
+    free = [c for c in free if not os.path.exists(c + ":\\")]
+    if not free:
+        pytest.skip("no free drive letter")
+    drive = free[0] + ":"
+    made = subprocess.run(
+        ["subst", drive, str(source.parent)], capture_output=True, check=False
+    )
+    if made.returncode != 0:
+        pytest.skip("subst is unavailable")
+    try:
+        target = drive + "\\" + source.name
+        if extended:
+            target = "\\\\?\\" + target
+        before = _sha256(source)
+        with pytest.raises(ValueError, match="redirected path"):
+            clear_geometry_infiltration(target)
+        assert _sha256(source) == before
+    finally:
+        subprocess.run(["subst", drive, "/d"], capture_output=True, check=False)
+
+
+def test_unredirected_path_accepts_extended_prefix_of_a_plain_file(tmp_path):
+    source = _area_only_source(tmp_path / "plain2")
+    if os.name == "nt":
+        assert (
+            association._unredirected_path("\\\\?\\" + str(source)) == source.resolve()
+        )
+    assert association._unredirected_path(source) == source.resolve()
