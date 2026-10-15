@@ -30,6 +30,55 @@ that names the missing package and `pip install "ras-commander[full]"`. The
 installation guide no longer states that the `compute` extra covers all
 direct HDF result extraction.
 
+**Removed unimplemented remote worker stubs**
+
+Removed: unimplemented SlurmWorker, SshWorker, WinrmWorker, AwsEc2Worker and
+AzureFrWorker stubs and the remote-ssh/remote-winrm/remote-aws/remote-azure
+extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
+`"docker"`; other worker types raise `ValueError`. For Slurm/HPC clusters use
+`RasSlurm` or `RasApptainer`.
+
+**Slurm and Apptainer parity with the Docker workflow**
+
+- `RasApptainer.render_prepare_job()` and `collect_prepare()` run Windows
+  HEC-RAS preprocessing under Wine on Slurm in a Wine executor SIF and assemble
+  a prepared project for `render_job()`, mirroring `RasDocker.preprocess_plan()`
+  followed by `compute_plan()`. New optional profile fields: `prepare_image`,
+  `prepare_image_sha256`, `prepare_ras_executable`, `prepare_python_executable`,
+  `prepare_timeout_seconds`.
+- `RasApptainer` profiles accept native HEC-RAS 7.x (`ras_version="7.0.1"`).
+- `RasSlurm` adds `execution_mode="array"` with `array_throttle`: one Slurm array
+  task per request, validated with the same per-request step accounting.
+- Every portable Slurm step now runs `apptainer exec --contain --cleanenv` with a
+  step-private `<node_scratch_root>/<jobid>/ras-commander-<execution_id>-*` bound as
+  `/tmp` (new `SlurmSiteConfig.node_scratch_root`, default `/tmp`), so Wine
+  prefixes never share host `/tmp`. The launcher is now
+  `ras-portable-slurm-launcher/v2`.
+- The portable executor preloads a CPU-numbering shim named by
+  `RAS_COMMANDER_WINE_CPU_SHIM` for Wine processes, fixing intermittent
+  `RasProcess.exe` `0xC0000005` crashes in Slurm CPU sets that do not start at
+  CPU 0, and disables the Wine debugger so crashes exit.
+- New container recipes: `containers/hecras-wine-precompute` (source of the
+  `rascommander/hec-ras-wine-precompute` images, now with the CPU shim),
+  `containers/hecras-wine-executor` (portable executor derived from it), and
+  `containers/apptainer/build_sif_from_archive.sbatch` (daemon-free archive to
+  SIF conversion as a Slurm job). See *Apptainer Images* in the user guide.
+- `remote/docker/setup_docker.py` lists its HEC-RAS 6.6 entry under `6.6`
+  again; it was mislabeled `7.0`, so `--version 6.6` was rejected.
+
+**Breaking changes**
+
+- Removed `SlurmSiteConfig.memory_per_task`, which never set memory; use
+  `slurm_memory`. Slurm submission handles and batch manifests are now
+  `ras-commander-slurm-submission/v2` and `ras-commander-slurm-batch/v2`; a v1
+  handle is rejected with an explanation. Check status and collect in-flight v1
+  submissions with the version that rendered them. Execution requests and
+  receipts are unchanged.
+- `RasApptainer` profiles no longer accept fim-commander-only fields
+  (`memory_per_task`, `max_concurrent`, `ras_executable`, `transfer_mode`,
+  `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
+  no-ops; unknown fields are rejected.
+
 ### v0.105.0 (October 2026)
 
 **HDF structure types appear in geometry summaries**

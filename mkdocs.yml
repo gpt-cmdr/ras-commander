@@ -79,6 +79,7 @@ plugins:
           - user-guide/container-images.md
           - user-guide/slurm-apptainer-execution.md
           - user-guide/slurm-portable-execution.md
+          - user-guide/apptainer-images.md
           - user-guide/plan-output-intervals-hdf-compression.md
           - user-guide/workflows-and-patterns.md
           - user-guide/hdf-data-extraction.md
@@ -224,6 +225,7 @@ nav:
       - Docker Hub Images: user-guide/container-images.md
       - Slurm + Apptainer Execution: user-guide/slurm-apptainer-execution.md
       - Portable Slurm Execution: user-guide/slurm-portable-execution.md
+      - Apptainer Images: user-guide/apptainer-images.md
       - Container HPC Design: user-guide/container-hpc-design.md
     - Geometry & Spatial:
       - Geometry Operations: user-guide/geometry-operations.md

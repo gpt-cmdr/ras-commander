@@ -120,7 +120,11 @@ def test_fixture_and_example_profiles_load():
     ({"time_limit": "soon"}, "time_limit"),
     ({"slurm_memory": "lots"}, "slurm_memory"),
     ({"partition": "a b; rm -rf /"}, "partition"),
-    ({"ras_version": "7.0"}, "ras_version"),
+    ({"ras_version": "5.0.7"}, "ras_version"),
+    ({"prepare_image": "/images/wine.sif"}, "set together"),
+    ({"prepare_image": "relative.sif", "prepare_image_sha256": "c" * 64}, "prepare_image must"),
+    ({"prepare_ras_executable": "C:/Ras.exe"}, "prepare_ras_executable"),
+    ({"prepare_timeout_seconds": 5}, "prepare_timeout_seconds"),
     ({"schema": "other/v9"}, "unsupported schema"),
     ({"environment": {"bad-name": "x"}}, "environment"),
 ])
@@ -526,15 +530,18 @@ def test_submit_rejects_placeholder_image_digest(project, profile, tmp_path):
         RasApptainer.submit(job, FakeTransport(), placeholder, dry_run=False)
 
 
-def test_fim_only_profile_fields_are_accepted_as_compatibility_noops():
+def test_unknown_portable_profile_fields_are_rejected():
     data = _profile_dict()
-    data.update({
-        "max_concurrent": 7, "memory_per_task": "3200M", "ras_executable": "C:/Ras.exe",
-        "transfer_mode": "scp", "timeout_seconds": 3600, "rsync_executable": "rsync",
-        "launcher_python_executable": "python3",
-    })
-    profile = RasApptainer.profile_from_dict(data)
-    assert profile.slurm_memory == "14336M"
+    data.update({"max_concurrent": 7, "memory_per_task": "3200M"})
+    with pytest.raises(ApptainerProfileError, match="unknown field 'memory_per_task'"):
+        RasApptainer.profile_from_dict(data)
+
+
+@pytest.mark.parametrize("version", ["6.5", "6.6", "7.0.1"])
+def test_profile_accepts_native_linux_6x_and_7x(version):
+    data = _profile_dict()
+    data["ras_version"] = version
+    assert RasApptainer.profile_from_dict(data).ras_version == version
 
 
 # ---- receipt -------------------------------------------------------------

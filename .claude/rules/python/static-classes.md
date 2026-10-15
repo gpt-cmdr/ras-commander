@@ -92,7 +92,6 @@ cmdr.compute_plan("01")
 - `PsexecWorker` - Remote Windows execution
 - `LocalWorker` - Local parallel execution
 - `DockerWorker` - Container execution
-- Future workers: `SshWorker`, `WinrmWorker`, etc.
 
 **Callback Classes** (execution monitoring):
 - `ConsoleCallback` - Console output

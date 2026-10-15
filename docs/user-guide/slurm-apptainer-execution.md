@@ -1,9 +1,12 @@
 # Native HEC-RAS on Slurm with Apptainer
 
-`RasApptainer` runs a HEC-RAS 6.6 **native-Linux unsteady** plan on any Slurm cluster that has
-Apptainer, starting from the artifacts that Windows preprocessing already produced
-(`<project>.p##.tmp.hdf`, `<project>.b##`, `<project>.x##`; see `RasPreprocess`). It is
-cluster-agnostic: everything site-specific lives in a JSON site profile.
+`RasApptainer` runs a HEC-RAS 6.x or 7.x **native-Linux unsteady** plan on any Slurm cluster that
+has Apptainer, starting from the artifacts that Windows preprocessing produced
+(`<project>.p##.tmp.hdf`, `<project>.b##`, `<project>.x##`; see `RasPreprocess`). Those artifacts
+can come from a Windows workstation or from a
+[Wine prepare job on the same cluster](#wine-preparation-on-the-cluster), which mirrors
+`RasDocker.preprocess_plan` followed by `RasDocker.compute_plan`. It is cluster-agnostic:
+everything site-specific lives in a JSON site profile.
 
 !!! note "What a receipt means"
     The receipt is computational and transfer evidence (exit codes, hashes, timings). It is not a
@@ -20,15 +23,13 @@ requests, use [RasSlurm](slurm-portable-execution.md); the
 | Site profile | JSON file: SSH target, shared staging root, node scratch, SIF path and SHA-256, Slurm account/partition/qos, cores, memory, time |
 | Image | One immutable OCI image pulled **once** by an administrator into a shared SIF. Every job re-verifies the SIF SHA-256 before use |
 | Job folder | Rendered locally: `inputs/` (tmp.hdf, .b, .x, `SHA256SUMS`), `engine.sh`, `job.sh`, `job.json` |
+| Prepare job (optional) | Rendered locally from a complete project: `inputs/` (the project tree), `job.sh`, `job.json`. Runs Windows preprocessing under Wine in a separate executor SIF and returns the solver inputs |
 | Job run | Verifies image and inputs, copies to node-local scratch, runs the solver in Apptainer, hash-verifies the copy-back, writes `receipt.json` |
 | Transport | Pluggable object with `run`, `put_tree`, `get_tree`. `SshApptainerTransport` uses OpenSSH/scp; tests use a fake |
 
-Known fim-commander-only fields (`max_concurrent`, `memory_per_task`, `ras_executable`,
-`transfer_mode`, `timeout_seconds`, `rsync_executable`, and launcher settings) are accepted as
-logged compatibility no-ops; `memory_per_task` is used as `slurm_memory` only when that native
-field is absent. A usable Apptainer profile still needs this API's SSH and native-image settings.
-Unknown fields are rejected, mutable image tags are rejected, and the SIF SHA-256 is mandatory at
-real submission time (the all-zero example placeholder is allowed only for local rendering/dry-run).
+Unknown fields are rejected (including other tools' fields such as `memory_per_task` or
+`max_concurrent`; use `slurm_memory`), mutable image tags are rejected, and the SIF SHA-256 is mandatory at real
+submission time (the all-zero example placeholder is allowed only for local rendering/dry-run).
 
 ## Site profile
 
@@ -49,6 +50,9 @@ Key fields:
 | `stack_unlimited`, `omp_stacksize`, `kmp_stacksize` | When `stack_unlimited=true`, the job checks both host and container stack limits; it fails with `STACK_LIMIT_FAILED` if either cannot be raised. `OMP_STACKSIZE`/`KMP_STACKSIZE` default to `2G`; `OMP_NUM_THREADS`/`MKL_NUM_THREADS` follow `num_cores`. |
 | `num_cores`, `slurm_memory`, `time_limit`, `account`, `partition`, `qos`, `nodelist` | Slurm resources (all but `num_cores` optional) |
 | `geom_preprocess` | Enable only for an image that ships `RasGeomPreprocess`. When false (the default), inputs must already contain non-empty `/Geometry/GeomPreprocess`. |
+| `ras_version` | HEC-RAS release of the native engine, `6.x` or `7.x` (for example `6.6` or `7.0.1`). It also selects the default Windows `Ras.exe` for prepare jobs |
+| `prepare_image`, `prepare_image_sha256` | Optional shared [Wine executor SIF](apptainer-images.md#wine-executor-image) and its SHA-256, required only by `render_prepare_job`. Set both or neither |
+| `prepare_ras_executable`, `prepare_python_executable`, `prepare_timeout_seconds` | Windows `Ras.exe` inside the executor (default `C:\Program Files (x86)\HEC\HEC-RAS\<ras_version>\Ras.exe`), the image's Linux Python (default `python`), and the preprocessing timeout (default 3600 s) |
 
 ## Canonical image and pulling it once
 
@@ -56,10 +60,20 @@ The default image is `rascommander/hec-ras-linux-unsteady_6.6:v1`
 ([Docker Hub](https://hub.docker.com/r/rascommander/hec-ras-linux-unsteady_6.6), linux/amd64).
 The [container catalog](container-images.md) lists its registry digest and Docker qualification.
 Its configured layout (`/opt/hecras-runtime/engine`, library directories beneath it, and no
-`RasGeomPreprocess`) is derived from its Dockerfile and registry metadata. It has not yet been
-qualified by a live run through this API. The proven CLB runs used `ras-hecras.sif`, which did ship
-and run `RasGeomPreprocess`; they are useful operational evidence, not a qualification of this
-default profile.
+`RasGeomPreprocess`) is derived from its Dockerfile and registry metadata. The same layout is used
+for 6.5 and 7.0.1 (`rascommander/hec-ras-linux-unsteady_<version>:v1`); set `ras_version` and
+`oci_source` together.
+
+!!! info "Production evidence"
+    CLB has run `RasApptainer.render_job`, `submit`, and `collect` live on its Slurm cluster
+    with a site-built HEC-RAS 6.6 native SIF (`ras-hecras.sif`, which ships `RasGeomPreprocess`).
+    Those jobs collected successfully with verified copy-back, populated unsteady results, and the
+    planned final simulation time. On October 13, 2026 the published
+    `rascommander/hec-ras-linux-unsteady_6.6:v1` SIF solved a Wine-prepared Muncie 2D plan
+    through this API (2 cores, 33 s) and collected successfully; its water surfaces matched the
+    Windows engine run under Wine to within 0.0031 ft (maximum-WSE map within 0.0001 ft). The
+    6.5 and 7.0.1 SIFs use the same layout but were not run; qualify the image you pull with one
+    representative plan before a campaign.
 
 An administrator pulls it once, on a node, to shared storage, then records the digest:
 
@@ -181,6 +195,75 @@ matches the planned end time. Failed jobs are collected too so their logs and re
 - The staged HDF core attributes (`1D Cores`, `2D Cores (per mesh)`) are rewritten to `num_cores`;
   the allocation and OpenMP/MKL thread counts use the same value.
 
+## Wine preparation on the cluster
+
+Instead of preprocessing on a Windows workstation, run Windows HEC-RAS preprocessing under Wine on
+the cluster. Add the Wine executor SIF to the profile:
+
+```json
+"prepare_image": "/shared/images/hec-ras-wine-executor_6.6.sif",
+"prepare_image_sha256": "<sha256sum of that SIF>"
+```
+
+```python
+from ras_commander import RasApptainer, SshApptainerTransport
+
+profile = RasApptainer.load_profile("my-site.json")
+transport = SshApptainerTransport(profile)
+
+# 1. Stage the complete project (terrain and other subfolders included) and submit.
+prep = RasApptainer.render_prepare_job(
+    project_folder=r"C:\models\UPGU1", project_name="UPGU1", plan_number="01",
+    profile=profile, job_directory=r"C:\jobs\upgu1_p01_prepare",
+)
+prep = RasApptainer.submit(prep, transport=transport, profile=profile, dry_run=False)
+
+# 2. When terminal, verify and assemble the prepared project (new or empty folder).
+prepared = RasApptainer.collect_prepare(prep, transport, profile, r"C:\jobs\upgu1_p01_prepared")
+if not prepared.success:
+    raise RuntimeError(prepared.problems)
+
+# 3. Render and submit the native solve from the prepared project, exactly as above.
+job = RasApptainer.render_job(
+    project_folder=prepared.project_folder, project_name="UPGU1", plan_number="01",
+    profile=profile, job_directory=r"C:\jobs\upgu1_p01",
+)
+```
+
+The prepare job verifies the executor SIF and input hashes, copies the project to node scratch, and
+runs `python -m ras_commander.remote.apptainer_prepare prepare` in
+`apptainer exec --contain --cleanenv` with a node-scratch `/tmp`. Inside the container it:
+
+1. copies the image's baked Wine prefix into `/tmp` (the SIF stays read-only; no overlay or
+   `--writable-tmpfs`), preloads the image's [CPU-numbering shim](apptainer-images.md#cpu-numbering-shim),
+   and disables the Wine debugger so a crash exits instead of hanging the allocation;
+2. under Windows Python, sets the plan's solver cores to `num_cores`
+   (`RasPlan.set_num_cores`, `RasPlan.set_2d_flow_options`), clears stale geometry preprocessing,
+   and runs `RasPreprocess.preprocess_plan`;
+3. checks that `.p##.tmp.hdf`, `.b##`, and `.x##` exist and pass `check_solver_ready`, and writes
+   `prepare_receipt.json` with their hashes.
+
+Only files the preparation changed or created are copied back, hash-verified, to `out/<jobid>`.
+`collect_prepare` requires scheduler state `COMPLETED`, a matching `SHA256SUMS`, and a succeeded
+receipt bound to this request whose artifact hashes match the downloaded files. Only then does it
+write the prepared project: the staged tree overlaid with the changed files. The source project is
+never modified. Failed prepare jobs are collected too (`logs/prepare.log`), and their node scratch
+is retained for diagnosis.
+
+Keep everything the model needs inside `project_folder`; external terrain or DSS paths are not
+followed. Use `RasApptainer.check_solver_ready` and the normal solve-job render checks as the
+handoff gate; they run unchanged on the prepared files.
+
+!!! warning "Qualification status"
+    CLB has run `RasPreprocess.preprocess_plan` under Wine inside Apptainer on Slurm with the same
+    per-task prefix pattern, then solved the prepared models natively. On one model, RasMapper's
+    direct property-table API crashed under Wine while `RasPreprocess.preprocess_plan` succeeded,
+    which is why the prepare job uses the latter. On October 13, 2026 `render_prepare_job` and
+    `collect_prepare` prepared Muncie plan 03 (2D) on the CLB cluster in the 6.6 executor SIF built
+    from `containers/hecras-wine-executor` (34 s, CPU shim loaded) and the prepared project solved
+    natively as described above. That is one model and one version; run a representative model
+    end to end on your cluster before relying on them.
+
 ## The engine command
 
 The only code that knows how the solver is invoked is `ENGINE_SCRIPT_TEMPLATE` in
@@ -196,11 +279,16 @@ on all job failure paths; `engine.log` exists only after node-scratch staging be
 
 ## Limits
 
-- 2D/1D unsteady only from Windows pre-computed artifacts; no steady flow, no geometry-only runs.
-- One plan per job. Chained jobs (for example passing DSS output from one model into the next) are not
-  implemented; they need a qualified output/readback boundary, not just Slurm dependencies.
-- No job arrays. A pre-submission staging interruption may retry its unique attempt; an ambiguous
-  `sbatch` result must be reconciled before a new render.
+- 2D/1D unsteady only, from Windows pre-computed artifacts (workstation or prepare job); no steady
+  flow, no geometry-only runs. Steady and one-core unsteady request pools use
+  [RasSlurm](slurm-portable-execution.md), which also supports job arrays.
+- One plan per solve job. Chained models (for example passing DSS output from one model into the
+  next) are not implemented; they need a qualified output/readback boundary, not just Slurm
+  dependencies.
+- A prepare job and its solve job are two submissions with a local collection in between, so the
+  solve job's render-time checks run on the actual prepared files.
+- A pre-submission staging interruption may retry its unique attempt; an ambiguous `sbatch` result
+  must be reconciled before a new render.
 - Offline tests cover rendering, validation, receipts and a mocked transport. Qualify the image and
   solver on your cluster before relying on results.
 
@@ -274,30 +362,13 @@ the working project. `clear_existing=True` clears stale preprocessing artifacts
 in the working copy; keep the source and external dependencies unchanged.
 Never stage or inspect an HDF while its writer is active.
 
-#### Optional Wine preparation: unqualified handoff
+#### Alternative: Wine preparation on the cluster
 
-The [Docker workflow](container-execution.md) is qualified through
-`RasDocker.compute_plan`, but the retained release record does not establish
-that a Wine-prepared Muncie HDF passes `RasApptainer.check_solver_ready`.
-No offline check of that actual handoff is recorded here. Do not treat a
-successful Docker preparation receipt as proof of Apptainer readiness.
-
-To investigate this alternative, replace only the Windows preparation call
-above with the following. Use a Linux container engine and supply read-only
-`mounts={...}` for external terrain/projection dependencies as described in
-[the working-copy layout](container-execution.md#prepare-a-complete-working-copy).
-
-```python
-from ras_commander import RasDocker
-
-prepared = RasDocker.preprocess_plan(
-    project, plan_number, version="6.6",
-    image="rascommander/hec-ras-wine-precompute_6.6:v4",
-    timeout=900, num_cores=2, replace_generated=True, pull="always",
-)
-if not prepared.success:
-    raise RuntimeError(prepared.error or prepared.receipt)
-```
+To keep preparation on Linux, skip the Windows call above and use
+[`render_prepare_job` and `collect_prepare`](#wine-preparation-on-the-cluster); then continue at
+step 3 with `prepared.project_folder`. On a Linux workstation with Docker,
+`RasDocker.preprocess_plan(..., image="rascommander/hec-ras-wine-precompute_6.6:v4")` is the
+equivalent single-host route.
 
 For **either** preparation route, check the completed local HDF before rendering:
 
@@ -308,10 +379,10 @@ if problems:
     raise RuntimeError("Complete Windows preprocessing before staging: " + "; ".join(problems))
 ```
 
-If the Wine output lacks `/Geometry/GeomPreprocess`, stop and use the native
+If the prepared output lacks `/Geometry/GeomPreprocess`, stop and use the native
 Windows `RasPreprocess` route on a fresh working copy. Do not synthesize the
 missing group or disable input checks. Passing this offline check establishes
-structural readiness only; the canonical SIF still needs live qualification.
+structural readiness only.
 
 ### 3. Configure the site and render
 
@@ -397,6 +468,8 @@ rejected. To stop the recorded job, call
 | `UNKNOWN` status | Accounting may be delayed or unavailable. Inspect the returned reason and reconcile with the cluster before collecting or submitting again |
 | `STACK_LIMIT_FAILED` | Host or container stack limit could not be raised. Check the site's limits and image environment |
 | Missing geometry preprocessing | Keep `geom_preprocess=false` for the canonical image and provide a completed `/Geometry/GeomPreprocess` group |
+| Prepare job `PREPARE_FAILED` | Read `logs/prepare.log` and `prepare_receipt.json` (`detail`, `worker`). Check the executor's Wine environment variables, the `Ras.exe` path for `ras_version`, and that all model files are inside the project folder |
+| Intermittent `0xC0000005` in `RasProcess.exe` during preparation | The allocation's CPU set does not start at CPU 0 and the executor lacks the CPU shim; rebuild it from the current recipe |
 | Submission remains `SUBMITTING` after a transport error | `sbatch` may have accepted it. Reconcile the recorded attempt on the cluster; do not retry blindly |
 | Failed receipt, output hash, or final-time validation | Retain logs and receipt; inspect `result.problems`. A file's existence or scheduler `COMPLETED` alone does not establish a successful solve |
 | Failed-job outputs cannot be downloaded | Inspect the exact remote attempt and retained `logs/`; failure before scratch staging may produce no `engine.log` or output receipt |

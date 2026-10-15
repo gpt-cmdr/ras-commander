@@ -32,6 +32,11 @@ For historical evidence links, use the retained release record at
 Pin other historical inventory/reconstruction links to their corresponding
 source commit; current guides may link to `main` or the published site.
 
+The published Wine `v4` images were built from ras2fim-2d. Their successor
+recipe is [hecras-wine-precompute](hecras-wine-precompute/README.md) (next tag
+`v5`, adding the CPU shim). Write `v5` descriptions only after those images
+are rebuilt, qualified, and published.
+
 This packet updates descriptions only. It does not authorize retagging,
 rebuilding, or republishing image payloads. Retain the previous descriptions,
 check all six updated listings and their links, and record the description

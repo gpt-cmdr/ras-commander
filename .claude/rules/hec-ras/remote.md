@@ -254,14 +254,12 @@ worker = init_ras_worker(
 )
 ```
 
-### Future Workers
+### HPC Clusters (Slurm)
 
-**Planned**:
-- `SshWorker` - SSH-based execution
-- `WinrmWorker` - Windows Remote Management
-- `SlurmWorker` - HPC cluster execution
-- `AwsEc2Worker` - AWS cloud execution
-- `AzureFrWorker` - Azure cloud execution
+`init_ras_worker()` supports only `psexec`, `local`, and `docker`; other types
+raise `ValueError`. For Slurm clusters use `RasSlurm`
+(`docs/user-guide/slurm-portable-execution.md`) or `RasApptainer`
+(`docs/user-guide/slurm-apptainer-execution.md`), not a worker.
 
 ## Troubleshooting
 
