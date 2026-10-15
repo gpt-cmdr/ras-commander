@@ -171,7 +171,10 @@ of the tested profile. Older Windows releases can require the existing
 process-local CPU-only WMIC shim. Older event writers use
 `CompleteEventConditions`; preprocessing recognizes it alongside
 `CompletePreProcess`, with exact temporary-file and launch-time ownership
-checks. Incomplete inventories block result inspection.
+checks. When a release runs no separate writer, a witnessed owned solver
+start with a successful no-writer inventory can signal handoff. Owned processes
+must still stop and completed artifacts must pass validation before inspection.
+Incomplete inventories block result inspection.
 
 Supported native import semantics are cumulative depth and interval-ending
 period-average hourly rates with a zero baseline frame. At least two strictly
@@ -194,7 +197,8 @@ following external HDF storage.
 `RasTcu.inspect_acceptance()` reads only the selected release's acceptance
 sentinel in both registry views. `export_acceptance()` and
 `import_acceptance()` support explicitly authorized profile provisioning;
-exports exclude personal preferences and recent projects. They are trusted
+exports exclude personal preferences and recent projects. Export requires a
+registry-backed value; a task-probe record alone is not portable acceptance. They are trusted
 operator configuration, not signed attestations. `accept_gui_terms()` requires
 explicit assent, a stable enabled main window and graceful exit.
 

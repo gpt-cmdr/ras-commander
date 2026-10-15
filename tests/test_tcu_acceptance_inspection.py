@@ -120,3 +120,35 @@ def test_gui_receipt_handles_probe_without_registry_key(monkeypatch, tmp_path):
     assert result["registry_status_accepted"] is None
     assert result["system_statistic"] is None
     assert result["acceptance_status_reason"] == "probe-verified"
+
+
+def test_probe_status_can_still_inspect_exact_install_registry(monkeypatch):
+    state = TcuStatus(True, "6.0", "C:/HEC/6.0", None, "probe-verified")
+    monkeypatch.setattr(RasTcu, "status", staticmethod(lambda **kw: state))
+    monkeypatch.setattr(module.os, "name", "nt")
+    paths = []
+
+    def open_key(hive, path, reserved, flags):
+        paths.append(path)
+        assert path in {
+            r"Software\VB and VBA Program Settings\C:\HEC\6.0\ras.exe\Projects",
+            r"Software\VB and VBA Program Settings\C:\HEC\6.0\ras\Projects",
+        }
+        return contextlib.nullcontext(None)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "winreg",
+        types.SimpleNamespace(
+            HKEY_CURRENT_USER=1,
+            KEY_READ=1,
+            KEY_WOW64_32KEY=32,
+            KEY_WOW64_64KEY=64,
+            OpenKey=open_key,
+            QueryValueEx=lambda *a: ("1065353813", 1),
+        ),
+    )
+    result = RasTcu.inspect_acceptance(ras_version="6.0")
+    assert len(paths) == 4
+    assert result["status"]["reason"] == "probe-verified"
+    assert all(row["matches_release"] for row in result["registry_views"])

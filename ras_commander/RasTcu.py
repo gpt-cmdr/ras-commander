@@ -600,10 +600,18 @@ class RasTcu:
         record = {"status": dataclasses.asdict(state),
                   "expected_sentinel": RasTcu._accepted_sentinel_value(state.version),
                   "registry_views": []}
-        if os.name != "nt" or not state.registry_key:
+        if os.name != "nt":
+            return record
+        lookup_key = state.registry_key
+        if not lookup_key and state.install_dir:
+            # A task probe can verify assent without returning a registry key.
+            # Diagnostics may still inspect the exact selected install subtree.
+            lookup_key = (_VB_ROOT + "\\" + str(PureWindowsPath(state.install_dir))
+                          + "\\" + RasTcu._node_name_for(state.version, state.install_dir))
+        if not lookup_key:
             return record
         import winreg
-        parent = state.registry_key.rsplit("\\", 1)[0]
+        parent = lookup_key.rsplit("\\", 1)[0]
         for node in ("ras.exe", "ras"):
             registry_key = parent + "\\" + node
             for view, flag in (("32", winreg.KEY_WOW64_32KEY), ("64", winreg.KEY_WOW64_64KEY)):
