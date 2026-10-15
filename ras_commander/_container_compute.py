@@ -455,6 +455,24 @@ def _forward_native_progress(log, *, stream=None, poll_interval=0.1):
         thread.join()
 
 
+def _any_series_reaches(hdf, end):
+    """Return whether any results ``Time Date Stamp`` series ends exactly at ``end``."""
+    from .hdf.HdfUtils import HdfUtils
+
+    found = []
+
+    def visit(name, node):
+        if (isinstance(node, h5py.Dataset) and name.startswith("Results/Unsteady/")
+                and name.endswith("Time Date Stamp") and node.size):
+            try:
+                found.append(HdfUtils.parse_ras_datetime(_text(node[-1])) == end)
+            except ValueError:
+                pass
+
+    hdf.visititems(visit)
+    return any(found)
+
+
 def _validate_result(path, log, plan, meshes, window, property_tables=True):
     from .RasCmdr import RasCmdr
     from .hdf.HdfUtils import HdfUtils
@@ -478,7 +496,11 @@ def _validate_result(path, log, plan, meshes, window, property_tables=True):
         timestamps = [parse_time(_text(value)) for value in stamps[:]]
         if any(later <= earlier for earlier, later in zip(timestamps, timestamps[1:])):
             raise ValueError("Result timestamps are not strictly increasing")
-        if timestamps[0] != window[0] or timestamps[-1] != window[1]:
+        if timestamps[0] != window[0] or timestamps[-1] > window[1]:
+            raise ValueError("Result timestamps do not cover the full requested simulation window")
+        if timestamps[-1] != window[1] and not _any_series_reaches(hdf, window[1]):
+            # HEC-RAS 6.1 can offset base output by one computation step and omit
+            # the final time; another results series then carries the end.
             raise ValueError("Result timestamps do not cover the full requested simulation window")
         for name, mesh in meshes.items():
             water = base.get("2D Flow Areas/" + name + "/Water Surface")
