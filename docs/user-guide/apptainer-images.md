@@ -294,9 +294,11 @@ A plan whose `.u##` names a GDAL raster without the imported payload fails in ev
 rasters only in its GUI import, so import them with ras-commander. HEC-RAS 5.x has no gridded
 meteorology.
 
-`RasDocker` with the final images ran Muncie plan 03 and the DSS case end to end (Wine
-preparation, native solve) for 7.0.1, 7.0, 6.6, and 6.5, with the same cumulative
-precipitation. Hosts whose Docker AppArmor profile denies Wine's sockets need
+`RasDocker` with the final images ran Muncie plan 03 end to end (Wine preparation, native
+solve) for 7.0.1, 7.0, 6.6, 6.5, 6.1, and 5.0.7, and the DSS case for 7.0.1, 7.0, 6.6, 6.5,
+and 6.1, with the same cumulative precipitation. The SIFs in the packaged catalog are the
+exact files of the final Slurm requalification (2026-10-15): for every Linux-engine release,
+Muncie plans 01/03 under Wine and natively, and the DSS case under Wine and natively. Hosts whose Docker AppArmor profile denies Wine's sockets need
 `apparmor_profile="unconfined"`.
 
 Notes:

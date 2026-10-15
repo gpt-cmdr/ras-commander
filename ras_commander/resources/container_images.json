@@ -189,49 +189,49 @@
     {
       "role": "linux-unsteady",
       "hec_ras_version": "5.0.7",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_5.0.7@sha256:25190a37ac4a3f55ee4e07eab3521ddde4d0217f540768c8a1889367ad65deca",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_5.0.7@sha256:7067f2fc5f3119d0b44464f830864d70ab227f6ac944bf9ffa898c2a13aa1129",
-      "sif_sha256": "b48479f8f76d1288a33f0dbf05f4cfd719c9f39961f65cac5b4293acc816faab",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_5.0.7@sha256:000c66b174940444fcdacac5b5a1077747f8252307d5db22f4c69545726a16ba",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_5.0.7@sha256:ed1c8f8cf670e07f6f3abc69a36e39a5bb22124c575eaab940bab0718c3c5869",
+      "sif_sha256": "dae61d203218572ae5be9de7971e30dd137f5456d507411ad52406457cf84c05",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.1@sha256:2f78a61658c1311ac9934356d8ef4fea591362a165f7ba76ad88aaa3658804a7",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.1@sha256:1bc7e94051eff3eea00b12abaacdb8b6fc98ff39487079a9c240ea4b046c4c58",
-      "sif_sha256": "a26b4e83d346be0eca5ae88a059963fecc16022c3095565f11edda08a18989b6",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.1@sha256:d756ace88649c5e39805ec2737d58c91578820f7645878bf2974baa159319eaf",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.1@sha256:3308a2f06f1266baf394ec6c55f68d210bf6ef0065635cf37eae37aa4222ffe1",
+      "sif_sha256": "9b64985cf23c2dcbae8fd3af2a7329341eac327c131cb8e9a622e6045f186673",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.5",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.5@sha256:d2e51d3a7f9a10f24d323deb819a1a770cfa03ee597bbb1a6f0f4f9dc8a43665",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.5@sha256:cd021db53d5081dd66f85f5cc5f6641e60b01d625dd4cf9fdcce75c4aaf2e78d",
-      "sif_sha256": "7e556b7153e26fbc7d2a1f31c824e9a329dc8dce80782d52b474b8dc34ec8a6d",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.5@sha256:eac85cb9ca2646ff6ef43ec7c8f5036e1935b97f1a6b114d18289978b5e7ecc6",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.5@sha256:47e249e0ec89c16f5b0bf3626129a7b602439a742e907b951e1ca61c6f433c16",
+      "sif_sha256": "d5bf96578fc3e4959d828c682511f210213331afa85d6485124346ce6a39b094",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.5@sha256:944c6b4a5d2a0eca7cd8c381e614a25cb4f03a559e3a082c6de66c38fbd363c8"
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "6.6",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:4260e287fd3494a14c95091e1aaedd2bab50aac0615cb987f65bd33a01018f0f",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.6@sha256:33552088545493d0ef6865a5c7d544b16f3ecd6191e4f20820a42faf41ab7b67",
-      "sif_sha256": "38759aeb98fa3ef07d9c691d4b2047e12147ec56a6e8cd5eb432e25fec7ccd04",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_6.6@sha256:219084e923d704a3209999fda7efdb42a731dcc632bd38c6fdabca00fc0a7ec0",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_6.6@sha256:b14aa2d973ca7337981ddaf0482e67d368cdc092f13a7b1a06824d26c12b3f3b",
+      "sif_sha256": "2750b12ec187b2df18a2db92418793fe3186f92be001e9f9e7e959c198b3d0b4",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_6.6@sha256:71dec03350996cfa8a0ccb18ae08075de9b9cc3d7fb6b1dddbf541c030abb95c"
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "7.0",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0@sha256:f2ae7e5dac3fe38e55fecc18fdf8d25dd0276f10519ac39fff171b1eecd8fd05",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0@sha256:b2fd5a48b30b5267ce5ece8ed1979d0f23f449060f78f4d7535f8097ef97dcff",
-      "sif_sha256": "c38485ccb0fac6ea77768ebb88bfbee7d9a4eb82ce033ef2401d417543ca8625",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0@sha256:990ef97924b72d2d74a5c8ea3e26a77180fb567e3d64fa68cbf68bb2fcd03ef1",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0@sha256:b8ce833a4e2059cce033647f574eed45ac786506f2c3709758a59a2793c5c737",
+      "sif_sha256": "3ef2cab97a36beb42afbe83f039c273f18a60a0c0b5f3980849df6606b165e3e",
       "mirror": null
     },
     {
       "role": "linux-unsteady",
       "hec_ras_version": "7.0.1",
-      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0.1@sha256:8e692487b70d924aa7f985fb6eef5610c979eba76ec4377e27947d8821b51fc5",
-      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0.1@sha256:01d6393ed752039f0da6dea5a1c24ea0445f476c6f86e3c4d9ec72971bb4da0a",
-      "sif_sha256": "17f4fb931c73f7c2f22febbd55115d06dc056fe89cacb023aa379a61f81f74a6",
+      "ghcr": "ghcr.io/gpt-cmdr/hec-ras-linux-unsteady_7.0.1@sha256:9d9d12630ae8289a4a4332b5463e23acbb00973caa3c963cb3d61b2c30baf9bf",
+      "sif": "oras://ghcr.io/gpt-cmdr/hec-ras-linux-unsteady-sif_7.0.1@sha256:c61aa6b81912859f0dbebb8d750956439b14d8b9a323fbefed2477191a6c7721",
+      "sif_sha256": "3ff50f56fc3e6456b6d09fa98b191782d4d6231de1f21d9443e59951cfaae3fd",
       "mirror": "docker.io/rascommander/hec-ras-linux-unsteady_7.0.1@sha256:038475b5669ff45b2087fba0370321e89696f1c1d526123dfad24c4334ee1ed9"
     }
   ]
