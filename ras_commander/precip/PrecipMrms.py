@@ -1167,7 +1167,8 @@ class PrecipMrms:
         from ..hdf.HdfResultsMesh import HdfResultsMesh
 
         plan_hdf = Path(plan_hdf)
-        cell_points = HdfMesh.get_mesh_cell_points(plan_hdf)
+        # Physical cells only, matching the ghost-free get_mesh_timeseries().
+        cell_points = HdfMesh.get_mesh_cell_points(plan_hdf, include_ghost_cells=False)
         if cell_points.empty:
             raise ValueError(f"No 2D mesh cell centers found in {plan_hdf}")
 

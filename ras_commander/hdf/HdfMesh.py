@@ -1110,8 +1110,30 @@ class HdfMesh:
         return pd.DataFrame.from_records(diagnostic_records, columns=columns)
         
     @staticmethod
+    def _physical_cell_counts(hdf_file: h5py.File) -> Dict[str, int]:
+        """Return each 2D flow area's physical (non-ghost) cell count by name.
+
+        HEC-RAS lists a 2D area's physical cells first in ``Cells Center
+        Coordinate`` and in cell result arrays, followed by ghost cells outside
+        the perimeter. ``Geometry/2D Flow Areas/Attributes`` ``Cell Count`` is
+        the physical count. Meshes without a recorded count are omitted.
+        """
+        attributes = hdf_file.get("Geometry/2D Flow Areas/Attributes")
+        if attributes is None or "Cell Count" not in (attributes.dtype.names or ()):
+            return {}
+        counts = {}
+        for row in attributes[()]:
+            count = row["Cell Count"]
+            if np.isfinite(count) and count > 0:
+                counts[str(HdfUtils.convert_ras_string(row["Name"]))] = int(count)
+        return counts
+
+    @staticmethod
     @standardize_input(file_type='geom_hdf')
-    def get_mesh_cell_points(hdf_path: Path) -> 'GeoDataFrame':
+    def get_mesh_cell_points(
+        hdf_path: Path,
+        include_ghost_cells: bool = True,
+    ) -> 'GeoDataFrame':
         """
         Return 2D flow mesh cell center points.
 
@@ -1119,6 +1141,13 @@ class HdfMesh:
         ----------
         hdf_path : Path
             Path to the HEC-RAS geometry HDF file.
+        include_ghost_cells : bool, optional
+            ``Cells Center Coordinate`` lists the physical cells followed by
+            ghost cells outside the perimeter (IDs at or above the area's
+            ``Attributes`` ``Cell Count``). Default True returns every entry.
+            Pass False to return physical cells only, matching mesh polygons
+            and the default ghost-free ``HdfResultsMesh`` cell results. A mesh
+            whose ``Cell Count`` is not recorded keeps every entry.
 
         Returns
         -------
@@ -1142,10 +1171,15 @@ class HdfMesh:
                 all_mesh_names = []
                 all_cell_ids = []
                 all_points = []
+                physical_counts = (
+                    {} if include_ghost_cells else HdfMesh._physical_cell_counts(hdf_file)
+                )
 
                 for mesh_name in mesh_area_names:
                     # Get all cell centers in one read
                     cell_centers = hdf_file[f"Geometry/2D Flow Areas/{mesh_name}/Cells Center Coordinate"][()]
+                    if mesh_name in physical_counts:
+                        cell_centers = cell_centers[:physical_counts[mesh_name]]
                     cell_count = len(cell_centers)
 
                     # Extend lists efficiently

@@ -82,6 +82,7 @@ HdfUtils for common operations. Methods use @log_call decorator for logging and
 from __future__ import annotations
 
 
+import operator
 from pathlib import Path
 from typing import (
     Any,
@@ -116,6 +117,9 @@ gpd = optional_module("geopandas", "Returning GeoDataFrame results from HdfResul
 xr = optional_module("xarray", "Returning xarray results from HdfResultsMesh")
 
 logger = get_logger(__name__)
+
+# Meshes already reported as lacking 'Cell Count' (warn once per mesh name).
+_UNKNOWN_CELL_COUNT_WARNED: set = set()
 
 HdfInput = Union[int, str, Path, h5py.File]
 
@@ -157,7 +161,7 @@ class HdfResultsMesh:
         hdf_path: HdfInput,
         var: str,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> pd.DataFrame:
         """Return mesh summary values without constructing geometry.
 
@@ -166,8 +170,9 @@ class HdfResultsMesh:
             var: HEC-RAS summary-output variable name.
             round_to: Time rounding specification for paired time rows.
             include_ghost_cells: Keep rows for the ghost cells HEC-RAS writes
-                outside the mesh perimeter (default True). Cell results always
-                carry an ``is_ghost_cell`` column.
+                outside the mesh perimeter (default False). Ghost values are
+                placeholders, not solution results. Cell results always carry
+                an ``is_ghost_cell`` column.
 
         Returns:
             DataFrame with mesh name, cell or face identifier, value, and an
@@ -198,7 +203,7 @@ class HdfResultsMesh:
         hdf_path: HdfInput,
         var: str,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> gpd.GeoDataFrame:
         """Get spatial summary output for a mesh variable.
 
@@ -208,8 +213,9 @@ class HdfResultsMesh:
                 ``"Maximum Water Surface"``.
             round_to: Time rounding specification for paired time rows.
             include_ghost_cells: Keep rows for the ghost cells HEC-RAS writes
-                outside the mesh perimeter (default True). Cell results always
-                carry an ``is_ghost_cell`` column.
+                outside the mesh perimeter (default False). Ghost values are
+                placeholders, not solution results. Cell results always carry
+                an ``is_ghost_cell`` column.
 
         Returns:
             GeoDataFrame with mesh name, cell or face identifier, summary
@@ -241,7 +247,7 @@ class HdfResultsMesh:
         time_selection: Selection = None,
         spatial_selection: Selection = None,
         return_type: Literal["xarray"] = "xarray",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> xr.DataArray: ...
 
     @staticmethod
@@ -255,7 +261,7 @@ class HdfResultsMesh:
         time_selection: Selection = None,
         spatial_selection: Selection = None,
         return_type: Literal["view"],
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> HdfResultView: ...
 
     @staticmethod
@@ -270,7 +276,7 @@ class HdfResultsMesh:
         time_selection: Selection = None,
         spatial_selection: Selection = None,
         return_type: Literal["xarray", "view"] = "xarray",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> Union[xr.DataArray, HdfResultView]:
         """
         Get timeseries output for a specific mesh and variable.
@@ -290,10 +296,12 @@ class HdfResultsMesh:
                 evaluated over this selected spatial subset.
             return_type: ``"xarray"`` (default) or opt-in ``"view"``.
             include_ghost_cells: Keep the ghost-cell columns HEC-RAS writes
-                after the physical cells of a cell variable (default True).
-                When False, ``spatial_selection`` is clipped to the physical
-                cells, and selecting a single ghost cell raises ``ValueError``.
-                Face variables are unaffected.
+                after the physical cells of a cell variable (default False).
+                Ghost values are placeholders, not solution results. When
+                False, ``spatial_selection`` is clipped to the physical cells,
+                negative positions count back from the last physical cell, and
+                selecting a single ghost cell raises ``ValueError``. Face
+                variables are unaffected.
 
         Returns:
             xr.DataArray or HdfResultView: **Single variable** time series data.
@@ -355,7 +363,7 @@ class HdfResultsMesh:
         spatial_selection: Selection = None,
         batch_size: Optional[int] = None,
         max_chunk_bytes: int = 16 * 1024 * 1024,
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> Iterator[xr.DataArray]:
         """Yield untruncated, bounded time-major batches for one mesh variable.
 
@@ -375,7 +383,7 @@ class HdfResultsMesh:
             batch_size: Optional explicit number of timesteps per batch.
             max_chunk_bytes: Byte target used when ``batch_size`` is omitted.
             include_ghost_cells: Keep the ghost-cell columns of a cell
-                variable (default True). When False, ``spatial_selection`` is
+                variable (default False). When False, ``spatial_selection`` is
                 clipped to the physical cells.
 
         Returns:
@@ -411,7 +419,7 @@ class HdfResultsMesh:
         truncate: bool,
         time_selection: Selection,
         spatial_selection: Selection,
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> Tuple[HdfResultView, Optional[int]]:
         """Create a fingerprinted lazy view without reading result values.
 
@@ -446,15 +454,14 @@ class HdfResultsMesh:
             id_dim = "face_id" if "Face" in var else "cell_id"
             cell_count = None
             if id_dim == "cell_id" and len(shape) == 2:
-                counts = HdfResultsMesh._physical_cell_counts(hdf_file)
-                if include_ghost_cells:
-                    cell_count = counts.get(mesh_name)
-                else:
-                    cell_count = HdfResultsMesh._require_physical_cell_count(
-                        counts, mesh_name
-                    )
+                cell_count = HdfResultsMesh._physical_cell_count(
+                    HdfResultsMesh._physical_cell_counts(hdf_file),
+                    mesh_name,
+                    include_ghost_cells,
+                )
+                if not include_ghost_cells and cell_count is not None:
                     spatial_selection = HdfResultsMesh._physical_spatial_selection(
-                        spatial_selection, cell_count, shape[1]
+                        spatial_selection, cell_count
                     )
 
         stat = source_path.stat()
@@ -1518,7 +1525,7 @@ class HdfResultsMesh:
         var: Optional[str] = None,
         truncate: bool = False,
         ras_object: Optional[Any] = None,
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> Dict[str, xr.Dataset]:
         """
         Get mesh cells timeseries output.
@@ -1530,7 +1537,7 @@ class HdfResultsMesh:
             truncate (bool): Remove trailing zeros if True
             ras_object (Any, optional): RAS object if available
             include_ghost_cells (bool): Keep the ghost-cell columns HEC-RAS
-                writes after the physical cells (default True). Cell
+                writes after the physical cells (default False). Cell
                 variables always carry an ``is_ghost_cell`` coordinate along
                 ``cell_id``; face variables are unaffected.
 
@@ -1573,14 +1580,14 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_last_iter(hdf_file: Path, include_ghost_cells: bool = True) -> pd.DataFrame:
+    def get_mesh_last_iter(hdf_file: Path, include_ghost_cells: bool = False) -> pd.DataFrame:
         """
         Get last iteration count for each mesh cell.
 
         Args:
             hdf_file (Path): Path to the HDF file.
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True). Rows always
+                writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
 
         Returns:
@@ -1597,7 +1604,7 @@ class HdfResultsMesh:
     def get_mesh_max_ws(
         hdf_path: Path,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Get maximum water surface elevation for each mesh cell.
@@ -1606,7 +1613,7 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True). Rows always
+                writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
 
         Returns:
@@ -1633,7 +1640,7 @@ class HdfResultsMesh:
     def get_mesh_min_ws(
         hdf_path: Path,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Get minimum water surface elevation for each mesh cell.
@@ -1642,7 +1649,7 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True). Rows always
+                writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
 
         Returns:
@@ -1714,7 +1721,7 @@ class HdfResultsMesh:
     def get_mesh_max_ws_err(
         hdf_path: Path,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> pd.DataFrame:
         """
         Get maximum water surface error for each mesh cell.
@@ -1723,7 +1730,7 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True). Rows always
+                writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
 
         Returns:
@@ -1750,7 +1757,7 @@ class HdfResultsMesh:
     def get_mesh_max_iter(
         hdf_path: Path,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Get maximum iteration count for each mesh cell.
@@ -1759,7 +1766,7 @@ class HdfResultsMesh:
             hdf_path (Path): Path to the HDF file.
             round_to (str): Time rounding specification (default "100ms").
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True). Rows always
+                writes outside the mesh perimeter (default False). Rows always
                 carry an ``is_ghost_cell`` column.
 
         Returns:
@@ -1838,7 +1845,7 @@ class HdfResultsMesh:
     @staticmethod
     @log_call
     @standardize_input(file_type='plan_hdf')
-    def get_mesh_max_depth(hdf_path: Path, include_ghost_cells: bool = True) -> gpd.GeoDataFrame:
+    def get_mesh_max_depth(hdf_path: Path, include_ghost_cells: bool = False) -> gpd.GeoDataFrame:
         """
         Get the maximum depth for each 2D mesh cell.
 
@@ -1865,7 +1872,7 @@ class HdfResultsMesh:
         Args:
             hdf_path (Path): Path to the HDF file.
             include_ghost_cells (bool): Keep rows for the ghost cells HEC-RAS
-                writes outside the mesh perimeter (default True).
+                writes outside the mesh perimeter (default False).
 
         Returns:
             gpd.GeoDataFrame: GeoDataFrame with columns:
@@ -2277,16 +2284,24 @@ class HdfResultsMesh:
         elif mesh_name not in mesh_names:
             raise ValueError(f"Mesh '{mesh_name}' not found. Available meshes: {mesh_names}")
 
-        cell_points = HdfMesh.get_mesh_cell_points(geom_source)
-        if cell_points.empty:
+        all_points = HdfMesh.get_mesh_cell_points(geom_source)
+        if all_points.empty:
             raise ValueError(f"No 2D mesh cell centers found in {geom_source}")
-        cell_points = cell_points[cell_points["mesh_name"] == mesh_name].copy()
-        if cell_points.empty:
+        all_points = all_points[all_points["mesh_name"] == mesh_name]
+        if all_points.empty:
             raise ValueError(f"No 2D mesh cell centers found for mesh '{mesh_name}'")
+        # The grid extent spans every center, including the ghost centers on
+        # the perimeter. Values come from physical cells only: ghost cells have
+        # no minimum elevation and their depth is not a solution value.
+        physical_counts = HdfResultsMesh._physical_cell_counts_from_path(geom_source)
+        cell_points = all_points.sort_values("cell_id")
+        if mesh_name in physical_counts:
+            cell_points = cell_points[cell_points["cell_id"] < physical_counts[mesh_name]]
+        cell_points = cell_points.copy()
 
         x = cell_points.geometry.x.to_numpy(dtype=float)
         y = cell_points.geometry.y.to_numpy(dtype=float)
-        x_min, y_min, x_max, y_max = cell_points.total_bounds
+        x_min, y_min, x_max, y_max = all_points.total_bounds
         if resolution is None:
             longest_side = max(float(x_max - x_min), float(y_max - y_min))
             resolution = longest_side / float(max_dimension)
@@ -2391,6 +2406,8 @@ class HdfResultsMesh:
                 else:
                     wse = np.asarray(result_hdf[wse_path][time_index], dtype=np.float32)
                     values = np.maximum(wse - min_elev, 0.0).astype(np.float32)
+                # Physical cells precede ghost cells in result arrays.
+                values = values[: len(cell_points)]
                 values = np.where(np.isfinite(values), values, 0.0).astype(np.float32)
 
                 if len(values) != len(cell_points):
@@ -2533,7 +2550,7 @@ class HdfResultsMesh:
                                          mesh_names: Optional[Union[str, List[str]]] = None,
                                          var: Optional[str] = None,
                                          truncate: bool = False,
-                                         include_ghost_cells: bool = True) -> Dict[str, xr.Dataset]:
+                                         include_ghost_cells: bool = False) -> Dict[str, xr.Dataset]:
         """
         Get mesh cells timeseries output for specified meshes and variables.
 
@@ -2585,12 +2602,7 @@ class HdfResultsMesh:
 
             datasets = {}
             for mesh_name in mesh_names:
-                if include_ghost_cells:
-                    cell_count = cell_counts.get(mesh_name)
-                else:
-                    cell_count = HdfResultsMesh._require_physical_cell_count(
-                        cell_counts, mesh_name
-                    )
+                cell_count = cell_counts.get(mesh_name)
                 data_vars = {}
                 missing_optional_variables = []
                 for variable in variables:
@@ -2612,12 +2624,14 @@ class HdfResultsMesh:
                         id_dim = "face_id" if variable in TIME_SERIES_OUTPUT_VARS["face"] else "cell_id"
 
                         dataset = hdf_path[path]
-                        if (
-                            id_dim == "cell_id"
-                            and not include_ghost_cells
-                            and dataset.ndim == 2
-                        ):
-                            values = dataset[:, :cell_count]
+                        if id_dim == "cell_id" and dataset.ndim == 2:
+                            physical_count = HdfResultsMesh._physical_cell_count(
+                                cell_counts, mesh_name, include_ghost_cells
+                            )
+                        else:
+                            physical_count = None
+                        if not include_ghost_cells and physical_count is not None:
+                            values = dataset[:, :physical_count]
                         else:
                             values = dataset[:]
                         units = HdfResultsMesh._decode_hdf_attr(
@@ -2828,27 +2842,38 @@ class HdfResultsMesh:
         HEC-RAS cell result arrays have one column per entry in ``Cells Center
         Coordinate``: the physical cells, followed by ghost cells outside the
         perimeter. ``Geometry/2D Flow Areas/Attributes`` ``Cell Count`` is the
-        physical count, so cell IDs at or above it are ghost cells. Returns an
-        empty mapping when the attribute table or column is absent.
+        physical count, so cell IDs at or above it are ghost cells.
         """
-        attributes = hdf_file.get("Geometry/2D Flow Areas/Attributes")
-        if attributes is None or "Cell Count" not in (attributes.dtype.names or ()):
-            return {}
-        return {
-            HdfUtils.convert_ras_string(row["Name"]): int(row["Cell Count"])
-            for row in attributes[()]
-        }
+        return HdfMesh._physical_cell_counts(hdf_file)
 
     @staticmethod
-    def _require_physical_cell_count(counts: Dict[str, int], mesh_name: str) -> int:
-        """Return a mesh's physical cell count or explain why ghosts cannot be excluded."""
-        if mesh_name not in counts:
-            raise ValueError(
-                "include_ghost_cells=False requires 'Cell Count' in "
-                "Geometry/2D Flow Areas/Attributes for mesh "
-                f"'{mesh_name}', which this HDF does not provide"
-            )
-        return counts[mesh_name]
+    def _physical_cell_counts_from_path(hdf_path: Union[str, Path]) -> Dict[str, int]:
+        """Read physical cell counts from an HDF path."""
+        with h5py.File(hdf_path, "r") as hdf_file:
+            return HdfMesh._physical_cell_counts(hdf_file)
+
+    @staticmethod
+    def _physical_cell_count(
+        counts: Dict[str, int],
+        mesh_name: str,
+        include_ghost_cells: bool,
+    ) -> Optional[int]:
+        """Return a mesh's physical cell count, or None when it is not recorded.
+
+        Without ``Cell Count`` ghost cells cannot be identified, so every cell is
+        kept. A ghost-free request logs that once per mesh.
+        """
+        cell_count = counts.get(mesh_name)
+        if cell_count is None and not include_ghost_cells:
+            if mesh_name not in _UNKNOWN_CELL_COUNT_WARNED:
+                _UNKNOWN_CELL_COUNT_WARNED.add(mesh_name)
+                logger.warning(
+                    "Mesh '%s' has no 'Cell Count' in Geometry/2D Flow Areas/"
+                    "Attributes, so ghost cells cannot be identified; all "
+                    "cells are returned.",
+                    mesh_name,
+                )
+        return cell_count
 
     @staticmethod
     def _flag_ghost_cell_rows(
@@ -2858,17 +2883,17 @@ class HdfResultsMesh:
         include_ghost_cells: bool,
     ) -> pd.DataFrame:
         """Add ``is_ghost_cell`` to one mesh's cell rows and optionally drop ghosts."""
-        if not include_ghost_cells:
-            cell_count = HdfResultsMesh._require_physical_cell_count(counts, mesh_name)
-        else:
-            cell_count = counts.get(mesh_name)
+        cell_count = HdfResultsMesh._physical_cell_count(
+            counts, mesh_name, include_ghost_cells
+        )
         if cell_count is None:
-            cell_count = np.iinfo(np.int64).max
-        frame["is_ghost_cell"] = frame["cell_id"].to_numpy() >= cell_count
+            frame["is_ghost_cell"] = False
+        else:
+            frame["is_ghost_cell"] = frame["cell_id"].to_numpy() >= cell_count
         if "geometry" in frame.columns:
             # Keep geometry as the last column, as in the other mesh results.
             frame = frame[[c for c in frame.columns if c != "geometry"] + ["geometry"]]
-        if not include_ghost_cells:
+        if not include_ghost_cells and cell_count is not None:
             frame = frame.loc[~frame["is_ghost_cell"]].reset_index(drop=True)
         return frame
 
@@ -2888,23 +2913,35 @@ class HdfResultsMesh:
     def _physical_spatial_selection(
         spatial_selection: Selection,
         cell_count: int,
-        source_cells: int,
     ) -> Selection:
-        """Restrict a source-coordinate cell selection to physical cells."""
+        """Restrict a cell selection to physical cells.
+
+        Non-negative positions are source ``cell_id`` values, which coincide
+        for physical cells. Negative positions count back from the last
+        physical cell.
+        """
         if spatial_selection is None:
             return slice(0, cell_count)
         if isinstance(spatial_selection, slice):
-            start, stop, step = spatial_selection.indices(source_cells)
-            return slice(start, min(stop, cell_count), step)
-        index = int(spatial_selection)
+            if spatial_selection.step is not None and spatial_selection.step <= 0:
+                return spatial_selection  # HdfResultView reports the error
+            start, stop, step = spatial_selection.indices(cell_count)
+            return slice(start, stop, step)
+        index = operator.index(spatial_selection)
         if index < 0:
-            index += source_cells
+            index += cell_count
+            if index < 0:
+                raise IndexError(
+                    f"Cell selection {spatial_selection} is outside the "
+                    f"{cell_count} physical cells"
+                )
+            return index
         if index >= cell_count:
             raise ValueError(
                 f"Cell {index} is a ghost cell (physical cells are 0-"
                 f"{cell_count - 1}); pass include_ghost_cells=True to read it"
             )
-        return spatial_selection
+        return index
 
     @staticmethod
     def _get_available_meshes(hdf_path: h5py.File) -> List[str]:
@@ -2924,7 +2961,7 @@ class HdfResultsMesh:
         hdf_file: h5py.File,
         var: str,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> pd.DataFrame:
         """Read summary values from an open HDF without building geometry.
 
@@ -3029,7 +3066,7 @@ class HdfResultsMesh:
         hdf_file: h5py.File,
         var: str,
         round_to: str = "100ms",
-        include_ghost_cells: bool = True,
+        include_ghost_cells: bool = False,
     ) -> gpd.GeoDataFrame:
         """
         Get the summary output data for a given variable from the HDF file.
@@ -3045,7 +3082,8 @@ class HdfResultsMesh:
         include_ghost_cells : bool, optional
             Cell results include an ``is_ghost_cell`` column. HEC-RAS writes
             values for ghost cells outside the mesh perimeter after the
-            physical cells; pass False to drop those rows. Default True.
+            physical cells. Default False drops those rows; pass True to
+            keep them.
 
         Returns
         -------

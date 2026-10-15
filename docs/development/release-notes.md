@@ -106,21 +106,41 @@ extras. `init_ras_worker()` now accepts only `"psexec"`, `"local"`, and
   `timeout_seconds`, `rsync_executable`, `launcher_python_executable`) as
   no-ops; unknown fields are rejected.
 
-**2D cell results identify ghost cells**
+**2D cell results exclude ghost cells by default (behavior change)**
 
 HEC-RAS writes cell results for the physical cells of a 2D flow area followed
 by ghost cells outside the perimeter. `Geometry/2D Flow Areas/Attributes`
-`Cell Count` is the physical count, so the extra columns did not match the
-mesh polygons (BaldEagleCrkMulti2D p07: 89,879 result columns, 87,039 cells).
-Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
-`get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
-`get_mesh_max_iter()`, `get_mesh_last_iter()`, and `get_mesh_max_depth()` now
-include an `is_ghost_cell` column. Cell time series from `get_mesh_timeseries()`
-and `get_mesh_cells_timeseries()` carry an `is_ghost_cell` coordinate along
-`cell_id`. Each of these methods and `iter_mesh_timeseries()` accepts
-`include_ghost_cells=False` to return physical cells only. The default keeps
-ghost cells, so existing result shapes are unchanged. Face results are
-unaffected.
+`Cell Count` is the physical count. Ghost values are placeholders, not
+solution results: summary maximum and minimum water surface are 0.0, and
+minimum elevation is NaN. Including them produced wrong results. On
+DavisStormSystem p02, the `HdfResultsProducts` maximum-WSE raster published
+73,004 pixels at 0.0. `HdfResultsQuery` point queries near the perimeter
+snapped to ghost centers and returned a maximum WSE of 0.0. Monte Carlo
+statistics also carried permanently-zero columns.
+
+- Cell results from `get_mesh_summary()`, `get_mesh_summary_values()`,
+  `get_mesh_max_ws()`, `get_mesh_min_ws()`, `get_mesh_max_ws_err()`,
+  `get_mesh_max_iter()`, `get_mesh_last_iter()`, `get_mesh_max_depth()`,
+  `get_mesh_timeseries()`, `iter_mesh_timeseries()`, and
+  `get_mesh_cells_timeseries()` now contain physical cells only. Pass
+  `include_ghost_cells=True` for the previous shapes.
+- Results carry an `is_ghost_cell` column, or a `cell_id` coordinate for
+  xarray results.
+- For `get_mesh_timeseries()` and `iter_mesh_timeseries()`, negative
+  `spatial_selection` positions now count back from the last physical cell.
+- When an HDF has no `Cell Count`, every cell is kept and a warning is logged.
+- Face results are unchanged.
+- `HdfMesh.get_mesh_cell_points()` accepts `include_ghost_cells=False`; its
+  default is unchanged.
+- `HdfResultsQuery`, `HdfResultsProducts`, `PrecipMrms` flood animation,
+  `RasMonteCarlo` full-domain extraction, `export_depth_rasters_at_times()`,
+  and `HdfResultsSediment` now use physical cells only. The depth-raster grid
+  extent is unchanged; only ghost-derived values are removed.
+- `check_stability` iteration averages no longer include ghost zeros.
+- **Migration:** code that pairs cell results by position with the full
+  `Cells Center Coordinate` array must join on `cell_id`, use
+  `HdfMesh.get_mesh_cell_points(..., include_ghost_cells=False)`, or pass
+  `include_ghost_cells=True`.
 
 **HdfBase timestamp readers accept paths**
 
